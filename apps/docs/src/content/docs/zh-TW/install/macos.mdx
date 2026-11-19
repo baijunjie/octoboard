@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "適用於 Apple 晶片和 Intel 的 Mac，需要 macOS 11 或更新版本。"
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+適用於 Apple 晶片和 Intel 的 Mac，需要 macOS 11 或更新版本。
+
+<LinkButton href={downloads.macos}>下載 macOS 版</LinkButton>
+
+<Aside>macOS 應用程式仍處於 Beta 階段。</Aside>
+
+## 安裝
+
+<Steps>
+
+1. 點選上面的按鈕下載應用程式。下載到的是一個磁碟映像檔，檔名以 <code dir="ltr">.dmg</code> 結尾。
+2. 開啟下載的檔案，在跳出的視窗中把 {productName} 拖到「應用程式」資料夾。
+3. 從「應用程式」資料夾或「啟動台」開啟 {productName}。
+4. 安裝至少一個程式設計代理程式（見下文），然後在 {productName} 中點選<strong>加入專案</strong>，開啟一個專案資料夾。
+
+</Steps>
+
+看到主視窗開啟，就安裝完成了。
+
+## 安裝程式設計代理程式
+
+{productName} 本身不附帶 AI 代理程式，請依照各自的官方說明安裝並登入你要用的代理程式，{productName} 會自動偵測到它們。目前支援：
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## 更新
+
+有新版本時，{productName} 會提醒你，你可以直接在應用程式內安裝，不必再回到這個頁面。
+
+<a href={downloads.releases}>所有歷史版本</a>

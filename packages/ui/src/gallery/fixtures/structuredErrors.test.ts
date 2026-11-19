@@ -50,7 +50,7 @@ const UNSHOWN: Array<{ code: string; params: Record<string, string> }> = [
 
 // A successful render alone cannot reveal a missing fixture parameter: interpolation leaves it visible.
 describe("structured error fixture contracts", () => {
-  it.each(["en", "zh-Hans", "ar"] as const)("fills every catalog placeholder in %s", (language) => {
+  it.each(["en", "zh-CN", "ar"] as const)("fills every catalog placeholder in %s", (language) => {
     for (const scenario of structuredErrorScenarios) {
       const state = scenario.state!;
       for (const notification of scenario.notifications ?? []) {
@@ -66,7 +66,7 @@ describe("structured error fixture contracts", () => {
     }
   });
 
-  it.each(["en", "zh-Hans", "ar"] as const)("fills every placeholder of the codes no scenario shows in %s", (language) => {
+  it.each(["en", "zh-CN", "ar"] as const)("fills every placeholder of the codes no scenario shows in %s", (language) => {
     for (const { code, params } of UNSHOWN) {
       const text = daemonMessage(language, code, params, "", records);
       expect(text, code).not.toMatch(/\{[a-zA-Z_]+\}/);

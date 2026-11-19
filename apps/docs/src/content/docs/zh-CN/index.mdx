@@ -1,0 +1,18 @@
+---
+title: 简介
+description: Octoboard 是什么，以及应该先读哪篇指南。
+---
+
+import { productName } from "../../../commands.ts";
+
+{productName} 是一个开源的本地开发工作台，用来统一管理你已经在用的编程智能体和它们的账号：多个会话并排运行、切换账号时保留对话、在不同智能体之间交接任务，还能让一个协调智能体把工作分派到多个项目。
+
+编程智能体是替你写代码、运行代码的 AI 助手，比如 Claude Code 和 Codex。{productName} 本身不带智能体，它运行的是你已经装好的那些。
+
+## 从哪里开始
+
+- <strong>在这台电脑上使用 {productName}：</strong>安装 [macOS](install/macos/) 或 [Windows](install/windows/) 应用。大多数人只需要这一步。
+- <strong>在 Linux 服务器上运行智能体</strong>（你租用或放在别处一直开着的机器，通常没有屏幕）：先[安装服务器程序](install/linux/)，再按[通过 SSH 连接](remote-connections/)从桌面应用连过去。
+- <strong>从另一台电脑使用这台电脑上的 {productName}：</strong>先看[选择连接方式](choose-how-to-connect/)，那里对比了各种方式。简单来说：
+  - 用另一台电脑的应用或浏览器，并且愿意开启 SSH 登录：看[通过 SSH 连接](remote-connections/)；
+  - 只用浏览器，不想开启 SSH 登录：看[通过 Tailscale 用浏览器访问](browser-over-tailscale/)或[通过 UU 远程用浏览器访问](browser-over-uu-remote/)。

@@ -10,8 +10,8 @@ mascot and the wordmark are not mirrored.
 The wordmark is public/wordmark.png, the same on every card. The slogan, its
 meaning, and the title lines come from each locale catalog, and {appName} is filled from
 config/app.json. The hostname comes from the origin written in site.config.ts.
-The filename uses the route code (zh, not zh-Hans), which is the code in
-seo/site-seo.ts. A line that does not fit, or a character the face cannot
+The filename uses the locale's URL code in seo/site-seo.ts, which is its
+language tag (zh-CN, zh-TW). A line that does not fit, or a character the face cannot
 draw, fails the run.
 
 Arabic, Devanagari, and Thai have to be shaped. Pillow's wheels do not ship
@@ -77,8 +77,8 @@ FONT_BY_CODE = {
     "ja": "HiraginoSans",
     "ko": "NotoSansKR",
     "th": "NotoSansThai",
-    "zh": "NotoSansSC",
-    "zh-Hant": "NotoSansTC",
+    "zh-CN": "NotoSansSC",
+    "zh-TW": "NotoSansTC",
 }
 FONT_COMMIT = "23e54b51ddffbc7713c583748e3bd86f62b1fa4a"
 FONT_PATHS = {
@@ -98,7 +98,7 @@ HIRAGINO_SANS = {
 
 
 def locales() -> list[tuple[str, str]]:
-    """Route code and catalog filename, in the order seo/site-seo.ts lists them.
+    """URL code and catalog filename, in the order seo/site-seo.ts lists them.
 
     The list is derived there from the UI's languages, so Node evaluates the
     module and hands the pairs over.

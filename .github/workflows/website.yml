@@ -1,10 +1,13 @@
 name: Deploy website
 
+# The site is the website with the documentation site (`apps/docs/`) built into its `docs/` path.
 # A push to main deploys the site unless everything it changes is known to be outside what generating the site
 # reads: the daemon, the desktop app package (except the app icon the UI's About section inlines, which the site's
 # preview of the app ships), `scripts/` other than `scripts/lib/` (which the UI's Vite configuration imports), the Rust
-# workspace files, documentation, agent files, the other CI definitions and hooks, the brand assets and the license.
-# Markdown changes nothing the site renders. A new input anywhere else therefore deploys rather than being missed.
+# workspace files, the repository's documentation (`docs/`), agent files, the other CI definitions and hooks, the brand
+# assets and the license.
+# Markdown changes nothing the website renders, so it is left out everywhere except in the documentation app, whose
+# pages are Markdown. A new input anywhere else therefore deploys rather than being missed.
 # After a change to the repository's Pages settings (the domain or base path), or a failed deployment, start the
 # workflow by hand; it deploys whatever main holds.
 on:
@@ -33,6 +36,7 @@ on:
       - "!assets/**"
       - "!LICENSE"
       - "!**/*.md"
+      - "apps/docs/**"
   workflow_dispatch:
 
 permissions:
@@ -75,9 +79,23 @@ jobs:
         env:
           NUXT_PUBLIC_SITE_ORIGIN: ${{ steps.site.outputs.origin }}
           NUXT_APP_BASE_URL: ${{ steps.site.outputs.base }}
-      # The tests read the build's output, so they run after it.
+      # The docs get the same origin and base path, and add `docs/` to the base themselves.
+      - run: pnpm --filter @octoboard/docs build
+        env:
+          NUXT_PUBLIC_SITE_ORIGIN: ${{ steps.site.outputs.origin }}
+          NUXT_APP_BASE_URL: ${{ steps.site.outputs.base }}
+      - name: Add the docs to the website output
+        shell: bash
+        run: |
+          if [ -e apps/web/.output/public/docs ]; then
+            echo "::error::The website output already has a docs path, which the documentation site owns."
+            exit 1
+          fi
+          cp -R apps/docs/dist apps/web/.output/public/docs
+      # The tests read the builds' output, so they run after them.
       - run: pnpm --filter @octoboard/web test
-      - run: pnpm exec eslint apps/web --max-warnings 0
+      - run: pnpm --filter @octoboard/docs test
+      - run: pnpm exec eslint apps/web apps/docs --max-warnings 0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: apps/web/.output/public

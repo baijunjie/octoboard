@@ -1,12 +1,10 @@
-import { remoteAppLabels, remoteCode } from "./remote-references.ts";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   appDownloads,
-  appPanelKeys,
+  appRequirementsKeys,
   installCommand,
   releasesUrl,
-  linuxCommandParts,
   serverDownloads,
   type Downloads,
 } from "./downloads.ts";
@@ -23,11 +21,13 @@ import {
   homeSteps,
   plannedPlatforms,
   privacySections,
-  remoteGuides,
-  remoteTopics,
+  remoteGuidePage,
   workflowNodes,
 } from "./page-outline.ts";
 import {
+  docsPages,
+  docsPath,
+  type DocsPage,
   languageHomeUrl,
   localeCodeFromPath,
   locales,
@@ -119,30 +119,19 @@ function catalog(copy: AgentCopy, code: string): Record<string, string> {
 
 type Text = (key: string, values?: Record<string, string>) => string;
 
-// The Linux server's part of the download page: the install command, how to reach and keep the server, how to
-// upgrade and the archives.
+// The docs page of one system's installation steps and troubleshooting, linked from the download page.
+function guideLink(copy: AgentCopy, text: Text, code: string, page: DocsPage): string {
+  return link(text("downloadGuideLink"), docsPath(copy.siteUrl, code, page));
+}
+
+// The Linux server's part of the download page: the install command, the archives and the docs that hold the rest.
 function linuxParts(copy: AgentCopy, text: Text, onDownloadPage: boolean, localeCode = "en"): Array<string | false> {
-  const code = (value: string) => `\`${value}\``;
-  const commands = Object.fromEntries(
-    Object.entries(linuxCommandParts).map(([name, command]) => [name, code(command)]),
-  );
   return [
     onDownloadPage && heading(2, text("downloadLinuxTitle")),
     text("downloadLinuxDescription"),
     text("downloadLinuxRange"),
-    onDownloadPage && remoteGuideLink(copy, text, localeCode),
     heading(3, text("downloadInstallStep")),
     `\`\`\`sh\n${installCommand(copy.siteUrl)}\n\`\`\``,
-    heading(3, text("downloadStartStep")),
-    `\`\`\`sh\n${linuxCommandParts.start}\n${linuxCommandParts.address}\n\`\`\``,
-    heading(3, text("downloadOpenStep")),
-    text("remoteBrowserServer", commands),
-    text("downloadBrowserSteps"),
-    heading(3, text("downloadOptionsLabel")),
-    text("downloadPortNote", commands),
-    text("downloadPathNote", commands),
-    text("downloadServiceSteps", commands),
-    text("downloadUpgrade", commands),
     [
       text("downloadArchivesLabel"),
       ...serverDownloads.map(
@@ -153,16 +142,20 @@ function linuxParts(copy: AgentCopy, text: Text, onDownloadPage: boolean, locale
         },
       ),
     ].join("\n"),
+    guideLink(copy, text, localeCode, docsPages.linux),
+    link(text("downloadSshGuideLink"), docsPath(copy.siteUrl, localeCode, remoteGuidePage)),
   ];
 }
 
+// Each app's download, followed by the guide to installing that app.
 function appLinks(copy: AgentCopy, text: Text): string {
   return appDownloads
     .map(
       (target) => {
         const label = text("downloadButton", { platform: target.name });
         const href = copy.downloads[target.id];
-        return `- ${href === releasesUrl(copy.repositoryUrl) ? label : link(label, href)}`;
+        const download = `- ${href === releasesUrl(copy.repositoryUrl) ? label : link(label, href)}`;
+        return `${download}\n- ${guideLink(copy, text, "en", docsPages[target.id])}`;
       },
     )
     .join("\n");
@@ -180,7 +173,8 @@ function downloadMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     ...appDownloads.flatMap((target) => [
       heading(2, target.name),
       link(text("downloadButton", { platform: target.name }), copy.downloads[target.id]),
-      ...appPanelKeys[target.id].map((key) => text(key)),
+      text(appRequirementsKeys[target.id]),
+      guideLink(copy, text, locale.code, docsPages[target.id]),
     ]),
     ...linuxParts(copy, text, true, locale.code),
     link(text("downloadAllReleases"), releasesUrl(copy.repositoryUrl)),
@@ -188,42 +182,7 @@ function downloadMarkdown(copy: AgentCopy, locale: SiteLocale): string {
 }
 
 function remoteGuideLink(copy: AgentCopy, text: Text, code: string): string {
-  return link(text("remoteGuideLink"), markdownUrl(copy.siteUrl, `/${localizedPath(code, "remote/")}`));
-}
-
-function remoteMarkdown(copy: AgentCopy, locale: SiteLocale): string {
-  const messages = catalog(copy, locale.code);
-  const params = valuesFor(copy);
-  const labels = Object.fromEntries(
-    Object.keys(remoteAppLabels).map((key) => [key, `**${message(messages, key, params)}**`]),
-  );
-  const references = {
-    ...params,
-    ...labels,
-    settingsPath: `${labels.remoteLabelSettings} › ${labels.remoteLabelAccess}`,
-    ...Object.fromEntries(Object.entries(remoteCode).map(([key, command]) => [key, `\`${command}\``])),
-  };
-  const text = (key: string) => message(messages, key, references);
-  const canonical = copy.siteUrl + localizedPath(locale.code, "remote/");
-  return document([
-    heading(1, text("remoteEyebrow")),
-    `Canonical: ${canonical}`,
-    text("remoteIntro"),
-    ...remoteGuides(copy.siteUrl).flatMap((guide) => [
-      heading(2, text(guide.key)),
-      ...guide.steps.map((step, index) => {
-        const body = [`${index + 1}. ${text(step.key)}`];
-        if ("command" in step) body.push(`   \`\`\`sh\n   ${step.command}\n   \`\`\``);
-        if ("notes" in step) body.push(...step.notes.map((note) => `   ${text(note)}`));
-        return body.join("\n\n");
-      }),
-      "note" in guide && text(guide.note),
-    ]),
-    ...remoteTopics.flatMap(({ key, items }) => [
-      heading(2, text(key)),
-      items.map((item) => `- **${text(`${item}Lead`)}** ${text(item)}`).join("\n"),
-    ]),
-  ]);
+  return link(text("remoteGuideLink"), docsPath(copy.siteUrl, code, remoteGuidePage));
 }
 
 function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
@@ -313,7 +272,7 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
         (platform) => `- ${platform.name}: ${text(platform.status)}`,
       ),
     ].join("\n"),
-    text("platformsDownloadPointer"),
+    text("platformsRequirementsPointer"),
     link(
       text("downloadCta"),
       markdownUrl(copy.siteUrl, `/${localizedPath(locale.code, "download/")}`),
@@ -364,7 +323,6 @@ const pageMarkdown = {
   "": homeMarkdown,
   "privacy/": privacyMarkdown,
   "download/": downloadMarkdown,
-  "remote/": remoteMarkdown,
 } as const;
 
 function truncate(value: string, max: number): string {
@@ -384,9 +342,10 @@ function llmsTxt(copy: AgentCopy): string {
     ...[...availablePlatforms, ...plannedPlatforms].map(
       (platform) => `${platform.name}: ${text(platform.status)}`,
     ),
-    text("platformsDownloadPointer"),
+    text("platformsRequirementsPointer"),
     appLinks(copy, plain),
     ...linuxParts(copy, plain, false).filter((part): part is string => Boolean(part)),
+    link(text("navDocs"), docsPath(copy.siteUrl, "en")),
     link(text("downloadAllReleases"), releasesUrl(copy.repositoryUrl)),
     text("proofFreeCaption"),
     text("localDescription"),

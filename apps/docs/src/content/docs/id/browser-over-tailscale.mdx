@@ -1,0 +1,179 @@
+---
+title: "Browser melalui Tailscale"
+description: "Buka Octoboard di browser pada komputer lain melalui jaringan Tailscale Anda sendiri, tanpa SSH atau desktop jarak jauh."
+---
+
+import { Aside, Code, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+import HostBrowserAddress from "../../../snippets/id/host-browser-address.mdx";
+
+Buka {productName} di browser pada komputer lain melalui jaringan Tailscale Anda sendiri, tanpa SSH atau desktop jarak jauh. Host adalah komputer yang menjalankan {productName}: Mac, PC Windows, atau server Linux yang menjalankan octoboardd. Login SSH (Login Jarak Jauh di macOS) boleh tetap nonaktif.
+
+Belum yakin ini cara yang tepat untuk Anda? Lihat [Pilih cara terhubung](../choose-how-to-connect/).
+
+<Aside type="caution">
+Langkah-langkah ini belum diuji sepenuhnya. Langkah-langkah ini mengikuti dokumentasi Tailscale Serve dan pemeriksaan {productName} sendiri. Program relay sudah dicoba di satu komputer, termasuk koneksi langsung browser; Tailscale Serve di antara dua perangkat dan penerusan di Windows belum dicoba.
+</Aside>
+
+<strong>Browser di komputer Anda</strong> → <strong>relay di komputer Anda (127.0.0.1)</strong> ⟷ Tailscale ⟷ <strong>relay di host (127.0.0.1)</strong> → <strong>{productName}</strong>
+
+<details>
+<summary>Baru mengenal ini?</summary>
+
+- <strong>Tailscale:</strong> layanan yang menghubungkan perangkat Anda menjadi jaringan pribadi lewat internet, di mana pun perangkat itu berada. Anda masuk ke layanan ini dengan akun Anda sendiri.
+- <strong>Tailnet:</strong> jaringan Tailscale Anda: perangkat-perangkat yang masuk ke akun Tailscale Anda.
+- <strong>127.0.0.1 (loopback):</strong> alamat yang selalu berarti “komputer yang sama ini”.
+- <strong>Port:</strong> angka yang memilih satu program di komputer, seperti nomor pintu. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> adalah port {commands.defaultPort} di komputer ini.
+- <strong>socat:</strong> program kecil dan gratis yang meneruskan koneksi dari satu tempat ke tempat lain. Di sini ia berperan sebagai relay.
+- <strong>Tailscale Serve:</strong> perintah Tailscale yang membagikan sebuah port hanya ke tailnet Anda. Saudaranya, Tailscale Funnel, akan membagikannya ke seluruh internet; jangan pernah memakainya di sini.
+- <strong>Terminal:</strong> jendela tempat Anda mengetik perintah: Terminal di macOS, PowerShell di Windows.
+
+</details>
+
+## Mengapa ada langkah tambahan
+
+Demi keamanan, {productName} hanya menerima browser yang membukanya di <code dir="ltr">{tunnel.loopback}</code>, alamat yang selalu berarti “komputer yang sama ini” (disebut juga loopback). Jadi Anda tidak bisa begitu saja mengetik alamat Tailscale host di browser. Sebagai gantinya, Anda menjalankan program relay kecil di setiap komputer: di komputer Anda, relay membuat host tampak lokal di <code dir="ltr">{tunnel.loopback}</code>; di host, relay menyerahkan koneksi ke {productName}. Tailscale membawa lalu lintas data di antara keduanya.
+
+## Sebelum Anda mulai
+
+- <strong>Tailscale di kedua komputer,</strong> masuk ke tailnet yang sama. Pakai tailnet yang hanya berisi perangkat Anda sendiri: setiap perangkat yang diizinkannya menjangkau host dapat menjangkau port yang Anda bagikan.
+- <strong>socat di setiap komputer yang berupa Mac atau menjalankan Linux.</strong> Komputer Windows tidak memerlukannya.
+
+  <Tabs syncKey="host">
+  <TabItem label="macOS">
+  Instal [Homebrew](https://brew.sh/) lebih dulu jika belum punya (macOS tidak menyertakan alat yang dapat melakukan tugas ini), lalu jalankan ini di Terminal:
+
+  <Code code={tunnel.installSocatMac} lang="sh" />
+  </TabItem>
+  <TabItem label="Windows">
+  Tidak ada yang perlu diinstal: host Windows sudah menyajikan browser di port <code dir="ltr">{tunnel.loopback}</code>, dan komputer Windows tempat Anda browsing memakai perintah bawaan sebagai gantinya.
+  </TabItem>
+  <TabItem label="Linux">
+  <Code code={tunnel.installSocatLinux} lang="sh" />
+
+  Pakai pengelola paket distribusi Anda (<code dir="ltr">dnf</code>, <code dir="ltr">pacman</code>, dan sebagainya) jika bukan <code dir="ltr">apt</code>.
+  </TabItem>
+  </Tabs>
+- <strong>Dua atau tiga jendela dibiarkan terbuka</strong> selama Anda bekerja: relay dan Tailscale Serve di host (kecuali relay di Windows), dan relay di komputer Anda (kecuali di Windows).
+
+## Di host
+
+<Steps>
+
+1. Dapatkan alamat browser, yang membawa kunci untuk memasukkan browser.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <HostBrowserAddress />
+   </TabItem>
+   <TabItem label="Windows">
+   <HostBrowserAddress windows />
+   </TabItem>
+   <TabItem label="Linux">
+   Jalankan ini sebagai pengguna yang menjalankan octoboardd, lalu salin alamat yang dicetak, yang diawali <code dir="ltr">{tunnel.addressStart}</code>. Abaikan perintah SSH yang dicetak setelahnya.
+
+   <Code code={commands.address} lang="sh" />
+   </TabItem>
+   </Tabs>
+2. Mulai relay di host, yang menghubungkan sebuah port di <code dir="ltr">{tunnel.loopback}</code> milik host ke {productName}. Port ini adalah <strong>port host</strong> pada langkah-langkah berikut.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   Jalankan ini di Terminal dan biarkan jendelanya terbuka. Relay hanya mendengarkan di <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   Port host-nya adalah <code dir="ltr">{tunnel.bridgePort}</code>.
+   </TabItem>
+   <TabItem label="Windows">
+   Tidak ada yang perlu dijalankan: {productName} sendiri mendengarkan di port browser, hanya di <code dir="ltr">127.0.0.1</code>. Port host-nya adalah <strong>Port browser</strong> ({commands.defaultPort} kecuali Anda mengubahnya).
+   </TabItem>
+   <TabItem label="Linux">
+   Jalankan ini sebagai pengguna yang sama, di terminal atau sesi <code dir="ltr">tmux</code> yang tetap terbuka. Relay hanya mendengarkan di <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   Port host-nya adalah <code dir="ltr">{tunnel.bridgePort}</code>.
+   </TabItem>
+   </Tabs>
+3. Bagikan port host ke tailnet Anda dengan Tailscale Serve, dan biarkan jendelanya terbuka. Jangan pernah memakai Tailscale Funnel, yang akan menempatkannya di internet publik.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   Dengan aplikasi Tailscale dari App Store, jalankan perintah itu sebagai <code dir="ltr">{tunnel.macCli}</code> sebagai ganti <code dir="ltr">tailscale</code>. Dengan aplikasi mandiri, instal dulu perintahnya dari pengaturannya, di bawah CLI integration.
+   </TabItem>
+   <TabItem label="Windows">
+   Di PowerShell atau Command Prompt:
+
+   <Code code={tunnel.serveBrowserPort} lang="powershell" />
+
+   Pakai port Anda jika Anda mengubah <strong>Port browser</strong>.
+   </TabItem>
+   <TabItem label="Linux">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   Jika Tailscale menyatakan Anda tidak memiliki izin, izinkan pengguna Anda mengelolanya sekali dengan <code dir="ltr">{tunnel.linuxOperator}</code>, atau jalankan perintah dengan <code dir="ltr">sudo</code>.
+   </TabItem>
+   </Tabs>
+
+   Untuk memeriksa, jalankan <code dir="ltr">{tunnel.serveStatus}</code> di jendela lain: port host seharusnya terdaftar.
+
+</Steps>
+
+## Di komputer tempat Anda akan browsing
+
+<Steps>
+
+1. Temukan host di aplikasi Tailscale di komputer ini, dan catat namanya (seperti <code dir="ltr">my-mac</code>) atau alamatnya (angka seperti <code dir="ltr">100.x.y.z</code>).
+2. Mulai relay di komputer ini, yang membuat host tampak di <code dir="ltr">{tunnel.loopback}:{commands.defaultPort}</code> di sini. Jika port {commands.defaultPort} sudah dipakai di komputer ini, pilih port lain dan ubah juga di alamat browser.
+
+   <Tabs syncKey="visitor">
+   <TabItem label="macOS atau Linux">
+   Pada perintah di bawah, ganti <code dir="ltr">{tunnel.host}</code> dengan nama atau alamat host, dan <code dir="ltr">{tunnel.hostPort}</code> dengan port host.
+
+   <Code code={tunnel.visitorForward} lang="sh" />
+
+   Misalnya, untuk host Mac bernama <code dir="ltr">my-mac</code>:
+
+   <Code code={tunnel.visitorForwardExample} lang="sh" />
+
+   Jalankan di Terminal dan biarkan jendelanya terbuka.
+   </TabItem>
+   <TabItem label="Windows">
+   Buka PowerShell sebagai administrator. Pada perintah di bawah, ganti <code dir="ltr">{tunnel.hostIp}</code> dengan alamat <code dir="ltr">100.x.y.z</code> milik host (perintah ini memerlukan angkanya; nama tidak akan berfungsi), dan <code dir="ltr">{tunnel.hostPort}</code> dengan port host.
+
+   <Code code={tunnel.visitorForwardWindows} lang="powershell" />
+
+   Penerusan ini tetap ada, termasuk setelah restart, sampai Anda menghapusnya (lihat di bawah), jadi tidak ada jendela yang perlu dibiarkan terbuka. Penerusan ini memerlukan layanan IP Helper, yang berjalan secara default.
+   </TabItem>
+   </Tabs>
+3. Buka alamat browser yang Anda salin di host. Alamat ini diawali <code dir="ltr">{tunnel.addressStart}</code>.
+
+</Steps>
+
+Anda tahu semuanya berhasil saat {productName} terbuka di tab browser tanpa meminta Anda masuk.
+
+## Jika tidak berhasil
+
+- <strong>Halaman tidak termuat:</strong> salah satu jendela ditutup, atau perintahnya berhenti. Periksa bahwa relay dan Tailscale Serve masih berjalan, dan bahwa <code dir="ltr">{tunnel.serveStatus}</code> di host mencantumkan port host.
+- <strong>socat menyatakan “Address already in use”:</strong> port itu sudah dipakai di komputer tersebut. Pilih port lain; di komputer Anda, ubah juga di alamat browser.
+- <strong>Halaman ditolak atau kosong:</strong> periksa bahwa Anda membuka alamat di <code dir="ltr">{tunnel.loopback}</code>, bukan nama Tailscale host atau alamat <code dir="ltr">100.x.y.z</code>.
+- <strong>Relay di host mencetak “Connection refused” atau “No such file or directory” saat Anda membuka halaman:</strong> <strong>Izinkan akses jarak jauh</strong> nonaktif, atau {productName} tidak berjalan di host (di Linux, octoboardd tidak berjalan).
+
+## Mematikannya
+
+- <strong>Di komputer tempat Anda browsing:</strong> hentikan socat dengan <kbd>Ctrl</kbd>+<kbd>C</kbd>, atau di Windows hapus penerusan di PowerShell yang dijalankan sebagai administrator:
+
+  <Code code={tunnel.visitorForwardWindowsOff} lang="powershell" />
+- <strong>Di host:</strong> hentikan perintah Tailscale Serve dan socat dengan <kbd>Ctrl</kbd>+<kbd>C</kbd>. Periksa dengan <code dir="ltr">{tunnel.serveStatus}</code> bahwa tidak ada lagi yang dibagikan; jika port masih terdaftar, hapus dengan <code dir="ltr">{tunnel.serveBridgeOff}</code> (di Windows, <code dir="ltr">{tunnel.serveBrowserPortOff}</code>).
+- <strong>Di host Mac atau Windows,</strong> nonaktifkan <strong>Izinkan akses jarak jauh</strong> saat Anda tidak lagi memerlukannya. Ini menutup pintu masuk browser dan memutus setiap halaman yang dibuka dengan kunci itu.
+- <strong>Jika alamat mungkin bocor,</strong> beri alamat kunci baru dengan <strong>Ganti kunci</strong> di tab <strong>Browser</strong>, atau di Linux dengan <code dir="ltr">{tunnel.rotate}</code>. Halaman yang terbuka dengan alamat lama akan terputus.
+
+## Keamanan
+
+- <strong>Alamat adalah kata sandi:</strong> kuncinya memberi kendali penuh atas {productName} di host, termasuk menjalankan perintah apa pun. Kunci berlaku sampai Anda menggantinya. Alamat tersimpan di riwayat dan bookmark browser, serta tersinkron ke perangkat Anda yang lain jika sinkronisasi browser aktif.
+- <strong>Siapa yang dapat menjangkaunya:</strong> siapa pun yang mencapai port host dan memiliki kuncinya. Relay hanya mendengarkan di <code dir="ltr">127.0.0.1</code>, sehingga perangkat lain di jaringan host atau jaringan lokal Anda tidak dapat menjangkaunya; Tailscale Serve membuat port host hanya dapat dijangkau dari tailnet Anda, sejauh aturan aksesnya mengizinkan.
+- <strong>Hanya di komputer yang tidak dipakai login orang lain:</strong> akun pengguna lain di host atau di komputer Anda dapat terhubung ke port <code dir="ltr">127.0.0.1</code> ini, dan selama relay tidak berjalan ia dapat mengambil port itu dan menerima kunci saat browser Anda tersambung kembali. [Terhubung melalui SSH](../remote-connections/) tidak memiliki kelemahan ini di host Mac atau Linux, dan komputer Anda sendiri juga tidak memilikinya saat memakai aplikasi desktop. Di browser, komputer Anda tetap memilikinya, karena penerusan SSH di sana juga mendengarkan di port <code dir="ltr">127.0.0.1</code>.
+- <strong>Jangan pernah Funnel:</strong> Tailscale Funnel akan memublikasikan port ke seluruh internet.

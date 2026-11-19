@@ -39,6 +39,8 @@ stay current.
 
 - [What the website publishes: pages, languages, search indexing, preview and privacy](../../docs/product/website.md),
   and [its download page](../../docs/product/website-download-page.md)
+- The installation and remote connection guides live in the [documentation site](../docs/README.md), published under
+  `/docs/` with the website
 - [The website's structure: directories, its imports from the UI package, where new code
   goes](../../docs/structure/web.md)
 - The [documentation index](../../docs/README.md)

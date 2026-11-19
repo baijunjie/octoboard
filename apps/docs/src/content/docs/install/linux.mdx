@@ -1,0 +1,89 @@
+---
+title: "Linux server"
+description: "Install octoboardd, the Octoboard server program, on a Linux server without root. Reach it from the macOS or Windows app, or from a browser, both through SSH."
+---
+
+import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
+import { commands, downloads, productName } from "../../../commands.ts";
+
+Install octoboardd, the {productName} server program (the app calls it the daemon), on a Linux server without root. Reach it from the macOS or Windows app, or from a browser, both through SSH.
+
+For x86_64 and aarch64, on any distribution.
+
+<Aside>The Linux server program is in beta.</Aside>
+
+## Before you start
+
+- **A Linux server you can sign in to with SSH.** SSH is a secure way to sign in to another machine and type commands on it. The server's provider gives you its address and your user name.
+- **The {productName} app on your own computer**, for [macOS](../macos/) or [Windows](../windows/), if you want to work in the desktop app (recommended).
+
+To sign in, open Terminal (macOS) or PowerShell (Windows) on your own computer and run the command below, with your user name in place of <code dir="ltr">&lt;you&gt;</code> and the server's address in place of <code dir="ltr">{commands.server}</code>. The first time, answer <code dir="ltr">yes</code> when it asks whether to trust the server.
+
+<Code code={commands.signIn} lang="sh" />
+
+Steps 1 and 2 below run on the server, in that signed-in window.
+
+## Install
+
+<Steps>
+
+1. Install octoboardd on the server.
+
+   <Code code={commands.install} lang="sh" />
+
+   It prints a line beginning <code dir="ltr">Installed octoboardd</code>.
+2. Start it on the server.
+
+   <Code code={commands.start} lang="sh" />
+
+   It prints a line beginning <code dir="ltr">{productName} started</code>.
+3. Connect to it from your own computer, in one of two ways:
+
+   - <strong>From the desktop app (recommended):</strong> follow [Connect to a Linux server](../../remote-connections/#connect-to-a-linux-server) in the SSH guide.
+   - <strong>From a browser:</strong> run this on the server.
+
+     <Code code={commands.address} lang="sh" />
+
+     It prints two things: a browser address, starting with <code dir="ltr">http://127.0.0.1:</code>, and an <code dir="ltr">ssh</code> command. On your own computer, copy the <code dir="ltr">ssh</code> command, replace <code dir="ltr">{commands.server}</code> with the server's address (the IP address or name you use to sign in to it), and run it in Terminal or PowerShell. It may ask for your password, then shows nothing more; that's normal. Leave that window open: closing it cuts the connection. Then open the printed address in your browser.
+
+</Steps>
+
+You'll know it worked when {productName} opens in the desktop app's new window, or in the browser tab.
+
+## If octoboardd isn't found
+
+If the install says a folder ending in <code dir="ltr">.local/bin</code> (such as <code dir="ltr">/home/&lt;you&gt;/.local/bin</code>) is not on your PATH, the shell can't find <code dir="ltr">octoboardd</code> by name. Run it by the full path the install printed, or add <code dir="ltr">{commands.binDir}</code> to your PATH (for example in <code dir="ltr">~/.profile</code>) and sign in again.
+
+## Keep it running after you log out or reboot
+
+Started with <code dir="ltr">{commands.start}</code>, octoboardd stops when the server restarts, and nothing starts it again by itself: run <code dir="ltr">{commands.start}</code> again, or connect from the desktop app, which offers to start it for you. Some servers also stop it when you sign out.
+
+To have it start whenever the server starts and keep running after you sign out, install it as a service instead:
+
+<Code code={commands.installService} lang="sh" />
+
+This installs the program, sets it up as a systemd user service and starts it. It then turns on lingering, which lets your services run while you aren't signed in. If it says it could not, run this once (it may need <code dir="ltr">sudo</code>):
+
+<Code code={commands.linger} lang="sh" />
+
+The default port is <code dir="ltr">{commands.defaultPort}</code>. To use another, add <code dir="ltr">{commands.portOption}</code> to the end of the service command, or to <code dir="ltr">{commands.start}</code>.
+
+## Upgrade
+
+{productName} never upgrades itself on its own: when a new version is out, the browser tells you, and you choose when to install it. Once the new version is installed, {productName} restarts into it by itself when no session would be interrupted; if some would be, it lists them and asks first.
+
+- <strong>In the browser:</strong> select <strong>Download and install</strong> where it says a new version is available.
+- <strong>On the server:</strong> run this command.
+
+  <Code code={commands.update} lang="sh" />
+
+  If it asks whether to restart now, answer <code dir="ltr">y</code> to restart, or press Enter to keep the old version running for now. To restart later, run <code dir="ltr">{commands.restart}</code>.
+
+If <code dir="ltr">{commands.update}</code> says it can't replace the program, for example because it was installed somewhere you can't write to, run the install command (or the service command) again instead. It restarts in the same way when that's safe, and otherwise tells you to run <code dir="ltr">{commands.restart}</code>.
+
+## Download the archive instead
+
+<LinkButton href={downloads["linux-x86_64"]} variant="secondary">x86_64 archive</LinkButton>
+<LinkButton href={downloads["linux-aarch64"]} variant="secondary">aarch64 archive</LinkButton>
+
+<a href={downloads.releases}>All past versions</a>

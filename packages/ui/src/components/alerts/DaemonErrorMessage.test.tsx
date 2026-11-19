@@ -73,7 +73,7 @@ it("retains the structured request failure through the dialog action and respond
   expect(alert?.querySelector("h3")?.textContent).toBe("Shell environment timed out");
   expect(alert?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
   expect(error.message).toBe("plain diagnostic for notifications");
-  act(() => setLanguage("zh-Hans"));
+  act(() => setLanguage("zh-CN"));
   expect(alert?.textContent).not.toContain("Shell environment timed out");
   expect(alert?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
 });
@@ -136,7 +136,7 @@ it("keeps the overlapping project name in a reference after the Trash remedy cha
   const { body } = mountApart(error);
   expect(body.querySelector("[data-inline-reference]")?.textContent).toBe("Shared frontend");
   expect(body.textContent).toContain("The overlapping project must be removed");
-  act(() => setLanguage("zh-Hans"));
+  act(() => setLanguage("zh-CN"));
   expect(body.querySelector("[data-inline-reference]")?.textContent).toBe("Shared frontend");
   expect(body.textContent).toContain("需先移除重叠的项目");
 });
@@ -373,7 +373,7 @@ it("keeps a complete nested diagnostic outside its launch sentence and translate
   expect(body.querySelector("span")?.textContent).toBe("Could not start Draft: Codex could not report its usage.");
   expect(body.querySelector("pre")).toBeNull();
   expect(raw.querySelectorAll("pre")).toHaveLength(1);
-  act(() => setLanguage("zh-Hans"));
+  act(() => setLanguage("zh-CN"));
   expect(body.textContent).toContain("无法报告用量");
   expect(raw.querySelector("pre")?.textContent).toBe("raw\n    quota failure");
 });
@@ -392,13 +392,13 @@ it.each([
 ])("says a project_directory_trash_failed with cause %s in its own words, with its own remedy, the daemon's text only in the raw part", (cause, detail) => {
   const error = new CodedError("fallback", "project_directory_trash_failed", { path: "/work/p", detail, cause });
   const { body, raw } = mountApart(error);
-  const words = (language: "en" | "zh-Hans") => ["summary", "recovery"].map((part) => format(language, `daemon.project_directory_trash_failed.${cause}.retryTrash.${part}` as never)).join("");
+  const words = (language: "en" | "zh-CN") => ["summary", "recovery"].map((part) => format(language, `daemon.project_directory_trash_failed.${cause}.retryTrash.${part}` as never)).join("");
   expect(body.textContent).toBe(words("en"));
   expect(body.textContent).not.toContain(format("en", "daemon.project_directory_trash_failed.summary" as never));
   expect(raw.querySelector("pre")?.textContent).toBe(detail);
   expect(hasErrorRemedy(error)).toBe(true);
-  act(() => setLanguage("zh-Hans"));
-  expect(body.textContent).toBe(words("zh-Hans"));
+  act(() => setLanguage("zh-CN"));
+  expect(body.textContent).toBe(words("zh-CN"));
 });
 
 it.each(Object.entries(CODES).filter(([, record]) => "noSummary" in record).map(([code]) => code))("gives %s no first line, its title saying what failed, and keeps the system's text only in the raw part", (code) => {
@@ -680,8 +680,8 @@ it.each(["path_not_absolute", "project_directory_shared", "agent_not_available",
   // providers served that list is empty, leaving only the plain sentence's full stop.
   const plainOf = (text: string) => (code === "agent_not_available" ? text.replace(/[.。]$/, "") : text);
   expect(whole()).toBe(normalize(plainOf(plain)));
-  act(() => setLanguage("zh-Hans"));
-  expect(whole()).toBe(normalize(plainOf(daemonMessage("zh-Hans", code, params, error.message, createStateStore({}).getState()))));
+  act(() => setLanguage("zh-CN"));
+  expect(whole()).toBe(normalize(plainOf(daemonMessage("zh-CN", code, params, error.message, createStateStore({}).getState()))));
 });
 
 
@@ -719,7 +719,7 @@ it.each(["project", "console"])("preserves the held %s session's task and name a
   // One chip around the joined title, each name isolated at element level so mixed directions
   // cannot reorder across the separator.
   expect([...chips[0].querySelectorAll("bdi")].map((name) => name.textContent)).toEqual(["Task / 任务", session.title]);
-  for (const language of ["en", "zh-Hans"] as const) {
+  for (const language of ["en", "zh-CN"] as const) {
     const plain = daemonMessage(language, error.code, params, error.message, store.getState());
     expect(plain).toContain("\u2068Task / 任务\u2069｜\u2068مراجعة name\u2069");
   }
@@ -737,10 +737,10 @@ it.each([
   ["unsentMessage", ["Enter"]],
 ] as const)("marks %s recovery references while preserving a matching plain companion", (recovery, englishValues) => {
   const container = mount(<RecoveryGuidance recovery={recovery} />);
-  for (const language of ["en", "zh-Hans"] as const) {
+  for (const language of ["en", "zh-CN"] as const) {
     act(() => setLanguage(language));
     const chips = [...container.querySelectorAll("[data-inline-reference]")];
-    const expected = language === "zh-Hans" && recovery === "repository" ? ["Git", "终端", "Git"] : englishValues.map((value) => language === "zh-Hans" && value === "Terminal" ? "终端" : value);
+    const expected = language === "zh-CN" && recovery === "repository" ? ["Git", "终端", "Git"] : englishValues.map((value) => language === "zh-CN" && value === "Terminal" ? "终端" : value);
     expect(chips.map((chip) => chip.textContent)).toEqual(expected);
     for (const chip of chips) {
       const technical = ["PATH", "Enter", "git worktree list", "git branch"].includes(chip.textContent!);
@@ -756,8 +756,8 @@ it.each([
 
 it.each(["accountSharing", "accountChanging"] as const)("names the sharing switch as a reference and the Settings page as a path in %s recovery, in the plain companion as text", (recovery) => {
   const container = mount(<RecoveryGuidance recovery={recovery} />);
-  const names = { en: ["Share default configuration", "Settings", "Agent accounts"], "zh-Hans": ["共享默认配置", "设置", "智能体账户"] } as const;
-  for (const language of ["en", "zh-Hans"] as const) {
+  const names = { en: ["Share default configuration", "Settings", "Agent accounts"], "zh-CN": ["共享默认配置", "设置", "智能体账户"] } as const;
+  for (const language of ["en", "zh-CN"] as const) {
     act(() => setLanguage(language));
     const [sharing, ...steps] = names[language];
     const path = container.querySelector("[data-inline-path]")!;
@@ -852,7 +852,7 @@ it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s sh
   expect(hasErrorRemedy(error)).toBe(false);
   const summary = container.querySelector('[data-slot="alert-description"]')!;
   const details = container.querySelector("section")!;
-  for (const language of ["en", "zh-Hans"] as const) {
+  for (const language of ["en", "zh-CN"] as const) {
     act(() => setLanguage(language));
     expect(summary.textContent).toContain("Work");
     expect(summary.querySelector("div,p,ul,li,pre")).toBeNull();
@@ -863,7 +863,7 @@ it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s sh
     expect(causes[1]!.textContent).toContain(session.title);
   }
   // The details part is what an alert's Details popover shows, so it has no disclosure of its own to open.
-  expect([...details.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))).toEqual(Array(3).fill(translatorFor("zh-Hans")("common.copy")));
+  expect([...details.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))).toEqual(Array(3).fill(translatorFor("zh-CN")("common.copy")));
   expect(details.querySelector("[hidden]")).toBeNull();
   expect(details.querySelectorAll("li")).toHaveLength(3);
   expect(details.firstElementChild!.querySelectorAll("li")).toHaveLength(0);
@@ -899,7 +899,7 @@ it("joins a whole failure's reason and its guidance in the catalog, and points a
   </DaemonProvider>);
   const busy = mountWith("busy", "x");
   const other = mountWith("other", "x");
-  act(() => setLanguage("zh-Hans"));
+  act(() => setLanguage("zh-CN"));
   expect(busy.querySelector("span.block")!.textContent).toBe("此账户目录中有内容正在被使用。请关闭正在使用相关文件的其他程序，例如终端中的智能体、编辑器或同步工具。");
   expect(other.querySelector("span.block")!.textContent).toBe("请查看详情。");
   act(() => setLanguage("en"));
@@ -1109,8 +1109,8 @@ describe("a draft cleared from an input box", () => {
   it("words the label in the language in use", () => {
     const error = new CodedError("plain", "draft_discarded", { agent: "Claude Code", detail: CHINESE });
     const { body } = mountApart(error);
-    act(() => setLanguage("zh-Hans"));
-    const localized = format("zh-Hans", "daemon.draft_discarded.detailLabel");
+    act(() => setLanguage("zh-CN"));
+    const localized = format("zh-CN", "daemon.draft_discarded.detailLabel");
     expect(localized).not.toBe(format("en", "daemon.draft_discarded.detailLabel"));
     expect(label(body, localized)?.parentElement?.contains(body.querySelector("pre"))).toBe(true);
     expect(label(body, "Draft content")).toBeUndefined();
@@ -1209,8 +1209,8 @@ describe("a message sent with the text in an input box that could not be cleared
   it("words the label in the language in use", () => {
     const error = new CodedError("plain", "message_sent_with_draft", { agent: "Codex", detail: CHINESE });
     const { body } = mountApart(error);
-    act(() => setLanguage("zh-Hans"));
-    const localized = format("zh-Hans", "daemon.message_sent_with_draft.detailLabel");
+    act(() => setLanguage("zh-CN"));
+    const localized = format("zh-CN", "daemon.message_sent_with_draft.detailLabel");
     expect(localized).not.toBe("Draft content");
     expect(label(body, localized)?.parentElement?.contains(body.querySelector("pre"))).toBe(true);
     expect(label(body, "Draft content")).toBeUndefined();

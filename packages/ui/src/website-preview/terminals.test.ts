@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cells } from "../fixtures/fakeTerminal";
 import { createPreviewScenario } from "./scenarios";
 import { previewCopy as english } from "./locales/en";
-import { previewCopy as chinese } from "./locales/zh-Hans";
+import { previewCopy as chinese } from "./locales/zh-CN";
 import { createTerminalScript, liveSchedule, type TerminalSession } from "./terminals";
 import { terminalScripts } from "./terminalScripts";
 import { previewRepositories } from "./repositories";
@@ -15,7 +15,7 @@ beforeEach(() => { fakeTimers(); vi.setSystemTime(1_000_000); });
 
 const plain = (text: string) => text.replace(/\x1b\[[0-9;]*m/g, "");
 
-const sessionsOf = (language: "en" | "zh-Hans") => {
+const sessionsOf = (language: "en" | "zh-CN") => {
   const { scenario, output } = createPreviewScenario("overview", language);
   return [...scenario.state!.sessions!.keys()].map((id) => {
     const script = output(id);
@@ -36,12 +36,12 @@ describe("the preview's agent terminals", () => {
   });
 
   it("prints what a tool prints in English in every language", () => {
-    const toolRows = (language: "en" | "zh-Hans") =>
+    const toolRows = (language: "en" | "zh-CN") =>
       sessionsOf(language).map(({ script }) =>
         plain(script.screen(80, 0)).split("\r\n").filter((row) => /Read \d+ lines|Tests {2}\d|Running in the background|additions|No errors/.test(row)),
       );
-    expect(toolRows("zh-Hans")).toEqual(toolRows("en"));
-    expect(toolRows("zh-Hans").flat().length).toBeGreaterThan(10);
+    expect(toolRows("zh-CN")).toEqual(toolRows("en"));
+    expect(toolRows("zh-CN").flat().length).toBeGreaterThan(10);
   });
 
   it("agrees with the sample repositories the visitor can open", () => {
@@ -60,7 +60,7 @@ describe("the preview's agent terminals", () => {
     expect(sessions["preview-order-checks"]).toContain("Tests  2 passed | 2 skipped (4)");
   });
 
-  it.each(["en", "zh-Hans"] as const)("keeps every row of the working tail within the width in %s", (language) => {
+  it.each(["en", "zh-CN"] as const)("keeps every row of the working tail within the width in %s", (language) => {
     for (const { id, session, script } of sessionsOf(language)) {
       if (session.status !== "working") continue;
       for (const cols of [40, 60, 100]) {
@@ -77,7 +77,7 @@ describe("the preview's agent terminals", () => {
   });
 
   it("keeps the input box and rules of every session within the width", () => {
-    for (const language of ["en", "zh-Hans"] as const)
+    for (const language of ["en", "zh-CN"] as const)
       for (const { script } of sessionsOf(language))
         for (const cols of [40, 100])
           for (const row of script.screen(cols, 0).split("\r\n"))

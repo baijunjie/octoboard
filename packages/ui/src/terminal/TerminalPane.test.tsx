@@ -352,7 +352,7 @@ it("names the terminal's input in the UI language, and follows a language change
     act(() => setLanguage("en"));
     mount();
     expect(FakeController.last.inputLabel).toBe("Terminal input");
-    act(() => setLanguage("zh-Hans"));
+    act(() => setLanguage("zh-CN"));
     expect(FakeController.last.inputLabel).toBe("终端输入");
   } finally {
     act(() => setLanguage(language));

@@ -7,14 +7,14 @@ it("writes the theme, the language and each preference under the keys and in the
   writeStartingPreferences(
     { setItem: (key, value) => void written.set(key, value) },
     {
-      language: "zh-Hans",
+      language: "zh-CN",
       theme: "dark",
       preferences: { sidebarVisible: false, sidebarWidth: 280, markdownStyle: "github", panelStacks: { project: { open: ["files"], shares: { files: 1 } } } },
     },
   );
   expect(Object.fromEntries(written)).toEqual({
     "heroui-theme": "dark",
-    "octoboard.language": "zh-Hans",
+    "octoboard.language": "zh-CN",
     "octoboard.sidebarVisible": "false",
     "octoboard.sidebarWidth": "280",
     "octoboard.markdownStyle": "github",

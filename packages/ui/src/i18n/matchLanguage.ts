@@ -34,6 +34,8 @@ function parseTag(tag: string): ParsedTag | undefined {
   return { language, script };
 }
 
+// The two Chinese entries are region tags (`zh-CN`, `zh-TW`), so they too are parsed to the script their region means,
+// and a system language is matched to them by script: `zh-Hant-HK` and `zh-MO` land on `zh-TW`, `zh-SG` on `zh-CN`.
 const PARSED_LANGUAGES = LANGUAGES.map((language) => [language, parseTag(language)!] as const);
 
 /** The first entry of the list one system language maps onto, or `undefined`. A different

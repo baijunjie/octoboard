@@ -1,0 +1,119 @@
+---
+title: "Conectar por SSH"
+description: "Use o Octoboard em um servidor Linux ou em outro computador a partir deste computador, no app para desktop ou em um navegador, por SSH: uma conexão criptografada direto com essa máquina, sem retransmissor nem serviço na nuvem."
+---
+
+import { Code, Steps } from "@astrojs/starlight/components";
+import { commands, productName } from "../../../commands.ts";
+
+Use o {productName} em um servidor Linux ou em outro computador a partir deste computador, no app para desktop ou em um navegador, por SSH: uma conexão criptografada direto com essa máquina, sem retransmissor nem serviço na nuvem.
+
+Não tem certeza de que esta é a melhor forma para você? [Escolha como se conectar](../choose-how-to-connect/) compara o SSH com as formas que usam só o navegador e não precisam de SSH.
+
+<strong>App para desktop neste computador</strong> · <strong>Navegador por um encaminhamento SSH</strong> ⟷ SSH ⟷ <strong>Servidor Linux ou outro computador</strong>
+
+<details>
+<summary>Novo por aqui?</summary>
+
+- <strong>Host:</strong> a máquina em que o {productName} é executado e que você quer acessar, um servidor Linux ou outro Mac ou PC com Windows.
+- <strong>Servidor:</strong> aqui, uma máquina Linux em que você faz login pela rede, em geral alugada, sem tela própria.
+- <strong>SSH:</strong> uma forma padrão e criptografada de fazer login em outra máquina e digitar comandos nela. Está incluído no macOS, no Windows e no Linux.
+- <strong>Terminal:</strong> a janela em que você digita comandos: Terminal no macOS, PowerShell no Windows.
+- <strong>Encaminhamento SSH:</strong> um comando SSH que faz algo do host aparecer no seu próprio computador, para que o navegador possa abri-lo ali.
+- <strong>Impressão digital (chave do host):</strong> um código curto que identifica o SSH de uma máquina. Conferir essa impressão uma vez garante que você chegou à máquina certa.
+- <strong>Arquivo de chave:</strong> um arquivo que faz o login no lugar de uma senha. Alguns provedores de servidor fornecem um.
+
+</details>
+
+## Do que você precisa
+
+- <strong>Uma forma de fazer login no host por SSH.</strong> Em um servidor Linux, o provedor informa o endereço e o seu nome de usuário. Para verificar se funciona, abra o Terminal (macOS) ou o PowerShell (Windows) e execute o comando abaixo com o seu nome de usuário e o endereço do servidor. Na primeira vez, responda <code dir="ltr">yes</code> quando ele perguntar se deve confiar no servidor.
+
+  <Code code={commands.signIn} lang="sh" />
+
+  Se o host for um Mac ou um PC com Windows, você ativa o login SSH nas configurações do sistema dele; [Usar outro computador como host](#usar-outro-computador-como-host) mostra como.
+- <strong>Em um servidor Linux, o {productName} instalado e iniciado nele.</strong> [Instalação › Servidor Linux](../install/linux/) mostra como. O programa de servidor do {productName}, o octoboardd, é o que o app chama de daemon.
+- <strong>O app {productName} neste computador</strong>, para macOS ou Windows, a menos que você use apenas um navegador.
+
+## Conectar a um servidor Linux
+
+<Steps>
+
+1. Faça login no servidor por SSH como o usuário que executa o {productName}, execute este comando e copie a linha que começa com <code dir="ltr">{commands.connectionScheme}</code>: os dados de conexão, que dizem ao app onde e como se conectar.
+
+   <Code code={commands.connection} lang="sh" />
+
+   Se este computador alcança o servidor por outro endereço ou outra porta SSH, adicione <code dir="ltr">{commands.host}</code> ou <code dir="ltr">{commands.sshPort}</code> ao comando para imprimir os dados de conexão corretos.
+
+   O QR code que ele também imprime contém a mesma linha. Nenhum app o lê ainda.
+2. No app {productName} neste computador, abra <strong>Dispositivos remotos</strong> na barra à esquerda ou, no macOS, escolha <strong>Remoto › Dispositivos Remotos</strong> na barra de menus. No Windows, você também pode escolher <strong>Dispositivos remotos</strong> no menu de sistema da janela ou na lista de atalhos do ícone da barra de tarefas.
+3. Selecione <strong>Adicionar daemon remoto</strong> e, em seguida, <strong>Colar</strong> em <strong>Dados de conexão</strong> para preencher os campos.
+4. Em <strong>Autenticação</strong>, escolha <strong>Senha</strong> se você faz login com a senha da sua conta. Escolha <strong>Arquivo de chave</strong> se o provedor do servidor lhe deu um arquivo de chave (muitas vezes com nome como <code dir="ltr">id_ed25519</code> ou terminado em <code dir="ltr">.pem</code>) e informe onde ele está neste computador.
+5. Selecione <strong>Salvar</strong> e depois <strong>Conectar</strong>. Digite a senha se ele pedir.
+
+   Se você colou os dados de conexão, a identidade do servidor (a impressão digital) veio com eles e o app a confere para você. Se você digitou o endereço manualmente, o app mostra uma impressão digital na primeira vez. Para ter certeza de que chegou à máquina certa, compare-a com a que este comando imprime no servidor e conecte somente se forem iguais:
+
+   <Code code={commands.fingerprintCommand} lang="sh" />
+
+</Steps>
+
+Você saberá que funcionou quando uma janela separada do {productName} abrir, mostrando os projetos e as sessões do servidor.
+
+## Usar outro computador como host
+
+Você também pode acessar um Mac ou um PC com Windows que execute o app {productName}.
+
+<Steps>
+
+1. No computador que você quer acessar, abra <strong>Ajustes › Acesso remoto</strong> no {productName}.
+2. Selecione <strong>Abrir Ajustes do Sistema</strong> (macOS) ou <strong>Abrir Configurações</strong> (Windows) ali e ative <strong>Login remoto</strong> (macOS) ou <strong>OpenSSH Server</strong> (Windows), seguindo o caminho indicado na linha, para que este computador aceite logins SSH. Isso exige um administrador. De volta ao {productName}, a linha passa a mostrar <strong>Ativado</strong>.
+3. Ative <strong>Permitir acesso remoto</strong>, selecione <strong>Permitir</strong> para confirmar e mantenha o {productName} em execução: se você o fechar, o acesso remoto para.
+4. Na guia <strong>App {productName}</strong>, selecione <strong>Copiar dados de conexão</strong> e envie-os ao outro computador, por exemplo por e-mail ou chat.
+5. No computador de onde você vai trabalhar, adicione o host como nos passos 2 a 5 de [Conectar a um servidor Linux](#conectar-a-um-servidor-linux), colando os dados que você enviou. Faça login com o seu nome de usuário e a sua senha no host.
+
+</Steps>
+
+Você saberá que funcionou quando uma janela separada abrir com os projetos e as sessões do host.
+
+## Por um navegador
+
+<Steps>
+
+1. Obtenha o comando de encaminhamento SSH:
+
+   - <strong>Em um host Mac ou Windows,</strong> faça primeiro os passos 1 a 3 de [Usar outro computador como host](#usar-outro-computador-como-host). Depois, na guia <strong>Navegador</strong>, veja <strong>Etapa 1: encaminhamento SSH</strong>. Clique no endereço no comando para escolher como o seu outro computador alcança este (ou escolha <strong>Inserir o endereço manualmente</strong> e substitua <code dir="ltr">{commands.server}</code> depois) e selecione <strong>Copiar comando de encaminhamento</strong>. Selecione também <strong>Copiar endereço</strong> em <strong>Etapa 2: endereço do navegador</strong>.
+   - <strong>Em um servidor Linux,</strong> execute isto no servidor. Ele imprime o endereço do navegador e depois o comando SSH a executar.
+
+     <Code code={commands.address} lang="sh" />
+
+     Substitua <code dir="ltr">{commands.server}</code> no comando pelo endereço do servidor.
+2. No computador de onde você vai navegar, execute o comando SSH no Terminal (macOS) ou no PowerShell (Windows). A janela pode pedir a sua senha e depois não mostra mais nada; isso é normal. Deixe-a aberta enquanto trabalha: fechá-la desconecta o navegador.
+3. Abra no navegador o endereço do navegador, que começa com <code dir="ltr">http://127.0.0.1:</code>.
+
+</Steps>
+
+Você saberá que funcionou quando o {productName} abrir na aba do navegador sem pedir que você faça login.
+
+Só quem consegue alcançar o {productName} pelo encaminhamento SSH pode usar este endereço. Mantenha-o privado: a chave dá controle total, fica no histórico e nos favoritos do navegador e é sincronizada com os seus outros dispositivos se a sincronização do navegador estiver ativada.
+
+## Se não funcionar
+
+- <strong>“Não foi possível alcançar o servidor”, ou o comando SSH diz “Connection refused” ou expira:</strong> o login SSH está desativado no host, ou o endereço ou a porta SSH está errado. Verifique se <strong>Login remoto</strong> ou <strong>OpenSSH Server</strong> está ativado e se você consegue fazer login com o comando <code dir="ltr">ssh</code> acima.
+- <strong>“Não foi possível entrar”, ou “Permission denied”:</strong> o nome de usuário, a senha ou o arquivo de chave está errado.
+- <strong>“A chave de host não confere”:</strong> a máquina que responde não é aquela a que você se conectou antes. Isso acontece depois que um servidor é reinstalado, mas também pode indicar que há algo errado. Não continue até saber o motivo.
+- <strong>A página do navegador não carrega:</strong> a janela do SSH foi fechada ou o comando dela parou. Execute-o de novo e recarregue a página.
+
+## Segurança
+
+- <strong>Sem portas públicas extras:</strong> o {productName} só aceita conexões do próprio host, então, para se conectar de outro computador, você primeiro precisa fazer login no host por SSH. É por isso que você precisa do SSH ou de um dos [retransmissores](../choose-how-to-connect/).
+- <strong>Confira a que máquina você chega:</strong> o app memoriza a chave do host, a identidade SSH da máquina, na primeira conexão bem-sucedida e bloqueia a conexão com um alerta se essa identidade mudar depois.
+- <strong>Nenhuma senha armazenada:</strong> depois que você faz login pela primeira vez com uma senha ou com o seu próprio arquivo de chave, o app cria uma chave SSH separada para este computador usar nos próximos logins.
+- <strong>Retire o acesso de um computador:</strong> remova a entrada desse computador da lista de chaves SSH permitidas do host (<code dir="ltr">{commands.authorizedKeys}</code> no Linux e no macOS). Essa chave não consegue mais fazer login; uma conexão já aberta continua até terminar.
+
+## Em uma janela remota
+
+- <strong>Uma janela por destino SSH:</strong> conexões com outro nome de usuário, host ou porta SSH abrem cada uma a sua própria janela, de modo que projetos, sessões e notificações nunca se misturam.
+- <strong>Veja o status de cada conexão:</strong> abra o ícone do app na barra de menus no macOS ou o ícone na área de notificação no Windows para ver uma guia para cada conexão.
+- <strong>Abra sites remotos aqui:</strong> quando um agente inicia um site no host, clique no link <code dir="ltr">{commands.localhost}</code> que ele fornece e o app abre esse site neste computador por SSH.
+- <strong>Abra arquivos remotos aqui:</strong> veja um arquivo na janela remota ou baixe uma cópia para abri-la no app padrão deste computador para esse arquivo.
+- <strong>Reconecte automaticamente:</strong> se a rede cair, a janela continua tentando se reconectar até conseguir ou até você fechá-la.

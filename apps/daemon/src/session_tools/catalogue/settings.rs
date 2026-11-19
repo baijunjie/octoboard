@@ -290,7 +290,7 @@ pub(super) const UPDATE_SETTINGS: ToolDef = ToolDef {
                     "type": "string",
                     "description": "The language the user's interface is shown in, as a tag the \
                                     interface is offered in (such as `en`, `ja` or \
-                                    `zh-Hans`). Sessions are told to talk to the user in \
+                                    `zh-CN`). Sessions are told to talk to the user in \
                                     it, and a change switches the windows connected to \
                                     this daemon to it.",
                 },

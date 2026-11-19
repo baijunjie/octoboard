@@ -60,7 +60,7 @@ it("binds to the console session only when the binding fixes one", () => {
 });
 
 it("localizes default project and console names and preserves custom names", () => {
-  const zh: Translate = translatorFor("zh-Hans");
+  const zh: Translate = translatorFor("zh-CN");
   expect(opened(zh, parent, project, { kind: "unbound" }, accounts, available(), null).title).toBe("Search API 会话");
   expect(opened(zh, parent, undefined, { kind: "unbound" }, accounts, available(), null).title).toBe("Main 会话");
   expect(openSessionRequest(zh, { console: parent, project, choice: { agent: "codex", account: null }, title: "  Custom  ", appearance: "dark" }).title).toBe("Custom");

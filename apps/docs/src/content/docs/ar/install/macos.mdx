@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "لأجهزة Mac بمعالج Apple silicon أو Intel، على macOS 11 أو أحدث."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+لأجهزة Mac بمعالج Apple silicon أو Intel، على macOS 11 أو أحدث.
+
+<LinkButton href={downloads.macos}>تنزيل لنظام macOS</LinkButton>
+
+<Aside>تطبيق macOS في مرحلة النسخة التجريبية.</Aside>
+
+## التثبيت
+
+<Steps>
+
+1. نزّل التطبيق بالزر أعلاه. ستحصل على صورة قرص، وهي ملف ينتهي اسمه بـ <code dir="ltr">.dmg</code>.
+2. افتح الملف الذي نزّلته. في النافذة التي تظهر، اسحب {productName} إلى مجلد التطبيقات (Applications).
+3. افتح {productName} من مجلد التطبيقات أو من Launchpad.
+4. ثبّت وكيل برمجة واحدًا على الأقل (انظر أدناه)، ثم اختر <strong>إضافة مشروع</strong> في {productName} لفتح مجلد مشروع.
+
+</Steps>
+
+عندما تظهر النافذة الرئيسية، تكون قد انتهيت.
+
+## تثبيت وكيل برمجة
+
+لا يتضمّن {productName} وكيل ذكاء اصطناعي. ثبّت الوكلاء الذين تريد استخدامهم باتباع تعليماتهم، وسجّل الدخول إليهم. يعثر {productName} عليهم تلقائيًا. وهو يعمل مع:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## التحديثات
+
+عند صدور نسخة جديدة يخبرك {productName}، ويمكنك تثبيتها من داخل التطبيق. لا حاجة للعودة إلى هذه الصفحة.
+
+<a href={downloads.releases}>كل الإصدارات السابقة</a>

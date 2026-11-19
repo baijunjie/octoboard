@@ -181,15 +181,15 @@ it("focusControl does not reach an unavailable control inert in its subtree", as
 
 it("changeRow names a change row by its file and status in the window's language, whatever follows", () => {
   const english = createUi(document, "en").changeRow("new-name.ts", "renamed");
-  const chinese = createUi(document, "zh-Hans").changeRow("new-name.ts", "renamed");
-  const translatedFrom = format("zh-Hans", "git.row.detail", {
-    name: "new-name.ts", status: format("zh-Hans", "git.status.renamed"),
-    detail: format("zh-Hans", "git.row.from", { path: "src/old-name.ts" }),
+  const chinese = createUi(document, "zh-CN").changeRow("new-name.ts", "renamed");
+  const translatedFrom = format("zh-CN", "git.row.detail", {
+    name: "new-name.ts", status: format("zh-CN", "git.status.renamed"),
+    detail: format("zh-CN", "git.row.from", { path: "src/old-name.ts" }),
   });
-  const translatedSelected = format("zh-Hans", "git.row.selected", { name: "new-name.ts", status: format("zh-Hans", "git.status.renamed") });
-  const translatedFromSelected = format("zh-Hans", "git.row.detail.selected", {
-    name: "new-name.ts", status: format("zh-Hans", "git.status.renamed"),
-    detail: format("zh-Hans", "git.row.from", { path: "src/old-name.ts" }),
+  const translatedSelected = format("zh-CN", "git.row.selected", { name: "new-name.ts", status: format("zh-CN", "git.status.renamed") });
+  const translatedFromSelected = format("zh-CN", "git.row.detail.selected", {
+    name: "new-name.ts", status: format("zh-CN", "git.status.renamed"),
+    detail: format("zh-CN", "git.row.from", { path: "src/old-name.ts" }),
   });
   const matches = (matcher: Matcher, name: string) => (typeof matcher === "string" ? matcher === name : matcher(name));
   expect(matches(english, "new-name.ts, renamed, from src/old-name.ts")).toBe(true);

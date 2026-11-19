@@ -215,7 +215,7 @@ useSeoMeta({
         </li>
       </ul>
       <p class="platform-note">
-        {{ t("platformsDownloadPointer") }}
+        {{ t("platformsRequirementsPointer") }}
         <NuxtLink :to="localePath('/download/')" class="text-link platform-note-link"
         >{{ t("downloadCta") }}<span class="link-arrow" aria-hidden="true" /></NuxtLink>
       </p>

@@ -1,6 +1,11 @@
 <script setup lang="ts">
+import { remoteGuidePage } from "../../seo/page-outline";
+import { docsPath } from "../../seo/site-seo";
+
 const { t } = useSiteCopy();
-const localePath = useLocalePath();
+const { locale } = useI18n();
+const config = useRuntimeConfig();
+const guideHref = computed(() => docsPath(config.app.baseURL, locale.value, remoteGuidePage));
 </script>
 
 <template>
@@ -13,9 +18,9 @@ const localePath = useLocalePath();
       :description="t('remoteIntro')"
     />
     <RemoteRoute />
-    <NuxtLink class="text-link remote-guide-link" :to="localePath('/remote/')">
+    <a class="text-link remote-guide-link" :href="guideHref">
       {{ t("remoteGuideLink") }}<span class="link-arrow" aria-hidden="true" />
-    </NuxtLink>
+    </a>
   </section>
 </template>
 

@@ -11,7 +11,7 @@ import { quotaNaming, quotaUsedUpSentence, quotaWindowLabel } from "../accounts/
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-it.each(["en", "zh-Hans", "ar"] as const)("keeps the rich used-up sentence the plain one in words (%s)", (language) => {
+it.each(["en", "zh-CN", "ar"] as const)("keeps the rich used-up sentence the plain one in words (%s)", (language) => {
   const before = currentLanguage();
   setLanguage(language);
   const container = document.body.appendChild(document.createElement("div"));

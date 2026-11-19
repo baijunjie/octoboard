@@ -65,24 +65,24 @@ fn update_settings_applies_all_or_nothing_and_a_blank_clone_dir_clears_it() {
     update_settings(
         &state,
         SettingsChanges {
-            interface_language: Some("zh-Hans".to_string()),
+            interface_language: Some("zh-CN".to_string()),
             ..SettingsChanges::default()
         },
     )
     .unwrap();
     assert_eq!(
         state.store.interface_language().unwrap().as_deref(),
-        Some("zh-Hans")
+        Some("zh-CN")
     );
     assert!(matches!(
         events.try_recv(),
         Ok(Event::SettingsUpdated { settings })
-            if settings.interface_language.as_deref() == Some("zh-Hans")
+            if settings.interface_language.as_deref() == Some("zh-CN")
     ));
     update_settings(
         &state,
         SettingsChanges {
-            interface_language: Some("zh-Hans".to_string()),
+            interface_language: Some("zh-CN".to_string()),
             ..SettingsChanges::default()
         },
     )

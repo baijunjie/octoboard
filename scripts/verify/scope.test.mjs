@@ -5,14 +5,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
-  ALL_PACKAGES, DAEMON_READS_MARKDOWN, DAEMON_READS_NATIVE, DAEMON_READS_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, MENU_KEYS_FILE, matchingRules, planScope, PROTOCOL_SCHEMA, RULES, SWEEP_SHARED, UI_READS_DAEMON, UI_READS_ELSEWHERE,
-  UI_IMPORTS_NATIVE, UI_READS_NATIVE, VERIFY_READS_UI, WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, WIRE_PROTOCOL,
+  ALL_PACKAGES, DAEMON_READS_MARKDOWN, DAEMON_READS_NATIVE, DAEMON_READS_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, MENU_KEYS_FILE, matchingRules, planScope, PROTOCOL_SCHEMA, RULES, SWEEP_SHARED, DOCS_IMPORTS_FROM_UI, DOCS_READS_WEB, UI_READS_DAEMON, UI_READS_ELSEWHERE,
+  UI_IMPORTS_NATIVE, UI_READS_NATIVE, VERIFY_READS_UI, WEB_IMPORTS_FROM_UI, WEB_READS_DOCS, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, WIRE_PROTOCOL,
 } from "./scope.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const mode = (files, options) => planScope(files, options).mode;
-const JS = ["verify", "ui", "web", "desktop"];
+const JS = ["verify", "ui", "web", "docs", "desktop"];
 const RUST = ["daemon", "native"];
 
 // One case per rule (a rule with several matchers has one per matcher worth distinguishing): the file
@@ -26,6 +26,8 @@ const CASES = [
   ["apps/web/app/app.vue", ["web"]],
   ["apps/web/package.json", ["web"]],
   ["apps/web/nuxt.config.ts", ["web"]],
+  ["apps/docs/astro.config.ts", ["docs"]],
+  ["apps/docs/src/content/docs/index.md", ["verify", "web", "docs"]],
   ["apps/daemon/src/main.rs", ["daemon"]],
   ["apps/desktop/src-tauri/src/lib.rs", ["native"]],
   ["apps/desktop/scripts/bundle.mjs", ["desktop"]],
@@ -78,7 +80,7 @@ const CASES = [
   ["contracts/protocol/released/control-output.schema.json", ["verify", "daemon"]],
   ["packages/ui/src/platform/tauri.ts", ["verify", "ui", "native"]],
   ["scripts/verify/lock.mjs", ["verify", "ui"]],
-  ["packages/ui/src/i18n/languages.ts", ["verify", "ui", "web", "daemon"]],
+  ["packages/ui/src/i18n/languages.ts", ["verify", "ui", "web", "docs", "daemon"]],
   ["apps/daemon/src/providers/claude.rs", ["verify", "ui", "daemon"]],
   ["apps/desktop/src-tauri/Info.template.plist", ["verify", "ui", "desktop", "native"]],
   ["apps/desktop/src-tauri/localizations/", ["verify", "desktop", "native"]],
@@ -91,7 +93,9 @@ const CASES = [
   ["apps/desktop/src-tauri/windows/installer-hooks.nsh", ["verify", "desktop", "daemon", "native"]],
   ["apps/desktop/src-tauri/tauri.macos.conf.json", ["verify", "desktop", "native"]],
   ["LICENSE", ["verify", "ui"]],
-  ["apps/web/site.config.ts", ["web"]],
+  ["apps/web/site.config.ts", ["verify", "web", "docs"]],
+  ["apps/web/public/wordmark.png", ["verify", "web", "docs"]],
+  ["apps/web/i18n/locales/ja.json", ["verify", "web", "docs"]],
   ["packages/ui/src/test/failedFilesReporter.ts", ["verify", "ui"]],
   ["apps/desktop/src-tauri/icons/128x128.png", ["verify", "ui", "web", "native"], ["ui"]],
   ["apps/daemon/src/adapter/claude/compatibility.md", ["verify", "daemon"]],
@@ -100,10 +104,11 @@ const CASES = [
   ["packages/ui/index.html", ["ui"], ["ui"]],
   ["packages/ui/scripts/generate-licenses.mjs", ["ui"], ["ui"]],
   ["packages/ui/tsconfig.app.json", ["ui"], ["ui"]],
-  ["packages/ui/package.json", ["verify", "ui", "web"], ["ui"]],
+  ["packages/ui/package.json", ["verify", "ui", "web", "docs"], ["ui"]],
   // Unknown inputs select everything; Markdown no rule claims is read by nothing.
   ["something/new.txt", ALL_PACKAGES],
   ["apps/web/app/README.md", []],
+  ["apps/docs/README.md", []],
   ["apps/daemon/README.md", []],
   ["packages/ui/src/nested/NOTES.md", []],
   ["scripts/NOTES.md", []],
@@ -148,7 +153,7 @@ test("the menu keys select the shell only when the caller reports a change to th
 });
 
 // Every relation list, so a new one is added in one place.
-const RELATION_LISTS = [WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, SWEEP_SHARED, WIRE_PROTOCOL, PROTOCOL_SCHEMA, DAEMON_READS_MARKDOWN, DAEMON_READS_NATIVE, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI, UI_IMPORTS_NATIVE];
+const RELATION_LISTS = [WEB_IMPORTS_FROM_UI, DOCS_IMPORTS_FROM_UI, DOCS_READS_WEB, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, SWEEP_SHARED, WIRE_PROTOCOL, PROTOCOL_SCHEMA, DAEMON_READS_MARKDOWN, DAEMON_READS_NATIVE, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI, UI_IMPORTS_NATIVE, WEB_READS_DOCS];
 
 test("every file named in a relation list selects verify, so these tests run when it changes", () => {
   for (const file of RELATION_LISTS.flat()) assert.ok(planScope([file]).packages.includes("verify"), file);
@@ -172,7 +177,7 @@ test("cross-package file reads are all named by a rule", () => {
   const packageOf = (file) => file.split("/").slice(0, file.startsWith("apps/desktop/") ? 3 : 2).join("/");
   const reads = [];
   for (const file of tracked) {
-    if (!/\.(rs|ts|tsx|mjs)$/.test(file) || !existsSync(path.join(root, file))) continue;
+    if (!/\.(rs|ts|tsx|mjs|astro|mdx)$/.test(file) || !existsSync(path.join(root, file))) continue;
     const text = readFileSync(path.join(root, file), "utf8");
     const patterns = file.endsWith(".rs")
       ? [/include_(?:str|bytes)!\(\s*"([^"]+)"/g]
@@ -204,37 +209,39 @@ test("cross-package file reads are all named by a rule", () => {
   assert.ok(reads.some(([, target]) => target === "apps/daemon/PROTOCOL.md"), "the scan no longer finds the daemon's read of its protocol document; its patterns are stale");
 });
 
-// `WEB_IMPORTS_FROM_UI` is kept by hand: this finds what `apps/web` imports from `packages/ui/src`,
-// and what that imports in turn, so a new import fails here instead of going unnoticed.
-test("everything apps/web imports from the UI package is counted as a cross-package relation", () => {
+// `WEB_IMPORTS_FROM_UI` and `DOCS_IMPORTS_FROM_UI` are kept by hand: this finds what `apps/web` and `apps/docs` import
+// from `packages/ui/src`, and what that imports in turn, so a new import fails here instead of going unnoticed.
+test("everything apps/web and apps/docs import from the UI package is counted as a cross-package relation", () => {
   const exported = JSON.parse(readFileSync(path.join(root, "packages/ui/package.json"), "utf8")).exports;
   // A `@octoboard/ui/<name>` import resolves through the UI package's `exports` map.
-  const webTarget = (specifier) => {
+  const target = (specifier) => {
     if (!specifier.startsWith("@octoboard/ui/")) return specifier;
     return path.join(root, "packages/ui", exported[`./${specifier.slice("@octoboard/ui/".length)}`]);
   };
-  const seen = new Set();
-  const visit = (file) => {
-    for (const match of readFileSync(file, "utf8").matchAll(/(?:from|import)\s*\(?\s*["']([.@][^"']*)["']/g)) {
-      const base = path.resolve(path.dirname(file), webTarget(match[1]));
-      const resolved = [".ts", ".tsx", ""].map((ext) => base + ext).find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
-      if (resolved && resolved.includes(`${path.sep}packages${path.sep}ui${path.sep}src${path.sep}`) && !seen.has(resolved)) {
-        seen.add(resolved);
-        visit(resolved);
+  for (const [name, dir] of [["web", "apps/web"], ["docs", "apps/docs"]]) {
+    const seen = new Set();
+    const visit = (file) => {
+      for (const match of readFileSync(file, "utf8").matchAll(/(?:from|import)\s*\(?\s*["']([.@][^"']*)["']/g)) {
+        const base = path.resolve(path.dirname(file), target(match[1]));
+        const resolved = [".ts", ".tsx", ""].map((ext) => base + ext).find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
+        if (resolved && resolved.includes(`${path.sep}packages${path.sep}ui${path.sep}src${path.sep}`) && !seen.has(resolved)) {
+          seen.add(resolved);
+          visit(resolved);
+        }
       }
-    }
-  };
-  const webFiles = [];
-  const walk = (dir) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if ([".nuxt", ".output", "node_modules", "public"].includes(entry.name)) continue;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (/\.(ts|vue|mjs)$/.test(entry.name)) webFiles.push(full);
-    }
-  };
-  walk(path.join(root, "apps/web"));
-  webFiles.forEach(visit);
-  for (const file of seen) assert.ok(planScope([path.relative(root, file)]).packages.includes("web"), file);
-  assert.ok(seen.size > 0);
+    };
+    const sources = [];
+    const walk = (current) => {
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        if ([".nuxt", ".output", ".astro", "dist", "node_modules", "public"].includes(entry.name)) continue;
+        const full = path.join(current, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.(ts|vue|mjs|astro)$/.test(entry.name)) sources.push(full);
+      }
+    };
+    walk(path.join(root, dir));
+    sources.forEach(visit);
+    for (const file of seen) assert.ok(planScope([path.relative(root, file)]).packages.includes(name), file);
+    assert.ok(seen.size > 0, `${dir} imports nothing from the UI package; the scan's patterns are stale`);
+  }
 });

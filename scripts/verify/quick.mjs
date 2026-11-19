@@ -199,7 +199,7 @@ export function rustTests(files) {
   return { mode: "related", args: [...targets, "--", ...[...new Set([...crates.flatMap((name) => need[name]), ...wide])].sort()] };
 }
 
-const BUILDS_AND_SUITES = new Set(["web build", "ui build", "web tests", "ui tests", "rust tests"]);
+const BUILDS_AND_SUITES = new Set(["web build", "docs build", "ui build", "web tests", "docs tests", "ui tests", "rust tests"]);
 
 // The quick steps and the notes explaining each fallback, for `scope` and its changed `files`
 // (null when they are not known, which keeps both suites in full).

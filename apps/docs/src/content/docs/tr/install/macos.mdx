@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "Apple Silicon ve Intel işlemcili Mac’ler için, macOS 11 veya sonrasında."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Apple Silicon ve Intel işlemcili Mac’ler için, macOS 11 veya sonrasında.
+
+<LinkButton href={downloads.macos}>macOS için indir</LinkButton>
+
+<Aside>macOS uygulaması beta aşamasındadır.</Aside>
+
+## Kurulum
+
+<Steps>
+
+1. Uygulamayı yukarıdaki düğmeyle indirin. Bir disk görüntüsü, yani adı <code dir="ltr">.dmg</code> ile biten bir dosya elde edersiniz.
+2. İndirilen dosyayı açın. Açılan pencerede {productName} simgesini Applications klasörüne sürükleyin.
+3. {productName} uygulamasını Applications klasöründen veya Launchpad’den açın.
+4. En az bir kodlama ajanı kurun (aşağıya bakın), ardından bir proje klasörü açmak için {productName} içinde <strong>Proje ekle</strong> düğmesini seçin.
+
+</Steps>
+
+Ana pencere açıldığında işiniz tamamdır.
+
+## Kodlama ajanı kurma
+
+{productName} bir yapay zekâ ajanı içermez. Kullanmak istediklerinizi kendi yönergelerine göre kurun ve oturum açın. {productName} onları otomatik olarak bulur. Şunlarla çalışır:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## Güncellemeler
+
+Yeni bir sürüm çıktığında {productName} sizi bilgilendirir ve uygulamanın içinden kurabilirsiniz. Bu sayfaya geri dönmeniz gerekmez.
+
+<a href={downloads.releases}>Tüm sürümler</a>

@@ -28,7 +28,7 @@ function mount(content: React.ReactNode): HTMLElement {
 
 const bare = (text: string) => text.replace(/[\u2068\u2069]/g, "");
 
-it.each(["en", "zh-Hans", "ar"] as const)("keeps rich location wording equal to plain copy without embedding string isolates (%s)", (language) => {
+it.each(["en", "zh-CN", "ar"] as const)("keeps rich location wording equal to plain copy without embedding string isolates (%s)", (language) => {
   const before = currentLanguage();
   setLanguage(language);
   onTestFinished(() => setLanguage(before));
@@ -61,7 +61,7 @@ it.each(TEST_AGENTS)("retains account qualifiers and removed-account paths for %
   }
 });
 
-it.each(["en", "zh-Hans", "ar"] as const)("keeps every Git phase the same in rich and plain routes, Git's own text in neither (%s)", (language) => {
+it.each(["en", "zh-CN", "ar"] as const)("keeps every Git phase the same in rich and plain routes, Git's own text in neither (%s)", (language) => {
   const before = currentLanguage();
   setLanguage(language);
   onTestFinished(() => setLanguage(before));

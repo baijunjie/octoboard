@@ -1,0 +1,119 @@
+---
+title: "透過 SSH 連線"
+description: "透過 SSH，在這台電腦的桌面應用程式或瀏覽器中使用 Linux 伺服器或另一台電腦上的 Octoboard。SSH 會在兩台裝置之間建立加密的直接連線，不需要中繼或雲端服務。"
+---
+
+import { Code, Steps } from "@astrojs/starlight/components";
+import { commands, productName } from "../../../commands.ts";
+
+透過 SSH，在這台電腦的桌面應用程式或瀏覽器中使用 Linux 伺服器或另一台電腦上的 {productName}。SSH 會在兩台裝置之間建立加密的直接連線，不需要中繼或雲端服務。
+
+不確定該用哪種方式？[選擇連線方式](../choose-how-to-connect/)比較了這種方式，以及不需要 SSH、只用瀏覽器的幾種方式。
+
+<strong>這台電腦上的桌面應用程式</strong> · <strong>透過 SSH 轉送存取的瀏覽器</strong> ⟷ SSH ⟷ <strong>Linux 伺服器或另一台電腦</strong>
+
+<details>
+<summary>新手須知</summary>
+
+- <strong>主機：</strong>執行 {productName}、你要連過去的那台機器，可以是 Linux 伺服器，也可以是另一台 Mac 或 Windows 電腦。
+- <strong>伺服器：</strong>這裡指透過網路登入的 Linux 機器，通常是租來的，沒有自己的螢幕。
+- <strong>SSH：</strong>一種通用的加密方式，用來登入另一台機器並在上面輸入指令。macOS、Windows 和 Linux 都內建。
+- <strong>終端機：</strong>輸入指令的視窗，macOS 上是「終端機」，Windows 上是 PowerShell。
+- <strong>SSH 轉送：</strong>一個 SSH 指令，讓主機上的東西出現在你自己的電腦上，瀏覽器就能在本機開啟它。
+- <strong>指紋（主機金鑰）：</strong>標識一台機器 SSH 身分的一串短碼。核對一次，就能確認連上的是正確的機器。
+- <strong>金鑰檔案：</strong>代替密碼登入用的檔案。有些伺服器供應商會給你一個。
+
+</details>
+
+## 準備工作
+
+- <strong>能用 SSH 登入主機。</strong>如果主機是 Linux 伺服器，位址和使用者名稱由伺服器供應商提供。可以先試試看：開啟「終端機」（macOS）或 PowerShell（Windows），用你的使用者名稱和伺服器位址執行下面的指令。第一次連線時，它會詢問是否信任這台伺服器，請輸入 <code dir="ltr">yes</code>。
+
+  <Code code={commands.signIn} lang="sh" />
+
+  如果主機是 Mac 或 Windows 電腦，需要在它的系統設定裡開啟 SSH 登入，方法見[用另一台電腦當作主機](#用另一台電腦當作主機)。
+- <strong>如果主機是 Linux 伺服器，需要先在上面安裝並啟動 {productName}。</strong>方法見[安裝 › Linux 伺服器](../install/linux/)。{productName} 的伺服器程式 octoboardd，應用程式裡稱為「背景服務」。
+- <strong>這台電腦上的 {productName} 應用程式</strong>（macOS 或 Windows 版）。只用瀏覽器的話可以不裝。
+
+## 連線到 Linux 伺服器
+
+<Steps>
+
+1. 用執行 {productName} 的帳號透過 SSH 登入伺服器，執行這個指令，複製以 <code dir="ltr">{commands.connectionScheme}</code> 開頭的那一行。這就是連線資訊，桌面應用程式靠它知道要連到哪裡、怎麼連。
+
+   <Code code={commands.connection} lang="sh" />
+
+   如果這台電腦連到伺服器時用的是另一個位址或 SSH 連接埠，請在指令裡加上 <code dir="ltr">{commands.host}</code> 或 <code dir="ltr">{commands.sshPort}</code>，以產生正確的連線資訊。
+
+   它同時輸出的 QR 圖碼包含同樣的一行文字，目前還沒有應用程式支援掃描。
+2. 在這台電腦的 {productName} 應用程式中，點選左側欄的<strong>遠端裝置</strong>，或在 macOS 選單列中選擇<strong>遠端連線 › 遠端裝置</strong>。在 Windows 上，也可以從視窗的系統選單或工作列圖示的跳躍清單中選擇<strong>遠端裝置</strong>。
+3. 點選<strong>加入遠端背景服務</strong>，再點選<strong>連線資訊</strong>旁的<strong>貼上</strong>，自動填好各個欄位。
+4. 在<strong>驗證方式</strong>中，如果你用帳號密碼登入，請選<strong>密碼</strong>；如果伺服器供應商給的是金鑰檔案（檔名常像 <code dir="ltr">id_ed25519</code>，或以 <code dir="ltr">.pem</code> 結尾），請選<strong>金鑰檔案</strong>，並填入它在這台電腦上的位置。
+5. 點選<strong>儲存</strong>，再點選<strong>連線</strong>。如果要求輸入密碼，請輸入。
+
+   如果你貼上了連線資訊，其中已經帶有伺服器的身分（指紋），應用程式會替你核對。如果你是手動填入位址，第一次連線時應用程式會顯示一個指紋。為了確認連上的是正確的機器，請把它和在伺服器上執行下面這個指令得到的指紋比對，一致時再連線：
+
+   <Code code={commands.fingerprintCommand} lang="sh" />
+
+</Steps>
+
+看到一個獨立的 {productName} 視窗開啟，顯示伺服器上的專案和工作階段，就表示成功了。
+
+## 用另一台電腦當作主機
+
+你也可以連到另一台執行 {productName} 應用程式的 Mac 或 Windows 電腦。
+
+<Steps>
+
+1. 在你要連過去的電腦上，開啟 {productName} 的<strong>設定 › 遠端存取</strong>。
+2. 點選那裡的<strong>開啟系統設定</strong>（macOS）或<strong>開啟設定</strong>（Windows），依照該列提供的路徑開啟<strong>遠端登入</strong>（macOS）或 <strong>OpenSSH Server</strong>（Windows），讓這台電腦接受 SSH 登入。這一步需要系統管理員權限。回到 {productName}，該列會顯示<strong>已開啟</strong>。
+3. 開啟<strong>允許遠端存取</strong>，點選<strong>允許</strong>確認，並讓 {productName} 保持執行，結束後遠端存取也會隨之中斷。
+4. 在 <strong>{productName} App</strong> 分頁點選<strong>複製連線資訊</strong>，再透過電子郵件或聊天工具傳到另一台電腦。
+5. 在你要用來工作的電腦上，依照[連線到 Linux 伺服器](#連線到-linux-伺服器)的第 2 到 5 步加入這台主機，貼上你傳過去的資訊。用主機上的使用者名稱和密碼登入。
+
+</Steps>
+
+看到一個獨立的視窗開啟，顯示主機上的專案和工作階段，就表示成功了。
+
+## 從瀏覽器連線
+
+<Steps>
+
+1. 取得 SSH 轉送指令：
+
+   - <strong>主機是 Mac 或 Windows 電腦時，</strong>先完成[用另一台電腦當作主機](#用另一台電腦當作主機)的第 1 到 3 步。然後在<strong>瀏覽器</strong>分頁找到<strong>步驟 1：SSH 轉送</strong>。點選指令中的位址，選擇另一台電腦連到這台電腦時所用的位址（或選擇<strong>自行輸入位址</strong>，稍後自己取代 <code dir="ltr">{commands.server}</code>），然後點選<strong>複製轉送指令</strong>。再在<strong>步驟 2：瀏覽器位址</strong>處點選<strong>複製位址</strong>。
+   - <strong>主機是 Linux 伺服器時，</strong>在伺服器上執行這個指令。它會先輸出瀏覽器位址，再輸出要執行的 SSH 指令。
+
+     <Code code={commands.address} lang="sh" />
+
+     把指令中的 <code dir="ltr">{commands.server}</code> 換成伺服器位址。
+2. 在用來瀏覽的電腦上，開啟「終端機」（macOS）或 PowerShell（Windows），執行這個 SSH 指令。視窗可能會要求輸入密碼，之後就不再顯示任何內容，這是正常的。使用期間請不要關閉它，關閉後瀏覽器的連線就會中斷。
+3. 在瀏覽器中開啟以 <code dir="ltr">http://127.0.0.1:</code> 開頭的瀏覽器位址。
+
+</Steps>
+
+看到 {productName} 在瀏覽器分頁中開啟，而且沒有要求你登入，就表示成功了。
+
+只有能透過 SSH 轉送連到 {productName} 的人才能使用這個位址。請妥善保管它：位址裡的金鑰可以完全控制 {productName}，它會留在瀏覽器的瀏覽紀錄和書籤裡，開啟同步後還會同步到你的其他裝置。
+
+## 連不上時
+
+- <strong>提示「無法連線到伺服器」，或 SSH 指令提示「Connection refused」、逾時：</strong>主機上的 SSH 登入沒有開啟，或位址、SSH 連接埠不對。請確認<strong>遠端登入</strong>或 <strong>OpenSSH Server</strong> 已開啟，並且能用上面的 <code dir="ltr">ssh</code> 指令登入。
+- <strong>提示「無法登入」或「Permission denied」：</strong>使用者名稱、密碼或金鑰檔案不對。
+- <strong>提示「主機金鑰不相符」：</strong>回應的機器不是你之前連過的那台。伺服器重新安裝後會這樣，但也可能是出了問題。在弄清楚原因之前請不要繼續。
+- <strong>瀏覽器頁面打不開：</strong>SSH 視窗被關掉了，或其中的指令已停止。請重新執行它，再重新整理頁面。
+
+## 連線安全
+
+- <strong>不額外開放連接埠：</strong>{productName} 只接受來自主機本機的連線，所以要從另一台電腦連線，需要先透過 SSH 登入主機。這就是為什麼需要 SSH，或某種[第三方中繼](../choose-how-to-connect/)。
+- <strong>核對主機身分：</strong>第一次成功連線後，應用程式會記住主機的身分標識（主機金鑰），之後標識改變時就拒絕連線並提醒你。
+- <strong>不儲存密碼：</strong>第一次用密碼或自己的金鑰檔案登入後，應用程式會為這台電腦設定一把專用的 SSH 金鑰，供之後登入使用。
+- <strong>隨時收回權限：</strong>在主機允許登入的 SSH 金鑰清單中（Linux 和 macOS 上是 <code dir="ltr">{commands.authorizedKeys}</code> 檔案）刪除這台電腦對應的那一行，這把金鑰就不能再登入了；已經建立的連線不受影響，直到它自行中斷。
+
+## 在遠端視窗中工作
+
+- <strong>每個 SSH 連線目標一個視窗：</strong>使用者名稱、主機或 SSH 連接埠不同的連線，各自開啟獨立的視窗，專案、工作階段和通知互不混雜。
+- <strong>一眼看到連線狀態：</strong>點開 macOS 選單列或 Windows 通知區域裡的應用程式圖示，每個連線都有自己的分頁。
+- <strong>遠端網頁在本機開啟：</strong>代理程式在主機上啟動網站後，點選它提供的 <code dir="ltr">{commands.localhost}</code> 連結，應用程式會經由 SSH 在這台電腦上開啟該網站。
+- <strong>遠端檔案在本機開啟：</strong>你可以在遠端視窗中直接查看檔案，也可以下載一份副本，用這台電腦的預設應用程式開啟。
+- <strong>斷線自動重新連線：</strong>網路中斷後，視窗會持續嘗試重新連線，直到連上或你關閉視窗為止。

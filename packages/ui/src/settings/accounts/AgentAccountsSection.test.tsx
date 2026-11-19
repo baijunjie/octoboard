@@ -559,7 +559,7 @@ it("opens no settings for an account whose agent is not in the list, focusing th
 it("gives focus back to the row's actions button after its details, settings or connectors and MCP close, in a language whose button name is not English", async () => {
   framesAsTimers("pointer");
   const before = currentLanguage();
-  setLanguage("zh-Hans");
+  setLanguage("zh-CN");
   onTestFinished(() => { act(() => setLanguage(before)); });
   const { container } = mount("Codex");
   const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>("[data-row-actions] button")!;

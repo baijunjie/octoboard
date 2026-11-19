@@ -1,0 +1,43 @@
+---
+title: "Choisir comment se connecter"
+description: "Comparez les façons d’utiliser Octoboard sur un serveur Linux ou un autre ordinateur : SSH, Tailscale et UU Remote."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+
+{productName} ne s’ouvre jamais de lui-même au réseau, donc un autre ordinateur a besoin d’un chemin sûr pour l’atteindre. SSH est une connexion chiffrée standard, intégrée à macOS, Windows et Linux, et c’est la voie principale : depuis l’app de bureau ou depuis un navigateur. Si vous préférez ne pas activer la connexion SSH sur l’hôte, un relais tiers, Tailscale ou UU Remote, peut transporter la connexion d’un navigateur à la place.
+
+L’<strong>hôte</strong> est la machine sur laquelle {productName} fonctionne et que vous voulez atteindre.
+
+<Aside type="tip" title="La méthode la plus simple">
+Si un léger décalage à la saisie et une image floue ne vous gênent pas, vous n’avez besoin d’aucune des configurations ci-dessous : ouvrez l’hôte dans le bureau à distance d’[UU Remote](https://uuyc.163.com/) et utilisez {productName} directement sur l’hôte. Cela fonctionne avec un hôte Mac ou Windows, pas avec un serveur Linux. L’interface d’UU Remote est en chinois. Pour une fenêtre nette et réactive sur votre propre ordinateur, choisissez l’une des méthodes ci-dessous.
+</Aside>
+
+| | [SSH](../remote-connections/) | [Tailscale](../browser-over-tailscale/) | [UU Remote](../browser-over-uu-remote/) |
+| --- | --- | --- | --- |
+| S’utilise depuis | L’app de bureau ou un navigateur | Un navigateur uniquement | Un navigateur uniquement |
+| Hôtes pris en charge | Serveur Linux, Mac, PC Windows | Serveur Linux, Mac, PC Windows | Mac ou PC Windows uniquement |
+| Sur l’hôte, vous activez ou installez | La connexion SSH (Connexion à distance sur un Mac, OpenSSH Server sous Windows ; un serveur Linux l’a déjà) | Tailscale ; un hôte Mac ou Linux a aussi besoin de socat | UU Remote ; un hôte Mac a aussi besoin de socat |
+| Sur votre propre ordinateur, vous installez | Rien de plus | Tailscale ; et socat sur un ordinateur Mac ou Linux | UU Remote (Mac ou Windows) |
+| Le trafic passe par | Une connexion directe, sans tiers | Le réseau de Tailscale, avec votre compte | Le service de NetEase UU Remote, avec votre compte |
+| Fonctionne hors du même réseau | Seulement si l’hôte est joignable : sur le même réseau, à une adresse publique ou via un VPN | Oui | Oui |
+| Idéal pour | Les serveurs ; l’app de bureau complète ; les hôtes Mac et Linux auxquels d’autres personnes se connectent aussi | Atteindre vos propres machines de n’importe où sans SSH | Les utilisateurs en Chine continentale qui utilisent déjà UU Remote |
+
+## Avant de choisir un relais
+
+Les guides des relais demandent plus d’étapes que SSH : vous exécutez des commandes sur les deux ordinateurs et vous les laissez tourner dans des fenêtres ouvertes pendant que vous travaillez.
+
+<Aside type="caution">
+Les guides Tailscale et UU Remote n’ont pas encore été entièrement testés entre deux appareils. Ils suivent la documentation de ces services et les propres vérifications de {productName}.
+</Aside>
+
+<Aside type="caution" title="Uniquement sur des ordinateurs auxquels personne d’autre ne se connecte">
+Avec un relais, un autre compte utilisateur sur l’hôte ou sur votre propre ordinateur pourrait intercepter la clé du navigateur. N’utilisez Tailscale ou UU Remote que sur des ordinateurs auxquels vous seul vous connectez. La méthode [Se connecter via SSH](../remote-connections/) n’a pas cette faiblesse sur un hôte Mac ou Linux, et votre propre ordinateur ne l’a pas non plus quand vous utilisez l’app de bureau. Dans un navigateur, votre ordinateur l’a toujours, car la redirection SSH y écoute aussi sur un port <code dir="ltr">127.0.0.1</code>.
+</Aside>
+
+## Ensuite
+
+- [Se connecter via SSH](../remote-connections/) : pour un serveur Linux, ou pour utiliser l’app de bureau.
+- [Navigateur via Tailscale](../browser-over-tailscale/) : navigateur uniquement, n’importe quel hôte, sans SSH.
+- [Navigateur via UU Remote](../browser-over-uu-remote/) : navigateur uniquement, hôte Mac ou Windows, sans SSH.

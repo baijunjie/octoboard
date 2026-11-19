@@ -313,7 +313,7 @@ export const PLATFORM_TERMS: Record<Language, LocaleTerms> = {
     notificationArea: "biểu tượng trong khu vực thông báo",
     developerMode: "Chế độ nhà phát triển",
   },
-  "zh-Hans": {
+  "zh-CN": {
     trash: "废纸篓",
     recycleBin: "回收站",
     systemSettings: "系统设置",
@@ -328,7 +328,7 @@ export const PLATFORM_TERMS: Record<Language, LocaleTerms> = {
     // Apple's verb for a press is 点按, Microsoft's 单击.
     vocabulary: { click: { macos: "点按", windows: "单击" } },
   },
-  "zh-Hant": {
+  "zh-TW": {
     trash: "垃圾桶",
     recycleBin: "資源回收筒",
     systemSettings: "系統設定",

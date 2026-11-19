@@ -14,7 +14,7 @@ import { MAC_HOST } from "../test/hosts";
 
 const bare = (text: string) => text.replace(/[\u2068\u2069]/g, "");
 
-it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich and their plain companion usable (%s)", (language) => {
+it.each(["en", "zh-CN", "ar"] as const)("keeps fixed product references rich and their plain companion usable (%s)", (language) => {
   const before = currentLanguage();
   setLanguage(language);
   const container = document.body.appendChild(document.createElement("div"));
@@ -68,7 +68,7 @@ function textNodes(root: Node): Text[] {
   return found;
 }
 
-it.each(["en", "zh-Hans"] as const)("joins two sentences without a whitespace-only text node (%s)", (language) => {
+it.each(["en", "zh-CN"] as const)("joins two sentences without a whitespace-only text node (%s)", (language) => {
   const before = currentLanguage();
   setLanguage(language);
   const container = document.body.appendChild(document.createElement("div"));

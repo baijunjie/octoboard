@@ -243,7 +243,7 @@ it("starts the message without a space when there is no subject", () => {
 
 it("joins a string message to the subject with no space in Chinese", () => {
   const before = currentLanguage();
-  setLanguage("zh-Hans");
+  setLanguage("zh-CN");
   onTestFinished(() => setLanguage(before));
   mount({ subject: "它将被归档。", message: "它将只听从你。" });
   expect(document.body.querySelector("[role=alertdialog] p")!.textContent).toBe("它将被归档。它将只听从你。");

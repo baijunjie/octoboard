@@ -1,0 +1,46 @@
+---
+title: "Windows"
+description: "Für PCs mit Intel- oder AMD-Prozessor (fast alle Windows-PCs), ab Windows 10 Version 21H2. Unter Windows 11 auf Arm läuft diese x64-App per Emulation."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Für PCs mit Intel- oder AMD-Prozessor (x64; fast alle Windows-PCs), ab Windows 10 Version 21H2. Unter Windows 11 auf Arm läuft diese x64-App per Emulation.
+
+<LinkButton href={downloads.windows}>Für Windows herunterladen</LinkButton>
+
+<Aside>Die Windows-App ist eine Betaversion.</Aside>
+
+## Installieren
+
+<Steps>
+
+1. Lade das Installationsprogramm mit der Schaltfläche oben herunter. Es ist eine Datei, deren Name auf <code dir="ltr">x64-setup.exe</code> endet.
+2. Öffne die heruntergeladene Datei, um das Installationsprogramm auszuführen. Es installiert {productName} nur für dein Benutzerkonto und verlangt daher keine Administratorrechte.
+
+   Die App ist noch nicht mit einem Code-Signaturzertifikat signiert, deshalb zeigt Microsoft Defender SmartScreen möglicherweise „Der Computer wurde durch Windows geschützt“ an. Wähle „Weitere Informationen“ und dann „Trotzdem ausführen“.
+
+   Falls auf deinem PC Microsoft Edge WebView2 fehlt, das das Fenster der App darstellt, lädt das Installationsprogramm es herunter. Bleibe dazu mit dem Internet verbunden.
+3. Öffne {productName} über das Startmenü.
+4. Installiere mindestens einen Coding-Agenten (siehe unten) und wähle dann in {productName} <strong>Projekt hinzufügen</strong>, um einen Projektordner zu öffnen.
+
+</Steps>
+
+Sobald sich das Hauptfenster öffnet, bist du fertig.
+
+## Einen Coding-Agenten installieren
+
+{productName} bringt keinen KI-Agenten mit. Installiere die, die du verwenden möchtest, nach deren eigener Anleitung und melde dich bei ihnen an. {productName} findet sie automatisch. Es funktioniert mit:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+Wenn du Claude Code oder Codex verwendest, installiere zuerst [Git for Windows](https://git-scm.com/download/win); sie brauchen es, um zu funktionieren.
+
+## Updates
+
+Wenn eine neue Version erscheint, sagt dir {productName} Bescheid, und du kannst sie in der App installieren. Du musst nicht zu dieser Seite zurückkehren.
+
+<a href={downloads.releases}>Alle früheren Versionen</a>

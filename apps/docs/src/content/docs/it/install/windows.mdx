@@ -1,0 +1,46 @@
+---
+title: "Windows"
+description: "Per PC con processore Intel o AMD (quasi tutti i PC Windows), con Windows 10 versione 21H2 o successiva. Su Windows 11 su Arm, questa app x64 gira in emulazione."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Per PC con processore Intel o AMD (x64; quasi tutti i PC Windows), con Windows 10 versione 21H2 o successiva. Su Windows 11 su Arm, questa app x64 gira in emulazione.
+
+<LinkButton href={downloads.windows}>Scarica per Windows</LinkButton>
+
+<Aside>L’app per Windows è in beta.</Aside>
+
+## Installazione
+
+<Steps>
+
+1. Scarica il programma di installazione con il pulsante qui sopra. È un file il cui nome termina con <code dir="ltr">x64-setup.exe</code>.
+2. Apri il file scaricato per avviare il programma di installazione. Installa {productName} solo per il tuo account utente, quindi non chiede i privilegi di amministratore.
+
+   L’app non è ancora firmata digitalmente, quindi Microsoft Defender SmartScreen potrebbe mostrare “Windows ha protetto il PC”. Seleziona “Ulteriori informazioni”, poi “Esegui comunque”.
+
+   Se sul PC manca Microsoft Edge WebView2, che disegna la finestra dell’app, il programma di installazione lo scarica: assicurati quindi di avere una connessione a internet.
+3. Apri {productName} dal menu Start.
+4. Installa almeno un agente di programmazione (vedi sotto), poi seleziona <strong>Aggiungi progetto</strong> in {productName} per aprire la cartella di un progetto.
+
+</Steps>
+
+Quando si apre la finestra principale, hai finito.
+
+## Installare un agente di programmazione
+
+{productName} non include un agente IA. Installa quelli che vuoi usare seguendo le loro istruzioni e accedi con il tuo account. {productName} li trova automaticamente. Funziona con:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+Se usi Claude Code o Codex, installa prima [Git for Windows](https://git-scm.com/download/win): ne hanno bisogno per funzionare.
+
+## Aggiornamenti
+
+Quando esce una nuova versione, {productName} te lo segnala e puoi installarla dall’interno dell’app. Non serve tornare su questa pagina.
+
+<a href={downloads.releases}>Tutte le versioni precedenti</a>

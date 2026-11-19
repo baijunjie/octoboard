@@ -1,0 +1,46 @@
+---
+title: "Windows"
+description: "Windows 10 버전 21H2 이상을 쓰는 Intel 또는 AMD 프로세서 PC(거의 모든 Windows PC)용입니다. Arm 기반 Windows 11에서는 이 x64 앱이 에뮬레이션으로 실행됩니다."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Windows 10 버전 21H2 이상을 쓰는 Intel 또는 AMD 프로세서(x64, 거의 모든 Windows PC) PC용입니다. Arm 기반 Windows 11에서는 이 x64 앱이 에뮬레이션으로 실행됩니다.
+
+<LinkButton href={downloads.windows}>Windows용 다운로드</LinkButton>
+
+<Aside>Windows 앱은 베타 버전입니다.</Aside>
+
+## 설치
+
+<Steps>
+
+1. 위 버튼으로 설치 프로그램을 내려받으세요. 이름이 <code dir="ltr">x64-setup.exe</code>로 끝나는 파일입니다.
+2. 내려받은 파일을 열어 설치 프로그램을 실행하세요. {productName}은(는) 현재 사용자 계정에만 설치되므로 관리자 권한을 묻지 않습니다.
+
+   앱에 아직 코드 서명이 없어서 Microsoft Defender SmartScreen이 “Windows의 PC 보호”라는 창을 띄울 수 있습니다. “추가 정보”를 누른 다음 “실행”을 누르세요.
+
+   앱 창을 그리는 Microsoft Edge WebView2가 PC에 없으면 설치 프로그램이 내려받으니, 인터넷에 연결한 상태를 유지하세요.
+3. 시작 메뉴에서 {productName}을(를) 여세요.
+4. 코딩 에이전트를 하나 이상 설치한 다음(아래 참고), {productName}에서 <strong>프로젝트 추가</strong>를 눌러 프로젝트 폴더를 여세요.
+
+</Steps>
+
+메인 창이 열리면 끝입니다.
+
+## 코딩 에이전트 설치
+
+{productName}에는 AI 에이전트가 들어 있지 않습니다. 사용할 에이전트를 각각의 안내에 따라 설치하고 로그인하세요. {productName}이(가) 자동으로 찾아 줍니다. 다음 에이전트를 지원합니다.
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+Claude Code나 Codex를 쓴다면 먼저 [Git for Windows](https://git-scm.com/download/win)를 설치하세요. 두 에이전트가 작동하려면 필요합니다.
+
+## 업데이트
+
+새 버전이 나오면 {productName}이(가) 알려 주며, 앱 안에서 바로 설치할 수 있습니다. 이 페이지로 다시 올 필요는 없습니다.
+
+<a href={downloads.releases}>이전 버전 모두 보기</a>

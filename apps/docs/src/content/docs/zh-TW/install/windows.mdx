@@ -1,0 +1,46 @@
+---
+title: "Windows"
+description: "適用於 Intel 或 AMD 處理器的電腦（絕大多數 Windows 電腦），需要 Windows 10 版本 21H2 或更新版本。在 Arm 版 Windows 11 上，這個 x64 應用程式會以模擬方式執行。"
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+適用於 Intel 或 AMD 處理器的電腦（x64，絕大多數 Windows 電腦），需要 Windows 10 版本 21H2 或更新版本。在 Arm 版 Windows 11 上，這個 x64 應用程式會以模擬方式執行。
+
+<LinkButton href={downloads.windows}>下載 Windows 版</LinkButton>
+
+<Aside>Windows 應用程式仍處於 Beta 階段。</Aside>
+
+## 安裝
+
+<Steps>
+
+1. 點選上面的按鈕下載安裝程式，檔名以 <code dir="ltr">x64-setup.exe</code> 結尾。
+2. 開啟下載的檔案，執行安裝程式。它只會為你目前的使用者帳戶安裝 {productName}，不需要系統管理員權限。
+
+   應用程式尚未進行程式碼簽署，因此 Microsoft Defender SmartScreen 可能會顯示「Windows 已保護您的電腦」。請點選「其他資訊」，再點選「仍要執行」。
+
+   應用程式的視窗由 Microsoft Edge WebView2 繪製。電腦上沒有 WebView2 時，安裝程式會下載它，所以請保持網路連線。
+3. 從「開始」功能表開啟 {productName}。
+4. 安裝至少一個程式設計代理程式（見下文），然後在 {productName} 中點選<strong>加入專案</strong>，開啟一個專案資料夾。
+
+</Steps>
+
+看到主視窗開啟，就安裝完成了。
+
+## 安裝程式設計代理程式
+
+{productName} 本身不附帶 AI 代理程式，請依照各自的官方說明安裝並登入你要用的代理程式，{productName} 會自動偵測到它們。目前支援：
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+如果你使用 Claude Code 或 Codex，請先安裝 [Git for Windows](https://git-scm.com/download/win)，它們需要它才能運作。
+
+## 更新
+
+有新版本時，{productName} 會提醒你，你可以直接在應用程式內安裝，不必再回到這個頁面。
+
+<a href={downloads.releases}>所有歷史版本</a>

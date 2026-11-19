@@ -27,12 +27,8 @@ async function start(): Promise<void> {
   // The platform words follow the visitor's system, as the key caps do, before the first message is read.
   const host = browserHost();
   announceHost(host);
-  // Draw the desktop form's Paste control without reading the visitor's clipboard.
-  const clipboard = feature === "remoteDevices"
-    ? { writeText: async () => {}, readText: async () => "" }
-    : undefined;
   createRoot(document.getElementById("root")!).render(
-    <PlatformProvider value={{ kind: "browser", host, clipboard }}>
+    <PlatformProvider value={{ kind: "browser", host }}>
       <LanguageProvider><ThemeProvider><FeatureView feature={feature} /></ThemeProvider></LanguageProvider>
     </PlatformProvider>,
   );

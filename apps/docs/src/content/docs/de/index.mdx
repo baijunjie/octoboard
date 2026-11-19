@@ -1,0 +1,18 @@
+---
+title: Einführung
+description: Was Octoboard ist und welche Anleitung du zuerst lesen solltest.
+---
+
+import { productName } from "../../../commands.ts";
+
+{productName} ist ein lokaler, quelloffener Entwicklungsarbeitsplatz für Coding-Agenten. Er führt deine vorhandenen Agenten und Konten an einem Ort zusammen: Du lässt Sitzungen nebeneinander laufen, wechselst das Konto und behältst dabei die Unterhaltung, übergibst Aufgaben zwischen Anbietern und lässt einen koordinierenden Agenten die Arbeit auf mehrere Projekte verteilen.
+
+Ein Coding-Agent ist ein KI-Assistent, der für dich Code schreibt und ausführt, zum Beispiel Claude Code oder Codex. {productName} bringt keinen mit; es führt die aus, die du bereits hast.
+
+## Wo du anfängst
+
+- **{productName} auf diesem Computer verwenden:** Installiere die App für [macOS](install/macos/) oder [Windows](install/windows/). Mehr brauchen die meisten nicht.
+- **Agenten auf einem Linux-Server ausführen** (einem Rechner, den du mietest oder irgendwo dauerhaft laufen lässt, meist ohne Bildschirm): [Installiere das Serverprogramm](install/linux/) und verbinde dich dann über die Desktop-App damit, wie es [Über SSH verbinden](remote-connections/) beschreibt.
+- **Das {productName} eines Computers von einem anderen Computer aus verwenden:** Beginne mit [Verbindungsart wählen](choose-how-to-connect/), das die Wege dorthin vergleicht. Kurz gesagt:
+  - über die App des anderen Computers oder über einen Browser, mit eingeschalteter SSH-Anmeldung: [Über SSH verbinden](remote-connections/);
+  - über einen Browser, ohne die SSH-Anmeldung einzuschalten: [Browser über Tailscale](browser-over-tailscale/) oder [Browser über UU Remote](browser-over-uu-remote/).

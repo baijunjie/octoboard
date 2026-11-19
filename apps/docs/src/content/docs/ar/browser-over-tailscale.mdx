@@ -1,0 +1,179 @@
+---
+title: "المتصفح عبر Tailscale"
+description: "افتح Octoboard في متصفح على كمبيوتر آخر عبر شبكة Tailscale الخاصة بك، دون SSH أو سطح مكتب بعيد."
+---
+
+import { Aside, Code, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+import HostBrowserAddress from "../../../snippets/ar/host-browser-address.mdx";
+
+افتح {productName} في متصفح على كمبيوتر آخر عبر شبكة Tailscale الخاصة بك، دون SSH أو سطح مكتب بعيد. المضيف هو الكمبيوتر الذي يشغّل {productName}: كمبيوتر Mac أو كمبيوتر Windows أو خادم Linux يشغّل octoboardd. ويمكن إبقاء تسجيل الدخول عبر SSH (Remote Login في macOS) متوقفًا.
+
+لست متأكدًا أن هذه هي الطريقة المناسبة لك؟ راجع [اختر طريقة الاتصال](../choose-how-to-connect/).
+
+<Aside type="caution">
+لم تُختبر هذه الخطوات اختبارًا كاملًا بعد. فهي تتبع وثائق Tailscale Serve وفحوص {productName} نفسها. جُرّبت برامج الوسيط على كمبيوتر واحد، بما في ذلك الاتصال المباشر للمتصفح؛ أما Tailscale Serve بين جهازين وإعادة التوجيه على Windows فلم يُجرَّبا بعد.
+</Aside>
+
+<strong>المتصفح على كمبيوترك</strong> ← <strong>الوسيط على كمبيوترك (127.0.0.1)</strong> ⟷ Tailscale ⟷ <strong>الوسيط على المضيف (127.0.0.1)</strong> ← <strong>{productName}</strong>
+
+<details>
+<summary>هل هذا جديد عليك؟</summary>
+
+- <strong>Tailscale:</strong> خدمة تربط أجهزتك في شبكة خاصة عبر الإنترنت، أينما كانت. تسجّل الدخول إليها بحسابك الخاص.
+- <strong>Tailnet:</strong> شبكة Tailscale الخاصة بك: الأجهزة المسجَّل دخولها إلى حساب Tailscale الخاص بك.
+- <strong>127.0.0.1 (loopback):</strong> عنوان يعني دائمًا “هذا الكمبيوتر نفسه”.
+- <strong>المنفذ (Port):</strong> رقم يحدد برنامجًا واحدًا على الكمبيوتر، مثل رقم باب. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> هو المنفذ {commands.defaultPort} على هذا الكمبيوتر.
+- <strong>socat:</strong> برنامج صغير ومجاني ينقل اتصالًا من مكان إلى آخر. وهو هنا الوسيط.
+- <strong>Tailscale Serve:</strong> أمر في Tailscale يشارك منفذًا مع tailnet الخاص بك وحده. أما قريبه Tailscale Funnel فكان سيشاركه مع الإنترنت كله؛ لا تستخدمه هنا أبدًا.
+- <strong>Terminal:</strong> النافذة التي تكتب فيها الأوامر: Terminal في macOS، وPowerShell في Windows.
+
+</details>
+
+## لماذا هذه الخطوات الإضافية
+
+حرصًا على الأمان، لا يقبل {productName} إلا متصفحًا يفتحه على <code dir="ltr">{tunnel.loopback}</code>، وهو عنوان يعني دائمًا “هذا الكمبيوتر نفسه” (ويسمى أيضًا loopback). لذا لا يمكنك ببساطة كتابة عنوان Tailscale الخاص بالمضيف في المتصفح. بدلًا من ذلك، تشغّل برنامج وسيط صغيرًا على كل كمبيوتر: على كمبيوترك يجعل المضيف يبدو محليًا على <code dir="ltr">{tunnel.loopback}</code>؛ وعلى المضيف يسلّم الاتصال إلى {productName}. وينقل Tailscale حركة البيانات بين الاثنين.
+
+## قبل أن تبدأ
+
+- <strong>Tailscale على الكمبيوترين،</strong> مسجَّلًا الدخول فيهما إلى tailnet نفسه. استخدم tailnet لا يضم إلا أجهزتك: فكل جهاز يسمح له بالوصول إلى المضيف يستطيع الوصول إلى المنفذ الذي تشاركه.
+- <strong>socat على كل كمبيوتر هو Mac أو يشغّل Linux.</strong> كمبيوتر Windows لا يحتاج إليه.
+
+  <Tabs syncKey="host">
+  <TabItem label="macOS">
+  ثبّت [Homebrew](https://brew.sh/) أولًا إن لم يكن لديك (لا يأتي macOS بأداة تؤدي هذه المهمة)، ثم شغّل هذا في Terminal:
+
+  <Code code={tunnel.installSocatMac} lang="sh" />
+  </TabItem>
+  <TabItem label="Windows">
+  لا شيء يُثبَّت: مضيف Windows يقدّم المتصفح بالفعل على منفذ <code dir="ltr">{tunnel.loopback}</code>، وكمبيوتر Windows الذي تتصفح منه يستخدم أمرًا مدمجًا بدلًا من ذلك.
+  </TabItem>
+  <TabItem label="Linux">
+  <Code code={tunnel.installSocatLinux} lang="sh" />
+
+  استخدم مدير الحزم في توزيعتك (<code dir="ltr">dnf</code> أو <code dir="ltr">pacman</code> وغيرهما) إذا لم تكن <code dir="ltr">apt</code>.
+  </TabItem>
+  </Tabs>
+- <strong>نافذتان أو ثلاث نوافذ تبقى مفتوحة</strong> أثناء عملك: الوسيط وTailscale Serve على المضيف (باستثناء الوسيط على Windows)، والوسيط على كمبيوترك (باستثناء Windows).
+
+## على المضيف
+
+<Steps>
+
+1. احصل على عنوان المتصفح، وهو يحمل المفتاح الذي يسجّل دخول المتصفح.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <HostBrowserAddress />
+   </TabItem>
+   <TabItem label="Windows">
+   <HostBrowserAddress windows />
+   </TabItem>
+   <TabItem label="Linux">
+   شغّل هذا بصفتك المستخدم الذي يعمل به octoboardd، وانسخ العنوان الذي يطبعه، وهو يبدأ بـ <code dir="ltr">{tunnel.addressStart}</code>. تجاهل أمر SSH الذي يطبعه بعده.
+
+   <Code code={commands.address} lang="sh" />
+   </TabItem>
+   </Tabs>
+2. شغّل الوسيط على المضيف، الذي يوصل منفذًا على <code dir="ltr">{tunnel.loopback}</code> الخاص بالمضيف بـ {productName}. هذا المنفذ هو <strong>منفذ المضيف</strong> في الخطوات أدناه.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   شغّل هذا في Terminal واترك النافذة مفتوحة. ينصت على <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> وحده.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   منفذ المضيف هو <code dir="ltr">{tunnel.bridgePort}</code>.
+   </TabItem>
+   <TabItem label="Windows">
+   لا شيء يُشغَّل: {productName} نفسه ينصت على منفذ المتصفح، على <code dir="ltr">127.0.0.1</code> وحده. ومنفذ المضيف هو <strong>منفذ المتصفح</strong> ({commands.defaultPort} ما لم تغيّره).
+   </TabItem>
+   <TabItem label="Linux">
+   شغّل هذا بصفتك المستخدم نفسه، في طرفية أو جلسة <code dir="ltr">tmux</code> تبقى مفتوحة. ينصت على <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> وحده.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   منفذ المضيف هو <code dir="ltr">{tunnel.bridgePort}</code>.
+   </TabItem>
+   </Tabs>
+3. شارك منفذ المضيف مع tailnet الخاص بك عبر Tailscale Serve، واترك النافذة مفتوحة. لا تستخدم Tailscale Funnel أبدًا، فهو سيضع المنفذ على الإنترنت العام.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   مع تطبيق Tailscale من App Store، شغّل الأمر بكتابة <code dir="ltr">{tunnel.macCli}</code> بدلًا من <code dir="ltr">tailscale</code>. ومع التطبيق المستقل، ثبّت الأمر أولًا من إعداداته، تحت CLI integration.
+   </TabItem>
+   <TabItem label="Windows">
+   في PowerShell أو Command Prompt:
+
+   <Code code={tunnel.serveBrowserPort} lang="powershell" />
+
+   استخدم منفذك إذا غيّرت <strong>منفذ المتصفح</strong>.
+   </TabItem>
+   <TabItem label="Linux">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   إذا قال Tailscale إنك لا تملك الإذن، فاسمح لمستخدمك بإدارته مرة واحدة بـ <code dir="ltr">{tunnel.linuxOperator}</code>، أو شغّل الأمر بـ <code dir="ltr">sudo</code>.
+   </TabItem>
+   </Tabs>
+
+   للتحقق، شغّل <code dir="ltr">{tunnel.serveStatus}</code> في نافذة أخرى: يجب أن يعرض منفذ المضيف.
+
+</Steps>
+
+## على الكمبيوتر الذي ستتصفح منه
+
+<Steps>
+
+1. ابحث عن المضيف في تطبيق Tailscale على هذا الكمبيوتر، ودوّن اسمه (مثل <code dir="ltr">my-mac</code>) أو عنوانه (رقم مثل <code dir="ltr">100.x.y.z</code>).
+2. شغّل الوسيط على هذا الكمبيوتر، ليظهر المضيف على <code dir="ltr">{tunnel.loopback}:{commands.defaultPort}</code> هنا. إذا كان المنفذ {commands.defaultPort} مستخدمًا بالفعل على هذا الكمبيوتر، فاختر منفذًا آخر وغيّره في عنوان المتصفح أيضًا.
+
+   <Tabs syncKey="visitor">
+   <TabItem label="macOS أو Linux">
+   في الأمر أدناه، استبدل <code dir="ltr">{tunnel.host}</code> باسم المضيف أو عنوانه، و<code dir="ltr">{tunnel.hostPort}</code> بمنفذ المضيف.
+
+   <Code code={tunnel.visitorForward} lang="sh" />
+
+   مثلًا، لمضيف Mac اسمه <code dir="ltr">my-mac</code>:
+
+   <Code code={tunnel.visitorForwardExample} lang="sh" />
+
+   شغّله في Terminal واترك النافذة مفتوحة.
+   </TabItem>
+   <TabItem label="Windows">
+   افتح PowerShell كمسؤول. في الأمر أدناه، استبدل <code dir="ltr">{tunnel.hostIp}</code> بعنوان المضيف <code dir="ltr">100.x.y.z</code> (يحتاج هذا الأمر إلى الرقم؛ فالاسم لا يصلح)، و<code dir="ltr">{tunnel.hostPort}</code> بمنفذ المضيف.
+
+   <Code code={tunnel.visitorForwardWindows} lang="powershell" />
+
+   تبقى إعادة التوجيه هذه قائمة، حتى بعد إعادة التشغيل، إلى أن تحذفها (انظر أدناه)، لذا لا توجد نافذة تُترك مفتوحة. وهي تحتاج إلى خدمة IP Helper، التي تعمل افتراضيًا.
+   </TabItem>
+   </Tabs>
+3. افتح عنوان المتصفح الذي نسخته على المضيف. وهو يبدأ بـ <code dir="ltr">{tunnel.addressStart}</code>.
+
+</Steps>
+
+ستعرف أن كل شيء نجح عندما يفتح {productName} في تبويب المتصفح دون أن يطلب منك تسجيل الدخول.
+
+## إذا لم يعمل
+
+- <strong>لا تُحمَّل الصفحة:</strong> أُغلقت إحدى النوافذ، أو توقف أمرها. تأكد من أن الوسيطين وTailscale Serve ما زالت تعمل، ومن أن <code dir="ltr">{tunnel.serveStatus}</code> على المضيف يعرض منفذ المضيف.
+- <strong>يقول socat “Address already in use”:</strong> المنفذ مستخدم على ذلك الكمبيوتر. اختر منفذًا آخر؛ وعلى كمبيوترك، غيّره في عنوان المتصفح أيضًا.
+- <strong>تُرفض الصفحة أو تظهر فارغة:</strong> تأكد من أنك فتحت العنوان على <code dir="ltr">{tunnel.loopback}</code>، لا باسم Tailscale الخاص بالمضيف ولا بعنوانه <code dir="ltr">100.x.y.z</code>.
+- <strong>يطبع الوسيط على المضيف “Connection refused” أو “No such file or directory” عند فتح الصفحة:</strong> <strong>السماح بالوصول عن بُعد</strong> متوقف، أو أن {productName} لا يعمل على المضيف (وفي Linux، أن octoboardd لا يعمل).
+
+## إيقافه
+
+- <strong>على الكمبيوتر الذي تصفحت منه:</strong> أوقف socat بـ <kbd>Ctrl</kbd>+<kbd>C</kbd>، أو احذف إعادة التوجيه في Windows من PowerShell يعمل كمسؤول:
+
+  <Code code={tunnel.visitorForwardWindowsOff} lang="powershell" />
+- <strong>على المضيف:</strong> أوقف أمر Tailscale Serve وsocat بـ <kbd>Ctrl</kbd>+<kbd>C</kbd>. وتأكد بـ <code dir="ltr">{tunnel.serveStatus}</code> أن شيئًا لم يعد مشاركًا؛ فإذا بقي المنفذ معروضًا، فأزله بـ <code dir="ltr">{tunnel.serveBridgeOff}</code> (وفي Windows، <code dir="ltr">{tunnel.serveBrowserPortOff}</code>).
+- <strong>على مضيف Mac أو Windows،</strong> أوقف <strong>السماح بالوصول عن بُعد</strong> عندما لا تحتاج إليه بعد الآن. يغلق هذا مدخل المتصفح ويقطع اتصال كل صفحة فُتحت بالمفتاح.
+- <strong>إذا احتمل أن العنوان تسرّب،</strong> فأعطه مفتاحًا جديدًا بـ <strong>تجديد المفتاح</strong> في تبويب <strong>المتصفح</strong>، أو في Linux بـ <code dir="ltr">{tunnel.rotate}</code>. تنقطع الصفحات المفتوحة بالعنوان القديم.
+
+## الأمان
+
+- <strong>العنوان هو كلمة المرور:</strong> مفتاحه يمنح تحكمًا كاملًا في {productName} على المضيف، بما في ذلك تشغيل أي أمر. ويبقى صالحًا إلى أن تجدّده. ويبقى في سجل المتصفح وإشاراته المرجعية، ويُزامَن إلى أجهزتك الأخرى إذا كانت مزامنة المتصفح مفعّلة.
+- <strong>من يستطيع الوصول إليه:</strong> كل من يصل إلى منفذ المضيف ويملك المفتاح. ينصت الوسيطان على <code dir="ltr">127.0.0.1</code> فقط، فلا تستطيع الأجهزة الأخرى في شبكة المضيف أو شبكتك المحلية الوصول إليهما؛ ويجعل Tailscale Serve منفذ المضيف متاحًا من tailnet الخاص بك وحده، بقدر ما تسمح قواعد الوصول فيه.
+- <strong>فقط على أجهزة لا يسجّل الدخول إليها أحد غيرك:</strong> يستطيع حساب مستخدم آخر على المضيف أو على كمبيوترك الاتصال بمنافذ <code dir="ltr">127.0.0.1</code> هذه، وعندما لا يكون الوسيط قيد التشغيل يستطيع أن يستولي على منفذه ويتلقى المفتاح عندما يعيد متصفحك الاتصال. عند [الاتصال عبر SSH](../remote-connections/)، لا يوجد هذا الضعف في مضيف Mac أو Linux، ولا في كمبيوترك أنت عند استخدام تطبيق سطح المكتب. أما في المتصفح فيبقى هذا الضعف في كمبيوترك، لأن إعادة توجيه SSH هناك تستمع أيضًا على منفذ <code dir="ltr">127.0.0.1</code>.
+- <strong>لا Funnel أبدًا:</strong> Tailscale Funnel سينشر المنفذ على الإنترنت كله.

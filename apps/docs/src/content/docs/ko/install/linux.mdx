@@ -1,0 +1,89 @@
+---
+title: "Linux 서버"
+description: "root 권한 없이 Linux 서버에 Octoboard 서버 프로그램인 octoboardd를 설치합니다. macOS나 Windows 앱 또는 브라우저에서 SSH를 통해 접속합니다."
+---
+
+import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
+import { commands, downloads, productName } from "../../../../commands.ts";
+
+root 권한 없이 Linux 서버에 {productName} 서버 프로그램인 octoboardd(앱에서는 ‘데몬’이라고 부릅니다)를 설치합니다. macOS나 Windows 앱 또는 브라우저에서 SSH를 통해 접속합니다.
+
+x86_64와 aarch64를 지원하며, 배포판은 상관없습니다.
+
+<Aside>Linux 서버 프로그램은 베타 버전입니다.</Aside>
+
+## 시작하기 전에
+
+- **SSH로 로그인할 수 있는 Linux 서버.** SSH는 다른 컴퓨터에 안전하게 로그인해서 명령을 입력하는 방법입니다. 서버 제공업체가 서버 주소와 사용자 이름을 알려 줍니다.
+- **내 컴퓨터에 설치한 {productName} 앱**([macOS](../macos/) 또는 [Windows](../windows/)). 데스크톱 앱에서 작업하려는 경우에 필요합니다(권장).
+
+로그인하려면 내 컴퓨터에서 터미널(macOS) 또는 PowerShell(Windows)을 열고 아래 명령을 실행하세요. <code dir="ltr">&lt;you&gt;</code> 자리에는 사용자 이름을, <code dir="ltr">{commands.server}</code> 자리에는 서버 주소를 넣습니다. 처음에는 서버를 신뢰할지 물으면 <code dir="ltr">yes</code>라고 답하세요.
+
+<Code code={commands.signIn} lang="sh" />
+
+아래 1단계와 2단계는 서버에서, 방금 로그인한 그 창에서 실행합니다.
+
+## 설치
+
+<Steps>
+
+1. 서버에 octoboardd를 설치하세요.
+
+   <Code code={commands.install} lang="sh" />
+
+   <code dir="ltr">Installed octoboardd</code>로 시작하는 줄이 출력됩니다.
+2. 서버에서 octoboardd를 시작하세요.
+
+   <Code code={commands.start} lang="sh" />
+
+   <code dir="ltr">{productName} started</code>로 시작하는 줄이 출력됩니다.
+3. 내 컴퓨터에서 다음 두 방법 중 하나로 연결하세요.
+
+   - <strong>데스크톱 앱에서(권장):</strong> SSH 가이드의 [Linux 서버에 연결하기](../../remote-connections/#linux-서버에-연결하기)를 따라 하세요.
+   - <strong>브라우저에서:</strong> 서버에서 다음을 실행하세요.
+
+     <Code code={commands.address} lang="sh" />
+
+     두 가지가 출력됩니다. <code dir="ltr">http://127.0.0.1:</code>로 시작하는 브라우저 주소와 <code dir="ltr">ssh</code> 명령입니다. 내 컴퓨터에서 <code dir="ltr">ssh</code> 명령을 복사하고, <code dir="ltr">{commands.server}</code>을(를) 서버 주소(서버에 로그인할 때 쓰는 IP 주소나 이름)로 바꾼 다음 터미널이나 PowerShell에서 실행하세요. 비밀번호를 물을 수 있고, 그 뒤에는 아무것도 표시되지 않는데 정상입니다. 그 창은 열어 두세요. 닫으면 연결이 끊어집니다. 그런 다음 출력된 주소를 브라우저에서 여세요.
+
+</Steps>
+
+데스크톱 앱의 새 창이나 브라우저 탭에서 {productName}이(가) 열리면 성공입니다.
+
+## octoboardd를 찾을 수 없다면
+
+설치 중에 <code dir="ltr">.local/bin</code>으로 끝나는 폴더(예: <code dir="ltr">/home/&lt;you&gt;/.local/bin</code>)가 PATH에 없다고 나오면, 셸이 이름만으로는 <code dir="ltr">octoboardd</code>를 찾지 못한다는 뜻입니다. 설치 중에 출력된 전체 경로로 실행하거나, <code dir="ltr">{commands.binDir}</code>을(를) PATH에 추가한(예: <code dir="ltr">~/.profile</code>에) 다음 다시 로그인하세요.
+
+## 로그아웃하거나 재부팅한 뒤에도 계속 실행하기
+
+<code dir="ltr">{commands.start}</code>(으)로 시작한 octoboardd는 서버가 재시작되면 멈추고, 저절로 다시 시작되지 않습니다. <code dir="ltr">{commands.start}</code>을(를) 다시 실행하거나, 시작해 주겠다고 제안하는 데스크톱 앱에서 연결하세요. 로그아웃하면 멈추는 서버도 있습니다.
+
+서버가 시작될 때마다 함께 시작되고 로그아웃한 뒤에도 계속 실행되게 하려면, 대신 서비스로 설치하세요.
+
+<Code code={commands.installService} lang="sh" />
+
+이 명령은 프로그램을 설치하고, systemd 사용자 서비스로 설정하고, 시작합니다. 그런 다음 로그인하지 않은 동안에도 서비스가 실행되게 해 주는 lingering을 켭니다. 켜지 못했다는 메시지가 나오면 다음을 한 번 실행하세요(<code dir="ltr">sudo</code>가 필요할 수 있습니다).
+
+<Code code={commands.linger} lang="sh" />
+
+기본 포트는 <code dir="ltr">{commands.defaultPort}</code>입니다. 다른 포트를 쓰려면 서비스 명령 끝이나 <code dir="ltr">{commands.start}</code>에 <code dir="ltr">{commands.portOption}</code>을(를) 덧붙이세요.
+
+## 업그레이드
+
+{productName}은(는) 스스로 업그레이드하지 않습니다. 새 버전이 나오면 브라우저가 알려 주고, 설치할 시점은 직접 정합니다. 새 버전을 설치하고 나면 중단되는 세션이 없을 때 {productName}이(가) 알아서 새 버전으로 다시 시작하며, 중단되는 세션이 있으면 목록을 보여 주고 먼저 물어봅니다.
+
+- <strong>브라우저에서:</strong> 새 버전이 있다는 안내에서 <strong>다운로드 및 설치</strong>를 누르세요.
+- <strong>서버에서:</strong> 다음 명령을 실행하세요.
+
+  <Code code={commands.update} lang="sh" />
+
+  지금 다시 시작할지 물으면 <code dir="ltr">y</code>라고 답해 다시 시작하거나, Enter를 눌러 일단 이전 버전을 계속 실행하세요. 나중에 다시 시작하려면 <code dir="ltr">{commands.restart}</code>을(를) 실행하세요.
+
+<code dir="ltr">{commands.update}</code>이(가) 프로그램을 교체할 수 없다고 하면(예: 쓰기 권한이 없는 곳에 설치된 경우), 대신 설치 명령(또는 서비스 명령)을 다시 실행하세요. 안전할 때는 같은 방식으로 다시 시작하고, 그렇지 않으면 <code dir="ltr">{commands.restart}</code>을(를) 실행하라고 알려 줍니다.
+
+## 대신 압축 파일 내려받기
+
+<LinkButton href={downloads["linux-x86_64"]} variant="secondary">x86_64 압축 파일</LinkButton>
+<LinkButton href={downloads["linux-aarch64"]} variant="secondary">aarch64 압축 파일</LinkButton>
+
+<a href={downloads.releases}>이전 버전 모두 보기</a>

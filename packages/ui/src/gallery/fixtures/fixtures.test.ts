@@ -305,7 +305,7 @@ describe("gallery scenarios", () => {
   });
 
   it("tell a matcher that spells the English separator out from one that takes any punctuation, as the check above relies on", () => {
-    const zhPairs = separatorPairs("zh-Hans");
+    const zhPairs = separatorPairs("zh-CN");
     expect(zhPairs).toContainEqual([", ", "，"]);
     const spelled = (label: string) => label === "Operations" || label.startsWith("Operations, ");
     const anyPunctuation = (label: string) => label === "Operations" || (label.startsWith("Operations") && /^\p{P}/u.test(label.slice("Operations".length)));
@@ -316,13 +316,13 @@ describe("gallery scenarios", () => {
   });
 
   it("tell English copy from a name that is data, as the check above relies on", () => {
-    const isEnglishCopy = englishCopyIn("zh-Hans");
+    const isEnglishCopy = englishCopyIn("zh-CN");
     expect(isEnglishCopy("Show whole file")).toBe(true);
     expect(isEnglishCopy("new-name.ts, renamed")).toBe(true);
     expect(isEnglishCopy((name) => name.startsWith("Show whole file"))).toBe(true);
     expect(isEnglishCopy("src")).toBe(false);
     expect(isEnglishCopy("feature/login")).toBe(false);
-    expect(isEnglishCopy(format("zh-Hans", "git.row", { name: "new-name.ts", status: format("zh-Hans", "git.status.renamed") }))).toBe(false);
+    expect(isEnglishCopy(format("zh-CN", "git.row", { name: "new-name.ts", status: format("zh-CN", "git.status.renamed") }))).toBe(false);
     expect(isEnglishCopy("Show all 27 unmodified lines")).toBe(true);
     expect(isEnglishCopy("View all")).toBe(true);
     // The limit: a name shaped like a message's frame is flagged, whatever it is. Name such a control
@@ -331,8 +331,8 @@ describe("gallery scenarios", () => {
   });
 
   it("Git steps match Chinese session and change labels, including rename detail and selection", async () => {
-    const t = translatorFor("zh-Hans");
-    const recorded = (await matchersOf("zh-Hans")).filter(({ id }) => id.startsWith("git-"));
+    const t = translatorFor("zh-CN");
+    const recorded = (await matchersOf("zh-CN")).filter(({ id }) => id.startsWith("git-"));
     const sessionMatchers = recorded.filter(({ matcher }) => String(matcher).startsWith("session("));
     expect(sessionMatchers.length).toBeGreaterThan(0);
     const sessionLabels = [
@@ -360,7 +360,7 @@ describe("gallery scenarios", () => {
     }
   });
 
-  it.each(["en", "zh-Hans", "ar"] as const)("viewer change stages follow the window language in %s", async (language) => {
+  it.each(["en", "zh-CN", "ar"] as const)("viewer change stages follow the window language in %s", async (language) => {
     const subjects = [...await viewerScenarios.find(({ id }) => id === "viewer-changes")!.viewer!.subjects(language), ...await viewerScenarios.find(({ id }) => id === "viewer-changes-errors")!.viewer!.subjects(language)];
     const stages = subjects.flatMap(({ stage }) => stage === undefined ? [] : [stage]);
     expect(new Set(stages)).toEqual(new Set([format(language, "git.group.staged"), format(language, "git.group.unstaged")]));

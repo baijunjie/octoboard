@@ -1,0 +1,89 @@
+---
+title: "Serveur Linux"
+description: "Installez octoboardd, le programme serveur d’Octoboard, sur un serveur Linux sans droits root. Accédez-y depuis l’app macOS ou Windows, ou depuis un navigateur, dans les deux cas par SSH."
+---
+
+import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
+import { commands, downloads, productName } from "../../../../commands.ts";
+
+Installez octoboardd, le programme serveur de {productName} (l’app l’appelle le service), sur un serveur Linux sans droits root. Accédez-y depuis l’app macOS ou Windows, ou depuis un navigateur, dans les deux cas par SSH.
+
+Pour x86_64 et aarch64, sur n’importe quelle distribution.
+
+<Aside>Le programme serveur Linux est en version bêta.</Aside>
+
+## Avant de commencer
+
+- **Un serveur Linux sur lequel vous pouvez vous connecter en SSH.** SSH est une façon sécurisée de se connecter à une autre machine et d’y taper des commandes. Le fournisseur du serveur vous donne son adresse et votre nom d’utilisateur.
+- **L’app {productName} sur votre propre ordinateur**, pour [macOS](../macos/) ou [Windows](../windows/), si vous voulez travailler dans l’app de bureau (recommandé).
+
+Pour vous connecter, ouvrez Terminal (macOS) ou PowerShell (Windows) sur votre propre ordinateur et exécutez la commande ci-dessous, en remplaçant <code dir="ltr">&lt;you&gt;</code> par votre nom d’utilisateur et <code dir="ltr">{commands.server}</code> par l’adresse du serveur. La première fois, répondez <code dir="ltr">yes</code> quand on vous demande si vous faites confiance au serveur.
+
+<Code code={commands.signIn} lang="sh" />
+
+Les étapes 1 et 2 ci-dessous s’exécutent sur le serveur, dans cette fenêtre connectée.
+
+## Installation
+
+<Steps>
+
+1. Installez octoboardd sur le serveur.
+
+   <Code code={commands.install} lang="sh" />
+
+   Il affiche une ligne qui commence par <code dir="ltr">Installed octoboardd</code>.
+2. Démarrez-le sur le serveur.
+
+   <Code code={commands.start} lang="sh" />
+
+   Il affiche une ligne qui commence par <code dir="ltr">{productName} started</code>.
+3. Connectez-vous-y depuis votre propre ordinateur, de l’une des deux façons suivantes :
+
+   - <strong>Depuis l’app de bureau (recommandé) :</strong> suivez [Se connecter à un serveur Linux](../../remote-connections/#se-connecter-à-un-serveur-linux) dans le guide SSH.
+   - <strong>Depuis un navigateur :</strong> exécutez ceci sur le serveur.
+
+     <Code code={commands.address} lang="sh" />
+
+     Il affiche deux choses : une adresse de navigateur, qui commence par <code dir="ltr">http://127.0.0.1:</code>, et une commande <code dir="ltr">ssh</code>. Sur votre propre ordinateur, copiez la commande <code dir="ltr">ssh</code>, remplacez <code dir="ltr">{commands.server}</code> par l’adresse du serveur (l’adresse IP ou le nom que vous utilisez pour vous y connecter) et exécutez-la dans Terminal ou PowerShell. Elle peut vous demander votre mot de passe, puis n’affiche plus rien : c’est normal. Laissez cette fenêtre ouverte : la fermer coupe la connexion. Ouvrez ensuite l’adresse affichée dans votre navigateur.
+
+</Steps>
+
+Vous saurez que ça a marché quand {productName} s’ouvre dans la nouvelle fenêtre de l’app de bureau, ou dans l’onglet du navigateur.
+
+## Si octoboardd est introuvable
+
+Si l’installation indique qu’un dossier se terminant par <code dir="ltr">.local/bin</code> (par exemple <code dir="ltr">/home/&lt;you&gt;/.local/bin</code>) n’est pas dans votre PATH, le shell ne trouve pas <code dir="ltr">octoboardd</code> par son nom. Exécutez-le avec le chemin complet affiché par l’installation, ou ajoutez <code dir="ltr">{commands.binDir}</code> à votre PATH (par exemple dans <code dir="ltr">~/.profile</code>) et reconnectez-vous.
+
+## Le garder actif après une déconnexion ou un redémarrage
+
+Démarré avec <code dir="ltr">{commands.start}</code>, octoboardd s’arrête quand le serveur redémarre, et rien ne le relance tout seul : exécutez de nouveau <code dir="ltr">{commands.start}</code>, ou connectez-vous depuis l’app de bureau, qui propose de le démarrer pour vous. Certains serveurs l’arrêtent aussi quand vous vous déconnectez.
+
+Pour qu’il démarre avec le serveur et reste actif après votre déconnexion, installez-le plutôt comme un service :
+
+<Code code={commands.installService} lang="sh" />
+
+Cette commande installe le programme, le configure comme un service utilisateur systemd et le démarre. Elle active ensuite la persistance de session (lingering), qui permet à vos services de tourner quand vous n’êtes pas connecté. Si elle indique qu’elle n’a pas pu le faire, exécutez ceci une fois (<code dir="ltr">sudo</code> peut être nécessaire) :
+
+<Code code={commands.linger} lang="sh" />
+
+Le port par défaut est <code dir="ltr">{commands.defaultPort}</code>. Pour en utiliser un autre, ajoutez <code dir="ltr">{commands.portOption}</code> à la fin de la commande du service, ou à <code dir="ltr">{commands.start}</code>.
+
+## Mise à jour
+
+{productName} ne se met jamais à jour tout seul : quand une nouvelle version est disponible, le navigateur vous le signale, et vous choisissez quand l’installer. Une fois la nouvelle version installée, {productName} redémarre dessus tout seul quand aucune session ne risque d’être interrompue ; si certaines le seraient, il les liste et vous demande d’abord.
+
+- <strong>Dans le navigateur :</strong> sélectionnez <strong>Télécharger et installer</strong> là où il est indiqué qu’une nouvelle version est disponible.
+- <strong>Sur le serveur :</strong> exécutez cette commande.
+
+  <Code code={commands.update} lang="sh" />
+
+  S’il demande s’il faut redémarrer maintenant, répondez <code dir="ltr">y</code> pour redémarrer, ou appuyez sur Entrée pour garder l’ancienne version en marche pour le moment. Pour redémarrer plus tard, exécutez <code dir="ltr">{commands.restart}</code>.
+
+Si <code dir="ltr">{commands.update}</code> indique qu’il ne peut pas remplacer le programme, par exemple parce qu’il a été installé à un endroit où vous ne pouvez pas écrire, exécutez plutôt de nouveau la commande d’installation (ou celle du service). Il redémarre de la même façon quand c’est sûr, et sinon vous dit d’exécuter <code dir="ltr">{commands.restart}</code>.
+
+## Télécharger plutôt l’archive
+
+<LinkButton href={downloads["linux-x86_64"]} variant="secondary">Archive x86_64</LinkButton>
+<LinkButton href={downloads["linux-aarch64"]} variant="secondary">Archive aarch64</LinkButton>
+
+<a href={downloads.releases}>Toutes les versions précédentes</a>

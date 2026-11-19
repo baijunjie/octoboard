@@ -1645,7 +1645,7 @@ proxy and VoiceOver were stopped afterwards; `cleanup.json` records the exact ow
 - **Two joins in the heard text.** "permanently.The project's" (the subject and the message, which were separated by a
   text node that was only a space) and "Codex (Default)Fixture turn" (a session row's hidden agent name directly before
   its title; E7 heard the same join). The current source puts the separator between the sentences
-  (`common.sentenceSeparator`: a space in en, nothing in zh-Hans) into the message's own text node and ends the hidden
+  (`common.sentenceSeparator`: a space in en, nothing in zh-CN) into the message's own text node and ends the hidden
   agent name with a comma ("Codex (Default), "), since a hidden element's trailing space is dropped in rendering. That
   changes the text only, not any item under "What \"matches a case\" means"; the new phrases were not heard.
 - **Capture.** AppleScript last phrase, by background polling at a requested 25 ms and by direct reads after guarded

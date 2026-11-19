@@ -1,0 +1,46 @@
+---
+title: "Windows"
+description: "Dành cho máy tính dùng bộ xử lý Intel hoặc AMD (hầu hết máy Windows), chạy Windows 10 phiên bản 21H2 trở lên. Trên Windows 11 chạy chip Arm, ứng dụng x64 này chạy qua giả lập."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Dành cho máy tính dùng bộ xử lý Intel hoặc AMD (x64; hầu hết máy Windows), chạy Windows 10 phiên bản 21H2 trở lên. Trên Windows 11 chạy chip Arm, ứng dụng x64 này chạy qua giả lập.
+
+<LinkButton href={downloads.windows}>Tải xuống cho Windows</LinkButton>
+
+<Aside>Ứng dụng Windows đang ở giai đoạn beta.</Aside>
+
+## Cài đặt
+
+<Steps>
+
+1. Tải trình cài đặt bằng nút ở trên. Đó là tệp có tên kết thúc bằng <code dir="ltr">x64-setup.exe</code>.
+2. Mở tệp vừa tải để chạy trình cài đặt. Nó chỉ cài {productName} cho tài khoản người dùng của bạn, nên không yêu cầu quyền quản trị viên.
+
+   Ứng dụng chưa được ký mã, nên Microsoft Defender SmartScreen có thể hiện “Windows protected your PC” (Windows đã bảo vệ PC của bạn). Chọn “More info” (Thông tin thêm), rồi “Run anyway” (Vẫn chạy).
+
+   Nếu máy bạn chưa có Microsoft Edge WebView2, thành phần vẽ cửa sổ của ứng dụng, trình cài đặt sẽ tải nó về, nên hãy giữ kết nối internet.
+3. Mở {productName} từ menu Start.
+4. Cài ít nhất một tác tử lập trình (xem bên dưới), rồi chọn <strong>Thêm dự án</strong> trong {productName} để mở một thư mục dự án.
+
+</Steps>
+
+Khi cửa sổ chính mở ra là bạn đã cài xong.
+
+## Cài tác tử lập trình
+
+{productName} không đi kèm tác tử AI. Hãy cài những tác tử bạn muốn dùng theo hướng dẫn riêng của chúng, rồi đăng nhập vào đó. {productName} sẽ tự nhận ra chúng. Hiện hỗ trợ:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+Nếu bạn dùng Claude Code hoặc Codex, hãy cài [Git for Windows](https://git-scm.com/download/win) trước; chúng cần nó để hoạt động.
+
+## Cập nhật
+
+Khi có phiên bản mới, {productName} sẽ báo cho bạn, và bạn có thể cài ngay trong ứng dụng. Bạn không cần quay lại trang này.
+
+<a href={downloads.releases}>Tất cả các phiên bản trước</a>

@@ -1,4 +1,4 @@
-import { installCommand, linuxCommandParts } from "./downloads.ts";
+import { docsPages } from "./site-seo.ts";
 
 // Sections the homepage, the privacy page, and the agent Markdown all walk.
 // Adding a visible section means adding it here; the pages iterate these lists.
@@ -32,32 +32,9 @@ export const homeSections = [
 
 export const homeSteps = ["One", "Two", "Three"] as const;
 
-export function remoteGuides(siteUrl: string) {
-  return [
-    { id: "linux", key: "remoteSetupTitle", steps: [
-      { key: "remoteStepInstallBody", command: installCommand(siteUrl), notes: ["downloadPathNote"] },
-      { key: "remoteStepStartBody", command: linuxCommandParts.start },
-      { key: "remoteStepDetailsBody", command: "octoboardd connection", notes: ["remoteAddressOverride", "remoteQr"] },
-      { key: "remoteStepConnectBody", preview: true, notes: ["remoteWindowsMenu", "remoteFingerprint"] },
-    ] },
-    { id: "host", key: "remoteHostTitle", steps: [
-      { key: "remoteHostSsh" },
-      { key: "remoteHostAllow" },
-      { key: "remoteHostDetails" },
-      { key: "remoteHostConnect" },
-    ] },
-    { id: "browser", key: "remoteBrowserTitle", steps: [
-      { key: "remoteBrowserCommand", command: linuxCommandParts.address, notes: ["remoteBrowserServer"] },
-      { key: "remoteBrowserRun" },
-      { key: "remoteBrowserOpen" },
-    ], note: "remoteBrowserKey" },
-  ] as const;
-}
-
-export const remoteTopics = [
-  { id: "security", key: "remoteSecurityTitle", items: ["remoteSecuritySsh", "remoteSecurityHost", "remoteSecurityDevice", "remoteSecurityRevoke"] },
-  { id: "remote-window", key: "remoteWindowTitle", items: ["remoteWindowWork", "remoteWindowMenu", "remoteWindowWeb", "remoteWindowFiles", "remoteWindowReconnect"] },
-] as const;
+// The docs page that "Read the setup guide" opens from the homepage, that "Read how to connect over SSH" opens from the
+// download page, and that the former remote connections addresses lead to.
+export const remoteGuidePage = docsPages.remoteConnections;
 
 export const developerSections = ["Shift", "Context", "Quality"] as const;
 

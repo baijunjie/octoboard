@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { existsSync, readFileSync } from "node:fs";
+import { locales } from "../seo/site-seo.ts";
 import {
+  appRequirementsKeys,
   detectDownloadTab,
+  linuxCommands,
   downloadPagePath,
   downloadTargets,
   fallbackDownloads,
@@ -227,4 +230,16 @@ test("the download tab follows the visitor's system and falls back to macOS", ()
   assert.equal(detectDownloadTab("", "Mozilla/5.0 (Linux; Android 14)"), "macos");
   assert.equal(detectDownloadTab("", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)"), "macos");
   assert.equal(detectDownloadTab("", ""), "macos");
+});
+
+test("each desktop app's download button has a requirements line in every language, and the Linux terminal demo types the daemon's own commands", () => {
+  assert.deepEqual({ ...appRequirementsKeys }, { macos: "downloadMacosRequirements", windows: "downloadWindowsRequirements" });
+  for (const locale of locales) {
+    const catalog = JSON.parse(readFileSync(new URL(`../i18n/locales/${locale.file}`, import.meta.url), "utf8")) as Record<string, string>;
+    for (const key of Object.values(appRequirementsKeys)) {
+      assert.equal(typeof catalog[key], "string", `${locale.code}: ${key}`);
+      assert.notEqual(catalog[key].trim(), "", `${locale.code}: ${key}`);
+    }
+  }
+  assert.deepEqual({ ...linuxCommands }, { start: "octoboardd start", address: "octoboardd address" });
 });

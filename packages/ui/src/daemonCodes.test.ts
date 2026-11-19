@@ -11,7 +11,7 @@ import { messageKey } from "./errors/codes";
 import { noticeKind } from "./errors/errorPresentation";
 import { classifyError } from "./errors/errorRecovery";
 import { en } from "./i18n/messages/en";
-import { zhHans } from "./i18n/messages/zh-Hans";
+import { zhCN } from "./i18n/messages/zh-CN";
 
 // Every code the daemon can send is worded in the catalogs, and every failure it can answer a request with, or notify
 // as one, has a remedy (`recovery` of its record in `errors/codes.ts`): otherwise the window shows the daemon's English
@@ -80,7 +80,7 @@ describe.each(ALL_CODES)("the daemon's code %s", (code) => {
   it("is worded in English and Simplified Chinese", () => {
     const key = messageKey(messageCode(code, {}));
     expect(Object.hasOwn(en, key), `en lacks ${key}`).toBe(true);
-    expect(Object.hasOwn(zhHans, key), `zh-Hans lacks ${key}`).toBe(true);
+    expect(Object.hasOwn(zhCN, key), `zh-CN lacks ${key}`).toBe(true);
   });
 });
 
@@ -104,7 +104,7 @@ const textsOf = (code: string, message: string): string => {
   return [key, `${key}.summary`, `${key}.recovery`, ...reasons]
     .map((k) => (Object.hasOwn(en, k) ? JSON.stringify(en[k as keyof typeof en]) : "")).join(" ");
 };
-const has = (key: string) => Object.hasOwn(en, key) && Object.hasOwn(zhHans, key);
+const has = (key: string) => Object.hasOwn(en, key) && Object.hasOwn(zhCN, key);
 
 describe("the registry in errors/codes.ts", () => {
   it("has a daemon record for every code the daemon declares, and for no other", () => {

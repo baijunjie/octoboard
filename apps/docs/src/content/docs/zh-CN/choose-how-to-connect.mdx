@@ -1,0 +1,43 @@
+---
+title: "选择连接方式"
+description: "对比在 Linux 服务器或另一台电脑上使用 Octoboard 的几种方式：SSH、Tailscale 和 UU 远程。"
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+
+{productName} 从不直接对网络开放，另一台电脑需要一条安全通道才能连到它。SSH 是 macOS、Windows 和 Linux 都自带的通用加密登录方式，也是主要的连接方式：桌面应用和浏览器都能用。如果你不想在主机上开启 SSH 登录，也可以借助第三方中转服务（Tailscale 或 UU 远程），让浏览器连过去。
+
+<strong>主机</strong>指运行 {productName}、你要连过去的那台机器。
+
+<Aside type="tip" title="最简单的方式">
+如果能接受一些操作延迟和画面模糊，可以不用下面这些设置：用 [UU 远程](https://uuyc.163.com/)的远程桌面打开主机，直接在主机上使用 {productName}。适用于 Mac 或 Windows 主机，不适用于 Linux 服务器。如果想在自己电脑上获得清晰流畅的操作，就从下面选一种方式。
+</Aside>
+
+| | [SSH](../remote-connections/) | [Tailscale](../browser-over-tailscale/) | [UU 远程](../browser-over-uu-remote/) |
+| --- | --- | --- | --- |
+| 可以从哪里用 | 桌面应用或浏览器 | 仅浏览器 | 仅浏览器 |
+| 支持的主机 | Linux 服务器、Mac、Windows 电脑 | Linux 服务器、Mac、Windows 电脑 | 仅 Mac 或 Windows 电脑 |
+| 主机上需要开启或安装 | SSH 登录（Mac 上是“远程登录”，Windows 上是 OpenSSH 服务器；Linux 服务器本来就有） | Tailscale；主机是 Mac 或 Linux 时还需要 socat | UU 远程；主机是 Mac 时还需要 socat |
+| 你自己的电脑上需要安装 | 无需额外安装 | Tailscale；Mac 或 Linux 电脑还需要 socat | UU 远程（Mac 或 Windows） |
+| 数据经过 | 直接连接，不经过第三方 | Tailscale 的网络，使用你的账号 | 网易 UU 远程的服务，使用你的账号 |
+| 不在同一网络时能否使用 | 仅当能访问到主机时：在同一网络、主机有公网地址或通过 VPN | 能 | 能 |
+| 适合谁 | 服务器；要用完整的桌面应用；其他人也会登录的 Mac 或 Linux 主机 | 不开 SSH，从任何地方访问自己的机器 | 已经在用 UU 远程的中国大陆用户 |
+
+## 选择中转服务之前
+
+中转方式的步骤比 SSH 多：要在两台电脑上运行命令，并在使用期间让它们在打开的窗口里一直运行。
+
+<Aside type="caution">
+Tailscale 和 UU 远程的指南尚未在两台设备之间完整实测，它们依据这两项服务自己的文档和 {productName} 自身的检查编写。
+</Aside>
+
+<Aside type="caution" title="只在没有其他人登录的电脑上使用">
+使用中转服务时，主机或你电脑上的其他用户账户有可能截获浏览器的密钥。请只在仅你自己登录的电脑上使用 Tailscale 或 UU 远程。通过 SSH 连接时，Mac 或 Linux 主机没有这个弱点；用桌面应用时，你自己的电脑也没有。但用浏览器时，你用来浏览的电脑仍有这个弱点，因为那里的 SSH 转发同样监听 <code dir="ltr">127.0.0.1</code> 端口。
+</Aside>
+
+## 下一步
+
+- [通过 SSH 连接](../remote-connections/)：连接 Linux 服务器，或使用桌面应用。
+- [通过 Tailscale 用浏览器访问](../browser-over-tailscale/)：仅浏览器，任何主机，不需要 SSH。
+- [通过 UU 远程用浏览器访问](../browser-over-uu-remote/)：仅浏览器，Mac 或 Windows 主机，不需要 SSH。

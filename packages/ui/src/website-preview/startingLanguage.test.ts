@@ -24,9 +24,9 @@ it("starts in the requested language, whatever the system's, without touching th
   const { installPreviewStorage } = await import("./storage");
   const { writeStartingPreferences } = await import("../fixtures/preferences");
   installPreviewStorage();
-  writeStartingPreferences(localStorage, { language: "zh-Hans", theme: "dark" });
+  writeStartingPreferences(localStorage, { language: "zh-CN", theme: "dark" });
 
   const { currentLanguage } = await import("../i18n/language");
-  expect(currentLanguage()).toBe("zh-Hans");
+  expect(currentLanguage()).toBe("zh-CN");
   expect(host.length).toBe(0);
 });

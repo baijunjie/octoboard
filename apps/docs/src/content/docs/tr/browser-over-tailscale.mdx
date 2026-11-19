@@ -1,0 +1,179 @@
+---
+title: "Tailscale üzerinden tarayıcı"
+description: "Octoboard’u, SSH veya uzak masaüstü olmadan, kendi Tailscale ağınız üzerinden başka bir bilgisayarın tarayıcısında açın."
+---
+
+import { Aside, Code, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+import HostBrowserAddress from "../../../snippets/tr/host-browser-address.mdx";
+
+{productName} uygulamasını, SSH veya uzak masaüstü olmadan, kendi Tailscale ağınız üzerinden başka bir bilgisayarın tarayıcısında açın. Ana makine, {productName} uygulamasını çalıştıran bilgisayardır: bir Mac, bir Windows bilgisayarı ya da octoboardd çalıştıran bir Linux sunucusu. SSH ile oturum açma (macOS’te Uzaktan Oturum Açma) kapalı kalabilir.
+
+Bunun sizin için doğru yol olup olmadığından emin değil misiniz? [Bağlanma yolunu seçin](../choose-how-to-connect/) sayfasına bakın.
+
+<Aside type="caution">
+Bu adımlar henüz tam olarak sınanmadı. Tailscale Serve belgelerini ve {productName} uygulamasının kendi denetimlerini izlerler. Aktarıcı programlar, tarayıcının canlı bağlantısı dahil tek bir bilgisayarda denendi; Tailscale Serve’ün iki cihaz arasındaki kullanımı ve Windows yönlendirmesi henüz denenmedi.
+</Aside>
+
+<strong>Bilgisayarınızdaki tarayıcı</strong> → <strong>bilgisayarınızdaki aktarıcı (127.0.0.1)</strong> ⟷ Tailscale ⟷ <strong>ana makinedeki aktarıcı (127.0.0.1)</strong> → <strong>{productName}</strong>
+
+<details>
+<summary>Bu konuya yeni misiniz?</summary>
+
+- <strong>Tailscale:</strong> cihazlarınızı, nerede olurlarsa olsunlar, internet üzerinden özel bir ağda birbirine bağlayan bir hizmet. Ona kendi hesabınızla oturum açarsınız.
+- <strong>Tailnet:</strong> sizin Tailscale ağınız: Tailscale hesabınızda oturum açmış cihazlar.
+- <strong>127.0.0.1 (loopback):</strong> her zaman “bu aynı bilgisayar” anlamına gelen bir adres.
+- <strong>Bağlantı noktası (port):</strong> bir bilgisayarda tek bir programı seçen, kapı numarası gibi bir sayı. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code>, bu bilgisayardaki {commands.defaultPort} numaralı bağlantı noktasıdır.
+- <strong>socat:</strong> bir bağlantıyı bir yerden başka bir yere ileten küçük, ücretsiz bir program. Burada aktarıcıdır.
+- <strong>Tailscale Serve:</strong> bir bağlantı noktasını yalnızca tailnet’inizle paylaşan bir Tailscale komutu. Akrabası Tailscale Funnel onu tüm internetle paylaşırdı; burada asla kullanmayın.
+- <strong>Terminal:</strong> komutları yazdığınız pencere: macOS’te Terminal, Windows’ta PowerShell.
+
+</details>
+
+## Neden ek adımlar var
+
+Güvenlik için {productName}, yalnızca kendisini <code dir="ltr">{tunnel.loopback}</code> adresinde, yani her zaman “bu aynı bilgisayar” anlamına gelen (loopback da denir) bir adreste açan tarayıcıyı kabul eder. Bu yüzden ana makinenin Tailscale adresini tarayıcıya doğrudan yazamazsınız. Bunun yerine her bilgisayarda küçük bir aktarıcı program çalıştırırsınız: sizin bilgisayarınızda ana makineyi <code dir="ltr">{tunnel.loopback}</code> adresinde yerel gibi gösterir; ana makinede bağlantıyı {productName} uygulamasına verir. İkisi arasındaki trafiği Tailscale taşır.
+
+## Başlamadan önce
+
+- <strong>İki bilgisayarda da Tailscale,</strong> aynı tailnet’te oturum açmış olarak. Yalnızca kendi cihazlarınızı içeren bir tailnet kullanın: ana makineye ulaşmasına izin verdiği her cihaz, paylaştığınız bağlantı noktasına ulaşabilir.
+- <strong>Mac olan ya da Linux çalıştıran her bilgisayarda socat.</strong> Windows bilgisayarına gerekmez.
+
+  <Tabs syncKey="host">
+  <TabItem label="macOS">
+  Yoksa önce [Homebrew](https://brew.sh/) kurun (macOS bu işi yapabilecek bir araçla gelmez), sonra Terminal’de şunu çalıştırın:
+
+  <Code code={tunnel.installSocatMac} lang="sh" />
+  </TabItem>
+  <TabItem label="Windows">
+  Kurulacak bir şey yok: Windows ana makinesi tarayıcıyı zaten bir <code dir="ltr">{tunnel.loopback}</code> bağlantı noktasında sunar, tarayıcıyı kullandığınız bir Windows bilgisayarı ise yerleşik bir komut kullanır.
+  </TabItem>
+  <TabItem label="Linux">
+  <Code code={tunnel.installSocatLinux} lang="sh" />
+
+  <code dir="ltr">apt</code> değilse dağıtımınızın paket yöneticisini (<code dir="ltr">dnf</code>, <code dir="ltr">pacman</code> vb.) kullanın.
+  </TabItem>
+  </Tabs>
+- <strong>Siz çalışırken açık bırakılan iki ya da üç pencere:</strong> ana makinedeki aktarıcı ve Tailscale Serve (Windows’taki aktarıcı hariç) ve bilgisayarınızdaki aktarıcı (Windows hariç).
+
+## Ana makinede
+
+<Steps>
+
+1. Tarayıcının oturum açmasını sağlayan anahtarı taşıyan tarayıcı adresini alın.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <HostBrowserAddress />
+   </TabItem>
+   <TabItem label="Windows">
+   <HostBrowserAddress windows />
+   </TabItem>
+   <TabItem label="Linux">
+   Bunu octoboardd’nin çalıştığı kullanıcı olarak çalıştırın ve yazdırdığı, <code dir="ltr">{tunnel.addressStart}</code> ile başlayan adresi kopyalayın. Ardından yazdırdığı SSH komutunu yok sayın.
+
+   <Code code={commands.address} lang="sh" />
+   </TabItem>
+   </Tabs>
+2. Ana makinenin <code dir="ltr">{tunnel.loopback}</code> adresindeki bir bağlantı noktasını {productName} uygulamasına bağlayan aktarıcıyı ana makinede başlatın. Bu bağlantı noktası, aşağıdaki adımlarda <strong>ana makine bağlantı noktasıdır</strong>.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   Bunu Terminal’de çalıştırın ve pencereyi açık bırakın. Yalnızca <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> adresini dinler.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   Ana makine bağlantı noktası <code dir="ltr">{tunnel.bridgePort}</code> değeridir.
+   </TabItem>
+   <TabItem label="Windows">
+   Çalıştırılacak bir şey yok: {productName} tarayıcı bağlantı noktasını kendisi dinler, yalnızca <code dir="ltr">127.0.0.1</code> üzerinde. Ana makine bağlantı noktası, <strong>Tarayıcı bağlantı noktası</strong> değeridir (değiştirmediyseniz {commands.defaultPort}).
+   </TabItem>
+   <TabItem label="Linux">
+   Bunu aynı kullanıcı olarak, açık kalan bir terminalde ya da <code dir="ltr">tmux</code> oturumunda çalıştırın. Yalnızca <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> adresini dinler.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   Ana makine bağlantı noktası <code dir="ltr">{tunnel.bridgePort}</code> değeridir.
+   </TabItem>
+   </Tabs>
+3. Ana makine bağlantı noktasını Tailscale Serve ile tailnet’inizle paylaşın ve pencereyi açık bırakın. Onu genel internete açacak Tailscale Funnel’ı asla kullanmayın.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   App Store’daki Tailscale uygulamasıyla komutu <code dir="ltr">tailscale</code> yerine <code dir="ltr">{tunnel.macCli}</code> olarak çalıştırın. Bağımsız uygulamayla önce komutu, uygulamanın ayarlarında CLI integration altından kurun.
+   </TabItem>
+   <TabItem label="Windows">
+   PowerShell’de veya Komut İstemi’nde:
+
+   <Code code={tunnel.serveBrowserPort} lang="powershell" />
+
+   <strong>Tarayıcı bağlantı noktası</strong> değerini değiştirdiyseniz kendi bağlantı noktanızı kullanın.
+   </TabItem>
+   <TabItem label="Linux">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   Tailscale izniniz olmadığını söylerse, kullanıcınızın onu yönetmesine <code dir="ltr">{tunnel.linuxOperator}</code> ile bir kez izin verin ya da komutu <code dir="ltr">sudo</code> ile çalıştırın.
+   </TabItem>
+   </Tabs>
+
+   Denetlemek için başka bir pencerede <code dir="ltr">{tunnel.serveStatus}</code> komutunu çalıştırın: ana makine bağlantı noktasını listelemelidir.
+
+</Steps>
+
+## Tarayıcıyı kullanacağınız bilgisayarda
+
+<Steps>
+
+1. Bu bilgisayardaki Tailscale uygulamasında ana makineyi bulun ve adını (örneğin <code dir="ltr">my-mac</code>) ya da adresini (<code dir="ltr">100.x.y.z</code> gibi bir sayı) not edin.
+2. Bu bilgisayarda, ana makineyi burada <code dir="ltr">{tunnel.loopback}:{commands.defaultPort}</code> adresinde gösteren aktarıcıyı başlatın. {commands.defaultPort} numaralı bağlantı noktası bu bilgisayarda zaten kullanılıyorsa başka bir bağlantı noktası seçin ve tarayıcı adresinde de değiştirin.
+
+   <Tabs syncKey="visitor">
+   <TabItem label="macOS veya Linux">
+   Aşağıdaki komutta <code dir="ltr">{tunnel.host}</code> yerine ana makinenin adını ya da adresini, <code dir="ltr">{tunnel.hostPort}</code> yerine ana makine bağlantı noktasını yazın.
+
+   <Code code={tunnel.visitorForward} lang="sh" />
+
+   Örneğin <code dir="ltr">my-mac</code> adlı bir Mac ana makinesi için:
+
+   <Code code={tunnel.visitorForwardExample} lang="sh" />
+
+   Terminal’de çalıştırın ve pencereyi açık bırakın.
+   </TabItem>
+   <TabItem label="Windows">
+   PowerShell’i yönetici olarak açın. Aşağıdaki komutta <code dir="ltr">{tunnel.hostIp}</code> yerine ana makinenin <code dir="ltr">100.x.y.z</code> adresini (bu komut sayıyı ister; ad işe yaramaz), <code dir="ltr">{tunnel.hostPort}</code> yerine ana makine bağlantı noktasını yazın.
+
+   <Code code={tunnel.visitorForwardWindows} lang="powershell" />
+
+   Bu yönlendirme, siz silene kadar (aşağıya bakın) yeniden başlatmalardan sonra da yerinde kalır; bu yüzden açık tutulacak bir pencere yoktur. Varsayılan olarak çalışan IP Helper hizmetini gerektirir.
+   </TabItem>
+   </Tabs>
+3. Ana makinede kopyaladığınız tarayıcı adresini açın. <code dir="ltr">{tunnel.addressStart}</code> ile başlar.
+
+</Steps>
+
+{productName} tarayıcı sekmesinde, oturum açmanızı istemeden açıldığında işe yaradığını anlarsınız.
+
+## Çalışmazsa
+
+- <strong>Sayfa yüklenmiyor:</strong> pencerelerden biri kapatılmış ya da komutu durmuş. Aktarıcıların ve Tailscale Serve’ün hâlâ çalıştığını ve ana makinedeki <code dir="ltr">{tunnel.serveStatus}</code> çıktısının ana makine bağlantı noktasını listelediğini denetleyin.
+- <strong>socat “Address already in use” diyor:</strong> o bağlantı noktası o bilgisayarda kullanılıyor. Başka bir bağlantı noktası seçin; kendi bilgisayarınızda tarayıcı adresinde de değiştirin.
+- <strong>Sayfa reddediliyor veya boş:</strong> adresi, ana makinenin Tailscale adıyla ya da <code dir="ltr">100.x.y.z</code> adresiyle değil, <code dir="ltr">{tunnel.loopback}</code> üzerinden açtığınızı denetleyin.
+- <strong>Sayfayı açtığınızda ana makinedeki aktarıcı “Connection refused” veya “No such file or directory” yazdırıyor:</strong> <strong>Uzaktan erişime izin ver</strong> kapalı ya da {productName} ana makinede çalışmıyor (Linux’ta octoboardd çalışmıyor).
+
+## Kapatın
+
+- <strong>Tarayıcıyı kullandığınız bilgisayarda:</strong> socat’ı <kbd>Ctrl</kbd>+<kbd>C</kbd> ile durdurun ya da Windows’ta yönlendirmeyi yönetici olarak çalıştırılan PowerShell’de silin:
+
+  <Code code={tunnel.visitorForwardWindowsOff} lang="powershell" />
+- <strong>Ana makinede:</strong> Tailscale Serve komutunu ve socat’ı <kbd>Ctrl</kbd>+<kbd>C</kbd> ile durdurun. <code dir="ltr">{tunnel.serveStatus}</code> ile artık hiçbir şeyin paylaşılmadığını denetleyin; bağlantı noktası hâlâ listeleniyorsa <code dir="ltr">{tunnel.serveBridgeOff}</code> ile kaldırın (Windows’ta <code dir="ltr">{tunnel.serveBrowserPortOff}</code>).
+- <strong>Mac veya Windows ana makinesinde,</strong> artık gerekmediğinde <strong>Uzaktan erişime izin ver</strong> seçeneğini kapatın. Bu, tarayıcı girişini kapatır ve anahtarla açılmış her sayfanın bağlantısını keser.
+- <strong>Adres sızmış olabilirse,</strong> <strong>Tarayıcı</strong> sekmesindeki <strong>Anahtarı yenile</strong> ile ya da Linux’ta <code dir="ltr">{tunnel.rotate}</code> ile ona yeni bir anahtar verin. Eski adresle açık olan sayfaların bağlantısı kesilir.
+
+## Güvenlik
+
+- <strong>Adres paroladır:</strong> anahtarı, ana makinedeki {productName} uygulamasının tam denetimini verir; her komutu çalıştırmak dahil. Siz yenileyene kadar geçerlidir. Tarayıcının geçmişinde ve yer imlerinde kalır, tarayıcı eşitlemesi açıksa diğer cihazlarınıza da eşitlenir.
+- <strong>Kimler ulaşabilir:</strong> ana makine bağlantı noktasına ulaşan ve anahtara sahip olan herkes. Aktarıcılar yalnızca <code dir="ltr">127.0.0.1</code> adresini dinler, bu yüzden ana makinenin ya da yerel ağınızın diğer cihazları onlara ulaşamaz; Tailscale Serve, ana makine bağlantı noktasını erişim kurallarının izin verdiği ölçüde yalnızca tailnet’inizden ulaşılabilir kılar.
+- <strong>Yalnızca başka kimsenin oturum açmadığı bilgisayarlarda:</strong> ana makinedeki ya da bilgisayarınızdaki başka bir kullanıcı hesabı bu <code dir="ltr">127.0.0.1</code> bağlantı noktalarına bağlanabilir ve bir aktarıcı çalışmıyorken onun bağlantı noktasını alıp tarayıcınız yeniden bağlandığında anahtarı alabilir. [SSH ile bağlanma](../remote-connections/) yöntemi, Mac veya Linux ana makinesinde bu zayıflığa sahip değildir; masaüstü uygulamasını kullandığınızda kendi bilgisayarınızda da yoktur. Ancak tarayıcıda bilgisayarınızda bu zayıflık yine vardır, çünkü orada da SSH yönlendirmesi bir <code dir="ltr">127.0.0.1</code> bağlantı noktasını dinler.
+- <strong>Asla Funnel değil:</strong> Tailscale Funnel, bağlantı noktasını tüm internette yayımlardı.

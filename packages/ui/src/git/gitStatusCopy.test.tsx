@@ -44,7 +44,7 @@ function mount(node: React.ReactNode): HTMLElement {
   return container;
 }
 
-const LANGUAGES = ["en", "zh-Hans", "ar"] as const;
+const LANGUAGES = ["en", "zh-CN", "ar"] as const;
 
 it.each(LANGUAGES.flatMap((language) => STATES.map(([name, extra]) => ({ language, name, extra }))))(
   "words the tooltip as the accessible name does: $name ($language)",

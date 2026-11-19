@@ -1,0 +1,43 @@
+---
+title: "연결 방법 선택"
+description: "Linux 서버나 다른 컴퓨터에서 Octoboard를 쓰는 방법을 비교합니다. SSH, Tailscale, UU Remote 중에서 고르세요."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+
+{productName}은(는) 스스로 네트워크에 열리지 않으므로, 다른 컴퓨터가 접속하려면 안전한 통로가 필요합니다. SSH는 macOS, Windows, Linux에 기본으로 들어 있는 표준 암호화 로그인 방식이며, 데스크톱 앱과 브라우저 모두에서 쓸 수 있는 주된 접속 방법입니다. 호스트에서 SSH 로그인을 켜고 싶지 않다면, 서드파티 중계 서비스인 Tailscale이나 UU Remote가 브라우저 연결을 대신 전달해 줄 수 있습니다.
+
+**호스트**는 {productName}이(가) 실행되는, 접속하려는 컴퓨터를 말합니다.
+
+<Aside type="tip" title="가장 간단한 방법">
+약간의 입력 지연과 흐릿한 화면이 괜찮다면 아래의 설정은 하나도 필요 없습니다. [UU Remote](https://uuyc.163.com/)의 원격 데스크톱으로 호스트를 열고, 호스트에서 바로 {productName}을(를) 사용하세요. Mac이나 Windows 호스트에서 쓸 수 있고, Linux 서버에서는 쓸 수 없습니다. UU Remote의 화면은 중국어입니다. 내 컴퓨터에서 선명하고 반응이 빠른 화면을 원한다면 아래 방법 중 하나를 고르세요.
+</Aside>
+
+| | [SSH](../remote-connections/) | [Tailscale](../browser-over-tailscale/) | [UU Remote](../browser-over-uu-remote/) |
+| --- | --- | --- | --- |
+| 사용 환경 | 데스크톱 앱 또는 브라우저 | 브라우저만 | 브라우저만 |
+| 지원하는 호스트 | Linux 서버, Mac, Windows PC | Linux 서버, Mac, Windows PC | Mac 또는 Windows PC만 |
+| 호스트에서 켜거나 설치할 것 | SSH 로그인(Mac은 원격 로그인, Windows는 OpenSSH Server, Linux 서버에는 이미 있음) | Tailscale. Mac이나 Linux 호스트는 socat도 필요 | UU Remote. Mac 호스트는 socat도 필요 |
+| 내 컴퓨터에 설치할 것 | 추가로 설치할 것 없음 | Tailscale. Mac이나 Linux 컴퓨터는 socat도 필요 | UU Remote(Mac 또는 Windows) |
+| 트래픽이 거치는 곳 | 제3자 없이 직접 연결 | Tailscale 네트워크(내 계정 사용) | NetEase UU Remote 서비스(내 계정 사용) |
+| 같은 네트워크가 아닐 때 | 호스트에 닿을 수 있어야만 가능: 같은 네트워크, 공개 주소, VPN 중 하나 | 가능 | 가능 |
+| 이런 경우에 추천 | 서버, 전체 데스크톱 앱, 다른 사람도 로그인하는 Mac·Linux 호스트 | SSH 없이 어디서든 내 컴퓨터에 접속 | 이미 UU Remote를 쓰는 중국 본토 사용자 |
+
+## 중계 서비스를 고르기 전에
+
+중계 서비스 가이드는 SSH보다 단계가 많습니다. 두 컴퓨터 모두에서 명령을 실행하고, 작업하는 동안 열어 둔 창에서 계속 실행되게 해야 합니다.
+
+<Aside type="caution">
+Tailscale과 UU Remote 가이드는 아직 두 기기 사이에서 완전히 시험해 보지 못했습니다. 두 서비스의 공식 문서와 {productName} 자체 점검을 바탕으로 작성했습니다.
+</Aside>
+
+<Aside type="caution" title="나 혼자 로그인하는 컴퓨터에서만">
+중계 서비스를 쓰면 호스트나 내 컴퓨터의 다른 사용자 계정이 브라우저의 키를 가로챌 수 있습니다. Tailscale이나 UU Remote는 나 혼자 로그인하는 컴퓨터에서만 쓰세요. SSH로 연결하면 Mac이나 Linux 호스트에는 이 약점이 없고, 데스크톱 앱을 쓸 때는 내 컴퓨터에도 없습니다. 하지만 브라우저를 쓸 때는 브라우저를 쓰는 컴퓨터에 약점이 남습니다. 그곳에서도 SSH 포워드가 <code dir="ltr">127.0.0.1</code> 포트에서 대기하기 때문입니다.
+</Aside>
+
+## 다음 단계
+
+- [SSH로 연결](../remote-connections/): Linux 서버에 접속하거나 데스크톱 앱을 쓸 때.
+- [Tailscale로 브라우저 연결](../browser-over-tailscale/): 브라우저 전용, 모든 호스트, SSH 불필요.
+- [UU Remote로 브라우저 연결](../browser-over-uu-remote/): 브라우저 전용, Mac 또는 Windows 호스트, SSH 불필요.

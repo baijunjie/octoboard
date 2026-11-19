@@ -74,7 +74,7 @@ it.each([
 });
 
 it("puts no space between the question and the branches in a language with none after its full stop", () => {
-  setLanguage("zh-Hans");
+  setLanguage("zh-CN");
   onTestFinished(() => setLanguage("en"));
   mountPendingQuestionDialog({ sessionRequests: [{ ...request, branches: ["fix/refunds", "feat/pay"] }] }, ack);
   expect(dialogText()).toContain("新会话将向你汇报。分支 fix/refunds、feat/pay 将转移给新会话。");

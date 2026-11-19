@@ -1,0 +1,46 @@
+---
+title: "Windows"
+description: "Intel veya AMD işlemcili bilgisayarlar için (neredeyse tüm Windows bilgisayarları), Windows 10 sürüm 21H2 veya sonrasında. Arm tabanlı Windows 11’de bu x64 uygulaması öykünme altında çalışır."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Intel veya AMD işlemcili bilgisayarlar için (x64; neredeyse tüm Windows bilgisayarları), Windows 10 sürüm 21H2 veya sonrasında. Arm tabanlı Windows 11’de bu x64 uygulaması öykünme altında çalışır.
+
+<LinkButton href={downloads.windows}>Windows için indir</LinkButton>
+
+<Aside>Windows uygulaması beta aşamasındadır.</Aside>
+
+## Kurulum
+
+<Steps>
+
+1. Yükleyiciyi yukarıdaki düğmeyle indirin. Adı <code dir="ltr">x64-setup.exe</code> ile biten bir dosyadır.
+2. Yükleyiciyi çalıştırmak için indirilen dosyayı açın. {productName} yalnızca kullanıcı hesabınız için kurulur, bu yüzden yönetici yetkisi istemez.
+
+   Uygulama henüz kod imzalı olmadığından Microsoft Defender SmartScreen “Windows bilgisayarınızı korudu” iletisini gösterebilir. “Daha fazla bilgi”yi, ardından “Yine de çalıştır”ı seçin.
+
+   Bilgisayarınızda uygulamanın penceresini çizen Microsoft Edge WebView2 yoksa yükleyici onu indirir, bu yüzden internete bağlı kalın.
+3. {productName} uygulamasını Başlat menüsünden açın.
+4. En az bir kodlama ajanı kurun (aşağıya bakın), ardından bir proje klasörü açmak için {productName} içinde <strong>Proje ekle</strong> düğmesini seçin.
+
+</Steps>
+
+Ana pencere açıldığında işiniz tamamdır.
+
+## Kodlama ajanı kurma
+
+{productName} bir yapay zekâ ajanı içermez. Kullanmak istediklerinizi kendi yönergelerine göre kurun ve oturum açın. {productName} onları otomatik olarak bulur. Şunlarla çalışır:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+Claude Code veya Codex kullanıyorsanız önce [Git for Windows](https://git-scm.com/download/win) kurun; çalışmak için ona ihtiyaç duyarlar.
+
+## Güncellemeler
+
+Yeni bir sürüm çıktığında {productName} sizi bilgilendirir ve uygulamanın içinden kurabilirsiniz. Bu sayfaya geri dönmeniz gerekmez.
+
+<a href={downloads.releases}>Tüm sürümler</a>

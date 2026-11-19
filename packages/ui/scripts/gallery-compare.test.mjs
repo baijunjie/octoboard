@@ -41,7 +41,7 @@ test("report escapes untrusted titles/errors and exposes incomplete/error result
 const required = ["--base-url", "http://localhost:5192", "--url", "http://localhost:5191", "--output", "/tmp/gallery-compare-test"];
 test("CLI defaults are small and origins/threshold/selection options are validated", () => {
   expect(parseOptions(required)).toMatchObject({ languages: ["en"], themes: ["light"], threshold: 8, patterns: [] });
-  expect(parseOptions([...required, "--theme", "both", "--lang", "en,zh-Hans", "viewer-*"])).toMatchObject({ themes: ["light", "dark"], languages: ["en", "zh-Hans"], patterns: ["viewer-*"] });
+  expect(parseOptions([...required, "--theme", "both", "--lang", "en,zh-CN", "viewer-*"])).toMatchObject({ themes: ["light", "dark"], languages: ["en", "zh-CN"], patterns: ["viewer-*"] });
   expect(() => parseOptions([...required, "--threshold", "256"])).toThrow("--threshold");
   expect(() => parseOptions([...required, "--width", "0"])).toThrow("--width");
   expect(() => parseOptions([...required, "--url", "http://name:password@localhost:1"])).toThrow("origin without credentials");

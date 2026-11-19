@@ -1,0 +1,26 @@
+---
+title: Introduction
+description: What Octoboard is, and which guide to read first.
+---
+
+import { productName } from "../../commands.ts";
+
+{productName} is a local, open source development workspace for coding agents. It brings your existing agents and accounts
+together in one place: run sessions side by side, switch accounts while keeping the conversation, hand tasks between
+providers, and let a coordinating agent spread work across several projects.
+
+A coding agent is an AI assistant that writes and runs code for you, such as Claude Code or Codex. {productName} doesn't
+include one; it runs the ones you already have.
+
+## Where to start
+
+- **Use {productName} on this computer:** install the app for [macOS](install/macos/) or [Windows](install/windows/).
+  That's all most people need.
+- **Run agents on a Linux server** (a machine you rent or keep running somewhere, usually without a screen):
+  [install the server program](install/linux/), then connect to it from the desktop app, as
+  [Connect over SSH](remote-connections/) describes.
+- **Use one computer's {productName} from another computer:** start with [Choose how to connect](choose-how-to-connect/),
+  which compares the ways in. In short:
+  - from the other computer's app, or from a browser, with SSH sign-in turned on: [Connect over SSH](remote-connections/);
+  - from a browser, without turning on SSH sign-in: [Browser over Tailscale](browser-over-tailscale/) or
+    [Browser over UU Remote](browser-over-uu-remote/).

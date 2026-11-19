@@ -555,7 +555,7 @@ const viMessages = {
   "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "Công cụ có thể thay đổi hoặc xóa tệp mà không hỏi quyền thông thường trong phiên của mọi tài khoản {agent}. Quy tắc từ chối và hook vẫn áp dụng.",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
-const zhHans = {
+const zhCN = {
   "provider.grok.trustCaution":
     "信任后，{agent} 会加载此项目自身的指令、钩子和 MCP 服务器。",
   "provider.grok.sharingNeverShared":
@@ -596,7 +596,7 @@ const zhHans = {
   "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "在所有 {agent} 账户的会话中，工具可能无需常规权限审批就修改或删除文件。拒绝规则与钩子仍然适用。",
 } as const;
 
-const zhHantMessages = {
+const zhTWMessages = {
   "provider.grok.trustCaution": "信任後，{agent} 會載入此專案自身的指令、掛鉤和 MCP 伺服器。",
   "provider.grok.sharingNeverShared": "登入憑證、{trustedFolders} 和 {hooksPaths} 不會共用。",
   "provider.grok.dirHint": "此目錄不必已存在。工作階段要保留登入資訊和對話，必須使用已透過 CLI 初始化的 {grok} 主目錄。這一點會在工作階段啟動時檢查。",
@@ -668,7 +668,7 @@ export const grok = {
     "th": { ...names, ...thMessages },
     "tr": { ...names, ...trMessages },
     "vi": { ...names, ...viMessages },
-    "zh-Hans": { ...names, ...zhHans },
-    "zh-Hant": { ...names, ...zhHantMessages },
+    "zh-CN": { ...names, ...zhCN },
+    "zh-TW": { ...names, ...zhTWMessages },
   },
 } as const satisfies ProviderPresentation;

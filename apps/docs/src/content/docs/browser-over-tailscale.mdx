@@ -1,0 +1,179 @@
+---
+title: "Browser over Tailscale"
+description: "Open Octoboard in a browser on another computer through your own Tailscale network, without SSH or a remote desktop."
+---
+
+import { Aside, Code, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../commands.ts";
+import HostBrowserAddress from "../../snippets/en/host-browser-address.mdx";
+
+Open {productName} in a browser on another computer through your own Tailscale network, without SSH or a remote desktop. The host is the computer that runs {productName}: a Mac, a Windows PC or a Linux server running octoboardd. SSH sign-in (Remote Login on macOS) can stay off.
+
+Not sure this is the way for you? See [Choose how to connect](../choose-how-to-connect/).
+
+<Aside type="caution">
+These steps haven't been fully tested yet. They follow the Tailscale Serve documentation and {productName}'s own checks. The relay programs were tried on a single computer, including the browser's live connection; Tailscale Serve between two devices and the Windows forward have not been tried yet.
+</Aside>
+
+<strong>Browser on your computer</strong> → <strong>relay on your computer (127.0.0.1)</strong> ⟷ Tailscale ⟷ <strong>relay on the host (127.0.0.1)</strong> → <strong>{productName}</strong>
+
+<details>
+<summary>New to this?</summary>
+
+- <strong>Tailscale:</strong> a service that links your devices into a private network over the internet, wherever they are. You sign in to it with your own account.
+- <strong>Tailnet:</strong> your Tailscale network: the devices signed in to your Tailscale account.
+- <strong>127.0.0.1 (loopback):</strong> an address that always means “this same computer”.
+- <strong>Port:</strong> a number that picks one program on a computer, like a door number. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> is port {commands.defaultPort} on this computer.
+- <strong>socat:</strong> a small, free program that passes a connection from one place to another. Here it's the relay.
+- <strong>Tailscale Serve:</strong> a Tailscale command that shares a port with your tailnet only. Its cousin, Tailscale Funnel, would share it with the whole internet; never use it here.
+- <strong>Terminal:</strong> the window you type commands into: Terminal on macOS, PowerShell on Windows.
+
+</details>
+
+## Why the extra steps
+
+For safety, {productName} only accepts a browser that opens it at <code dir="ltr">{tunnel.loopback}</code>, an address that always means “this same computer” (also called loopback). So you can't just type the host's Tailscale address into the browser. Instead, you run a small relay program on each computer: on your computer it makes the host look local at <code dir="ltr">{tunnel.loopback}</code>; on the host it hands the connection to {productName}. Tailscale carries the traffic between the two.
+
+## Before you start
+
+- <strong>Tailscale on both computers,</strong> signed in to the same tailnet. Use a tailnet that holds only your own devices: every device it lets reach the host can reach the port you share.
+- <strong>socat on each computer that is a Mac or runs Linux.</strong> A Windows computer doesn't need it.
+
+  <Tabs syncKey="host">
+  <TabItem label="macOS">
+  Install [Homebrew](https://brew.sh/) first if you don't have it (macOS ships no tool that can do this job), then run this in Terminal:
+
+  <Code code={tunnel.installSocatMac} lang="sh" />
+  </TabItem>
+  <TabItem label="Windows">
+  Nothing to install: a Windows host already serves the browser on a <code dir="ltr">{tunnel.loopback}</code> port, and a Windows computer you browse from uses a built-in command instead.
+  </TabItem>
+  <TabItem label="Linux">
+  <Code code={tunnel.installSocatLinux} lang="sh" />
+
+  Use your distribution's package manager (<code dir="ltr">dnf</code>, <code dir="ltr">pacman</code> and so on) if it isn't <code dir="ltr">apt</code>.
+  </TabItem>
+  </Tabs>
+- <strong>Two or three windows left open</strong> while you work: the relay and Tailscale Serve on the host (except the relay on Windows), and the relay on your computer (except on Windows).
+
+## On the host
+
+<Steps>
+
+1. Get the browser address, which carries the key that signs the browser in.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <HostBrowserAddress />
+   </TabItem>
+   <TabItem label="Windows">
+   <HostBrowserAddress windows />
+   </TabItem>
+   <TabItem label="Linux">
+   Run this as the user octoboardd runs as, and copy the address it prints, starting with <code dir="ltr">{tunnel.addressStart}</code>. Ignore the SSH command it prints after it.
+
+   <Code code={commands.address} lang="sh" />
+   </TabItem>
+   </Tabs>
+2. Start the relay on the host, which connects a port on the host's <code dir="ltr">{tunnel.loopback}</code> to {productName}. This port is the <strong>host port</strong> in the steps below.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   Run this in Terminal and leave the window open. It listens on <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> alone.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   The host port is <code dir="ltr">{tunnel.bridgePort}</code>.
+   </TabItem>
+   <TabItem label="Windows">
+   Nothing to run: {productName} itself listens on the browser port, on <code dir="ltr">127.0.0.1</code> alone. The host port is the <strong>Browser port</strong> ({commands.defaultPort} unless you changed it).
+   </TabItem>
+   <TabItem label="Linux">
+   Run this as the same user, in a terminal or a <code dir="ltr">tmux</code> session that stays open. It listens on <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> alone.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   The host port is <code dir="ltr">{tunnel.bridgePort}</code>.
+   </TabItem>
+   </Tabs>
+3. Share the host port with your tailnet with Tailscale Serve, and leave the window open. Never use Tailscale Funnel, which would put it on the public internet.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   With the Tailscale app from the App Store, run the command as <code dir="ltr">{tunnel.macCli}</code> in place of <code dir="ltr">tailscale</code>. With the standalone app, install the command first from its settings, under CLI integration.
+   </TabItem>
+   <TabItem label="Windows">
+   In PowerShell or Command Prompt:
+
+   <Code code={tunnel.serveBrowserPort} lang="powershell" />
+
+   Use your port if you changed <strong>Browser port</strong>.
+   </TabItem>
+   <TabItem label="Linux">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   If Tailscale says you lack permission, let your user manage it once with <code dir="ltr">{tunnel.linuxOperator}</code>, or run the command with <code dir="ltr">sudo</code>.
+   </TabItem>
+   </Tabs>
+
+   To check, run <code dir="ltr">{tunnel.serveStatus}</code> in another window: it should list the host port.
+
+</Steps>
+
+## On the computer you'll browse from
+
+<Steps>
+
+1. Find the host in the Tailscale app on this computer, and note its name (such as <code dir="ltr">my-mac</code>) or its address (a number like <code dir="ltr">100.x.y.z</code>).
+2. Start the relay on this computer, which makes the host appear at <code dir="ltr">{tunnel.loopback}:{commands.defaultPort}</code> here. If port {commands.defaultPort} is already taken on this computer, pick another port and change it in the browser address too.
+
+   <Tabs syncKey="visitor">
+   <TabItem label="macOS or Linux">
+   In the command below, replace <code dir="ltr">{tunnel.host}</code> with the host's name or address, and <code dir="ltr">{tunnel.hostPort}</code> with the host port.
+
+   <Code code={tunnel.visitorForward} lang="sh" />
+
+   For example, for a Mac host named <code dir="ltr">my-mac</code>:
+
+   <Code code={tunnel.visitorForwardExample} lang="sh" />
+
+   Run it in Terminal and leave the window open.
+   </TabItem>
+   <TabItem label="Windows">
+   Open PowerShell as administrator. In the command below, replace <code dir="ltr">{tunnel.hostIp}</code> with the host's <code dir="ltr">100.x.y.z</code> address (this command needs the number; a name won't work), and <code dir="ltr">{tunnel.hostPort}</code> with the host port.
+
+   <Code code={tunnel.visitorForwardWindows} lang="powershell" />
+
+   This forward stays in place, across restarts too, until you delete it (see below), so there's no window to keep open. It needs the IP Helper service, which runs by default.
+   </TabItem>
+   </Tabs>
+3. Open the browser address you copied on the host. It starts with <code dir="ltr">{tunnel.addressStart}</code>.
+
+</Steps>
+
+You'll know it worked when {productName} opens in the browser tab without asking you to sign in.
+
+## If it doesn't work
+
+- <strong>The page doesn't load:</strong> one of the windows was closed, or its command stopped. Check that the relays and Tailscale Serve are still running, and that <code dir="ltr">{tunnel.serveStatus}</code> on the host lists the host port.
+- <strong>socat says “Address already in use”:</strong> that port is taken on that computer. Pick another port; on your computer, change it in the browser address too.
+- <strong>The page is refused or blank:</strong> check that you opened the address at <code dir="ltr">{tunnel.loopback}</code>, not the host's Tailscale name or <code dir="ltr">100.x.y.z</code> address.
+- <strong>The relay on the host prints “Connection refused” or “No such file or directory” when you open the page:</strong> <strong>Allow remote access</strong> is off, or {productName} isn't running on the host (on Linux, octoboardd isn't running).
+
+## Turn it off
+
+- <strong>On the computer you browsed from:</strong> stop socat with <kbd>Ctrl</kbd>+<kbd>C</kbd>, or on Windows delete the forward in PowerShell run as administrator:
+
+  <Code code={tunnel.visitorForwardWindowsOff} lang="powershell" />
+- <strong>On the host:</strong> stop the Tailscale Serve command and socat with <kbd>Ctrl</kbd>+<kbd>C</kbd>. Check with <code dir="ltr">{tunnel.serveStatus}</code> that nothing is shared any more; if the port is still listed, remove it with <code dir="ltr">{tunnel.serveBridgeOff}</code> (on Windows, <code dir="ltr">{tunnel.serveBrowserPortOff}</code>).
+- <strong>On a Mac or Windows host,</strong> turn off <strong>Allow remote access</strong> when you no longer need it. This closes the browser entry and disconnects every page opened with the key.
+- <strong>If the address may have leaked,</strong> give it a new key with <strong>Rotate key</strong> on the <strong>Browser</strong> tab, or on Linux with <code dir="ltr">{tunnel.rotate}</code>. Pages open with the old address are disconnected.
+
+## Security
+
+- <strong>The address is the password:</strong> its key gives full control of {productName} on the host, running any command included. It lasts until you rotate it. It stays in the browser's history and bookmarks, and syncs to your other devices if browser sync is on.
+- <strong>Who can reach it:</strong> anyone who reaches the host port and has the key. The relays listen on <code dir="ltr">127.0.0.1</code> only, so other devices on the host's or your local network can't reach them; Tailscale Serve makes the host port reachable from your tailnet only, as far as its access rules allow.
+- <strong>Only on computers nobody else signs in to:</strong> another user account on the host or on your computer can connect to these <code dir="ltr">127.0.0.1</code> ports, and while a relay isn't running it can take its port and receive the key when your browser reconnects. With [Connect over SSH](../remote-connections/), a Mac or Linux host doesn't have this weakness, and neither does your own computer when you use the desktop app. In a browser your computer still has it, because the SSH forward listens on a <code dir="ltr">127.0.0.1</code> port there too.
+- <strong>Never Funnel:</strong> Tailscale Funnel would publish the port to the whole internet.

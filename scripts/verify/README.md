@@ -33,26 +33,31 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    selects every package, except Markdown, which is read by no check. If nothing checked changed, the mode is `unread`
    and nothing runs. `build` inputs (`builds`) add the UI build. The `menu.*` keys of the UI message catalog count only
    when a changed line is one of them. A cross-package read (a test that reads another package's file, an import across
-   packages) is declared in `scope.mjs`; `scope.test.mjs` fails when a new one is not. `--full` selects every package
-   and `--release` the shipping application only. `--release-group frontend|native|windows` selects one part of the
-   release plan; it requires `--release` and cannot be combined with `--full` or `--quick`. Without a group, `--release`
-   still selects every application check.
+   packages) is declared in `scope.mjs`; `scope.test.mjs` fails when a new one is not. The docs package (`apps/docs`) is
+   selected by its own files and by the UI's language list and `exports` map, which its locale table is built from
+   (verify, ui and docs); a change to its content directory also selects the website (verify, web and docs), whose SEO
+   test checks that every docs page the website links to exists in every language, and a change to the website's logo
+   and wordmark or to the website modules a docs test reads selects the docs in turn (verify, web and docs). `--full`
+   selects every package and `--release` the shipping application only. `--release-group frontend|native|windows`
+   selects one part of the release plan; it requires `--release` and cannot be combined with `--full` or `--quick`.
+   Without a group, `--release` still selects every application check.
 3. **Steps** (`steps.mjs`). Every non-`unread` plan, including release and quick plans, checks generated identity fields
    against `config/app.json` without writing (`scripts/sync-identity.mjs --check`) and searches the production core for
    provider knowledge (`provider-neutral.mjs`, below). A package selects its other steps (lint, type check, locales,
-   tests, build, script tests; both Rust crates always run together). Light steps run first and heavy ones (UI tests,
-   Rust builds and tests, the website build) last, and a failure stops the run. The website build runs before its SEO
-   tests, which read the generated output. `--release` runs the application checks: application lint, production UI type
-   check, application UI tests, desktop script tests, rustfmt, clippy, Rust tests and the Windows cross-check (`pnpm
-   check:windows`: both crates, all targets, through `cargo xwin`, and a link of the daemon's executable once its check
-   passes). Local `release:version` runs the complete plan with `--fresh --head <release-commit>` before tagging, then
-   scoped push verification can reuse matching passes. The release groups partition those same commands; each also runs
-   the identity and provider-neutral core checks. The optional hosted workflow runs the frontend and native groups
-   independently, with separate Linux and Windows jobs (see "Hosted application checks"); the windows group is local
-   only, since its toolchain (cargo-xwin, the `x86_64-pc-windows-msvc` target, LLVM's clang, the downloaded MSVC CRT and
-   Windows SDK) is not on the hosted macOS runner. A machine missing any of it fails the step before compiling, with a
-   message naming each missing piece and how to install it; the check never accepts the SDK license itself (see
-   `scripts/lib/windows-toolchain.mjs`).
+   tests, build, script tests; both Rust crates always run together). The docs package's steps are lint, type check,
+   build and tests, in that order. Light steps run first and heavy ones (UI tests, Rust builds and tests, the website
+   and docs builds) last, and a failure stops the run. The website build runs before its SEO tests, and the docs build
+   before the docs tests, which read the generated output. `--release` runs the application checks: application lint,
+   production UI type check, application UI tests, desktop script tests, rustfmt, clippy, Rust tests and the Windows
+   cross-check (`pnpm check:windows`: both crates, all targets, through `cargo xwin`, and a link of the daemon's
+   executable once its check passes). Local `release:version` runs the complete plan with `--fresh --head
+   <release-commit>` before tagging, then scoped push verification can reuse matching passes. The release groups
+   partition those same commands; each also runs the identity and provider-neutral core checks. The optional hosted
+   workflow runs the frontend and native groups independently, with separate Linux and Windows jobs (see "Hosted
+   application checks"); the windows group is local only, since its toolchain (cargo-xwin, the `x86_64-pc-windows-msvc`
+   target, LLVM's clang, the downloaded MSVC CRT and Windows SDK) is not on the hosted macOS runner. A machine missing
+   any of it fails the step before compiling, with a message naming each missing piece and how to install it; the check
+   never accepts the SDK license itself (see `scripts/lib/windows-toolchain.mjs`).
 4. **Reuse** (`stamp.mjs`, `tree.mjs`, `rerun.mjs`). `tree.mjs` fingerprints the working copy (tracked and untracked,
    non-ignored files, taken through a scratch index). A pass is recorded in the common git directory, keyed by that tree
    and the toolchain versions (node and pnpm, plus rustc except for the frontend release group) per step command, so
@@ -66,12 +71,12 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    tests and Rust checks on their own (`pnpm test:rust`, `clippy:rust`, `check:windows`, and the UI's `test`,
    `test:related` and `test:app`), through `heavy.mjs`. A heavy step marks its commands as running under its hold
    (`HELD_ENV`), so those scripts run at once inside `pnpm verify` instead of waiting on the slot it holds.
-6. **Quick mode** (`quick.mjs`, `--quick`). The normal plan without builds and without the two full test suites; UI and
-   Rust tests narrow to what the changes reach (`vitest related`, and cargo module filters), falling back to a full
-   suite where the reach cannot be traced. A file outside the UI package runs the UI tests that read it
-   (`UI_READERS`), and Markdown a crate reads runs the reading modules' tests (`RUST_MARKDOWN_READERS`). A run that
-   needs one crate keeps `--workspace` and selects that crate's test targets (`CRATES`), so it reuses the workspace
-   build. Narrowed steps are never recorded as a pass of the whole.
+6. **Quick mode** (`quick.mjs`, `--quick`). The normal plan without builds and without the two full test suites (nor the
+   website and docs tests, which need their builds); UI and Rust tests narrow to what the changes reach (`vitest
+   related`, and cargo module filters), falling back to a full suite where the reach cannot be traced. A file outside
+   the UI package runs the UI tests that read it (`UI_READERS`), and Markdown a crate reads runs the reading modules'
+   tests (`RUST_MARKDOWN_READERS`). A run that needs one crate keeps `--workspace` and selects that crate's test targets
+   (`CRATES`), so it reuses the workspace build. Narrowed steps are never recorded as a pass of the whole.
 
 ## Provider-neutral core search
 

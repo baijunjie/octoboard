@@ -1,0 +1,119 @@
+---
+title: "Kết nối qua SSH"
+description: "Dùng Octoboard trên máy chủ Linux hoặc một máy tính khác từ máy tính này, trong ứng dụng trên máy tính hoặc trình duyệt, qua SSH: một kết nối mã hóa thẳng tới máy đó, không qua dịch vụ chuyển tiếp hay đám mây."
+---
+
+import { Code, Steps } from "@astrojs/starlight/components";
+import { commands, productName } from "../../../commands.ts";
+
+Dùng {productName} trên máy chủ Linux hoặc một máy tính khác từ máy tính này, trong ứng dụng trên máy tính hoặc trình duyệt, qua SSH: một kết nối mã hóa thẳng tới máy đó, không qua dịch vụ chuyển tiếp hay đám mây.
+
+Chưa chắc đây là cách phù hợp với bạn? [Chọn cách kết nối](../choose-how-to-connect/) so sánh nó với các cách chỉ dùng trình duyệt mà không cần SSH.
+
+<strong>Ứng dụng trên máy tính này</strong> · <strong>Trình duyệt qua chuyển tiếp SSH</strong> ⟷ SSH ⟷ <strong>Máy chủ Linux hoặc máy tính khác</strong>
+
+<details>
+<summary>Mới làm quen?</summary>
+
+- <strong>Máy đích:</strong> máy mà {productName} chạy trên đó và bạn muốn truy cập tới: một máy chủ Linux, hoặc một máy Mac hay PC Windows khác.
+- <strong>Máy chủ:</strong> ở đây là một máy Linux mà bạn đăng nhập qua mạng, thường là máy bạn thuê, không có màn hình riêng.
+- <strong>SSH:</strong> cách chuẩn, được mã hóa, để đăng nhập vào một máy khác và gõ lệnh trên đó. Nó có sẵn trong macOS, Windows và Linux.
+- <strong>Terminal:</strong> cửa sổ để bạn gõ lệnh: Terminal trên macOS, PowerShell trên Windows.
+- <strong>Chuyển tiếp SSH:</strong> một lệnh SSH khiến thứ gì đó trên máy đích hiện ra trên máy tính của bạn, để trình duyệt mở được nó ở đó.
+- <strong>Dấu vân tay (khóa máy chủ):</strong> một mã ngắn nhận diện SSH của một máy. Kiểm tra nó một lần cho bạn biết mình đã tới đúng máy.
+- <strong>Tệp khóa:</strong> một tệp dùng để đăng nhập thay cho mật khẩu. Một số nhà cung cấp máy chủ có cấp cho bạn.
+
+</details>
+
+## Bạn cần gì
+
+- <strong>Một cách đăng nhập vào máy đích bằng SSH.</strong> Với máy chủ Linux, nhà cung cấp sẽ cho bạn địa chỉ và tên người dùng. Để kiểm tra, mở Terminal (macOS) hoặc PowerShell (Windows) rồi chạy lệnh dưới đây với tên người dùng và địa chỉ máy chủ của bạn. Lần đầu, hãy trả lời <code dir="ltr">yes</code> khi nó hỏi có tin tưởng máy chủ hay không.
+
+  <Code code={commands.signIn} lang="sh" />
+
+  Nếu máy đích là Mac hoặc PC Windows, bạn bật đăng nhập SSH trong cài đặt hệ thống của nó; [Dùng máy tính khác làm máy đích](#dùng-máy-tính-khác-làm-máy-đích) hướng dẫn cách làm.
+- <strong>Với máy chủ Linux, {productName} đã được cài và khởi động trên đó.</strong> [Cài đặt › Máy chủ Linux](../install/linux/) hướng dẫn cách làm. Chương trình máy chủ của {productName}, tức octoboardd, chính là thứ mà ứng dụng gọi là daemon.
+- <strong>Ứng dụng {productName} trên máy tính này</strong>, cho macOS hoặc Windows, trừ khi bạn chỉ dùng trình duyệt.
+
+## Kết nối với máy chủ Linux
+
+<Steps>
+
+1. Đăng nhập vào máy chủ qua SSH bằng người dùng đang chạy {productName}, chạy lệnh này rồi sao chép dòng bắt đầu bằng <code dir="ltr">{commands.connectionScheme}</code>: đó là thông tin kết nối, cho ứng dụng biết kết nối tới đâu và bằng cách nào.
+
+   <Code code={commands.connection} lang="sh" />
+
+   Nếu máy tính này tới máy chủ bằng một địa chỉ hoặc cổng SSH khác, hãy thêm <code dir="ltr">{commands.host}</code> hoặc <code dir="ltr">{commands.sshPort}</code> vào lệnh để in ra đúng thông tin kết nối.
+
+   Mã QR được in kèm cũng chứa chính dòng đó. Hiện chưa có ứng dụng nào quét nó.
+2. Trong ứng dụng {productName} trên máy tính này, mở <strong>Thiết bị từ xa</strong> từ thanh bên trái hoặc, trên macOS, chọn <strong>Từ xa › Thiết bị từ xa</strong> từ thanh menu. Trên Windows, bạn cũng có thể chọn <strong>Thiết bị từ xa</strong> từ menu hệ thống của cửa sổ hoặc từ danh sách tác vụ nhanh của biểu tượng trên thanh tác vụ.
+3. Chọn <strong>Thêm daemon từ xa</strong>, rồi chọn <strong>Dán</strong> trong mục <strong>Thông tin kết nối</strong> để điền các trường.
+4. Trong mục <strong>Xác thực</strong>, chọn <strong>Mật khẩu</strong> nếu bạn đăng nhập bằng mật khẩu tài khoản. Chọn <strong>Tệp khóa</strong> nếu nhà cung cấp máy chủ đã đưa cho bạn một tệp khóa (thường có tên như <code dir="ltr">id_ed25519</code> hoặc kết thúc bằng <code dir="ltr">.pem</code>), rồi nhập vị trí của nó trên máy tính này.
+5. Chọn <strong>Lưu</strong>, rồi chọn <strong>Kết nối</strong>. Nhập mật khẩu nếu được hỏi.
+
+   Nếu bạn đã dán thông tin kết nối, danh tính của máy chủ (dấu vân tay) đã đi kèm trong đó, và ứng dụng kiểm tra giúp bạn. Nếu bạn tự gõ địa chỉ, ứng dụng sẽ hiện dấu vân tay ở lần đầu. Để chắc chắn đã tới đúng máy, hãy so với dấu vân tay mà lệnh này in ra trên máy chủ, và chỉ kết nối nếu chúng khớp nhau:
+
+   <Code code={commands.fingerprintCommand} lang="sh" />
+
+</Steps>
+
+Bạn sẽ biết là đã thành công khi một cửa sổ {productName} riêng mở ra, hiện các dự án và phiên của máy chủ.
+
+## Dùng máy tính khác làm máy đích
+
+Bạn cũng có thể truy cập một máy Mac hoặc PC Windows đang chạy ứng dụng {productName}.
+
+<Steps>
+
+1. Trên máy tính bạn muốn truy cập tới, mở <strong>Cài đặt › Truy cập từ xa</strong> trong {productName}.
+2. Tại đó chọn <strong>Mở Cài đặt hệ thống</strong> (macOS) hoặc <strong>Mở Cài đặt</strong> (Windows), rồi bật <strong>Đăng nhập từ xa</strong> (macOS) hoặc <strong>OpenSSH Server</strong> (Windows), làm theo đường dẫn mà dòng đó chỉ ra, để máy tính này nhận đăng nhập SSH. Việc này cần quyền quản trị viên. Quay lại {productName}, dòng đó sẽ hiện <strong>Bật</strong>.
+3. Bật <strong>Cho phép truy cập từ xa</strong>, chọn <strong>Cho phép</strong> để xác nhận, và để {productName} tiếp tục chạy: nếu bạn thoát ứng dụng, truy cập từ xa sẽ dừng.
+4. Trên thẻ <strong>Ứng dụng {productName}</strong>, chọn <strong>Sao chép thông tin kết nối</strong>, rồi gửi chúng sang máy tính kia, chẳng hạn qua email hoặc tin nhắn.
+5. Trên máy tính bạn sẽ làm việc, thêm máy đích như ở bước 2 đến 5 của [Kết nối với máy chủ Linux](#kết-nối-với-máy-chủ-linux), dán thông tin bạn đã gửi. Đăng nhập bằng tên người dùng và mật khẩu của bạn trên máy đích.
+
+</Steps>
+
+Bạn sẽ biết là đã thành công khi một cửa sổ riêng mở ra, hiện các dự án và phiên của máy đích.
+
+## Từ trình duyệt
+
+<Steps>
+
+1. Lấy lệnh chuyển tiếp SSH:
+
+   - <strong>Trên máy đích Mac hoặc Windows,</strong> trước tiên làm bước 1 đến 3 của [Dùng máy tính khác làm máy đích](#dùng-máy-tính-khác-làm-máy-đích). Sau đó, trên thẻ <strong>Trình duyệt</strong>, xem mục <strong>Bước 1: chuyển tiếp SSH</strong>. Bấm vào địa chỉ trong lệnh để chọn cách máy tính kia tới được máy này (hoặc chọn <strong>Tự nhập địa chỉ</strong> rồi thay <code dir="ltr">{commands.server}</code> sau), rồi chọn <strong>Sao chép lệnh chuyển tiếp</strong>. Đồng thời chọn <strong>Sao chép địa chỉ</strong> trong mục <strong>Bước 2: địa chỉ trình duyệt</strong>.
+   - <strong>Trên máy chủ Linux,</strong> chạy lệnh này trên máy chủ. Nó in ra địa chỉ trình duyệt, rồi đến lệnh SSH cần chạy.
+
+     <Code code={commands.address} lang="sh" />
+
+     Thay <code dir="ltr">{commands.server}</code> trong lệnh bằng địa chỉ của máy chủ.
+2. Trên máy tính bạn sẽ dùng trình duyệt, chạy lệnh SSH trong Terminal (macOS) hoặc PowerShell (Windows). Cửa sổ có thể hỏi mật khẩu của bạn, sau đó không hiện thêm gì; như vậy là bình thường. Hãy để nó mở khi làm việc: đóng nó là trình duyệt mất kết nối.
+3. Mở địa chỉ trình duyệt, bắt đầu bằng <code dir="ltr">http://127.0.0.1:</code>, trong trình duyệt của bạn.
+
+</Steps>
+
+Bạn sẽ biết là đã thành công khi {productName} mở trong thẻ trình duyệt mà không yêu cầu bạn đăng nhập.
+
+Chỉ ai truy cập được {productName} qua chuyển tiếp SSH mới dùng được địa chỉ này. Hãy giữ kín: khóa của nó cho toàn quyền điều khiển, và nó nằm lại trong lịch sử và dấu trang của trình duyệt, đồng thời đồng bộ sang các thiết bị khác của bạn nếu bật đồng bộ trình duyệt.
+
+## Nếu không được
+
+- <strong>“Không tới được máy chủ”, hoặc lệnh SSH báo “Connection refused” hay hết thời gian chờ:</strong> đăng nhập SSH đang tắt trên máy đích, hoặc địa chỉ hay cổng SSH sai. Kiểm tra xem <strong>Đăng nhập từ xa</strong> hoặc <strong>OpenSSH Server</strong> đã bật chưa, và bạn có đăng nhập được bằng lệnh <code dir="ltr">ssh</code> ở trên không.
+- <strong>“Không đăng nhập được”, hoặc “Permission denied”:</strong> tên người dùng, mật khẩu hoặc tệp khóa sai.
+- <strong>“Khóa máy chủ không khớp”:</strong> máy đang trả lời không phải máy bạn đã kết nối trước đó. Điều này xảy ra sau khi máy chủ được cài lại, nhưng cũng có thể là dấu hiệu có điều gì đó không ổn. Đừng tiếp tục cho đến khi bạn biết lý do.
+- <strong>Trang trên trình duyệt không tải:</strong> cửa sổ SSH đã bị đóng, hoặc lệnh của nó đã dừng. Chạy lại nó rồi tải lại trang.
+
+## Bảo mật
+
+- <strong>Không mở thêm cổng công khai:</strong> {productName} chỉ nhận kết nối từ chính máy đích, nên để kết nối từ máy tính khác, trước hết bạn phải đăng nhập vào máy đích qua SSH. Đó là lý do bạn cần SSH, hoặc một trong các [dịch vụ chuyển tiếp](../choose-how-to-connect/).
+- <strong>Kiểm tra bạn đang tới máy nào:</strong> ứng dụng ghi nhớ khóa máy chủ, tức danh tính SSH của máy, ở lần kết nối thành công đầu tiên, và chặn kết nối kèm cảnh báo nếu danh tính đó sau này thay đổi.
+- <strong>Không lưu mật khẩu:</strong> sau khi bạn đăng nhập lần đầu bằng mật khẩu hoặc tệp khóa của riêng mình, ứng dụng tạo một khóa SSH riêng cho máy tính này dùng cho các lần đăng nhập sau.
+- <strong>Thu hồi quyền truy cập của một máy tính:</strong> xóa mục của máy tính đó khỏi danh sách khóa SSH được phép trên máy đích (<code dir="ltr">{commands.authorizedKeys}</code> trên Linux và macOS). Khóa đó sẽ không đăng nhập lại được; kết nối đang mở vẫn còn cho đến khi kết thúc.
+
+## Trong cửa sổ từ xa
+
+- <strong>Mỗi đích SSH một cửa sổ:</strong> các kết nối với tên người dùng, máy đích hoặc cổng SSH khác nhau mở mỗi cái một cửa sổ riêng, nên dự án, phiên và thông báo của chúng không bao giờ lẫn vào nhau.
+- <strong>Xem trạng thái của từng kết nối:</strong> mở biểu tượng trên thanh menu của ứng dụng trên macOS hoặc biểu tượng trong khu vực thông báo trên Windows để thấy một thẻ cho mỗi kết nối.
+- <strong>Mở website từ xa tại đây:</strong> khi một tác tử khởi chạy website trên máy đích, bấm vào liên kết <code dir="ltr">{commands.localhost}</code> mà nó đưa ra, và ứng dụng sẽ mở website đó trên máy tính này qua SSH.
+- <strong>Mở tệp từ xa tại đây:</strong> xem một tệp trong cửa sổ từ xa, hoặc tải một bản về để mở bằng ứng dụng mặc định của máy tính này cho loại tệp đó.
+- <strong>Tự kết nối lại:</strong> nếu mạng bị mất, cửa sổ tiếp tục thử kết nối lại cho đến khi được hoặc bạn đóng nó.

@@ -303,7 +303,7 @@ describe("the announcement of the phases", () => {
 
   it("joins the direction and the phase with the Chinese full stop in Chinese", async () => {
     const before = currentLanguage();
-    setLanguage("zh-Hans");
+    setLanguage("zh-CN");
     onTestFinished(() => { act(() => setLanguage(before)); });
     accountSharing.set("codex-work", { account: "codex-work", progress: { share: true, phase: "stopping", done: 0, total: 3 } });
     fakeTimers();

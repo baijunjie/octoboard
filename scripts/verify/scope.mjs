@@ -21,12 +21,31 @@ export const WEB_IMPORTS_FROM_UI = [
   "packages/ui/src/providers/types.ts",
 ];
 
+// What `apps/docs` imports from `@octoboard/ui`: the language list its locale table is built from (`locales.ts`),
+// resolved through the package's `exports` map.
+export const DOCS_IMPORTS_FROM_UI = ["packages/ui/src/i18n/languages.ts", "packages/ui/package.json"];
+
 // The inputs of the preview build `apps/web` takes from `packages/ui`.
 export const WEB_PREVIEW_INPUTS = [
   "packages/ui/vite.preview.config.ts",
   "packages/ui/website-preview.html",
   "packages/ui/src/website-preview/",
   "packages/ui/src/fixtures/",
+];
+
+// What `apps/docs` reads from `apps/web`: the logo and wordmark its title component imports
+// (`src/components/SiteTitle.astro`), and the website modules a docs test reads to hold the docs to the website's
+// redirects, addresses and download links, and the website's message catalogs, whose navigation labels another docs
+// test compares with the docs' own.
+export const DOCS_READS_WEB = [
+  "apps/web/i18n/locales/",
+  "apps/web/public/logo-640.png",
+  "apps/web/public/wordmark.png",
+  "apps/web/seo/redirect-pages.ts",
+  "apps/web/seo/page-outline.ts",
+  "apps/web/seo/site-seo.ts",
+  "apps/web/site.config.ts",
+  "apps/web/seo/downloads.ts",
 ];
 
 // The manifest whose `exports` map is how the website resolves `@octoboard/ui`.
@@ -85,6 +104,9 @@ export const WEB_READS_NATIVE = ["apps/desktop/src-tauri/tauri.conf.json"];
 // The same test holds the example systemd unit's port to the configured server port, and checks the install script's
 // signature verification against the daemon's signed self-update fixtures.
 export const WEB_READS_DAEMON = ["apps/daemon/dist/systemd/octoboardd.service", "apps/daemon/testdata/self_update/"];
+// A website test (`site-seo.test.ts`) checks that every docs page the website links to exists in every language, so it
+// reads the docs' content directory.
+export const WEB_READS_DOCS = ["apps/docs/src/content/docs/"];
 // The same test builds its release manifests with the desktop release scripts' own builder.
 export const WEB_IMPORTS_DESKTOP = ["apps/desktop/scripts/release-manifest.mjs"];
 // A UI test (`appConfig.test.ts`) holds `config/app.json` to the license.
@@ -98,8 +120,8 @@ export const UI_IMPORTS_NATIVE = ["apps/desktop/src-tauri/icons/128x128.png"];
 // A verify test (`rerun.test.mjs`) reads the reporter that shares `REPORT_ENV` with `rerun.mjs`.
 export const VERIFY_READS_UI = ["packages/ui/src/test/failedFilesReporter.ts"];
 
-export const ALL_PACKAGES = ["verify", "ui", "web", "desktop", "daemon", "native"];
-const JS_PACKAGES = ["verify", "ui", "web", "desktop"];
+export const ALL_PACKAGES = ["verify", "ui", "web", "docs", "desktop", "daemon", "native"];
+const JS_PACKAGES = ["verify", "ui", "web", "docs", "desktop"];
 const RUST_PACKAGES = ["daemon", "native"];
 
 // `match` entries are a prefix (ending in "/"), an exact path or a RegExp. A source rule names its own
@@ -113,6 +135,8 @@ export const RULES = [
   { match: ["scripts/verify/", "scripts/verify.mjs", "scripts/hooks/", "scripts/lib/", "scripts/format-staged.mjs", "scripts/pre-push.mjs"], consumers: ["verify"], why: "the verification command, the hook scripts, the shared script libraries and their tests (the two top-level hook paths are forwarding stubs for older installed hooks)" },
   { match: [notMarkdown("packages/ui/")], consumers: ["ui"], why: "the UI package" },
   { match: [notMarkdown("apps/web/")], consumers: ["web"], why: "the website" },
+  // The docs' pages are Markdown the docs build reads, so its content directory is matched whole.
+  { match: [notMarkdown("apps/docs/"), "apps/docs/src/content/"], consumers: ["docs"], why: "the documentation site, its Markdown pages included" },
   { match: [notMarkdown("apps/daemon/")], consumers: ["daemon"], why: "the daemon crate" },
   { match: [notMarkdown("apps/desktop/src-tauri/")], consumers: ["native"], why: "the desktop shell crate" },
   { match: ["apps/desktop/scripts/"], consumers: ["desktop"], why: "the desktop build and release scripts and their tests" },
@@ -140,6 +164,8 @@ export const RULES = [
 
   // Cross-package reads. Each also selects `verify`, whose tests check that the paths named here exist.
   { match: [...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS, ...WEB_RESOLVES_UI], consumers: ["verify", "ui", "web"], why: "the website imports these modules, builds its preview from them, or resolves the package through its `exports` map" },
+  { match: DOCS_IMPORTS_FROM_UI, consumers: ["verify", "ui", "docs"], why: "the docs build their locale table from the UI's language list, resolved through its `exports` map" },
+  { match: DOCS_READS_WEB, consumers: ["verify", "web", "docs"], why: "the docs import the website's logo and wordmark, and a docs test reads the website's redirect, address and download modules and its navigation labels" },
   { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon"], why: "the wire protocol is kept in step across the daemon and the UI: the UI reads the generated types, which the daemon writes from its own, and a UI test (`daemonCodes.test.ts`) reads the daemon's code registry from `protocol/codes.rs`" },
   { match: PROTOCOL_SCHEMA, consumers: ["verify", "daemon"], why: "the protocol schema is written by a daemon test from the daemon's types, and the same test fails when it is stale; the compatibility guard reads it and its release snapshot" },
   { match: DESKTOP_CONTRACT, consumers: ["verify", "ui", "native"], why: "the UI side of the contract with the desktop shell" },
@@ -151,6 +177,7 @@ export const RULES = [
   { match: DAEMON_READS_NATIVE, consumers: ["verify", "daemon", "native"], why: "a daemon test reads it" },
   { match: WEB_READS_NATIVE, consumers: ["verify", "web", "native"], why: "a website test holds the install script's key to the updater's" },
   { match: WEB_READS_DAEMON, consumers: ["verify", "web", "daemon"], why: "a website test holds the example unit's port to the install script's and verifies the daemon's signed update fixtures" },
+  { match: WEB_READS_DOCS, consumers: ["verify", "web", "docs"], why: "a website test checks that every docs page the website links to exists in every language" },
   { match: WEB_IMPORTS_DESKTOP, consumers: ["verify", "web", "desktop"], why: "a website test imports the release manifest builder" },
   { match: UI_READS_ELSEWHERE, consumers: ["verify", "ui"], why: "a UI test reads it" },
   { match: VERIFY_READS_UI, consumers: ["verify", "ui"], why: "a verify test reads it" },

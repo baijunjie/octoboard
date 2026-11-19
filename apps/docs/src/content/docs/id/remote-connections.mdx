@@ -1,0 +1,119 @@
+---
+title: "Terhubung melalui SSH"
+description: "Pakai Octoboard di server Linux atau komputer lain dari komputer ini, di aplikasi desktop atau browser, melalui SSH: koneksi terenkripsi langsung ke mesin itu, tanpa relay atau layanan cloud."
+---
+
+import { Code, Steps } from "@astrojs/starlight/components";
+import { commands, productName } from "../../../commands.ts";
+
+Pakai {productName} di server Linux atau komputer lain dari komputer ini, di aplikasi desktop atau browser, melalui SSH: koneksi terenkripsi langsung ke mesin itu, tanpa relay atau layanan cloud.
+
+Belum yakin ini cara yang tepat untuk Anda? [Pilih cara terhubung](../choose-how-to-connect/) membandingkannya dengan cara-cara khusus browser yang tidak memerlukan SSH.
+
+<strong>Aplikasi desktop di komputer ini</strong> · <strong>Browser melalui penerusan SSH</strong> ⟷ SSH ⟷ <strong>Server Linux atau komputer lain</strong>
+
+<details>
+<summary>Baru mengenal ini?</summary>
+
+- <strong>Host:</strong> mesin tempat {productName} berjalan dan yang ingin Anda jangkau, yaitu server Linux atau Mac atau PC Windows lain.
+- <strong>Server:</strong> di sini, mesin Linux yang Anda masuki lewat jaringan, biasanya yang Anda sewa, tanpa layar sendiri.
+- <strong>SSH:</strong> cara standar dan terenkripsi untuk masuk ke mesin lain dan mengetik perintah di sana. Sudah ada di macOS, Windows, dan Linux.
+- <strong>Terminal:</strong> jendela tempat Anda mengetik perintah: Terminal di macOS, PowerShell di Windows.
+- <strong>Penerusan SSH:</strong> perintah SSH yang membuat sesuatu di host muncul di komputer Anda sendiri, sehingga browser Anda dapat membukanya di sana.
+- <strong>Sidik jari (kunci host):</strong> kode pendek yang mengidentifikasi SSH sebuah mesin. Memeriksanya sekali memastikan Anda mencapai mesin yang benar.
+- <strong>File kunci:</strong> file yang memasukkan Anda sebagai ganti kata sandi. Beberapa penyedia server memberikannya.
+
+</details>
+
+## Yang Anda perlukan
+
+- <strong>Cara untuk masuk ke host dengan SSH.</strong> Untuk server Linux, penyedianya memberi Anda alamat dan nama pengguna Anda. Untuk memeriksa bahwa cara ini berfungsi, buka Terminal (macOS) atau PowerShell (Windows) dan jalankan perintah di bawah dengan nama pengguna Anda dan alamat server. Saat pertama kali, jawab <code dir="ltr">yes</code> ketika ditanya apakah server dipercaya.
+
+  <Code code={commands.signIn} lang="sh" />
+
+  Untuk Mac atau PC Windows sebagai host, Anda mengaktifkan login SSH di pengaturan sistemnya; [Gunakan komputer lain sebagai host](#gunakan-komputer-lain-sebagai-host) menunjukkan caranya.
+- <strong>Untuk server Linux, {productName} sudah terinstal dan dimulai di sana.</strong> [Instalasi › Server Linux](../install/linux/) menunjukkan caranya. Program server {productName}, octoboardd, disebut daemon oleh aplikasi.
+- <strong>Aplikasi {productName} di komputer ini</strong>, untuk macOS atau Windows, kecuali Anda hanya akan memakai browser.
+
+## Terhubung ke server Linux
+
+<Steps>
+
+1. Masuk ke server lewat SSH sebagai pengguna yang menjalankan {productName}, jalankan perintah ini, lalu salin baris yang diawali <code dir="ltr">{commands.connectionScheme}</code>: detail koneksi, yang memberi tahu aplikasi ke mana dan bagaimana terhubung.
+
+   <Code code={commands.connection} lang="sh" />
+
+   Jika komputer ini menjangkau server di alamat atau port SSH yang berbeda, tambahkan <code dir="ltr">{commands.host}</code> atau <code dir="ltr">{commands.sshPort}</code> ke perintah agar detail koneksi yang dicetak benar.
+
+   Kode QR yang ikut dicetak berisi baris yang sama. Belum ada aplikasi yang memindainya.
+2. Di aplikasi {productName} di komputer ini, buka <strong>Perangkat jarak jauh</strong> dari rail di sebelah kiri atau, di macOS, pilih <strong>Jarak Jauh › Perangkat Jarak Jauh</strong> dari bilah menu. Di Windows, Anda juga dapat memilih <strong>Perangkat jarak jauh</strong> dari menu sistem jendela atau dari jump list ikon bilah tugas.
+3. Pilih <strong>Tambah daemon jarak jauh</strong>, lalu <strong>Tempel</strong> di bawah <strong>Detail koneksi</strong> untuk mengisi kolom.
+4. Di bawah <strong>Autentikasi</strong>, pilih <strong>Kata sandi</strong> jika Anda masuk dengan kata sandi akun Anda. Pilih <strong>File kunci</strong> jika penyedia server memberi Anda file kunci sebagai gantinya (sering bernama seperti <code dir="ltr">id_ed25519</code> atau berakhiran <code dir="ltr">.pem</code>), dan masukkan lokasinya di komputer ini.
+5. Pilih <strong>Simpan</strong>, lalu <strong>Hubungkan</strong>. Masukkan kata sandi Anda jika diminta.
+
+   Jika Anda menempelkan detail koneksi, identitas server (sidik jarinya) ikut di dalamnya, dan aplikasi memeriksanya untuk Anda. Jika Anda mengetik alamat secara manual, aplikasi menampilkan sidik jari saat pertama kali. Untuk memastikan Anda mencapai mesin yang benar, bandingkan dengan sidik jari yang dicetak perintah ini di server, dan hubungkan hanya jika keduanya cocok:
+
+   <Code code={commands.fingerprintCommand} lang="sh" />
+
+</Steps>
+
+Anda tahu semuanya berhasil saat jendela {productName} terpisah terbuka, menampilkan proyek dan sesi server.
+
+## Gunakan komputer lain sebagai host
+
+Anda juga dapat menjangkau Mac atau PC Windows yang menjalankan aplikasi {productName}.
+
+<Steps>
+
+1. Di komputer yang ingin Anda jangkau, buka <strong>Pengaturan › Akses jarak jauh</strong> di {productName}.
+2. Pilih <strong>Buka Pengaturan Sistem</strong> (macOS) atau <strong>Buka Pengaturan</strong> (Windows) di sana, lalu aktifkan <strong>Login Jarak Jauh</strong> (macOS) atau <strong>OpenSSH Server</strong> (Windows), dengan mengikuti jalur yang diberikan baris itu, agar komputer ini menerima login SSH. Ini memerlukan administrator. Kembali di {productName}, baris itu kemudian menampilkan <strong>Aktif</strong>.
+3. Aktifkan <strong>Izinkan akses jarak jauh</strong>, pilih <strong>Izinkan</strong> untuk mengonfirmasi, dan biarkan {productName} tetap berjalan: jika Anda menutupnya, akses jarak jauh berhenti.
+4. Di tab <strong>Aplikasi {productName}</strong>, pilih <strong>Salin detail koneksi</strong>, dan kirim ke komputer lain, misalnya lewat email atau chat.
+5. Di komputer tempat Anda akan bekerja, tambahkan host seperti pada langkah 2 sampai 5 [Terhubung ke server Linux](#terhubung-ke-server-linux), dengan menempelkan detail yang Anda kirim. Masuk dengan nama pengguna dan kata sandi Anda di host.
+
+</Steps>
+
+Anda tahu semuanya berhasil saat jendela terpisah terbuka dengan proyek dan sesi host.
+
+## Dari browser
+
+<Steps>
+
+1. Dapatkan perintah penerusan SSH:
+
+   - <strong>Di host Mac atau Windows,</strong> lakukan dulu langkah 1 sampai 3 [Gunakan komputer lain sebagai host](#gunakan-komputer-lain-sebagai-host). Lalu, di tab <strong>Browser</strong>, lihat <strong>Langkah 1: penerusan SSH</strong>. Klik alamat di dalam perintah untuk memilih bagaimana komputer lain Anda menjangkau komputer ini (atau pilih <strong>Masukkan alamat sendiri</strong> dan ganti <code dir="ltr">{commands.server}</code> nanti), lalu pilih <strong>Salin perintah penerusan</strong>. Pilih juga <strong>Salin alamat</strong> di bawah <strong>Langkah 2: alamat browser</strong>.
+   - <strong>Di server Linux,</strong> jalankan ini di server. Perintah ini mencetak alamat browser, lalu perintah SSH yang harus dijalankan.
+
+     <Code code={commands.address} lang="sh" />
+
+     Ganti <code dir="ltr">{commands.server}</code> dalam perintah dengan alamat server.
+2. Di komputer yang akan Anda pakai untuk browsing, jalankan perintah SSH di Terminal (macOS) atau PowerShell (Windows). Jendela mungkin meminta kata sandi Anda, lalu tidak menampilkan apa-apa lagi; itu normal. Biarkan terbuka selama Anda bekerja: menutupnya memutus browser.
+3. Buka alamat browser, yang diawali <code dir="ltr">http://127.0.0.1:</code>, di browser Anda.
+
+</Steps>
+
+Anda tahu semuanya berhasil saat {productName} terbuka di tab browser tanpa meminta Anda masuk.
+
+Hanya orang yang dapat menjangkau {productName} melalui penerusan SSH yang dapat memakai alamat ini. Rahasiakan alamat ini: kuncinya memberi kendali penuh, dan alamat ini tersimpan di riwayat dan bookmark browser, serta tersinkron ke perangkat Anda yang lain jika sinkronisasi browser aktif.
+
+## Jika tidak berhasil
+
+- <strong>“Server tidak dapat dijangkau”, atau perintah SSH menyatakan “Connection refused” atau kehabisan waktu:</strong> login SSH nonaktif di host, atau alamat atau port SSH salah. Periksa bahwa <strong>Login Jarak Jauh</strong> atau <strong>OpenSSH Server</strong> aktif, dan bahwa Anda dapat masuk dengan perintah <code dir="ltr">ssh</code> di atas.
+- <strong>“Tidak dapat masuk”, atau “Permission denied”:</strong> nama pengguna, kata sandi, atau file kunci salah.
+- <strong>“Kunci host tidak cocok”:</strong> mesin yang menjawab bukan mesin yang Anda hubungi sebelumnya. Ini terjadi setelah server diinstal ulang, tetapi bisa juga berarti ada yang tidak beres. Jangan lanjutkan sampai Anda tahu penyebabnya.
+- <strong>Halaman browser tidak termuat:</strong> jendela SSH ditutup, atau perintahnya berhenti. Jalankan lagi dan muat ulang halaman.
+
+## Keamanan
+
+- <strong>Tanpa port publik tambahan:</strong> {productName} hanya menerima koneksi dari host itu sendiri, jadi untuk terhubung dari komputer lain Anda harus masuk dulu ke host lewat SSH. Inilah sebabnya Anda memerlukan SSH, atau salah satu [relay](../choose-how-to-connect/).
+- <strong>Periksa mesin mana yang Anda jangkau:</strong> aplikasi mengingat kunci host, identitas SSH mesin itu, pada koneksi pertama yang berhasil dan memblokir koneksi dengan peringatan jika identitas itu kemudian berubah.
+- <strong>Tanpa kata sandi tersimpan:</strong> setelah Anda pertama kali masuk dengan kata sandi atau file kunci Anda sendiri, aplikasi menyiapkan kunci SSH terpisah untuk dipakai komputer ini pada login berikutnya.
+- <strong>Cabut akses sebuah komputer:</strong> hapus entri komputer itu dari daftar kunci SSH yang diizinkan di host (<code dir="ltr">{commands.authorizedKeys}</code> di Linux dan macOS). Kunci itu lalu tidak dapat masuk lagi; koneksi yang sudah terbuka tetap berjalan sampai berakhir.
+
+## Di jendela jarak jauh
+
+- <strong>Satu jendela per tujuan SSH:</strong> koneksi dengan nama pengguna, host, atau port SSH yang berbeda masing-masing membuka jendelanya sendiri, sehingga proyek, sesi, dan notifikasinya tidak pernah tercampur.
+- <strong>Lihat status setiap koneksi:</strong> buka ikon bilah menu aplikasi di macOS atau ikon area notifikasinya di Windows untuk melihat tab bagi setiap koneksi.
+- <strong>Buka situs web jarak jauh di sini:</strong> saat agen menjalankan situs web di host, klik tautan <code dir="ltr">{commands.localhost}</code> yang diberikannya, dan aplikasi membuka situs web itu di komputer ini melalui SSH.
+- <strong>Buka file jarak jauh di sini:</strong> lihat file di jendela jarak jauh atau unduh salinannya untuk dibuka di aplikasi bawaan komputer ini untuk file tersebut.
+- <strong>Terhubung kembali otomatis:</strong> jika jaringan terputus, jendela terus mencoba terhubung kembali sampai berhasil atau Anda menutupnya.

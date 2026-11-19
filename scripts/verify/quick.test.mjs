@@ -114,6 +114,14 @@ test("the quick plan drops builds and the full suites, keeping every other step 
   ]);
 });
 
+test("the quick plan checks the docs without building them or running their tests, which need the build", () => {
+  assert.deepEqual(labels(["apps/docs/astro.config.ts"]), ["identity check", "provider-neutral core", "docs lint", "docs type check"]);
+  assert.ok(!labels(["apps/docs/src/content/docs/index.md"]).includes("docs tests"));
+  const languages = labels(["packages/ui/src/i18n/languages.ts"]);
+  assert.ok(languages.includes("docs type check"));
+  assert.ok(!languages.includes("docs build") && !languages.includes("docs tests"));
+});
+
 test("narrowed test steps are heavy, last and never stamped; a fallback keeps the normal stamped suite", () => {
   const narrowed = quick(["packages/ui/src/a/X.tsx", "apps/daemon/src/coordinator.rs"]).steps;
   assert.deepEqual(narrowed.map((step) => step.label), ["identity check", "provider-neutral core", "ui lint", "ui type check", "rustfmt check", "rust clippy", "ui related tests", "rust related tests"]);
@@ -131,8 +139,8 @@ test("narrowed test steps are heavy, last and never stamped; a fallback keeps th
 test("without known changed files both suites stay in full, minus the builds", () => {
   const { steps, notes } = quickSteps({ mode: "full", packages: [] }, null);
   assert.deepEqual(steps.map((step) => step.label), [
-    "identity check", "provider-neutral core", "verify lint", "verify tests", "ui lint", "ui type check", "web lint", "web type check", "web locales", "desktop lint",
-    "desktop script tests", "rustfmt check", "rust clippy", "ui tests", "rust tests",
+    "identity check", "provider-neutral core", "verify lint", "verify tests", "ui lint", "ui type check", "web lint", "web type check", "web locales", "docs lint",
+    "docs type check", "desktop lint", "desktop script tests", "rustfmt check", "rust clippy", "ui tests", "rust tests",
   ]);
   assert.equal(notes.length, 2);
   assert.match(quickSteps({ mode: "full", reason: "base origin/x is not readable", packages: [] }, null).notes[0], /: base origin\/x is not readable$/);

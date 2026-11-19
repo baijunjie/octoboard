@@ -1,0 +1,89 @@
+---
+title: "Server Linux"
+description: "Installa octoboardd, il programma server di Octoboard, su un server Linux senza privilegi di root. Raggiungilo dall’app per macOS o Windows, o da un browser, in entrambi i casi tramite SSH."
+---
+
+import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
+import { commands, downloads, productName } from "../../../../commands.ts";
+
+Installa octoboardd, il programma server di {productName} (l’app lo chiama il servizio), su un server Linux senza privilegi di root. Raggiungilo dall’app per macOS o Windows, o da un browser, in entrambi i casi tramite SSH.
+
+Per x86_64 e aarch64, su qualsiasi distribuzione.
+
+<Aside>Il programma server per Linux è in beta.</Aside>
+
+## Prima di iniziare
+
+- **Un server Linux a cui puoi accedere con SSH.** SSH è un modo sicuro per accedere a un’altra macchina e digitarvi comandi. Il provider del server ti dà il suo indirizzo e il tuo nome utente.
+- **L’app {productName} sul tuo computer**, per [macOS](../macos/) o [Windows](../windows/), se vuoi lavorare nell’app desktop (consigliato).
+
+Per accedere, apri Terminale (macOS) o PowerShell (Windows) sul tuo computer ed esegui il comando qui sotto, con il tuo nome utente al posto di <code dir="ltr">&lt;you&gt;</code> e l’indirizzo del server al posto di <code dir="ltr">{commands.server}</code>. La prima volta, rispondi <code dir="ltr">yes</code> quando ti chiede se considerare attendibile il server.
+
+<Code code={commands.signIn} lang="sh" />
+
+I passaggi 1 e 2 qui sotto si eseguono sul server, in quella finestra in cui hai effettuato l’accesso.
+
+## Installazione
+
+<Steps>
+
+1. Installa octoboardd sul server.
+
+   <Code code={commands.install} lang="sh" />
+
+   Stampa una riga che inizia con <code dir="ltr">Installed octoboardd</code>.
+2. Avvialo sul server.
+
+   <Code code={commands.start} lang="sh" />
+
+   Stampa una riga che inizia con <code dir="ltr">{productName} started</code>.
+3. Collegati dal tuo computer, in uno di due modi:
+
+   - <strong>Dall’app desktop (consigliato):</strong> segui [Connettiti a un server Linux](../../remote-connections/#connettiti-a-un-server-linux) nella guida SSH.
+   - <strong>Da un browser:</strong> esegui questo sul server.
+
+     <Code code={commands.address} lang="sh" />
+
+     Stampa due cose: un indirizzo del browser, che inizia con <code dir="ltr">http://127.0.0.1:</code>, e un comando <code dir="ltr">ssh</code>. Sul tuo computer, copia il comando <code dir="ltr">ssh</code>, sostituisci <code dir="ltr">{commands.server}</code> con l’indirizzo del server (l’indirizzo IP o il nome che usi per accedervi) ed eseguilo in Terminale o PowerShell. Potrebbe chiederti la password, poi non mostra altro: è normale. Lascia aperta quella finestra: chiuderla interrompe la connessione. Poi apri nel browser l’indirizzo stampato.
+
+</Steps>
+
+Saprai che ha funzionato quando {productName} si apre nella nuova finestra dell’app desktop o nella scheda del browser.
+
+## Se octoboardd non viene trovato
+
+Se l’installazione dice che una cartella che termina con <code dir="ltr">.local/bin</code> (per esempio <code dir="ltr">/home/&lt;you&gt;/.local/bin</code>) non è nel tuo PATH, la shell non riesce a trovare <code dir="ltr">octoboardd</code> per nome. Eseguilo con il percorso completo che l’installazione ha stampato, oppure aggiungi <code dir="ltr">{commands.binDir}</code> al tuo PATH (per esempio in <code dir="ltr">~/.profile</code>) e accedi di nuovo.
+
+## Tenerlo in esecuzione dopo la disconnessione o il riavvio
+
+Se avviato con <code dir="ltr">{commands.start}</code>, octoboardd si ferma quando il server si riavvia e nulla lo riavvia da solo: esegui di nuovo <code dir="ltr">{commands.start}</code>, oppure collegati dall’app desktop, che si offre di avviarlo per te. Alcuni server lo fermano anche quando esci dalla sessione.
+
+Per farlo partire a ogni avvio del server e tenerlo in esecuzione anche dopo che sei uscito, installalo invece come servizio:
+
+<Code code={commands.installService} lang="sh" />
+
+Questo comando installa il programma, lo configura come servizio utente systemd e lo avvia. Poi attiva il lingering, che permette ai tuoi servizi di restare in esecuzione quando non hai effettuato l’accesso. Se dice di non esserci riuscito, esegui questo una sola volta (potrebbe servire <code dir="ltr">sudo</code>):
+
+<Code code={commands.linger} lang="sh" />
+
+La porta predefinita è <code dir="ltr">{commands.defaultPort}</code>. Per usarne un’altra, aggiungi <code dir="ltr">{commands.portOption}</code> alla fine del comando del servizio, o a <code dir="ltr">{commands.start}</code>.
+
+## Aggiornamento
+
+{productName} non si aggiorna mai da solo: quando esce una nuova versione, il browser te lo segnala e scegli tu quando installarla. Una volta installata la nuova versione, {productName} si riavvia da solo con quella quando nessuna sessione verrebbe interrotta; se qualcuna lo fosse, le elenca e chiede prima.
+
+- <strong>Nel browser:</strong> seleziona <strong>Scarica e installa</strong> dove indica che è disponibile una nuova versione.
+- <strong>Sul server:</strong> esegui questo comando.
+
+  <Code code={commands.update} lang="sh" />
+
+  Se chiede se riavviare ora, rispondi <code dir="ltr">y</code> per riavviare, oppure premi Invio per lasciare per ora in esecuzione la vecchia versione. Per riavviare più tardi, esegui <code dir="ltr">{commands.restart}</code>.
+
+Se <code dir="ltr">{commands.update}</code> dice che non riesce a sostituire il programma, per esempio perché è installato in una posizione in cui non puoi scrivere, esegui invece di nuovo il comando di installazione (o quello del servizio). Si riavvia nello stesso modo quando è sicuro farlo; altrimenti ti dice di eseguire <code dir="ltr">{commands.restart}</code>.
+
+## Scaricare invece l’archivio
+
+<LinkButton href={downloads["linux-x86_64"]} variant="secondary">Archivio x86_64</LinkButton>
+<LinkButton href={downloads["linux-aarch64"]} variant="secondary">Archivio aarch64</LinkButton>
+
+<a href={downloads.releases}>Tutte le versioni precedenti</a>

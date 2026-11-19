@@ -1,0 +1,46 @@
+---
+title: "Windows"
+description: "สำหรับพีซีที่ใช้ตัวประมวลผล Intel หรือ AMD (เกือบทุกเครื่อง) บน Windows 10 เวอร์ชัน 21H2 ขึ้นไป บน Windows 11 บน Arm แอป x64 นี้ทำงานผ่านการจำลอง"
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+สำหรับพีซีที่ใช้ตัวประมวลผล Intel หรือ AMD (x64 ซึ่งคือพีซี Windows เกือบทุกเครื่อง) บน Windows 10 เวอร์ชัน 21H2 ขึ้นไป บน Windows 11 บน Arm แอป x64 นี้ทำงานผ่านการจำลอง
+
+<LinkButton href={downloads.windows}>ดาวน์โหลดสำหรับ Windows</LinkButton>
+
+<Aside>แอป Windows อยู่ในช่วงเบต้า</Aside>
+
+## ติดตั้ง
+
+<Steps>
+
+1. ดาวน์โหลดตัวติดตั้งด้วยปุ่มด้านบน เป็นไฟล์ที่ชื่อลงท้ายด้วย <code dir="ltr">x64-setup.exe</code>
+2. เปิดไฟล์ที่ดาวน์โหลดมาเพื่อรันตัวติดตั้ง ตัวติดตั้งจะติดตั้ง {productName} ให้เฉพาะบัญชีผู้ใช้ของคุณ จึงไม่ขอสิทธิ์ผู้ดูแลระบบ
+
+   แอปยังไม่ได้ลงนามรหัส (code-signed) Microsoft Defender SmartScreen จึงอาจแสดงข้อความ “Windows protected your PC” ให้เลือก “More info” แล้วเลือก “Run anyway”
+
+   หากพีซีของคุณไม่มี Microsoft Edge WebView2 ซึ่งใช้วาดหน้าต่างของแอป ตัวติดตั้งจะดาวน์โหลดให้ ดังนั้นโปรดเชื่อมต่ออินเทอร์เน็ตไว้
+3. เปิด {productName} จากเมนู Start
+4. ติดตั้งเอเจนต์เขียนโค้ดอย่างน้อยหนึ่งตัว (ดูด้านล่าง) แล้วเลือก <strong>เพิ่มโปรเจ็กต์</strong> ใน {productName} เพื่อเปิดโฟลเดอร์โปรเจ็กต์
+
+</Steps>
+
+เมื่อหน้าต่างหลักเปิดขึ้น ก็เป็นอันเสร็จเรียบร้อย
+
+## ติดตั้งเอเจนต์เขียนโค้ด
+
+{productName} ไม่มีเอเจนต์ AI มาให้ ให้ติดตั้งตัวที่คุณอยากใช้ตามคำแนะนำของแต่ละตัว แล้วลงชื่อเข้าใช้ {productName} จะค้นหาเอเจนต์เหล่านั้นให้เองโดยอัตโนมัติ รองรับ
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+หากคุณใช้ Claude Code หรือ Codex ให้ติดตั้ง [Git for Windows](https://git-scm.com/download/win) ก่อน เพราะทั้งสองต้องใช้
+
+## การอัปเดต
+
+เมื่อมีเวอร์ชันใหม่ {productName} จะแจ้งให้คุณทราบ และคุณติดตั้งได้จากในแอปเลย ไม่ต้องกลับมาที่หน้านี้อีก
+
+<a href={downloads.releases}>เวอร์ชันก่อนหน้าทั้งหมด</a>

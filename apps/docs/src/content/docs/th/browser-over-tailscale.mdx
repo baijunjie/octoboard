@@ -1,0 +1,179 @@
+---
+title: "เบราว์เซอร์ผ่าน Tailscale"
+description: "เปิด Octoboard ในเบราว์เซอร์บนคอมพิวเตอร์เครื่องอื่นผ่านเครือข่าย Tailscale ของคุณเอง โดยไม่ต้องใช้ SSH หรือรีโมตเดสก์ท็อป"
+---
+
+import { Aside, Code, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+import HostBrowserAddress from "../../../snippets/th/host-browser-address.mdx";
+
+เปิด {productName} ในเบราว์เซอร์บนคอมพิวเตอร์เครื่องอื่นผ่านเครือข่าย Tailscale ของคุณเอง โดยไม่ต้องใช้ SSH หรือรีโมตเดสก์ท็อป โฮสต์คือคอมพิวเตอร์ที่รัน {productName} ได้แก่ Mac, พีซี Windows หรือเซิร์ฟเวอร์ Linux ที่รัน octoboardd การลงชื่อเข้าใช้ด้วย SSH (Remote Login บน macOS) ปิดไว้ได้
+
+ไม่แน่ใจว่าวิธีนี้เหมาะกับคุณหรือไม่ ดู [เลือกวิธีเชื่อมต่อ](../choose-how-to-connect/)
+
+<Aside type="caution">
+ขั้นตอนเหล่านี้ยังไม่ได้ทดสอบครบถ้วน ทำตามเอกสาร Tailscale Serve และการตรวจสอบของ {productName} เอง โปรแกรมตัวส่งต่อได้ลองบนคอมพิวเตอร์เครื่องเดียวแล้ว รวมถึงการเชื่อมต่อสดของเบราว์เซอร์ ส่วน Tailscale Serve ระหว่างสองอุปกรณ์และการส่งต่อบน Windows ยังไม่ได้ลอง
+</Aside>
+
+<strong>เบราว์เซอร์บนคอมพิวเตอร์ของคุณ</strong> → <strong>ตัวส่งต่อบนคอมพิวเตอร์ของคุณ (127.0.0.1)</strong> ⟷ Tailscale ⟷ <strong>ตัวส่งต่อบนโฮสต์ (127.0.0.1)</strong> → <strong>{productName}</strong>
+
+<details>
+<summary>เพิ่งเริ่มใช้ใช่ไหม</summary>
+
+- <strong>Tailscale:</strong> บริการที่เชื่อมอุปกรณ์ของคุณเข้าเป็นเครือข่ายส่วนตัวผ่านอินเทอร์เน็ต ไม่ว่าอุปกรณ์จะอยู่ที่ไหน คุณลงชื่อเข้าใช้ด้วยบัญชีของคุณเอง
+- <strong>Tailnet:</strong> เครือข่าย Tailscale ของคุณ คืออุปกรณ์ที่ลงชื่อเข้าใช้บัญชี Tailscale ของคุณ
+- <strong>127.0.0.1 (loopback):</strong> ที่อยู่ที่หมายถึง “คอมพิวเตอร์เครื่องเดียวกันนี้” เสมอ
+- <strong>พอร์ต:</strong> ตัวเลขที่ใช้เลือกโปรแกรมหนึ่งบนคอมพิวเตอร์ เหมือนเลขประตู <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> คือพอร์ต {commands.defaultPort} บนคอมพิวเตอร์เครื่องนี้
+- <strong>socat:</strong> โปรแกรมเล็ก ๆ ที่ใช้ฟรี ทำหน้าที่ส่งต่อการเชื่อมต่อจากที่หนึ่งไปอีกที่หนึ่ง ในที่นี้คือตัวส่งต่อ
+- <strong>Tailscale Serve:</strong> คำสั่งของ Tailscale ที่แชร์พอร์ตให้เฉพาะ tailnet ของคุณ ส่วน Tailscale Funnel ซึ่งเป็นคำสั่งคู่กันจะแชร์ให้ทั้งอินเทอร์เน็ต อย่าใช้ในที่นี้เด็ดขาด
+- <strong>Terminal:</strong> หน้าต่างที่ใช้พิมพ์คำสั่ง คือ Terminal บน macOS และ PowerShell บน Windows
+
+</details>
+
+## ทำไมต้องมีขั้นตอนเพิ่ม
+
+เพื่อความปลอดภัย {productName} ยอมรับเฉพาะเบราว์เซอร์ที่เปิดมันที่ <code dir="ltr">{tunnel.loopback}</code> ซึ่งเป็นที่อยู่ที่หมายถึง “คอมพิวเตอร์เครื่องเดียวกันนี้” เสมอ (เรียกอีกอย่างว่า loopback) คุณจึงพิมพ์ที่อยู่ Tailscale ของโฮสต์ลงในเบราว์เซอร์ตรง ๆ ไม่ได้ แต่ให้รันโปรแกรมตัวส่งต่อเล็ก ๆ บนคอมพิวเตอร์แต่ละเครื่อง บนคอมพิวเตอร์ของคุณ มันทำให้โฮสต์ดูเหมือนอยู่ในเครื่องที่ <code dir="ltr">{tunnel.loopback}</code> บนโฮสต์ มันส่งต่อการเชื่อมต่อให้ {productName} ส่วน Tailscale พาข้อมูลระหว่างสองฝั่ง
+
+## ก่อนเริ่ม
+
+- <strong>Tailscale บนคอมพิวเตอร์ทั้งสองเครื่อง</strong> ลงชื่อเข้าใช้ใน tailnet เดียวกัน ใช้ tailnet ที่มีเฉพาะอุปกรณ์ของคุณเอง เพราะอุปกรณ์ทุกเครื่องที่มันอนุญาตให้เข้าถึงโฮสต์ จะเข้าถึงพอร์ตที่คุณแชร์ได้
+- <strong>socat บนคอมพิวเตอร์ทุกเครื่องที่เป็น Mac หรือรัน Linux</strong> คอมพิวเตอร์ Windows ไม่ต้องใช้
+
+  <Tabs syncKey="host">
+  <TabItem label="macOS">
+  ติดตั้ง [Homebrew](https://brew.sh/) ก่อนหากยังไม่มี (macOS ไม่มีเครื่องมือที่ทำงานนี้ได้) แล้วรันคำสั่งนี้ใน Terminal
+
+  <Code code={tunnel.installSocatMac} lang="sh" />
+  </TabItem>
+  <TabItem label="Windows">
+  ไม่ต้องติดตั้งอะไร: โฮสต์ Windows เปิดเบราว์เซอร์บนพอร์ต <code dir="ltr">{tunnel.loopback}</code> อยู่แล้ว และคอมพิวเตอร์ Windows ที่ใช้เปิดเบราว์เซอร์จะใช้คำสั่งที่มีมาในตัวแทน
+  </TabItem>
+  <TabItem label="Linux">
+  <Code code={tunnel.installSocatLinux} lang="sh" />
+
+  หากไม่ใช่ <code dir="ltr">apt</code> ให้ใช้ตัวจัดการแพ็กเกจของดิสทริบิวชันของคุณ (<code dir="ltr">dnf</code>, <code dir="ltr">pacman</code> เป็นต้น)
+  </TabItem>
+  </Tabs>
+- <strong>หน้าต่างสองหรือสามหน้าต่างที่เปิดค้างไว้</strong> ขณะทำงาน: ตัวส่งต่อและ Tailscale Serve บนโฮสต์ (ยกเว้นตัวส่งต่อบน Windows) และตัวส่งต่อบนคอมพิวเตอร์ของคุณ (ยกเว้นบน Windows)
+
+## บนโฮสต์
+
+<Steps>
+
+1. รับที่อยู่ของเบราว์เซอร์ ซึ่งมีคีย์ที่ใช้ลงชื่อเข้าใช้ให้เบราว์เซอร์
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <HostBrowserAddress />
+   </TabItem>
+   <TabItem label="Windows">
+   <HostBrowserAddress windows />
+   </TabItem>
+   <TabItem label="Linux">
+   รันคำสั่งนี้ในฐานะผู้ใช้ที่ octoboardd ทำงานอยู่ แล้วคัดลอกที่อยู่ที่มันแสดง ซึ่งขึ้นต้นด้วย <code dir="ltr">{tunnel.addressStart}</code> ไม่ต้องสนใจคำสั่ง SSH ที่มันแสดงตามหลัง
+
+   <Code code={commands.address} lang="sh" />
+   </TabItem>
+   </Tabs>
+2. เริ่มตัวส่งต่อบนโฮสต์ ซึ่งเชื่อมพอร์ตหนึ่งบน <code dir="ltr">{tunnel.loopback}</code> ของโฮสต์เข้ากับ {productName} พอร์ตนี้คือ <strong>พอร์ตของโฮสต์</strong> ในขั้นตอนต่อไป
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   รันคำสั่งนี้ใน Terminal แล้วเปิดหน้าต่างทิ้งไว้ มันรับฟังที่ <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> เท่านั้น
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   พอร์ตของโฮสต์คือ <code dir="ltr">{tunnel.bridgePort}</code>
+   </TabItem>
+   <TabItem label="Windows">
+   ไม่ต้องรันอะไร: {productName} เองรับฟังที่พอร์ตเบราว์เซอร์ บน <code dir="ltr">127.0.0.1</code> เท่านั้น พอร์ตของโฮสต์คือ <strong>พอร์ตเบราว์เซอร์</strong> ({commands.defaultPort} หากคุณไม่ได้เปลี่ยน)
+   </TabItem>
+   <TabItem label="Linux">
+   รันคำสั่งนี้ในฐานะผู้ใช้เดียวกัน ในเทอร์มินัลหรือเซสชัน <code dir="ltr">tmux</code> ที่เปิดค้างไว้ มันรับฟังที่ <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> เท่านั้น
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   พอร์ตของโฮสต์คือ <code dir="ltr">{tunnel.bridgePort}</code>
+   </TabItem>
+   </Tabs>
+3. แชร์พอร์ตของโฮสต์ให้ tailnet ของคุณด้วย Tailscale Serve และเปิดหน้าต่างทิ้งไว้ อย่าใช้ Tailscale Funnel เด็ดขาด เพราะจะเปิดพอร์ตสู่อินเทอร์เน็ตสาธารณะ
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   หากใช้แอป Tailscale จาก App Store ให้รันคำสั่งเป็น <code dir="ltr">{tunnel.macCli}</code> แทน <code dir="ltr">tailscale</code> หากใช้แอปแบบสแตนด์อโลน ให้ติดตั้งคำสั่งก่อนจากการตั้งค่าของแอป ในส่วน CLI integration
+   </TabItem>
+   <TabItem label="Windows">
+   ใน PowerShell หรือ Command Prompt
+
+   <Code code={tunnel.serveBrowserPort} lang="powershell" />
+
+   ใช้พอร์ตของคุณหากคุณเปลี่ยน <strong>พอร์ตเบราว์เซอร์</strong>
+   </TabItem>
+   <TabItem label="Linux">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   หาก Tailscale แจ้งว่าคุณไม่มีสิทธิ์ ให้อนุญาตให้ผู้ใช้ของคุณจัดการมันครั้งหนึ่งด้วย <code dir="ltr">{tunnel.linuxOperator}</code> หรือรันคำสั่งด้วย <code dir="ltr">sudo</code>
+   </TabItem>
+   </Tabs>
+
+   หากต้องการตรวจสอบ ให้รัน <code dir="ltr">{tunnel.serveStatus}</code> ในอีกหน้าต่างหนึ่ง ควรแสดงพอร์ตของโฮสต์
+
+</Steps>
+
+## บนคอมพิวเตอร์ที่คุณจะใช้เปิดเบราว์เซอร์
+
+<Steps>
+
+1. หาโฮสต์ในแอป Tailscale บนคอมพิวเตอร์เครื่องนี้ แล้วจดชื่อ (เช่น <code dir="ltr">my-mac</code>) หรือที่อยู่ของมัน (ตัวเลขเช่น <code dir="ltr">100.x.y.z</code>)
+2. เริ่มตัวส่งต่อบนคอมพิวเตอร์เครื่องนี้ ซึ่งทำให้โฮสต์ปรากฏที่ <code dir="ltr">{tunnel.loopback}:{commands.defaultPort}</code> ที่นี่ หากพอร์ต {commands.defaultPort} ถูกใช้อยู่แล้วบนคอมพิวเตอร์เครื่องนี้ ให้เลือกพอร์ตอื่นและเปลี่ยนในที่อยู่ของเบราว์เซอร์ด้วย
+
+   <Tabs syncKey="visitor">
+   <TabItem label="macOS หรือ Linux">
+   ในคำสั่งด้านล่าง ให้แทนที่ <code dir="ltr">{tunnel.host}</code> ด้วยชื่อหรือที่อยู่ของโฮสต์ และแทนที่ <code dir="ltr">{tunnel.hostPort}</code> ด้วยพอร์ตของโฮสต์
+
+   <Code code={tunnel.visitorForward} lang="sh" />
+
+   ตัวอย่างสำหรับโฮสต์ Mac ที่ชื่อ <code dir="ltr">my-mac</code>
+
+   <Code code={tunnel.visitorForwardExample} lang="sh" />
+
+   รันใน Terminal แล้วเปิดหน้าต่างทิ้งไว้
+   </TabItem>
+   <TabItem label="Windows">
+   เปิด PowerShell แบบผู้ดูแลระบบ ในคำสั่งด้านล่าง ให้แทนที่ <code dir="ltr">{tunnel.hostIp}</code> ด้วยที่อยู่ <code dir="ltr">100.x.y.z</code> ของโฮสต์ (คำสั่งนี้ต้องใช้ตัวเลข ใช้ชื่อไม่ได้) และแทนที่ <code dir="ltr">{tunnel.hostPort}</code> ด้วยพอร์ตของโฮสต์
+
+   <Code code={tunnel.visitorForwardWindows} lang="powershell" />
+
+   การส่งต่อนี้จะคงอยู่ รวมถึงหลังรีสตาร์ท จนกว่าคุณจะลบ (ดูด้านล่าง) จึงไม่มีหน้าต่างให้เปิดค้างไว้ ต้องใช้บริการ IP Helper ซึ่งทำงานโดยค่าเริ่มต้นอยู่แล้ว
+   </TabItem>
+   </Tabs>
+3. เปิดที่อยู่ของเบราว์เซอร์ที่คุณคัดลอกบนโฮสต์ ซึ่งขึ้นต้นด้วย <code dir="ltr">{tunnel.addressStart}</code>
+
+</Steps>
+
+คุณจะรู้ว่าสำเร็จเมื่อ {productName} เปิดขึ้นในแท็บของเบราว์เซอร์โดยไม่ให้คุณลงชื่อเข้าใช้
+
+## หากใช้งานไม่ได้
+
+- <strong>หน้าเว็บไม่โหลด:</strong> หน้าต่างใดหน้าต่างหนึ่งถูกปิด หรือคำสั่งหยุดทำงาน ตรวจสอบว่าตัวส่งต่อและ Tailscale Serve ยังทำงานอยู่ และ <code dir="ltr">{tunnel.serveStatus}</code> บนโฮสต์แสดงพอร์ตของโฮสต์
+- <strong>socat แจ้ง “Address already in use”:</strong> พอร์ตนั้นถูกใช้อยู่แล้วบนเครื่องนั้น ให้เลือกพอร์ตอื่น บนคอมพิวเตอร์ของคุณให้เปลี่ยนในที่อยู่ของเบราว์เซอร์ด้วย
+- <strong>หน้าเว็บถูกปฏิเสธหรือว่างเปล่า:</strong> ตรวจสอบว่าคุณเปิดที่อยู่ที่ <code dir="ltr">{tunnel.loopback}</code> ไม่ใช่ชื่อ Tailscale ของโฮสต์หรือที่อยู่ <code dir="ltr">100.x.y.z</code>
+- <strong>ตัวส่งต่อบนโฮสต์แสดง “Connection refused” หรือ “No such file or directory” เมื่อคุณเปิดหน้าเว็บ:</strong> <strong>อนุญาตการเข้าถึงระยะไกล</strong> ปิดอยู่ หรือ {productName} ไม่ได้ทำงานบนโฮสต์ (บน Linux คือ octoboardd ไม่ได้ทำงาน)
+
+## ปิดการใช้งาน
+
+- <strong>บนคอมพิวเตอร์ที่คุณใช้เปิดเบราว์เซอร์:</strong> หยุด socat ด้วย <kbd>Ctrl</kbd>+<kbd>C</kbd> หรือบน Windows ให้ลบการส่งต่อใน PowerShell ที่รันแบบผู้ดูแลระบบ
+
+  <Code code={tunnel.visitorForwardWindowsOff} lang="powershell" />
+- <strong>บนโฮสต์:</strong> หยุดคำสั่ง Tailscale Serve และ socat ด้วย <kbd>Ctrl</kbd>+<kbd>C</kbd> ตรวจสอบด้วย <code dir="ltr">{tunnel.serveStatus}</code> ว่าไม่มีอะไรถูกแชร์อยู่อีก หากพอร์ตยังอยู่ในรายการ ให้ลบด้วย <code dir="ltr">{tunnel.serveBridgeOff}</code> (บน Windows คือ <code dir="ltr">{tunnel.serveBrowserPortOff}</code>)
+- <strong>บนโฮสต์ Mac หรือ Windows</strong> ให้ปิด <strong>อนุญาตการเข้าถึงระยะไกล</strong> เมื่อไม่ต้องใช้อีก เป็นการปิดทางเข้าของเบราว์เซอร์และตัดการเชื่อมต่อของทุกหน้าที่เปิดด้วยคีย์นั้น
+- <strong>หากที่อยู่อาจรั่วไหล</strong> ให้สร้างคีย์ใหม่ด้วย <strong>เปลี่ยนคีย์</strong> ที่แท็บ <strong>เบราว์เซอร์</strong> หรือบน Linux ด้วย <code dir="ltr">{tunnel.rotate}</code> หน้าที่เปิดด้วยที่อยู่เก่าจะถูกตัดการเชื่อมต่อ
+
+## ความปลอดภัย
+
+- <strong>ที่อยู่นี้คือรหัสผ่าน:</strong> คีย์ของมันควบคุม {productName} บนโฮสต์ได้เต็มรูปแบบ รวมถึงการรันคำสั่งใดก็ได้ และคีย์ใช้ได้จนกว่าคุณจะเปลี่ยน มันอยู่ในประวัติและบุ๊กมาร์กของเบราว์เซอร์ และซิงก์ไปยังอุปกรณ์อื่นของคุณหากเปิดการซิงก์ของเบราว์เซอร์
+- <strong>ใครเข้าถึงได้:</strong> ทุกคนที่เข้าถึงพอร์ตของโฮสต์ได้และมีคีย์ ตัวส่งต่อรับฟังที่ <code dir="ltr">127.0.0.1</code> เท่านั้น อุปกรณ์อื่นในเครือข่ายของโฮสต์หรือเครือข่ายในบ้านของคุณจึงเข้าถึงไม่ได้ Tailscale Serve ทำให้พอร์ตของโฮสต์เข้าถึงได้จาก tailnet ของคุณเท่านั้น ตามที่กฎการเข้าถึงของมันอนุญาต
+- <strong>ใช้เฉพาะบนคอมพิวเตอร์ที่ไม่มีคนอื่นลงชื่อเข้าใช้:</strong> บัญชีผู้ใช้อื่นบนโฮสต์หรือบนคอมพิวเตอร์ของคุณเชื่อมต่อกับพอร์ต <code dir="ltr">127.0.0.1</code> เหล่านี้ได้ และขณะที่ตัวส่งต่อไม่ได้ทำงาน บัญชีนั้นอาจยึดพอร์ตของมันและรับคีย์เมื่อเบราว์เซอร์ของคุณเชื่อมต่อใหม่ [การเชื่อมต่อผ่าน SSH](../remote-connections/) ไม่มีจุดอ่อนนี้บนโฮสต์ Mac หรือ Linux และคอมพิวเตอร์ของคุณเองก็ไม่มีเมื่อใช้แอปบนเดสก์ท็อป แต่ในเบราว์เซอร์ คอมพิวเตอร์ของคุณยังมีจุดอ่อนนี้อยู่ เพราะการส่งต่อพอร์ตของ SSH ตรงนั้นก็รอรับการเชื่อมต่อที่พอร์ต <code dir="ltr">127.0.0.1</code> เช่นกัน
+- <strong>ห้ามใช้ Funnel เด็ดขาด:</strong> Tailscale Funnel จะเผยแพร่พอร์ตสู่ทั้งอินเทอร์เน็ต

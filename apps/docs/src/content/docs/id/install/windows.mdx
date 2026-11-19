@@ -1,0 +1,46 @@
+---
+title: "Windows"
+description: "Untuk PC dengan prosesor Intel atau AMD (hampir semua PC Windows), di Windows 10 versi 21H2 atau lebih baru. Di Windows 11 on Arm, aplikasi x64 ini berjalan melalui emulasi."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Untuk PC dengan prosesor Intel atau AMD (x64; hampir semua PC Windows), di Windows 10 versi 21H2 atau lebih baru. Di Windows 11 on Arm, aplikasi x64 ini berjalan melalui emulasi.
+
+<LinkButton href={downloads.windows}>Unduh untuk Windows</LinkButton>
+
+<Aside>Aplikasi Windows masih dalam versi beta.</Aside>
+
+## Instal
+
+<Steps>
+
+1. Unduh penginstal dengan tombol di atas. File ini memiliki nama yang berakhiran <code dir="ltr">x64-setup.exe</code>.
+2. Buka file yang diunduh untuk menjalankan penginstal. Penginstal memasang {productName} hanya untuk akun pengguna Anda, jadi tidak meminta administrator.
+
+   Aplikasi ini belum ditandatangani kode, sehingga Microsoft Defender SmartScreen mungkin menampilkan “Windows melindungi PC Anda”. Pilih “Informasi lebih lanjut”, lalu “Tetap jalankan”.
+
+   Jika PC Anda belum memiliki Microsoft Edge WebView2, yang menampilkan jendela aplikasi, penginstal akan mengunduhnya, jadi tetaplah terhubung ke internet.
+3. Buka {productName} dari menu Start.
+4. Instal setidaknya satu agen pengodean (lihat di bawah), lalu pilih <strong>Tambah proyek</strong> di {productName} untuk membuka folder proyek.
+
+</Steps>
+
+Setelah jendela utama terbuka, Anda sudah selesai.
+
+## Instal agen pengodean
+
+{productName} tidak menyertakan agen AI. Instal agen yang ingin Anda pakai dengan mengikuti petunjuknya masing-masing, lalu masuk ke akunnya. {productName} menemukannya secara otomatis. Aplikasi ini bekerja dengan:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+Jika Anda memakai Claude Code atau Codex, instal [Git for Windows](https://git-scm.com/download/win) lebih dulu; keduanya memerlukannya agar dapat berfungsi.
+
+## Pembaruan
+
+Saat versi baru tersedia, {productName} memberi tahu Anda, dan Anda dapat memasangnya dari dalam aplikasi. Anda tidak perlu kembali ke halaman ini.
+
+<a href={downloads.releases}>Semua versi sebelumnya</a>

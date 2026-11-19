@@ -1,0 +1,130 @@
+---
+title: "المتصفح عبر UU Remote"
+description: "افتح Octoboard في متصفح على كمبيوتر آخر عبر ميزة تعيين المنافذ في UU Remote، دون SSH أو سطح مكتب بعيد."
+---
+
+import { Aside, Code, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+import HostBrowserAddress from "../../../snippets/ar/host-browser-address.mdx";
+
+افتح {productName} في متصفح على كمبيوتر آخر عبر ميزة تعيين المنافذ في [UU Remote](https://uuyc.163.com/)، تطبيق التحكم عن بُعد من NetEase، دون SSH أو سطح مكتب بعيد. المضيف هو الكمبيوتر الذي يشغّل {productName}؛ ويمكن إبقاء تسجيل الدخول عبر SSH (Remote Login في macOS) متوقفًا، ولا حاجة إلى جلسة سطح مكتب بعيد. واجهة UU Remote بالصينية، لذلك يذكر هذا الدليل تسمياتها الصينية بجانب العربية.
+
+يفتح هذا الدليل {productName} في متصفح على جهازك. وهذه الطريقة أوضح وأسرع استجابة من سطح المكتب البعيد، لكنها تحتاج إلى خطوات أكثر. وإذا كان بعض التأخر وعدم الوضوح لا يزعجانك، فاستخدم ببساطة سطح المكتب البعيد في UU Remote للعمل على المضيف مباشرة.
+
+لست متأكدًا أن هذه هي الطريقة المناسبة لك؟ راجع [اختر طريقة الاتصال](../choose-how-to-connect/).
+
+<Aside type="caution">
+لم تُختبر هذه الخطوات بين جهازين بعد. فهي تتبع مساعدة UU Remote نفسها. جُرّب الوسيط على مضيف Mac على كمبيوتر واحد، بما في ذلك الاتصال المباشر للمتصفح.
+</Aside>
+
+<strong>المتصفح على كمبيوترك</strong> ← <strong>127.0.0.1 على كمبيوترك</strong> ⟷ UU Remote ⟷ <strong>127.0.0.1 على المضيف</strong> ← <strong>{productName}</strong>
+
+<details>
+<summary>هل هذا جديد عليك؟</summary>
+
+- <strong>127.0.0.1 (loopback):</strong> عنوان يعني دائمًا “هذا الكمبيوتر نفسه”.
+- <strong>المنفذ (Port):</strong> رقم يحدد برنامجًا واحدًا على الكمبيوتر، مثل رقم باب. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> هو المنفذ {commands.defaultPort} على هذا الكمبيوتر.
+- <strong>تعيين المنافذ (端口映射):</strong> ميزة في UU Remote تجعل منفذًا على المضيف يظهر كمنفذ على كمبيوترك.
+- <strong>socat:</strong> برنامج صغير ومجاني ينقل اتصالًا من مكان إلى آخر. ويحتاج إليه مضيف Mac وسيطًا.
+- <strong>Terminal:</strong> النافذة التي تكتب فيها الأوامر: Terminal في macOS، وPowerShell في Windows.
+
+</details>
+
+يجعل تعيين المنافذ في <bdi>UU Remote</bdi> تطبيق <bdi>{productName}</bdi> الخاص بالمضيف يظهر على كمبيوترك على <code dir="ltr">{tunnel.loopback}</code>، وهو العنوان الوحيد الذي يقبل {productName} متصفحًا عليه.
+
+## قبل أن تبدأ
+
+- <strong>الكمبيوتران كلاهما Mac أو كمبيوتر Windows.</strong> لا يوفّر UU Remote تعيين منافذ لنظام Linux؛ للوصول إلى خادم Linux استخدم [Tailscale](../browser-over-tailscale/) أو [SSH](../remote-connections/) بدلًا من ذلك.
+- <strong>على كليهما UU Remote مثبّت ومسجَّل الدخول إلى الحساب نفسه،</strong> بالإصدار 4.21.0 أو أحدث على Windows و4.32.0 أو أحدث على macOS. يعمل تعيين المنافذ مع TCP فقط، وهو كل ما يحتاجه {productName}. وقت كتابة هذا الدليل، يُدرج UU Remote تعيين المنافذ ضمن ميزاته المجانية؛ راجع خططه الحالية إن شككت.
+- <strong>يظهر المضيف ضمن أجهزتي (我的设备)</strong> في UU Remote على الكمبيوتر الذي ستتصفح منه.
+- <strong>يحتاج مضيف Mac أيضًا إلى [Homebrew](https://brew.sh/)</strong>، لتثبيت socat أدناه.
+
+## على المضيف
+
+<Steps>
+
+1. احصل على عنوان المتصفح، وهو يحمل المفتاح الذي يسجّل دخول المتصفح.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <HostBrowserAddress />
+   </TabItem>
+   <TabItem label="Windows">
+   <HostBrowserAddress windows />
+   </TabItem>
+   </Tabs>
+2. أنشئ منفذًا على <code dir="ltr">{tunnel.loopback}</code> الخاص بالمضيف يؤدي إلى {productName}. هذا المنفذ هو <strong>منفذ المضيف</strong> في الخطوات أدناه.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   يقدّم Mac المتصفح بطريقة لا يستطيع UU Remote تعيينها، لذا يحتاج إلى socat وسيطًا. ثبّته في Terminal:
+
+   <Code code={tunnel.installSocatMac} lang="sh" />
+
+   ثم شغّل هذا واترك النافذة مفتوحة. ينصت على <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> وحده.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   منفذ المضيف هو <code dir="ltr">{tunnel.bridgePort}</code>.
+   </TabItem>
+   <TabItem label="Windows">
+   لا شيء يُشغَّل: {productName} نفسه ينصت على منفذ المتصفح، على <code dir="ltr">127.0.0.1</code> وحده. ومنفذ المضيف هو <strong>منفذ المتصفح</strong> في تبويب <strong>المتصفح</strong> ({commands.defaultPort} ما لم تغيّره).
+   </TabItem>
+   </Tabs>
+
+</Steps>
+
+## على الكمبيوتر الذي ستتصفح منه
+
+<Steps>
+
+1. في UU Remote، افتح المضيف من <strong>أجهزتي</strong> (我的设备)، واختر <strong>المزيد</strong> (更多) على بطاقته ثم <strong>تعيين المنافذ</strong> (端口映射)، وأضف تعيينًا:
+
+   | الحقل | القيمة |
+   | --- | --- |
+   | الاسم (名称) | {productName} |
+   | المنفذ المحلي (本地端口) | <code dir="ltr">{commands.defaultPort}</code> |
+   | عنوان الهدف (目标地址) | <code dir="ltr">127.0.0.1</code> |
+   | منفذ الهدف (目标端口) | منفذ المضيف |
+
+   احفظه وفعّله، وانتظر حتى يظهر أنه متصل. إذا كان {commands.defaultPort} مستخدمًا على هذا الكمبيوتر، فاختر منفذًا محليًا آخر وغيّره في عنوان المتصفح أيضًا.
+2. تأكد من أن هذا الكمبيوتر وحده يستطيع استخدام التعيين. افتح Terminal (في macOS) أو PowerShell (في Windows) على هذا الكمبيوتر وشغّل:
+
+   <Tabs syncKey="visitor">
+   <TabItem label="macOS">
+   <Code code={tunnel.checkListener} lang="sh" />
+
+   يجب أن ترى سطرًا يحتوي على <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> و<code dir="ltr">LISTEN</code>.
+   </TabItem>
+   <TabItem label="Windows">
+   <Code code={tunnel.checkListenerWindows} lang="powershell" />
+
+   يجب أن ترى سطرًا يبدأ بـ <code dir="ltr">TCP</code>، ثم <code dir="ltr">127.0.0.1:{commands.defaultPort}</code>، وينتهي بـ <code dir="ltr">LISTENING</code> ورقم.
+   </TabItem>
+   </Tabs>
+
+   إذا رأيت <code dir="ltr">*:{commands.defaultPort}</code> أو <code dir="ltr">0.0.0.0:{commands.defaultPort}</code> بدلًا منه، فاحذف التعيين: فقد تستطيع أجهزة أخرى على شبكتك الوصول إلى {productName}.
+3. افتح عنوان المتصفح الذي نسخته على المضيف. وهو يبدأ بـ <code dir="ltr">{tunnel.addressStart}</code>.
+
+</Steps>
+
+ستعرف أن كل شيء نجح عندما يفتح {productName} في تبويب المتصفح دون أن يطلب منك تسجيل الدخول.
+
+## إذا لم يعمل
+
+- <strong>يظهر التعيين متصلًا، لكن الصفحة لا تُحمَّل:</strong> على مضيف Mac، أُغلقت نافذة socat أو توقف أمرها؛ أو أن <strong>السماح بالوصول عن بُعد</strong> متوقف، أو أن {productName} لا يعمل على المضيف.
+- <strong>لا يُحفظ التعيين أو لا يتصل:</strong> قد يكون المنفذ المحلي مستخدمًا على هذا الكمبيوتر. اختر منفذًا آخر، وغيّره في عنوان المتصفح أيضًا.
+- <strong>تُرفض الصفحة أو تظهر فارغة:</strong> تأكد من أنك فتحت العنوان على <code dir="ltr">{tunnel.loopback}</code>.
+
+## إيقافه
+
+- <strong>على الكمبيوتر الذي تصفحت منه:</strong> أوقف التعيين في لوحة تعيين المنافذ في UU Remote، أو احذفه. وإغلاق اللوحة أو قطع الاتصال يوقفه أيضًا.
+- <strong>على مضيف Mac:</strong> أوقف socat بـ <kbd>Ctrl</kbd>+<kbd>C</kbd>.
+- <strong>على المضيف،</strong> أوقف <strong>السماح بالوصول عن بُعد</strong> عندما لا تحتاج إليه بعد الآن. يغلق هذا مدخل المتصفح ويقطع اتصال كل صفحة فُتحت بالمفتاح.
+- <strong>إذا احتمل أن العنوان تسرّب،</strong> فأعطه مفتاحًا جديدًا بـ <strong>تجديد المفتاح</strong> في تبويب <strong>المتصفح</strong>. تنقطع الصفحات المفتوحة بالعنوان القديم.
+
+## الأمان
+
+- <strong>العنوان هو كلمة المرور:</strong> مفتاحه يمنح تحكمًا كاملًا في {productName} على المضيف، بما في ذلك تشغيل أي أمر. ويبقى صالحًا إلى أن تجدّده. ويبقى في سجل المتصفح وإشاراته المرجعية، ويُزامَن إلى أجهزتك الأخرى إذا كانت مزامنة المتصفح مفعّلة.
+- <strong>من يستطيع الوصول إليه:</strong> كل من يصل إلى منفذ المضيف ويملك المفتاح. وعلى المضيف ينصت على <code dir="ltr">127.0.0.1</code> فقط؛ ويستطيع الوصول إليه أيضًا كل من يستطيع استخدام حساب UU Remote الخاص بك لتعيين منافذ إلى المضيف، فأبقِ ذلك الحساب مؤمّنًا.
+- <strong>فقط على أجهزة لا يسجّل الدخول إليها أحد غيرك:</strong> يستطيع حساب مستخدم آخر على المضيف أو على كمبيوترك الاتصال بمنافذ <code dir="ltr">127.0.0.1</code> هذه، وعندما لا يكون التعيين أو socat قيد التشغيل يستطيع أن يستولي على المنفذ ويتلقى المفتاح عندما يعيد متصفحك الاتصال. عند [الاتصال عبر SSH](../remote-connections/)، لا يوجد هذا الضعف في مضيف Mac أو Linux، ولا في كمبيوترك أنت عند استخدام تطبيق سطح المكتب. أما في المتصفح فيبقى هذا الضعف في كمبيوترك، لأن إعادة توجيه SSH هناك تستمع أيضًا على منفذ <code dir="ltr">127.0.0.1</code>.

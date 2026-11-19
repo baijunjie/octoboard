@@ -1,0 +1,119 @@
+---
+title: "SSH로 연결"
+description: "SSH로 이 컴퓨터에서 Linux 서버나 다른 컴퓨터의 Octoboard를 데스크톱 앱이나 브라우저로 사용합니다. 중계 서비스나 클라우드 서비스 없이 그 컴퓨터에 바로 연결하는 암호화된 연결입니다."
+---
+
+import { Code, Steps } from "@astrojs/starlight/components";
+import { commands, productName } from "../../../commands.ts";
+
+SSH로 이 컴퓨터에서 Linux 서버나 다른 컴퓨터의 {productName}을(를) 데스크톱 앱이나 브라우저로 사용합니다. 중계 서비스나 클라우드 서비스 없이 그 컴퓨터에 바로 연결하는 암호화된 연결입니다.
+
+이 방법이 맞는지 잘 모르겠나요? [연결 방법 선택](../choose-how-to-connect/)에서 SSH가 필요 없는 브라우저 전용 방법과 비교해 보세요.
+
+<strong>이 컴퓨터의 데스크톱 앱</strong> · <strong>SSH 포워드를 통한 브라우저</strong> ⟷ SSH ⟷ <strong>Linux 서버 또는 다른 컴퓨터</strong>
+
+<details>
+<summary>처음이라면</summary>
+
+- <strong>호스트:</strong> {productName}이(가) 실행되는, 접속하려는 컴퓨터입니다. Linux 서버나 다른 Mac, Windows PC가 해당합니다.
+- <strong>서버:</strong> 여기서는 네트워크로 로그인하는 Linux 컴퓨터를 뜻합니다. 보통 임대한 것이고 화면이 따로 없습니다.
+- <strong>SSH:</strong> 다른 컴퓨터에 로그인해서 명령을 입력하는 표준 암호화 방식입니다. macOS, Windows, Linux에 기본으로 들어 있습니다.
+- <strong>터미널:</strong> 명령을 입력하는 창입니다. macOS에서는 터미널, Windows에서는 PowerShell입니다.
+- <strong>SSH 포워드:</strong> 호스트에 있는 것이 내 컴퓨터에서도 보이게 만들어, 브라우저로 열 수 있게 해 주는 SSH 명령입니다.
+- <strong>지문(호스트 키):</strong> 컴퓨터의 SSH를 식별하는 짧은 코드입니다. 한 번 확인해 두면 제대로 된 컴퓨터에 접속했음을 알 수 있습니다.
+- <strong>키 파일:</strong> 비밀번호 대신 로그인해 주는 파일입니다. 서버 제공업체가 주는 경우가 있습니다.
+
+</details>
+
+## 필요한 것
+
+- <strong>호스트에 SSH로 로그인할 수 있는 방법.</strong> Linux 서버라면 제공업체가 주소와 사용자 이름을 알려 줍니다. 되는지 확인하려면 터미널(macOS) 또는 PowerShell(Windows)을 열고, 내 사용자 이름과 서버 주소로 아래 명령을 실행하세요. 처음에는 서버를 신뢰할지 물으면 <code dir="ltr">yes</code>라고 답하세요.
+
+  <Code code={commands.signIn} lang="sh" />
+
+  Mac이나 Windows PC가 호스트라면 시스템 설정에서 SSH 로그인을 켜야 합니다. 방법은 [다른 컴퓨터를 호스트로 사용하기](#다른-컴퓨터를-호스트로-사용하기)에 나와 있습니다.
+- <strong>Linux 서버라면 서버에 {productName}을(를) 설치하고 시작해 두세요.</strong> 방법은 [설치 › Linux 서버](../install/linux/)에 나와 있습니다. {productName} 서버 프로그램인 octoboardd를 앱에서는 ‘데몬’이라고 부릅니다.
+- <strong>이 컴퓨터에 설치한 {productName} 앱</strong>(macOS 또는 Windows). 브라우저만 쓸 거라면 필요 없습니다.
+
+## Linux 서버에 연결하기
+
+<Steps>
+
+1. {productName}을(를) 실행하는 사용자로 서버에 SSH 로그인한 다음, 이 명령을 실행하고 <code dir="ltr">{commands.connectionScheme}</code>(으)로 시작하는 줄을 복사하세요. 앱이 어디에 어떻게 연결할지 알려 주는 연결 정보입니다.
+
+   <Code code={commands.connection} lang="sh" />
+
+   이 컴퓨터에서 서버에 다른 주소나 SSH 포트로 접속한다면, 명령에 <code dir="ltr">{commands.host}</code> 또는 <code dir="ltr">{commands.sshPort}</code>을(를) 덧붙여 올바른 연결 정보가 출력되게 하세요.
+
+   함께 출력되는 QR 코드에도 같은 줄이 들어 있습니다. 아직은 이를 스캔하는 앱이 없습니다.
+2. 이 컴퓨터의 {productName} 앱에서 왼쪽 레일의 <strong>원격 기기</strong>를 열거나, macOS에서는 메뉴 막대에서 <strong>원격 › 원격 기기</strong>를 선택하세요. Windows에서는 창의 시스템 메뉴나 작업 표시줄 아이콘의 점프 목록에서도 <strong>원격 기기</strong>를 선택할 수 있습니다.
+3. <strong>원격 데몬 추가</strong>를 누른 다음 <strong>연결 정보</strong> 아래의 <strong>붙여넣기</strong>를 눌러 입력란을 채우세요.
+4. <strong>인증</strong>에서 계정 비밀번호로 로그인한다면 <strong>암호</strong>를 선택하세요. 서버 제공업체가 대신 키 파일을 줬다면(이름이 <code dir="ltr">id_ed25519</code> 같거나 <code dir="ltr">.pem</code>으로 끝나는 경우가 많습니다) <strong>키 파일</strong>을 선택하고, 이 컴퓨터에서 그 파일이 있는 위치를 입력하세요.
+5. <strong>저장</strong>을 누른 다음 <strong>연결</strong>을 누르세요. 물으면 비밀번호를 입력하세요.
+
+   연결 정보를 붙여넣었다면 서버의 신원(지문)이 함께 들어 있어 앱이 대신 확인해 줍니다. 주소를 직접 입력했다면 처음에 앱이 지문을 보여 줍니다. 제대로 된 컴퓨터에 접속했는지 확인하려면, 서버에서 이 명령으로 출력되는 지문과 비교해 보고 일치할 때만 연결하세요.
+
+   <Code code={commands.fingerprintCommand} lang="sh" />
+
+</Steps>
+
+별도의 {productName} 창이 열리고 서버의 프로젝트와 세션이 보이면 성공입니다.
+
+## 다른 컴퓨터를 호스트로 사용하기
+
+{productName} 앱이 실행 중인 Mac이나 Windows PC에도 접속할 수 있습니다.
+
+<Steps>
+
+1. 접속하려는 컴퓨터에서 {productName}의 <strong>설정 › 원격 접근</strong>을 여세요.
+2. 거기서 <strong>시스템 설정 열기</strong>(macOS) 또는 <strong>설정 열기</strong>(Windows)를 누르고, 해당 항목에 나온 경로를 따라 <strong>원격 로그인</strong>(macOS) 또는 <strong>OpenSSH Server</strong>(Windows)를 켜서 이 컴퓨터가 SSH 로그인을 받게 하세요. 관리자 권한이 필요합니다. {productName}으로 돌아오면 해당 항목에 <strong>켬</strong>이라고 표시됩니다.
+3. <strong>원격 접근 허용</strong>을 켜고 <strong>허용</strong>을 눌러 확인한 다음, {productName}을(를) 계속 실행해 두세요. 종료하면 원격 접근이 멈춥니다.
+4. <strong>{productName} 앱</strong> 탭에서 <strong>연결 정보 복사</strong>를 누르고, 이메일이나 메신저 등으로 다른 컴퓨터에 보내세요.
+5. 작업할 컴퓨터에서 [Linux 서버에 연결하기](#linux-서버에-연결하기)의 2~5단계와 같이 호스트를 추가하되, 보낸 연결 정보를 붙여넣으세요. 호스트의 사용자 이름과 비밀번호로 로그인하세요.
+
+</Steps>
+
+별도의 창이 열리고 호스트의 프로젝트와 세션이 보이면 성공입니다.
+
+## 브라우저에서 연결하기
+
+<Steps>
+
+1. SSH 포워드 명령을 가져오세요.
+
+   - <strong>Mac이나 Windows 호스트라면</strong> 먼저 [다른 컴퓨터를 호스트로 사용하기](#다른-컴퓨터를-호스트로-사용하기)의 1~3단계를 하세요. 그런 다음 <strong>브라우저</strong> 탭의 <strong>1단계: SSH 포워드</strong>를 보세요. 명령에 있는 주소를 눌러 다른 컴퓨터가 이 컴퓨터에 접속할 방법을 고르고(또는 <strong>주소 직접 입력</strong>을 선택하고 나중에 <code dir="ltr">{commands.server}</code>을(를) 직접 바꾸고), <strong>포워딩 명령 복사</strong>를 누르세요. 또 <strong>2단계: 브라우저 주소</strong> 아래의 <strong>주소 복사</strong>도 누르세요.
+   - <strong>Linux 서버라면</strong> 서버에서 다음을 실행하세요. 브라우저 주소가 출력되고, 이어서 실행할 SSH 명령이 출력됩니다.
+
+     <Code code={commands.address} lang="sh" />
+
+     명령의 <code dir="ltr">{commands.server}</code>을(를) 서버 주소로 바꾸세요.
+2. 브라우저를 쓸 컴퓨터의 터미널(macOS) 또는 PowerShell(Windows)에서 SSH 명령을 실행하세요. 비밀번호를 물을 수 있고, 그 뒤에는 아무것도 표시되지 않는데 정상입니다. 작업하는 동안 창을 열어 두세요. 닫으면 브라우저 연결이 끊어집니다.
+3. <code dir="ltr">http://127.0.0.1:</code>로 시작하는 브라우저 주소를 브라우저에서 여세요.
+
+</Steps>
+
+로그인하라는 요청 없이 브라우저 탭에서 {productName}이(가) 열리면 성공입니다.
+
+SSH 포워드로 {productName}에 접속할 수 있는 사람만 이 주소를 쓸 수 있습니다. 주소는 비공개로 하세요. 주소에 든 키는 전체 제어 권한을 주고, 브라우저 방문 기록과 북마크에 남으며, 브라우저 동기화를 켜 두면 다른 기기에도 동기화됩니다.
+
+## 연결되지 않을 때
+
+- <strong>“서버에 연결할 수 없습니다”라고 나오거나, SSH 명령이 “Connection refused”라고 하거나 시간이 초과될 때:</strong> 호스트의 SSH 로그인이 꺼져 있거나 주소 또는 SSH 포트가 틀렸습니다. <strong>원격 로그인</strong> 또는 <strong>OpenSSH Server</strong>가 켜져 있는지, 위의 <code dir="ltr">ssh</code> 명령으로 로그인할 수 있는지 확인하세요.
+- <strong>“로그인할 수 없습니다”라고 나오거나 “Permission denied”일 때:</strong> 사용자 이름, 비밀번호 또는 키 파일이 틀렸습니다.
+- <strong>“호스트 키가 일치하지 않습니다”라고 나올 때:</strong> 응답한 컴퓨터가 이전에 연결했던 컴퓨터가 아닙니다. 서버를 다시 설치한 뒤에 생기기도 하지만, 뭔가 잘못됐다는 뜻일 수도 있습니다. 이유를 알기 전에는 계속하지 마세요.
+- <strong>브라우저 페이지가 열리지 않을 때:</strong> SSH 창을 닫았거나 그 명령이 멈췄습니다. 다시 실행하고 페이지를 새로 고치세요.
+
+## 보안
+
+- <strong>추가로 공개되는 포트 없음:</strong> {productName}은(는) 호스트 자신으로부터의 연결만 받으므로, 다른 컴퓨터에서 접속하려면 먼저 SSH로 호스트에 로그인해야 합니다. 그래서 SSH나 [중계 서비스](../choose-how-to-connect/) 중 하나가 필요합니다.
+- <strong>어느 컴퓨터에 접속하는지 확인:</strong> 앱은 처음 연결에 성공할 때 호스트 키(그 컴퓨터의 SSH 신원)를 기억해 두고, 나중에 그 신원이 바뀌면 경고를 띄우고 연결을 차단합니다.
+- <strong>비밀번호를 저장하지 않음:</strong> 처음에 비밀번호나 내 키 파일로 로그인하고 나면, 앱이 이 컴퓨터가 앞으로 로그인할 때 쓸 별도의 SSH 키를 설정합니다.
+- <strong>컴퓨터의 접속 권한 없애기:</strong> 호스트의 허용된 SSH 키 목록(Linux와 macOS에서는 <code dir="ltr">{commands.authorizedKeys}</code>)에서 그 컴퓨터의 항목을 지우세요. 그러면 그 키로는 다시 로그인할 수 없고, 이미 열린 연결은 끝날 때까지 유지됩니다.
+
+## 원격 창에서
+
+- <strong>SSH 접속 대상마다 창 하나:</strong> 사용자 이름, 호스트, SSH 포트 중 하나라도 다른 연결은 각자 창을 열므로 프로젝트, 세션, 알림이 섞이지 않습니다.
+- <strong>연결마다 상태 보기:</strong> macOS에서는 앱의 메뉴 막대 아이콘을, Windows에서는 알림 영역 아이콘을 열면 연결마다 탭이 보입니다.
+- <strong>원격 웹사이트를 여기서 열기:</strong> 에이전트가 호스트에서 웹사이트를 시작하면 에이전트가 알려 주는 <code dir="ltr">{commands.localhost}</code> 링크를 누르세요. 앱이 SSH를 통해 그 웹사이트를 이 컴퓨터에서 열어 줍니다.
+- <strong>원격 파일을 여기서 열기:</strong> 원격 창에서 파일을 보거나, 사본을 내려받아 이 컴퓨터에서 그 파일의 기본 앱으로 열 수 있습니다.
+- <strong>자동으로 다시 연결:</strong> 네트워크가 끊기면 창이 연결될 때까지, 또는 창을 닫을 때까지 계속 다시 연결을 시도합니다.

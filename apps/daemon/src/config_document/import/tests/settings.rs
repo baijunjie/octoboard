@@ -1018,6 +1018,59 @@ fn a_version_2_document_loses_the_sidebar_order_setting() {
         .contains_key("sidebar_order_by_status"));
 }
 
+/// A version 3 document tags the two Chinese languages by script; the upgrade gives them the region
+/// tags the interface now offers, and leaves any other language as it is.
+#[test]
+fn a_version_3_document_has_its_chinese_language_tag_renamed() {
+    for (older_tag, current) in [("zh-Hans", "zh-CN"), ("zh-Hant", "zh-TW"), ("ja", "ja")] {
+        let mut older = with_settings(document(Vec::new()), true, false);
+        older["version"] = json!(3);
+        older["settings"]["interface_language"] = json!(older_tag);
+        let mut raw = older.as_object().unwrap().clone();
+        crate::config_document::upgrade::upgrade(&mut raw, 3);
+        assert_eq!(
+            raw["settings"]["interface_language"],
+            json!(current),
+            "{older_tag}"
+        );
+    }
+}
+
+/// The Chinese rename is the last step of every older document's chain, so a version 1 or 2 export
+/// holding a script tag is read with the region tag too, and a document that names no language, a
+/// null one or no settings region is left as it is. An inspection and an import read the upgraded
+/// document, so the parsed settings carry the region tag.
+#[test]
+fn an_older_document_of_any_version_reads_its_chinese_language_as_the_region_tag() {
+    for version in [1, 2, 3] {
+        for (older_tag, current) in [("zh-Hans", "zh-CN"), ("zh-Hant", "zh-TW")] {
+            let mut older = with_settings(document(Vec::new()), true, false);
+            older["version"] = json!(version);
+            older["settings"]["interface_language"] = json!(older_tag);
+            let parsed = parse(&older).unwrap();
+            assert_eq!(
+                parsed.settings.unwrap().interface_language.as_deref(),
+                Some(current),
+                "version {version}: {older_tag}"
+            );
+        }
+    }
+
+    for settings in [
+        json!({ "interface_language": null }),
+        json!({ "auto_pull_repositories": true }),
+    ] {
+        let mut raw = document(Vec::new()).as_object().unwrap().clone();
+        raw.insert("settings".to_string(), settings.clone());
+        crate::config_document::upgrade::upgrade(&mut raw, 3);
+        assert_eq!(raw["settings"], settings);
+    }
+    let mut no_settings = document(Vec::new()).as_object().unwrap().clone();
+    no_settings.remove("settings");
+    crate::config_document::upgrade::upgrade(&mut no_settings, 3);
+    assert!(!no_settings.contains_key("settings"));
+}
+
 /// A version 1 document with settings but no accounts region keeps its Agent accounts settings:
 /// the upgrade gives it an accounts region that holds only them. One with accounts but no settings
 /// has none to apply, and one with neither has no accounts region either.

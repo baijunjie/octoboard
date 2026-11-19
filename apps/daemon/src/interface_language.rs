@@ -22,11 +22,11 @@ const LANGUAGES: &[(&str, &str)] = &[
     ("th", "Thai"),
     ("tr", "Turkish"),
     ("vi", "Vietnamese"),
-    ("zh-Hans", "Simplified Chinese"),
-    ("zh-Hant", "Traditional Chinese"),
+    ("zh-CN", "Simplified Chinese"),
+    ("zh-TW", "Traditional Chinese"),
 ];
 
-/// The language as sessions are told it, such as `Simplified Chinese (zh-Hans)`; `None` for a tag
+/// The language as sessions are told it, such as `Simplified Chinese (zh-CN)`; `None` for a tag
 /// the interface does not offer.
 pub fn display_name(tag: &str) -> Option<String> {
     LANGUAGES
@@ -54,12 +54,12 @@ mod tests {
     #[test]
     fn a_tag_is_named_in_english_beside_itself() {
         assert_eq!(
-            display_name("zh-Hans").as_deref(),
-            Some("Simplified Chinese (zh-Hans)")
+            display_name("zh-CN").as_deref(),
+            Some("Simplified Chinese (zh-CN)")
         );
         assert_eq!(
-            display_name("zh-Hant").as_deref(),
-            Some("Traditional Chinese (zh-Hant)")
+            display_name("zh-TW").as_deref(),
+            Some("Traditional Chinese (zh-TW)")
         );
         assert_eq!(display_name("pt").as_deref(), Some("Portuguese (pt)"));
         assert_eq!(display_name("ja").as_deref(), Some("Japanese (ja)"));
@@ -68,7 +68,7 @@ mod tests {
     #[test]
     fn a_tag_the_interface_does_not_offer_has_no_name() {
         for tag in [
-            "", "xx", "zh", "pt-PT", "ZH-Hans", "zh-hans", "en-GB", " ja",
+            "", "xx", "zh", "pt-PT", "ZH-CN", "zh-cn", "zh-Hans", "zh-Hant", "en-GB", " ja",
         ] {
             assert_eq!(display_name(tag), None, "{tag:?}");
         }
@@ -76,7 +76,8 @@ mod tests {
 
     #[test]
     fn a_tag_is_offered_only_when_the_interface_lists_it() {
-        assert!(is_offered("zh-Hans"));
+        assert!(is_offered("zh-CN"));
+        assert!(!is_offered("zh-Hans"));
         assert!(!is_offered("zh"));
         assert!(!is_offered("en-GB"));
     }

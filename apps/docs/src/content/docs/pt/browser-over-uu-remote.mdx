@@ -1,0 +1,130 @@
+---
+title: "Navegador via UU Remote"
+description: "Abra o Octoboard em um navegador em outro computador pelo mapeamento de portas do UU Remote, sem SSH nem área de trabalho remota."
+---
+
+import { Aside, Code, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+import HostBrowserAddress from "../../../snippets/pt/host-browser-address.mdx";
+
+Abra o {productName} em um navegador em outro computador pelo mapeamento de portas do [UU Remote](https://uuyc.163.com/), o app de controle remoto da NetEase, sem SSH nem área de trabalho remota. O host é o computador que executa o {productName}; o login SSH (Login remoto no macOS) pode continuar desativado e não é preciso nenhuma sessão de área de trabalho remota. A interface do UU Remote está em chinês, por isso este guia mostra os rótulos em chinês ao lado do português.
+
+Este guia abre o {productName} em um navegador no seu próprio computador. Isso é mais nítido e rápido do que a área de trabalho remota, mas exige mais passos. Se você não se importa com um pouco de atraso e borrão, basta usar a área de trabalho remota do UU Remote para trabalhar diretamente no host.
+
+Não tem certeza de que esta é a melhor forma para você? Veja [Escolha como se conectar](../choose-how-to-connect/).
+
+<Aside type="caution">
+Estes passos ainda não foram testados entre dois dispositivos. Eles seguem a própria ajuda do UU Remote. O retransmissor em um host Mac foi testado em um único computador, inclusive a conexão ao vivo do navegador.
+</Aside>
+
+<strong>Navegador no seu computador</strong> → <strong>127.0.0.1 no seu computador</strong> ⟷ UU Remote ⟷ <strong>127.0.0.1 no host</strong> → <strong>{productName}</strong>
+
+<details>
+<summary>Novo por aqui?</summary>
+
+- <strong>127.0.0.1 (loopback):</strong> um endereço que sempre significa “este mesmo computador”.
+- <strong>Porta:</strong> um número que escolhe um programa em um computador, como o número de uma porta de entrada. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> é a porta {commands.defaultPort} neste computador.
+- <strong>Mapeamento de portas (端口映射):</strong> um recurso do UU Remote que faz uma porta do host aparecer como uma porta no seu próprio computador.
+- <strong>socat:</strong> um programa pequeno e gratuito que passa uma conexão de um lugar para outro. Um host Mac precisa dele como retransmissor.
+- <strong>Terminal:</strong> a janela em que você digita comandos: Terminal no macOS, PowerShell no Windows.
+
+</details>
+
+O mapeamento de portas do UU Remote faz o {productName} do host aparecer no seu próprio computador em <code dir="ltr">{tunnel.loopback}</code>, o único endereço em que o {productName} aceita um navegador.
+
+## Antes de começar
+
+- <strong>Os dois computadores são um Mac ou um PC com Windows.</strong> O UU Remote não tem mapeamento de portas para Linux; para acessar um servidor Linux, use o [Tailscale](../browser-over-tailscale/) ou o [SSH](../remote-connections/).
+- <strong>Os dois têm o UU Remote instalado e conectado à mesma conta,</strong> na versão 4.21.0 ou posterior no Windows e 4.32.0 ou posterior no macOS. O mapeamento de portas funciona apenas para TCP, que é tudo de que o {productName} precisa. No momento da redação, o UU Remote lista o mapeamento de portas entre os recursos gratuitos; confira os planos atuais em caso de dúvida.
+- <strong>O host aparece em Meus dispositivos (我的设备)</strong> no UU Remote do computador de onde você vai navegar.
+- <strong>Um host Mac também precisa do [Homebrew](https://brew.sh/)</strong>, para instalar o socat abaixo.
+
+## No host
+
+<Steps>
+
+1. Obtenha o endereço do navegador, que contém a chave que faz o login do navegador.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <HostBrowserAddress />
+   </TabItem>
+   <TabItem label="Windows">
+   <HostBrowserAddress windows />
+   </TabItem>
+   </Tabs>
+2. Crie uma porta no <code dir="ltr">{tunnel.loopback}</code> do host que leve ao {productName}. Essa porta é a <strong>porta do host</strong> nos passos abaixo.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   Um Mac serve o navegador de um jeito que o UU Remote não consegue mapear, por isso ele precisa do socat como retransmissor. Instale-o no Terminal:
+
+   <Code code={tunnel.installSocatMac} lang="sh" />
+
+   Depois execute isto e deixe a janela aberta. Ele escuta somente em <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   A porta do host é <code dir="ltr">{tunnel.bridgePort}</code>.
+   </TabItem>
+   <TabItem label="Windows">
+   Não há nada a executar: o próprio {productName} escuta na porta do navegador, somente em <code dir="ltr">127.0.0.1</code>. A porta do host é a <strong>Porta do navegador</strong> na guia <strong>Navegador</strong> ({commands.defaultPort}, a menos que você a tenha alterado).
+   </TabItem>
+   </Tabs>
+
+</Steps>
+
+## No computador de onde você vai navegar
+
+<Steps>
+
+1. No UU Remote, abra o host em <strong>Meus dispositivos</strong> (我的设备), escolha <strong>Mais</strong> (更多) no cartão dele e depois <strong>Mapeamento de portas</strong> (端口映射), e adicione um mapeamento:
+
+   | Campo | Valor |
+   | --- | --- |
+   | Nome (名称) | {productName} |
+   | Porta local (本地端口) | <code dir="ltr">{commands.defaultPort}</code> |
+   | Endereço de destino (目标地址) | <code dir="ltr">127.0.0.1</code> |
+   | Porta de destino (目标端口) | a porta do host |
+
+   Salve e ative-o e espere até ele aparecer como conectado. Se a {commands.defaultPort} estiver ocupada neste computador, escolha outra porta local e altere-a também no endereço do navegador.
+2. Confira se somente este computador pode usar o mapeamento. Abra o Terminal (macOS) ou o PowerShell (Windows) neste computador e execute:
+
+   <Tabs syncKey="visitor">
+   <TabItem label="macOS">
+   <Code code={tunnel.checkListener} lang="sh" />
+
+   Você deve ver uma linha que contém <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> e <code dir="ltr">LISTEN</code>.
+   </TabItem>
+   <TabItem label="Windows">
+   <Code code={tunnel.checkListenerWindows} lang="powershell" />
+
+   Você deve ver uma linha que começa com <code dir="ltr">TCP</code>, depois <code dir="ltr">127.0.0.1:{commands.defaultPort}</code>, e termina com <code dir="ltr">LISTENING</code> e um número.
+   </TabItem>
+   </Tabs>
+
+   Se você vir <code dir="ltr">*:{commands.defaultPort}</code> ou <code dir="ltr">0.0.0.0:{commands.defaultPort}</code> no lugar, exclua o mapeamento: outros dispositivos na sua rede poderiam alcançar o {productName}.
+3. Abra o endereço do navegador que você copiou no host. Ele começa com <code dir="ltr">{tunnel.addressStart}</code>.
+
+</Steps>
+
+Você saberá que funcionou quando o {productName} abrir na aba do navegador sem pedir que você faça login.
+
+## Se não funcionar
+
+- <strong>O mapeamento aparece como conectado, mas a página não carrega:</strong> em um host Mac, a janela do socat foi fechada ou o comando dela parou; ou <strong>Permitir acesso remoto</strong> está desativado, ou o {productName} não está em execução no host.
+- <strong>O mapeamento não salva nem conecta:</strong> a porta local pode estar ocupada neste computador. Escolha outra e altere-a também no endereço do navegador.
+- <strong>A página é recusada ou fica em branco:</strong> verifique se você abriu o endereço em <code dir="ltr">{tunnel.loopback}</code>.
+
+## Desativar
+
+- <strong>No computador de onde você navegou:</strong> desative o mapeamento no painel de mapeamento de portas do UU Remote ou exclua-o. Fechar o painel ou se desconectar também o interrompe.
+- <strong>Em um host Mac:</strong> pare o socat com <kbd>Ctrl</kbd>+<kbd>C</kbd>.
+- <strong>No host,</strong> desative <strong>Permitir acesso remoto</strong> quando não precisar mais dele. Isso fecha a entrada do navegador e desconecta todas as páginas abertas com a chave.
+- <strong>Se o endereço puder ter vazado,</strong> dê a ele uma nova chave com <strong>Renovar chave</strong> na guia <strong>Navegador</strong>. As páginas abertas com o endereço antigo são desconectadas.
+
+## Segurança
+
+- <strong>O endereço é a senha:</strong> a chave dele dá controle total do {productName} no host, inclusive para executar qualquer comando. Ela vale até você renová-la. Ela fica no histórico e nos favoritos do navegador e é sincronizada com os seus outros dispositivos se a sincronização do navegador estiver ativada.
+- <strong>Quem pode alcançá-lo:</strong> qualquer pessoa que alcance a porta do host e tenha a chave. No host, ele escuta somente em <code dir="ltr">127.0.0.1</code>; quem puder usar a sua conta do UU Remote para mapear portas para o host também consegue alcançá-lo, então mantenha essa conta segura.
+- <strong>Somente em computadores em que ninguém mais faz login:</strong> outra conta de usuário no host ou no seu computador pode se conectar a essas portas <code dir="ltr">127.0.0.1</code> e, enquanto o mapeamento ou o socat não está em execução, pode tomar a porta e receber a chave quando o seu navegador se reconectar. [Conectar por SSH](../remote-connections/) não tem essa fraqueza em um host Mac ou Linux, nem no seu próprio computador quando você usa o app para desktop. No navegador, o seu computador ainda a tem, porque lá o encaminhamento SSH também escuta em uma porta <code dir="ltr">127.0.0.1</code>.

@@ -11,11 +11,14 @@ import {
   strictFromEnv,
   type Downloads,
 } from "./seo/downloads";
+import { renderRemoteRedirectPages, renderRetiredLocalePages } from "./seo/redirect-pages";
 import {
+  docsPath,
   locales,
   localizedPath,
   pagePaths,
   robotsTxt,
+  unindexedSitemapExcludes,
 } from "./seo/site-seo";
 import site from "./site.config";
 
@@ -101,6 +104,8 @@ export default defineNuxtConfig({
       autoSubfolderIndex: true,
       failOnError: true,
       routes: [...prerenderRoutes, "/404/"],
+      // The Docs links lead to the separately built documentation site, which the deployment adds under `docs/`.
+      ignore: [docsPath(site.baseURL, "en")],
     },
   },
   i18n: {
@@ -128,8 +133,9 @@ export default defineNuxtConfig({
     // One sitemap whose entries point at each other with hreflang; otherwise the
     // i18n integration splits it into one sitemap per language plus an index.
     sitemaps: false,
-    // The error page is prerendered for the static host but is not a page to index.
-    exclude: ["/404", "/404/"],
+    // The error page is prerendered for the static host but is not a page to index, and the pages that ask not to be are
+    // left out too. The module applies each exclude to every locale prefix.
+    exclude: ["/404", "/404/", ...unindexedSitemapExcludes],
     // The sitemap lists pages and their language alternates only
     // (docs/product/website-search-indexing.md, "Search indexing and agent-readable copies"); image
     // entries would fall outside that.
@@ -142,7 +148,11 @@ export default defineNuxtConfig({
           fileURLToPath(new URL("./i18n/locales/", import.meta.url)),
         );
         const downloads = nitro.options.runtimeConfig.public.downloads as Downloads;
-        const downloadPages = renderDownloadPages({ downloads, baseURL: site.baseURL });
+        const redirectPages = {
+          ...renderDownloadPages({ downloads, baseURL: site.baseURL }),
+          ...renderRemoteRedirectPages(site.baseURL),
+          ...renderRetiredLocalePages(site.baseURL),
+        };
         const agentFiles = renderAgentFiles({
           siteUrl: site.url,
           appName: appConfig.name,
@@ -162,9 +172,9 @@ export default defineNuxtConfig({
         )
           .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "")
           .replace(/<link\b[^>]*\brel="(?:modulepreload|preload)"[^>]*>/gi, "");
-        // The fixed download addresses are not routes, so they stay out of the sitemap and the language variants.
+        // The redirect pages are not routes, so they stay out of the sitemap and the language variants.
         await Promise.all(
-          Object.entries(downloadPages).map(async ([path, html]) => {
+          Object.entries(redirectPages).map(async ([path, html]) => {
             const file = resolve(nitro.options.output.publicDir, path);
             await mkdir(dirname(file), { recursive: true });
             await writeFile(file, html);

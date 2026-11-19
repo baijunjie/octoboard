@@ -56,7 +56,7 @@ const heldFromStart = heldModifier !== undefined && scenario?.held === "from-sta
 // language among them) as they load, so the scenario's own choices have to be in storage first. The converse binds
 // everything this file imports statically, `./fixtures`, every scenario file and whatever those import included: none
 // of it may read a stored preference at module load, or the scenario opens in the previous one's language (English
-// under `lang=zh-Hans`, say).
+// under `lang=zh-CN`, say).
 const [{ App }, { AppRoot }, { Toasts }, { TrayFlyout }, { selectPlatform }, startup, { useUpdates }] = await Promise.all([
   import("../App"),
   import("../AppRoot"),

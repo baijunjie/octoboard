@@ -1,0 +1,43 @@
+---
+title: "選擇連線方式"
+description: "比較在 Linux 伺服器或另一台電腦上使用 Octoboard 的幾種方式：SSH、Tailscale 和 UU 遠程。"
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+
+{productName} 從不直接對網路開放，另一台電腦需要一條安全通道才能連到它。SSH 是 macOS、Windows 和 Linux 都內建的通用加密登入方式，也是主要的連線方式：桌面應用程式和瀏覽器都能用。如果你不想在主機上開啟 SSH 登入，也可以借助第三方中繼服務（Tailscale 或 UU 遠程），讓瀏覽器連過去。
+
+<strong>主機</strong>指執行 {productName}、你要連過去的那台機器。
+
+<Aside type="tip" title="最簡單的方式">
+如果可以接受一些操作延遲和畫面模糊，就不必做下面這些設定：用 [UU 遠程](https://uuyc.163.com/)的遠端桌面開啟主機，直接在主機上使用 {productName}。適用於 Mac 或 Windows 主機，不適用於 Linux 伺服器。如果想在自己的電腦上獲得清晰流暢的操作，就從下面選一種方式。
+</Aside>
+
+| | [SSH](../remote-connections/) | [Tailscale](../browser-over-tailscale/) | [UU 遠程](../browser-over-uu-remote/) |
+| --- | --- | --- | --- |
+| 可以從哪裡用 | 桌面應用程式或瀏覽器 | 僅瀏覽器 | 僅瀏覽器 |
+| 支援的主機 | Linux 伺服器、Mac、Windows 電腦 | Linux 伺服器、Mac、Windows 電腦 | 僅 Mac 或 Windows 電腦 |
+| 主機上需要開啟或安裝 | SSH 登入（Mac 上是「遠端登入」，Windows 上是 OpenSSH Server；Linux 伺服器本來就有） | Tailscale；主機是 Mac 或 Linux 時還需要 socat | UU 遠程；主機是 Mac 時還需要 socat |
+| 你自己的電腦上需要安裝 | 不需額外安裝 | Tailscale；Mac 或 Linux 電腦還需要 socat | UU 遠程（Mac 或 Windows） |
+| 資料經過 | 直接連線，不經過第三方 | Tailscale 的網路，使用你的帳號 | 網易 UU 遠程的服務，使用你的帳號 |
+| 不在同一個網路時能否使用 | 僅限能連到主機時：在同一個網路、主機有公開位址，或透過 VPN | 能 | 能 |
+| 適合誰 | 伺服器；要用完整的桌面應用程式；其他人也會登入的 Mac 或 Linux 主機 | 不開 SSH，從任何地方存取自己的機器 | 已經在用 UU 遠程的中國大陸使用者 |
+
+## 選擇中繼服務之前
+
+中繼方式的步驟比 SSH 多：要在兩台電腦上執行指令，並在使用期間讓它們在開著的視窗裡持續執行。
+
+<Aside type="caution">
+Tailscale 和 UU 遠程的指南尚未在兩台裝置之間完整實測，它們是依據這兩項服務自己的文件和 {productName} 本身的檢查撰寫的。
+</Aside>
+
+<Aside type="caution" title="只在沒有其他人登入的電腦上使用">
+使用中繼服務時，主機或你電腦上的其他使用者帳戶有可能攔截瀏覽器的金鑰。請只在只有你自己登入的電腦上使用 Tailscale 或 UU 遠程。透過 SSH 連線時，Mac 或 Linux 主機沒有這個弱點；用桌面應用程式時，你自己的電腦也沒有。但用瀏覽器時，你用來瀏覽的電腦仍有這個弱點，因為那裡的 SSH 轉送同樣監聽 <code dir="ltr">127.0.0.1</code> 連接埠。
+</Aside>
+
+## 下一步
+
+- [透過 SSH 連線](../remote-connections/)：連線到 Linux 伺服器，或使用桌面應用程式。
+- [透過 Tailscale 用瀏覽器存取](../browser-over-tailscale/)：僅瀏覽器，任何主機，不需要 SSH。
+- [透過 UU 遠程用瀏覽器存取](../browser-over-uu-remote/)：僅瀏覽器，Mac 或 Windows 主機，不需要 SSH。

@@ -271,7 +271,7 @@ it("replaces an empty select's placeholder and badge with localized loading text
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); act(() => setLanguage(language)); });
-  act(() => setLanguage("zh-Hans"));
+  act(() => setLanguage("zh-CN"));
   const render = (isLoading: boolean) => act(() => root.render(
     <OptionSelect label="Model" value={null} onChange={() => {}} options={[]} placeholder="Same as console" placeholderBadge="Inherited model" isLoading={isLoading} />,
   ));

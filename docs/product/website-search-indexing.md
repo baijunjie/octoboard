@@ -5,26 +5,37 @@
 Search indexing, live retrieval by agents, and use of the pages for model training are allowed.
 `robots.txt` at the deployment root allows the whole site and does not disallow the Markdown copies.
 It sets `Content-Usage` to `train-ai=y` and `Content-Signal` to `search=yes, ai-input=yes, ai-train=yes`,
-and points `Sitemap` at the absolute URL of `sitemap.xml`.
+and names two sitemaps by absolute URL: the website's `sitemap.xml`, and the documentation site's own sitemap index at
+`docs/sitemap-index.xml` under the deployment root (see "Search indexing" in `docs/product/documentation-site.md`).
 
 The published host does not send `X-Robots-Tag`, `Link`, or `Vary`, and it does not negotiate
 `Accept: text/markdown`. A Markdown copy is its own URL. The response is not marked `noindex`, so the
 copy can be indexed beside its HTML page.
 
-`sitemap.xml` lists each homepage, download, privacy and remote guide URL once, for every language, and nothing else; the
-fixed download addresses (see `docs/product/website-download-page.md`, "Fixed download addresses") are not listed. Each entry carries an
+`sitemap.xml` lists each homepage and download URL once, for every language (34 URLs), and nothing else; the privacy page is not
+listed (see below), and neither are the fixed download addresses (see `docs/product/website-download-page.md`, "Fixed
+download addresses"). Each entry carries an
 alternate for every language and an `x-default` alternate. The language value is the BCP-47 tag identified in
-`docs/product/website.md`, "Pages and languages": Simplified Chinese is `zh-Hans` while its route prefix stays `zh`.
+`docs/product/website.md`, "Pages and languages": each language's tag, which is also its route prefix
+(Simplified Chinese `zh-CN`, Traditional Chinese `zh-TW`).
 `x-default` is the unprefixed English URL of that page. Every listed URL ends with a slash. Entries carry no `lastmod`
 and no image entries. The standalone product preview is not listed and requests `noindex`. The error page is not listed;
-see `docs/product/website.md`, "Missing pages and errors". `sitemap.xml` is the only sitemap: there is no sitemap index
-and no per-language sitemap. It references an XSL stylesheet published at `__sitemap__/style.xsl` under the deployment
+see `docs/product/website.md`, "Missing pages and errors". Neither are the redirect pages in "Pages and languages" in
+`docs/product/website.md`. `sitemap.xml` is the website's only sitemap: it has no sitemap index and no per-language
+sitemap, and it lists no documentation site page. It references an XSL stylesheet published at `__sitemap__/style.xsl` under the deployment
 root, so a browser opening it shows its entries as a table.
 
-Each HTML content page, in every language, has an absolute canonical URL with a trailing slash, and
+The privacy page, in every language, asks not to be indexed: it carries `<meta name="robots" content="noindex, follow">`
+and is not in the sitemap, and its head names no canonical URL and no hreflang alternates. It stays reachable and linked
+from the footer. Its head does not link its Markdown copy as an alternate, so search engines are not pointed at it from
+this page. The copy itself stays published and listed in the agent-readable files below; the published host cannot mark
+it `noindex`.
+
+Each other HTML content page, in every language, has an absolute canonical URL with a trailing slash, and
 hreflang alternates for the HTML versions, also with trailing slashes. `x-default` is again the
 unprefixed English URL of that page. Those alternates use the same BCP-47 tags as the sitemap, and the
-HTML page adds one tag that repeats an existing URL: `zh` is the Simplified Chinese page, the same URL as `zh-Hans`.
+HTML page adds one tag that repeats an existing URL: `zh` is the Simplified Chinese page, the same URL as `zh-CN`. The
+redirect pages in "Pages and languages" in `docs/product/website.md` are not among the alternates.
 The sitemap does not include `zh`. Portuguese uses `pt` in both the HTML alternates and the sitemap.
 
 Every language's homepage SEO title identifies Octoboard as a multi-agent workspace for Claude Code and Codex. Its SEO
@@ -32,7 +43,7 @@ description names Claude Code, Codex and Grok Build, describes an open source wo
 Linux server, and covers account management, usage tracking, account switching and coordination across projects. Every
 language's download page has its own SEO title, naming the download of Octoboard for macOS, Windows and Linux, and SEO
 description, offering the macOS or Windows app or the Linux server installed with one command, free and open source
-under the MIT License. The remote guide names remote connections and summarizes direct SSH use. These localized titles and descriptions
+under the MIT License. These localized titles and descriptions
 are used in the HTML metadata, social metadata, structured data and agent-readable page listings. The visible homepage
 headings and share-image text retain their own wording.
 
@@ -44,8 +55,7 @@ name, and `og:url` is the canonical URL. `og:title` and `og:description` are tha
 title and description.
 
 Each language has one share image, 1200 by 630, at the deployment root as `og-image-<route code>.png`. The route code is
-the URL code in `docs/product/website.md`, "Pages and languages", so Simplified Chinese is `og-image-zh.png`, not
-`zh-Hans`. The image shows the mascot published as `logo.png` at the deployment root, the pixel wordmark published as
+the URL code in `docs/product/website.md`, "Pages and languages", so Simplified Chinese is `og-image-zh-CN.png`. The image shows the mascot published as `logo.png` at the deployment root, the pixel wordmark published as
 `wordmark.png` at the deployment root, that language's brand slogan drawn as text under the wordmark, followed by the
 localized sentence that states the slogan's two meanings (see `docs/product/website.md`, "Brand slogan"), the three
 lines of the homepage title, and the hostname `octoboard.dev`. The meaning sentence wraps into at most three lines. The
@@ -57,7 +67,7 @@ Neither the mascot nor the wordmark is mirrored.
 `og:image:height` is 630. `twitter:card` is `summary_large_image`. `og:image:alt` is the application name,
 an em dash, that language's brand slogan, an em dash, the sentence that states its two meanings,
 an em dash, then the three homepage title lines joined with spaces, with a space on each side of each dash.
-The download, privacy and remote guide pages use the same image and the same alt text as that language's homepage. The unlocalized 404
+The download and privacy pages use the same image and the same alt text as that language's homepage. The unlocalized 404
 page uses the English image and the same alt text as the English homepage. It is not a separate card.
 An error within the running site does not set a share image.
 Indexing exclusions for the 404 page and that error are in `docs/product/website.md`, "Missing pages and errors".
@@ -83,47 +93,50 @@ tags. It has no description, no feature list, no offer, no install URL, and no r
 page's FAQ page, not on the shared application entry. Availability is described in `docs/product/website.md`,
 "Platform availability".
 
-A download or remote guide page has a web page entry at that page's canonical URL plus `#webpage`, about the software application,
+A download page has a web page entry at that page's canonical URL plus `#webpage`, about the software application,
 and the same software application entry as a homepage. It has no FAQ page.
 
-A privacy page has a web page entry at that page's canonical URL plus `#webpage`. It does not include
+A privacy page has a web page entry at that page's own URL plus `#webpage`. It does not include
 the FAQ page or the software application.
 
 Agent-readable files are published at the deployment root and are crawlable:
 
-- One Markdown file per content page. The English homepage is `index.md`, the download page `download.md`, the privacy
-  page `privacy.md` and the remote guide `remote.md`. Another language's homepage is `<route code>.md`, so Simplified
-  Chinese is `zh.md`. Its other pages use the same filenames within the locale directory, such as `zh/remote.md`.
+- One Markdown file per content page. The English homepage is `index.md`, the download page `download.md` and the
+  privacy page `privacy.md`. Another language's homepage is `<route code>.md`, so Simplified Chinese is `zh-CN.md`. Its
+  other pages use the same filenames within the locale directory, such as `zh-CN/download.md`.
 - `llms.txt`, in English. Its notes state that Octoboard is free and open source under the MIT License, and cover
   the supported systems and processors (macOS on Apple silicon and Intel, Windows on x64, the Linux server on x86_64
   and aarch64), beta status, each platform's availability, the pointer to the download page, the newest macOS and
-  Windows downloads, the Linux server's description, install command, next steps, service, upgrade and archive links
-  (as on the download page's Linux panel, without its headings), the link to all releases, local data handling,
+  Windows downloads, each followed by a link to that app's English installation guide on the documentation site, the
+  Linux server's description, supported architectures, install command under its "Install on the server" heading,
+  archive links, and links to the documentation site's English Linux server guide and Connect over SSH guide (as on the
+  download page's Linux panel, without the panel's title), a link to the documentation site's English home, the link to
+  all releases, local data handling,
   account switching, agent handoff, usage and resets, the nine questions and answers, the support email, and the
   repository. Platform availability is described in `docs/product/website.md`, "Platform availability".
   It then lists every language and links to each language's full-content bundle and to non-English homepage
-  Markdown. The page list links to the four English pages with their SEO titles and descriptions, including the
-  English homepage and remote guide. The file also links to the all-language bundle and `sitemap.md`, directing
+  Markdown. The page list links to the three English pages with their SEO titles and descriptions, including the
+  English homepage. The file also links to the all-language bundle and `sitemap.md`, directing
   readers to a single-language bundle unless they need all languages. When a download falls back to the releases
   page, the notes list its name and use the single all-releases link for that destination.
-- `llms-full.txt` contains every language and all four pages. English comes first, then the other languages in the
+- `llms-full.txt` contains every language and all three pages. English comes first, then the other languages in the
   order in `docs/product/website.md`, "Pages and languages". Each language's homepage comes first, followed by its
-  privacy page, download page and remote guide. Each part gives the page's SEO title, the HTML URL as its source, the SEO description, and the Markdown body.
+  privacy page and download page. Each part gives the page's SEO title, the HTML URL as its source, the SEO description, and the Markdown body.
   Its opening product summary is in English.
-- `llms-full-<route code>.txt` contains only that language's homepage, privacy page, download page and remote guide, in that order,
+- `llms-full-<route code>.txt` contains only that language's homepage, privacy page and download page, in that order,
   with the same per-page information as the all-language bundle. All 17 languages have a bundle, including `llms-full-en.txt` for
-  English and `llms-full-zh.txt` for Simplified Chinese. Each bundle opens with the product name, the homepage's SEO
+  English and `llms-full-zh-CN.txt` for Simplified Chinese. Each bundle opens with the product name, the homepage's SEO
   description in that language, and the canonical site origin.
 - `sitemap.md` lists every Markdown URL with that page's localized SEO title, grouped by language: English, the
   unprefixed pages, first under the heading Root, then each other language under its route code.
 
 Each page file states `Canonical:` and then that page's HTML URL. A link from one of these copies to
-another page of the site points at the Markdown file. Links that leave the site — the downloads, the releases page,
-the repository, the license, the GitHub privacy statement, and email — stay on those targets.
+another page of the site points at the Markdown file. Links into the documentation site point at its HTML pages, which
+have no Markdown copies. Links that leave the site — the downloads, the releases page, the repository, the license, the
+GitHub privacy statement, and email — stay on those targets.
 
-The Markdown carries the page's localized wording in the same section order. The remote connections guide's own copy
-preserves its three numbered procedures, shell blocks and bulleted topics. The homepage, download page and
-`llms.txt` link to the guide's Markdown. The homepage copy includes all
+The Markdown carries the page's localized wording in the same section order. The homepage copy's remote connections
+overview ends with its link to the documentation site's Connect over SSH guide in that language. The homepage copy includes all
 three feature groups and their 13 titles and descriptions, the statement that Octoboard is free and open source under the MIT License, the
 preview scene names and sample-data explanation, and every workflow node's task and report. The developer's motivation
 follows the remote connections overview in the homepage Markdown, including its title, opening, three subsections,
@@ -131,9 +144,11 @@ product purpose, invitation, and byline. It does not include the embedded applic
 copy gives the systems and beta status where the hero does, links the download page's Markdown after the platform
 availability note, and ends with the closing section's Download heading, its sentence and a link to the download page's
 Markdown, then the closing note. The download page copy gives the page's heading and introduction, then for macOS and
-Windows a heading, a link to the newest download and the panel's paragraphs, then the Linux server's heading and panel
-text with the install command as a shell code block and the archive links, and last the link to all releases; it omits
-the tabs, the Copy button and the terminal demonstration. The workflow is
+Windows a heading, a link to the newest download, the requirements and the link to that system's installation guide,
+then the Linux server's heading and panel text with the install command as a shell code block under its "Install on
+the server" heading, the archive links and the links to the Linux server guide and the Connect over SSH guide, and last
+the link to all releases; the guide links name the documentation site's pages in that language. It omits the tabs, the
+Copy button and the terminal demonstration. The workflow is
 identified as an illustration. The copies omit the header, the footer, decorative art, the labels and numbers that mark
 a section, the scroll cue, the MIT badge, and interactive controls. The brand slogan stays, and the homepage Markdown
 also includes the sentence that states the slogan's two meanings. The privacy page's introductory line and the

@@ -1,0 +1,101 @@
+---
+// Starlight's site title, drawn with the website's own images: its logo, then the application's name as its pixel
+// wordmark, then the page language's word for "Docs". The link's accessible name is what it shows, the wordmark's alt
+// text and the word ("Octoboard Documentación"); the page title ("Documentación de Octoboard") is worded naturally
+// instead. The link reads left to right on every page, so the lockup keeps its order on a right-to-left language; the
+// word alone takes its own direction.
+// The lockup is laid out at its natural size and scaled down to fit the column the header leaves for the title, so it
+// always shows in full, whatever the word's length or the width of the screen (`<site-title-fit>`, below).
+import { FALLBACK_LANGUAGE, isLanguage } from "@octoboard/ui/languages";
+import logo from "../../../web/public/logo-640.png";
+import wordmark from "../../../web/public/wordmark.png";
+import { docsWords } from "../../siteTitle.ts";
+import site from "../../site.config.ts";
+
+const { siteTitleHref, lang } = Astro.locals.starlightRoute;
+const word = docsWords[isLanguage(lang) ? lang : FALLBACK_LANGUAGE];
+---
+
+<site-title-fit dir="ltr">
+  <a href={siteTitleHref} class="site-title sl-flex">
+    <img class="logo" alt="" src={logo.src} width={logo.width} height={logo.height} />
+    <img class="wordmark" translate="no" alt={site.productName} src={wordmark.src} width={wordmark.width} height={wordmark.height} />
+    <span class="word" dir="auto">{word}</span>
+  </a>
+</site-title-fit>
+
+<script>
+  // The element takes the width the header leaves the title (it shrinks with the title's column, which clips what
+  // overflows it), and the link inside keeps its natural width. The scale is the first over the second, never above 1,
+  // and is measured again when either changes size, when the link's content changes, and when the fonts have loaded.
+  class SiteTitleFit extends HTMLElement {
+    #resize?: ResizeObserver;
+    #mutation?: MutationObserver;
+
+    connectedCallback() {
+      const link = this.firstElementChild;
+      if (!(link instanceof HTMLElement)) return;
+      const fit = () => {
+        // The transform does not change layout, but it does change the rectangle read here, so it is lifted to read the
+        // natural width.
+        link.style.transform = "none";
+        link.style.setProperty("--scale", "1");
+        const available = this.getBoundingClientRect().width;
+        const natural = link.getBoundingClientRect().width;
+        const scale = natural > 0 ? Math.min(1, available / natural) : 1;
+        link.style.transform = scale < 1 ? `scale(${scale})` : "";
+        link.style.setProperty("--scale", String(scale));
+      };
+      this.#resize = new ResizeObserver(fit);
+      this.#resize.observe(this);
+      this.#resize.observe(link);
+      this.#mutation = new MutationObserver(fit);
+      this.#mutation.observe(link, { childList: true, characterData: true, subtree: true });
+      fit();
+      void document.fonts.ready.then(fit);
+    }
+
+    disconnectedCallback() {
+      this.#resize?.disconnect();
+      this.#mutation?.disconnect();
+    }
+  }
+  if (!customElements.get("site-title-fit")) customElements.define("site-title-fit", SiteTitleFit);
+</script>
+
+<style>
+  /* The title's column clips what overflows it, so a lockup wider than the column is cut until the script has scaled
+     it, never overflowing the search button. */
+  site-title-fit {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+  .site-title {
+    flex: none;
+    align-items: center;
+    gap: 0.5rem;
+    /* The link is at least 24px tall as drawn, so a scaled lockup keeps a target of that size. */
+    min-height: calc(1.5rem / var(--scale, 1));
+    font-size: var(--sl-text-h4);
+    font-weight: 600;
+    color: var(--sl-color-text-accent);
+    text-decoration: none;
+    white-space: nowrap;
+    transform-origin: left center;
+  }
+  .logo,
+  .wordmark {
+    flex: none;
+  }
+  .logo {
+    height: calc(var(--sl-nav-height) - 2 * var(--sl-nav-pad-y));
+    width: auto;
+  }
+  /* As tall as the website header draws it (113 × 19). */
+  .wordmark {
+    height: 1.1875rem;
+    width: auto;
+    image-rendering: pixelated;
+  }
+</style>

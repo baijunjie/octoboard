@@ -27,7 +27,7 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
 
   const press = (binding: Binding, extra: KeyboardEventInit = {}) => new KeyboardEvent("keydown", { ...eventKey(binding), ...extra });
   const defaults = effectiveBindings({});
-  const say = (language: "en" | "zh-Hans"): Translate => translatorFor(language);
+  const say = (language: "en" | "zh-CN"): Translate => translatorFor(language);
   const primary = apple ? { metaKey: true } : { ctrlKey: true };
 
   afterEach(() => restoreAllBindings());
@@ -98,7 +98,7 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
     it("says a binding in words for a screen reader", () => {
       expect(describeBinding({ code: "KeyF", primary: true, shift: true }, say("en"))).toBe(apple ? "Shift+Command+F" : "Ctrl+Shift+F");
       expect(describeBinding({ code: "PageUp", primary: true }, say("en"))).toBe(apple ? "Command+Page Up" : "Ctrl+Page Up");
-      expect(describeBinding({ code: "ArrowUp", primary: true }, say("zh-Hans"))).toBe(apple ? "Command+上箭头" : "Ctrl+上箭头");
+      expect(describeBinding({ code: "ArrowUp", primary: true }, say("zh-CN"))).toBe(apple ? "Command+上箭头" : "Ctrl+上箭头");
     });
 
     it("draws and says Control as the key it is on the host", () => {

@@ -1,7 +1,6 @@
 // Locale registration, robots rules, and structured data for the static site.
 // Open Graph locale values use language_TERRITORY. The protocol does not accept a
-// bare language or a BCP-47 script tag such as zh-Hans, so each language is pinned
-// to its primary market.
+// bare language, so each language is pinned to its primary market.
 
 import {
   LANGUAGES,
@@ -19,47 +18,72 @@ export type SiteLocale = {
   dir?: "rtl";
 };
 
-// The languages, their order, names and direction are the application's own list; the site adds
-// only its URL code and Open Graph locale. Exhaustive by type, so a new application language
-// fails here until the site gives it a code.
-const SITE_LOCALES: Record<Language, { code: string; ogLocale: string }> = {
-  ar: { code: "ar", ogLocale: "ar_AR" },
-  de: { code: "de", ogLocale: "de_DE" },
-  en: { code: "en", ogLocale: "en_US" },
-  es: { code: "es", ogLocale: "es_ES" },
-  fr: { code: "fr", ogLocale: "fr_FR" },
-  hi: { code: "hi", ogLocale: "hi_IN" },
-  id: { code: "id", ogLocale: "id_ID" },
-  it: { code: "it", ogLocale: "it_IT" },
-  ja: { code: "ja", ogLocale: "ja_JP" },
-  ko: { code: "ko", ogLocale: "ko_KR" },
-  pt: { code: "pt", ogLocale: "pt_BR" },
-  ru: { code: "ru", ogLocale: "ru_RU" },
-  th: { code: "th", ogLocale: "th_TH" },
-  tr: { code: "tr", ogLocale: "tr_TR" },
-  vi: { code: "vi", ogLocale: "vi_VN" },
-  "zh-Hans": { code: "zh", ogLocale: "zh_CN" },
-  "zh-Hant": { code: "zh-Hant", ogLocale: "zh_TW" },
+// The languages, their order, names and direction are the application's own list, and a language's URL code is its
+// tag; the site adds only its Open Graph locale. Exhaustive by type, so a new application language fails here until the
+// site gives it one.
+const OG_LOCALES: Record<Language, string> = {
+  ar: "ar_AR",
+  de: "de_DE",
+  en: "en_US",
+  es: "es_ES",
+  fr: "fr_FR",
+  hi: "hi_IN",
+  id: "id_ID",
+  it: "it_IT",
+  ja: "ja_JP",
+  ko: "ko_KR",
+  pt: "pt_BR",
+  ru: "ru_RU",
+  th: "th_TH",
+  tr: "tr_TR",
+  vi: "vi_VN",
+  "zh-CN": "zh_CN",
+  "zh-TW": "zh_TW",
 };
 
 export const locales: readonly SiteLocale[] = LANGUAGES.map((language) => ({
-  ...SITE_LOCALES[language],
+  code: language,
   language,
   file: `${language}.json`,
   name: LANGUAGE_NAMES[language],
+  ogLocale: OG_LOCALES[language],
   ...(textDirection(language) === "rtl" ? { dir: "rtl" as const } : {}),
 }));
 
-export const pagePaths = ["", "privacy/", "download/", "remote/"] as const;
-export type PageKind = "home" | "privacy" | "download" | "remote" | "other";
+// The URL codes the two Chinese languages had before their codes became their tags, and the code each moved to. Every
+// page that was published under one has a redirect page there (`renderRetiredLocalePages` in `redirect-pages.ts`), and
+// a language choice remembered under one is read as the code it moved to. The docs keep the same table
+// (`apps/docs/redirects.ts`).
+export const retiredLocaleCodes: Readonly<Record<string, Language>> = { zh: "zh-CN", "zh-Hant": "zh-TW" };
+
+// The current code of `code`, which may be a retired one.
+export function currentLocaleCode(code: string): string {
+  return Object.hasOwn(retiredLocaleCodes, code) ? retiredLocaleCodes[code]! : code;
+}
+
+export const pagePaths = ["", "privacy/", "download/"] as const;
+export type PageKind = "home" | "privacy" | "download" | "other";
 
 export type ContentPageKind = Exclude<PageKind, "other">;
+
+// The pages that ask not to be indexed, in every language (docs/product/website-search-indexing.md). Each carries a
+// noindex robots tag, names no canonical or alternates, and stays out of the sitemap and out of the Markdown alternates.
+export const unindexedPageKinds: readonly PageKind[] = ["privacy"];
+
+export function isIndexedPage(kind: PageKind): boolean {
+  return !unindexedPageKinds.includes(kind);
+}
+
+// The sitemap excludes of the unindexed pages, as paths of the default language; the sitemap module applies each to
+// every locale prefix.
+export const unindexedSitemapExcludes: readonly string[] = pagePaths
+  .filter((path) => !isIndexedPage(pageKind(`/${path}`)))
+  .flatMap((path) => [`/${path}`, `/${path.replace(/\/$/, "")}`]);
 
 // The catalog keys of each content page's SEO title and description.
 export const pageSeoKeys: Record<ContentPageKind, { title: string; description: string }> = {
   home: { title: "codingAgentsSeoTitle", description: "workspaceSeoSummary" },
   privacy: { title: "privacySeoTitle", description: "privacySeoDescription" },
-  remote: { title: "remoteSeoTitle", description: "remoteIntro" },
   download: { title: "downloadSeoTitle", description: "downloadSeoDescription" },
 };
 
@@ -79,6 +103,28 @@ export function localizedPath(code: string, path: string): string {
   return `${code === "en" ? "" : `${code}/`}${path}`;
 }
 
+// The documentation site (`apps/docs/`) is deployed under `docs/` of the website's base path, and its language path
+// segments are the website's locale codes, with English unprefixed (`apps/docs/site.config.ts`,
+// `apps/docs/locales.ts`).
+const docsSegment = "docs/";
+
+// The pages of the docs the website links to, by their path within one language (`apps/docs/src/content/docs/`).
+export const docsPages = {
+  macos: "install/macos/",
+  windows: "install/windows/",
+  linux: "install/linux/",
+  remoteConnections: "remote-connections/",
+  chooseHowToConnect: "choose-how-to-connect/",
+} as const;
+
+export type DocsPage = (typeof docsPages)[keyof typeof docsPages];
+
+// A docs page in one language, the docs' home when `page` is left out, under the website's base path or address
+// (`base` ends in a slash): a base path for links in the Vue app, the site URL for links in the Markdown files.
+export function docsPath(base: string, code: string, page: DocsPage | "" = ""): string {
+  return `${base}${docsSegment}${localizedPath(code, page)}`;
+}
+
 export function localeCodeFromPath(path: string): string {
   return knownLocaleCode(path) || "en";
 }
@@ -89,7 +135,6 @@ export function pageKind(path: string): PageKind {
   const rest = code ? normalized.slice(code.length + 1) : normalized;
   if (rest === "/privacy/") return "privacy";
   if (rest === "/download/") return "download";
-  if (rest === "/remote/") return "remote";
   if (rest === "/") return "home";
   return "other";
 }
@@ -148,6 +193,8 @@ export function robotsTxt(siteUrl: string): string {
     "Content-Signal: search=yes, ai-input=yes, ai-train=yes",
     "",
     `Sitemap: ${siteUrl}sitemap.xml`,
+    // The documentation site is a separate build with its own sitemap index (`apps/docs/`).
+    `Sitemap: ${siteUrl}${docsSegment}sitemap-index.xml`,
     "",
   ].join("\n");
 }
@@ -212,8 +259,8 @@ export function buildJsonLd(input: JsonLdInput): Record<string, unknown> {
   ];
   // The download addresses are the site's own redirects, which never change. An Offer would state a
   // price and an installUrl an installation the site does not run, and there is no real rating to report.
-  // The application is described on the homepage, the download page and the remote guide. FAQ rich results are marked on the
-  // homepage only; the other pages repeat none of these questions.
+  // The application is described on the homepage and the download page. FAQ rich results are marked on the homepage
+  // only; the other pages repeat none of these questions.
   if (input.page !== "privacy") {
     page.about = { "@id": app };
     graph.push({

@@ -482,19 +482,20 @@ are now wrong or it leaves out one thing, the meaning has changed.
 ## This project
 
 - **Languages**: 17 languages — `ar`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `pt`, `ru`, `th`, `tr`,
-  `vi`, `zh-Hans`, `zh-Hant`; all 17 have complete catalogs.
+  `vi`, `zh-CN` (Simplified), `zh-TW` (Traditional); all 17 have complete catalogs.
   (`packages/ui/src/i18n/languages.ts`; `docs/product/language.md`, "What is translated so far")
+- **Chinese tags**: the generic sections' `zh-Hans` and `zh-Hant` mean this project's `zh-CN` and `zh-TW`.
 - **Catalogs and how code uses them**: the English catalog is the source every other language is translated from, a
   language without a catalog or a message a catalog lacks renders in English, and the catalog files, keys,
   placeholders, plurals, the `useT`, `Translate` and `<Message>` lookups and `common.sentenceSeparator` are code
   rules in `docs/conventions/i18n-in-code.md`: "What is translated, and where it lives", "Looking messages up", "Keys"
   and "Placeholders, numbers and plurals". Copy is written to fit them: a sentence with a variable part is one message,
   and two whole sentences in a paragraph are written to be joined by the separator.
-- **Glossary**: zh-Hans follows Apple's zh-Hans macOS terminology with the fixed terms 控制台 console, 会话 session,
+- **Glossary**: zh-CN follows Apple's zh-Hans macOS terminology with the fixed terms 控制台 console, 会话 session,
   控制台会话 console session, 项目会话 project session, 智能体 agent, 移交 handoff, 转移 transfer (of branches, process
   trees or a parent), one half-width space between Chinese and Latin text,
   numbers or placeholders, and full-width punctuation in Chinese sentences, parentheses included (`（{detail}）`).
-  (`packages/ui/src/i18n/messages/zh-Hans.ts`, the catalog's doc comment)
+  (`packages/ui/src/i18n/messages/zh-CN.ts`, the catalog's doc comment)
 - **App name and other app-level facts**: copy writes the product name as the global placeholder `{appName}`, never as
   a literal, and never translates it; how the placeholder is filled is in `docs/conventions/i18n-in-code.md`,
   "Placeholders, numbers and plurals". (`docs/product/language.md`, "What follows the language")
@@ -544,7 +545,7 @@ are now wrong or it leaves out one thing, the meaning has changed.
   - it: with Lei, the formal pronoun is capitalized. This adds to the it row of "Pitfalls in other languages" (with tu,
     lowercase lei means "she"; leave it).
   - id: the prepositions di and ke are written apart from the noun (di rumah); as prefixes they are joined (dihapus).
-  - zh-Hans: add 要删除吗？ → 确认删除该文件？ to the "Simplified Chinese" table's Don't / Do pairs.
+  - zh-CN: add 要删除吗？ → 确认删除该文件？ to the "Simplified Chinese" table's Don't / Do pairs.
 
   (the user's decision)
 - **Grammatically required contractions**: the contraction table under "English" is en-only, but these preposition +
@@ -577,7 +578,7 @@ are now wrong or it leaves out one thing, the meaning has changed.
   - A button never takes in-progress text: while its action runs it keeps its own label and shows a spinner before it
     (an icon-only button's spinner replaces its icon), so "In-progress states" applies to status lines and banners
     only, and no catalog carries a pending variant of a button's label (`docs/conventions/ui-standard.md`, "Buttons").
-  - A search field's placeholder is the standard word "Search" in each language (zh-Hans 搜索), shared through the one
+  - A search field's placeholder is the standard word "Search" in each language (zh-CN 搜索), shared through the one
     catalog key `common.search`; its accessible label names what is searched ("Search settings").
 
   (the user's decision)
@@ -591,6 +592,6 @@ are now wrong or it leaves out one thing, the meaning has changed.
 - **Codex usage limit resets**: the copy for a Codex account's usage limit resets follows Codex's own wording rather
   than terms of our own: "usage limit reset(s)" for the credit, "Redeem reset" for the command and the confirmation's
   title, "Use reset" for its Confirm, "Usage reset" once used. The title and Confirm deliberately use different verbs,
-  as Codex does, overriding the "Destructive actions" rule above that they share the trigger's word. zh-Hans keeps the
+  as Codex does, overriding the "Destructive actions" rule above that they share the trigger's word. zh-CN keeps the
   same split: 用量限额重置, 兑换重置, 使用重置, 用量已重置. (the user's decision; `packages/ui/src/i18n/messages/en.ts`,
   `quota.resetCredits`)

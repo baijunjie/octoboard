@@ -4,6 +4,8 @@
 // prerelease. This module is pure apart from the injected `fetch`, so the tests run it without a network.
 
 import appConfig from "../../../config/app.json" with { type: "json" };
+import { redirectPage } from "./redirect-pages.ts";
+import { docsPages } from "./site-seo.ts";
 
 // The downloads the site offers. `app` targets are desktop installers; `server` targets are the archives of the
 // daemon (the Linux server form), one per architecture.
@@ -29,40 +31,24 @@ export const serverDownloads = targetsOfKind("server");
 // script and this site alike.
 export const defaultServerPort: number = appConfig.defaultServerPort;
 
-// The commands the Linux copy quotes, keyed by the placeholder that names each in the catalogs. They are not
-// translated.
-export const linuxCommandParts = {
+// The commands the Linux tab's terminal demo types after installing. They are not translated.
+export const linuxCommands = {
   start: "octoboardd start",
-  binDir: "~/.local/bin",
-  // The daemon serves the browser on an owner-only socket in its data directory, not on its port; `octoboardd
-  // address` prints this command with the real path and user.
-  forward: `ssh -o ExitOnForwardFailure=yes -L 127.0.0.1:${defaultServerPort}:/home/<you>/.octoboard/browser.sock <you>@<server>`,
   address: "octoboardd address",
-  server: "<server>",
-  plain: "sh",
-  option: "sh -s -- --service",
-  port: "--port <port>",
-  defaultPort: String(defaultServerPort),
-  linger: 'loginctl enable-linger "$USER"',
-  restart: "octoboardd restart",
 } as const;
 
-// The tabs of the download page, one per system the visitor can pick.
+// The tabs of the download page, one per system the visitor can pick, each with the docs page that holds its
+// installation steps and troubleshooting.
 export const downloadTabs = [
-  { id: "macos", name: "macOS", icon: "apple-logo" },
-  { id: "windows", name: "Windows", icon: "windows-logo" },
-  { id: "linux", name: "Linux", icon: "linux-logo" },
+  { id: "macos", name: "macOS", icon: "apple-logo", docsPage: docsPages.macos },
+  { id: "windows", name: "Windows", icon: "windows-logo", docsPage: docsPages.windows },
+  { id: "linux", name: "Linux", icon: "linux-logo", docsPage: docsPages.linux },
 ] as const;
 
-// The catalog keys of the paragraphs under each desktop app's download button, in order.
-export const appPanelKeys = {
-  macos: ["downloadMacosRequirements", "downloadUpdates"],
-  windows: [
-    "downloadWindowsRequirements",
-    "downloadWindowsUserOnly",
-    "downloadWindowsSmartScreen",
-    "downloadUpdates",
-  ],
+// The catalog key of the system requirements under each desktop app's download button.
+export const appRequirementsKeys = {
+  macos: "downloadMacosRequirements",
+  windows: "downloadWindowsRequirements",
 } as const;
 
 export type DownloadTab = (typeof downloadTabs)[number]["id"];
@@ -265,47 +251,7 @@ export async function resolveDownloads(options: ResolveOptions): Promise<Downloa
   return downloads;
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-// The page at a fixed download address: an immediate redirect with a plain link behind it. It is unlocalized,
-// not indexed and not in the sitemap, like the 404 page, so its few sentences are English only.
-function downloadRedirectPage(input: {
-  url: string;
-  title: string;
-  baseURL: string;
-}): string {
-  const url = escapeHtml(input.url);
-  const script = JSON.stringify(input.url).replaceAll("<", "\\u003c");
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(input.title)}</title>
-<meta name="robots" content="noindex, nofollow">
-<meta http-equiv="refresh" content="0; url=${url}">
-<link rel="icon" type="image/png" href="${escapeHtml(input.baseURL)}favicon.png">
-<style>
-body { margin: 0; min-height: 100vh; display: grid; place-content: center; gap: 16px; padding: 24px; background: #000; color: #f5f5f5; font: 16px/1.6 system-ui, sans-serif; text-align: center; }
-a { color: #f5f5f5; }
-</style>
-<script>location.replace(${script});</script>
-</head>
-<body>
-<p>Taking you to the download. If nothing happens, use the link below.</p>
-<p><a href="${url}">${escapeHtml(input.title)}</a></p>
-</body>
-</html>
-`;
-}
-
-// Every redirect page of the site, keyed by its path in the generated output.
+// The redirect page at each fixed download address, keyed by its path in the generated output.
 export function renderDownloadPages(input: {
   downloads: Downloads;
   baseURL: string;
@@ -313,9 +259,10 @@ export function renderDownloadPages(input: {
   return Object.fromEntries(
     downloadTargets.map(({ id, name }) => [
       `${downloadPagePath(id)}index.html`,
-      downloadRedirectPage({
+      redirectPage({
         url: input.downloads[id],
         title: `Download for ${name}`,
+        notice: "Taking you to the download. If nothing happens, use the link below.",
         baseURL: input.baseURL,
       }),
     ]),

@@ -182,7 +182,7 @@ it("words a periodic refresh that fails after a language change in the new langu
   const { list } = mountChangeList();
   await advance(0);
   await settle();
-  act(() => setLanguage("zh-Hans"));
+  act(() => setLanguage("zh-CN"));
   await advance(AUTO_REFRESH_MS);
   expect(count("list_project_changes")).toBe(1);
   await act(async () =>

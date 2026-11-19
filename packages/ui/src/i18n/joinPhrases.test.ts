@@ -18,7 +18,7 @@ it.each([
     { type: "element", value: second },
   ]);
   onTestFinished(() => parts.mockRestore());
-  expect(joinPhrases("zh-Hans", [first, second])).toBe(expected);
+  expect(joinPhrases("zh-CN", [first, second])).toBe(expected);
 });
 
 it("keeps punctuation separators and English lists in the runtime's own format", () => {
@@ -31,7 +31,7 @@ it("keeps punctuation separators and English lists in the runtime's own format",
     { type: "element", value: phrases[2] },
   ]);
   onTestFinished(() => parts.mockRestore());
-  expect(joinPhrases("zh-Hans", phrases)).toBe("分支 main、落后 1 个提交、Git 错误：fetch failed");
+  expect(joinPhrases("zh-CN", phrases)).toBe("分支 main、落后 1 个提交、Git 错误：fetch failed");
   expect(joinPhrases("en", ["Branch main", "1 commit behind", "Git error: fetch failed"])).toBe("Branch main, 1 commit behind, Git error: fetch failed");
 });
 

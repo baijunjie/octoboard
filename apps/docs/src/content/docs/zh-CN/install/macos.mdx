@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "适用于 Apple 芯片和 Intel 的 Mac，需要 macOS 11 或更高版本。"
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+适用于 Apple 芯片和 Intel 的 Mac，需要 macOS 11 或更高版本。
+
+<LinkButton href={downloads.macos}>下载 macOS 版</LinkButton>
+
+<Aside>macOS 应用仍处于 Beta 阶段。</Aside>
+
+## 安装
+
+<Steps>
+
+1. 点击上面的按钮下载应用。下载到的是一个磁盘映像，文件名以 <code dir="ltr">.dmg</code> 结尾。
+2. 打开下载的文件，在弹出的窗口中把 {productName} 拖到“应用程序”文件夹。
+3. 从“应用程序”文件夹或启动台打开 {productName}。
+4. 安装至少一个编程智能体（见下文），然后在 {productName} 中点击<strong>添加项目</strong>，打开一个项目文件夹。
+
+</Steps>
+
+看到主窗口打开，就安装完成了。
+
+## 安装编程智能体
+
+{productName} 本身不带 AI 智能体，请按各自的官方说明安装并登录你要用的智能体，{productName} 会自动识别。目前支持：
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## 更新
+
+有新版本时，{productName} 会提醒你，你可以直接在应用内安装，不用再回到这个页面。
+
+<a href={downloads.releases}>所有历史版本</a>

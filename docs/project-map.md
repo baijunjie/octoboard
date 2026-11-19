@@ -15,6 +15,7 @@ Everything revolves around one daemon; every client reaches it only through the 
 | UI | TypeScript, React 19 with the React Compiler, HeroUI 3 (react-aria), Tailwind 4, Zustand, xterm.js, Vite 8, Vitest |
 | Desktop shell | Tauri 2 (Rust crate plus npm scripts), macOS and Windows |
 | Website | Nuxt 4 (Vue 3, Nuxt i18n, sitemap), generated as static files for GitHub Pages; serves a POSIX `install.sh` |
+| Documentation site | Astro 6 with Starlight, generated as static files and deployed under `/docs/` of the website's GitHub Pages site |
 | Tooling | Node scripts (`.mjs`), pnpm 10, ESLint (also formats), rustfmt, GitHub Actions |
 
 ## Workspaces
@@ -23,7 +24,7 @@ The repository root is two workspace roots at once:
 
 - The **pnpm workspace** (`package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`): the `apps/*` and `packages/*`
   directories that have a `package.json`, namely `apps/daemon/` (only a build wrapper, see below), `apps/desktop/`,
-  `apps/web/` and `packages/ui/`.
+  `apps/web/`, `apps/docs/` and `packages/ui/`.
 - The **Cargo workspace** (`Cargo.toml`, `Cargo.lock`): the daemon (`apps/daemon/`) and the desktop shell's Tauri crate
   (`apps/desktop/src-tauri/`), built into one `target/` directory.
 
@@ -52,6 +53,9 @@ applies.
 - [Desktop shell](structure/desktop.md) — `apps/desktop/` ([README](../apps/desktop/README.md)): the Tauri 2 shell for macOS and Windows
   with its build, install and release scripts (which also build the daemon's Linux server archive); loads the UI and starts the daemon as a sidecar.
 - [Website](structure/web.md) — `apps/web/` ([README](../apps/web/README.md)): the public Nuxt website, with the download page and the Linux install script.
+- [Documentation site](structure/docs.md) — `apps/docs/` ([README](../apps/docs/README.md)): the Starlight how-to
+  documentation (installation, remote connections) in the application's 17 languages, served under `/docs/` of the
+  website and deployed with it.
 - [Tooling](structure/tooling.md) — `scripts/`, `.githooks/`, `.github/`, `config/`, `patches/`, `eslint.config.mjs`,
   `rustfmt.toml` and the other repository configuration: verification, hooks, CI, release (macOS, Windows and Linux).
 

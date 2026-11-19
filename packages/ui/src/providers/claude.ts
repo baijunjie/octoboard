@@ -479,7 +479,7 @@ const viMessages = {
   "provider.claude.openInApp": "Mở trong ứng dụng Claude",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
-const zhHans = {
+const zhCN = {
   "provider.claude.trustCaution":
     "信任后，此项目自身的权限规则和钩子会生效：其 {file} 可能会预先批准工具权限。",
   "provider.claude.sharingNeverShared":
@@ -513,7 +513,7 @@ const zhHans = {
   "provider.claude.openInApp": "在 Claude 应用中打开",
 } as const;
 
-const zhHantMessages = {
+const zhTWMessages = {
   "provider.claude.trustCaution": "信任後，此專案自身的權限規則和掛鉤會生效：其 {file} 可能會預先批准工具權限。",
   "provider.claude.sharingNeverShared": "登入憑證、{claudeJson}（含使用者級 MCP 伺服器）和 {plans} 不會共用。",
   "provider.claude.setting.approval_mode.heading": "權限核准",
@@ -583,7 +583,7 @@ export const claude = {
     "th": { ...names, ...thMessages },
     "tr": { ...names, ...trMessages },
     "vi": { ...names, ...viMessages },
-    "zh-Hans": { ...names, ...zhHans },
-    "zh-Hant": { ...names, ...zhHantMessages },
+    "zh-CN": { ...names, ...zhCN },
+    "zh-TW": { ...names, ...zhTWMessages },
   },
 } as const satisfies ProviderPresentation;

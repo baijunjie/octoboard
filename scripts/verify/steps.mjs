@@ -59,6 +59,13 @@ export function checkSteps(scope) {
     pnpm("web build", ["--filter", "@octoboard/web", "build"], { heavy: true }),
     pnpm("web tests", ["--filter", "@octoboard/web", "test"], { heavy: true }),
   );
+  if (packages.includes("docs")) steps.push(
+    lint("docs lint", ["apps/docs"]),
+    pnpm("docs type check", ["--filter", "@octoboard/docs", "typecheck"]),
+    pnpm("docs build", ["--filter", "@octoboard/docs", "build"], { heavy: true }),
+    // One test reads the generated output, so the build precedes the tests.
+    pnpm("docs tests", ["--filter", "@octoboard/docs", "test"], { heavy: true }),
+  );
   if (packages.includes("desktop")) steps.push(
     lint("desktop lint", ["apps/desktop/scripts"]),
     pnpm("desktop script tests", ["--filter", "@octoboard/desktop", "test"]),

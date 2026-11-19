@@ -1,0 +1,119 @@
+---
+title: "Connettersi tramite SSH"
+description: "Usa Octoboard su un server Linux o su un altro computer da questo computer, nell’app desktop o in un browser, tramite SSH: una connessione cifrata diretta a quella macchina, senza relay né servizi cloud."
+---
+
+import { Code, Steps } from "@astrojs/starlight/components";
+import { commands, productName } from "../../../commands.ts";
+
+Usa {productName} su un server Linux o su un altro computer da questo computer, nell’app desktop o in un browser, tramite SSH: una connessione cifrata diretta a quella macchina, senza relay né servizi cloud.
+
+Non sai se è la strada giusta per te? [Scegli come connetterti](../choose-how-to-connect/) la confronta con i modi solo browser che non richiedono SSH.
+
+<strong>App desktop su questo computer</strong> · <strong>Browser tramite un inoltro SSH</strong> ⟷ SSH ⟷ <strong>Server Linux o altro computer</strong>
+
+<details>
+<summary>Sei alle prime armi?</summary>
+
+- <strong>Host:</strong> la macchina su cui gira {productName} e che vuoi raggiungere, un server Linux o un altro Mac o PC Windows.
+- <strong>Server:</strong> qui, una macchina Linux a cui accedi in rete, di solito una che noleggi, senza schermo proprio.
+- <strong>SSH:</strong> un modo standard e cifrato per accedere a un’altra macchina e digitarvi comandi. È integrato in macOS, Windows e Linux.
+- <strong>Terminale:</strong> la finestra in cui digiti i comandi: Terminale su macOS, PowerShell su Windows.
+- <strong>Inoltro SSH:</strong> un comando SSH che fa comparire qualcosa dell’host sul tuo computer, così il browser può aprirlo lì.
+- <strong>Impronta (chiave host):</strong> un breve codice che identifica l’SSH di una macchina. Controllarla una volta ti conferma di aver raggiunto la macchina giusta.
+- <strong>File della chiave:</strong> un file che ti fa accedere al posto di una password. Alcuni provider di server te ne danno uno.
+
+</details>
+
+## Che cosa serve
+
+- <strong>Un modo per accedere all’host con SSH.</strong> Per un server Linux, il provider ti dà l’indirizzo e il tuo nome utente. Per verificare che funzioni, apri Terminale (macOS) o PowerShell (Windows) ed esegui il comando qui sotto con il tuo nome utente e l’indirizzo del server. La prima volta, rispondi <code dir="ltr">yes</code> quando ti chiede se considerare attendibile il server.
+
+  <Code code={commands.signIn} lang="sh" />
+
+  Per un Mac o un PC Windows come host, attivi l’accesso SSH nelle impostazioni di sistema; [Usa un altro computer come host](#usa-un-altro-computer-come-host) mostra come.
+- <strong>Per un server Linux, {productName} installato e avviato su di esso.</strong> [Installazione › Server Linux](../install/linux/) mostra come. Il programma server di {productName}, octoboardd, è ciò che l’app chiama il servizio.
+- <strong>L’app {productName} su questo computer</strong>, per macOS o Windows, a meno che userai solo un browser.
+
+## Connettiti a un server Linux
+
+<Steps>
+
+1. Accedi al server via SSH come l’utente che esegue {productName}, esegui questo comando e copia la riga che inizia con <code dir="ltr">{commands.connectionScheme}</code>: i dati di connessione, che dicono all’app dove e come collegarsi.
+
+   <Code code={commands.connection} lang="sh" />
+
+   Se questo computer raggiunge il server a un indirizzo o a una porta SSH diversi, aggiungi <code dir="ltr">{commands.host}</code> o <code dir="ltr">{commands.sshPort}</code> al comando per stampare i dati di connessione corretti.
+
+   Anche il codice QR che stampa contiene la stessa riga. Per ora nessuna app lo legge.
+2. Nell’app {productName} su questo computer, apri <strong>Dispositivi remoti</strong> dalla barra a sinistra oppure, su macOS, scegli <strong>Remoto › Dispositivi remoti</strong> dalla barra dei menu. Su Windows puoi anche scegliere <strong>Dispositivi remoti</strong> dal menu di sistema della finestra o dalla jump list dell’icona sulla barra delle applicazioni.
+3. Seleziona <strong>Aggiungi servizio remoto</strong>, poi <strong>Incolla</strong> sotto <strong>Dati di connessione</strong> per compilare i campi.
+4. Sotto <strong>Autenticazione</strong>, scegli <strong>Password</strong> se accedi con la password del tuo account. Scegli <strong>File della chiave</strong> se il provider del server ti ha dato invece un file della chiave (spesso con un nome come <code dir="ltr">id_ed25519</code> o che termina con <code dir="ltr">.pem</code>), e indica dove si trova su questo computer.
+5. Seleziona <strong>Salva</strong>, poi <strong>Connetti</strong>. Se te la chiede, inserisci la password.
+
+   Se hai incollato i dati di connessione, l’identità del server (la sua impronta) è arrivata insieme e l’app la controlla per te. Se hai digitato l’indirizzo a mano, l’app mostra un’impronta la prima volta. Per assicurarti di aver raggiunto la macchina giusta, confrontala con quella che questo comando stampa sul server e collegati solo se coincidono:
+
+   <Code code={commands.fingerprintCommand} lang="sh" />
+
+</Steps>
+
+Saprai che ha funzionato quando si apre una finestra {productName} separata, che mostra i progetti e le sessioni del server.
+
+## Usa un altro computer come host
+
+Puoi raggiungere anche un Mac o un PC Windows su cui gira l’app {productName}.
+
+<Steps>
+
+1. Sul computer che vuoi raggiungere, apri <strong>Impostazioni › Accesso remoto</strong> in {productName}.
+2. Lì seleziona <strong>Apri Impostazioni di Sistema</strong> (macOS) o <strong>Apri Impostazioni</strong> (Windows) e attiva <strong>Login remoto</strong> (macOS) o <strong>OpenSSH Server</strong> (Windows), seguendo il percorso indicato nella riga, così questo computer accetta gli accessi SSH. Serve un amministratore. Tornando in {productName}, la riga mostra poi <strong>Attivo</strong>.
+3. Attiva <strong>Consenti accesso remoto</strong>, seleziona <strong>Consenti</strong> per confermare e tieni {productName} in esecuzione: se lo chiudi, l’accesso remoto si interrompe.
+4. Nella scheda <strong>App {productName}</strong>, seleziona <strong>Copia dati di connessione</strong> e inviali all’altro computer, per esempio per email o in chat.
+5. Sul computer da cui lavorerai, aggiungi l’host come nei passaggi da 2 a 5 di [Connettiti a un server Linux](#connettiti-a-un-server-linux), incollando i dati che hai inviato. Accedi con il tuo nome utente e la tua password sull’host.
+
+</Steps>
+
+Saprai che ha funzionato quando si apre una finestra separata con i progetti e le sessioni dell’host.
+
+## Da un browser
+
+<Steps>
+
+1. Ottieni il comando di inoltro SSH:
+
+   - <strong>Su un host Mac o Windows,</strong> esegui prima i passaggi da 1 a 3 di [Usa un altro computer come host](#usa-un-altro-computer-come-host). Poi, nella scheda <strong>Browser</strong>, guarda <strong>Passaggio 1: inoltro SSH</strong>. Fai clic sull’indirizzo nel comando per scegliere come l’altro computer raggiunge questo (oppure scegli <strong>Inserisci l’indirizzo manualmente</strong> e sostituisci <code dir="ltr">{commands.server}</code> più tardi), poi seleziona <strong>Copia comando di inoltro</strong>. Seleziona anche <strong>Copia indirizzo</strong> sotto <strong>Passaggio 2: indirizzo del browser</strong>.
+   - <strong>Su un server Linux,</strong> esegui questo sul server. Stampa l’indirizzo del browser, poi il comando SSH da eseguire.
+
+     <Code code={commands.address} lang="sh" />
+
+     Sostituisci <code dir="ltr">{commands.server}</code> nel comando con l’indirizzo del server.
+2. Sul computer da cui navigherai, esegui il comando SSH in Terminale (macOS) o PowerShell (Windows). La finestra potrebbe chiederti la password, poi non mostra altro: è normale. Lasciala aperta mentre lavori: chiuderla scollega il browser.
+3. Apri nel browser l’indirizzo del browser, che inizia con <code dir="ltr">http://127.0.0.1:</code>.
+
+</Steps>
+
+Saprai che ha funzionato quando {productName} si apre nella scheda del browser senza chiederti di accedere.
+
+Solo chi può raggiungere {productName} tramite l’inoltro SSH può usare questo indirizzo. Tienilo privato: la sua chiave dà il controllo completo, resta nella cronologia e nei segnalibri del browser e si sincronizza con gli altri tuoi dispositivi se la sincronizzazione del browser è attiva.
+
+## Se non funziona
+
+- <strong>“Impossibile raggiungere il server”, oppure il comando SSH dice “Connection refused” o va in timeout:</strong> l’accesso SSH è disattivato sull’host, oppure l’indirizzo o la porta SSH sono sbagliati. Controlla che <strong>Login remoto</strong> oppure <strong>OpenSSH Server</strong> sia attivo e che riesca ad accedere con il comando <code dir="ltr">ssh</code> qui sopra.
+- <strong>“Accesso non riuscito”, oppure “Permission denied”:</strong> il nome utente, la password o il file della chiave non sono corretti.
+- <strong>“La chiave host non corrisponde”:</strong> la macchina che risponde non è quella a cui ti eri collegato prima. Succede dopo la reinstallazione di un server, ma può anche significare che qualcosa non va. Non proseguire finché non sai perché.
+- <strong>La pagina del browser non si carica:</strong> la finestra SSH è stata chiusa o il suo comando si è fermato. Eseguilo di nuovo e ricarica la pagina.
+
+## Sicurezza
+
+- <strong>Nessuna porta pubblica in più:</strong> {productName} accetta solo connessioni dall’host stesso, quindi per collegarti da un altro computer devi prima accedere all’host via SSH. Per questo serve SSH, oppure uno dei [relay](../choose-how-to-connect/).
+- <strong>Controlla quale macchina raggiungi:</strong> l’app ricorda la chiave host, l’identità SSH della macchina, alla prima connessione riuscita e blocca la connessione con un avviso se quell’identità cambia in seguito.
+- <strong>Nessuna password salvata:</strong> dopo il tuo primo accesso con una password o con il tuo file della chiave, l’app configura una chiave SSH separata che questo computer userà per gli accessi futuri.
+- <strong>Revocare l’accesso a un computer:</strong> rimuovi la voce di quel computer dall’elenco delle chiavi SSH autorizzate dell’host (<code dir="ltr">{commands.authorizedKeys}</code> su Linux e macOS). Quella chiave non potrà più accedere; una connessione già aperta resta fino alla sua fine.
+
+## In una finestra remota
+
+- <strong>Una finestra per ogni destinazione SSH:</strong> le connessioni con un nome utente, un host o una porta SSH diversi aprono ciascuna la propria finestra, così progetti, sessioni e notifiche non si mescolano mai.
+- <strong>Vedi lo stato di ogni connessione:</strong> apri l’icona nella barra dei menu dell’app su macOS o l’icona nell’area di notifica su Windows per vedere una scheda per ogni connessione.
+- <strong>Apri qui i siti web remoti:</strong> quando un agente avvia un sito web sull’host, fai clic sul link <code dir="ltr">{commands.localhost}</code> che ti dà e l’app apre quel sito su questo computer tramite SSH.
+- <strong>Apri qui i file remoti:</strong> visualizza un file nella finestra remota o scarica una copia da aprire con l’app predefinita di questo computer per quel file.
+- <strong>Riconnessione automatica:</strong> se la rete cade, la finestra continua a provare a riconnettersi finché non ci riesce o la chiudi.

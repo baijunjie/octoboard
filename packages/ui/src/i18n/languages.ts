@@ -3,7 +3,9 @@
 
 /** Every language Octoboard offers, ordered by tag. The order is the order of the options in
  * Settings, and it breaks ties when a system language matches more than one entry (see
- * `matchLanguage`), which is why a bare `zh` lands on `zh-Hans`. */
+ * `matchLanguage`), which is why a bare `zh` lands on `zh-CN`. Chinese is tagged by region (`zh-CN`
+ * Simplified, `zh-TW` Traditional) rather than by script, the tags the website's and the docs' page
+ * metadata and the docs framework's own strings use. */
 export const LANGUAGES = [
   "ar",
   "de",
@@ -20,8 +22,8 @@ export const LANGUAGES = [
   "th",
   "tr",
   "vi",
-  "zh-Hans",
-  "zh-Hant",
+  "zh-CN",
+  "zh-TW",
 ] as const;
 
 export type Language = (typeof LANGUAGES)[number];
@@ -47,8 +49,8 @@ export const LANGUAGE_NAMES: Record<Language, string> = {
   th: "ไทย",
   tr: "Türkçe",
   vi: "Tiếng Việt",
-  "zh-Hans": "简体中文",
-  "zh-Hant": "繁體中文",
+  "zh-CN": "简体中文",
+  "zh-TW": "繁體中文",
 };
 
 const RIGHT_TO_LEFT: ReadonlySet<Language> = new Set<Language>(["ar"]);

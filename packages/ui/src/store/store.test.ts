@@ -637,9 +637,9 @@ it("keeps each setting an update leaves as it was, so what reads only that setti
   const settings = { ...DEFAULT_SETTINGS, accounts: [accountOf("a1", "claude", "Work", "/home/u/.claude-work")], default_account_names: { claude: "Mine" } };
   client.onEvents!([{ type: "settings_updated", settings }]);
   const before = daemon.store.getState();
-  client.onEvents!([{ type: "settings_updated", settings: structuredClone({ ...settings, interface_language: "zh-Hans" }) }]);
+  client.onEvents!([{ type: "settings_updated", settings: structuredClone({ ...settings, interface_language: "zh-CN" }) }]);
   const after = daemon.store.getState().settings;
-  expect(after.interface_language).toBe("zh-Hans");
+  expect(after.interface_language).toBe("zh-CN");
   expect(after.accounts).toBe(before.settings.accounts);
   expect(after.default_account_names).toBe(before.settings.default_account_names);
   // An update that changes nothing leaves the state as it was.

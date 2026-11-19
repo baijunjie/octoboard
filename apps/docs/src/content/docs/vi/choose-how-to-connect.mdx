@@ -1,0 +1,43 @@
+---
+title: "Chọn cách kết nối"
+description: "So sánh các cách dùng Octoboard trên máy chủ Linux hoặc một máy tính khác: SSH, Tailscale và UU Remote."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+
+{productName} không bao giờ tự mở ra mạng, nên một máy tính khác cần một đường đi an toàn tới nó. SSH là kiểu đăng nhập mã hóa chuẩn, có sẵn trong macOS, Windows và Linux, và là cách chính để vào: từ ứng dụng trên máy tính hoặc từ trình duyệt. Nếu bạn không muốn bật đăng nhập SSH trên máy đích, một dịch vụ chuyển tiếp của bên thứ ba, Tailscale hoặc UU Remote, có thể mang kết nối của trình duyệt thay cho SSH.
+
+<strong>Máy đích</strong> là máy mà {productName} chạy trên đó và bạn muốn truy cập tới.
+
+<Aside type="tip" title="Cách đơn giản nhất">
+Nếu bạn chấp nhận được độ trễ khi thao tác và hình ảnh hơi mờ thì không cần làm theo các cách thiết lập bên dưới: hãy mở máy đích bằng tính năng điều khiển máy từ xa của [UU Remote](https://uuyc.163.com/) và dùng {productName} ngay trên máy đích. Cách này dùng được với máy đích là Mac hoặc Windows, không dùng được với máy chủ Linux. Giao diện của UU Remote bằng tiếng Trung. Muốn có cửa sổ rõ nét, phản hồi nhanh ngay trên máy tính của mình, hãy chọn một trong các cách bên dưới.
+</Aside>
+
+| | [SSH](../remote-connections/) | [Tailscale](../browser-over-tailscale/) | [UU Remote](../browser-over-uu-remote/) |
+| --- | --- | --- | --- |
+| Dùng từ | Ứng dụng trên máy tính hoặc trình duyệt | Chỉ trình duyệt | Chỉ trình duyệt |
+| Máy đích được hỗ trợ | Máy chủ Linux, Mac, PC Windows | Máy chủ Linux, Mac, PC Windows | Chỉ Mac hoặc PC Windows |
+| Trên máy đích, bạn bật hoặc cài | Đăng nhập SSH (Đăng nhập từ xa trên Mac, OpenSSH Server trên Windows; máy chủ Linux đã có sẵn) | Tailscale; máy đích Mac hoặc Linux còn cần socat | UU Remote; máy đích Mac còn cần socat |
+| Trên máy tính của bạn, bạn cài | Không cần gì thêm | Tailscale; thêm socat nếu là máy Mac hoặc Linux | UU Remote (Mac hoặc Windows) |
+| Lưu lượng đi qua | Kết nối trực tiếp, không qua bên thứ ba | Mạng của Tailscale, bằng tài khoản của bạn | Dịch vụ của NetEase UU Remote, bằng tài khoản của bạn |
+| Dùng được khi không cùng mạng | Chỉ khi truy cập được tới máy đích: cùng mạng, qua địa chỉ công khai hoặc qua VPN | Có | Có |
+| Phù hợp nhất cho | Máy chủ; ứng dụng đầy đủ trên máy tính; máy đích Mac và Linux mà người khác cũng đăng nhập | Truy cập máy của chính bạn từ mọi nơi mà không cần SSH | Người dùng ở Trung Quốc đại lục đã dùng UU Remote |
+
+## Trước khi chọn dịch vụ chuyển tiếp
+
+Các hướng dẫn dùng dịch vụ chuyển tiếp nhiều bước hơn SSH: bạn chạy lệnh trên cả hai máy tính và giữ chúng chạy trong các cửa sổ đang mở suốt lúc làm việc.
+
+<Aside type="caution">
+Các hướng dẫn Tailscale và UU Remote chưa được thử đầy đủ giữa hai thiết bị. Chúng dựa theo tài liệu riêng của các dịch vụ đó và các phép kiểm tra của chính {productName}.
+</Aside>
+
+<Aside type="caution" title="Chỉ dùng trên những máy mà không ai khác đăng nhập">
+Với dịch vụ chuyển tiếp, một tài khoản người dùng khác trên máy đích hoặc trên máy tính của bạn có thể chặn lấy khóa của trình duyệt. Chỉ dùng Tailscale hoặc UU Remote trên những máy tính mà một mình bạn đăng nhập. [Kết nối qua SSH](../remote-connections/) không có điểm yếu này trên máy đích Mac hoặc Linux, và máy tính của bạn cũng không có khi dùng ứng dụng máy tính. Nhưng trong trình duyệt, máy tính của bạn vẫn có điểm yếu này, vì chuyển tiếp SSH ở đó cũng lắng nghe trên một cổng <code dir="ltr">127.0.0.1</code>.
+</Aside>
+
+## Tiếp theo
+
+- [Kết nối qua SSH](../remote-connections/): cho máy chủ Linux, hoặc để dùng ứng dụng trên máy tính.
+- [Trình duyệt qua Tailscale](../browser-over-tailscale/): chỉ trình duyệt, máy đích nào cũng được, không cần SSH.
+- [Trình duyệt qua UU Remote](../browser-over-uu-remote/): chỉ trình duyệt, máy đích là Mac hoặc Windows, không cần SSH.

@@ -1,0 +1,18 @@
+---
+title: 簡介
+description: Octoboard 是什麼，以及應該先讀哪篇指南。
+---
+
+import { productName } from "../../../commands.ts";
+
+{productName} 是一個開放原始碼的本機開發工作台，用來統一管理你已經在用的程式設計代理程式和它們的帳號：多個工作階段並排執行、切換帳號時保留對話、在不同代理程式之間交接任務，還能讓一個協調代理程式把工作分派到多個專案。
+
+程式設計代理程式是替你撰寫、執行程式碼的 AI 助理，例如 Claude Code 和 Codex。{productName} 本身不附帶代理程式，它執行的是你已經安裝好的那些。
+
+## 從哪裡開始
+
+- <strong>在這台電腦上使用 {productName}：</strong>安裝 [macOS](install/macos/) 或 [Windows](install/windows/) 應用程式。大多數人只需要這一步。
+- <strong>在 Linux 伺服器上執行代理程式</strong>（你租用或放在別處一直開著的機器，通常沒有螢幕）：先[安裝伺服器程式](install/linux/)，再依照[透過 SSH 連線](remote-connections/)從桌面應用程式連過去。
+- <strong>從另一台電腦使用這台電腦上的 {productName}：</strong>先看[選擇連線方式](choose-how-to-connect/)，那裡比較了各種方式。簡單來說：
+  - 用另一台電腦的應用程式或瀏覽器，並且願意開啟 SSH 登入：看[透過 SSH 連線](remote-connections/)；
+  - 只用瀏覽器，不想開啟 SSH 登入：看[透過 Tailscale 用瀏覽器存取](browser-over-tailscale/)或[透過 UU 遠程用瀏覽器存取](browser-over-uu-remote/)。

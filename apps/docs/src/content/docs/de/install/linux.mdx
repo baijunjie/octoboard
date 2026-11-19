@@ -1,0 +1,89 @@
+---
+title: "Linux-Server"
+description: "Installiere octoboardd, das Octoboard-Serverprogramm, ohne Root auf einem Linux-Server. Du erreichst es über die macOS- oder Windows-App oder über einen Browser, beides per SSH."
+---
+
+import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
+import { commands, downloads, productName } from "../../../../commands.ts";
+
+Installiere octoboardd, das {productName}-Serverprogramm (die App nennt es den Hintergrunddienst), ohne Root auf einem Linux-Server. Du erreichst es über die macOS- oder Windows-App oder über einen Browser, beides per SSH.
+
+Für x86_64 und aarch64, auf jeder Distribution.
+
+<Aside>Das Linux-Serverprogramm ist eine Betaversion.</Aside>
+
+## Bevor du anfängst
+
+- **Ein Linux-Server, bei dem du dich per SSH anmelden kannst.** SSH ist ein sicherer Weg, sich an einem anderen Rechner anzumelden und dort Befehle einzugeben. Der Anbieter des Servers nennt dir die Adresse und deinen Benutzernamen.
+- **Die {productName}-App auf deinem eigenen Computer**, für [macOS](../macos/) oder [Windows](../windows/), wenn du in der Desktop-App arbeiten möchtest (empfohlen).
+
+Öffne zum Anmelden auf deinem eigenen Computer das Terminal (macOS) oder PowerShell (Windows) und führe den folgenden Befehl aus, mit deinem Benutzernamen anstelle von <code dir="ltr">&lt;you&gt;</code> und der Adresse des Servers anstelle von <code dir="ltr">{commands.server}</code>. Antworte beim ersten Mal mit <code dir="ltr">yes</code>, wenn gefragt wird, ob du dem Server vertraust.
+
+<Code code={commands.signIn} lang="sh" />
+
+Die Schritte 1 und 2 unten führst du auf dem Server aus, in diesem angemeldeten Fenster.
+
+## Installieren
+
+<Steps>
+
+1. Installiere octoboardd auf dem Server.
+
+   <Code code={commands.install} lang="sh" />
+
+   Es gibt eine Zeile aus, die mit <code dir="ltr">Installed octoboardd</code> beginnt.
+2. Starte es auf dem Server.
+
+   <Code code={commands.start} lang="sh" />
+
+   Es gibt eine Zeile aus, die mit <code dir="ltr">{productName} started</code> beginnt.
+3. Verbinde dich von deinem eigenen Computer aus auf eine von zwei Arten damit:
+
+   - <strong>Über die Desktop-App (empfohlen):</strong> Folge [Verbindung zu einem Linux-Server herstellen](../../remote-connections/#verbindung-zu-einem-linux-server-herstellen) in der SSH-Anleitung.
+   - <strong>Über einen Browser:</strong> Führe dies auf dem Server aus.
+
+     <Code code={commands.address} lang="sh" />
+
+     Es gibt zwei Dinge aus: eine Browser-Adresse, die mit <code dir="ltr">http://127.0.0.1:</code> beginnt, und einen <code dir="ltr">ssh</code>-Befehl. Kopiere auf deinem eigenen Computer den <code dir="ltr">ssh</code>-Befehl, ersetze <code dir="ltr">{commands.server}</code> durch die Adresse des Servers (die IP-Adresse oder den Namen, mit dem du dich dort anmeldest) und führe ihn im Terminal oder in PowerShell aus. Möglicherweise fragt er nach deinem Passwort und zeigt danach nichts mehr an; das ist normal. Lass dieses Fenster geöffnet: Wenn du es schließt, bricht die Verbindung ab. Öffne dann die ausgegebene Adresse in deinem Browser.
+
+</Steps>
+
+Es hat geklappt, wenn sich {productName} im neuen Fenster der Desktop-App oder im Browser-Tab öffnet.
+
+## Wenn octoboardd nicht gefunden wird
+
+Wenn die Installation meldet, dass ein Ordner, dessen Pfad auf <code dir="ltr">.local/bin</code> endet (etwa <code dir="ltr">/home/&lt;you&gt;/.local/bin</code>), nicht in deinem PATH liegt, kann die Shell <code dir="ltr">octoboardd</code> nicht über den Namen finden. Führe es über den vollständigen Pfad aus, den die Installation ausgegeben hat, oder füge <code dir="ltr">{commands.binDir}</code> zu deinem PATH hinzu (zum Beispiel in <code dir="ltr">~/.profile</code>) und melde dich erneut an.
+
+## Nach Abmelden oder Neustart weiterlaufen lassen
+
+Wenn octoboardd mit <code dir="ltr">{commands.start}</code> gestartet wurde, endet es, sobald der Server neu startet, und nichts startet es von selbst wieder: Führe <code dir="ltr">{commands.start}</code> erneut aus oder verbinde dich über die Desktop-App, die anbietet, es für dich zu starten. Manche Server beenden es auch, wenn du dich abmeldest.
+
+Damit es mit dem Server startet und nach dem Abmelden weiterläuft, installiere es stattdessen als Dienst:
+
+<Code code={commands.installService} lang="sh" />
+
+Das installiert das Programm, richtet es als systemd-Benutzerdienst ein und startet es. Danach schaltet es „Lingering“ ein, wodurch deine Dienste auch laufen, wenn du nicht angemeldet bist. Falls es meldet, dass das nicht möglich war, führe dies einmal aus (möglicherweise mit <code dir="ltr">sudo</code>):
+
+<Code code={commands.linger} lang="sh" />
+
+Der Standardport ist <code dir="ltr">{commands.defaultPort}</code>. Um einen anderen zu verwenden, hänge <code dir="ltr">{commands.portOption}</code> an das Ende des Dienstbefehls oder an <code dir="ltr">{commands.start}</code> an.
+
+## Upgrade
+
+{productName} aktualisiert sich nie von selbst: Wenn eine neue Version erscheint, sagt dir der Browser Bescheid, und du entscheidest, wann du sie installierst. Sobald die neue Version installiert ist, startet {productName} von selbst in ihr neu, wenn dadurch keine Sitzung unterbrochen würde; andernfalls listet es die betroffenen Sitzungen auf und fragt vorher nach.
+
+- <strong>Im Browser:</strong> Wähle <strong>Herunterladen und installieren</strong>, wo steht, dass eine neue Version verfügbar ist.
+- <strong>Auf dem Server:</strong> Führe diesen Befehl aus.
+
+  <Code code={commands.update} lang="sh" />
+
+  Wenn gefragt wird, ob jetzt neu gestartet werden soll, antworte mit <code dir="ltr">y</code>, um neu zu starten, oder drücke die Eingabetaste, um die alte Version vorerst weiterlaufen zu lassen. Um später neu zu starten, führe <code dir="ltr">{commands.restart}</code> aus.
+
+Wenn <code dir="ltr">{commands.update}</code> meldet, dass es das Programm nicht ersetzen kann, zum Beispiel weil es an einem Ort installiert wurde, an dem du nicht schreiben darfst, führe stattdessen den Installationsbefehl (oder den Dienstbefehl) erneut aus. Er startet auf die gleiche Weise neu, wenn das sicher ist, und sagt dir sonst, dass du <code dir="ltr">{commands.restart}</code> ausführen sollst.
+
+## Stattdessen das Archiv herunterladen
+
+<LinkButton href={downloads["linux-x86_64"]} variant="secondary">x86_64-Archiv</LinkButton>
+<LinkButton href={downloads["linux-aarch64"]} variant="secondary">aarch64-Archiv</LinkButton>
+
+<a href={downloads.releases}>Alle früheren Versionen</a>

@@ -33,7 +33,7 @@ function review(held: string | null) {
 
 beforeEach(() => {
   languageLine = undefined;
-  setLanguage("zh-Hans");
+  setLanguage("zh-CN");
 });
 
 it("compares the document's language with the one the daemon holds", () => {

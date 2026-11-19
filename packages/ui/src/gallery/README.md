@@ -138,7 +138,7 @@ gallery:
   `ui.session`, a change row through `ui.changeRow`. `fixtures/fixtures.test.ts` fails a step that names a control by
   the English text of a message another language's catalog translates, bare or filled, and a test of the name that takes
   a name followed by the English catalog's separator and refuses the language's own (a literal comma and space, where
-  `zh-Hans` writes `，`). A custom test of the name that stands for copy must be built from the helpers, and may be given
+  `zh-CN` writes `，`). A custom test of the name that stands for copy must be built from the helpers, and may be given
   a description with `describing(...)` (what a failed step reports).
 - **Held to rules by tests.** `fixtures/fixtures.test.ts` (copy and catalog rules above, groups),
   `fixtures/projectGit.test.ts` (every fixture repository read is answered), `fixtures/configuration.test.ts` (written
@@ -207,7 +207,7 @@ An explicit pattern matching no selected scenario fails rather than silently omi
 
 The defaults are English, the light theme and one capture at a time. The whole comparison waits for the machine-wide
 heavy-step lock used by `pnpm verify`; it prints the current holders while queued. `--theme dark|both` and
-`--lang en,zh-Hans` widen the viewing conditions; each named language must exist in both galleries. `--width <pixels>`
+`--lang en,zh-CN` widen the viewing conditions; each named language must exist in both galleries. `--width <pixels>`
 chooses one width. Both sides use the current scenario's own width when set, otherwise that flag or 1440, widened to
 either side's `minWidth`; height is the current scenario's height or 900, with a minimum of 400. A removed scenario
 uses its baseline metadata. This keeps the viewport equal on both sides.

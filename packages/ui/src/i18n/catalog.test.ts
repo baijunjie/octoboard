@@ -37,7 +37,7 @@ it.each([0, 1, 2, 73866303])("localizes context size units for a total of %i", (
   const tokens = count.toLocaleString("en");
   const params = { count, tokens };
   expect(format("en", "session.context.heading", params)).toBe(`Context ${tokens} ${count === 1 ? "token" : "tokens"}`);
-  expect(format("zh-Hans", "session.context.heading", params)).toBe(`上下文 ${tokens} 个 token`);
+  expect(format("zh-CN", "session.context.heading", params)).toBe(`上下文 ${tokens} 个 token`);
 });
 
 it("registers a complete catalog for every offered language", () => {
@@ -229,14 +229,14 @@ it("gives both Russian settings apps their prepositional form", () => {
 it.each([
   ["en", "settings.notifications.openSettings", "Open System Settings", "Open Windows Settings"],
   ["ja", "settings.notifications.openSettings", "システム設定を開く", "Windows の設定を開く"],
-  ["zh-Hans", "settings.notifications.openSettings", "打开系统设置", "打开 Windows 设置"],
+  ["zh-CN", "settings.notifications.openSettings", "打开系统设置", "打开 Windows 设置"],
   ["ru", "settings.notifications.openSettings", "Открыть Системные настройки", "Открыть Параметры Windows"],
   ["de", "settings.notifications.systemPane", "Mitteilungen", "Benachrichtigungen"],
   ["ar", "settings.notifications.systemPane", "الإشعارات", "الإعلامات"],
   ["hi", "settings.notifications.systemPane", "नोटिफ़िकेशन", "सूचनाएँ"],
   ["ja", "settings.background.label", "ウインドウを閉じても", "ウィンドウを閉じても"],
-  ["zh-Hans", "settings.background.description.on", "点按菜单栏图标即可重新打开窗口。", "单击通知区域图标即可重新打开窗口。"],
-  ["zh-Hant", "settings.background.description.on", "點按選單列圖示即可重新開啟視窗。", "按一下通知區域圖示即可重新開啟視窗。"],
+  ["zh-CN", "settings.background.description.on", "点按菜单栏图标即可重新打开窗口。", "单击通知区域图标即可重新打开窗口。"],
+  ["zh-TW", "settings.background.description.on", "點按選單列圖示即可重新開啟視窗。", "按一下通知區域圖示即可重新開啟視窗。"],
   ["ko", "settings.background.label", "윈도우를 닫아도 백그라운드에서 계속 실행", "창을 닫아도 백그라운드에서 계속 실행"],
   ["ko", "connection.incompatible.body", "이 윈도우와 연결된", "이 창과 연결된"],
   ["ko", "menu.closeWindow", "윈도우 닫기", "창 닫기"],

@@ -1,0 +1,130 @@
+---
+title: "UU Remote로 브라우저 연결"
+description: "SSH나 원격 데스크톱 없이, UU Remote의 포트 매핑을 통해 다른 컴퓨터의 브라우저에서 Octoboard를 엽니다."
+---
+
+import { Aside, Code, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+import HostBrowserAddress from "../../../snippets/ko/host-browser-address.mdx";
+
+SSH나 원격 데스크톱 없이, NetEase의 원격 제어 앱 [UU Remote](https://uuyc.163.com/)의 포트 매핑을 통해 다른 컴퓨터의 브라우저에서 {productName}을(를) 엽니다. 호스트는 {productName}이(가) 실행되는 컴퓨터입니다. SSH 로그인(macOS의 원격 로그인)은 꺼 둬도 되고, 원격 데스크톱 세션도 필요 없습니다. UU Remote의 화면은 중국어여서, 이 가이드는 중국어 표시를 한국어 설명 옆에 함께 적었습니다.
+
+이 가이드는 내 컴퓨터의 브라우저에서 {productName}을(를) 여는 방법입니다. 이 방법은 원격 데스크톱보다 선명하고 반응이 빠르지만 단계가 더 많습니다. 지연과 흐릿함이 신경 쓰이지 않는다면, UU Remote의 원격 데스크톱으로 호스트를 직접 조작하면 됩니다.
+
+이 방법이 맞는지 잘 모르겠나요? [연결 방법 선택](../choose-how-to-connect/)을 보세요.
+
+<Aside type="caution">
+이 단계는 아직 두 기기 사이에서 시험해 보지 못했습니다. UU Remote 자체 도움말을 바탕으로 작성했습니다. Mac 호스트의 중계 프로그램은 컴퓨터 한 대에서, 브라우저의 실시간 연결까지 포함해 시험해 봤습니다.
+</Aside>
+
+<strong>내 컴퓨터의 브라우저</strong> → <strong>내 컴퓨터의 127.0.0.1</strong> ⟷ UU Remote ⟷ <strong>호스트의 127.0.0.1</strong> → <strong>{productName}</strong>
+
+<details>
+<summary>처음이라면</summary>
+
+- <strong>127.0.0.1(루프백):</strong> 항상 “바로 이 컴퓨터”를 뜻하는 주소입니다.
+- <strong>포트:</strong> 컴퓨터 안의 프로그램 하나를 가리키는 번호로, 문 번호와 같습니다. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code>은(는) 이 컴퓨터의 {commands.defaultPort}번 포트입니다.
+- <strong>포트 매핑(端口映射):</strong> 호스트의 포트가 내 컴퓨터의 포트처럼 보이게 해 주는 UU Remote 기능입니다.
+- <strong>socat:</strong> 한 곳의 연결을 다른 곳으로 넘겨 주는 작은 무료 프로그램입니다. Mac 호스트는 중계 프로그램으로 이것이 필요합니다.
+- <strong>터미널:</strong> 명령을 입력하는 창입니다. macOS에서는 터미널, Windows에서는 PowerShell입니다.
+
+</details>
+
+UU Remote의 포트 매핑은 호스트의 {productName}이(가) 내 컴퓨터의 <code dir="ltr">{tunnel.loopback}</code>에 나타나게 합니다. {productName}이(가) 브라우저를 받는 주소는 이 주소뿐입니다.
+
+## 시작하기 전에
+
+- <strong>두 컴퓨터 모두 Mac 또는 Windows PC여야 합니다.</strong> UU Remote에는 Linux용 포트 매핑이 없습니다. Linux 서버에는 [Tailscale](../browser-over-tailscale/)이나 [SSH](../remote-connections/)로 접속하세요.
+- <strong>두 컴퓨터 모두 UU Remote를 설치하고 같은 계정으로 로그인해야 합니다.</strong> 버전은 Windows는 4.21.0 이상, macOS는 4.32.0 이상이어야 합니다. 포트 매핑은 TCP만 지원하며, {productName}에는 TCP면 충분합니다. 이 글을 쓰는 시점에는 UU Remote가 포트 매핑을 무료 기능으로 안내하고 있습니다. 확실하지 않다면 현재 요금제를 확인하세요.
+- <strong>브라우저를 쓸 컴퓨터의 UU Remote에서 호스트가 내 기기(我的设备)에 보여야 합니다.</strong>
+- <strong>Mac 호스트에는 [Homebrew](https://brew.sh/)도 필요합니다.</strong> 아래에서 socat을 설치하는 데 씁니다.
+
+## 호스트에서
+
+<Steps>
+
+1. 브라우저 주소를 가져오세요. 이 주소에 브라우저를 로그인시키는 키가 들어 있습니다.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <HostBrowserAddress />
+   </TabItem>
+   <TabItem label="Windows">
+   <HostBrowserAddress windows />
+   </TabItem>
+   </Tabs>
+2. 호스트의 <code dir="ltr">{tunnel.loopback}</code>에 {productName}(으)로 이어지는 포트를 만드세요. 이 포트가 아래 단계에서 말하는 <strong>호스트 포트</strong>입니다.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   Mac은 UU Remote가 매핑할 수 없는 방식으로 브라우저를 제공하므로 중계 프로그램으로 socat이 필요합니다. 터미널에서 설치하세요.
+
+   <Code code={tunnel.installSocatMac} lang="sh" />
+
+   그런 다음 이 명령을 실행하고 창을 열어 두세요. <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>에서만 연결을 받습니다.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   호스트 포트는 <code dir="ltr">{tunnel.bridgePort}</code>입니다.
+   </TabItem>
+   <TabItem label="Windows">
+   실행할 것이 없습니다. {productName}이(가) 직접 브라우저 포트에서, <code dir="ltr">127.0.0.1</code>에서만 연결을 받습니다. 호스트 포트는 <strong>브라우저</strong> 탭의 <strong>브라우저 포트</strong>입니다(바꾸지 않았다면 {commands.defaultPort}).
+   </TabItem>
+   </Tabs>
+
+</Steps>
+
+## 브라우저를 쓸 컴퓨터에서
+
+<Steps>
+
+1. UU Remote에서 <strong>내 기기</strong>(我的设备)의 호스트를 열고, 호스트 카드에서 <strong>더보기</strong>(更多)를 선택한 다음 <strong>포트 매핑</strong>(端口映射)을 선택해 매핑을 추가하세요.
+
+   | 항목 | 값 |
+   | --- | --- |
+   | 이름(名称) | {productName} |
+   | 로컬 포트(本地端口) | <code dir="ltr">{commands.defaultPort}</code> |
+   | 대상 주소(目标地址) | <code dir="ltr">127.0.0.1</code> |
+   | 대상 포트(目标端口) | 호스트 포트 |
+
+   저장하고 켠 다음, 연결됨으로 표시될 때까지 기다리세요. 이 컴퓨터에서 {commands.defaultPort}번 포트를 이미 쓰고 있다면 다른 로컬 포트를 고르고, 브라우저 주소의 포트도 바꾸세요.
+2. 이 컴퓨터에서만 매핑을 쓸 수 있는지 확인하세요. 이 컴퓨터에서 터미널(macOS) 또는 PowerShell(Windows)을 열고 실행하세요.
+
+   <Tabs syncKey="visitor">
+   <TabItem label="macOS">
+   <Code code={tunnel.checkListener} lang="sh" />
+
+   <code dir="ltr">127.0.0.1:{commands.defaultPort}</code>와(과) <code dir="ltr">LISTEN</code>이 들어 있는 줄이 보여야 합니다.
+   </TabItem>
+   <TabItem label="Windows">
+   <Code code={tunnel.checkListenerWindows} lang="powershell" />
+
+   <code dir="ltr">TCP</code>로 시작해서 <code dir="ltr">127.0.0.1:{commands.defaultPort}</code>이(가) 나오고, <code dir="ltr">LISTENING</code>과 숫자로 끝나는 줄이 보여야 합니다.
+   </TabItem>
+   </Tabs>
+
+   그 자리에 <code dir="ltr">*:{commands.defaultPort}</code>(이)나 <code dir="ltr">0.0.0.0:{commands.defaultPort}</code>이(가) 보이면 매핑을 삭제하세요. 네트워크의 다른 기기가 {productName}에 접속할 수 있게 됩니다.
+3. 호스트에서 복사한 브라우저 주소를 여세요. <code dir="ltr">{tunnel.addressStart}</code>(으)로 시작합니다.
+
+</Steps>
+
+로그인하라는 요청 없이 브라우저 탭에서 {productName}이(가) 열리면 성공입니다.
+
+## 연결되지 않을 때
+
+- <strong>매핑은 연결됨으로 표시되는데 페이지가 열리지 않을 때:</strong> Mac 호스트라면 socat 창을 닫았거나 그 명령이 멈췄습니다. 또는 <strong>원격 접근 허용</strong>이 꺼져 있거나 호스트에서 {productName}이(가) 실행 중이 아닙니다.
+- <strong>매핑이 저장되지 않거나 연결되지 않을 때:</strong> 이 컴퓨터에서 로컬 포트를 이미 쓰고 있을 수 있습니다. 다른 포트를 고르고, 브라우저 주소의 포트도 바꾸세요.
+- <strong>페이지가 거부되거나 비어 있을 때:</strong> <code dir="ltr">{tunnel.loopback}</code>의 주소로 열었는지 확인하세요.
+
+## 끄기
+
+- <strong>브라우저를 쓴 컴퓨터에서:</strong> UU Remote의 포트 매핑 패널에서 매핑을 끄거나 삭제하세요. 패널을 닫거나 연결을 끊어도 멈춥니다.
+- <strong>Mac 호스트에서:</strong> <kbd>Ctrl</kbd>+<kbd>C</kbd>로 socat을 멈추세요.
+- <strong>호스트에서</strong> 더 이상 필요 없을 때 <strong>원격 접근 허용</strong>을 끄세요. 브라우저 입구가 닫히고, 그 키로 열린 모든 페이지의 연결이 끊어집니다.
+- <strong>주소가 유출됐을 수 있다면</strong> <strong>브라우저</strong> 탭의 <strong>키 교체</strong>로 새 키를 만드세요. 이전 주소로 열려 있던 페이지는 연결이 끊어집니다.
+
+## 보안
+
+- <strong>주소가 곧 비밀번호:</strong> 주소의 키는 호스트의 {productName}에 대한 전체 제어 권한을 주며, 어떤 명령이든 실행할 수 있습니다. 키를 교체하기 전까지 유효합니다. 브라우저 방문 기록과 북마크에 남으며, 브라우저 동기화를 켜 두면 다른 기기에도 동기화됩니다.
+- <strong>누가 접속할 수 있나:</strong> 호스트 포트에 닿을 수 있고 키를 가진 사람은 누구든 접속할 수 있습니다. 호스트에서는 <code dir="ltr">127.0.0.1</code>에서만 연결을 받습니다. 내 UU Remote 계정으로 호스트에 포트를 매핑할 수 있는 사람도 접속할 수 있으니 그 계정을 안전하게 지키세요.
+- <strong>나 혼자 로그인하는 컴퓨터에서만:</strong> 호스트나 내 컴퓨터의 다른 사용자 계정이 이 <code dir="ltr">127.0.0.1</code> 포트에 연결할 수 있고, 매핑이나 socat이 실행 중이 아닐 때는 그 포트를 가로채 브라우저가 다시 연결할 때 키를 받을 수 있습니다. [SSH로 연결](../remote-connections/)하면 Mac이나 Linux 호스트에는 이 약점이 없고, 데스크톱 앱을 쓸 때는 내 컴퓨터에도 없습니다. 하지만 브라우저를 쓸 때는 브라우저를 쓰는 컴퓨터에 약점이 남습니다. 그곳에서도 SSH 포워드가 <code dir="ltr">127.0.0.1</code> 포트에서 대기하기 때문입니다.

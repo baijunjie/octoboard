@@ -1,0 +1,119 @@
+---
+title: "SSH ile bağlanın"
+description: "Octoboard’u bir Linux sunucusunda veya başka bir bilgisayarda bu bilgisayardan, masaüstü uygulamasında ya da bir tarayıcıda SSH ile kullanın: doğrudan o makineye şifreli bir bağlantı, aktarıcı veya bulut hizmeti olmadan."
+---
+
+import { Code, Steps } from "@astrojs/starlight/components";
+import { commands, productName } from "../../../commands.ts";
+
+{productName} uygulamasını bir Linux sunucusunda veya başka bir bilgisayarda bu bilgisayardan, masaüstü uygulamasında ya da bir tarayıcıda SSH ile kullanın: doğrudan o makineye şifreli bir bağlantı, aktarıcı veya bulut hizmeti olmadan.
+
+Bunun sizin için doğru yol olup olmadığından emin değil misiniz? [Bağlanma yolunu seçin](../choose-how-to-connect/) sayfası, bunu SSH gerektirmeyen yalnızca tarayıcı yollarıyla karşılaştırır.
+
+<strong>Bu bilgisayardaki masaüstü uygulaması</strong> · <strong>SSH yönlendirmesiyle tarayıcı</strong> ⟷ SSH ⟷ <strong>Linux sunucusu veya başka bir bilgisayar</strong>
+
+<details>
+<summary>Bu konuya yeni misiniz?</summary>
+
+- <strong>Ana makine:</strong> {productName} uygulamasının çalıştığı ve ulaşmak istediğiniz makine; bir Linux sunucusu ya da başka bir Mac veya Windows bilgisayarı.
+- <strong>Sunucu:</strong> burada, ağ üzerinden oturum açtığınız, genellikle kiraladığınız ve kendi ekranı olmayan bir Linux makinesi.
+- <strong>SSH:</strong> başka bir makinede oturum açıp komut yazmanın standart, şifreli bir yolu. macOS, Windows ve Linux’ta yerleşik gelir.
+- <strong>Terminal:</strong> komutları yazdığınız pencere: macOS’te Terminal, Windows’ta PowerShell.
+- <strong>SSH yönlendirmesi:</strong> ana makinedeki bir şeyi kendi bilgisayarınızda görünür kılan bir SSH komutu; böylece tarayıcınız onu orada açabilir.
+- <strong>Parmak izi (ana makine anahtarı):</strong> bir makinenin SSH kimliğini belirleyen kısa bir kod. Bir kez kontrol etmek, doğru makineye ulaştığınızı gösterir.
+- <strong>Anahtar dosyası:</strong> parola yerine oturum açmanızı sağlayan bir dosya. Bazı sunucu sağlayıcıları size bir tane verir.
+
+</details>
+
+## Gerekenler
+
+- <strong>Ana makinede SSH ile oturum açmanın bir yolu.</strong> Bir Linux sunucusu için adresi ve kullanıcı adınızı sağlayıcısı verir. Çalıştığını denetlemek için Terminal’i (macOS) veya PowerShell’i (Windows) açın ve aşağıdaki komutu kullanıcı adınız ve sunucunun adresiyle çalıştırın. İlk seferde sunucuya güvenip güvenmeyeceğinizi sorduğunda <code dir="ltr">yes</code> yanıtını verin.
+
+  <Code code={commands.signIn} lang="sh" />
+
+  Ana makine bir Mac veya Windows bilgisayarıysa, SSH ile oturum açmayı sistem ayarlarından siz açarsınız; nasıl yapılacağını [Başka bir bilgisayarı ana makine olarak kullanın](#başka-bir-bilgisayarı-ana-makine-olarak-kullanın) bölümü gösterir.
+- <strong>Bir Linux sunucusu için, üzerine kurulmuş ve başlatılmış {productName}.</strong> Nasıl yapılacağını [Kurulum › Linux sunucusu](../install/linux/) gösterir. {productName} sunucu programı octoboardd’ye uygulama “hizmet” der.
+- <strong>Bu bilgisayarda {productName} uygulaması</strong>, macOS veya Windows için; yalnızca bir tarayıcı kullanmayacaksanız.
+
+## Linux sunucusuna bağlanın
+
+<Steps>
+
+1. {productName} uygulamasını çalıştıran kullanıcı olarak sunucuda SSH ile oturum açın, bu komutu çalıştırın ve <code dir="ltr">{commands.connectionScheme}</code> ile başlayan satırı kopyalayın: uygulamaya nereye ve nasıl bağlanacağını söyleyen bağlantı bilgileri.
+
+   <Code code={commands.connection} lang="sh" />
+
+   Bu bilgisayar sunucuya farklı bir adres veya SSH bağlantı noktasıyla ulaşıyorsa, doğru bağlantı bilgilerini yazdırması için komuta <code dir="ltr">{commands.host}</code> veya <code dir="ltr">{commands.sshPort}</code> ekleyin.
+
+   Yazdırdığı QR kod da aynı satırı içerir. Henüz hiçbir uygulama onu taramıyor.
+2. Bu bilgisayardaki {productName} uygulamasında soldaki çubuktan <strong>Uzak cihazlar</strong> bölümünü açın ya da macOS’te menü çubuğundan <strong>Uzak › Uzak Cihazlar</strong> öğesini seçin. Windows’ta ayrıca pencerenin sistem menüsünden veya görev çubuğu simgesinin atlama listesinden <strong>Uzak cihazlar</strong> öğesini seçebilirsiniz.
+3. <strong>Uzak hizmet ekle</strong> düğmesini, ardından alanları doldurmak için <strong>Bağlantı bilgileri</strong> altındaki <strong>Yapıştır</strong> düğmesini seçin.
+4. <strong>Kimlik doğrulama</strong> altında, hesap parolanızla oturum açıyorsanız <strong>Parola</strong> seçeneğini seçin. Sunucu sağlayıcınız size bunun yerine bir anahtar dosyası verdiyse (çoğunlukla <code dir="ltr">id_ed25519</code> gibi adlandırılır ya da <code dir="ltr">.pem</code> ile biter) <strong>Anahtar dosyası</strong> seçeneğini seçin ve bu bilgisayarda nerede olduğunu girin.
+5. <strong>Kaydet</strong> düğmesini, ardından <strong>Bağlan</strong> düğmesini seçin. İsterse parolanızı girin.
+
+   Bağlantı bilgilerini yapıştırdıysanız sunucunun kimliği (parmak izi) onlarla birlikte geldi ve uygulama onu sizin için denetler. Adresi elle yazdıysanız uygulama ilk seferde bir parmak izi gösterir. Doğru makineye ulaştığınızdan emin olmak için onu, bu komutun sunucuda yazdırdığı parmak iziyle karşılaştırın ve yalnızca eşleşiyorlarsa bağlanın:
+
+   <Code code={commands.fingerprintCommand} lang="sh" />
+
+</Steps>
+
+Ayrı bir {productName} penceresi açılıp sunucunun projelerini ve oturumlarını gösterdiğinde işe yaradığını anlarsınız.
+
+## Başka bir bilgisayarı ana makine olarak kullanın
+
+{productName} uygulamasını çalıştıran bir Mac’e veya Windows bilgisayarına da ulaşabilirsiniz.
+
+<Steps>
+
+1. Ulaşmak istediğiniz bilgisayarda {productName} içinde <strong>Ayarlar › Uzaktan erişim</strong> bölümünü açın.
+2. Orada <strong>Sistem Ayarları’nı aç</strong> (macOS) veya <strong>Ayarlar’ı aç</strong> (Windows) düğmesini seçin ve satırın verdiği yolu izleyerek <strong>Uzaktan Oturum Açma</strong> (macOS) veya <strong>OpenSSH Server</strong> (Windows) seçeneğini açın; böylece bu bilgisayar SSH ile oturum açmayı kabul eder. Bunun için yönetici yetkisi gerekir. {productName} uygulamasına döndüğünüzde satır <strong>Açık</strong> gösterir.
+3. <strong>Uzaktan erişime izin ver</strong> seçeneğini açın, onaylamak için <strong>İzin ver</strong> düğmesini seçin ve {productName} uygulamasını açık tutun: kapatırsanız uzaktan erişim durur.
+4. <strong>{productName} uygulaması</strong> sekmesinde <strong>Bağlantı bilgilerini kopyala</strong> düğmesini seçin ve bilgileri diğer bilgisayara, örneğin e-posta veya sohbetle gönderin.
+5. Çalışacağınız bilgisayarda ana makineyi, [Linux sunucusuna bağlanın](#linux-sunucusuna-bağlanın) bölümünün 2. ile 5. adımlarındaki gibi ekleyin ve gönderdiğiniz bilgileri yapıştırın. Ana makinedeki kullanıcı adınız ve parolanızla oturum açın.
+
+</Steps>
+
+Ana makinenin projelerini ve oturumlarını gösteren ayrı bir pencere açıldığında işe yaradığını anlarsınız.
+
+## Bir tarayıcıdan
+
+<Steps>
+
+1. SSH yönlendirme komutunu alın:
+
+   - <strong>Mac veya Windows ana makinesinde,</strong> önce [Başka bir bilgisayarı ana makine olarak kullanın](#başka-bir-bilgisayarı-ana-makine-olarak-kullanın) bölümünün 1. ile 3. adımlarını uygulayın. Ardından <strong>Tarayıcı</strong> sekmesinde <strong>1. adım: SSH yönlendirmesi</strong> bölümüne bakın. Diğer bilgisayarınızın buna nasıl ulaşacağını seçmek için komuttaki adrese tıklayın (ya da <strong>Adresi kendiniz girin</strong> seçeneğini seçip <code dir="ltr">{commands.server}</code> değerini sonra değiştirin), ardından <strong>Yönlendirme komutunu kopyala</strong> düğmesini seçin. Ayrıca <strong>2. adım: tarayıcı adresi</strong> altındaki <strong>Adresi kopyala</strong> düğmesini seçin.
+   - <strong>Linux sunucusunda,</strong> bunu sunucuda çalıştırın. Tarayıcı adresini, ardından çalıştırılacak SSH komutunu yazdırır.
+
+     <Code code={commands.address} lang="sh" />
+
+     Komuttaki <code dir="ltr">{commands.server}</code> yerine sunucunun adresini yazın.
+2. Tarayıcıyı kullanacağınız bilgisayarda SSH komutunu Terminal’de (macOS) veya PowerShell’de (Windows) çalıştırın. Pencere parolanızı isteyebilir, sonra başka bir şey göstermez; bu normaldir. Çalışırken açık bırakın: kapatırsanız tarayıcının bağlantısı kesilir.
+3. <code dir="ltr">http://127.0.0.1:</code> ile başlayan tarayıcı adresini tarayıcınızda açın.
+
+</Steps>
+
+{productName} tarayıcı sekmesinde, oturum açmanızı istemeden açıldığında işe yaradığını anlarsınız.
+
+Bu adresi yalnızca SSH yönlendirmesi üzerinden {productName} uygulamasına ulaşabilen biri kullanabilir. Gizli tutun: anahtarı tam denetim verir, tarayıcının geçmişinde ve yer imlerinde kalır, tarayıcı eşitlemesi açıksa diğer cihazlarınıza da eşitlenir.
+
+## Çalışmazsa
+
+- <strong>“Sunucuya ulaşılamadı” ya da SSH komutu “Connection refused” diyor veya zaman aşımına uğruyor:</strong> ana makinede SSH ile oturum açma kapalı ya da adres veya SSH bağlantı noktası yanlış. <strong>Uzaktan Oturum Açma</strong> veya <strong>OpenSSH Server</strong> seçeneğinin açık olduğunu ve yukarıdaki <code dir="ltr">ssh</code> komutuyla oturum açabildiğinizi denetleyin.
+- <strong>“Oturum açılamadı” ya da “Permission denied”:</strong> kullanıcı adı, parola veya anahtar dosyası yanlış.
+- <strong>“Ana makine anahtarı eşleşmiyor”:</strong> yanıt veren makine, daha önce bağlandığınız makine değil. Bu, bir sunucu yeniden kurulduktan sonra olur ama bir şeylerin ters gittiği anlamına da gelebilir. Nedenini öğrenene kadar devam etmeyin.
+- <strong>Tarayıcı sayfası yüklenmiyor:</strong> SSH penceresi kapatılmış ya da komutu durmuş. Yeniden çalıştırın ve sayfayı yenileyin.
+
+## Güvenlik
+
+- <strong>Ek genel bağlantı noktası yok:</strong> {productName} yalnızca ana makinenin kendisinden gelen bağlantıları kabul eder; bu yüzden başka bir bilgisayardan bağlanmak için önce ana makinede SSH ile oturum açmanız gerekir. SSH’ye ya da [aktarıcılardan](../choose-how-to-connect/) birine bu yüzden ihtiyacınız vardır.
+- <strong>Hangi makineye ulaştığınızı denetleyin:</strong> uygulama, ilk başarılı bağlantıda ana makine anahtarını, yani makinenin SSH kimliğini hatırlar ve bu kimlik sonradan değişirse bağlantıyı bir uyarıyla engeller.
+- <strong>Parola saklanmaz:</strong> ilk kez bir parolayla veya kendi anahtar dosyanızla oturum açtıktan sonra uygulama, bu bilgisayarın sonraki oturum açmalarda kullanması için ayrı bir SSH anahtarı oluşturur.
+- <strong>Bir bilgisayarın erişimini kaldırın:</strong> o bilgisayarın girdisini ana makinenin izin verilen SSH anahtarları listesinden silin (Linux ve macOS’te <code dir="ltr">{commands.authorizedKeys}</code>). O anahtar bir daha oturum açamaz; zaten açık olan bir bağlantı sona erene kadar kalır.
+
+## Uzak bir pencerede
+
+- <strong>SSH hedefi başına bir pencere:</strong> farklı kullanıcı adı, ana makine veya SSH bağlantı noktasıyla yapılan bağlantıların her biri kendi penceresini açar; böylece projeleri, oturumları ve bildirimleri asla karışmaz.
+- <strong>Her bağlantının durumunu görün:</strong> her bağlantı için bir sekme görmek üzere macOS’te uygulamanın menü çubuğu simgesini ya da Windows’ta bildirim alanı simgesini açın.
+- <strong>Uzak web sitelerini burada açın:</strong> bir ajan ana makinede bir web sitesi başlattığında verdiği <code dir="ltr">{commands.localhost}</code> bağlantısına tıklayın; uygulama o web sitesini bu bilgisayarda SSH üzerinden açar.
+- <strong>Uzak dosyaları burada açın:</strong> bir dosyayı uzak pencerede görüntüleyin ya da bu bilgisayarda o dosya için varsayılan uygulamayla açmak üzere bir kopyasını indirin.
+- <strong>Otomatik yeniden bağlanma:</strong> ağ koparsa pencere, bağlantı kurulana veya siz kapatana kadar yeniden bağlanmayı dener.

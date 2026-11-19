@@ -1,0 +1,89 @@
+---
+title: "Server Linux"
+description: "Instal octoboardd, program server Octoboard, di server Linux tanpa root. Jangkau dari aplikasi macOS atau Windows, atau dari browser, keduanya melalui SSH."
+---
+
+import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
+import { commands, downloads, productName } from "../../../../commands.ts";
+
+Instal octoboardd, program server {productName} (aplikasi menyebutnya daemon), di server Linux tanpa root. Jangkau dari aplikasi macOS atau Windows, atau dari browser, keduanya melalui SSH.
+
+Untuk x86_64 dan aarch64, di distribusi apa pun.
+
+<Aside>Program server Linux masih dalam versi beta.</Aside>
+
+## Sebelum Anda mulai
+
+- **Server Linux yang bisa Anda masuki dengan SSH.** SSH adalah cara aman untuk masuk ke mesin lain dan mengetik perintah di sana. Penyedia server memberi Anda alamatnya dan nama pengguna Anda.
+- **Aplikasi {productName} di komputer Anda sendiri**, untuk [macOS](../macos/) atau [Windows](../windows/), jika Anda ingin bekerja di aplikasi desktop (disarankan).
+
+Untuk masuk, buka Terminal (macOS) atau PowerShell (Windows) di komputer Anda sendiri dan jalankan perintah di bawah, dengan nama pengguna Anda sebagai ganti <code dir="ltr">&lt;you&gt;</code> dan alamat server sebagai ganti <code dir="ltr">{commands.server}</code>. Saat pertama kali, jawab <code dir="ltr">yes</code> ketika ditanya apakah server dipercaya.
+
+<Code code={commands.signIn} lang="sh" />
+
+Langkah 1 dan 2 di bawah dijalankan di server, di jendela yang sudah masuk itu.
+
+## Instal
+
+<Steps>
+
+1. Instal octoboardd di server.
+
+   <Code code={commands.install} lang="sh" />
+
+   Perintah ini mencetak baris yang diawali <code dir="ltr">Installed octoboardd</code>.
+2. Mulai octoboardd di server.
+
+   <Code code={commands.start} lang="sh" />
+
+   Perintah ini mencetak baris yang diawali <code dir="ltr">{productName} started</code>.
+3. Hubungkan dari komputer Anda sendiri, dengan salah satu dari dua cara:
+
+   - <strong>Dari aplikasi desktop (disarankan):</strong> ikuti [Terhubung ke server Linux](../../remote-connections/#terhubung-ke-server-linux) di panduan SSH.
+   - <strong>Dari browser:</strong> jalankan ini di server.
+
+     <Code code={commands.address} lang="sh" />
+
+     Perintah ini mencetak dua hal: alamat browser, yang diawali <code dir="ltr">http://127.0.0.1:</code>, dan perintah <code dir="ltr">ssh</code>. Di komputer Anda sendiri, salin perintah <code dir="ltr">ssh</code> itu, ganti <code dir="ltr">{commands.server}</code> dengan alamat server (alamat IP atau nama yang Anda pakai untuk masuk ke server), lalu jalankan di Terminal atau PowerShell. Mungkin akan diminta kata sandi Anda, lalu tidak menampilkan apa-apa lagi; itu normal. Biarkan jendela itu terbuka: menutupnya memutus koneksi. Lalu buka alamat yang dicetak itu di browser Anda.
+
+</Steps>
+
+Anda tahu semuanya berhasil saat {productName} terbuka di jendela baru aplikasi desktop, atau di tab browser.
+
+## Jika octoboardd tidak ditemukan
+
+Jika penginstalan menyatakan bahwa folder yang berakhiran <code dir="ltr">.local/bin</code> (misalnya <code dir="ltr">/home/&lt;you&gt;/.local/bin</code>) tidak ada di PATH Anda, shell tidak dapat menemukan <code dir="ltr">octoboardd</code> berdasarkan namanya. Jalankan dengan jalur lengkap yang dicetak oleh penginstalan, atau tambahkan <code dir="ltr">{commands.binDir}</code> ke PATH Anda (misalnya di <code dir="ltr">~/.profile</code>) dan masuk lagi.
+
+## Tetap berjalan setelah logout atau reboot
+
+Jika dimulai dengan <code dir="ltr">{commands.start}</code>, octoboardd berhenti saat server dihidupkan ulang, dan tidak ada yang memulainya lagi dengan sendirinya: jalankan <code dir="ltr">{commands.start}</code> lagi, atau hubungkan dari aplikasi desktop, yang menawarkan untuk memulainya bagi Anda. Beberapa server juga menghentikannya saat Anda keluar.
+
+Agar octoboardd mulai setiap kali server menyala dan tetap berjalan setelah Anda keluar, instal sebagai layanan:
+
+<Code code={commands.installService} lang="sh" />
+
+Perintah ini menginstal program, menyiapkannya sebagai layanan pengguna systemd, dan memulainya. Lalu perintah ini mengaktifkan lingering, yang membiarkan layanan Anda berjalan saat Anda tidak masuk. Jika dikatakan gagal melakukannya, jalankan ini sekali (mungkin memerlukan <code dir="ltr">sudo</code>):
+
+<Code code={commands.linger} lang="sh" />
+
+Port bawaannya adalah <code dir="ltr">{commands.defaultPort}</code>. Untuk memakai port lain, tambahkan <code dir="ltr">{commands.portOption}</code> di akhir perintah layanan, atau di <code dir="ltr">{commands.start}</code>.
+
+## Pembaruan
+
+{productName} tidak pernah memperbarui dirinya sendiri: saat versi baru tersedia, browser memberi tahu Anda, dan Anda yang memilih kapan memasangnya. Setelah versi baru terpasang, {productName} memulai ulang ke versi itu dengan sendirinya jika tidak ada sesi yang terganggu; jika ada, ia mencantumkannya dan bertanya lebih dulu.
+
+- <strong>Di browser:</strong> pilih <strong>Unduh dan instal</strong> di tempat yang menyatakan versi baru tersedia.
+- <strong>Di server:</strong> jalankan perintah ini.
+
+  <Code code={commands.update} lang="sh" />
+
+  Jika ditanya apakah akan memulai ulang sekarang, jawab <code dir="ltr">y</code> untuk memulai ulang, atau tekan Enter agar versi lama tetap berjalan untuk sementara. Untuk memulai ulang nanti, jalankan <code dir="ltr">{commands.restart}</code>.
+
+Jika <code dir="ltr">{commands.update}</code> menyatakan tidak dapat mengganti program, misalnya karena program dipasang di tempat yang tidak bisa Anda tulisi, jalankan perintah instal (atau perintah layanan) sekali lagi. Perintah itu memulai ulang dengan cara yang sama jika aman, dan jika tidak, memberi tahu Anda untuk menjalankan <code dir="ltr">{commands.restart}</code>.
+
+## Unduh arsipnya saja
+
+<LinkButton href={downloads["linux-x86_64"]} variant="secondary">Arsip x86_64</LinkButton>
+<LinkButton href={downloads["linux-aarch64"]} variant="secondary">Arsip aarch64</LinkButton>
+
+<a href={downloads.releases}>Semua versi sebelumnya</a>

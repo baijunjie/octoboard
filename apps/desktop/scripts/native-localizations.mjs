@@ -6,6 +6,14 @@ const desktopDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const json = (file) => JSON.parse(readFileSync(file, "utf8"));
 const xml = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
 
+/** The catalogs are named by Octoboard's language tags; a bundle's `.lproj` directory is named by Apple's localization
+ * identifier, which Xcode and the App Store recognise, and which for Chinese is the script tag rather than the region
+ * tag Octoboard uses. This is the one place generation maps the two. */
+const APPLE_LOCALIZATIONS = new Map([["zh-CN", "zh-Hans"], ["zh-TW", "zh-Hant"]]);
+
+/** The Apple localization identifier of one of Octoboard's language tags. */
+export const appleLocalization = (language) => APPLE_LOCALIZATIONS.get(language) ?? language;
+
 /** Generates macOS bundle resources before Tauri builds or launches. Permission prompts use the bundle's language,
  * independently of the language selected inside the application. */
 export function generateNativeLocalizations({ appName, catalogs, outputDir, basePlist, infoPlistPath = path.join(outputDir, "Info.plist") }) {
@@ -20,7 +28,7 @@ export function generateNativeLocalizations({ appName, catalogs, outputDir, base
     for (const text of Object.values(catalog)) render(text);
   }
   for (const [language, catalog] of Object.entries(catalogs)) {
-    const directory = path.join(outputDir, `${language}.lproj`);
+    const directory = path.join(outputDir, `${appleLocalization(language)}.lproj`);
     mkdirSync(directory, { recursive: true });
     const strings = keys.map((key) => `${JSON.stringify(key)} = ${JSON.stringify(render(catalog[key]))};`).join("\n");
     writeFileSync(path.join(directory, "InfoPlist.strings"), `${strings}\n`);

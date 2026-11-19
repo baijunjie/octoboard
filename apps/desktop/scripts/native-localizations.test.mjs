@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
-import { generateNativeLocalizations } from "./native-localizations.mjs";
+import { appleLocalization, generateNativeLocalizations } from "./native-localizations.mjs";
 
 const read = (file) => readFileSync(new URL(file, import.meta.url), "utf8");
 const catalogs = Object.fromEntries(readdirSync(new URL("../src-tauri/localizations/", import.meta.url)).filter((file) => file.endsWith(".json")).sort().map((file) => [file.slice(0, -5), JSON.parse(read(`../src-tauri/localizations/${file}`))]));
@@ -15,7 +15,7 @@ test("provides a native permission catalog for every offered bundle language", (
   const array = /<key>CFBundleLocalizations<\/key>\s*<array>([\s\S]*?)<\/array>/.exec(basePlist)?.[1] ?? "";
   const languages = [...array.matchAll(/<string>([^<]+)<\/string>/g)].map((match) => match[1]);
   assert.ok(languages.length > 0);
-  assert.deepEqual(Object.keys(catalogs).sort(), languages.sort());
+  assert.deepEqual(Object.keys(catalogs).map(appleLocalization).sort(), languages.sort());
 });
 
 test("generates all native purposes with the configured identity and valid bundle resources", () => {
@@ -27,7 +27,7 @@ test("generates all native purposes with the configured identity and valid bundl
     const config = JSON.parse(read("../src-tauri/tauri.macos.conf.json"));
     assert.equal(config.bundle.macOS.infoPlist, "Info.plist");
     for (const language of Object.keys(catalogs)) {
-      const resource = `${language}.lproj/InfoPlist.strings`;
+      const resource = `${appleLocalization(language)}.lproj/InfoPlist.strings`;
       assert.equal(config.bundle.resources[`generated-localizations/${resource}`], resource);
       const file = path.join(outputDir, resource);
       const strings = readFileSync(file, "utf8");
@@ -70,7 +70,7 @@ test("the CLI writes the same permission plist for Tauri dev embedding and bundl
     }
     execFileSync(process.execPath, [script]);
     for (const language of Object.keys(catalogs)) {
-      const generated = readFileSync(path.join(desktop, `src-tauri/generated-localizations/${language}.lproj/InfoPlist.strings`), "utf8");
+      const generated = readFileSync(path.join(desktop, `src-tauri/generated-localizations/${appleLocalization(language)}.lproj/InfoPlist.strings`), "utf8");
       assert.equal(generated.split("\n").filter(Boolean).length, 15);
       assert.ok(!generated.includes("{appName}"));
     }
@@ -89,7 +89,38 @@ test("the CLI writes the same permission plist for Tauri dev embedding and bundl
   }
 });
 
+test("an Apple localization identifier is Octoboard's tag, except for Chinese, which Apple names by script", () => {
+  assert.equal(appleLocalization("zh-CN"), "zh-Hans");
+  assert.equal(appleLocalization("zh-TW"), "zh-Hant");
+  for (const language of ["en", "de", "ja", "ar", "pt"]) assert.equal(appleLocalization(language), language);
+  for (const name of ["constructor", "toString", "__proto__"]) assert.equal(appleLocalization(name), name);
+});
+
+test("the bundle's localization directories are named by Apple's identifiers, never by Octoboard's Chinese tags", () => {
+  assert.ok(Object.keys(catalogs).includes("zh-CN") && Object.keys(catalogs).includes("zh-TW"));
+  const outputDir = mkdtempSync(path.join(tmpdir(), "native-localizations-names-"));
+  try {
+    generateNativeLocalizations({ appName: "Test", catalogs, outputDir, basePlist });
+    const directories = readdirSync(outputDir).filter((name) => name.endsWith(".lproj"));
+    assert.ok(directories.includes("zh-Hans.lproj") && directories.includes("zh-Hant.lproj"));
+    assert.ok(!directories.includes("zh-CN.lproj") && !directories.includes("zh-TW.lproj"));
+    assert.equal(directories.length, Object.keys(catalogs).length);
+    // The Simplified catalog's own text is in the Simplified directory and the Traditional one's in the Traditional.
+    const strings = (directory) => readFileSync(path.join(outputDir, directory, "InfoPlist.strings"), "utf8");
+    assert.ok(strings("zh-Hans.lproj").includes(JSON.stringify(catalogs["zh-CN"].NSCameraUsageDescription.replaceAll("{appName}", "Test"))));
+    assert.ok(strings("zh-Hant.lproj").includes(JSON.stringify(catalogs["zh-TW"].NSCameraUsageDescription.replaceAll("{appName}", "Test"))));
+  } finally {
+    rmSync(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("every catalog the shell's build script watches exists", () => {
+  const watched = [...read("../src-tauri/build.rs").matchAll(/"(localizations\/[^"]+\.json)"/g)].map((match) => match[1]);
+  assert.ok(watched.length > 0);
+  for (const file of watched) assert.ok(existsSync(new URL(`../src-tauri/${file}`, import.meta.url)), file);
+});
+
 test("refuses missing translations and unresolved template parameters", () => {
-  assert.throws(() => generateNativeLocalizations({ appName: "Test", catalogs: { ...catalogs, "zh-Hans": {} }, outputDir: "unused", basePlist }), /keys differ/);
+  assert.throws(() => generateNativeLocalizations({ appName: "Test", catalogs: { ...catalogs, "zh-CN": {} }, outputDir: "unused", basePlist }), /keys differ/);
   assert.throws(() => generateNativeLocalizations({ appName: "Test", catalogs: { en: { NSCameraUsageDescription: "{appName} {unknown}" } }, outputDir: "unused", basePlist }), /template/);
 });

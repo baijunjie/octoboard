@@ -37,14 +37,14 @@ function mount() {
 
 beforeEach(() => {
   request.mockClear();
-  setLanguage("zh-Hans");
+  setLanguage("zh-CN");
   daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 1, settings: { ...DEFAULT_SETTINGS, interface_language: null } }, request });
 });
 
 it("seeds a daemon that holds no language with the one this window shows", () => {
   mount();
-  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", interface_language: "zh-Hans" });
-  expect(currentLanguage()).toBe("zh-Hans");
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", interface_language: "zh-CN" });
+  expect(currentLanguage()).toBe("zh-CN");
 });
 
 it("shows the language the daemon holds, whatever this window showed, and sends nothing", () => {
@@ -65,7 +65,7 @@ it("follows the daemon when another client changes its language", () => {
 it("keeps the language it shows, and writes nothing, for a tag this build does not offer", () => {
   setLanguageOnDaemon("tlh");
   mount();
-  expect(currentLanguage()).toBe("zh-Hans");
+  expect(currentLanguage()).toBe("zh-CN");
   expect(request).not.toHaveBeenCalled();
 });
 
@@ -85,10 +85,10 @@ it("changes nothing before the first snapshot or while the connection is down", 
   setLanguageOnDaemon("de");
   set({ snapshotEpoch: 0 });
   const { rerender } = mount();
-  expect(currentLanguage()).toBe("zh-Hans");
+  expect(currentLanguage()).toBe("zh-CN");
   set({ snapshotEpoch: 1, connectionState: "reconnecting" });
   rerender();
-  expect(currentLanguage()).toBe("zh-Hans");
+  expect(currentLanguage()).toBe("zh-CN");
   expect(request).not.toHaveBeenCalled();
   setLanguageOnDaemon(null);
   expect(request).not.toHaveBeenCalled();
@@ -101,7 +101,7 @@ it("does not seed again for a re-render, only once the daemon still has none aft
   set({ snapshotEpoch: 2 });
   rerender();
   expect(request).toHaveBeenCalledTimes(2);
-  setLanguageOnDaemon("zh-Hans");
+  setLanguageOnDaemon("zh-CN");
   set({ snapshotEpoch: 3 });
   rerender();
   expect(request).toHaveBeenCalledTimes(2);

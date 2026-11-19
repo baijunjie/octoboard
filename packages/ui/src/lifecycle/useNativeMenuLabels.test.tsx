@@ -48,7 +48,7 @@ it("gives the menu bar the Remote menu's labels with the others, in the language
   // The item that opened a new remote window is gone.
   expect(labels).not.toHaveProperty("menu.newRemoteWindow");
 
-  await act(async () => setLanguage("zh-Hans"));
+  await act(async () => setLanguage("zh-CN"));
   await flushPromises();
   expect(setMenuLabels.mock.lastCall![0]).toMatchObject({ "menu.remote": "远程连接", "menu.remoteDevices": "远程设备" });
 });
@@ -65,7 +65,7 @@ it("gives the Windows jump list the Remote menu's labels under its keys, in Wind
 
 it("hands the jump list the labels again in the new language", async () => {
   await mount(WINDOWS);
-  await act(async () => setLanguage("zh-Hans"));
+  await act(async () => setLanguage("zh-CN"));
   await flushPromises();
   expect(setJumpListLabels).toHaveBeenCalledTimes(2);
   expect(setJumpListLabels.mock.lastCall![0]["menu.remote"]).toBe("远程连接");

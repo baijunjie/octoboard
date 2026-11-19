@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "Apple シリコン搭載 Mac と Intel Mac に対応。macOS 11 以降で使えます。"
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Apple シリコン搭載 Mac と Intel Mac に対応。macOS 11 以降で使えます。
+
+<LinkButton href={downloads.macos}>macOS 版をダウンロード</LinkButton>
+
+<Aside>macOS 版アプリはベータ版です。</Aside>
+
+## インストール
+
+<Steps>
+
+1. 上のボタンからアプリをダウンロードします。ディスクイメージという、名前が <code dir="ltr">.dmg</code> で終わるファイルが手に入ります。
+2. ダウンロードしたファイルを開きます。開いたウインドウで、{productName} を「アプリケーション」フォルダにドラッグします。
+3. 「アプリケーション」フォルダまたは Launchpad から {productName} を開きます。
+4. コーディングエージェントを 1 つ以上インストールし（下記参照）、{productName} で<strong>プロジェクトを追加</strong>を選んで、プロジェクトのフォルダを開きます。
+
+</Steps>
+
+メインウインドウが開いたら完了です。
+
+## コーディングエージェントをインストールする
+
+{productName} には AI エージェントは含まれていません。使いたいエージェントを、それぞれの案内に従ってインストールし、サインインしてください。{productName} が自動で見つけます。対応しているのは次のエージェントです。
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## アップデート
+
+新しいバージョンが出ると {productName} がお知らせするので、アプリの中からインストールできます。このページに戻る必要はありません。
+
+<a href={downloads.releases}>過去のバージョンをすべて見る</a>

@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 import site from "../site.config.ts";
 
 const root = fileURLToPath(new URL("../.output/public/", import.meta.url));
+// The deployment copies the documentation site's build into `docs/` of the website's output; the preview serves that
+// path from the docs' own build instead, so either can be rebuilt without the other.
+const docsSegment = "docs/";
+const docsRoot = fileURLToPath(new URL("../../docs/dist/", import.meta.url));
 const port = Number(process.env.PORT || 4318);
 const types = {
   ".html": "text/html; charset=utf-8",
@@ -21,11 +25,17 @@ const types = {
   ".xsl": "application/xslt+xml",
   ".txt": "text/plain; charset=utf-8",
   ".md": "text/markdown; charset=utf-8",
+  ".wasm": "application/wasm",
 };
 
 await stat(resolve(root, "index.html")).catch(() => {
   throw new Error(
     "Build the website before previewing it: pnpm --filter @octoboard/web build",
+  );
+});
+await stat(resolve(docsRoot, "index.html")).catch(() => {
+  console.warn(
+    "The docs are not built, so the preview has none: pnpm --filter @octoboard/docs build",
   );
 });
 
@@ -46,11 +56,14 @@ const server = createServer(async (request, response) => {
     }
     if (!url.pathname.startsWith(site.baseURL))
       throw new Error("Outside site base");
-    let path = resolve(
-      root,
-      decodeURIComponent(url.pathname.slice(site.baseURL.length)),
-    );
-    if (path !== resolve(root) && !path.startsWith(resolve(root) + sep))
+    let relative = decodeURIComponent(url.pathname.slice(site.baseURL.length));
+    let base = root;
+    if (relative === docsSegment.slice(0, -1) || relative.startsWith(docsSegment)) {
+      relative = relative.slice(docsSegment.length);
+      base = docsRoot;
+    }
+    let path = resolve(base, relative);
+    if (path !== resolve(base) && !path.startsWith(resolve(base) + sep))
       throw new Error("Outside public directory");
     if ((await stat(path)).isDirectory()) {
       if (!url.pathname.endsWith("/")) {

@@ -1,0 +1,89 @@
+---
+title: "Máy chủ Linux"
+description: "Cài octoboardd, chương trình máy chủ của Octoboard, lên máy chủ Linux mà không cần quyền root. Truy cập từ ứng dụng macOS hoặc Windows, hoặc từ trình duyệt, đều qua SSH."
+---
+
+import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
+import { commands, downloads, productName } from "../../../../commands.ts";
+
+Cài octoboardd, chương trình máy chủ của {productName} (ứng dụng gọi nó là daemon), lên máy chủ Linux mà không cần quyền root. Truy cập từ ứng dụng macOS hoặc Windows, hoặc từ trình duyệt, đều qua SSH.
+
+Dành cho x86_64 và aarch64, trên mọi bản phân phối.
+
+<Aside>Chương trình máy chủ Linux đang ở giai đoạn beta.</Aside>
+
+## Trước khi bắt đầu
+
+- **Một máy chủ Linux mà bạn đăng nhập được bằng SSH.** SSH là cách an toàn để đăng nhập vào một máy khác và gõ lệnh trên đó. Nhà cung cấp máy chủ sẽ cho bạn địa chỉ của máy và tên người dùng của bạn.
+- **Ứng dụng {productName} trên máy tính của bạn**, cho [macOS](../macos/) hoặc [Windows](../windows/), nếu bạn muốn làm việc trong ứng dụng trên máy tính (khuyên dùng).
+
+Để đăng nhập, mở Terminal (macOS) hoặc PowerShell (Windows) trên máy tính của bạn rồi chạy lệnh dưới đây, thay <code dir="ltr">&lt;you&gt;</code> bằng tên người dùng của bạn và <code dir="ltr">{commands.server}</code> bằng địa chỉ của máy chủ. Lần đầu, hãy trả lời <code dir="ltr">yes</code> khi nó hỏi có tin tưởng máy chủ hay không.
+
+<Code code={commands.signIn} lang="sh" />
+
+Bước 1 và 2 bên dưới chạy trên máy chủ, trong cửa sổ đã đăng nhập đó.
+
+## Cài đặt
+
+<Steps>
+
+1. Cài octoboardd lên máy chủ.
+
+   <Code code={commands.install} lang="sh" />
+
+   Nó in ra một dòng bắt đầu bằng <code dir="ltr">Installed octoboardd</code>.
+2. Khởi động nó trên máy chủ.
+
+   <Code code={commands.start} lang="sh" />
+
+   Nó in ra một dòng bắt đầu bằng <code dir="ltr">{productName} started</code>.
+3. Kết nối tới nó từ máy tính của bạn, theo một trong hai cách:
+
+   - <strong>Từ ứng dụng trên máy tính (khuyên dùng):</strong> làm theo [Kết nối với máy chủ Linux](../../remote-connections/#kết-nối-với-máy-chủ-linux) trong hướng dẫn SSH.
+   - <strong>Từ trình duyệt:</strong> chạy lệnh này trên máy chủ.
+
+     <Code code={commands.address} lang="sh" />
+
+     Nó in ra hai thứ: một địa chỉ trình duyệt, bắt đầu bằng <code dir="ltr">http://127.0.0.1:</code>, và một lệnh <code dir="ltr">ssh</code>. Trên máy tính của bạn, sao chép lệnh <code dir="ltr">ssh</code>, thay <code dir="ltr">{commands.server}</code> bằng địa chỉ của máy chủ (địa chỉ IP hoặc tên bạn dùng để đăng nhập vào nó), rồi chạy trong Terminal hoặc PowerShell. Nó có thể hỏi mật khẩu của bạn, sau đó không hiện thêm gì; như vậy là bình thường. Hãy để cửa sổ đó mở: đóng nó là ngắt kết nối. Sau đó mở địa chỉ đã in ra trong trình duyệt.
+
+</Steps>
+
+Bạn sẽ biết là đã thành công khi {productName} mở trong cửa sổ mới của ứng dụng trên máy tính, hoặc trong thẻ trình duyệt.
+
+## Nếu không tìm thấy octoboardd
+
+Nếu lúc cài đặt báo thư mục có đường dẫn kết thúc bằng <code dir="ltr">.local/bin</code> (chẳng hạn <code dir="ltr">/home/&lt;you&gt;/.local/bin</code>) không nằm trong PATH, nghĩa là shell không tìm được <code dir="ltr">octoboardd</code> theo tên. Hãy chạy nó bằng đường dẫn đầy đủ mà quá trình cài đã in ra, hoặc thêm <code dir="ltr">{commands.binDir}</code> vào PATH (chẳng hạn trong <code dir="ltr">~/.profile</code>) rồi đăng nhập lại.
+
+## Giữ cho nó chạy sau khi đăng xuất hoặc khởi động lại
+
+Nếu khởi động bằng <code dir="ltr">{commands.start}</code>, octoboardd sẽ dừng khi máy chủ khởi động lại và không có gì tự bật nó lên lại: hãy chạy <code dir="ltr">{commands.start}</code> lần nữa, hoặc kết nối từ ứng dụng trên máy tính, ứng dụng sẽ đề nghị khởi động giúp bạn. Một số máy chủ còn dừng nó khi bạn đăng xuất.
+
+Để nó tự chạy mỗi khi máy chủ khởi động và tiếp tục chạy sau khi bạn đăng xuất, hãy cài nó thành một dịch vụ:
+
+<Code code={commands.installService} lang="sh" />
+
+Lệnh này cài chương trình, thiết lập nó thành dịch vụ người dùng của systemd và khởi động nó. Sau đó nó bật lingering, cho phép các dịch vụ của bạn chạy khi bạn không đăng nhập. Nếu nó báo không làm được, hãy chạy lệnh này một lần (có thể cần <code dir="ltr">sudo</code>):
+
+<Code code={commands.linger} lang="sh" />
+
+Cổng mặc định là <code dir="ltr">{commands.defaultPort}</code>. Để dùng cổng khác, thêm <code dir="ltr">{commands.portOption}</code> vào cuối lệnh dịch vụ, hoặc vào <code dir="ltr">{commands.start}</code>.
+
+## Nâng cấp
+
+{productName} không bao giờ tự nâng cấp: khi có phiên bản mới, trình duyệt sẽ báo cho bạn, và bạn chọn lúc nào cài. Khi phiên bản mới đã được cài, {productName} tự khởi động lại vào phiên bản đó nếu không có phiên nào bị gián đoạn; nếu có, nó liệt kê các phiên đó và hỏi bạn trước.
+
+- <strong>Trong trình duyệt:</strong> chọn <strong>Tải xuống và cài đặt</strong> ở chỗ báo có phiên bản mới.
+- <strong>Trên máy chủ:</strong> chạy lệnh này.
+
+  <Code code={commands.update} lang="sh" />
+
+  Nếu nó hỏi có khởi động lại ngay không, trả lời <code dir="ltr">y</code> để khởi động lại, hoặc nhấn Enter để tạm giữ phiên bản cũ tiếp tục chạy. Để khởi động lại sau, chạy <code dir="ltr">{commands.restart}</code>.
+
+Nếu <code dir="ltr">{commands.update}</code> báo không thay được chương trình, chẳng hạn vì nó được cài ở nơi bạn không có quyền ghi, hãy chạy lại lệnh cài đặt (hoặc lệnh dịch vụ). Nó khởi động lại theo cách tương tự khi an toàn, và nếu không thì sẽ bảo bạn chạy <code dir="ltr">{commands.restart}</code>.
+
+## Hoặc tải về tệp nén
+
+<LinkButton href={downloads["linux-x86_64"]} variant="secondary">Tệp nén x86_64</LinkButton>
+<LinkButton href={downloads["linux-aarch64"]} variant="secondary">Tệp nén aarch64</LinkButton>
+
+<a href={downloads.releases}>Tất cả các phiên bản trước</a>

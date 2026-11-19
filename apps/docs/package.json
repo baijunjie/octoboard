@@ -1,0 +1,22 @@
+{
+  "name": "@octoboard/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "astro check",
+    "test": "node --experimental-strip-types --test site.config.test.ts locales.test.ts siteTitle.test.ts redirects.test.ts webParity.test.ts src/commands.test.ts buildOutput.test.ts"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "~0.40.0",
+    "@octoboard/ui": "workspace:*",
+    "astro": "^6.4.8"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@types/node": "^22.20.0",
+    "typescript": "^5.9.2"
+  }
+}

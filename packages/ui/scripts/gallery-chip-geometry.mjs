@@ -15,7 +15,7 @@ async function open(scenario, language, width) {
   assert.equal(await page.locator("[data-gallery-failure]").count(), 0, `${scenario}/${language}: gallery failure`);
 }
 try {
-  for (const language of ["en", "zh-Hans"]) {
+  for (const language of ["en", "zh-CN"]) {
     if (!trustOnly) {
       await open("code-colors", language, 1440);
       const samples = await page.locator("[data-prose-size]").evaluateAll((samples) => samples.map((sample) => ({

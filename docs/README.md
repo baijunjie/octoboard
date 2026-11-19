@@ -340,6 +340,8 @@ Where to start, by question:
   sample data, layout and loading failures.
 - [Website privacy](product/website-privacy.md) — what the privacy page discloses and the Google Analytics consent
   prompt and cookie.
+- [Documentation site](product/documentation-site.md) — the docs at `/docs/`: addresses and languages, the English
+  fallback, the retired Chinese redirects, the sidebar and what each page covers, and how the guides are written.
 
 ## Reference
 
@@ -362,6 +364,9 @@ Where to start, by question:
   goes, and its build and release scripts.
 - [Website structure](structure/web.md) — `apps/web`'s Nuxt directory map, what it imports from the UI package, where
   new code goes, and its SEO, locale and icon entry points.
+- [Documentation site structure](structure/docs.md) — `apps/docs`'s Starlight directory map, why the docs are a
+  separate app at `/docs/` in the website's Pages deployment, what it copies from or reads in the website and UI, and
+  where pages, snippets and quoted commands go.
 - [Tooling structure](structure/tooling.md) — the workspaces and toolchains, `pnpm verify` scoping, git hooks, CI
   workflows and repository configuration, and where new scripts and checks go.
 
@@ -457,6 +462,9 @@ Binding rules for code, one home per rule; the structure docs keep placement and
   origin.
 - [Writing desktop shell code](memory/writing-desktop-shell-code.md) — checking every native hook after a Tauri raise,
   and checking event state by changing it while a page loads.
+- [Writing documentation pages](memory/writing-documentation-pages.md) — three rules no check enforces in
+  `apps/docs/src/content/docs/`: app labels with platform words, anchors in translated pages, and inline values as
+  `<code dir="ltr">`.
 - [Writing screen-reader announcements and focus moves](memory/writing-screen-reader-announcements-and-focus-moves.md) —
   which VoiceOver case rules to read before claiming a match, and what to do when none matches.
 - [Writing text into a session](memory/writing-text-into-a-session.md) — the waits the per-message bound leaves

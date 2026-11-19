@@ -174,7 +174,7 @@ it("says nothing failed for the consoles and the accounts beside a failure to ap
 });
 
 it("lists the totals as items of their own in every language, with the dot between them hidden from assistive technology", () => {
-  setLanguage("zh-Hans");
+  setLanguage("zh-CN");
   onTestFinished(() => setLanguage("en"));
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
   const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: null, settings_error: null, accounts: null }} />);

@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "Para Mac con chip de Apple o Intel, con macOS 11 o posterior."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Para Mac con chip de Apple o Intel, con macOS 11 o posterior.
+
+<LinkButton href={downloads.macos}>Descargar para macOS</LinkButton>
+
+<Aside>La app para macOS está en fase beta.</Aside>
+
+## Instalar
+
+<Steps>
+
+1. Descarga la app con el botón de arriba. Obtendrás una imagen de disco, un archivo cuyo nombre termina en <code dir="ltr">.dmg</code>.
+2. Abre el archivo descargado. En la ventana que se abre, arrastra {productName} a la carpeta Aplicaciones.
+3. Abre {productName} desde la carpeta Aplicaciones o desde Launchpad.
+4. Instala al menos un agente de programación (consulta más abajo) y luego selecciona <strong>Añadir proyecto</strong> en {productName} para abrir la carpeta de un proyecto.
+
+</Steps>
+
+Cuando se abra la ventana principal, habrás terminado.
+
+## Instalar un agente de programación
+
+{productName} no incluye ningún agente de IA. Instala los que quieras usar siguiendo sus propias instrucciones e inicia sesión en ellos. {productName} los encuentra automáticamente. Funciona con:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## Actualizaciones
+
+Cuando hay una versión nueva, {productName} te avisa y puedes instalarla desde la propia app. No hace falta que vuelvas a esta página.
+
+<a href={downloads.releases}>Todas las versiones anteriores</a>

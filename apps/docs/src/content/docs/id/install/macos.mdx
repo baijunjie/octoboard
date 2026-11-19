@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "Untuk Mac Apple silicon dan Intel, di macOS 11 atau lebih baru."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Untuk Mac Apple silicon dan Intel, di macOS 11 atau lebih baru.
+
+<LinkButton href={downloads.macos}>Unduh untuk macOS</LinkButton>
+
+<Aside>Aplikasi macOS masih dalam versi beta.</Aside>
+
+## Instal
+
+<Steps>
+
+1. Unduh aplikasi dengan tombol di atas. Anda mendapatkan image disk, yaitu file dengan nama berakhiran <code dir="ltr">.dmg</code>.
+2. Buka file yang diunduh. Di jendela yang terbuka, seret {productName} ke folder Aplikasi (Applications).
+3. Buka {productName} dari folder Aplikasi atau dari Launchpad.
+4. Instal setidaknya satu agen pengodean (lihat di bawah), lalu pilih <strong>Tambah proyek</strong> di {productName} untuk membuka folder proyek.
+
+</Steps>
+
+Setelah jendela utama terbuka, Anda sudah selesai.
+
+## Instal agen pengodean
+
+{productName} tidak menyertakan agen AI. Instal agen yang ingin Anda pakai dengan mengikuti petunjuknya masing-masing, lalu masuk ke akunnya. {productName} menemukannya secara otomatis. Aplikasi ini bekerja dengan:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## Pembaruan
+
+Saat versi baru tersedia, {productName} memberi tahu Anda, dan Anda dapat memasangnya dari dalam aplikasi. Anda tidak perlu kembali ke halaman ini.
+
+<a href={downloads.releases}>Semua versi sebelumnya</a>

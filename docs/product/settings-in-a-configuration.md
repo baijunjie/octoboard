@@ -212,7 +212,9 @@ made in Settings, and the result of the import reports what was applied. So:
 - one that turns asking questions as choices on or off changes no session already running;
 - one that changes the language sets the language the daemon holds, when this build offers the document's language,
   and every open window of that daemon switches to it (see "The language the daemon holds" in
-  `docs/product/language.md`); a language it does not offer is skipped, and the rest of the settings still apply.
+  `docs/product/language.md`); a language it does not offer is skipped, and the rest of the settings still apply. A
+  document of version 3 or earlier that carries `zh-Hans` or `zh-Hant` has it renamed to `zh-CN` or `zh-TW` as it is
+  read (see "Versions" in `docs/product/configuration-export-and-import.md`), so that language is applied.
 
 ### The default clone directory on import
 

@@ -89,6 +89,6 @@ export const PROVIDER_MESSAGES = {
   "th": mergedMessages("th"),
   "tr": mergedMessages("tr"),
   "vi": mergedMessages("vi"),
-  "zh-Hans": mergedMessages("zh-Hans"),
-  "zh-Hant": mergedMessages("zh-Hant"),
+  "zh-CN": mergedMessages("zh-CN"),
+  "zh-TW": mergedMessages("zh-TW"),
 } as const;

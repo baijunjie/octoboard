@@ -1,0 +1,89 @@
+---
+title: "Linux sunucusu"
+description: "Octoboard’un sunucu programı octoboardd’yi bir Linux sunucusuna root yetkisi olmadan kurun. macOS veya Windows uygulamasından ya da bir tarayıcıdan, ikisinde de SSH üzerinden ulaşın."
+---
+
+import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
+import { commands, downloads, productName } from "../../../../commands.ts";
+
+{productName} sunucu programı octoboardd’yi (uygulama ona “hizmet” der) bir Linux sunucusuna root yetkisi olmadan kurun. macOS veya Windows uygulamasından ya da bir tarayıcıdan, ikisinde de SSH üzerinden ulaşın.
+
+x86_64 ve aarch64 için, her dağıtımda.
+
+<Aside>Linux sunucu programı beta aşamasındadır.</Aside>
+
+## Başlamadan önce
+
+- **SSH ile oturum açabildiğiniz bir Linux sunucusu.** SSH, başka bir makinede oturum açıp komut yazmanın güvenli bir yoludur. Sunucunun adresini ve kullanıcı adınızı sağlayıcısı verir.
+- Masaüstü uygulamasında çalışmak istiyorsanız (önerilir), kendi bilgisayarınızda **{productName} uygulaması**, [macOS](../macos/) veya [Windows](../windows/) için.
+
+Oturum açmak için kendi bilgisayarınızda Terminal’i (macOS) veya PowerShell’i (Windows) açın ve aşağıdaki komutu, <code dir="ltr">&lt;you&gt;</code> yerine kullanıcı adınızı, <code dir="ltr">{commands.server}</code> yerine sunucunun adresini yazarak çalıştırın. İlk seferde sunucuya güvenip güvenmeyeceğinizi sorduğunda <code dir="ltr">yes</code> yanıtını verin.
+
+<Code code={commands.signIn} lang="sh" />
+
+Aşağıdaki 1. ve 2. adımlar sunucuda, oturum açtığınız bu pencerede çalıştırılır.
+
+## Kurulum
+
+<Steps>
+
+1. octoboardd’yi sunucuya kurun.
+
+   <Code code={commands.install} lang="sh" />
+
+   <code dir="ltr">Installed octoboardd</code> ile başlayan bir satır yazdırır.
+2. Sunucuda başlatın.
+
+   <Code code={commands.start} lang="sh" />
+
+   <code dir="ltr">{productName} started</code> ile başlayan bir satır yazdırır.
+3. Kendi bilgisayarınızdan ona iki yolla bağlanın:
+
+   - <strong>Masaüstü uygulamasından (önerilir):</strong> SSH kılavuzundaki [Linux sunucusuna bağlanın](../../remote-connections/#linux-sunucusuna-bağlanın) bölümünü izleyin.
+   - <strong>Bir tarayıcıdan:</strong> bunu sunucuda çalıştırın.
+
+     <Code code={commands.address} lang="sh" />
+
+     İki şey yazdırır: <code dir="ltr">http://127.0.0.1:</code> ile başlayan bir tarayıcı adresi ve bir <code dir="ltr">ssh</code> komutu. Kendi bilgisayarınızda <code dir="ltr">ssh</code> komutunu kopyalayın, <code dir="ltr">{commands.server}</code> yerine sunucunun adresini (sunucuda oturum açmak için kullandığınız IP adresi veya ad) yazın ve Terminal’de ya da PowerShell’de çalıştırın. Parolanızı isteyebilir, sonra başka bir şey göstermez; bu normaldir. O pencereyi açık bırakın: kapatırsanız bağlantı kesilir. Ardından yazdırılan adresi tarayıcınızda açın.
+
+</Steps>
+
+{productName} masaüstü uygulamasının yeni penceresinde ya da tarayıcı sekmesinde açıldığında işe yaradığını anlarsınız.
+
+## octoboardd bulunamazsa
+
+Kurulum <code dir="ltr">.local/bin</code> ile biten bir dizinin (örneğin <code dir="ltr">/home/&lt;you&gt;/.local/bin</code>) PATH içinde olmadığını söylüyorsa, kabuk <code dir="ltr">octoboardd</code> programını adıyla bulamıyor demektir. Kurulumun yazdırdığı tam yolla çalıştırın ya da <code dir="ltr">{commands.binDir}</code> dizinini PATH’inize ekleyin (örneğin <code dir="ltr">~/.profile</code> içinde) ve yeniden oturum açın.
+
+## Oturumu kapattıktan veya yeniden başlattıktan sonra da çalışır tutun
+
+<code dir="ltr">{commands.start}</code> ile başlatılan octoboardd, sunucu yeniden başladığında durur ve onu kendiliğinden yeniden başlatan bir şey yoktur: <code dir="ltr">{commands.start}</code> komutunu yeniden çalıştırın ya da sizin için başlatmayı öneren masaüstü uygulamasından bağlanın. Bazı sunucular, oturumu kapattığınızda da onu durdurur.
+
+Sunucu her başladığında kendiliğinden başlamasını ve oturumu kapattıktan sonra da çalışmasını istiyorsanız, onu bunun yerine bir hizmet olarak kurun:
+
+<Code code={commands.installService} lang="sh" />
+
+Bu komut programı kurar, bir systemd kullanıcı hizmeti olarak ayarlar ve başlatır. Ardından, hizmetlerinizin siz oturum açmamışken de çalışmasını sağlayan lingering özelliğini açar. Bunu yapamadığını söylerse, şunu bir kez çalıştırın (<code dir="ltr">sudo</code> gerekebilir):
+
+<Code code={commands.linger} lang="sh" />
+
+Varsayılan bağlantı noktası <code dir="ltr">{commands.defaultPort}</code> değeridir. Başka birini kullanmak için <code dir="ltr">{commands.portOption}</code> seçeneğini hizmet komutunun ya da <code dir="ltr">{commands.start}</code> komutunun sonuna ekleyin.
+
+## Yükseltme
+
+{productName} kendini hiçbir zaman kendi başına yükseltmez: yeni bir sürüm çıktığında tarayıcı sizi bilgilendirir ve ne zaman kuracağınıza siz karar verirsiniz. Yeni sürüm kurulduktan sonra, hiçbir oturum kesintiye uğramayacaksa {productName} kendiliğinden yeni sürümle yeniden başlar; bazıları kesintiye uğrayacaksa onları listeler ve önce sorar.
+
+- <strong>Tarayıcıda:</strong> yeni bir sürüm olduğunu söyleyen yerde <strong>İndir ve yükle</strong> düğmesini seçin.
+- <strong>Sunucuda:</strong> bu komutu çalıştırın.
+
+  <Code code={commands.update} lang="sh" />
+
+  Şimdi yeniden başlatılıp başlatılmayacağını sorarsa, yeniden başlatmak için <code dir="ltr">y</code> yanıtını verin ya da eski sürümü şimdilik çalışır tutmak için Enter’a basın. Daha sonra yeniden başlatmak için <code dir="ltr">{commands.restart}</code> komutunu çalıştırın.
+
+<code dir="ltr">{commands.update}</code> programı değiştiremediğini söylüyorsa, örneğin yazamayacağınız bir yere kurulduğu için, bunun yerine kurulum komutunu (ya da hizmet komutunu) yeniden çalıştırın. Güvenliyse aynı şekilde yeniden başlar, değilse <code dir="ltr">{commands.restart}</code> komutunu çalıştırmanızı söyler.
+
+## Bunun yerine arşivi indirin
+
+<LinkButton href={downloads["linux-x86_64"]} variant="secondary">x86_64 arşivi</LinkButton>
+<LinkButton href={downloads["linux-aarch64"]} variant="secondary">aarch64 arşivi</LinkButton>
+
+<a href={downloads.releases}>Tüm geçmiş sürümler</a>

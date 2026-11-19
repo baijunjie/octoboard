@@ -1669,7 +1669,7 @@ mod tests {
                 for tag in ["en", "en-GB", "xx"] {
                     assert_eq!(with(Some(tag), agent, owner.as_ref()), none, "{tag}");
                 }
-                let text = with(Some("zh-Hans"), agent, owner.as_ref());
+                let text = with(Some("zh-CN"), agent, owner.as_ref());
                 let section = text
                     .strip_suffix(project_closing().as_str())
                     .and_then(|rest| {
@@ -1678,7 +1678,7 @@ mod tests {
                     .expect("the section goes in just before the closing sentence");
                 assert!(section.starts_with("## The user's language\n\n"));
                 assert!(section.contains(
-                    "The user has set Octoboard's interface to Simplified Chinese (zh-Hans)."
+                    "The user has set Octoboard's interface to Simplified Chinese (zh-CN)."
                 ));
                 assert!(
                     text.find("## Asking the user").unwrap()

@@ -1,0 +1,130 @@
+---
+title: "Browser over UU Remote"
+description: "Open Octoboard in a browser on another computer through UU Remote’s port mapping, without SSH or a remote desktop."
+---
+
+import { Aside, Code, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../commands.ts";
+import HostBrowserAddress from "../../snippets/en/host-browser-address.mdx";
+
+Open {productName} in a browser on another computer through the port mapping of [UU Remote](https://uuyc.163.com/), NetEase's remote control app, without SSH or a remote desktop. The host is the computer that runs {productName}; SSH sign-in (Remote Login on macOS) can stay off, and no remote desktop session is needed. UU Remote's interface is in Chinese, so this guide gives its Chinese labels beside the English.
+
+This guide opens {productName} in a browser on your own computer. That's sharper and more responsive than remote desktop, but takes more steps. If you don't mind some lag and blur, simply use UU Remote's remote desktop to work on the host directly.
+
+Not sure this is the way for you? See [Choose how to connect](../choose-how-to-connect/).
+
+<Aside type="caution">
+These steps haven't been tested between two devices yet. They follow UU Remote's own help. The relay on a Mac host was tried on a single computer, including the browser's live connection.
+</Aside>
+
+<strong>Browser on your computer</strong> → <strong>127.0.0.1 on your computer</strong> ⟷ UU Remote ⟷ <strong>127.0.0.1 on the host</strong> → <strong>{productName}</strong>
+
+<details>
+<summary>New to this?</summary>
+
+- <strong>127.0.0.1 (loopback):</strong> an address that always means “this same computer”.
+- <strong>Port:</strong> a number that picks one program on a computer, like a door number. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> is port {commands.defaultPort} on this computer.
+- <strong>Port mapping (端口映射):</strong> a UU Remote feature that makes a port on the host appear as a port on your own computer.
+- <strong>socat:</strong> a small, free program that passes a connection from one place to another. A Mac host needs it as a relay.
+- <strong>Terminal:</strong> the window you type commands into: Terminal on macOS, PowerShell on Windows.
+
+</details>
+
+UU Remote's port mapping makes the host's {productName} appear on your own computer at <code dir="ltr">{tunnel.loopback}</code>, which is the only address {productName} accepts a browser on.
+
+## Before you start
+
+- <strong>Both computers are a Mac or a Windows PC.</strong> UU Remote has no port mapping for Linux; reach a Linux server through [Tailscale](../browser-over-tailscale/) or [SSH](../remote-connections/) instead.
+- <strong>Both have UU Remote installed and signed in to the same account,</strong> at version 4.21.0 or later on Windows and 4.32.0 or later on macOS. Port mapping works for TCP only, which is all {productName} needs. At the time of writing, UU Remote lists port mapping among its free features; check its current plans if in doubt.
+- <strong>The host appears under My devices (我的设备)</strong> in UU Remote on the computer you'll browse from.
+- <strong>A Mac host also needs [Homebrew](https://brew.sh/)</strong>, to install socat below.
+
+## On the host
+
+<Steps>
+
+1. Get the browser address, which carries the key that signs the browser in.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <HostBrowserAddress />
+   </TabItem>
+   <TabItem label="Windows">
+   <HostBrowserAddress windows />
+   </TabItem>
+   </Tabs>
+2. Make a port on the host's <code dir="ltr">{tunnel.loopback}</code> that leads to {productName}. This port is the <strong>host port</strong> in the steps below.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   A Mac serves the browser in a way UU Remote can't map, so it needs socat as a relay. Install it in Terminal:
+
+   <Code code={tunnel.installSocatMac} lang="sh" />
+
+   Then run this and leave the window open. It listens on <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> alone.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   The host port is <code dir="ltr">{tunnel.bridgePort}</code>.
+   </TabItem>
+   <TabItem label="Windows">
+   Nothing to run: {productName} itself listens on the browser port, on <code dir="ltr">127.0.0.1</code> alone. The host port is the <strong>Browser port</strong> on the <strong>Browser</strong> tab ({commands.defaultPort} unless you changed it).
+   </TabItem>
+   </Tabs>
+
+</Steps>
+
+## On the computer you'll browse from
+
+<Steps>
+
+1. In UU Remote, open the host from <strong>My devices</strong> (我的设备), choose <strong>More</strong> (更多) on its card and then <strong>Port mapping</strong> (端口映射), and add a mapping:
+
+   | Field | Value |
+   | --- | --- |
+   | Name (名称) | {productName} |
+   | Local port (本地端口) | <code dir="ltr">{commands.defaultPort}</code> |
+   | Target address (目标地址) | <code dir="ltr">127.0.0.1</code> |
+   | Target port (目标端口) | the host port |
+
+   Save and enable it, and wait until it shows as connected. If {commands.defaultPort} is taken on this computer, pick another local port and change it in the browser address too.
+2. Check that only this computer can use the mapping. Open Terminal (macOS) or PowerShell (Windows) on this computer and run:
+
+   <Tabs syncKey="visitor">
+   <TabItem label="macOS">
+   <Code code={tunnel.checkListener} lang="sh" />
+
+   You should see a line containing <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> and <code dir="ltr">LISTEN</code>.
+   </TabItem>
+   <TabItem label="Windows">
+   <Code code={tunnel.checkListenerWindows} lang="powershell" />
+
+   You should see a line that starts with <code dir="ltr">TCP</code>, then <code dir="ltr">127.0.0.1:{commands.defaultPort}</code>, and ends with <code dir="ltr">LISTENING</code> and a number.
+   </TabItem>
+   </Tabs>
+
+   If you see <code dir="ltr">*:{commands.defaultPort}</code> or <code dir="ltr">0.0.0.0:{commands.defaultPort}</code> in its place, delete the mapping: other devices on your network could reach {productName}.
+3. Open the browser address you copied on the host. It starts with <code dir="ltr">{tunnel.addressStart}</code>.
+
+</Steps>
+
+You'll know it worked when {productName} opens in the browser tab without asking you to sign in.
+
+## If it doesn't work
+
+- <strong>The mapping shows as connected, but the page doesn't load:</strong> on a Mac host, the socat window was closed or its command stopped; or <strong>Allow remote access</strong> is off, or {productName} isn't running on the host.
+- <strong>The mapping won't save or connect:</strong> the local port may be taken on this computer. Pick another one, and change it in the browser address too.
+- <strong>The page is refused or blank:</strong> check that you opened the address at <code dir="ltr">{tunnel.loopback}</code>.
+
+## Turn it off
+
+- <strong>On the computer you browsed from:</strong> switch the mapping off in UU Remote's port mapping panel, or delete it. Closing the panel or disconnecting also stops it.
+- <strong>On a Mac host:</strong> stop socat with <kbd>Ctrl</kbd>+<kbd>C</kbd>.
+- <strong>On the host,</strong> turn off <strong>Allow remote access</strong> when you no longer need it. This closes the browser entry and disconnects every page opened with the key.
+- <strong>If the address may have leaked,</strong> give it a new key with <strong>Rotate key</strong> on the <strong>Browser</strong> tab. Pages open with the old address are disconnected.
+
+## Security
+
+- <strong>The address is the password:</strong> its key gives full control of {productName} on the host, running any command included. It lasts until you rotate it. It stays in the browser's history and bookmarks, and syncs to your other devices if browser sync is on.
+- <strong>Who can reach it:</strong> anyone who reaches the host port and has the key. On the host it listens on <code dir="ltr">127.0.0.1</code> only; anyone who can use your UU Remote account to map ports to the host can reach it too, so keep that account secure.
+- <strong>Only on computers nobody else signs in to:</strong> another user account on the host or on your computer can connect to these <code dir="ltr">127.0.0.1</code> ports, and while the mapping or socat isn't running it can take the port and receive the key when your browser reconnects. With [Connect over SSH](../remote-connections/), a Mac or Linux host doesn't have this weakness, and neither does your own computer when you use the desktop app. In a browser your computer still has it, because the SSH forward listens on a <code dir="ltr">127.0.0.1</code> port there too.

@@ -384,8 +384,8 @@ describe("buildStatusItemMenu quota submenus", () => {
   });
 
   it("localizes the exhausted account tag in Chinese", () => {
-    const translate: Translate = ((key: string, ...args: unknown[]) => format("zh-Hans", key as never, args[0] as never)) as Translate;
-    const state = source({ language: "zh-Hans", agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null, { windows: [window({ used_percent: 100 })] })] });
+    const translate: Translate = ((key: string, ...args: unknown[]) => format("zh-CN", key as never, args[0] as never)) as Translate;
+    const state = source({ language: "zh-CN", agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null, { windows: [window({ used_percent: 100 })] })] });
     expect(buildQuotaSubmenus(translate, state)[0].items[0]).toMatchObject({ title: "默认 · Max", status: { label: "已达上限" } });
   });
 

@@ -1,0 +1,43 @@
+---
+title: "Choose how to connect"
+description: "Compare the ways to use Octoboard on a Linux server or another computer: SSH, Tailscale and UU Remote."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import { productName } from "../../commands.ts";
+
+{productName} never opens itself to the network, so another computer needs a secure path to it. SSH is a standard encrypted sign-in built into macOS, Windows and Linux, and it's the main way in: from the desktop app or from a browser. If you'd rather not turn on SSH sign-in on the host, a third-party relay, Tailscale or UU Remote, can carry a browser's connection instead.
+
+The <strong>host</strong> is the machine {productName} runs on and that you want to reach.
+
+<Aside type="tip" title="The simplest way">
+If some input lag and a blurry picture are fine for you, you don't need any of the setups below: open the host in [UU Remote](https://uuyc.163.com/)'s remote desktop and use {productName} right there on the host. This works for a Mac or Windows host, not a Linux server. UU Remote's interface is in Chinese. For a sharp, responsive window on your own computer, pick one of the ways below.
+</Aside>
+
+| | [SSH](../remote-connections/) | [Tailscale](../browser-over-tailscale/) | [UU Remote](../browser-over-uu-remote/) |
+| --- | --- | --- | --- |
+| Use from | Desktop app or browser | Browser only | Browser only |
+| Supported hosts | Linux server, Mac, Windows PC | Linux server, Mac, Windows PC | Mac or Windows PC only |
+| On the host you turn on or install | SSH sign-in (Remote Login on a Mac, OpenSSH Server on Windows; a Linux server already has it) | Tailscale; a Mac or Linux host also needs socat | UU Remote; a Mac host also needs socat |
+| On your own computer you install | Nothing extra | Tailscale; also socat on a Mac or Linux computer | UU Remote (Mac or Windows) |
+| The traffic goes through | A direct connection, no third party | Tailscale's network, with your account | NetEase UU Remote's service, with your account |
+| Works when not on the same network | Only if the host can be reached: on the same network, at a public address or over a VPN | Yes | Yes |
+| Best for | Servers; the full desktop app; Mac and Linux hosts other people also sign in to | Reaching your own machines from anywhere without SSH | Users in mainland China who already use UU Remote |
+
+## Before you pick a relay
+
+The relay guides take more steps than SSH: you run commands on both computers and keep them running in open windows while you work.
+
+<Aside type="caution">
+The Tailscale and UU Remote guides haven't been fully tested between two devices yet. They follow those services' own documentation and {productName}'s own checks.
+</Aside>
+
+<Aside type="caution" title="Only on computers nobody else signs in to">
+With a relay, another user account on the host or on your own computer could catch the browser's key. Use Tailscale or UU Remote only on computers you alone sign in to. With [Connect over SSH](../remote-connections/), a Mac or Linux host doesn't have this weakness, and neither does your own computer when you use the desktop app. In a browser your computer still has it, because the SSH forward listens on a <code dir="ltr">127.0.0.1</code> port there too.
+</Aside>
+
+## Next
+
+- [Connect over SSH](../remote-connections/): for a Linux server, or for using the desktop app.
+- [Browser over Tailscale](../browser-over-tailscale/): browser only, any host, no SSH.
+- [Browser over UU Remote](../browser-over-uu-remote/): browser only, Mac or Windows host, no SSH.

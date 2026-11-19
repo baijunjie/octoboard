@@ -1,0 +1,119 @@
+---
+title: "Conectarse por SSH"
+description: "Usa Octoboard en un servidor Linux o en otro equipo desde este, en la app de escritorio o en un navegador, por SSH: una conexión cifrada directa a esa máquina, sin relé ni servicio en la nube."
+---
+
+import { Code, Steps } from "@astrojs/starlight/components";
+import { commands, productName } from "../../../commands.ts";
+
+Usa {productName} en un servidor Linux o en otro equipo desde este, en la app de escritorio o en un navegador, por SSH: una conexión cifrada directa a esa máquina, sin relé ni servicio en la nube.
+
+¿No estás seguro de que esta sea la mejor opción? [Elige cómo conectarte](../choose-how-to-connect/) la compara con las formas que solo usan el navegador y no necesitan SSH.
+
+<strong>App de escritorio en este equipo</strong> · <strong>Navegador mediante un reenvío SSH</strong> ⟷ SSH ⟷ <strong>Servidor Linux u otro equipo</strong>
+
+<details>
+<summary>¿Es la primera vez?</summary>
+
+- <strong>Host:</strong> la máquina en la que se ejecuta {productName} y a la que quieres acceder: un servidor Linux u otro Mac o PC con Windows.
+- <strong>Servidor:</strong> aquí, una máquina Linux en la que inicias sesión por la red, normalmente una que alquilas, sin pantalla propia.
+- <strong>SSH:</strong> una forma estándar y cifrada de iniciar sesión en otra máquina y escribir comandos en ella. Viene incluida en macOS, Windows y Linux.
+- <strong>Terminal:</strong> la ventana en la que escribes comandos: Terminal en macOS, PowerShell en Windows.
+- <strong>Reenvío SSH:</strong> un comando SSH que hace que algo del host aparezca en tu propio equipo, para que tu navegador pueda abrirlo allí.
+- <strong>Huella (clave de host):</strong> un código corto que identifica el SSH de una máquina. Comprobarlo una vez te dice que has llegado a la máquina correcta.
+- <strong>Archivo de clave:</strong> un archivo que te permite iniciar sesión en lugar de una contraseña. Algunos proveedores de servidores te dan uno.
+
+</details>
+
+## Qué necesitas
+
+- <strong>Una forma de iniciar sesión en el host por SSH.</strong> En un servidor Linux, su proveedor te da la dirección y tu nombre de usuario. Para comprobar que funciona, abre Terminal (macOS) o PowerShell (Windows) y ejecuta el comando siguiente con tu nombre de usuario y la dirección del servidor. La primera vez, responde <code dir="ltr">yes</code> cuando pregunte si confías en el servidor.
+
+  <Code code={commands.signIn} lang="sh" />
+
+  Si el host es un Mac o un PC con Windows, activas el inicio de sesión por SSH en los ajustes del sistema; [Usar otro equipo como host](#usar-otro-equipo-como-host) explica cómo.
+- <strong>Para un servidor Linux, {productName} instalado e iniciado en él.</strong> [Instalación › Servidor Linux](../install/linux/) explica cómo. El programa de servidor de {productName}, octoboardd, es lo que la app llama el servicio.
+- <strong>La app de {productName} en este equipo</strong>, para macOS o Windows, salvo que uses solo un navegador.
+
+## Conectar con un servidor Linux
+
+<Steps>
+
+1. Inicia sesión en el servidor por SSH como el usuario que ejecuta {productName}, ejecuta este comando y copia la línea que empieza por <code dir="ltr">{commands.connectionScheme}</code>: los datos de conexión, que le dicen a la app dónde y cómo conectarse.
+
+   <Code code={commands.connection} lang="sh" />
+
+   Si este equipo accede al servidor con otra dirección u otro puerto SSH, añade <code dir="ltr">{commands.host}</code> o <code dir="ltr">{commands.sshPort}</code> al comando para que muestre los datos de conexión correctos.
+
+   El código QR que también muestra contiene la misma línea. Todavía ninguna app lo escanea.
+2. En la app de {productName} de este equipo, abre <strong>Dispositivos remotos</strong> desde la barra lateral izquierda o, en macOS, elige <strong>Remoto › Dispositivos remotos</strong> en la barra de menús. En Windows, también puedes elegir <strong>Dispositivos remotos</strong> en el menú del sistema de la ventana o en la lista de accesos directos del icono de la barra de tareas.
+3. Selecciona <strong>Añadir servicio remoto</strong> y luego <strong>Pegar</strong> en <strong>Datos de conexión</strong> para rellenar los campos.
+4. En <strong>Autenticación</strong>, elige <strong>Contraseña</strong> si inicias sesión con la contraseña de tu cuenta. Elige <strong>Archivo de clave</strong> si tu proveedor del servidor te dio un archivo de clave (a menudo con un nombre como <code dir="ltr">id_ed25519</code> o que termina en <code dir="ltr">.pem</code>), e indica dónde está en este equipo.
+5. Selecciona <strong>Guardar</strong> y luego <strong>Conectar</strong>. Introduce tu contraseña si la pide.
+
+   Si pegaste los datos de conexión, la identidad del servidor (su huella) venía incluida y la app la comprueba por ti. Si escribiste la dirección a mano, la app muestra una huella la primera vez. Para asegurarte de que has llegado a la máquina correcta, compárala con la que muestra este comando en el servidor y conéctate solo si coinciden:
+
+   <Code code={commands.fingerprintCommand} lang="sh" />
+
+</Steps>
+
+Sabrás que ha funcionado cuando se abra una ventana de {productName} aparte con los proyectos y las sesiones del servidor.
+
+## Usar otro equipo como host
+
+También puedes acceder a un Mac o a un PC con Windows que ejecute la app de {productName}.
+
+<Steps>
+
+1. En el equipo al que quieres acceder, abre <strong>Ajustes › Acceso remoto</strong> en {productName}.
+2. Selecciona allí <strong>Abrir Ajustes del Sistema</strong> (macOS) o <strong>Abrir Configuración</strong> (Windows) y activa <strong>Acceso remoto</strong> (macOS) u <strong>OpenSSH Server</strong> (Windows), siguiendo la ruta que indica la fila, para que este equipo acepte inicios de sesión por SSH. Esto requiere un administrador. De vuelta en {productName}, la fila mostrará <strong>Activado</strong>.
+3. Activa <strong>Permitir acceso remoto</strong>, selecciona <strong>Permitir</strong> para confirmar y mantén {productName} en ejecución: si lo cierras, el acceso remoto se detiene.
+4. En la pestaña <strong>App de {productName}</strong>, selecciona <strong>Copiar datos de conexión</strong> y envíalos al otro equipo, por ejemplo por correo o por chat.
+5. En el equipo desde el que vas a trabajar, añade el host como en los pasos 2 a 5 de [Conectar con un servidor Linux](#conectar-con-un-servidor-linux), pegando los datos que enviaste. Inicia sesión con tu nombre de usuario y tu contraseña en el host.
+
+</Steps>
+
+Sabrás que ha funcionado cuando se abra una ventana aparte con los proyectos y las sesiones del host.
+
+## Desde un navegador
+
+<Steps>
+
+1. Obtén el comando de reenvío SSH:
+
+   - <strong>En un host Mac o Windows,</strong> haz primero los pasos 1 a 3 de [Usar otro equipo como host](#usar-otro-equipo-como-host). Después, en la pestaña <strong>Navegador</strong>, mira <strong>Paso 1: reenvío SSH</strong>. Haz clic en la dirección del comando para elegir cómo accede tu otro equipo a este (o elige <strong>Introducir la dirección manualmente</strong> y sustituye <code dir="ltr">{commands.server}</code> después), y luego selecciona <strong>Copiar comando de reenvío</strong>. Selecciona también <strong>Copiar dirección</strong> en <strong>Paso 2: dirección del navegador</strong>.
+   - <strong>En un servidor Linux,</strong> ejecuta esto en el servidor. Muestra la dirección del navegador y después el comando SSH que debes ejecutar.
+
+     <Code code={commands.address} lang="sh" />
+
+     Sustituye <code dir="ltr">{commands.server}</code> en el comando por la dirección del servidor.
+2. En el equipo desde el que vas a navegar, ejecuta el comando SSH en Terminal (macOS) o PowerShell (Windows). Puede que la ventana pida tu contraseña y después no muestra nada más; es normal. Déjala abierta mientras trabajas: si la cierras, el navegador se desconecta.
+3. Abre en tu navegador la dirección del navegador, que empieza por <code dir="ltr">http://127.0.0.1:</code>.
+
+</Steps>
+
+Sabrás que ha funcionado cuando {productName} se abra en la pestaña del navegador sin pedirte que inicies sesión.
+
+Solo quien pueda acceder a {productName} a través del reenvío SSH puede usar esta dirección. Mantenla privada: su clave da control total, y queda en el historial y los marcadores del navegador y se sincroniza con tus otros dispositivos si la sincronización del navegador está activada.
+
+## Si no funciona
+
+- <strong>«No se pudo llegar al servidor», o el comando SSH dice «Connection refused» o agota el tiempo de espera:</strong> el inicio de sesión por SSH está desactivado en el host, o la dirección o el puerto SSH son incorrectos. Comprueba que <strong>Acceso remoto</strong> u <strong>OpenSSH Server</strong> esté activado y que puedes iniciar sesión con el comando <code dir="ltr">ssh</code> de arriba.
+- <strong>«No se pudo iniciar sesión», o «Permission denied»:</strong> el nombre de usuario, la contraseña o el archivo de clave son incorrectos.
+- <strong>«La clave de host no coincide»:</strong> la máquina que responde no es la misma a la que te conectaste antes. Esto ocurre cuando se reinstala un servidor, pero también puede significar que algo va mal. No continúes hasta saber por qué.
+- <strong>La página del navegador no carga:</strong> se cerró la ventana de SSH o su comando se detuvo. Ejecútalo de nuevo y recarga la página.
+
+## Seguridad
+
+- <strong>Sin puertos públicos adicionales:</strong> {productName} solo acepta conexiones del propio host, así que para conectarte desde otro equipo primero debes iniciar sesión en el host por SSH. Por eso necesitas SSH o uno de los [relés](../choose-how-to-connect/).
+- <strong>Comprueba a qué máquina accedes:</strong> la app recuerda la clave de host, la identidad SSH de la máquina, en la primera conexión correcta y bloquea la conexión con una alerta si esa identidad cambia más tarde.
+- <strong>Sin contraseña guardada:</strong> después de que inicies sesión por primera vez con una contraseña o con tu propio archivo de clave, la app crea una clave SSH independiente para que este equipo la use en los inicios de sesión posteriores.
+- <strong>Quitar el acceso a un equipo:</strong> elimina la entrada de ese equipo de la lista de claves SSH permitidas del host (<code dir="ltr">{commands.authorizedKeys}</code> en Linux y macOS). Esa clave ya no podrá iniciar sesión; una conexión que ya esté abierta seguirá hasta que termine.
+
+## En una ventana remota
+
+- <strong>Una ventana por destino SSH:</strong> las conexiones con otro nombre de usuario, host o puerto SSH abren cada una su propia ventana, así que sus proyectos, sesiones y notificaciones nunca se mezclan.
+- <strong>Consulta el estado de cada conexión:</strong> abre el icono de la barra de menús de la app en macOS o su icono del área de notificación en Windows para ver una pestaña por cada conexión.
+- <strong>Abre aquí los sitios web remotos:</strong> cuando un agente inicia un sitio web en el host, haz clic en el enlace <code dir="ltr">{commands.localhost}</code> que da, y la app abre ese sitio web en este equipo a través de SSH.
+- <strong>Abre aquí los archivos remotos:</strong> consulta un archivo en la ventana remota o descarga una copia para abrirla con la app predeterminada de este equipo para ese tipo de archivo.
+- <strong>Reconexión automática:</strong> si se cae la red, la ventana sigue intentando reconectarse hasta que lo consigue o la cierras.

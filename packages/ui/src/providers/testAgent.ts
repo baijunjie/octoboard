@@ -17,7 +17,7 @@ const en = {
   "provider.test_agent.setting.mode.confirm.reckless.message": "The test agent will skip every safeguard.",
 } as const;
 
-const zhHans = {
+const zhCN = {
   "provider.test_agent.label": "Test Agent",
   "provider.test_agent.shortName": "Test",
   "provider.test_agent.setting.mode.heading": "测试模式",
@@ -34,5 +34,5 @@ const zhHans = {
 export const testAgent = {
   id: "test_agent",
   mark: { fill: "currentColor", d: "M4 4h16v16H4z" },
-  messages: { en, "zh-Hans": zhHans },
+  messages: { en, "zh-CN": zhCN },
 } as const satisfies ProviderPresentation;

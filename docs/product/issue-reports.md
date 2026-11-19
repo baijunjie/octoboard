@@ -63,7 +63,7 @@ The body is Markdown in three sections:
   agent names them (such as `macOS 10.15.7`), nothing else of the device; `Daemon host:` and the operating system of
   the machine the daemon runs on, `macOS`, `Windows` or `Linux`, as the daemon announced it on the window's current
   connection, which may be another machine than the window's; and the UI's current language as its code (such as
-  `zh-Hans`). With none known, the section says `Unknown`.
+  `zh-CN`). With none known, the section says `Unknown`.
 - **Error**: one entry per failure:
   - its kind: `unexpected`, `known` for a known failure, or `actionable (<remedy>)` with the name of the remedy kind
     it was classified under;

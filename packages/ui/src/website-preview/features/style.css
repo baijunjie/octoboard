@@ -14,17 +14,6 @@ html { color-scheme: dark; }
 .end-glyph { margin-inline-start: auto; flex-shrink: 0; }
 .process-running { color: var(--color-success-soft-foreground); }
 .process-actions { margin-top: 2px; }
-.feature-canvas[data-feature="remoteDevices"] { padding: 12px; }
-.remote-details-view { width: 100%; max-width: 360px; }
-/* The form in the desktop window uses HeroUI's wide-screen sizes, even when this preview iframe is narrow. */
-.remote-details-view .input {
-  font-size: var(--text-sm);
-  line-height: var(--text-sm--line-height);
-}
-.remote-details-view .button--icon-only {
-  width: calc(var(--spacing) * 9);
-  height: calc(var(--spacing) * 9);
-}
 .changes-view { display: flex; flex-direction: column; background: #0a0c10; overflow: hidden; }
 .changes-heading { padding: 14px 16px; font-size: 16px; border-bottom: 1px solid var(--separator); }
 .diff-body { min-height: 0; --diffs-font-size: 13px; --diffs-line-height: 25px; }

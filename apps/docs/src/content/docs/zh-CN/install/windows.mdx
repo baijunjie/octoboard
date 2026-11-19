@@ -1,0 +1,46 @@
+---
+title: "Windows"
+description: "适用于 Intel 或 AMD 处理器的电脑（绝大多数 Windows 电脑），需要 Windows 10 版本 21H2 或更高版本。在 Arm 版 Windows 11 上，这个 x64 应用会以仿真方式运行。"
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+适用于 Intel 或 AMD 处理器的电脑（x64，绝大多数 Windows 电脑），需要 Windows 10 版本 21H2 或更高版本。在 Arm 版 Windows 11 上，这个 x64 应用会以仿真方式运行。
+
+<LinkButton href={downloads.windows}>下载 Windows 版</LinkButton>
+
+<Aside>Windows 应用仍处于 Beta 阶段。</Aside>
+
+## 安装
+
+<Steps>
+
+1. 点击上面的按钮下载安装程序，文件名以 <code dir="ltr">x64-setup.exe</code> 结尾。
+2. 打开下载的文件，运行安装程序。它只为你当前的用户账号安装 {productName}，不需要管理员权限。
+
+   应用尚未进行代码签名，因此 Microsoft Defender SmartScreen 可能显示“Windows 已保护你的电脑”。请点击“更多信息”，再点击“仍要运行”。
+
+   应用窗口由 Microsoft Edge WebView2 绘制。电脑上没有 WebView2 时，安装程序会下载它，所以请保持联网。
+3. 从“开始”菜单打开 {productName}。
+4. 安装至少一个编程智能体（见下文），然后在 {productName} 中点击<strong>添加项目</strong>，打开一个项目文件夹。
+
+</Steps>
+
+看到主窗口打开，就安装完成了。
+
+## 安装编程智能体
+
+{productName} 本身不带 AI 智能体，请按各自的官方说明安装并登录你要用的智能体，{productName} 会自动识别。目前支持：
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+如果你使用 Claude Code 或 Codex，请先安装 [Git for Windows](https://git-scm.com/download/win)，它们需要它才能工作。
+
+## 更新
+
+有新版本时，{productName} 会提醒你，你可以直接在应用内安装，不用再回到这个页面。
+
+<a href={downloads.releases}>所有历史版本</a>

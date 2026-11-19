@@ -1,0 +1,119 @@
+---
+title: "通过 SSH 连接"
+description: "通过 SSH，在这台电脑的桌面应用或浏览器中使用 Linux 服务器或另一台电脑上的 Octoboard。SSH 会在两台设备之间建立加密直连，无需中转或云服务。"
+---
+
+import { Code, Steps } from "@astrojs/starlight/components";
+import { commands, productName } from "../../../commands.ts";
+
+通过 SSH，在这台电脑的桌面应用或浏览器中使用 Linux 服务器或另一台电脑上的 {productName}。SSH 会在两台设备之间建立加密直连，无需中转或云服务。
+
+不确定该用哪种方式？[选择连接方式](../choose-how-to-connect/)对比了这种方式和不需要 SSH、只用浏览器的几种方式。
+
+<strong>这台电脑上的桌面应用</strong> · <strong>通过 SSH 转发访问的浏览器</strong> ⟷ SSH ⟷ <strong>Linux 服务器或另一台电脑</strong>
+
+<details>
+<summary>新手须知</summary>
+
+- <strong>主机：</strong>运行 {productName}、你要连过去的那台机器，可以是 Linux 服务器，也可以是另一台 Mac 或 Windows 电脑。
+- <strong>服务器：</strong>这里指通过网络登录的 Linux 机器，通常是租来的，没有自己的屏幕。
+- <strong>SSH：</strong>一种通用的加密方式，用来登录另一台机器并在上面输入命令。macOS、Windows 和 Linux 都自带。
+- <strong>终端：</strong>输入命令的窗口，macOS 上是“终端”，Windows 上是 PowerShell。
+- <strong>SSH 转发：</strong>一条 SSH 命令，让主机上的东西出现在你自己的电脑上，浏览器就能在本机打开它。
+- <strong>指纹（主机密钥）：</strong>标识一台机器 SSH 身份的一串短码。核对一次，就能确认连上的是正确的机器。
+- <strong>密钥文件：</strong>代替密码登录用的文件。有些服务器提供商会给你一个。
+
+</details>
+
+## 准备工作
+
+- <strong>能用 SSH 登录主机。</strong>如果主机是 Linux 服务器，地址和用户名由服务器提供商给出。可以先试一下：打开“终端”（macOS）或 PowerShell（Windows），用你的用户名和服务器地址运行下面的命令。第一次连接时，它会问是否信任这台服务器，输入 <code dir="ltr">yes</code>。
+
+  <Code code={commands.signIn} lang="sh" />
+
+  如果主机是 Mac 或 Windows 电脑，需要在它的系统设置里开启 SSH 登录，方法见[用另一台电脑作为主机](#用另一台电脑作为主机)。
+- <strong>如果主机是 Linux 服务器，需要先在上面安装并启动 {productName}。</strong>方法见[安装 › Linux 服务器](../install/linux/)。{productName} 的服务器程序 octoboardd，应用里称为“守护进程”。
+- <strong>这台电脑上的 {productName} 应用</strong>（macOS 或 Windows 版）。只用浏览器的话可以不装。
+
+## 连接 Linux 服务器
+
+<Steps>
+
+1. 用运行 {productName} 的账号通过 SSH 登录服务器，运行这条命令，复制以 <code dir="ltr">{commands.connectionScheme}</code> 开头的那一行。这就是连接信息，桌面应用靠它知道连到哪里、怎么连。
+
+   <Code code={commands.connection} lang="sh" />
+
+   如果这台电脑访问服务器时用的是另一个地址或 SSH 端口，请在命令里加上 <code dir="ltr">{commands.host}</code> 或 <code dir="ltr">{commands.sshPort}</code>，以生成正确的连接信息。
+
+   它同时输出的二维码包含相同的一行文字，目前还没有应用支持扫码。
+2. 在这台电脑的 {productName} 应用中，点击左侧栏的<strong>远程设备</strong>，或在 macOS 菜单栏中选择<strong>远程连接 › 远程设备</strong>。在 Windows 上，也可以从窗口的系统菜单或任务栏图标的跳转列表中选择<strong>远程设备</strong>。
+3. 点击<strong>添加远程守护进程</strong>，再点击<strong>连接信息</strong>旁的<strong>粘贴</strong>，自动填好各项。
+4. 在<strong>认证方式</strong>中，如果你用账号密码登录，选<strong>密码</strong>；如果服务器提供商给的是密钥文件（文件名常像 <code dir="ltr">id_ed25519</code>，或以 <code dir="ltr">.pem</code> 结尾），选<strong>密钥文件</strong>，并填写它在这台电脑上的位置。
+5. 点击<strong>保存</strong>，再点击<strong>连接</strong>。如果要求输入密码，请输入。
+
+   如果你粘贴了连接信息，其中已经带有服务器的身份（指纹），应用会替你核对。如果你是手动填写的地址，第一次连接时应用会显示一个指纹。为了确认连上的是正确的机器，请把它和在服务器上运行下面这条命令得到的指纹比对，一致时再连接：
+
+   <Code code={commands.fingerprintCommand} lang="sh" />
+
+</Steps>
+
+看到一个独立的 {productName} 窗口打开，显示服务器上的项目和会话，就说明成功了。
+
+## 用另一台电脑作为主机
+
+你也可以连到另一台运行 {productName} 应用的 Mac 或 Windows 电脑。
+
+<Steps>
+
+1. 在你要连过去的电脑上，打开 {productName} 的<strong>设置 › 远程访问</strong>。
+2. 点击那里的<strong>打开系统设置</strong>（macOS）或<strong>打开设置</strong>（Windows），按该行给出的路径开启<strong>远程登录</strong>（macOS）或 <strong>OpenSSH 服务器</strong>（Windows），让这台电脑接受 SSH 登录。这一步需要管理员权限。回到 {productName}，该行会显示<strong>已开启</strong>。
+3. 开启<strong>允许远程访问</strong>，点击<strong>允许</strong>确认，并保持 {productName} 运行，退出后远程访问会随之中断。
+4. 在<strong>{productName} 应用</strong>标签页点击<strong>复制连接信息</strong>，再通过邮件或聊天工具发到另一台电脑。
+5. 在你要用来工作的电脑上，按[连接 Linux 服务器](#连接-linux-服务器)的第 2 到 5 步添加这台主机，粘贴你发过去的信息。用主机上的用户名和密码登录。
+
+</Steps>
+
+看到一个独立的窗口打开，显示主机上的项目和会话，就说明成功了。
+
+## 从浏览器连接
+
+<Steps>
+
+1. 获取 SSH 转发命令：
+
+   - <strong>主机是 Mac 或 Windows 电脑时，</strong>先完成[用另一台电脑作为主机](#用另一台电脑作为主机)的第 1 到 3 步。然后在<strong>浏览器</strong>标签页找到<strong>第 1 步：SSH 转发</strong>。点击命令中的地址，选择另一台电脑访问这台电脑所用的地址（或选择<strong>自行输入地址</strong>，稍后自己替换 <code dir="ltr">{commands.server}</code>），然后点击<strong>复制转发命令</strong>。再在<strong>第 2 步：浏览器地址</strong>处点击<strong>复制地址</strong>。
+   - <strong>主机是 Linux 服务器时，</strong>在服务器上运行这条命令。它会先输出浏览器地址，再输出要运行的 SSH 命令。
+
+     <Code code={commands.address} lang="sh" />
+
+     把命令中的 <code dir="ltr">{commands.server}</code> 换成服务器地址。
+2. 在用来浏览的电脑上，打开“终端”（macOS）或 PowerShell（Windows），运行这条 SSH 命令。窗口可能会要求输入密码，之后就不再显示任何内容，这是正常的。使用期间请不要关闭它，关闭后浏览器就会断开。
+3. 在浏览器中打开以 <code dir="ltr">http://127.0.0.1:</code> 开头的浏览器地址。
+
+</Steps>
+
+看到 {productName} 在浏览器标签页中打开，而且没有要求你登录，就说明成功了。
+
+只有能通过 SSH 转发访问 {productName} 的人才能使用这个地址。请保管好它：地址里的密钥可以完全控制 {productName}，它会留在浏览器的历史记录和书签里，开启同步后还会同步到你的其他设备。
+
+## 连不上时
+
+- <strong>提示“无法连接到服务器”，或 SSH 命令提示“Connection refused”、超时：</strong>主机上的 SSH 登录没有开启，或地址、SSH 端口不对。请确认<strong>远程登录</strong>或 <strong>OpenSSH 服务器</strong>已开启，并且能用上面的 <code dir="ltr">ssh</code> 命令登录。
+- <strong>提示“无法登录”或“Permission denied”：</strong>用户名、密码或密钥文件不对。
+- <strong>提示“主机密钥不匹配”：</strong>应答的机器不是你之前连过的那台。服务器重装后会这样，但也可能是出了问题。弄清原因之前请不要继续。
+- <strong>浏览器页面打不开：</strong>SSH 窗口被关掉了，或其中的命令已停止。请重新运行它，再刷新页面。
+
+## 连接安全
+
+- <strong>不额外开放端口：</strong>{productName} 只接受来自主机本机的连接，所以要从另一台电脑连接，需要先通过 SSH 登录主机。这就是为什么需要 SSH，或者某种[第三方中转](../choose-how-to-connect/)。
+- <strong>核对主机身份：</strong>首次成功连接后，应用会记住主机的身份标识（主机密钥），以后标识变了就拒绝连接并提醒你。
+- <strong>不保存密码：</strong>首次用密码或自己的密钥文件登录后，应用会为这台电脑设置一把专用 SSH 密钥，供以后登录使用。
+- <strong>随时收回权限：</strong>在主机允许登录的 SSH 密钥列表中（Linux 和 macOS 上是 <code dir="ltr">{commands.authorizedKeys}</code> 文件）删掉这台电脑对应的一行，这把密钥就不能再登录了；已经建立的连接不受影响，直到它自行断开。
+
+## 在远程窗口中工作
+
+- <strong>每个 SSH 连接目标一个窗口：</strong>用户名、主机或 SSH 端口不同的连接，各自打开独立的窗口，项目、会话和通知互不混在一起。
+- <strong>一眼看到连接状态：</strong>点开 macOS 菜单栏或 Windows 通知区域里的应用图标，每条连接都有自己的标签页。
+- <strong>远程网页在本机打开：</strong>智能体在主机上启动网站后，点击它给出的 <code dir="ltr">{commands.localhost}</code> 链接，应用会经由 SSH 在这台电脑上打开该网站。
+- <strong>远程文件在本机打开：</strong>你可以在远程窗口中直接查看文件，也可以下载一份副本，用这台电脑的默认应用打开。
+- <strong>断线自动重连：</strong>网络中断后，窗口会一直尝试重新连接，直到连上或你关闭窗口。

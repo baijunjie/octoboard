@@ -1,0 +1,21 @@
+---
+title: 소개
+description: Octoboard가 무엇인지, 어떤 가이드부터 읽으면 좋은지 안내합니다.
+---
+
+import { productName } from "../../../commands.ts";
+
+{productName}는 코딩 에이전트를 위한 로컬 오픈 소스 개발 작업 공간입니다. 이미 쓰고 있는 에이전트와 계정을 한곳에 모아 줍니다. 세션을 나란히 실행하고, 대화를 유지한 채 계정을 바꾸고, 제공업체 사이에서 작업을 넘기고, 조율 에이전트가 여러 프로젝트에 일을 나눠 맡기게 할 수 있습니다.
+
+코딩 에이전트는 코드를 대신 작성하고 실행해 주는 AI 어시스턴트로, Claude Code나 Codex가 그 예입니다. {productName}에는 에이전트가 들어 있지 않으며, 이미 가지고 있는 에이전트를 실행합니다.
+
+## 어디서 시작할까요
+
+- **이 컴퓨터에서 {productName} 사용하기:** [macOS](install/macos/) 또는 [Windows](install/windows/)용 앱을 설치하세요.
+  대부분의 사용자는 이것만 있으면 됩니다.
+- **Linux 서버에서 에이전트 실행하기** (임대했거나 어딘가에 계속 켜 둔, 보통 화면이 없는 컴퓨터):
+  [서버 프로그램을 설치](install/linux/)한 다음, [SSH로 연결](remote-connections/)에서 설명하는 대로 데스크톱 앱에서 연결하세요.
+- **한 컴퓨터의 {productName}를 다른 컴퓨터에서 사용하기:** 접속 방법을 비교해 주는 [연결 방법 선택](choose-how-to-connect/)부터 보세요. 간단히 정리하면 다음과 같습니다.
+  - SSH 로그인을 켠 상태에서 다른 컴퓨터의 앱이나 브라우저로 접속: [SSH로 연결](remote-connections/)
+  - SSH 로그인을 켜지 않고 브라우저로 접속: [Tailscale로 브라우저 연결](browser-over-tailscale/) 또는
+    [UU Remote로 브라우저 연결](browser-over-uu-remote/)

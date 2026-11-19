@@ -13,6 +13,17 @@ function systemLanguages(): readonly string[] {
   return navigator.languages?.length ? navigator.languages : [navigator.language];
 }
 
+/** The tags the two Chinese languages had before they took region tags (`zh-CN`, `zh-TW`), which a cache written by an
+ * earlier version still holds; the daemon's own setting is migrated, the cache is read through this. */
+const RETIRED_TAGS: Readonly<Record<string, Language>> = { "zh-Hans": "zh-CN", "zh-Hant": "zh-TW" };
+
+/** The cached language, or the system's when the cache holds none this build offers. */
+function cachedLanguage(raw: unknown): Language {
+  if (isLanguage(raw)) return raw;
+  if (typeof raw === "string" && Object.hasOwn(RETIRED_TAGS, raw)) return RETIRED_TAGS[raw]!;
+  return matchLanguage(systemLanguages());
+}
+
 /**
  * The UI's language. Once connected it is the one the window's daemon holds, which every client of
  * that daemon shares (`useInterfaceLanguage`); what is kept here is only a cache of it, so that the
@@ -24,7 +35,7 @@ function systemLanguages(): readonly string[] {
  */
 const language = createPersistedPreference<Language>(
   PREFERENCE_KEYS.language,
-  (raw) => (isLanguage(raw) ? raw : matchLanguage(systemLanguages())),
+  cachedLanguage,
   (value) => value,
   { scope: "daemon", inherit: true },
 );
@@ -41,7 +52,7 @@ const localLanguage =
     ? language
     : createPersistedPreference<Language>(
       PREFERENCE_KEYS.language,
-      (raw) => (isLanguage(raw) ? raw : matchLanguage(systemLanguages())),
+      cachedLanguage,
       (value) => value,
     );
 

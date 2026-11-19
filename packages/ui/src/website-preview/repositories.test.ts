@@ -374,7 +374,7 @@ describe("the website's eight independent repository fixtures", () => {
   );
 
   it("preserves all scenes, the sample report page and project branch metadata", () => {
-    for (const lang of ["en", "zh-Hans"] as const)
+    for (const lang of ["en", "zh-CN"] as const)
       for (const scene of ["overview", "focus", "changes"] as const) {
         const { scenario } = createPreviewScenario(scene, lang);
         expect(scenario.steps).toHaveLength(scene === "changes" ? 4 : 1);
@@ -390,7 +390,7 @@ describe("the website's eight independent repository fixtures", () => {
       }
   });
 
-  it.each(["en", "zh-Hans"] as const)(
+  it.each(["en", "zh-CN"] as const)(
     "keeps one ongoing workspace behind every %s view",
     (language) => {
       const overview = createPreviewScenario("overview", language);

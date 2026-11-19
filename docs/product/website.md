@@ -1,25 +1,31 @@
 # Website
 
-The official website presents Octoboard, its developer's motivation, its downloads, its remote connections guide, and its privacy policy. It is a static public
-site, separate from the application: visiting it does not connect to a local daemon, open a real agent session, or
-require an account.
+The official website presents Octoboard, its developer's motivation, its downloads and its privacy policy, and links to
+the documentation site for how-to guides. It is a static public site, separate from the application: visiting it does
+not connect to a local daemon, open a real agent session, or require an account.
 
 Its search indexing and agent-readable copies are described in `docs/product/website-search-indexing.md`, its
 product preview in `docs/product/website-product-preview.md`, its download page and download links in
 `docs/product/website-download-page.md`, and its privacy disclosures and analytics consent in
-`docs/product/website-privacy.md`.
+`docs/product/website-privacy.md`. The documentation site served under `/docs/` is described in
+`docs/product/documentation-site.md`.
 
 ## Publishing
 
 A push to `main` publishes the static site to GitHub Pages unless every file it changes is known to be outside what
 generating the site reads: the daemon, the desktop app package (except the app icon, which the site's preview of the
-app ships), `scripts/` other than `scripts/lib/`, the Rust workspace files, documentation and other Markdown, agent
-files, the other CI definitions and hooks, the brand assets and the license. A file outside those lists publishes, so
-an input added outside those areas is never missed. Pushes to other branches publish nothing. The same publication can
+app ships), `scripts/` other than `scripts/lib/`, the Rust workspace files, the repository's documentation (`docs/`) and
+other Markdown, agent files, the other CI definitions and hooks, the brand assets and the license. Markdown in the
+documentation site's app (`apps/docs/`) is not excluded: any change there publishes. A file outside those lists
+publishes, so an input added outside those areas is never missed. Pushes to other branches publish nothing. The same publication can
 be started manually, and a manual run publishes the selected revision to that same site; start one after changing the
 repository's Pages settings or after a failed publication, which no push then retries by itself. Every published
 release also starts a publication of `main`, so that the download links point at the new version (see
 `docs/product/website-download-page.md`, "Where download links point").
+
+Every publication also builds the documentation site and publishes it under `docs/` of the same site (see
+`docs/product/documentation-site.md`), with the same origin and base path as the website. A publication whose website output already holds a
+`docs/` path fails, since that path belongs to the documentation site.
 
 Publication uses the origin and base path configured for the repository's GitHub Pages site, passed to generation
 as `NUXT_PUBLIC_SITE_ORIGIN` and `NUXT_APP_BASE_URL`. An origin reported as `http` is changed to `https` before
@@ -32,20 +38,30 @@ both names exist, GitHub Pages redirects `www.octoboard.dev` to `octoboard.dev`.
 
 ## Pages and languages
 
-The site has a homepage, a download page, a privacy page and a remote connections guide. Paths below are relative to the site's deployment root:
+The site has a homepage, a download page and a privacy page. Paths below are relative to the site's deployment root:
 
-- English: `/`, `/download/`, `/privacy/` and `/remote/`, without an `en` prefix.
-- Other languages: `/<locale>/`, `/<locale>/download/`, `/<locale>/privacy/` and `/<locale>/remote/`.
-- Simplified Chinese uses the route prefix `zh`, with the language identified as `zh-Hans` in page metadata.
-  Traditional Chinese uses `zh-Hant` for both.
-- Portuguese uses `pt` for both its route prefix and page language.
+- English: `/`, `/download/` and `/privacy/`, without an `en` prefix.
+- Other languages: `/<locale>/`, `/<locale>/download/` and `/<locale>/privacy/`.
+- A language's route prefix is its language tag, the same tag that identifies it in page metadata: Simplified Chinese
+  is `zh-CN`, Traditional Chinese `zh-TW`, Portuguese `pt`.
+- The two Chinese languages were earlier published under `zh` and `zh-Hant`. Every page published there (`/zh/`,
+  `/zh/download/`, `/zh/privacy/`, and the same under `/zh-Hant/`) is a redirect page to the same page under
+  `zh-CN` or `zh-TW`, carrying the visitor's query and fragment along, in the shape of the fixed download addresses'
+  pages (see "Fixed download addresses" in `docs/product/website-download-page.md`): in English, not indexed, with no
+  canonical URL, and not in the sitemap. A language choice remembered under `zh` or `zh-Hant` is read as `zh-CN` or
+  `zh-TW`. The documentation site keeps its former Chinese paths the same way (see "Addresses and languages" in
+  `docs/product/documentation-site.md`).
+- `/remote/` and `/<locale>/remote/`, under `zh` and `zh-Hant` too, are redirect pages of the same shape to the
+  documentation site's Connect over SSH guide in that language (`zh` and `zh-Hant` to `zh-CN` and `zh-TW`), so links to
+  the remote connections guide the site used to have keep working; they do not carry the query or fragment.
 
 All 17 languages have complete website translations, including navigation, all 13 feature cards, preview
-controls, the illustrative workflow, the remote connections guide, the developer's motivation, questions and answers, the download page, privacy
+controls, the illustrative workflow, the remote connections overview, the developer's motivation, questions and answers, the download page, privacy
 text, client error messages, and page metadata: Arabic, German, English, Spanish, French, Hindi, Indonesian, Italian,
 Japanese, Korean, Portuguese, Russian, Thai, Turkish, Vietnamese, Simplified Chinese, and Traditional
 Chinese. This coverage is specific to the website; the application's translation coverage is described in
-`docs/product/language.md`, "What is translated so far".
+`docs/product/language.md`, "What is translated so far", and the documentation site's in "Addresses and languages" in
+`docs/product/documentation-site.md`.
 The application fragments in the feature wall use the application's translations: their controls and labels follow
 the website's language in all 17 languages.
 
@@ -208,9 +224,11 @@ meaning, says that the macOS or Windows app can be downloaded or the Linux serve
 three platform links — macOS, Windows and Linux server, each with its icon — that open the download page at that
 platform's tab, then the Download button, and a closing note that repeats the beta status beside the MIT License. Other
 repository links open GitHub; the footer links to the developer's motivation at the localized homepage's
-`#developer-intent` and to the localized privacy page, explicitly names the MIT License in its license link, provides
-the operator's email address, and ends with the analytics settings button described in
-`docs/product/website-privacy.md`, "Analytics consent". The hero, open-source section and footer use icon-only GitHub
+`#developer-intent`, to the documentation site's Choose how to connect page under the Remote connections label, to the
+documentation site's home under the Docs label, and to the localized privacy page, explicitly names the MIT License in
+its license link, provides the operator's email address, and ends with the analytics settings button described in
+`docs/product/website-privacy.md`, "Analytics consent". Links into the documentation site open it in the website page's
+language. The hero, open-source section and footer use icon-only GitHub
 links with 44-by-44-pixel targets, accessible names and hover titles.
 
 The footer forms a compact centered group: the wordmark and localized tagline, followed by navigation links and
@@ -222,8 +240,9 @@ wordmark, centered on the wordmark. Under that group, centered, is the sentence 
 meanings (see "Brand slogan"). Decorative graphics do not act as slide or pagination controls.
 
 The floating header stays visible while scrolling. Its inline navigation links to the feature wall
-(`#benefits`), product preview (`#product-preview`) and the remote connections guide, alongside language selection and
-the Download action. The inline links are hidden at widths of 1200 pixels or less. The footer also links to the guide. The header has a glass surface with edge refraction where supported and a sheen that follows
+(`#benefits`), product preview (`#product-preview`) and, labelled Docs, the documentation site's home in the page's
+language, alongside language selection and the Download action. The inline links are hidden at widths of 1200 pixels
+or less; the footer's Docs link stays. The header has a glass surface with edge refraction where supported and a sheen that follows
 the pointer. Browsers without refraction support use blurred glass; those without backdrop blur use a more opaque
 surface.
 
@@ -273,30 +292,11 @@ remains localized text rather than part of the wordmark artwork.
 
 ## Remote connections
 
-The fourth numbered homepage section gives a short overview, an SSH diagram and a link to the localized setup guide.
-The guide is at `/remote/` in English and `/<locale>/remote/` in other languages. It repeats the diagram and uses one
-reading column, with a sticky contents list on wide screens and a collapsible contents list before the instructions
-on phones.
-
-Each of the three ways to connect is a vertical list of numbered steps:
-
-- Connect to Linux from the desktop app. Install and start the daemon, including the installer's PATH advice, copy
-  its connection details, then add and connect to it. The guide gives the Windows system menu and jump list entry.
-  Pasting a fingerprint saves it automatically, and a manually entered host's fingerprint is checked against the
-  server's before it is confirmed. A framed snapshot shows the Connection details field and its Paste button.
-- Use another desktop computer as the host. Enable the system SSH server and the app's remote access, copy the app's
-  connection details and use them on the other computer.
-- Connect from a browser. Get the SSH forward command, replace its `<server>` placeholder for a Linux server, run
-  it on your computer and keep it running while using the browser address. The key works only for someone who can
-  reach Octoboard and can travel with history, bookmarks and sync.
-
-Commands share the download page's copyable command block. The instructions quote the app's localized controls
-using inline references, including the Save and Paste buttons and the path to Remote access. The Markdown guide
-emphasizes the same labels and uses inline code for commands, flags and paths. The connection steps explain what each
-command or setting does. Each item under Security and In a remote window starts with a bold benefit followed by one
-sentence explaining how it works, including that windows are per SSH destination, identified by user, host and
-SSH port. The application behavior is described in
-`docs/product/remote-daemons.md`.
+The fourth numbered homepage section gives a short overview — using the macOS or Windows app to work on a Linux server
+or another computer through SSH, straight to that machine with no relay or cloud service — an SSH diagram, and a "Read
+the setup guide" link to the documentation site's Connect over SSH guide in the page's language. The setup steps
+themselves are in the documentation site (see "Pages and sidebar" in `docs/product/documentation-site.md`); the
+application behavior is described in `docs/product/remote-daemons.md`.
 
 ## Platform availability
 
@@ -309,8 +309,8 @@ identifies the iOS and Android apps as planned.
 Linux is the server form (see `docs/product/server-form.md`), not a Linux desktop app. The site does not give an
 availability date.
 
-After the list, a note in the visitor's language says that each system's requirements and installation steps are on the
-download page, followed by a Download link to the localized download page.
+After the list, a note in the visitor's language says that each system's requirements, and a link to its installation
+guide, are on the download page, followed by a Download link to the localized download page.
 
 Status: not implemented — the iOS and Android apps. Each appears with a platform icon, the shared planned badge, and no
 download or availability date. The homepage Markdown includes the same introduction, the same status for each row, the
@@ -343,7 +343,8 @@ interactive controls, including questions and project nodes, show keyboard focus
 
 An unknown address receives a branded 404 page with the original mascot, an explanation, and a link back to the
 homepage. The static GitHub Pages fallback is in English, works without JavaScript, and preserves the requested missing
-address rather than replacing it with a different URL. Its return-home link opens the English homepage under the site's
+address rather than replacing it with a different URL. A missing address under the documentation site's `/docs/` gets
+this page too. Its return-home link opens the English homepage under the site's
 deployment root. Its share image is the English one in `docs/product/website-search-indexing.md`, "Search indexing and
 agent-readable copies".
 

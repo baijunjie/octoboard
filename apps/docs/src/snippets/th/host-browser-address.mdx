@@ -1,0 +1,12 @@
+import { productName } from "../../commands.ts";
+
+{/* The host's steps both relay guides share: turning on remote access and copying the browser address. Pass
+`windows` on a Windows host, which also needs the browser port. */}
+
+ใน {productName} ให้เปิด <strong>การตั้งค่า › การเข้าถึงระยะไกล</strong> เปิดสวิตช์ <strong>อนุญาตการเข้าถึงระยะไกล</strong> แล้วเลือก <strong>อนุญาต</strong> เพื่อยืนยัน จากนั้นจะมีสองแท็บปรากฏใต้สวิตช์ ที่แท็บ <strong>เบราว์เซอร์</strong> ให้เลือก <strong>คัดลอกที่อยู่</strong> ใต้ <strong>ขั้นตอนที่ 2: ที่อยู่ของเบราว์เซอร์</strong>{props.windows ? <> และจดตัวเลขใต้ <strong>พอร์ตเบราว์เซอร์</strong> ไว้ด้วย</> : null}
+
+ส่งที่อยู่นี้ไปยังคอมพิวเตอร์อีกเครื่องด้วยวิธีที่มีแต่คุณที่อ่านได้ เช่น โน้ตถึงตัวเอง เพราะที่อยู่นี้ทำหน้าที่เหมือนรหัสผ่าน
+
+ข้าม <strong>ขั้นตอนที่ 1: SSH forward</strong> ไปได้เลย การตั้งค่าในแอปพูดถึง SSH หลายแห่ง แต่ตรงนี้ไม่ต้องสนใจ เพราะคู่มือนี้ใช้เพียงที่อยู่ของเบราว์เซอร์
+
+เปิด {productName} ทิ้งไว้ หากปิดแอป การเข้าถึงระยะไกลจะหยุดทำงาน

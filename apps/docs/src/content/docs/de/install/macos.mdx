@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "Für Macs mit Apple-Chip und Intel-Macs, ab macOS 11."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Für Macs mit Apple-Chip und Intel-Macs, ab macOS 11.
+
+<LinkButton href={downloads.macos}>Für macOS herunterladen</LinkButton>
+
+<Aside>Die macOS-App ist eine Betaversion.</Aside>
+
+## Installieren
+
+<Steps>
+
+1. Lade die App mit der Schaltfläche oben herunter. Du erhältst ein Disk-Image, eine Datei, deren Name auf <code dir="ltr">.dmg</code> endet.
+2. Öffne die heruntergeladene Datei. Ziehe {productName} im geöffneten Fenster auf den Ordner „Programme“.
+3. Öffne {productName} aus dem Ordner „Programme“ oder über das Launchpad.
+4. Installiere mindestens einen Coding-Agenten (siehe unten) und wähle dann in {productName} <strong>Projekt hinzufügen</strong>, um einen Projektordner zu öffnen.
+
+</Steps>
+
+Sobald sich das Hauptfenster öffnet, bist du fertig.
+
+## Einen Coding-Agenten installieren
+
+{productName} bringt keinen KI-Agenten mit. Installiere die, die du verwenden möchtest, nach deren eigener Anleitung und melde dich bei ihnen an. {productName} findet sie automatisch. Es funktioniert mit:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## Updates
+
+Wenn eine neue Version erscheint, sagt dir {productName} Bescheid, und du kannst sie in der App installieren. Du musst nicht zu dieser Seite zurückkehren.
+
+<a href={downloads.releases}>Alle früheren Versionen</a>

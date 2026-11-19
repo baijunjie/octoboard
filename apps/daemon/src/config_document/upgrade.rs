@@ -102,6 +102,19 @@ fn from_v2(document: &mut Document) {
     }
 }
 
-/// Version 3 to 4. A document of 3 already carries the one language as `settings.interface_language`,
-/// which is where the current version reads it, so there is nothing to change.
-fn from_v3(_document: &mut Document) {}
+/// Version 3 to 4.
+///
+/// - `settings.interface_language` tags the two Chinese languages by region: `zh-Hans` becomes
+///   `zh-CN` and `zh-Hant` becomes `zh-TW`.
+fn from_v3(document: &mut Document) {
+    if let Some(Value::Object(settings)) = document.get_mut("settings") {
+        if let Some(language) = settings.get_mut("interface_language") {
+            let renamed = match language.as_str() {
+                Some("zh-Hans") => "zh-CN",
+                Some("zh-Hant") => "zh-TW",
+                _ => return,
+            };
+            *language = json!(renamed);
+        }
+    }
+}

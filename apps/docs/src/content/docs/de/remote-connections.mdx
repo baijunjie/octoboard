@@ -1,0 +1,119 @@
+---
+title: "Über SSH verbinden"
+description: "Nutze Octoboard auf einem Linux-Server oder einem anderen Computer von diesem Computer aus, in der Desktop-App oder in einem Browser, per SSH: eine verschlüsselte Verbindung direkt zu diesem Rechner, ohne Relay oder Cloud-Dienst."
+---
+
+import { Code, Steps } from "@astrojs/starlight/components";
+import { commands, productName } from "../../../commands.ts";
+
+Nutze {productName} auf einem Linux-Server oder einem anderen Computer von diesem Computer aus, in der Desktop-App oder in einem Browser, per SSH: eine verschlüsselte Verbindung direkt zu diesem Rechner, ohne Relay oder Cloud-Dienst.
+
+Du bist nicht sicher, ob das der richtige Weg für dich ist? [Verbindungsart wählen](../choose-how-to-connect/) vergleicht ihn mit den Wegen nur über den Browser, die kein SSH brauchen.
+
+<strong>Desktop-App auf diesem Computer</strong> · <strong>Browser über eine SSH-Weiterleitung</strong> ⟷ SSH ⟷ <strong>Linux-Server oder anderer Computer</strong>
+
+<details>
+<summary>Neu hier?</summary>
+
+- <strong>Host:</strong> der Rechner, auf dem {productName} läuft und den du erreichen möchtest, ein Linux-Server oder ein anderer Mac oder Windows-PC.
+- <strong>Server:</strong> hier ein Linux-Rechner, bei dem du dich über das Netzwerk anmeldest, meist einer, den du mietest und der keinen eigenen Bildschirm hat.
+- <strong>SSH:</strong> ein standardisierter, verschlüsselter Weg, sich an einem anderen Rechner anzumelden und dort Befehle einzugeben. Er ist in macOS, Windows und Linux eingebaut.
+- <strong>Terminal:</strong> das Fenster, in das du Befehle eingibst: Terminal unter macOS, PowerShell unter Windows.
+- <strong>SSH-Weiterleitung:</strong> ein SSH-Befehl, der etwas auf dem Host auf deinem eigenen Computer erscheinen lässt, sodass dein Browser es dort öffnen kann.
+- <strong>Fingerabdruck (Host-Schlüssel):</strong> ein kurzer Code, der das SSH eines Rechners identifiziert. Wenn du ihn einmal prüfst, weißt du, dass du den richtigen Rechner erreicht hast.
+- <strong>Schlüsseldatei:</strong> eine Datei, die dich statt eines Passworts anmeldet. Manche Serveranbieter geben dir eine.
+
+</details>
+
+## Was du brauchst
+
+- <strong>Eine Möglichkeit, dich per SSH am Host anzumelden.</strong> Bei einem Linux-Server nennt dir der Anbieter die Adresse und deinen Benutzernamen. Um zu prüfen, ob es funktioniert, öffne das Terminal (macOS) oder PowerShell (Windows) und führe den folgenden Befehl mit deinem Benutzernamen und der Adresse des Servers aus. Antworte beim ersten Mal mit <code dir="ltr">yes</code>, wenn gefragt wird, ob du dem Server vertraust.
+
+  <Code code={commands.signIn} lang="sh" />
+
+  Bei einem Mac oder Windows-PC als Host schaltest du die SSH-Anmeldung in den Systemeinstellungen ein; [Einen anderen Computer als Host verwenden](#einen-anderen-computer-als-host-verwenden) zeigt, wie.
+- <strong>Bei einem Linux-Server: {productName} darauf installiert und gestartet.</strong> [Installation › Linux-Server](../install/linux/) zeigt, wie. Das Serverprogramm von {productName}, octoboardd, nennt die App den Hintergrunddienst.
+- <strong>Die {productName}-App auf diesem Computer</strong>, für macOS oder Windows, es sei denn, du nutzt nur einen Browser.
+
+## Verbindung zu einem Linux-Server herstellen
+
+<Steps>
+
+1. Melde dich per SSH als der Benutzer, der {productName} ausführt, am Server an, führe diesen Befehl aus und kopiere die Zeile, die mit <code dir="ltr">{commands.connectionScheme}</code> beginnt: die Verbindungsdaten, die der App sagen, wo und wie sie sich verbinden soll.
+
+   <Code code={commands.connection} lang="sh" />
+
+   Wenn dieser Computer den Server unter einer anderen Adresse oder einem anderen SSH-Port erreicht, hänge <code dir="ltr">{commands.host}</code> oder <code dir="ltr">{commands.sshPort}</code> an den Befehl an, damit er die richtigen Verbindungsdaten ausgibt.
+
+   Der QR-Code, den er ebenfalls ausgibt, enthält dieselbe Zeile. Bisher scannt ihn keine App.
+2. Öffne in der {productName}-App auf diesem Computer <strong>Remote-Geräte</strong> in der Leiste links oder wähle unter macOS <strong>Fernverbindung › Remote-Geräte</strong> in der Menüleiste. Unter Windows kannst du <strong>Remote-Geräte</strong> auch im Systemmenü des Fensters oder in der Sprungliste des Taskleistensymbols wählen.
+3. Wähle <strong>Hintergrunddienst hinzufügen</strong> und dann <strong>Einfügen</strong> unter <strong>Verbindungsdaten</strong>, um die Felder auszufüllen.
+4. Wähle unter <strong>Anmeldung</strong> die Option <strong>Passwort</strong>, wenn du dich mit deinem Kontopasswort anmeldest. Wähle <strong>Schlüsseldatei</strong>, wenn dir dein Serveranbieter stattdessen eine Schlüsseldatei gegeben hat (oft mit einem Namen wie <code dir="ltr">id_ed25519</code> oder mit der Endung <code dir="ltr">.pem</code>), und gib an, wo sie sich auf diesem Computer befindet.
+5. Wähle <strong>Sichern</strong> und dann <strong>Verbinden</strong>. Gib dein Passwort ein, falls danach gefragt wird.
+
+   Wenn du die Verbindungsdaten eingefügt hast, kam die Identität des Servers (sein Fingerabdruck) mit, und die App prüft sie für dich. Wenn du die Adresse von Hand eingegeben hast, zeigt die App beim ersten Mal einen Fingerabdruck an. Um sicherzugehen, dass du den richtigen Rechner erreicht hast, vergleiche ihn mit dem, den dieser Befehl auf dem Server ausgibt, und verbinde dich nur, wenn beide übereinstimmen:
+
+   <Code code={commands.fingerprintCommand} lang="sh" />
+
+</Steps>
+
+Es hat geklappt, wenn sich ein eigenes {productName}-Fenster öffnet, das die Projekte und Sitzungen des Servers zeigt.
+
+## Einen anderen Computer als Host verwenden
+
+Du kannst auch einen Mac oder Windows-PC erreichen, auf dem die {productName}-App läuft.
+
+<Steps>
+
+1. Öffne auf dem Computer, den du erreichen möchtest, in {productName} <strong>Einstellungen › Fernzugriff</strong>.
+2. Wähle dort <strong>Systemeinstellungen öffnen</strong> (macOS) oder <strong>Einstellungen öffnen</strong> (Windows) und schalte <strong>Entfernte Anmeldung</strong> (macOS) oder <strong>OpenSSH Server</strong> (Windows) ein, wie es der Pfad in der Zeile angibt, damit dieser Computer SSH-Anmeldungen annimmt. Dafür sind Administratorrechte nötig. Zurück in {productName} zeigt die Zeile dann <strong>Ein</strong>.
+3. Schalte <strong>Fernzugriff erlauben</strong> ein, bestätige mit <strong>Erlauben</strong> und lass {productName} geöffnet: Wenn du es beendest, endet der Fernzugriff.
+4. Wähle auf dem Tab <strong>{productName}-App</strong> die Option <strong>Verbindungsdaten kopieren</strong> und sende sie an den anderen Computer, zum Beispiel per E-Mail oder Chat.
+5. Füge den Host auf dem Computer, von dem aus du arbeitest, wie in den Schritten 2 bis 5 von [Verbindung zu einem Linux-Server herstellen](#verbindung-zu-einem-linux-server-herstellen) hinzu und füge die gesendeten Daten ein. Melde dich mit deinem Benutzernamen und Passwort auf dem Host an.
+
+</Steps>
+
+Es hat geklappt, wenn sich ein eigenes Fenster mit den Projekten und Sitzungen des Hosts öffnet.
+
+## Über einen Browser
+
+<Steps>
+
+1. Besorge dir den Befehl für die SSH-Weiterleitung:
+
+   - <strong>Bei einem Mac- oder Windows-Host</strong> führe zuerst die Schritte 1 bis 3 von [Einen anderen Computer als Host verwenden](#einen-anderen-computer-als-host-verwenden) aus. Sieh dir dann auf dem Tab <strong>Browser</strong> den Abschnitt <strong>Schritt 1: SSH-Weiterleitung</strong> an. Klicke auf die Adresse im Befehl, um zu wählen, wie dein anderer Computer diesen erreicht (oder wähle <strong>Adresse selbst eingeben</strong> und ersetze <code dir="ltr">{commands.server}</code> später), und wähle dann <strong>Weiterleitungsbefehl kopieren</strong>. Wähle außerdem unter <strong>Schritt 2: Browser-Adresse</strong> die Option <strong>Adresse kopieren</strong>.
+   - <strong>Bei einem Linux-Server</strong> führe dies auf dem Server aus. Es gibt die Browser-Adresse aus und danach den SSH-Befehl, den du ausführen sollst.
+
+     <Code code={commands.address} lang="sh" />
+
+     Ersetze <code dir="ltr">{commands.server}</code> im Befehl durch die Adresse des Servers.
+2. Führe auf dem Computer, von dem aus du im Browser arbeitest, den SSH-Befehl im Terminal (macOS) oder in PowerShell (Windows) aus. Das Fenster fragt möglicherweise nach deinem Passwort und zeigt danach nichts mehr an; das ist normal. Lass es geöffnet, während du arbeitest: Wenn du es schließt, wird der Browser getrennt.
+3. Öffne die Browser-Adresse, die mit <code dir="ltr">http://127.0.0.1:</code> beginnt, in deinem Browser.
+
+</Steps>
+
+Es hat geklappt, wenn sich {productName} im Browser-Tab öffnet, ohne dass du dich anmelden musst.
+
+Nur wer {productName} über die SSH-Weiterleitung erreicht, kann diese Adresse verwenden. Halte sie geheim: Ihr Schlüssel gibt die volle Kontrolle, und sie bleibt im Verlauf und in den Lesezeichen des Browsers und wird mit deinen anderen Geräten synchronisiert, wenn die Browser-Synchronisierung eingeschaltet ist.
+
+## Wenn es nicht funktioniert
+
+- <strong>„Server nicht erreichbar“ oder der SSH-Befehl meldet „Connection refused“ oder läuft in ein Zeitlimit:</strong> Die SSH-Anmeldung ist auf dem Host ausgeschaltet, oder die Adresse oder der SSH-Port stimmt nicht. Prüfe, ob <strong>Entfernte Anmeldung</strong> oder <strong>OpenSSH Server</strong> eingeschaltet ist und ob du dich mit dem obigen <code dir="ltr">ssh</code>-Befehl anmelden kannst.
+- <strong>„Anmeldung fehlgeschlagen“ oder „Permission denied“:</strong> Benutzername, Passwort oder Schlüsseldatei sind falsch.
+- <strong>„Der Host-Schlüssel stimmt nicht überein“:</strong> Der Rechner, der antwortet, ist nicht derselbe, mit dem du dich zuvor verbunden hast. Das passiert, nachdem ein Server neu installiert wurde, kann aber auch bedeuten, dass etwas nicht stimmt. Mache erst weiter, wenn du den Grund kennst.
+- <strong>Die Browser-Seite lädt nicht:</strong> Das SSH-Fenster wurde geschlossen, oder sein Befehl wurde beendet. Führe ihn erneut aus und lade die Seite neu.
+
+## Sicherheit
+
+- <strong>Keine zusätzlichen öffentlichen Ports:</strong> {productName} nimmt nur Verbindungen vom Host selbst an, daher musst du dich für eine Verbindung von einem anderen Computer zuerst per SSH am Host anmelden. Deshalb brauchst du SSH oder eines der [Relays](../choose-how-to-connect/).
+- <strong>Prüfe, welchen Rechner du erreichst:</strong> Die App merkt sich beim ersten erfolgreichen Verbinden den Host-Schlüssel, die SSH-Identität des Rechners, und blockiert die Verbindung mit einer Meldung, wenn sich diese Identität später ändert.
+- <strong>Kein Passwort gespeichert:</strong> Nachdem du dich zum ersten Mal mit einem Passwort oder deiner eigenen Schlüsseldatei angemeldet hast, richtet die App einen eigenen SSH-Schlüssel ein, den dieser Computer für künftige Anmeldungen verwendet.
+- <strong>Einem Computer den Zugriff entziehen:</strong> Entferne den Eintrag dieses Computers aus der Liste der erlaubten SSH-Schlüssel des Hosts (<code dir="ltr">{commands.authorizedKeys}</code> unter Linux und macOS). Dieser Schlüssel kann sich dann nicht mehr anmelden; eine bereits geöffnete Verbindung bleibt bestehen, bis sie endet.
+
+## In einem Remote-Fenster
+
+- <strong>Ein Fenster pro SSH-Ziel:</strong> Verbindungen mit einem anderen Benutzernamen, Host oder SSH-Port öffnen jeweils ein eigenes Fenster, sodass sich ihre Projekte, Sitzungen und Mitteilungen nie vermischen.
+- <strong>Den Status jeder Verbindung sehen:</strong> Öffne das Menüleistensymbol der App unter macOS oder ihr Symbol im Infobereich unter Windows, um für jede Verbindung einen Tab zu sehen.
+- <strong>Entfernte Websites hier öffnen:</strong> Wenn ein Agent auf dem Host eine Website startet, klicke auf den Link <code dir="ltr">{commands.localhost}</code>, den er angibt, und die App öffnet diese Website per SSH auf diesem Computer.
+- <strong>Entfernte Dateien hier öffnen:</strong> Sieh dir eine Datei im Remote-Fenster an oder lade eine Kopie herunter, um sie in der Standard-App dieses Computers für diese Datei zu öffnen.
+- <strong>Automatisch neu verbinden:</strong> Wenn das Netzwerk ausfällt, versucht das Fenster so lange, sich neu zu verbinden, bis es klappt oder du es schließt.

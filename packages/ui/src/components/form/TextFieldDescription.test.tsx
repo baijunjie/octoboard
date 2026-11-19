@@ -8,7 +8,7 @@ import { TextFieldDescription } from "./TextFieldDescription";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-it.each(["en", "zh-Hans", "ar"] as const)("keeps only the drawn ratio LTR in %s while retaining the description and count threshold", (language) => {
+it.each(["en", "zh-CN", "ar"] as const)("keeps only the drawn ratio LTR in %s while retaining the description and count threshold", (language) => {
   const previous = currentLanguage();
   setLanguage(language);
   const container = document.body.appendChild(document.createElement("div"));

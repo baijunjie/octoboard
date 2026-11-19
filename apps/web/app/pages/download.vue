@@ -1,20 +1,22 @@
 <script setup lang="ts">
 import {
-  appPanelKeys,
+  appRequirementsKeys,
   detectDownloadTab,
   downloadTabs,
   isDownloadTab,
-  linuxCommandParts,
   releasesUrl,
   serverDownloads,
   type DownloadTab,
   type Downloads,
 } from "../../seo/downloads";
+import { remoteGuidePage } from "../../seo/page-outline";
+import { docsPath } from "../../seo/site-seo";
 
 const { t } = useSiteCopy();
 const config = useRuntimeConfig();
 const route = useRoute();
-const localePath = useLocalePath();
+const { locale } = useI18n();
+const docsHref = (page: Parameters<typeof docsPath>[2]) => docsPath(config.app.baseURL, locale.value, page);
 const downloads = config.public.downloads as Downloads;
 const allReleasesUrl = releasesUrl(config.public.repositoryUrl);
 useSeoMeta({
@@ -118,37 +120,13 @@ onBeforeUnmount(() => window.removeEventListener("hashchange", onHashChange));
         </div>
         <template v-if="tab.id !== 'linux'">
           <a :href="downloads[tab.id]" class="button">{{ t("downloadButton", { platform: tab.name }) }}</a>
-          <p v-for="key in appPanelKeys[tab.id]" :key="key">{{ t(key) }}</p>
+          <p>{{ t(appRequirementsKeys[tab.id]) }}</p>
         </template>
         <template v-else>
           <p>{{ t("downloadLinuxDescription") }}</p>
           <p>{{ t("downloadLinuxRange") }}</p>
-          <NuxtLink :to="localePath('/remote/')" class="text-link">
-            {{ t("remoteGuideLink") }}<span class="link-arrow" aria-hidden="true" />
-          </NuxtLink>
-          <ol class="download-steps">
-            <li>
-              <h3>{{ t("downloadInstallStep") }}</h3>
-              <InstallCommand />
-            </li>
-            <li>
-              <h3>{{ t("downloadStartStep") }}</h3>
-              <pre class="download-start" dir="ltr"><code>{{ linuxCommandParts.start }}
-              {{ linuxCommandParts.address }}</code></pre>
-            </li>
-            <li>
-              <h3>{{ t("downloadOpenStep") }}</h3>
-              <CommandMessage keypath="remoteBrowserServer" />
-              <p>{{ t("downloadBrowserSteps") }}</p>
-            </li>
-          </ol>
-          <details class="download-options">
-            <summary>{{ t("downloadOptionsLabel") }}</summary>
-            <CommandMessage keypath="downloadPathNote" />
-            <CommandMessage keypath="downloadPortNote" />
-            <CommandMessage keypath="downloadServiceSteps" />
-            <CommandMessage keypath="downloadUpgrade" />
-          </details>
+          <h3>{{ t("downloadInstallStep") }}</h3>
+          <InstallCommand />
           <p class="download-archives">
             <span>{{ t("downloadArchivesLabel") }}</span>
             <a
@@ -158,8 +136,14 @@ onBeforeUnmount(() => window.removeEventListener("hashchange", onHashChange));
               class="button"
             >{{ t("downloadArchive", { architecture: target.architecture }) }}</a>
           </p>
-          <TerminalDemo />
         </template>
+        <a :href="docsHref(tab.docsPage)" class="text-link">
+          {{ t("downloadGuideLink") }}<span class="link-arrow" aria-hidden="true" />
+        </a>
+        <a v-if="tab.id === 'linux'" :href="docsHref(remoteGuidePage)" class="text-link">
+          {{ t("downloadSshGuideLink") }}<span class="link-arrow" aria-hidden="true" />
+        </a>
+        <TerminalDemo v-if="tab.id === 'linux'" />
       </div>
     </section>
 

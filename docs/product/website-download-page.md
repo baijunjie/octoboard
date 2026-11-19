@@ -22,53 +22,38 @@ fragment selects that tab. The tabs follow the usual keyboard pattern: only the 
 arrow keys move between tabs (mirrored in Arabic's right-to-left layout) and wrap around, and Home and End go to the
 first and last tab; moving selects the tab.
 
+Each panel keeps to a summary and links to that system's installation guide on the documentation site, which holds
+the installation steps, options and troubleshooting (see "Pages and sidebar" in `docs/product/documentation-site.md`).
+Every link into the documentation site opens it in the page's language.
+
 **macOS panel**: a download button for macOS, then that it is for Apple silicon and Intel Macs on macOS 11 or later,
-and that later versions arrive through the app's own updates.
+then a "Read the installation guide" link to the documentation site's macOS guide.
 
 **Windows panel**: a download button for Windows, then that it is for x64 on Windows 10 version 21H2 or later, that on
 Windows 11 on Arm the x64 app runs under emulation, and that the installer downloads Microsoft Edge WebView2 when it is
-missing, which needs an internet connection; that it installs for the visitor's user account only; that the app is not
-code-signed yet, so Microsoft Defender SmartScreen may show "Windows protected your PC", which "More info", then "Run
-anyway" passes; and that later versions arrive through the app's own updates.
+missing, which needs an internet connection; then a "Read the installation guide" link to the documentation site's
+Windows guide.
 
 **Linux panel**: an introduction says that it installs `octoboardd`, the Octoboard daemon, on a Linux server without
-root and supports x86_64 and aarch64 on any distribution. The daemon is reachable over SSH from the macOS or Windows
-app or from a browser. A link opens the localized remote connections guide. Three numbered steps show the browser
-path:
+root, reachable from the macOS or Windows app or from a browser over SSH, and that it supports x86_64 and aarch64 on any
+distribution. Under an "Install on the server" heading, the install command,
+`curl --proto '=https' --tlsv1.2 -fsSL <site origin>/install.sh | sh` (see "The install script" in
+`docs/product/installing-the-server-form.md`), is in a horizontally scrollable, focusable block with a Copy button. A
+successful copy turns the button's label to Copied for 2 seconds and announces it to screen readers; a copy the browser
+refuses changes nothing, the command staying selectable. Links to each architecture's archive, x86_64 and aarch64,
+follow, in the website's download-button appearance, wrapping onto new lines where needed. Then come a "Read the
+installation guide" link to the documentation site's Linux server guide, a "Read the SSH connection guide" link to its
+Connect over SSH guide, and the terminal demonstration (below).
 
-1. **Install on the server.** The command, `curl --proto '=https' --tlsv1.2 -fsSL <site origin>/install.sh | sh` (see
-   "The install script" in `docs/product/installing-the-server-form.md`), is in a horizontally scrollable, focusable
-   block with a Copy button. A successful copy turns the button's label to Copied for 2 seconds and announces it to
-   screen readers; a copy the browser refuses changes nothing, the command staying selectable.
-2. **Start on the server.** A two-line command block shows `octoboardd start`, then `octoboardd address` to print the
-   address and the SSH command that forwards it.
-3. **Open on the visitor's own machine.** Replace `<server>` in the printed SSH command with the address the
-   visitor's machine uses to reach the server, run the command there, keep that connection open and open the printed
-   address in a browser.
-
-A collapsed options and troubleshooting disclosure follows, available without JavaScript too. It holds:
-
-- the PATH caveat: when the install says `~/.local/bin` is not on the PATH, run `octoboardd start` by the full path it
-  prints, or add the directory to the PATH;
-- the default port, 3369 (`--port <port>` picks another), and an example of the SSH command printed with the server's
-  details, `ssh -o ExitOnForwardFailure=yes -L 127.0.0.1:3369:/home/<you>/.octoboard/browser.sock <you>@<server>` (see
-  "The browser socket" in `docs/product/server-form.md`);
-- the service: replacing the install command's final `sh` with `sh -s -- --service` installs it as a systemd user
-  service that starts at once, `--port <port>` choosing another port; the script then turns lingering on, which keeps
-  the service running after logout and starting at boot, and only when it says it could not does the visitor run
-  `loginctl enable-linger "$USER"` once, possibly with sudo;
-- upgrading: run the install command again, then `octoboardd restart`.
-
-After the disclosure, links to each architecture's archive, x86_64 and aarch64, use the website's download-button
-appearance, wrapping onto new lines where needed. The terminal demonstration (below) follows them. The agent-readable
-Markdown uses headings for the three steps and the options, retaining all commands and troubleshooting content in full.
+The page's agent-readable Markdown is described in "Search indexing and agent-readable copies" in
+`docs/product/website-search-indexing.md`.
 
 Commands and code read left to right in every language, Arabic included. Under the panels, a link opens the
 repository's releases page, listing every release.
 
 ### The terminal demonstration
 
-An animation of the Linux steps: a terminal on the server runs the install command, prints the download and
+An animation of installing and opening the Linux server: a terminal on the server runs the install command, prints the download and
 installation, starts the daemon with `octoboardd start` and prints its address with `octoboardd address`, followed by
 the line saying to forward it with the SSH command it names; then a terminal on the visitor's own machine appears and
 runs that forward of the daemon's socket (without `-N`, so that the SSH session opens a shell on the server); then a
@@ -81,7 +66,8 @@ typed at an uneven, human pace.
 It plays once, from the start, when the page loads, and runs only while it is on screen and the page is visible,
 resuming where it was. A replay button on the server terminal plays it again from the start. With a reduced-motion
 preference it does not play and has no replay button, showing its final state, as it does without JavaScript. The
-animation is hidden from assistive technology, which reads a translated text alternative describing the same steps.
+animation is hidden from assistive technology, which reads a translated text alternative describing the same steps and
+saying that the installation guide explains each one.
 
 ## Where download links point
 

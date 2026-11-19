@@ -1,0 +1,119 @@
+---
+title: "Se connecter via SSH"
+description: "Utilisez Octoboard sur un serveur Linux ou un autre ordinateur depuis cet ordinateur, dans l’app de bureau ou un navigateur, par SSH : une connexion chiffrée directe vers cette machine, sans relais ni service cloud."
+---
+
+import { Code, Steps } from "@astrojs/starlight/components";
+import { commands, productName } from "../../../commands.ts";
+
+Utilisez {productName} sur un serveur Linux ou un autre ordinateur depuis cet ordinateur, dans l’app de bureau ou un navigateur, par SSH : une connexion chiffrée directe vers cette machine, sans relais ni service cloud.
+
+Vous ne savez pas si c’est la bonne voie pour vous ? [Choisir comment se connecter](../choose-how-to-connect/) la compare aux voies réservées au navigateur qui n’ont pas besoin de SSH.
+
+<strong>App de bureau sur cet ordinateur</strong> · <strong>Navigateur via une redirection SSH</strong> ⟷ SSH ⟷ <strong>Serveur Linux ou autre ordinateur</strong>
+
+<details>
+<summary>Vous débutez ?</summary>
+
+- <strong>Hôte :</strong> la machine sur laquelle {productName} fonctionne et que vous voulez atteindre, un serveur Linux ou un autre Mac ou PC Windows.
+- <strong>Serveur :</strong> ici, une machine Linux à laquelle vous vous connectez par le réseau, en général une machine que vous louez, sans écran propre.
+- <strong>SSH :</strong> une façon standard et chiffrée de se connecter à une autre machine et d’y taper des commandes. Il est intégré à macOS, Windows et Linux.
+- <strong>Terminal :</strong> la fenêtre dans laquelle vous tapez des commandes : Terminal sur macOS, PowerShell sous Windows.
+- <strong>Redirection SSH :</strong> une commande SSH qui fait apparaître sur votre propre ordinateur quelque chose qui se trouve sur l’hôte, pour que votre navigateur puisse l’y ouvrir.
+- <strong>Empreinte (clé d’hôte) :</strong> un court code qui identifie le SSH d’une machine. La vérifier une fois vous confirme que vous avez atteint la bonne machine.
+- <strong>Fichier de clé :</strong> un fichier qui vous connecte à la place d’un mot de passe. Certains fournisseurs de serveurs vous en donnent un.
+
+</details>
+
+## Ce dont vous avez besoin
+
+- <strong>Un moyen de vous connecter à l’hôte en SSH.</strong> Pour un serveur Linux, son fournisseur vous donne l’adresse et votre nom d’utilisateur. Pour vérifier que ça marche, ouvrez Terminal (macOS) ou PowerShell (Windows) et exécutez la commande ci-dessous avec votre nom d’utilisateur et l’adresse du serveur. La première fois, répondez <code dir="ltr">yes</code> quand on vous demande si vous faites confiance au serveur.
+
+  <Code code={commands.signIn} lang="sh" />
+
+  Si l’hôte est un Mac ou un PC Windows, vous activez la connexion SSH dans ses réglages système ; [Utiliser un autre ordinateur comme hôte](#utiliser-un-autre-ordinateur-comme-hôte) montre comment faire.
+- <strong>Pour un serveur Linux, {productName} installé et démarré dessus.</strong> [Installation › Serveur Linux](../install/linux/) montre comment faire. Le programme serveur de {productName}, octoboardd, est ce que l’app appelle le service.
+- <strong>L’app {productName} sur cet ordinateur</strong>, pour macOS ou Windows, sauf si vous n’utilisez qu’un navigateur.
+
+## Se connecter à un serveur Linux
+
+<Steps>
+
+1. Connectez-vous au serveur en SSH avec l’utilisateur qui exécute {productName}, exécutez cette commande et copiez la ligne qui commence par <code dir="ltr">{commands.connectionScheme}</code> : les informations de connexion, qui indiquent à l’app où et comment se connecter.
+
+   <Code code={commands.connection} lang="sh" />
+
+   Si cet ordinateur atteint le serveur à une autre adresse ou sur un autre port SSH, ajoutez <code dir="ltr">{commands.host}</code> ou <code dir="ltr">{commands.sshPort}</code> à la commande pour qu’elle affiche les bonnes informations de connexion.
+
+   Le code QR qu’elle affiche aussi contient la même ligne. Aucune app ne le lit encore.
+2. Dans l’app {productName} sur cet ordinateur, ouvrez <strong>Appareils distants</strong> depuis la barre latérale de gauche ou, sur macOS, choisissez <strong>À distance › Appareils distants</strong> dans la barre des menus. Sous Windows, vous pouvez aussi choisir <strong>Appareils distants</strong> dans le menu système de la fenêtre ou dans la liste de raccourcis de l’icône de la barre des tâches.
+3. Sélectionnez <strong>Ajouter un service distant</strong>, puis <strong>Coller</strong> sous <strong>Informations de connexion</strong> pour remplir les champs.
+4. Sous <strong>Authentification</strong>, choisissez <strong>Mot de passe</strong> si vous vous connectez avec le mot de passe de votre compte. Choisissez <strong>Fichier de clé</strong> si votre fournisseur de serveur vous a donné un fichier de clé à la place (souvent nommé comme <code dir="ltr">id_ed25519</code> ou se terminant par <code dir="ltr">.pem</code>), et indiquez où il se trouve sur cet ordinateur.
+5. Sélectionnez <strong>Enregistrer</strong>, puis <strong>Se connecter</strong>. Saisissez votre mot de passe s’il vous est demandé.
+
+   Si vous avez collé les informations de connexion, l’identité du serveur (son empreinte) est venue avec elles, et l’app la vérifie pour vous. Si vous avez saisi l’adresse à la main, l’app affiche une empreinte la première fois. Pour être sûr d’avoir atteint la bonne machine, comparez-la à celle qu’affiche cette commande sur le serveur, et ne vous connectez que si elles correspondent :
+
+   <Code code={commands.fingerprintCommand} lang="sh" />
+
+</Steps>
+
+Vous saurez que ça a marché quand une fenêtre {productName} distincte s’ouvre, avec les projets et les sessions du serveur.
+
+## Utiliser un autre ordinateur comme hôte
+
+Vous pouvez aussi atteindre un Mac ou un PC Windows sur lequel fonctionne l’app {productName}.
+
+<Steps>
+
+1. Sur l’ordinateur que vous voulez atteindre, ouvrez <strong>Réglages › Accès à distance</strong> dans {productName}.
+2. Sélectionnez-y <strong>Ouvrir Réglages Système</strong> (macOS) ou <strong>Ouvrir Paramètres</strong> (Windows), et activez <strong>Connexion à distance</strong> (macOS) ou <strong>OpenSSH Server</strong> (Windows), en suivant le chemin que donne la ligne, pour que cet ordinateur accepte les connexions SSH. Cela demande un administrateur. De retour dans {productName}, la ligne affiche alors <strong>Activée</strong>.
+3. Activez <strong>Autoriser l’accès à distance</strong>, sélectionnez <strong>Autoriser</strong> pour confirmer, et laissez {productName} en marche : si vous le quittez, l’accès à distance s’arrête.
+4. Dans l’onglet <strong>App {productName}</strong>, sélectionnez <strong>Copier les informations de connexion</strong>, et envoyez-les à l’autre ordinateur, par exemple par e-mail ou par messagerie.
+5. Sur l’ordinateur depuis lequel vous travaillerez, ajoutez l’hôte comme aux étapes 2 à 5 de [Se connecter à un serveur Linux](#se-connecter-à-un-serveur-linux), en collant les informations que vous avez envoyées. Connectez-vous avec votre nom d’utilisateur et votre mot de passe sur l’hôte.
+
+</Steps>
+
+Vous saurez que ça a marché quand une fenêtre distincte s’ouvre avec les projets et les sessions de l’hôte.
+
+## Depuis un navigateur
+
+<Steps>
+
+1. Obtenez la commande de redirection SSH :
+
+   - <strong>Sur un hôte Mac ou Windows,</strong> faites d’abord les étapes 1 à 3 de [Utiliser un autre ordinateur comme hôte](#utiliser-un-autre-ordinateur-comme-hôte). Puis, dans l’onglet <strong>Navigateur</strong>, regardez <strong>Étape 1 : redirection SSH</strong>. Cliquez sur l’adresse dans la commande pour choisir comment votre autre ordinateur atteint celui-ci (ou choisissez <strong>Saisir l’adresse soi-même</strong> et remplacez <code dir="ltr">{commands.server}</code> plus tard), puis sélectionnez <strong>Copier la commande de redirection</strong>. Sélectionnez aussi <strong>Copier l’adresse</strong> sous <strong>Étape 2 : adresse du navigateur</strong>.
+   - <strong>Sur un serveur Linux,</strong> exécutez ceci sur le serveur. Il affiche l’adresse du navigateur, puis la commande SSH à exécuter.
+
+     <Code code={commands.address} lang="sh" />
+
+     Remplacez <code dir="ltr">{commands.server}</code> dans la commande par l’adresse du serveur.
+2. Sur l’ordinateur depuis lequel vous naviguerez, exécutez la commande SSH dans Terminal (macOS) ou PowerShell (Windows). La fenêtre peut vous demander votre mot de passe, puis n’affiche plus rien : c’est normal. Laissez-la ouverte pendant que vous travaillez : la fermer déconnecte le navigateur.
+3. Ouvrez dans votre navigateur l’adresse du navigateur, qui commence par <code dir="ltr">http://127.0.0.1:</code>.
+
+</Steps>
+
+Vous saurez que ça a marché quand {productName} s’ouvre dans l’onglet du navigateur sans vous demander de vous connecter.
+
+Seule une personne qui peut atteindre {productName} par la redirection SSH peut utiliser cette adresse. Gardez-la privée : sa clé donne un contrôle total, et elle reste dans l’historique et les favoris du navigateur, et se synchronise avec vos autres appareils si la synchronisation du navigateur est activée.
+
+## Si ça ne marche pas
+
+- <strong>« Impossible de joindre le serveur », ou la commande SSH indique « Connection refused » ou expire :</strong> la connexion SSH est désactivée sur l’hôte, ou l’adresse ou le port SSH est incorrect. Vérifiez que <strong>Connexion à distance</strong> ou <strong>OpenSSH Server</strong> est activé, et que vous pouvez vous connecter avec la commande <code dir="ltr">ssh</code> ci-dessus.
+- <strong>« Connexion impossible », ou « Permission denied » :</strong> le nom d’utilisateur, le mot de passe ou le fichier de clé est incorrect.
+- <strong>« La clé d’hôte ne correspond pas » :</strong> la machine qui répond n’est pas celle à laquelle vous vous étiez connecté auparavant. Cela arrive après la réinstallation d’un serveur, mais cela peut aussi signaler un problème. Ne continuez pas avant de savoir pourquoi.
+- <strong>La page du navigateur ne se charge pas :</strong> la fenêtre SSH a été fermée, ou sa commande s’est arrêtée. Exécutez-la de nouveau et rechargez la page.
+
+## Sécurité
+
+- <strong>Aucun port public supplémentaire :</strong> {productName} n’accepte que les connexions venant de l’hôte lui-même, donc pour vous connecter depuis un autre ordinateur, vous devez d’abord vous connecter à l’hôte en SSH. C’est pourquoi il faut SSH, ou l’un des [relais](../choose-how-to-connect/).
+- <strong>Vérifiez quelle machine vous atteignez :</strong> l’app mémorise la clé d’hôte, l’identité SSH de la machine, lors de la première connexion réussie et bloque la connexion avec une alerte si cette identité change par la suite.
+- <strong>Aucun mot de passe enregistré :</strong> après votre première connexion avec un mot de passe ou votre propre fichier de clé, l’app crée une clé SSH distincte que cet ordinateur utilisera pour les connexions suivantes.
+- <strong>Retirer l’accès d’un ordinateur :</strong> supprimez l’entrée de cet ordinateur de la liste des clés SSH autorisées de l’hôte (<code dir="ltr">{commands.authorizedKeys}</code> sous Linux et macOS). Cette clé ne pourra plus se connecter ; une connexion déjà ouverte reste active jusqu’à sa fin.
+
+## Dans une fenêtre distante
+
+- <strong>Une fenêtre par destination SSH :</strong> les connexions avec un nom d’utilisateur, un hôte ou un port SSH différent ouvrent chacune leur propre fenêtre, de sorte que leurs projets, sessions et notifications ne se mélangent jamais.
+- <strong>Voir l’état de chaque connexion :</strong> ouvrez l’icône de l’app dans la barre des menus sur macOS ou dans la zone de notification sous Windows pour voir un onglet par connexion.
+- <strong>Ouvrir ici les sites web distants :</strong> quand un agent démarre un site web sur l’hôte, cliquez sur le lien <code dir="ltr">{commands.localhost}</code> qu’il donne, et l’app ouvre ce site web sur cet ordinateur par SSH.
+- <strong>Ouvrir ici les fichiers distants :</strong> affichez un fichier dans la fenêtre distante ou téléchargez-en une copie pour l’ouvrir dans l’app par défaut de cet ordinateur pour ce type de fichier.
+- <strong>Se reconnecter automatiquement :</strong> si le réseau tombe, la fenêtre continue d’essayer de se reconnecter jusqu’à y parvenir ou jusqu’à ce que vous la fermiez.

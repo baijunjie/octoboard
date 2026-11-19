@@ -22,11 +22,11 @@ it("says a tree that has just started so", () => {
 });
 
 it("is worded in the viewing language", () => {
-  expect(processFacts(translate("zh-Hans"), "zh-Hans", tree({ ports: [3000, 5173], process_count: 4 }), NOW)).toContain("监听端口");
+  expect(processFacts(translate("zh-CN"), "zh-CN", tree({ ports: [3000, 5173], process_count: 4 }), NOW)).toContain("监听端口");
 });
 
 it("joins several ports with the language's own word, each isolated, so they are not another fact of the line", () => {
   const ports = (language: Language) => processFacts(translate(language), language, tree({ ports: [3000, 5173, 24678] }), NOW);
   expect(ports("en")).toContain("listening on ports \u20683000\u2069, \u20685173\u2069, and \u206824678\u2069 · started");
-  expect(ports("zh-Hans")).toMatch(/监听端口 \u20683000\u2069(、|和)/);
+  expect(ports("zh-CN")).toMatch(/监听端口 \u20683000\u2069(、|和)/);
 });

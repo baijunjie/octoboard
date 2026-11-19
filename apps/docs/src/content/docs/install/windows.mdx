@@ -1,0 +1,46 @@
+---
+title: "Windows"
+description: "For PCs with an Intel or AMD processor (almost all Windows PCs), on Windows 10 version 21H2 or later. On Windows 11 on Arm, this x64 app runs under emulation."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../commands.ts";
+
+For PCs with an Intel or AMD processor (x64; almost all Windows PCs), on Windows 10 version 21H2 or later. On Windows 11 on Arm, this x64 app runs under emulation.
+
+<LinkButton href={downloads.windows}>Download for Windows</LinkButton>
+
+<Aside>The Windows app is in beta.</Aside>
+
+## Install
+
+<Steps>
+
+1. Download the installer with the button above. It's a file whose name ends in <code dir="ltr">x64-setup.exe</code>.
+2. Open the downloaded file to run the installer. It installs {productName} for your user account only, so it doesn't ask for an administrator.
+
+   The app is not code-signed yet, so Microsoft Defender SmartScreen may show “Windows protected your PC”. Select “More info”, then “Run anyway”.
+
+   If your PC lacks Microsoft Edge WebView2, which draws the app's window, the installer downloads it, so stay connected to the internet.
+3. Open {productName} from the Start menu.
+4. Install at least one coding agent (see below), then select <strong>Add project</strong> in {productName} to open a project folder.
+
+</Steps>
+
+When the main window opens, you're done.
+
+## Install a coding agent
+
+{productName} doesn't include an AI agent. Install the ones you want to use by following their own instructions, and sign in to them. {productName} finds them automatically. It works with:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+If you use Claude Code or Codex, install [Git for Windows](https://git-scm.com/download/win) first; they need it to work.
+
+## Updates
+
+When a new version is out, {productName} tells you, and you can install it from inside the app. You don't need to come back to this page.
+
+<a href={downloads.releases}>All past versions</a>

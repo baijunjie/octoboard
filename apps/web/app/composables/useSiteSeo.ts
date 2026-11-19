@@ -13,6 +13,7 @@ import {
   localeCodeFromPath,
   locales,
   markdownUrl,
+  isIndexedPage,
   ogLocaleAlternates,
   pageKind,
   pageSeoKeys,
@@ -35,6 +36,7 @@ export function useSiteSeo() {
   const kind = computed(() => pageKind(route.path));
   const code = computed(() => localeCodeFromPath(route.path));
   const locale = computed(() => localeByCode(code.value));
+  const indexed = computed(() => isIndexedPage(kind.value));
   const canonical = computed(() => canonicalUrl(siteUrl, route.path));
   const title = computed(() =>
     t(pageSeoKeys[kind.value as ContentPageKind]?.title ?? pageSeoKeys.home.title),
@@ -80,6 +82,7 @@ export function useSiteSeo() {
       : "";
     return {
       meta: [
+        ...(indexed.value ? [] : [{ name: "robots", content: "noindex, follow" }]),
         { property: "og:locale", content: locale.value.ogLocale },
         ...ogLocaleAlternates(code.value).map((content) => ({
           property: "og:locale:alternate",
@@ -88,11 +91,10 @@ export function useSiteSeo() {
       ],
       link: contentPage
         ? [
-          {
-            rel: "alternate",
-            type: "text/markdown",
-            href: markdownUrl(siteUrl, route.path),
-          },
+          // A page that asks not to be indexed does not point search engines at its Markdown copy.
+          ...(indexed.value
+            ? [defineLink({ rel: "alternate", type: "text/markdown", href: markdownUrl(siteUrl, route.path) })]
+            : []),
           defineLink({ rel: "describedby", href: `${siteUrl}llms.txt` }),
         ]
         : [],
@@ -113,7 +115,8 @@ export function useSiteSeo() {
       lang: localeHead.value.htmlAttrs?.lang || languageCode.value,
       dir: languageCode.value === "ar" ? "rtl" : "ltr",
     },
-    link: (localeHead.value.link || []).map((link) =>
+    // A page that asks not to be indexed has no URL to prefer, so it names no canonical and no language alternates.
+    link: (indexed.value ? localeHead.value.link || [] : []).map((link) =>
       link.rel === "canonical"
         ? { rel: "canonical" as const, href: directoryUrl(link.href) }
         : {
@@ -138,7 +141,7 @@ export function useSiteSeo() {
             : String(meta.content),
       })),
   }));
-  // One card per route code, drawn by scripts/generate-og-images.py.
+  // One card per locale code, drawn by scripts/generate-og-images.py.
   // The site build does not redraw them.
   const shareImage = () => `${config.public.siteUrl}og-image-${languageCode.value}.png`;
   useSeoMeta({

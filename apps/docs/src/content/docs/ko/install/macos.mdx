@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "macOS 11 이상을 쓰는 Apple 실리콘 및 Intel Mac용입니다."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+macOS 11 이상을 쓰는 Apple 실리콘 및 Intel Mac용입니다.
+
+<LinkButton href={downloads.macos}>macOS용 다운로드</LinkButton>
+
+<Aside>macOS 앱은 베타 버전입니다.</Aside>
+
+## 설치
+
+<Steps>
+
+1. 위 버튼으로 앱을 내려받으세요. 이름이 <code dir="ltr">.dmg</code>로 끝나는 디스크 이미지 파일을 받게 됩니다.
+2. 내려받은 파일을 여세요. 열린 창에서 {productName}을(를) 응용 프로그램 폴더로 끌어다 놓으세요.
+3. 응용 프로그램 폴더나 Launchpad에서 {productName}을(를) 여세요.
+4. 코딩 에이전트를 하나 이상 설치한 다음(아래 참고), {productName}에서 <strong>프로젝트 추가</strong>를 눌러 프로젝트 폴더를 여세요.
+
+</Steps>
+
+메인 창이 열리면 끝입니다.
+
+## 코딩 에이전트 설치
+
+{productName}에는 AI 에이전트가 들어 있지 않습니다. 사용할 에이전트를 각각의 안내에 따라 설치하고 로그인하세요. {productName}이(가) 자동으로 찾아 줍니다. 다음 에이전트를 지원합니다.
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## 업데이트
+
+새 버전이 나오면 {productName}이(가) 알려 주며, 앱 안에서 바로 설치할 수 있습니다. 이 페이지로 다시 올 필요는 없습니다.
+
+<a href={downloads.releases}>이전 버전 모두 보기</a>

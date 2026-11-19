@@ -1,0 +1,46 @@
+---
+title: "Windows"
+description: "Intel または AMD プロセッサ搭載の PC（ほとんどの Windows PC）に対応。Windows 10 バージョン 21H2 以降で使えます。Arm 版 Windows 11 では、この x64 版アプリがエミュレーションで動きます。"
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Intel または AMD プロセッサ搭載の PC（x64。ほとんどの Windows PC）に対応。Windows 10 バージョン 21H2 以降で使えます。Arm 版 Windows 11 では、この x64 版アプリがエミュレーションで動きます。
+
+<LinkButton href={downloads.windows}>Windows 版をダウンロード</LinkButton>
+
+<Aside>Windows 版アプリはベータ版です。</Aside>
+
+## インストール
+
+<Steps>
+
+1. 上のボタンからインストーラーをダウンロードします。名前が <code dir="ltr">x64-setup.exe</code> で終わるファイルです。
+2. ダウンロードしたファイルを開いて、インストーラーを実行します。{productName} は自分のユーザーアカウントだけにインストールされるので、管理者の許可は求められません。
+
+   アプリにはまだコード署名がないため、Microsoft Defender SmartScreen が「Windows によって PC が保護されました」と表示することがあります。その場合は「詳細情報」を選び、続けて「実行」を選びます。
+
+   アプリのウィンドウを描画する Microsoft Edge WebView2 が PC に入っていない場合は、インストーラーがダウンロードします。インターネットにつないだままにしてください。
+3. スタートメニューから {productName} を開きます。
+4. コーディングエージェントを 1 つ以上インストールし（下記参照）、{productName} で<strong>プロジェクトを追加</strong>を選んで、プロジェクトのフォルダを開きます。
+
+</Steps>
+
+メインウィンドウが開いたら完了です。
+
+## コーディングエージェントをインストールする
+
+{productName} には AI エージェントは含まれていません。使いたいエージェントを、それぞれの案内に従ってインストールし、サインインしてください。{productName} が自動で見つけます。対応しているのは次のエージェントです。
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+Claude Code または Codex を使う場合は、先に [Git for Windows](https://git-scm.com/download/win) をインストールしてください。動作に必要です。
+
+## アップデート
+
+新しいバージョンが出ると {productName} がお知らせするので、アプリの中からインストールできます。このページに戻る必要はありません。
+
+<a href={downloads.releases}>過去のバージョンをすべて見る</a>

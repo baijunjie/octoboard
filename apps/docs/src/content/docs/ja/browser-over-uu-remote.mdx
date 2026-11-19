@@ -1,0 +1,130 @@
+---
+title: "UU Remote 経由のブラウザ"
+description: "UU Remote のポートマッピングを通して、別のコンピューターのブラウザで Octoboard を開きます。SSH もリモートデスクトップも使いません。"
+---
+
+import { Aside, Code, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+import HostBrowserAddress from "../../../snippets/ja/host-browser-address.mdx";
+
+NetEase のリモート操作アプリ [UU Remote](https://uuyc.163.com/) のポートマッピングを通して、別のコンピューターのブラウザで {productName} を開きます。SSH もリモートデスクトップも使いません。ホストとは {productName} が動いているコンピューターのことです。SSH ログイン（macOS ではリモートログイン）はオフのままで構わず、リモートデスクトップのセッションも必要ありません。UU Remote の画面は中国語なので、このガイドでは日本語の名前に、画面に出る中国語の表示を添えています。
+
+このガイドでは、自分のコンピューターのブラウザで {productName} を開きます。リモートデスクトップより鮮明で反応がよい方法ですが、手順は多くなります。遅れやぼやけが気にならないなら、UU Remote のリモートデスクトップでホストを直接操作するだけで済みます。
+
+この方法が自分に合っているかわからない場合は、[接続方法を選ぶ](../choose-how-to-connect/)をご覧ください。
+
+<Aside type="caution">
+この手順は、まだ 2 台のデバイスの間ではテストできていません。UU Remote の公式ヘルプに基づいています。Mac のホストの中継は 1 台のコンピューターで試していて、ブラウザのライブ接続も含めて確認済みです。
+</Aside>
+
+<strong>自分のコンピューターのブラウザ</strong> → <strong>自分のコンピューターの 127.0.0.1</strong> ⟷ UU Remote ⟷ <strong>ホストの 127.0.0.1</strong> → <strong>{productName}</strong>
+
+<details>
+<summary>はじめての方へ</summary>
+
+- <strong>127.0.0.1（ループバック）:</strong> 常に「このコンピューター自身」を指すアドレスです。
+- <strong>ポート:</strong> コンピューター上の 1 つのプログラムを選ぶための番号で、部屋番号のようなものです。<code dir="ltr">127.0.0.1:{commands.defaultPort}</code> は、このコンピューターのポート {commands.defaultPort} を指します。
+- <strong>ポートマッピング（端口映射）:</strong> ホストのポートを、自分のコンピューターのポートとして見せる UU Remote の機能です。
+- <strong>socat:</strong> 接続をある場所から別の場所へ受け渡す、小さな無料のプログラムです。Mac のホストでは、中継役として必要です。
+- <strong>ターミナル:</strong> コマンドを入力するウィンドウです。macOS ではターミナル、Windows では PowerShell を使います。
+
+</details>
+
+UU Remote のポートマッピングを使うと、ホストの {productName} が、自分のコンピューターの <code dir="ltr">{tunnel.loopback}</code> にあるように見えます。{productName} がブラウザを受け付けるのは、このアドレスだけです。
+
+## 始める前に
+
+- <strong>両方のコンピューターが Mac または Windows PC であること。</strong>UU Remote には Linux 向けのポートマッピングがありません。Linux サーバーには、代わりに [Tailscale](../browser-over-tailscale/) か [SSH](../remote-connections/) でつないでください。
+- <strong>両方に UU Remote が入っていて、同じアカウントでサインインしていること。</strong>バージョンは、Windows では 4.21.0 以降、macOS では 4.32.0 以降です。ポートマッピングは TCP だけに対応していて、{productName} に必要なのはそれだけです。執筆時点では、UU Remote はポートマッピングを無料機能の 1 つとして挙げています。気になる場合は、現在のプランを確認してください。
+- <strong>ブラウザを使うコンピューターの UU Remote で、ホストが「マイデバイス（我的设备）」に表示されていること。</strong>
+- <strong>Mac のホストには [Homebrew](https://brew.sh/) も必要です。</strong>下の手順で socat をインストールするために使います。
+
+## ホストでの操作
+
+<Steps>
+
+1. ブラウザのアドレスを手に入れます。このアドレスには、ブラウザをサインインさせるキーが含まれています。
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <HostBrowserAddress />
+   </TabItem>
+   <TabItem label="Windows">
+   <HostBrowserAddress windows />
+   </TabItem>
+   </Tabs>
+2. ホストの <code dir="ltr">{tunnel.loopback}</code> に、{productName} につながるポートを用意します。このポートが、以降の手順でいう<strong>ホストのポート</strong>です。
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   Mac は、UU Remote がマッピングできない形でブラウザ用の入口を提供しているため、中継として socat が必要です。ターミナルでインストールします。
+
+   <Code code={tunnel.installSocatMac} lang="sh" />
+
+   続けて次のコマンドを実行し、ウィンドウは開いたままにします。待ち受けるのは <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> だけです。
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   ホストのポートは <code dir="ltr">{tunnel.bridgePort}</code> です。
+   </TabItem>
+   <TabItem label="Windows">
+   実行するものはありません。{productName} 自身が、ブラウザ用ポートで <code dir="ltr">127.0.0.1</code> だけを待ち受けています。ホストのポートは、<strong>ブラウザ</strong>タブの<strong>ブラウザ用ポート</strong>です（変更していなければ {commands.defaultPort}）。
+   </TabItem>
+   </Tabs>
+
+</Steps>
+
+## ブラウザを使うコンピューターでの操作
+
+<Steps>
+
+1. UU Remote で、「マイデバイス（我的设备）」からホストを開き、そのカードの「その他（更多）」、続けて「ポートマッピング（端口映射）」を選んで、マッピングを追加します。
+
+   | 項目 | 値 |
+   | --- | --- |
+   | 名前（名称） | {productName} |
+   | ローカルポート（本地端口） | <code dir="ltr">{commands.defaultPort}</code> |
+   | ターゲットアドレス（目标地址） | <code dir="ltr">127.0.0.1</code> |
+   | ターゲットポート（目标端口） | ホストのポート |
+
+   保存して有効にし、接続済みと表示されるまで待ちます。このコンピューターで {commands.defaultPort} がすでに使われている場合は、別のローカルポートを選び、ブラウザのアドレスのポートも同じように変えてください。
+2. このコンピューターだけがマッピングを使えることを確認します。このコンピューターでターミナル（macOS）または PowerShell（Windows）を開き、次のコマンドを実行します。
+
+   <Tabs syncKey="visitor">
+   <TabItem label="macOS">
+   <Code code={tunnel.checkListener} lang="sh" />
+
+   <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> と <code dir="ltr">LISTEN</code> を含む行が表示されるはずです。
+   </TabItem>
+   <TabItem label="Windows">
+   <Code code={tunnel.checkListenerWindows} lang="powershell" />
+
+   <code dir="ltr">TCP</code> で始まり、次に <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> があり、<code dir="ltr">LISTENING</code> と数字で終わる行が表示されるはずです。
+   </TabItem>
+   </Tabs>
+
+   代わりに <code dir="ltr">*:{commands.defaultPort}</code> や <code dir="ltr">0.0.0.0:{commands.defaultPort}</code> と表示された場合は、マッピングを削除してください。ネットワーク上のほかのデバイスが {productName} に届いてしまいます。
+3. ホストでコピーしたブラウザのアドレスを開きます。<code dir="ltr">{tunnel.addressStart}</code> で始まるアドレスです。
+
+</Steps>
+
+サインインを求められずに、ブラウザのタブで {productName} が開けば成功です。
+
+## うまくいかないとき
+
+- <strong>マッピングは接続済みと表示されるのに、ページが開かない:</strong> Mac のホストでは、socat のウィンドウが閉じられたか、コマンドが止まっています。または、<strong>リモートアクセスを許可</strong>がオフになっているか、ホストで {productName} が動いていません。
+- <strong>マッピングが保存できない、または接続できない:</strong> このコンピューターで、ローカルポートがすでに使われている可能性があります。別のポートを選び、ブラウザのアドレスのポートも同じように変えてください。
+- <strong>ページが拒否される、または空白になる:</strong> <code dir="ltr">{tunnel.loopback}</code> のアドレスで開いたことを確認してください。
+
+## 使い終わったら止める
+
+- <strong>ブラウザを使ったコンピューターで:</strong> UU Remote のポートマッピングの画面でマッピングをオフにするか、削除します。画面を閉じたり、接続を切ったりしても止まります。
+- <strong>Mac のホストで:</strong> <kbd>Ctrl</kbd>+<kbd>C</kbd> で socat を止めます。
+- <strong>ホストでは、</strong>使わなくなったら<strong>リモートアクセスを許可</strong>をオフにします。これでブラウザの入口が閉じ、そのキーで開いているページはすべて切断されます。
+- <strong>アドレスが漏れたかもしれないときは、</strong><strong>ブラウザ</strong>タブの<strong>キーを更新</strong>で新しいキーに替えます。古いアドレスで開いているページは切断されます。
+
+## セキュリティ
+
+- <strong>アドレスはパスワードと同じ:</strong> アドレスに含まれるキーで、ホスト上の {productName} をフルコントロールでき、任意のコマンドも実行できます。キーは更新するまで有効です。ブラウザの履歴やブックマークに残り、ブラウザの同期がオンなら、ほかのデバイスにも同期されます。
+- <strong>誰が届くか:</strong> ホストのポートに届いて、キーを持っている人なら誰でも届きます。ホストでは <code dir="ltr">127.0.0.1</code> だけを待ち受けます。ただし、自分の UU Remote アカウントを使ってホストへのポートをマッピングできる人も届いてしまうので、そのアカウントを安全に保ってください。
+- <strong>他の人がサインインしないコンピューターでだけ使う:</strong> ホストや自分のコンピューターにある別のユーザーアカウントは、これらの <code dir="ltr">127.0.0.1</code> のポートに接続できます。マッピングや socat が動いていない間は、そのポートを奪って、ブラウザが再接続したときにキーを受け取ってしまうこともあります。[SSH で接続](../remote-connections/)する方法では、Mac や Linux のホストにこの弱点はなく、デスクトップアプリを使う場合は自分のコンピューターにもありません。ただしブラウザを使う場合は、ブラウジングに使うコンピューターにこの弱点が残ります。そこでも SSH のフォワードが <code dir="ltr">127.0.0.1</code> のポートで待ち受けるためです。

@@ -1,0 +1,89 @@
+---
+title: "Linux 伺服器"
+description: "不需要 root 權限，就能在 Linux 伺服器上安裝 octoboardd（Octoboard 的伺服器程式）。可從 macOS 或 Windows 應用程式連線，也可在瀏覽器中開啟，兩種方式都經由 SSH。"
+---
+
+import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
+import { commands, downloads, productName } from "../../../../commands.ts";
+
+不需要 root 權限，就能在 Linux 伺服器上安裝 octoboardd（{productName} 的伺服器程式，應用程式裡稱它為「背景服務」）。可從 macOS 或 Windows 應用程式連線，也可在瀏覽器中開啟，兩種方式都經由 SSH。
+
+支援 x86_64 和 aarch64，不限發行版。
+
+<Aside>Linux 伺服器程式仍處於 Beta 階段。</Aside>
+
+## 準備工作
+
+- <strong>一台能用 SSH 登入的 Linux 伺服器。</strong>SSH 是一種安全登入另一台機器、並在上面輸入指令的方式。伺服器的位址和你的使用者名稱由伺服器供應商提供。
+- <strong>你自己電腦上的 {productName} 應用程式</strong>（[macOS](../macos/) 或 [Windows](../windows/) 版），如果你想在桌面應用程式裡工作（建議）。
+
+登入方法：在自己的電腦上開啟「終端機」（macOS）或 PowerShell（Windows），執行下面的指令，把 <code dir="ltr">&lt;you&gt;</code> 換成你的使用者名稱，把 <code dir="ltr">{commands.server}</code> 換成伺服器位址。第一次連線時，它會詢問是否信任這台伺服器，請輸入 <code dir="ltr">yes</code>。
+
+<Code code={commands.signIn} lang="sh" />
+
+下面的第 1、2 步都在伺服器上執行，也就是在這個已登入的視窗裡。
+
+## 安裝
+
+<Steps>
+
+1. 在伺服器上安裝 octoboardd。
+
+   <Code code={commands.install} lang="sh" />
+
+   輸出中會有一行以 <code dir="ltr">Installed octoboardd</code> 開頭。
+2. 在伺服器上啟動它。
+
+   <Code code={commands.start} lang="sh" />
+
+   輸出中會有一行以 <code dir="ltr">{productName} started</code> 開頭。
+3. 從你自己的電腦連過去，有兩種方式：
+
+   - <strong>用桌面應用程式（建議）：</strong>依照 SSH 指南中的[連線到 Linux 伺服器](../../remote-connections/#連線到-linux-伺服器)操作。
+   - <strong>用瀏覽器：</strong>在伺服器上執行這個指令。
+
+     <Code code={commands.address} lang="sh" />
+
+     它會輸出兩樣東西：一個以 <code dir="ltr">http://127.0.0.1:</code> 開頭的瀏覽器位址，以及一個 <code dir="ltr">ssh</code> 指令。在自己的電腦上複製這個 <code dir="ltr">ssh</code> 指令，把 <code dir="ltr">{commands.server}</code> 換成伺服器位址（就是你登入它時用的 IP 位址或名稱），然後在「終端機」或 PowerShell 中執行。它可能會要求輸入密碼，之後就不再顯示任何內容，這是正常的。請不要關閉這個視窗，關閉後連線就會中斷。接著在瀏覽器中開啟輸出的位址。
+
+</Steps>
+
+看到 {productName} 在桌面應用程式的新視窗或瀏覽器分頁中開啟，就表示成功了。
+
+## 找不到 octoboardd 時
+
+如果安裝時提示以 <code dir="ltr">.local/bin</code> 結尾的目錄（例如 <code dir="ltr">/home/&lt;you&gt;/.local/bin</code>）不在 PATH 中，表示 shell 無法直接依名稱找到 <code dir="ltr">octoboardd</code>。請用安裝時輸出的完整路徑執行它，或把 <code dir="ltr">{commands.binDir}</code> 加入 PATH（例如寫進 <code dir="ltr">~/.profile</code>），再重新登入。
+
+## 登出或重新開機後繼續執行
+
+用 <code dir="ltr">{commands.start}</code> 啟動的 octoboardd 會在伺服器重新開機時停止，之後也不會自動啟動：需要再執行一次 <code dir="ltr">{commands.start}</code>，或直接從桌面應用程式連線，應用程式會提示你啟動它。有些伺服器在你登出時也會讓它停止。
+
+如果想讓它隨伺服器啟動、登出後也繼續執行，請改為安裝成服務：
+
+<Code code={commands.installService} lang="sh" />
+
+這個指令會安裝程式，把它設定為 systemd 使用者服務並啟動，然後開啟 lingering，讓你的服務在你未登入時也能執行。如果它提示無法開啟，請執行一次下面的指令（可能需要 <code dir="ltr">sudo</code>）：
+
+<Code code={commands.linger} lang="sh" />
+
+預設連接埠為 <code dir="ltr">{commands.defaultPort}</code>。要改用其他連接埠，請在服務指令或 <code dir="ltr">{commands.start}</code> 的結尾加上 <code dir="ltr">{commands.portOption}</code>。
+
+## 升級
+
+{productName} 不會自己悄悄升級：有新版本時，瀏覽器會提示你，由你決定什麼時候安裝。新版本安裝好後，如果重新啟動不會中斷任何工作階段，{productName} 會自動重新啟動並換上新版本；如果會中斷某些工作階段，它會先列出來詢問你。
+
+- <strong>在瀏覽器裡：</strong>在新版本提示處點選<strong>下載並安裝</strong>。
+- <strong>在伺服器上：</strong>執行這個指令。
+
+  <Code code={commands.update} lang="sh" />
+
+  如果它詢問是否立即重新啟動，輸入 <code dir="ltr">y</code> 重新啟動；直接按 Enter 則暫時繼續執行舊版本，之後想重新啟動時再執行 <code dir="ltr">{commands.restart}</code>。
+
+如果 <code dir="ltr">{commands.update}</code> 提示無法取代程式（例如程式裝在你沒有寫入權限的位置），請改為再次執行安裝指令（或服務指令）。它同樣會在安全時自動重新啟動，否則會提示你執行 <code dir="ltr">{commands.restart}</code>。
+
+## 改為下載壓縮檔
+
+<LinkButton href={downloads["linux-x86_64"]} variant="secondary">x86_64 壓縮檔</LinkButton>
+<LinkButton href={downloads["linux-aarch64"]} variant="secondary">aarch64 壓縮檔</LinkButton>
+
+<a href={downloads.releases}>所有歷史版本</a>

@@ -72,3 +72,25 @@ it("takes up the language another window of the local daemon picks once it follo
   expect(currentLanguage()).toBe("ja");
   expect(document.documentElement.lang).toBe("ja");
 });
+
+it("reads the Chinese tags an earlier version cached as the region tags that replaced them", async () => {
+  localStorage.setItem(KEY, "zh-Hans");
+  expect((await loadedIn()).currentLanguage()).toBe("zh-CN");
+  localStorage.setItem(KEY, "zh-Hant");
+  expect((await loadedIn()).currentLanguage()).toBe("zh-TW");
+});
+
+it("reads a retired Chinese tag cached by a remote daemon's window, or inherited from the local window's cache, as the region tag", async () => {
+  localStorage.setItem(`${KEY}@me@host`, "zh-Hant");
+  expect((await loadedIn("me@host")).currentLanguage()).toBe("zh-TW");
+  localStorage.removeItem(`${KEY}@me@host`);
+  localStorage.setItem(KEY, "zh-Hans");
+  expect((await loadedIn("other@host")).currentLanguage()).toBe("zh-CN");
+});
+
+it("takes a cached value that is no language at all, including an object's own property names, for the system's language", async () => {
+  for (const cached of ["constructor", "toString", "__proto__", "zh", "zh-cn", "xx"]) {
+    localStorage.setItem(KEY, cached);
+    expect((await loadedIn()).currentLanguage(), cached).toBe("en");
+  }
+});

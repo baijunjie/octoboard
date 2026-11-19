@@ -1,6 +1,11 @@
 <script setup lang="ts">
+import { docsPages, docsPath } from "../../seo/site-seo";
 const { t } = useSiteCopy();
+const { locale } = useI18n();
 const config = useRuntimeConfig();
+// The docs are a separate build under the same base path, so they are an ordinary link, not a route.
+const docsHref = computed(() => docsPath(config.app.baseURL, locale.value));
+const connectHref = computed(() => docsPath(config.app.baseURL, locale.value, docsPages.chooseHowToConnect));
 const localePath = useLocalePath();
 // `data-analytics-settings` marks the button the analytics prompt hands focus to when it has
 // nowhere else to return it.
@@ -34,7 +39,8 @@ const { open, reopen } = useAnalyticsConsent();
         ><NuxtLink :to="`${localePath('/')}#developer-intent`">{{
           t("developerEyebrow")
         }}</NuxtLink
-        ><NuxtLink :to="localePath('/remote/')">{{ t("remoteEyebrow") }}</NuxtLink
+        ><a :href="connectHref">{{ t("remoteEyebrow") }}</a
+        ><a :href="docsHref">{{ t("navDocs") }}</a
         ><NuxtLink :to="localePath('/privacy/')">{{
           t("footerPrivacy")
         }}</NuxtLink

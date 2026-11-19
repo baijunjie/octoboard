@@ -29,11 +29,11 @@ it("words the refusals of an owner change under way without ids, naming the owne
     `${isolate("Hub")} is being started, resumed, handed off, switched to another account or given another owner, so sessions cannot be bound to or moved from it right now.`,
   );
   expect(daemonMessage("en", "session_not_bound_to_owner", { session: "s2", owner: "s1" }, "x", records)).toContain(isolate("Hub"));
-  expect(daemonMessage("zh-Hans", "session_owner_changing", { session: "s2", owner: "s1" }, "x", records)).toContain(isolate("Hub"));
+  expect(daemonMessage("zh-CN", "session_owner_changing", { session: "s2", owner: "s1" }, "x", records)).toContain(isolate("Hub"));
   const withTasks = { ...records, sessions: new Map([["s1", { id: "s1", title: "Hub", terminal_title: "Fixing tests" } as Session], ["s3", { id: "s3", title: "" } as Session]]) };
   expect(daemonMessage("en", "session_not_bound_to_owner", { session: "s2", owner: "s1" }, "x", withTasks)).toContain("Fixing tests");
   expect(daemonMessage("en", "session_not_bound_to_owner", { session: "s2", owner: "s3" }, "x", withTasks)).toContain(isolate("s3"));
-  for (const language of ["en", "zh-Hans"] as const) {
+  for (const language of ["en", "zh-CN"] as const) {
     expect(daemonMessage(language, "session_changing", { session: "s1" }, "x", records)).not.toContain("s1");
   }
 });
@@ -44,7 +44,7 @@ it("words the refusals of binding a session to an owner, naming the owner by its
   expect(refusal).toContain(isolate("Hub"));
   expect(refusal).not.toContain("s1");
   expect(refusal).not.toContain("s2");
-  expect(daemonMessage("zh-Hans", "owner_cannot_own", { session: "s2", owner: "s1" }, "x", records)).toContain(isolate("Hub"));
+  expect(daemonMessage("zh-CN", "owner_cannot_own", { session: "s2", owner: "s1" }, "x", records)).toContain(isolate("Hub"));
 });
 
 it("shows a shell terminal param by the terminal's name, and by its id once the terminal is gone", () => {
@@ -61,7 +61,7 @@ it("names the terminal whose input was lost by its session or shell terminal, an
   expect(daemonMessage("en", "terminal_input_lost", { shell_terminal: "t1" }, "x", named, true)).toBe(
     `Terminal ${isolate("npm run dev")} disconnected before it had taken everything typed into it.`,
   );
-  expect(daemonMessage("zh-Hans", "terminal_input_lost", { shell_terminal: "t9" }, "x", named)).toContain(`终端 ${isolate("t9")} 在接收完全部输入前已断开`);
+  expect(daemonMessage("zh-CN", "terminal_input_lost", { shell_terminal: "t9" }, "x", named)).toContain(`终端 ${isolate("t9")} 在接收完全部输入前已断开`);
   expect(daemonMessage("en", "terminal_input_lost", {}, "x", named)).toBe(
     "The terminal disconnected before it had taken everything typed into it. Check the terminal's input line before continuing.",
   );
@@ -154,9 +154,9 @@ it.each([
   ["config_dir_taken", "Claude Code 的账户 ⁨默认⁩ 已在使用此配置目录。"],
 ] as const)("words the default account in a %s message by its name in the current language", (code, zh) => {
   const params = { agent: "Claude Code", name: "Default" };
-  expect(daemonMessage("zh-Hans", code, params, "x", records)).toBe(zh.replace("Claude Code", isolate("Claude Code")));
+  expect(daemonMessage("zh-CN", code, params, "x", records)).toBe(zh.replace("Claude Code", isolate("Claude Code")));
   expect(daemonMessage("en", code, params, "x", records)).toContain(isolate("Default"));
-  expect(daemonMessage("zh-Hans", code, { ...params, name: "Work" }, "x", records)).toContain(isolate("Work"));
+  expect(daemonMessage("zh-CN", code, { ...params, name: "Work" }, "x", records)).toContain(isolate("Work"));
 });
 
 it("words each branch or worktree still there with its reason in plain text, one apart from the next", () => {
@@ -166,7 +166,7 @@ it("words each branch or worktree still there with its reason in plain text, one
   ]);
   const message = daemonMessage("en", "session_branches_not_removed", { count: "2", items }, "fallback", { ...records, homeDir: "/home/dev" });
   expect(message).toBe(`These were to be removed and are still there: Removing this failed: ${isolate("~/wt")} (detached HEAD): ${isolate("error: x, y")}. This branch is not merged: ${isolate("fix/a,b")}.`);
-  const zh = daemonMessage("zh-Hans", "session_branches_not_removed", { count: "2", items }, "fallback", { ...records, homeDir: "/home/dev" });
+  const zh = daemonMessage("zh-CN", "session_branches_not_removed", { count: "2", items }, "fallback", { ...records, homeDir: "/home/dev" });
   expect(zh).toBe(`以下内容本应删除，但仍然保留：以下内容删除失败：${isolate("~/wt")}（HEAD 分离）：${isolate("error: x, y")}。以下分支尚未合并：${isolate("fix/a,b")}。`);
 });
 
@@ -193,7 +193,7 @@ it("words a worktree kept for a project folder that could not be checked by its 
     `Whether this worktree is or holds another project's folder could not be checked: ${isolate("~/wt")} (detached HEAD). `
       + "It may hold another project's files. Once it can be read, check what is in it before you remove it yourself.",
   );
-  expect(daemonMessage("zh-Hans", "session_branches_not_removed", { count: "1", items }, "fallback", shown)).toBe(
+  expect(daemonMessage("zh-CN", "session_branches_not_removed", { count: "1", items }, "fallback", shown)).toBe(
     `无法检查以下工作树是否为或包含其他项目的文件夹：${isolate("~/wt")}（HEAD 分离）。其中可能有其他项目的文件。请等到可以读取后先检查内容，再自行删除。`,
   );
 });
@@ -206,7 +206,7 @@ it("words a worktree kept as the home folder, a disk's root or a folder of the a
   expect(daemonMessage("en", "session_branches_not_removed", { count: "1", items }, "fallback", shown)).toBe(
     `This worktree is your home folder, the root of a disk, or holds the app’s own data, so it was kept: ${isolate("~")} (${isolate("a")}).`,
   );
-  expect(daemonMessage("zh-Hans", "session_branches_not_removed", { count: "1", items }, "fallback", shown)).toBe(
+  expect(daemonMessage("zh-CN", "session_branches_not_removed", { count: "1", items }, "fallback", shown)).toBe(
     `以下工作树是你的主文件夹、磁盘的根目录，或存放着本应用自身的数据，因此已保留：${isolate("~")}（${isolate("a")}）。`,
   );
 });
@@ -221,7 +221,7 @@ it.each([
   ["description", "2000", "Description must be 2,000 characters or fewer.", "描述不能超过 2,000 个字符。"],
 ])("localizes the field and limit for an overlong %s", (field, limit, english, chinese) => {
   expect(daemonMessage("en", "field_too_long", { field, limit }, "x", records)).toBe(english);
-  expect(daemonMessage("zh-Hans", "field_too_long", { field, limit }, "x", records)).toBe(chinese);
+  expect(daemonMessage("zh-CN", "field_too_long", { field, limit }, "x", records)).toBe(chinese);
 });
 
 it("words a refusal of a disabled account in the UI's language", () => {
@@ -229,7 +229,7 @@ it("words a refusal of a disabled account in the UI's language", () => {
   expect(daemonMessage("en", "account_disabled", params, "x", records)).toBe(
     `${isolate("Work")} (${isolate("Codex")}) is disabled, so a session cannot be opened on it.`,
   );
-  expect(daemonMessage("zh-Hans", "account_disabled", params, "x", records)).toContain("已停用");
+  expect(daemonMessage("zh-CN", "account_disabled", params, "x", records)).toContain("已停用");
 });
 
 it("words a refusal of an account that is not logged in in the UI's language, the default account under its localized name", () => {
@@ -237,7 +237,7 @@ it("words a refusal of an account that is not logged in in the UI's language, th
   expect(daemonMessage("en", "account_not_signed_in", params, "x", records)).toBe(
     `${isolate("Default")} (${isolate("Codex")}) is not logged in, so a session cannot be opened on it.`,
   );
-  const chinese = daemonMessage("zh-Hans", "account_not_signed_in", params, "x", records);
+  const chinese = daemonMessage("zh-CN", "account_not_signed_in", params, "x", records);
   expect(chinese).toContain("未登录");
   expect(chinese).not.toContain("Default");
 });
@@ -247,7 +247,7 @@ it("words an automatic account switch with the default account named in the UI's
   expect(daemonMessage("en", "account_switched_automatically", params, "x", records)).toBe(
     `${isolate(DEFAULT_ACCOUNT_NAME)} (${isolate("Claude Code")}) reached its usage limit, so ${appConfig.name} switched ${isolate("Hub")} to ${isolate("Work")}.`,
   );
-  const chinese = daemonMessage("zh-Hans", "account_switched_automatically", params, "x", records);
+  const chinese = daemonMessage("zh-CN", "account_switched_automatically", params, "x", records);
   expect(chinese).toContain("已达使用限制");
   expect(chinese).not.toContain(isolate(DEFAULT_ACCOUNT_NAME));
 });
@@ -257,7 +257,7 @@ it("words an automatic account switch onto the default account in the UI's langu
   expect(daemonMessage("en", "account_switched_automatically", params, "x", records)).toBe(
     `${isolate("Work")} (${isolate("Claude Code")}) reached its usage limit, so ${appConfig.name} switched ${isolate("Hub")} to ${isolate("Default")}.`,
   );
-  const chinese = daemonMessage("zh-Hans", "account_switched_automatically", params, "x", records);
+  const chinese = daemonMessage("zh-CN", "account_switched_automatically", params, "x", records);
   expect(chinese).toContain("已达使用限制");
   expect(chinese).not.toContain("Default");
 });
@@ -277,7 +277,7 @@ describe("an automatic account switch that failed after the session's process en
     expect(daemonMessage("en", "account_switch_automatically_failed", params, "x", records)).toBe(
       `${isolate("Default")} (${isolate("Claude Code")}) reached its usage limit, and ${appConfig.name} could neither switch this session to ${isolate("Work")} nor bring it back up on the account it had, so it is interrupted.`,
     );
-    const chinese = daemonMessage("zh-Hans", "account_switch_automatically_failed", params, "x", records);
+    const chinese = daemonMessage("zh-CN", "account_switch_automatically_failed", params, "x", records);
     expect(chinese).toContain("已达使用限制，");
     expect(chinese).toContain("既未能将此会话切换到");
     expect(chinese).toContain("也未能让它在原账户上重新运行，因此会话已中断。");
@@ -287,7 +287,7 @@ describe("an automatic account switch that failed after the session's process en
   it("shows a move onto the default account under its localized name", () => {
     const toDefault = { ...params, from: "Work", account: DEFAULT_ACCOUNT_NAME };
     expect(daemonMessage("en", "account_switch_automatically_failed", toDefault, "x", records)).toContain(`switch this session to ${isolate("Default")}`);
-    const chinese = daemonMessage("zh-Hans", "account_switch_automatically_failed", toDefault, "x", records);
+    const chinese = daemonMessage("zh-CN", "account_switch_automatically_failed", toDefault, "x", records);
     expect(chinese).toContain("切换到 ");
     expect(chinese).toContain("默认");
     expect(chinese).not.toContain("Default");
@@ -304,7 +304,7 @@ it.each(["account_switched_automatically", "account_switch_automatically_failed"
   "sets the account names of %s apart as names, the default one under its localized name",
   (code) => {
     const params = { agent: "Claude Code", from: DEFAULT_ACCOUNT_NAME, account: "Work", reason: "why", reason_code: "newer" };
-    const marked = daemonParams("zh-Hans", code, params, records, (value, monospace) => `[${monospace ? "code" : "name"}:${value}]`);
+    const marked = daemonParams("zh-CN", code, params, records, (value, monospace) => `[${monospace ? "code" : "name"}:${value}]`);
     expect(marked.account).toBe("[name:Work]");
     expect(marked.from).toMatch(/^\[name:/);
     expect(String(marked.from)).not.toContain("Default");
@@ -317,21 +317,21 @@ it("words an exhausted account's quota, with the time left when the reset is kno
     `${isolate("Work")} (${isolate("Codex")}) cannot run a session because it has reached its 5h limit.`,
   );
   const resetsAt = String(Date.now() + 2 * 60 * 60_000 + 30_000);
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, resets_at: resetsAt }, "x", records)).toContain("已达到 5 小时限制");
+  expect(daemonMessage("zh-CN", "account_quota_exhausted", { ...params, resets_at: resetsAt }, "x", records)).toContain("已达到 5 小时限制");
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, resets_at: resetsAt }, "x", records)).toContain("It resets in 2h");
 });
 
 it("words the session window as the agent's own interface names it", () => {
   const params = { agent: "Claude Code", account: "Work", window: "5-hour", window_kind: "session" };
   expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain("has reached its session limit.");
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", params, "x", records)).toContain("已达到 会话限制");
+  expect(daemonMessage("zh-CN", "account_quota_exhausted", params, "x", records)).toContain("已达到 会话限制");
 });
 
 it("words Claude Code's weekly window for all models only beside a model's own weekly window", () => {
   const params = { agent: "Claude Code", account: "Work", window: "Weekly", window_kind: "weekly" };
   expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain("has reached its weekly limit.");
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, model_weekly: "true" }, "x", records)).toContain("has reached its weekly limit for all models.");
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, model_weekly: "true" }, "x", records)).toContain("已达到 所有模型的每周限制");
+  expect(daemonMessage("zh-CN", "account_quota_exhausted", { ...params, model_weekly: "true" }, "x", records)).toContain("已达到 所有模型的每周限制");
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, agent: "Codex", model_weekly: "true" }, "x", records)).toContain("has reached its weekly limit.");
 });
 
@@ -344,7 +344,7 @@ it("words a credit pool by its period or as credits, and a window without the st
   const codex = { agent: "Codex", account: "Work" };
   const credits = { ...codex, window: "Credits", window_kind: "credit_period" };
   expect(daemonMessage("en", "account_quota_exhausted", credits, "x", records)).toContain("has reached its credit limit.");
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", credits, "x", records)).toContain("：已达到 额度上限。");
+  expect(daemonMessage("zh-CN", "account_quota_exhausted", credits, "x", records)).toContain("：已达到 额度上限。");
   expect(daemonMessage("en", "account_quota_exhausted", { ...codex, window: "Opus weekly" }, "x", records)).toContain(`its ${isolate("Opus weekly")} limit.`);
   for (const unknown of [{ window_kind: "weekly_model" }, { agent: "Other" }]) {
     expect(daemonMessage("en", "account_quota_exhausted", { ...codex, window: "Weekly", window_kind: "weekly", ...unknown }, "x", records)).toContain(`its ${isolate("Weekly")} limit.`);
@@ -354,12 +354,12 @@ it("words a credit pool by its period or as credits, and a window without the st
 it("shows the default account of an exhausted quota by its name in the UI's language", () => {
   const params = { agent: "Claude Code", account: DEFAULT_ACCOUNT_NAME, window: "Weekly" };
   expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain(isolate("Default"));
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", params, "x", records)).toContain(isolate("默认"));
+  expect(daemonMessage("zh-CN", "account_quota_exhausted", params, "x", records)).toContain(isolate("默认"));
 });
 
 it("words a refused Grok sandbox with its profile and where it was set, leaving no placeholder in either language", () => {
   const params = { source: "GROK_SANDBOX", profile: "workspace" };
-  for (const language of ["en", "zh-Hans"] as const) {
+  for (const language of ["en", "zh-CN"] as const) {
     const text = daemonMessage(language, "provider.grok.sandbox_unsupported", params, "fallback", records);
     expect(text).toContain(isolate("workspace"));
     expect(text).toContain(isolate("GROK_SANDBOX"));
@@ -438,7 +438,7 @@ it("says why a sharing change left its entries, one short line per cause, in the
   expect(english).toContain(`${isolate("skills/")} was left unchanged.`);
   expect(english).not.toContain("permission denied");
   expect(english).not.toContain("english summary");
-  const chinese = daemonMessage("zh-Hans", "account_sharing_repair_failed", params, "x", records);
+  const chinese = daemonMessage("zh-CN", "account_sharing_repair_failed", params, "x", records);
   expect(chinese).toContain(`没有权限修改 ${isolate("skills/")} 和另外 1 项。`);
   expect(chinese).toContain(`${isolate("Hub")} 正在被使用。`);
   expect(chinese).toContain(`未能修改 ${isolate("hooks/")} 和另外 1 项。`);
@@ -478,19 +478,19 @@ it.each([
   ["provider.grok.home_not_initialized", { path: "/tmp/home" }],
   ["agent_not_available", { agent: "Codex" }], ["provider.claude.workspace_untrusted", {}],
 ] as const)("supplies fixed references for %s without unresolved placeholders in either language", (code, params) => {
-  for (const language of ["en", "zh-Hans"] as const) expect(daemonMessage(language, code, params, "fallback", records)).not.toMatch(/\{\w+\}/);
+  for (const language of ["en", "zh-CN"] as const) expect(daemonMessage(language, code, params, "fallback", records)).not.toMatch(/\{\w+\}/);
 });
 
 it("isolates each served label in the list of agents an unavailable agent's message offers", () => {
   const labels = TEST_PROVIDERS.map(({ label }) => label);
-  for (const language of ["en", "zh-Hans"] as const) {
+  for (const language of ["en", "zh-CN"] as const) {
     const text = daemonMessage(language, "agent_not_available", { agent: "Codex" }, "fallback", { ...records, providers: TEST_PROVIDERS });
     for (const label of labels) expect(text, `${language} ${label}`).toContain(isolate(label));
   }
 });
 
 it.each(["sign_in", "kick", "reset_credit", "config_sharing", "other"])("words a refused %s by the provider's name, not its wire id", (operation) => {
-  for (const language of ["en", "zh-Hans"] as const) {
+  for (const language of ["en", "zh-CN"] as const) {
     const text = daemonMessage(language, "provider_unsupported", { agent: "grok", operation }, "fallback", { ...records, providers: TEST_PROVIDERS });
     expect(text).toContain("Grok Build");
     expect(text).not.toMatch(/\{\w+\}/);
@@ -499,7 +499,7 @@ it.each(["sign_in", "kick", "reset_credit", "config_sharing", "other"])("words a
 
 it("keeps a nested detail-only shell failure usable without inventing missing command fields", () => {
   const params = { title: "Draft", reason_code: "shell_environment_timeout", detail: "environment capture failed\n    permission denied" };
-  for (const language of ["en", "zh-Hans"] as const) {
+  for (const language of ["en", "zh-CN"] as const) {
     const plain = daemonMessage(language, "launch_failed", params, "fallback", records);
     expect(plain).toContain(isolate(params.detail));
     expect(plain.endsWith(isolate(params.detail))).toBe(true);
@@ -539,7 +539,7 @@ it("words a session that did not stop as possibly still running, and a resume th
   expect(daemonMessage("en", "sharing_resume_failed", { ...params, still_running: "true" }, "x", records)).toContain("may still be running; it was not restarted");
   expect(daemonMessage("en", "sharing_resume_failed", { ...params, still_running: "false" }, "x", records)).toContain("left interrupted");
   expect(daemonMessage("en", "sharing_resume_failed", params, "x", records)).toContain("left interrupted");
-  expect(daemonMessage("zh-Hans", "sharing_resume_failed", { ...params, still_running: "true" }, "x", records)).toContain("可能仍在运行，未重新启动");
+  expect(daemonMessage("zh-CN", "sharing_resume_failed", { ...params, still_running: "true" }, "x", records)).toContain("可能仍在运行，未重新启动");
 });
 
 it.each([
@@ -553,7 +553,7 @@ it.each([
 ])("words a path link refused for the cause %s in every language, an unknown one as other", (cause, english, chinese) => {
   const params = { path: "a.ts", cause };
   expect(daemonMessage("en", "path_link_refused", params, "x", records)).toContain(english);
-  expect(daemonMessage("zh-Hans", "path_link_refused", params, "x", records)).toContain(chinese);
+  expect(daemonMessage("zh-CN", "path_link_refused", params, "x", records)).toContain(chinese);
 });
 
 it("keeps the system's text of an unreadable path link as plain text, on a line of its own", () => {
@@ -564,7 +564,7 @@ it("keeps the system's text of an unreadable path link as plain text, on a line 
 
 it("words an outside_scope from a link click as not opened from a link, and any other as not shown", () => {
   expect(daemonMessage("en", "outside_scope", { path: "/x", action: "open" }, "x", records)).toContain("not opened from a link");
-  expect(daemonMessage("zh-Hans", "outside_scope", { path: "/x", action: "open" }, "x", records)).toContain("不通过链接打开");
+  expect(daemonMessage("zh-CN", "outside_scope", { path: "/x", action: "open" }, "x", records)).toContain("不通过链接打开");
   expect(daemonMessage("en", "outside_scope", { path: "/x" }, "x", records)).toContain("is not shown");
 });
 
@@ -576,7 +576,7 @@ it("words every path link refusal that carries the system's text, an unknown cau
 });
 
 describe("the refusals of removing an account with its directory moved to the Trash", () => {
-  it.each(["en", "zh-Hans"] as const)("words each one in %s, naming what is in the way and counting the sessions", (language) => {
+  it.each(["en", "zh-CN"] as const)("words each one in %s, naming what is in the way and counting the sessions", (language) => {
     const said = (code: string, params: Record<string, string>) => daemonMessage(language, code, params, "fallback", records);
     expect(said("account_has_running_sessions", { account: "a", name: "Work", sessions: "2" })).toContain(isolate("Work"));
     expect(said("account_has_running_sessions", { account: "a", name: "Work", sessions: "2" })).toContain("2");
@@ -607,7 +607,7 @@ describe("a refused content search pattern or file mask", () => {
 
   it("words a regular expression from why and where it fails, the offset shown as a 1-based character, never the crate's text", () => {
     expect(pattern({ cause: "unclosed_group", offset: "7" })).toBe("The regular expression is not valid: the parenthesis at character 8 is never closed.");
-    expect(pattern({ cause: "unclosed_group", offset: "7" }, "zh-Hans")).toBe("正则表达式有误：第 8 个字符处的括号没有闭合。");
+    expect(pattern({ cause: "unclosed_group", offset: "7" }, "zh-CN")).toBe("正则表达式有误：第 8 个字符处的括号没有闭合。");
     expect(pattern({ cause: "unopened_group", offset: "0" })).toContain("closing parenthesis at character 1 has no opening one");
     expect(pattern({ cause: "line_break" })).toBe("The regular expression is not valid: it matches a line break, which a search line by line never finds.");
     expect(pattern({ cause: "other", offset: "3" })).toBe("The regular expression is not valid at character 4.");
@@ -634,7 +634,7 @@ describe("a refused content search pattern or file mask", () => {
 
   it("words a glob of the file mask from why it fails, naming the glob", () => {
     expect(mask({ cause: "unclosed_class" })).toBe(`The file mask ${isolate("src/[a")} is not valid: the bracket is never closed.`);
-    expect(mask({ cause: "unclosed_class" }, "zh-Hans")).toBe(`文件掩码 ${isolate("src/[a")} 有误：方括号没有闭合。`);
+    expect(mask({ cause: "unclosed_class" }, "zh-CN")).toBe(`文件掩码 ${isolate("src/[a")} 有误：方括号没有闭合。`);
     expect(mask({ cause: "unclosed_alternation", glob: "*.{md" })).toContain("Commas separate patterns, even inside braces.");
     expect(mask({ cause: "other" })).toBe(`The file mask ${isolate("src/[a")} is not valid.`);
     expect(mask({ cause: "something_new" })).toBe(`The file mask ${isolate("src/[a")} is not valid.`);

@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { installCommand } from "../../seo/downloads";
 
-const props = defineProps<{ command?: string; label?: string }>();
 const { t } = useSiteCopy();
 const config = useRuntimeConfig();
-const command = computed(() => props.command ?? installCommand(config.public.siteUrl));
+const command = computed(() => installCommand(config.public.siteUrl));
 const commandId = `${useId()}-command`;
 const announcement = ref("");
 const copied = ref(false);
@@ -32,7 +31,7 @@ onBeforeUnmount(() => clearTimeout(timer));
 
 <template>
   <div class="install-command">
-    <div class="install-command-scroll" dir="ltr" role="region" :aria-label="label ?? t('downloadInstallLabel')" tabindex="0">
+    <div class="install-command-scroll" dir="ltr" role="region" :aria-label="t('downloadInstallLabel')" tabindex="0">
       <!-- The command reads left to right in every language. -->
       <code :id="commandId" dir="ltr">{{ command }}</code>
     </div>

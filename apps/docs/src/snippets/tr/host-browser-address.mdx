@@ -1,0 +1,12 @@
+import { productName } from "../../commands.ts";
+
+{/* The host's steps both relay guides share: turning on remote access and copying the browser address. Pass
+`windows` on a Windows host, which also needs the browser port. */}
+
+{productName} içinde <strong>Ayarlar › Uzaktan erişim</strong> bölümünü açın, <strong>Uzaktan erişime izin ver</strong> seçeneğini açın ve onaylamak için <strong>İzin ver</strong> düğmesini seçin. Anahtarın altında iki sekme belirir. <strong>Tarayıcı</strong> sekmesinde, <strong>2. adım: tarayıcı adresi</strong> altındaki <strong>Adresi kopyala</strong> düğmesini seçin.{props.windows ? <> Ayrıca <strong>Tarayıcı bağlantı noktası</strong> altındaki sayıyı not edin.</> : null}
+
+Adresi diğer bilgisayara yalnızca sizin okuyabileceğiniz bir yolla iletin, örneğin kendinize bir not olarak: parola gibi çalışır.
+
+<strong>1. adım: SSH yönlendirmesi</strong> bölümünü atlayın. Uygulamanın ayarları SSH’den birkaç yerde söz eder; burada bunu yok sayabilirsiniz, çünkü bu kılavuz yalnızca tarayıcı adresini kullanır.
+
+{productName} uygulamasını açık tutun: kapatırsanız uzaktan erişim durur.

@@ -1,0 +1,46 @@
+---
+title: "Windows"
+description: "Pour les PC avec un processeur Intel ou AMD (presque tous les PC Windows), sous Windows 10 version 21H2 ou ultérieure. Sous Windows 11 sur Arm, cette app x64 fonctionne par émulation."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Pour les PC avec un processeur Intel ou AMD (x64 ; presque tous les PC Windows), sous Windows 10 version 21H2 ou ultérieure. Sous Windows 11 sur Arm, cette app x64 fonctionne par émulation.
+
+<LinkButton href={downloads.windows}>Télécharger pour Windows</LinkButton>
+
+<Aside>L’app Windows est en version bêta.</Aside>
+
+## Installation
+
+<Steps>
+
+1. Téléchargez le programme d’installation avec le bouton ci-dessus. C’est un fichier dont le nom se termine par <code dir="ltr">x64-setup.exe</code>.
+2. Ouvrez le fichier téléchargé pour lancer le programme d’installation. Il installe {productName} pour votre compte utilisateur uniquement, donc il ne demande pas de droits d’administrateur.
+
+   L’app n’est pas encore signée, donc Microsoft Defender SmartScreen peut afficher « Windows a protégé votre ordinateur ». Sélectionnez « Informations complémentaires », puis « Exécuter quand même ».
+
+   Si votre PC n’a pas Microsoft Edge WebView2, qui affiche la fenêtre de l’app, le programme d’installation le télécharge : restez donc connecté à Internet.
+3. Ouvrez {productName} depuis le menu Démarrer.
+4. Installez au moins un agent de code (voir ci-dessous), puis sélectionnez <strong>Ajouter un projet</strong> dans {productName} pour ouvrir un dossier de projet.
+
+</Steps>
+
+Quand la fenêtre principale s’ouvre, c’est terminé.
+
+## Installer un agent de code
+
+{productName} n’inclut aucun agent IA. Installez ceux que vous voulez utiliser en suivant leurs propres instructions, et connectez-vous-y. {productName} les trouve automatiquement. Il fonctionne avec :
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+Si vous utilisez Claude Code ou Codex, installez d’abord [Git for Windows](https://git-scm.com/download/win) : ils en ont besoin pour fonctionner.
+
+## Mises à jour
+
+Quand une nouvelle version est disponible, {productName} vous le signale, et vous pouvez l’installer depuis l’app. Vous n’avez pas besoin de revenir sur cette page.
+
+<a href={downloads.releases}>Toutes les versions précédentes</a>

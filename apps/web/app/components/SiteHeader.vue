@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { pageKind } from "../../seo/site-seo";
+import { docsPath, pageKind } from "../../seo/site-seo";
 const { t } = useSiteCopy();
+const { locale } = useI18n();
 const config = useRuntimeConfig();
 const localePath = useLocalePath();
 const route = useRoute();
+// The docs are a separate build under the same base path, so they are an ordinary link, not a route.
+const docsHref = computed(() => docsPath(config.app.baseURL, locale.value));
 const isHome = computed(() => pageKind(route.path) === "home");
 const glass = ref<HTMLElement | null>(null);
 useLiquidGlass(glass);
@@ -20,7 +23,7 @@ useLiquidGlassPointer(glass);
       <nav class="desktop-nav" :aria-label="t('navMenu')">
         <NuxtLink :to="`${localePath('/')}#benefits`">{{ t("navFeatures") }}</NuxtLink>
         <NuxtLink :to="`${localePath('/')}#product-preview`">{{ t("previewEyebrow") }}</NuxtLink>
-        <NuxtLink :to="localePath('/remote/')">{{ t("remoteEyebrow") }}</NuxtLink>
+        <a :href="docsHref">{{ t("navDocs") }}</a>
       </nav>
       <div class="nav-actions">
         <SectionNavigation v-if="isHome" />

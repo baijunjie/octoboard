@@ -1,4 +1,5 @@
 import { matchLanguage } from "@octoboard/ui/match-language";
+import { currentLocaleCode } from "../../seo/site-seo";
 
 const COOKIE_KEY = "octoboard_i18n_redirected";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
@@ -17,7 +18,9 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     if (i18n.locale.value === i18n.defaultLocale) {
       const locales = i18n.locales.value;
-      const remembered = locales.find(({ code }) => code === cookie.value);
+      // A choice remembered before the Chinese codes became their tags names the retired code.
+      const rememberedCode = cookie.value ? currentLocaleCode(cookie.value) : cookie.value;
+      const remembered = locales.find(({ code }) => code === rememberedCode);
       const language = matchLanguage(
         navigator.languages?.length ? navigator.languages : [navigator.language],
       );

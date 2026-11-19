@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "Dành cho máy Mac chip Apple và Intel, chạy macOS 11 trở lên."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Dành cho máy Mac chip Apple và Intel, chạy macOS 11 trở lên.
+
+<LinkButton href={downloads.macos}>Tải xuống cho macOS</LinkButton>
+
+<Aside>Ứng dụng macOS đang ở giai đoạn beta.</Aside>
+
+## Cài đặt
+
+<Steps>
+
+1. Tải ứng dụng bằng nút ở trên. Bạn nhận được một ảnh đĩa, là tệp có tên kết thúc bằng <code dir="ltr">.dmg</code>.
+2. Mở tệp vừa tải. Trong cửa sổ hiện ra, kéo {productName} vào thư mục Applications.
+3. Mở {productName} từ thư mục Applications hoặc từ Launchpad.
+4. Cài ít nhất một tác tử lập trình (xem bên dưới), rồi chọn <strong>Thêm dự án</strong> trong {productName} để mở một thư mục dự án.
+
+</Steps>
+
+Khi cửa sổ chính mở ra là bạn đã cài xong.
+
+## Cài tác tử lập trình
+
+{productName} không đi kèm tác tử AI. Hãy cài những tác tử bạn muốn dùng theo hướng dẫn riêng của chúng, rồi đăng nhập vào đó. {productName} sẽ tự nhận ra chúng. Hiện hỗ trợ:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## Cập nhật
+
+Khi có phiên bản mới, {productName} sẽ báo cho bạn, và bạn có thể cài ngay trong ứng dụng. Bạn không cần quay lại trang này.
+
+<a href={downloads.releases}>Tất cả các phiên bản trước</a>

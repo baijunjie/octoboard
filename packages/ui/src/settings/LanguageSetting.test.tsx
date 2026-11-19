@@ -40,9 +40,9 @@ function pick(select: HTMLSelectElement, value: string) {
 
 it("shows the language the user picks at once and sends it to the daemon", () => {
   const select = mount();
-  pick(select, "zh-Hans");
-  expect(currentLanguage()).toBe("zh-Hans");
-  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", interface_language: "zh-Hans", base_versions: undefined });
+  pick(select, "zh-CN");
+  expect(currentLanguage()).toBe("zh-CN");
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", interface_language: "zh-CN", base_versions: undefined });
 });
 
 it("bases the write on the version the store holds of the language", () => {

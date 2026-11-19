@@ -1,0 +1,179 @@
+---
+title: "Браузер через Tailscale"
+description: "Откройте Octoboard в браузере на другом компьютере через вашу собственную сеть Tailscale, без SSH и удалённого рабочего стола."
+---
+
+import { Aside, Code, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+import HostBrowserAddress from "../../../snippets/ru/host-browser-address.mdx";
+
+Откройте {productName} в браузере на другом компьютере через вашу собственную сеть Tailscale, без SSH и удалённого рабочего стола. Хост — это компьютер, на котором работает {productName}: Mac, компьютер с Windows или сервер Linux с octoboardd. Вход по SSH (Удалённый вход в macOS) может оставаться выключенным.
+
+Не уверены, что этот способ вам подходит? См. раздел [Выбор способа подключения](../choose-how-to-connect/).
+
+<Aside type="caution">
+Эти шаги пока проверены не полностью. Они основаны на документации Tailscale Serve и на собственных проверках {productName}. Программы-ретрансляторы опробованы на одном компьютере, включая живое соединение браузера; Tailscale Serve между двумя устройствами и перенаправление в Windows пока не проверялись.
+</Aside>
+
+<strong>Браузер на вашем компьютере</strong> → <strong>ретранслятор на вашем компьютере (127.0.0.1)</strong> ⟷ Tailscale ⟷ <strong>ретранслятор на хосте (127.0.0.1)</strong> → <strong>{productName}</strong>
+
+<details>
+<summary>Впервые сталкиваетесь с этим?</summary>
+
+- <strong>Tailscale:</strong> сервис, который объединяет ваши устройства в частную сеть через интернет, где бы они ни находились. Вы входите в него со своим аккаунтом.
+- <strong>Tailnet:</strong> ваша сеть Tailscale: устройства, вошедшие в ваш аккаунт Tailscale.
+- <strong>127.0.0.1 (loopback):</strong> адрес, который всегда означает «этот же компьютер».
+- <strong>Порт:</strong> число, которое выбирает одну программу на компьютере, как номер двери. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> — это порт {commands.defaultPort} на этом компьютере.
+- <strong>socat:</strong> небольшая бесплатная программа, которая передаёт соединение из одного места в другое. Здесь она служит ретранслятором.
+- <strong>Tailscale Serve:</strong> команда Tailscale, которая открывает порт только для вашего tailnet. Её родственная функция Tailscale Funnel открыла бы его для всего интернета; здесь её нельзя использовать никогда.
+- <strong>Терминал:</strong> окно, в которое вводят команды: Терминал в macOS, PowerShell в Windows.
+
+</details>
+
+## Зачем нужны дополнительные шаги
+
+В целях безопасности {productName} принимает только тот браузер, который открывает его по адресу <code dir="ltr">{tunnel.loopback}</code> — адресу, который всегда означает «этот же компьютер» (его также называют loopback). Поэтому просто ввести в браузере адрес хоста в Tailscale нельзя. Вместо этого вы запускаете небольшую программу-ретранслятор на каждом компьютере: на вашем она делает так, что хост выглядит локальным по адресу <code dir="ltr">{tunnel.loopback}</code>; на хосте она передаёт соединение в {productName}. Трафик между ними переносит Tailscale.
+
+## Перед началом
+
+- <strong>Tailscale на обоих компьютерах</strong>, с входом в один и тот же tailnet. Используйте tailnet, в котором только ваши устройства: любое устройство, которое он допускает к хосту, получает доступ к открытому вами порту.
+- <strong>socat на каждом компьютере, который является Mac или работает под Linux.</strong> Компьютеру с Windows он не нужен.
+
+  <Tabs syncKey="host">
+  <TabItem label="macOS">
+  Сначала установите [Homebrew](https://brew.sh/), если его нет (в macOS нет инструмента, который мог бы выполнить эту работу), затем выполните в Терминале:
+
+  <Code code={tunnel.installSocatMac} lang="sh" />
+  </TabItem>
+  <TabItem label="Windows">
+  Ничего устанавливать не нужно: хост с Windows уже отдаёт браузеру порт на <code dir="ltr">{tunnel.loopback}</code>, а компьютер с Windows, с которого вы открываете браузер, использует встроенную команду.
+  </TabItem>
+  <TabItem label="Linux">
+  <Code code={tunnel.installSocatLinux} lang="sh" />
+
+  Если в вашем дистрибутиве не <code dir="ltr">apt</code>, используйте его менеджер пакетов (<code dir="ltr">dnf</code>, <code dir="ltr">pacman</code> и так далее).
+  </TabItem>
+  </Tabs>
+- <strong>Два или три окна, оставленные открытыми</strong>, пока вы работаете: ретранслятор и Tailscale Serve на хосте (кроме ретранслятора в Windows) и ретранслятор на вашем компьютере (кроме Windows).
+
+## На хосте
+
+<Steps>
+
+1. Получите адрес для браузера: в нём есть ключ, по которому браузер входит.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <HostBrowserAddress />
+   </TabItem>
+   <TabItem label="Windows">
+   <HostBrowserAddress windows />
+   </TabItem>
+   <TabItem label="Linux">
+   Выполните это под тем пользователем, под которым работает octoboardd, и скопируйте выведенный адрес, начинающийся с <code dir="ltr">{tunnel.addressStart}</code>. Команду SSH, которую она выводит после адреса, пропустите.
+
+   <Code code={commands.address} lang="sh" />
+   </TabItem>
+   </Tabs>
+2. Запустите ретранслятор на хосте, который соединяет порт на <code dir="ltr">{tunnel.loopback}</code> хоста с {productName}. Этот порт — <strong>порт хоста</strong> в шагах ниже.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   Выполните это в Терминале и оставьте окно открытым. Ретранслятор слушает только <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   Порт хоста — <code dir="ltr">{tunnel.bridgePort}</code>.
+   </TabItem>
+   <TabItem label="Windows">
+   Запускать ничего не нужно: сам {productName} слушает порт браузера, и только на <code dir="ltr">127.0.0.1</code>. Порт хоста — это <strong>Порт браузера</strong> ({commands.defaultPort}, если вы его не меняли).
+   </TabItem>
+   <TabItem label="Linux">
+   Выполните это под тем же пользователем, в терминале или сеансе <code dir="ltr">tmux</code>, который остаётся открытым. Ретранслятор слушает только <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   Порт хоста — <code dir="ltr">{tunnel.bridgePort}</code>.
+   </TabItem>
+   </Tabs>
+3. Откройте порт хоста для своего tailnet с помощью Tailscale Serve и оставьте окно открытым. Никогда не используйте Tailscale Funnel: он выставил бы порт в открытый интернет.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   Если у вас приложение Tailscale из App Store, выполняйте команду как <code dir="ltr">{tunnel.macCli}</code> вместо <code dir="ltr">tailscale</code>. Если у вас автономное приложение, сначала установите команду в его настройках, в разделе CLI integration.
+   </TabItem>
+   <TabItem label="Windows">
+   В PowerShell или командной строке:
+
+   <Code code={tunnel.serveBrowserPort} lang="powershell" />
+
+   Если вы меняли <strong>Порт браузера</strong>, укажите свой порт.
+   </TabItem>
+   <TabItem label="Linux">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   Если Tailscale сообщает, что у вас недостаточно прав, один раз разрешите своему пользователю управлять им командой <code dir="ltr">{tunnel.linuxOperator}</code> или выполните команду с <code dir="ltr">sudo</code>.
+   </TabItem>
+   </Tabs>
+
+   Чтобы проверить, выполните в другом окне <code dir="ltr">{tunnel.serveStatus}</code>: в списке должен быть порт хоста.
+
+</Steps>
+
+## На компьютере, с которого вы открываете браузер
+
+<Steps>
+
+1. Найдите хост в приложении Tailscale на этом компьютере и запомните его имя (например, <code dir="ltr">my-mac</code>) или адрес (число вида <code dir="ltr">100.x.y.z</code>).
+2. Запустите ретранслятор на этом компьютере, который делает хост доступным здесь по адресу <code dir="ltr">{tunnel.loopback}:{commands.defaultPort}</code>. Если порт {commands.defaultPort} на этом компьютере уже занят, выберите другой порт и измените его также в адресе для браузера.
+
+   <Tabs syncKey="visitor">
+   <TabItem label="macOS или Linux">
+   В команде ниже замените <code dir="ltr">{tunnel.host}</code> именем или адресом хоста, а <code dir="ltr">{tunnel.hostPort}</code> — портом хоста.
+
+   <Code code={tunnel.visitorForward} lang="sh" />
+
+   Например, для хоста Mac с именем <code dir="ltr">my-mac</code>:
+
+   <Code code={tunnel.visitorForwardExample} lang="sh" />
+
+   Выполните её в Терминале и оставьте окно открытым.
+   </TabItem>
+   <TabItem label="Windows">
+   Откройте PowerShell от имени администратора. В команде ниже замените <code dir="ltr">{tunnel.hostIp}</code> адресом хоста вида <code dir="ltr">100.x.y.z</code> (этой команде нужно именно число, имя не подойдёт), а <code dir="ltr">{tunnel.hostPort}</code> — портом хоста.
+
+   <Code code={tunnel.visitorForwardWindows} lang="powershell" />
+
+   Это перенаправление остаётся на месте, в том числе после перезагрузок, пока вы его не удалите (см. ниже), поэтому окно держать открытым не нужно. Ему нужна служба IP Helper, которая по умолчанию запущена.
+   </TabItem>
+   </Tabs>
+3. Откройте в браузере адрес, который вы скопировали на хосте. Он начинается с <code dir="ltr">{tunnel.addressStart}</code>.
+
+</Steps>
+
+Всё получилось, если {productName} открылся во вкладке браузера, не требуя входа.
+
+## Если не получается
+
+- <strong>Страница не загружается:</strong> одно из окон было закрыто или его команда остановилась. Проверьте, что ретрансляторы и Tailscale Serve всё ещё работают и что <code dir="ltr">{tunnel.serveStatus}</code> на хосте показывает порт хоста.
+- <strong>socat пишет «Address already in use»:</strong> этот порт занят на этом компьютере. Выберите другой порт; на своём компьютере измените его также в адресе для браузера.
+- <strong>Страница отклонена или пуста:</strong> проверьте, что вы открыли адрес на <code dir="ltr">{tunnel.loopback}</code>, а не по имени хоста в Tailscale или адресу <code dir="ltr">100.x.y.z</code>.
+- <strong>Ретранслятор на хосте при открытии страницы пишет «Connection refused» или «No such file or directory»:</strong> выключено <strong>Разрешить удалённый доступ</strong> или {productName} не запущен на хосте (в Linux — не запущен octoboardd).
+
+## Как отключить
+
+- <strong>На компьютере, с которого вы открывали браузер:</strong> остановите socat сочетанием <kbd>Ctrl</kbd>+<kbd>C</kbd> или, в Windows, удалите перенаправление в PowerShell, запущенном от имени администратора:
+
+  <Code code={tunnel.visitorForwardWindowsOff} lang="powershell" />
+- <strong>На хосте:</strong> остановите команду Tailscale Serve и socat сочетанием <kbd>Ctrl</kbd>+<kbd>C</kbd>. Командой <code dir="ltr">{tunnel.serveStatus}</code> убедитесь, что больше ничего не открыто; если порт всё ещё в списке, удалите его командой <code dir="ltr">{tunnel.serveBridgeOff}</code> (в Windows — <code dir="ltr">{tunnel.serveBrowserPortOff}</code>).
+- <strong>На хосте Mac или Windows</strong> выключите <strong>Разрешить удалённый доступ</strong>, когда он больше не нужен. Это закроет вход для браузера и отключит все страницы, открытые с этим ключом.
+- <strong>Если адрес мог утечь,</strong> выдайте ему новый ключ кнопкой <strong>Сменить ключ</strong> на вкладке <strong>Браузер</strong> или, в Linux, командой <code dir="ltr">{tunnel.rotate}</code>. Страницы, открытые по старому адресу, будут отключены.
+
+## Безопасность
+
+- <strong>Адрес — это пароль:</strong> его ключ даёт полный контроль над {productName} на хосте, включая запуск любых команд. Он действует, пока вы его не смените. Адрес остаётся в истории и закладках браузера и синхронизируется с другими вашими устройствами, если включена синхронизация браузера.
+- <strong>Кто может добраться:</strong> любой, кто достигает порта хоста и знает ключ. Ретрансляторы слушают только <code dir="ltr">127.0.0.1</code>, поэтому другие устройства в сети хоста или вашей локальной сети не могут к ним подключиться; Tailscale Serve делает порт хоста доступным только из вашего tailnet, в пределах его правил доступа.
+- <strong>Только на компьютерах, на которые больше никто не входит:</strong> другая учётная запись на хосте или на вашем компьютере может подключиться к этим портам <code dir="ltr">127.0.0.1</code>, а пока ретранслятор не запущен, занять его порт и получить ключ, когда ваш браузер переподключится. [Подключение по SSH](../remote-connections/) не имеет этой слабости на хосте Mac или Linux, а ваш собственный компьютер её не имеет при работе в настольном приложении. В браузере у вашего компьютера она остаётся, потому что перенаправление SSH там тоже слушает порт <code dir="ltr">127.0.0.1</code>.
+- <strong>Никогда не Funnel:</strong> Tailscale Funnel опубликовал бы порт для всего интернета.

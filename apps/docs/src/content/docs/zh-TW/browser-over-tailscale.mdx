@@ -1,0 +1,179 @@
+---
+title: "透過 Tailscale 用瀏覽器存取"
+description: "透過你自己的 Tailscale 網路，在另一台電腦的瀏覽器中開啟 Octoboard，不需要 SSH 或遠端桌面。"
+---
+
+import { Aside, Code, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+import HostBrowserAddress from "../../../snippets/zh-TW/host-browser-address.mdx";
+
+透過你自己的 Tailscale 網路，在另一台電腦的瀏覽器中開啟 {productName}，不需要 SSH 或遠端桌面。主機是執行 {productName} 的那台電腦：Mac、Windows 電腦，或執行 octoboardd 的 Linux 伺服器。SSH 登入（macOS 上的「遠端登入」）可以保持關閉。
+
+不確定該用哪種方式？請看[選擇連線方式](../choose-how-to-connect/)。
+
+<Aside type="caution">
+這些步驟尚未完整實測，是依據 Tailscale Serve 的文件和 {productName} 本身的檢查撰寫的。轉送程式已在單台電腦上試過，包括瀏覽器的即時連線；兩台裝置之間的 Tailscale Serve 以及 Windows 上的轉送尚未實測。
+</Aside>
+
+<strong>你電腦上的瀏覽器</strong> → <strong>你電腦上的轉送程式（127.0.0.1）</strong> ⟷ Tailscale ⟷ <strong>主機上的轉送程式（127.0.0.1）</strong> → <strong>{productName}</strong>
+
+<details>
+<summary>新手須知</summary>
+
+- <strong>Tailscale：</strong>一項透過網際網路把你的裝置連成私人網路的服務，不管裝置在哪裡都能用。你用自己的帳號登入它。
+- <strong>tailnet：</strong>你的 Tailscale 網路，也就是登入了你 Tailscale 帳號的那些裝置。
+- <strong>127.0.0.1（回送位址）：</strong>永遠代表「本機」的位址。
+- <strong>連接埠：</strong>用來指定電腦上某個程式的編號，就像門牌號碼。<code dir="ltr">127.0.0.1:{commands.defaultPort}</code> 就是本機的 {commands.defaultPort} 連接埠。
+- <strong>socat：</strong>一個免費的小程式，負責把連線從一處轉到另一處。這裡用它當作轉送程式。
+- <strong>Tailscale Serve：</strong>Tailscale 的一個指令，只把連接埠分享給你的 tailnet。和它相近的 Tailscale Funnel 會把連接埠分享到整個網際網路，這裡千萬不要用。
+- <strong>終端機：</strong>輸入指令的視窗，macOS 上是「終端機」，Windows 上是 PowerShell。
+
+</details>
+
+## 為什麼要多這幾步
+
+基於安全考量，{productName} 只接受在 <code dir="ltr">{tunnel.loopback}</code>（永遠代表「本機」的位址，也稱為回送位址）上開啟的瀏覽器頁面，所以不能直接在瀏覽器裡輸入主機的 Tailscale 位址。做法是在兩台電腦上各執行一個小型轉送程式：你這邊的讓主機看起來就在本機的 <code dir="ltr">{tunnel.loopback}</code> 上，主機那邊的把連線交給 {productName}，中間由 Tailscale 傳送。
+
+## 準備工作
+
+- <strong>兩台電腦都安裝好 Tailscale，</strong>並登入同一個 tailnet。請使用只包含你自己裝置的 tailnet：其中每一台能連到主機的裝置，都能存取你分享的連接埠。
+- <strong>Mac 或執行 Linux 的電腦都要安裝 socat。</strong>Windows 電腦不需要。
+
+  <Tabs syncKey="host">
+  <TabItem label="macOS">
+  如果還沒有 [Homebrew](https://brew.sh/)，請先安裝它（macOS 內建的工具都做不到這件事），然後在「終端機」中執行：
+
+  <Code code={tunnel.installSocatMac} lang="sh" />
+  </TabItem>
+  <TabItem label="Windows">
+  不需要安裝：Windows 主機本來就在 <code dir="ltr">{tunnel.loopback}</code> 的連接埠上為瀏覽器提供服務，用來瀏覽的 Windows 電腦則改用系統內建的指令。
+  </TabItem>
+  <TabItem label="Linux">
+  <Code code={tunnel.installSocatLinux} lang="sh" />
+
+  如果發行版不用 <code dir="ltr">apt</code>，請改用它的套件管理工具（<code dir="ltr">dnf</code>、<code dir="ltr">pacman</code> 等）。
+  </TabItem>
+  </Tabs>
+- <strong>使用期間要開著兩到三個視窗：</strong>主機上的轉送程式和 Tailscale Serve（Windows 主機不需要轉送程式），以及你電腦上的轉送程式（Windows 電腦不需要）。
+
+## 在主機上
+
+<Steps>
+
+1. 取得瀏覽器位址，位址裡帶有登入金鑰，用瀏覽器開啟就能直接登入。
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <HostBrowserAddress />
+   </TabItem>
+   <TabItem label="Windows">
+   <HostBrowserAddress windows />
+   </TabItem>
+   <TabItem label="Linux">
+   以執行 octoboardd 的使用者身分執行這個指令，複製它輸出的以 <code dir="ltr">{tunnel.addressStart}</code> 開頭的位址。忽略之後輸出的 SSH 指令。
+
+   <Code code={commands.address} lang="sh" />
+   </TabItem>
+   </Tabs>
+2. 在主機上啟動轉送程式，把主機 <code dir="ltr">{tunnel.loopback}</code> 上的一個連接埠接到 {productName}。下文的<strong>主機連接埠</strong>就是這個連接埠。
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   在「終端機」中執行這個指令，不要關閉視窗。它只監聽 <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>。
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   主機連接埠是 <code dir="ltr">{tunnel.bridgePort}</code>。
+   </TabItem>
+   <TabItem label="Windows">
+   不需要執行任何指令：{productName} 本身就在瀏覽器連接埠上監聽，而且只監聽 <code dir="ltr">127.0.0.1</code>。主機連接埠就是<strong>瀏覽器連接埠</strong>（沒改過的話是 {commands.defaultPort}）。
+   </TabItem>
+   <TabItem label="Linux">
+   以同一個使用者身分，在一直開著的終端機或 <code dir="ltr">tmux</code> 工作階段中執行這個指令。它只監聽 <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>。
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   主機連接埠是 <code dir="ltr">{tunnel.bridgePort}</code>。
+   </TabItem>
+   </Tabs>
+3. 用 Tailscale Serve 把主機連接埠分享給你的 tailnet，不要關閉視窗。不要使用 Tailscale Funnel，它會把連接埠公開到網際網路上。
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   如果用的是 App Store 版 Tailscale，請用 <code dir="ltr">{tunnel.macCli}</code> 代替指令中的 <code dir="ltr">tailscale</code>。如果用的是獨立版，請先在它的設定中的 CLI integration 裡安裝指令。
+   </TabItem>
+   <TabItem label="Windows">
+   在 PowerShell 或命令提示字元中執行：
+
+   <Code code={tunnel.serveBrowserPort} lang="powershell" />
+
+   如果改過<strong>瀏覽器連接埠</strong>，請換成你的連接埠。
+   </TabItem>
+   <TabItem label="Linux">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   如果 Tailscale 提示權限不足，請執行一次 <code dir="ltr">{tunnel.linuxOperator}</code> 讓你的使用者可以管理它，或用 <code dir="ltr">sudo</code> 執行這個指令。
+   </TabItem>
+   </Tabs>
+
+   檢查方法：在另一個視窗執行 <code dir="ltr">{tunnel.serveStatus}</code>，清單中應該會有主機連接埠。
+
+</Steps>
+
+## 在用來瀏覽的電腦上
+
+<Steps>
+
+1. 在這台電腦的 Tailscale 應用程式中找到主機，記下它的名稱（例如 <code dir="ltr">my-mac</code>）或位址（形如 <code dir="ltr">100.x.y.z</code> 的數字）。
+2. 在這台電腦上啟動轉送程式，讓主機出現在本機的 <code dir="ltr">{tunnel.loopback}:{commands.defaultPort}</code> 上。如果這台電腦上的 {commands.defaultPort} 連接埠已被占用，請換一個連接埠，並在瀏覽器位址中也改成它。
+
+   <Tabs syncKey="visitor">
+   <TabItem label="macOS 或 Linux">
+   把下面指令中的 <code dir="ltr">{tunnel.host}</code> 換成主機的名稱或位址，<code dir="ltr">{tunnel.hostPort}</code> 換成主機連接埠。
+
+   <Code code={tunnel.visitorForward} lang="sh" />
+
+   例如主機是一台名為 <code dir="ltr">my-mac</code> 的 Mac：
+
+   <Code code={tunnel.visitorForwardExample} lang="sh" />
+
+   在「終端機」中執行，不要關閉視窗。
+   </TabItem>
+   <TabItem label="Windows">
+   以系統管理員身分開啟 PowerShell。把下面指令中的 <code dir="ltr">{tunnel.hostIp}</code> 換成主機的 <code dir="ltr">100.x.y.z</code> 位址（這個指令只接受數字位址，不能填名稱），<code dir="ltr">{tunnel.hostPort}</code> 換成主機連接埠。
+
+   <Code code={tunnel.visitorForwardWindows} lang="powershell" />
+
+   這個轉送會一直保留，重新開機後也還在，直到你刪除它（見下文），所以不需要開著視窗。它依賴預設執行的 IP Helper 服務。
+   </TabItem>
+   </Tabs>
+3. 開啟在主機上複製的瀏覽器位址。它以 <code dir="ltr">{tunnel.addressStart}</code> 開頭。
+
+</Steps>
+
+看到 {productName} 在瀏覽器分頁中開啟，而且沒有要求你登入，就表示成功了。
+
+## 連不上時
+
+- <strong>頁面打不開：</strong>某個視窗被關掉了，或其中的指令已停止。請確認轉送程式和 Tailscale Serve 都還在執行，並且主機上的 <code dir="ltr">{tunnel.serveStatus}</code> 有列出主機連接埠。
+- <strong>socat 提示「Address already in use」：</strong>這台電腦上的該連接埠已被占用。請換一個連接埠；如果是你這邊的電腦，瀏覽器位址裡也要改成它。
+- <strong>頁面被拒絕或一片空白：</strong>請確認開啟的是 <code dir="ltr">{tunnel.loopback}</code> 開頭的位址，而不是主機的 Tailscale 名稱或 <code dir="ltr">100.x.y.z</code> 位址。
+- <strong>開啟頁面時，主機上的轉送程式提示「Connection refused」或「No such file or directory」：</strong><strong>允許遠端存取</strong>沒有開啟，或主機上的 {productName} 沒有在執行（Linux 上是 octoboardd 沒有在執行）。
+
+## 停止使用
+
+- <strong>在用來瀏覽的電腦上：</strong>按 <kbd>Ctrl</kbd>+<kbd>C</kbd> 停止 socat；在 Windows 上，以系統管理員身分開啟 PowerShell，刪除轉送：
+
+  <Code code={tunnel.visitorForwardWindowsOff} lang="powershell" />
+- <strong>在主機上：</strong>按 <kbd>Ctrl</kbd>+<kbd>C</kbd> 停止 Tailscale Serve 指令和 socat。用 <code dir="ltr">{tunnel.serveStatus}</code> 確認已不再分享任何內容；如果連接埠仍在清單中，用 <code dir="ltr">{tunnel.serveBridgeOff}</code> 移除它（Windows 上用 <code dir="ltr">{tunnel.serveBrowserPortOff}</code>）。
+- <strong>主機是 Mac 或 Windows 時，</strong>不再需要時請關閉<strong>允許遠端存取</strong>。這會關閉瀏覽器入口，並中斷所有用該金鑰開啟的頁面。
+- <strong>如果位址可能已外洩，</strong>在<strong>瀏覽器</strong>分頁點選<strong>輪替金鑰</strong>為它換一把新金鑰，Linux 上則執行 <code dir="ltr">{tunnel.rotate}</code>。用舊位址開啟的頁面會被中斷。
+
+## 安全性
+
+- <strong>位址就是密碼：</strong>位址裡的金鑰可以完全控制主機上的 {productName}，包括執行任何指令。金鑰在你輪替之前一直有效。它會留在瀏覽器的瀏覽紀錄和書籤裡，開啟同步後還會同步到你的其他裝置。
+- <strong>誰能存取：</strong>能連到主機連接埠並持有金鑰的任何人。兩台電腦上的轉送程式只監聽 <code dir="ltr">127.0.0.1</code>，主機所在網路或你本地網路中的其他裝置都連不到；Tailscale Serve 只讓你的 tailnet 能連到主機連接埠，並受它的存取規則限制。
+- <strong>只在沒有其他人登入的電腦上使用：</strong>主機或你電腦上的其他使用者帳戶可以連到這些 <code dir="ltr">127.0.0.1</code> 連接埠；轉送程式沒在執行時，他們還可以占用該連接埠，在你的瀏覽器重新連線時拿到金鑰。[透過 SSH 連線](../remote-connections/)時，Mac 或 Linux 主機沒有這個弱點；用桌面應用程式時，你自己的電腦也沒有。但用瀏覽器時，你用來瀏覽的電腦仍有這個弱點，因為那裡的 SSH 轉送同樣監聽 <code dir="ltr">127.0.0.1</code> 連接埠。
+- <strong>不要使用 Funnel：</strong>Tailscale Funnel 會把連接埠公開到整個網際網路。

@@ -32,7 +32,7 @@ function render(error: ErrorPresentation, path = "src/gone.ts"): HTMLDivElement 
   return renderContent(<ViewerErrorMessage error={error} path={path} />);
 }
 
-it.each<Language>(["en", "zh-Hans"])("omits only the current file's path in %s", (language) => {
+it.each<Language>(["en", "zh-CN"])("omits only the current file's path in %s", (language) => {
   setLanguage(language);
   for (const [code, key] of [
     ["invalid_path", "viewer.error.invalidPath"],
@@ -53,7 +53,7 @@ it("keeps the special explanation for an unmerged file", () => {
   expect(render(error).textContent).toBe(format("en", "viewer.error.unmerged"));
 });
 
-it.each<Language>(["en", "zh-Hans"])("keeps permission diagnostics out of the summary in %s", (language) => {
+it.each<Language>(["en", "zh-CN"])("keeps permission diagnostics out of the summary in %s", (language) => {
   setLanguage(language);
   const permission = render(new CodedError("fallback", "permission_denied", { path: "src/gone.ts", detail: "Access denied" }));
   // The system's text is the failure's Details, not part of the summary line.
@@ -100,7 +100,7 @@ it("does not shorten shared errors outside the viewer", () => {
 });
 
 
-it.each<Language>(["en", "zh-Hans"])("uses the same compact reasons in plain-text body failures in %s", (language) => {
+it.each<Language>(["en", "zh-CN"])("uses the same compact reasons in plain-text body failures in %s", (language) => {
   const t: Translate = translatorFor(language);
   const text = (error: ErrorPresentation) => viewerErrorText(t, language, error, "src/gone.ts", NO_RECORDS);
   expect(text(new CodedError("gone", "file_not_found", { path: "src/gone.ts" })))
@@ -122,7 +122,7 @@ it.each([
   expect(rawFailureText(error)).toBe(error.message);
 });
 
-it.each<Language>(["en", "zh-Hans"])("words a failure of another path as its summary sentence, without the raw reason, in %s", (language) => {
+it.each<Language>(["en", "zh-CN"])("words a failure of another path as its summary sentence, without the raw reason, in %s", (language) => {
   const t: Translate = translatorFor(language);
   const text = (error: ErrorPresentation) => viewerErrorText(t, language, error, "src/gone.ts", NO_RECORDS);
   const parent = text(new CodedError("raw", "source_unavailable", { path: "src", detail: "Permission denied" }));
@@ -141,9 +141,9 @@ it("knows the sentence of a body failure worded before the language changed", ()
   const error = new CodedError("denied", "permission_denied", { path: "src/gone.ts", detail: "Access denied" });
   const { message, messageKey } = bodiesFailure(changeBodiesFailure(t, "en", error, "src/gone.ts", NO_RECORDS));
   expect(message).toBe(format("en", "viewer.error.permissionDenied.summary"));
-  setLanguage("zh-Hans");
+  setLanguage("zh-CN");
   const reason = renderContent(<BodiesFailureReason message={message!} messageKey={messageKey} />);
-  expect(reason.textContent).toBe(format("zh-Hans", "viewer.error.permissionDenied.summary"));
+  expect(reason.textContent).toBe(format("zh-CN", "viewer.error.permissionDenied.summary"));
 });
 
 it("words any viewer sentence of a body failure in the live language", () => {
@@ -151,7 +151,7 @@ it("words any viewer sentence of a body failure in the live language", () => {
   const error = new CodedError("gone", "file_not_found", { path: "src/gone.ts" });
   const { message, messageKey } = bodiesFailure(changeBodiesFailure(t, "en", error, "src/gone.ts", NO_RECORDS));
   expect(messageKey).toBe("viewer.error.fileNotFound");
-  setLanguage("zh-Hans");
+  setLanguage("zh-CN");
   const reason = renderContent(<BodiesFailureReason message={message!} messageKey={messageKey} />);
-  expect(reason.textContent).toBe(format("zh-Hans", "viewer.error.fileNotFound"));
+  expect(reason.textContent).toBe(format("zh-CN", "viewer.error.fileNotFound"));
 });

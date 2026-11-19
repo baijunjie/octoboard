@@ -216,8 +216,9 @@ Upgrading a version 2 document drops its application settings' setting for order
 import no longer reads: the order of sessions and projects travels instead as the Sorting of the General section (see
 "The application settings an export carries" in `docs/product/settings-in-a-configuration.md`).
 
-Upgrading a version 3 document to version 4 keeps its settings unchanged: it already carries the one language under
-`interface_language`, where the current version reads it (see "The application settings an export carries" in
+Upgrading a version 3 document to version 4 renames the language its application settings carry under
+`interface_language` to the tag the current version offers for it: `zh-Hans` becomes `zh-CN` and `zh-Hant` becomes
+`zh-TW`. Any other value is left as it is (see "The application settings an export carries" in
 `docs/product/settings-in-a-configuration.md`).
 
 An export always writes an entry for every agent in `accounts`, `launch` and `project_session_launch`. An import reads

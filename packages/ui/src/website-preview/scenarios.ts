@@ -17,7 +17,7 @@ import {
 } from "../fixtures/builders";
 import { previewRepositories } from "./repositories";
 import { previewCopy as english } from "./locales/en";
-import { previewCopy as chinese } from "./locales/zh-Hans";
+import { previewCopy as chinese } from "./locales/zh-CN";
 import { createIdleScript, createTerminalScript } from "./terminals";
 import { terminalCopy } from "./terminalScripts";
 import type { TerminalScript } from "../fixtures/fakeTerminal";
@@ -55,7 +55,7 @@ function previewQuotas() {
 }
 
 export const copyFor = (language: Language) =>
-  language === "zh-Hans" ? chinese : english;
+  language === "zh-CN" ? chinese : english;
 
 function report(copy: typeof english): PageContent {
   // This is sample agent-authored report content, rendered by the application's real report panel.

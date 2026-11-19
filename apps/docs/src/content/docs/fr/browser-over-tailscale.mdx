@@ -1,0 +1,179 @@
+---
+title: "Navigateur via Tailscale"
+description: "Ouvrez Octoboard dans un navigateur sur un autre ordinateur par votre propre réseau Tailscale, sans SSH ni bureau à distance."
+---
+
+import { Aside, Code, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+import HostBrowserAddress from "../../../snippets/fr/host-browser-address.mdx";
+
+Ouvrez {productName} dans un navigateur sur un autre ordinateur par votre propre réseau Tailscale, sans SSH ni bureau à distance. L’hôte est l’ordinateur sur lequel fonctionne {productName} : un Mac, un PC Windows ou un serveur Linux où tourne octoboardd. La connexion SSH (Connexion à distance sur macOS) peut rester désactivée.
+
+Vous ne savez pas si c’est la bonne voie pour vous ? Consultez [Choisir comment se connecter](../choose-how-to-connect/).
+
+<Aside type="caution">
+Ces étapes n’ont pas encore été entièrement testées. Elles suivent la documentation de Tailscale Serve et les propres vérifications de {productName}. Les programmes relais ont été essayés sur un seul ordinateur, y compris la connexion en direct du navigateur ; Tailscale Serve entre deux appareils et la redirection sous Windows n’ont pas encore été essayés.
+</Aside>
+
+<strong>Navigateur sur votre ordinateur</strong> → <strong>relais sur votre ordinateur (127.0.0.1)</strong> ⟷ Tailscale ⟷ <strong>relais sur l’hôte (127.0.0.1)</strong> → <strong>{productName}</strong>
+
+<details>
+<summary>Vous débutez ?</summary>
+
+- <strong>Tailscale :</strong> un service qui relie vos appareils en un réseau privé par Internet, où qu’ils soient. Vous vous y connectez avec votre propre compte.
+- <strong>Tailnet :</strong> votre réseau Tailscale : les appareils connectés à votre compte Tailscale.
+- <strong>127.0.0.1 (boucle locale) :</strong> une adresse qui signifie toujours « cet ordinateur-ci ».
+- <strong>Port :</strong> un nombre qui désigne un programme précis sur un ordinateur, comme un numéro de porte. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> est le port {commands.defaultPort} sur cet ordinateur.
+- <strong>socat :</strong> un petit programme gratuit qui fait passer une connexion d’un endroit à un autre. Ici, c’est le relais.
+- <strong>Tailscale Serve :</strong> une commande Tailscale qui partage un port avec votre tailnet uniquement. Sa cousine, Tailscale Funnel, le partagerait avec tout Internet ; ne l’utilisez jamais ici.
+- <strong>Terminal :</strong> la fenêtre dans laquelle vous tapez des commandes : Terminal sur macOS, PowerShell sous Windows.
+
+</details>
+
+## Pourquoi ces étapes supplémentaires
+
+Par sécurité, {productName} n’accepte qu’un navigateur qui l’ouvre à l’adresse <code dir="ltr">{tunnel.loopback}</code>, une adresse qui signifie toujours « cet ordinateur-ci » (appelée aussi boucle locale). Vous ne pouvez donc pas simplement taper l’adresse Tailscale de l’hôte dans le navigateur. À la place, vous lancez un petit programme relais sur chaque ordinateur : sur le vôtre, il fait apparaître l’hôte comme local à l’adresse <code dir="ltr">{tunnel.loopback}</code> ; sur l’hôte, il transmet la connexion à {productName}. Tailscale transporte le trafic entre les deux.
+
+## Avant de commencer
+
+- <strong>Tailscale sur les deux ordinateurs,</strong> connectés au même tailnet. Utilisez un tailnet qui ne contient que vos propres appareils : chaque appareil qu’il autorise à atteindre l’hôte peut atteindre le port que vous partagez.
+- <strong>socat sur chaque ordinateur qui est un Mac ou qui tourne sous Linux.</strong> Un ordinateur Windows n’en a pas besoin.
+
+  <Tabs syncKey="host">
+  <TabItem label="macOS">
+  Installez d’abord [Homebrew](https://brew.sh/) si vous ne l’avez pas (macOS ne fournit aucun outil capable de faire ce travail), puis exécutez ceci dans Terminal :
+
+  <Code code={tunnel.installSocatMac} lang="sh" />
+  </TabItem>
+  <TabItem label="Windows">
+  Rien à installer : un hôte Windows sert déjà le navigateur sur un port <code dir="ltr">{tunnel.loopback}</code>, et un ordinateur Windows depuis lequel vous naviguez utilise à la place une commande intégrée.
+  </TabItem>
+  <TabItem label="Linux">
+  <Code code={tunnel.installSocatLinux} lang="sh" />
+
+  Utilisez le gestionnaire de paquets de votre distribution (<code dir="ltr">dnf</code>, <code dir="ltr">pacman</code>, etc.) si ce n’est pas <code dir="ltr">apt</code>.
+  </TabItem>
+  </Tabs>
+- <strong>Deux ou trois fenêtres laissées ouvertes</strong> pendant que vous travaillez : le relais et Tailscale Serve sur l’hôte (sauf le relais sous Windows), et le relais sur votre ordinateur (sauf sous Windows).
+
+## Sur l’hôte
+
+<Steps>
+
+1. Obtenez l’adresse du navigateur, qui contient la clé qui connecte le navigateur.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <HostBrowserAddress />
+   </TabItem>
+   <TabItem label="Windows">
+   <HostBrowserAddress windows />
+   </TabItem>
+   <TabItem label="Linux">
+   Exécutez ceci avec l’utilisateur qui exécute octoboardd, et copiez l’adresse qu’il affiche, qui commence par <code dir="ltr">{tunnel.addressStart}</code>. Ignorez la commande SSH qu’il affiche ensuite.
+
+   <Code code={commands.address} lang="sh" />
+   </TabItem>
+   </Tabs>
+2. Démarrez le relais sur l’hôte, qui relie un port de l’adresse <code dir="ltr">{tunnel.loopback}</code> de l’hôte à {productName}. Ce port est le <strong>port de l’hôte</strong> dans les étapes suivantes.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   Exécutez ceci dans Terminal et laissez la fenêtre ouverte. Il écoute uniquement sur <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   Le port de l’hôte est <code dir="ltr">{tunnel.bridgePort}</code>.
+   </TabItem>
+   <TabItem label="Windows">
+   Rien à exécuter : {productName} écoute lui-même sur le port du navigateur, uniquement sur <code dir="ltr">127.0.0.1</code>. Le port de l’hôte est le <strong>Port du navigateur</strong> ({commands.defaultPort} sauf si vous l’avez modifié).
+   </TabItem>
+   <TabItem label="Linux">
+   Exécutez ceci avec le même utilisateur, dans un terminal ou une session <code dir="ltr">tmux</code> qui reste ouverte. Il écoute uniquement sur <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
+
+   <Code code={tunnel.bridge} lang="sh" />
+
+   Le port de l’hôte est <code dir="ltr">{tunnel.bridgePort}</code>.
+   </TabItem>
+   </Tabs>
+3. Partagez le port de l’hôte avec votre tailnet grâce à Tailscale Serve, et laissez la fenêtre ouverte. N’utilisez jamais Tailscale Funnel, qui l’exposerait sur Internet.
+
+   <Tabs syncKey="host">
+   <TabItem label="macOS">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   Avec l’app Tailscale de l’App Store, exécutez la commande avec <code dir="ltr">{tunnel.macCli}</code> à la place de <code dir="ltr">tailscale</code>. Avec l’app autonome, installez d’abord la commande depuis ses réglages, sous CLI integration.
+   </TabItem>
+   <TabItem label="Windows">
+   Dans PowerShell ou l’invite de commandes :
+
+   <Code code={tunnel.serveBrowserPort} lang="powershell" />
+
+   Utilisez votre port si vous avez modifié le <strong>Port du navigateur</strong>.
+   </TabItem>
+   <TabItem label="Linux">
+   <Code code={tunnel.serveBridge} lang="sh" />
+
+   Si Tailscale indique que vous n’avez pas la permission, autorisez une fois votre utilisateur à le gérer avec <code dir="ltr">{tunnel.linuxOperator}</code>, ou exécutez la commande avec <code dir="ltr">sudo</code>.
+   </TabItem>
+   </Tabs>
+
+   Pour vérifier, exécutez <code dir="ltr">{tunnel.serveStatus}</code> dans une autre fenêtre : il doit lister le port de l’hôte.
+
+</Steps>
+
+## Sur l’ordinateur depuis lequel vous naviguerez
+
+<Steps>
+
+1. Trouvez l’hôte dans l’app Tailscale sur cet ordinateur, et notez son nom (comme <code dir="ltr">my-mac</code>) ou son adresse (un nombre du genre <code dir="ltr">100.x.y.z</code>).
+2. Démarrez le relais sur cet ordinateur, qui fait apparaître l’hôte à l’adresse <code dir="ltr">{tunnel.loopback}:{commands.defaultPort}</code> ici. Si le port {commands.defaultPort} est déjà pris sur cet ordinateur, choisissez-en un autre et modifiez-le aussi dans l’adresse du navigateur.
+
+   <Tabs syncKey="visitor">
+   <TabItem label="macOS ou Linux">
+   Dans la commande ci-dessous, remplacez <code dir="ltr">{tunnel.host}</code> par le nom ou l’adresse de l’hôte, et <code dir="ltr">{tunnel.hostPort}</code> par le port de l’hôte.
+
+   <Code code={tunnel.visitorForward} lang="sh" />
+
+   Par exemple, pour un hôte Mac nommé <code dir="ltr">my-mac</code> :
+
+   <Code code={tunnel.visitorForwardExample} lang="sh" />
+
+   Exécutez-la dans Terminal et laissez la fenêtre ouverte.
+   </TabItem>
+   <TabItem label="Windows">
+   Ouvrez PowerShell en tant qu’administrateur. Dans la commande ci-dessous, remplacez <code dir="ltr">{tunnel.hostIp}</code> par l’adresse <code dir="ltr">100.x.y.z</code> de l’hôte (cette commande exige le nombre ; un nom ne fonctionne pas), et <code dir="ltr">{tunnel.hostPort}</code> par le port de l’hôte.
+
+   <Code code={tunnel.visitorForwardWindows} lang="powershell" />
+
+   Cette redirection reste en place, même après un redémarrage, jusqu’à ce que vous la supprimiez (voir plus bas), donc il n’y a aucune fenêtre à garder ouverte. Elle nécessite le service Assistance IP (IP Helper), qui s’exécute par défaut.
+   </TabItem>
+   </Tabs>
+3. Ouvrez l’adresse du navigateur que vous avez copiée sur l’hôte. Elle commence par <code dir="ltr">{tunnel.addressStart}</code>.
+
+</Steps>
+
+Vous saurez que ça a marché quand {productName} s’ouvre dans l’onglet du navigateur sans vous demander de vous connecter.
+
+## Si ça ne marche pas
+
+- <strong>La page ne se charge pas :</strong> l’une des fenêtres a été fermée, ou sa commande s’est arrêtée. Vérifiez que les relais et Tailscale Serve fonctionnent toujours, et que <code dir="ltr">{tunnel.serveStatus}</code> sur l’hôte liste le port de l’hôte.
+- <strong>socat indique « Address already in use » :</strong> ce port est pris sur cet ordinateur. Choisissez-en un autre ; sur votre ordinateur, modifiez-le aussi dans l’adresse du navigateur.
+- <strong>La page est refusée ou vide :</strong> vérifiez que vous avez ouvert l’adresse à <code dir="ltr">{tunnel.loopback}</code>, et non le nom Tailscale de l’hôte ou son adresse <code dir="ltr">100.x.y.z</code>.
+- <strong>Le relais sur l’hôte affiche « Connection refused » ou « No such file or directory » quand vous ouvrez la page :</strong> <strong>Autoriser l’accès à distance</strong> est désactivé, ou {productName} ne fonctionne pas sur l’hôte (sous Linux, octoboardd ne tourne pas).
+
+## Tout désactiver
+
+- <strong>Sur l’ordinateur depuis lequel vous naviguiez :</strong> arrêtez socat avec <kbd>Ctrl</kbd>+<kbd>C</kbd>, ou, sous Windows, supprimez la redirection dans PowerShell lancé en tant qu’administrateur :
+
+  <Code code={tunnel.visitorForwardWindowsOff} lang="powershell" />
+- <strong>Sur l’hôte :</strong> arrêtez la commande Tailscale Serve et socat avec <kbd>Ctrl</kbd>+<kbd>C</kbd>. Vérifiez avec <code dir="ltr">{tunnel.serveStatus}</code> que plus rien n’est partagé ; si le port est encore listé, retirez-le avec <code dir="ltr">{tunnel.serveBridgeOff}</code> (sous Windows, <code dir="ltr">{tunnel.serveBrowserPortOff}</code>).
+- <strong>Sur un hôte Mac ou Windows,</strong> désactivez <strong>Autoriser l’accès à distance</strong> quand vous n’en avez plus besoin. Cela ferme l’entrée du navigateur et déconnecte toutes les pages ouvertes avec la clé.
+- <strong>Si l’adresse a pu fuiter,</strong> donnez-lui une nouvelle clé avec <strong>Renouveler la clé</strong> dans l’onglet <strong>Navigateur</strong>, ou, sous Linux, avec <code dir="ltr">{tunnel.rotate}</code>. Les pages ouvertes avec l’ancienne adresse sont déconnectées.
+
+## Sécurité
+
+- <strong>L’adresse est le mot de passe :</strong> sa clé donne un contrôle total de {productName} sur l’hôte, y compris l’exécution de n’importe quelle commande. Elle dure jusqu’à ce que vous la renouveliez. Elle reste dans l’historique et les favoris du navigateur, et se synchronise avec vos autres appareils si la synchronisation du navigateur est activée.
+- <strong>Qui peut l’atteindre :</strong> toute personne qui atteint le port de l’hôte et possède la clé. Les relais écoutent uniquement sur <code dir="ltr">127.0.0.1</code>, donc les autres appareils du réseau local de l’hôte ou du vôtre ne peuvent pas les atteindre ; Tailscale Serve rend le port de l’hôte accessible depuis votre tailnet uniquement, dans la limite de ses règles d’accès.
+- <strong>Uniquement sur des ordinateurs auxquels personne d’autre ne se connecte :</strong> un autre compte utilisateur sur l’hôte ou sur votre ordinateur peut se connecter à ces ports <code dir="ltr">127.0.0.1</code>, et tant qu’un relais ne tourne pas, il peut prendre son port et recevoir la clé quand votre navigateur se reconnecte. La méthode [Se connecter via SSH](../remote-connections/) n’a pas cette faiblesse sur un hôte Mac ou Linux, et votre propre ordinateur ne l’a pas non plus quand vous utilisez l’app de bureau. Dans un navigateur, votre ordinateur l’a toujours, car la redirection SSH y écoute aussi sur un port <code dir="ltr">127.0.0.1</code>.
+- <strong>Jamais Funnel :</strong> Tailscale Funnel publierait le port sur tout Internet.

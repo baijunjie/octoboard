@@ -352,7 +352,7 @@ it("words the default account that holds a directory in the current language", a
   const [claude] = ACCOUNTS.agents;
   const inUse = account({ name: "Team", status: "directory_in_use", in_use_by: DEFAULT_ACCOUNT_NAME });
   await reviewing({ accounts: { ...ACCOUNTS, agents: [{ ...claude, accounts: [inUse] }] }, consoles: [], id: null, settings: null, settings_sections: [], settings_versions: {} });
-  await act(async () => setLanguage("zh-Hans"));
+  await act(async () => setLanguage("zh-CN"));
   const { text } = await markPopover(row("Team"));
   expect(text).toContain("该目录已被 默认 使用。");
   expect(text).not.toContain(DEFAULT_ACCOUNT_NAME);

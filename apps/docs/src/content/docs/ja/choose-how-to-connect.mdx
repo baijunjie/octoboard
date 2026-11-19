@@ -1,0 +1,43 @@
+---
+title: "接続方法を選ぶ"
+description: "Linux サーバーや別のコンピューターで Octoboard を使う方法を比べます。SSH、Tailscale、UU Remote の 3 つです。"
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+
+{productName} は、自分からネットワークに公開することはありません。そのため、別のコンピューターから使うには、安全な通り道が必要です。SSH は、macOS、Windows、Linux に標準で入っている暗号化されたサインイン方法で、デスクトップアプリからもブラウザからも使える、基本のつなぎ方です。ホストで SSH ログインをオンにしたくない場合は、サードパーティの中継サービスである Tailscale または UU Remote を使って、ブラウザの接続を運ぶこともできます。
+
+<strong>ホスト</strong>とは、{productName} が動いていて、つなぎたい相手のマシンのことです。
+
+<Aside type="tip" title="いちばん簡単な方法">
+操作の遅れや画面のぼやけが気にならないなら、以下のどの設定も必要ありません。[UU Remote](https://uuyc.163.com/) のリモートデスクトップでホストを開き、ホスト上でそのまま {productName} を使います。Mac または Windows のホストで使えます。Linux サーバーでは使えません。UU Remote の画面は中国語です。自分のコンピューターで鮮明で反応のよい画面を使いたいときは、以下の方法から選んでください。
+</Aside>
+
+| | [SSH](../remote-connections/) | [Tailscale](../browser-over-tailscale/) | [UU Remote](../browser-over-uu-remote/) |
+| --- | --- | --- | --- |
+| 使う場所 | デスクトップアプリまたはブラウザ | ブラウザのみ | ブラウザのみ |
+| 対応するホスト | Linux サーバー、Mac、Windows PC | Linux サーバー、Mac、Windows PC | Mac または Windows PC のみ |
+| ホストでオンにする、またはインストールするもの | SSH ログイン（Mac ではリモートログイン、Windows では OpenSSH Server。Linux サーバーには最初から入っています） | Tailscale。Mac または Linux のホストには socat も必要 | UU Remote。Mac のホストには socat も必要 |
+| 自分のコンピューターにインストールするもの | 追加で必要なものはなし | Tailscale。Mac または Linux のコンピューターには socat も必要 | UU Remote（Mac または Windows） |
+| 通信の経路 | 直接接続。第三者を通りません | Tailscale のネットワーク。自分のアカウントで利用 | NetEase の UU Remote のサービス。自分のアカウントで利用 |
+| 同じネットワークの外からでも使えるか | ホストに届く場合のみ。同じネットワーク内、公開アドレス、または VPN 経由 | 使える | 使える |
+| 向いている場面 | サーバー、デスクトップアプリの全機能、他の人もサインインする Mac や Linux のホスト | SSH を使わず、どこからでも自分のマシンにつなぎたいとき | すでに UU Remote を使っている中国本土のユーザー |
+
+## 中継サービスを選ぶ前に
+
+中継サービスのガイドは、SSH より手順が多めです。両方のコンピューターでコマンドを実行し、作業している間はウィンドウを開いたままにしておく必要があります。
+
+<Aside type="caution">
+Tailscale と UU Remote のガイドは、2 台のデバイスの間ではまだ十分にテストできていません。それぞれのサービスの公式ドキュメントと、{productName} 自身の確認に基づいています。
+</Aside>
+
+<Aside type="caution" title="他の人がサインインしないコンピューターでだけ使う">
+中継サービスを使うと、ホストや自分のコンピューターにある別のユーザーアカウントが、ブラウザのキーを横取りできてしまう場合があります。Tailscale や UU Remote は、自分だけがサインインするコンピューターでだけ使ってください。SSH で接続する方法では、Mac や Linux のホストにこの弱点はなく、デスクトップアプリを使う場合は自分のコンピューターにもありません。ただしブラウザを使う場合は、ブラウジングに使うコンピューターにこの弱点が残ります。そこでも SSH のフォワードが <code dir="ltr">127.0.0.1</code> のポートで待ち受けるためです。
+</Aside>
+
+## 次に読むもの
+
+- [SSH で接続](../remote-connections/): Linux サーバー向け、またはデスクトップアプリで使いたい場合。
+- [Tailscale 経由のブラウザ](../browser-over-tailscale/): ブラウザのみ。どのホストでも使え、SSH は不要です。
+- [UU Remote 経由のブラウザ](../browser-over-uu-remote/): ブラウザのみ。Mac または Windows のホスト向けで、SSH は不要です。

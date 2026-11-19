@@ -1,0 +1,46 @@
+---
+title: "Windows"
+description: "لأجهزة الكمبيوتر بمعالج Intel أو AMD (معظم أجهزة Windows)، على Windows 10 الإصدار 21H2 أو أحدث. على Windows 11 لمعالجات Arm يعمل هذا التطبيق x64 بالمحاكاة."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+لأجهزة الكمبيوتر بمعالج Intel أو AMD (x64؛ معظم أجهزة Windows)، على Windows 10 الإصدار 21H2 أو أحدث. على Windows 11 لمعالجات Arm يعمل هذا التطبيق x64 بالمحاكاة.
+
+<LinkButton href={downloads.windows}>تنزيل لنظام Windows</LinkButton>
+
+<Aside>تطبيق Windows في مرحلة النسخة التجريبية.</Aside>
+
+## التثبيت
+
+<Steps>
+
+1. نزّل المثبّت بالزر أعلاه. وهو ملف ينتهي اسمه بـ <code dir="ltr">x64-setup.exe</code>.
+2. افتح الملف الذي نزّلته لتشغيل المثبّت. يثبّت {productName} لحساب المستخدم الخاص بك فقط، لذلك لا يطلب صلاحيات المسؤول.
+
+   التطبيق غير موقَّع رقميًا بعد، لذا قد يعرض Microsoft Defender SmartScreen رسالة “Windows protected your PC”. اختر “More info” ثم “Run anyway”.
+
+   إذا لم يكن Microsoft Edge WebView2، الذي يرسم نافذة التطبيق، مثبّتًا على جهازك، ينزّله المثبّت، فابقَ متصلًا بالإنترنت.
+3. افتح {productName} من قائمة ابدأ (Start).
+4. ثبّت وكيل برمجة واحدًا على الأقل (انظر أدناه)، ثم اختر <strong>إضافة مشروع</strong> في {productName} لفتح مجلد مشروع.
+
+</Steps>
+
+عندما تظهر النافذة الرئيسية، تكون قد انتهيت.
+
+## تثبيت وكيل برمجة
+
+لا يتضمّن {productName} وكيل ذكاء اصطناعي. ثبّت الوكلاء الذين تريد استخدامهم باتباع تعليماتهم، وسجّل الدخول إليهم. يعثر {productName} عليهم تلقائيًا. وهو يعمل مع:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+إذا كنت تستخدم Claude Code أو Codex، فثبّت [Git for Windows](https://git-scm.com/download/win) أولًا؛ فهما يحتاجان إليه ليعملا.
+
+## التحديثات
+
+عند صدور نسخة جديدة يخبرك {productName}، ويمكنك تثبيتها من داخل التطبيق. لا حاجة للعودة إلى هذه الصفحة.
+
+<a href={downloads.releases}>كل الإصدارات السابقة</a>

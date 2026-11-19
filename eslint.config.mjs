@@ -20,6 +20,7 @@ export default defineConfig(
     "**/.worktrees/**",
     "**/.pnpm-store/**",
     "**/.nuxt/**",
+    "**/.astro/**",
     "**/.output/**",
     "apps/web/public/preview/**",
     "**/dist/**",

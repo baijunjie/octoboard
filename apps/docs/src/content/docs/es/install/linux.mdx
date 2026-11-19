@@ -1,0 +1,89 @@
+---
+title: "Servidor Linux"
+description: "Instala octoboardd, el programa de servidor de Octoboard, en un servidor Linux sin root. Accede a él desde la app para macOS o Windows, o desde un navegador, ambos por SSH."
+---
+
+import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
+import { commands, downloads, productName } from "../../../../commands.ts";
+
+Instala octoboardd, el programa de servidor de {productName} (la app lo llama el servicio), en un servidor Linux sin root. Accede a él desde la app para macOS o Windows, o desde un navegador, ambos por SSH.
+
+Para x86_64 y aarch64, en cualquier distribución.
+
+<Aside>El programa de servidor para Linux está en fase beta.</Aside>
+
+## Antes de empezar
+
+- **Un servidor Linux en el que puedas iniciar sesión por SSH.** SSH es una forma segura de iniciar sesión en otra máquina y escribir comandos en ella. El proveedor del servidor te da su dirección y tu nombre de usuario.
+- **La app de {productName} en tu propio equipo**, para [macOS](../macos/) o [Windows](../windows/), si quieres trabajar en la app de escritorio (recomendado).
+
+Para iniciar sesión, abre Terminal (macOS) o PowerShell (Windows) en tu propio equipo y ejecuta el comando siguiente, con tu nombre de usuario en lugar de <code dir="ltr">&lt;you&gt;</code> y la dirección del servidor en lugar de <code dir="ltr">{commands.server}</code>. La primera vez, responde <code dir="ltr">yes</code> cuando pregunte si confías en el servidor.
+
+<Code code={commands.signIn} lang="sh" />
+
+Los pasos 1 y 2 siguientes se ejecutan en el servidor, en esa ventana en la que ya has iniciado sesión.
+
+## Instalar
+
+<Steps>
+
+1. Instala octoboardd en el servidor.
+
+   <Code code={commands.install} lang="sh" />
+
+   Muestra una línea que empieza por <code dir="ltr">Installed octoboardd</code>.
+2. Inícialo en el servidor.
+
+   <Code code={commands.start} lang="sh" />
+
+   Muestra una línea que empieza por <code dir="ltr">{productName} started</code>.
+3. Conéctate desde tu propio equipo, de una de estas dos formas:
+
+   - <strong>Desde la app de escritorio (recomendado):</strong> sigue [Conectar con un servidor Linux](../../remote-connections/#conectar-con-un-servidor-linux) en la guía de SSH.
+   - <strong>Desde un navegador:</strong> ejecuta esto en el servidor.
+
+     <Code code={commands.address} lang="sh" />
+
+     Muestra dos cosas: una dirección del navegador, que empieza por <code dir="ltr">http://127.0.0.1:</code>, y un comando <code dir="ltr">ssh</code>. En tu propio equipo, copia el comando <code dir="ltr">ssh</code>, sustituye <code dir="ltr">{commands.server}</code> por la dirección del servidor (la dirección IP o el nombre con el que inicias sesión en él) y ejecútalo en Terminal o PowerShell. Puede que pida tu contraseña y después no muestra nada más; es normal. Deja esa ventana abierta: si la cierras, se corta la conexión. Después abre en tu navegador la dirección que se mostró.
+
+</Steps>
+
+Sabrás que ha funcionado cuando {productName} se abra en la nueva ventana de la app de escritorio o en la pestaña del navegador.
+
+## Si no se encuentra octoboardd
+
+Si la instalación indica que una carpeta que termina en <code dir="ltr">.local/bin</code> (por ejemplo <code dir="ltr">/home/&lt;you&gt;/.local/bin</code>) no está en tu PATH, el shell no puede encontrar <code dir="ltr">octoboardd</code> por su nombre. Ejecútalo con la ruta completa que mostró la instalación, o añade <code dir="ltr">{commands.binDir}</code> a tu PATH (por ejemplo en <code dir="ltr">~/.profile</code>) y vuelve a iniciar sesión.
+
+## Mantenerlo en marcha al cerrar sesión o reiniciar
+
+Si lo inicias con <code dir="ltr">{commands.start}</code>, octoboardd se detiene cuando el servidor se reinicia y nada lo vuelve a iniciar por sí solo: ejecuta de nuevo <code dir="ltr">{commands.start}</code> o conéctate desde la app de escritorio, que se ofrece a iniciarlo por ti. Algunos servidores también lo detienen al cerrar sesión.
+
+Para que se inicie cada vez que arranque el servidor y siga en marcha después de cerrar sesión, instálalo como servicio:
+
+<Code code={commands.installService} lang="sh" />
+
+Esto instala el programa, lo configura como servicio de usuario de systemd y lo inicia. Después activa lingering, que permite que tus servicios se ejecuten mientras no tienes una sesión abierta. Si indica que no pudo hacerlo, ejecuta esto una vez (puede que necesite <code dir="ltr">sudo</code>):
+
+<Code code={commands.linger} lang="sh" />
+
+El puerto predeterminado es <code dir="ltr">{commands.defaultPort}</code>. Para usar otro, añade <code dir="ltr">{commands.portOption}</code> al final del comando del servicio o de <code dir="ltr">{commands.start}</code>.
+
+## Actualizar
+
+{productName} nunca se actualiza por sí solo: cuando hay una versión nueva, el navegador te avisa y tú eliges cuándo instalarla. Una vez instalada la versión nueva, {productName} se reinicia con ella por sí mismo cuando no se interrumpiría ninguna sesión; si se interrumpiera alguna, te las muestra y te pregunta antes.
+
+- <strong>En el navegador:</strong> selecciona <strong>Descargar e instalar</strong> donde indica que hay una versión nueva disponible.
+- <strong>En el servidor:</strong> ejecuta este comando.
+
+  <Code code={commands.update} lang="sh" />
+
+  Si pregunta si quieres reiniciar ahora, responde <code dir="ltr">y</code> para reiniciar o pulsa Intro para seguir usando por ahora la versión anterior. Para reiniciar más tarde, ejecuta <code dir="ltr">{commands.restart}</code>.
+
+Si <code dir="ltr">{commands.update}</code> indica que no puede reemplazar el programa, por ejemplo porque se instaló en un lugar donde no puedes escribir, ejecuta de nuevo el comando de instalación (o el del servicio). Se reinicia del mismo modo cuando es seguro y, si no, te indica que ejecutes <code dir="ltr">{commands.restart}</code>.
+
+## Descargar el archivo en su lugar
+
+<LinkButton href={downloads["linux-x86_64"]} variant="secondary">Archivo x86_64</LinkButton>
+<LinkButton href={downloads["linux-aarch64"]} variant="secondary">Archivo aarch64</LinkButton>
+
+<a href={downloads.releases}>Todas las versiones anteriores</a>

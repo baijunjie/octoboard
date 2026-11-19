@@ -9,7 +9,7 @@ import { isolate } from "../i18n/isolate";
 
 const records = { consoles: new Map(), projects: new Map(), sessions: new Map() };
 
-it.each(["en", "zh-Hans"] as const)("distinguishes automatic submit retry from legacy manual recovery in %s", (language) => {
+it.each(["en", "zh-CN"] as const)("distinguishes automatic submit retry from legacy manual recovery in %s", (language) => {
   const agent = "Claude Code";
   const params = { agent, submit_retry: "once" };
   expect(daemonMessage(language, "message_not_sent", params, "diagnostic", records)).toBe(
@@ -33,7 +33,7 @@ it.each(["en", "zh-Hans"] as const)("distinguishes automatic submit retry from l
 it("says the retry presses the submit key only where the input box holds nothing but the message, and differs from the wording with no retry in every language", () => {
   const params = { agent: "Claude Code", appName: "Octoboard" };
   expect(format("en", "daemon.message_not_sent.retry", params)).toContain("only if the input box holds nothing but the message");
-  for (const language of ["en", "de", "ja", "zh-Hans", "ar"] as const) {
+  for (const language of ["en", "de", "ja", "zh-CN", "ar"] as const) {
     expect(format(language, "daemon.message_not_sent.retry", params), language).not.toBe(format(language, "daemon.message_not_sent", params));
   }
 });

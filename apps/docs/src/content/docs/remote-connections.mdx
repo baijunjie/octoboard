@@ -1,0 +1,119 @@
+---
+title: "Connect over SSH"
+description: "Use Octoboard on a Linux server or another computer from this computer, in the desktop app or a browser, through SSH: an encrypted connection straight to that machine, with no relay or cloud service."
+---
+
+import { Code, Steps } from "@astrojs/starlight/components";
+import { commands, productName } from "../../commands.ts";
+
+Use {productName} on a Linux server or another computer from this computer, in the desktop app or a browser, through SSH: an encrypted connection straight to that machine, with no relay or cloud service.
+
+Not sure this is the way for you? [Choose how to connect](../choose-how-to-connect/) compares it with the browser-only ways that don't need SSH.
+
+<strong>Desktop app on this computer</strong> · <strong>Browser via an SSH forward</strong> ⟷ SSH ⟷ <strong>Linux server or another computer</strong>
+
+<details>
+<summary>New to this?</summary>
+
+- <strong>Host:</strong> the machine {productName} runs on and that you want to reach, a Linux server or another Mac or Windows PC.
+- <strong>Server:</strong> here, a Linux machine you sign in to over the network, usually one you rent, with no screen of its own.
+- <strong>SSH:</strong> a standard, encrypted way to sign in to another machine and type commands on it. It's built into macOS, Windows and Linux.
+- <strong>Terminal:</strong> the window you type commands into: Terminal on macOS, PowerShell on Windows.
+- <strong>SSH forward:</strong> an SSH command that makes something on the host appear on your own computer, so your browser can open it there.
+- <strong>Fingerprint (host key):</strong> a short code that identifies a machine's SSH. Checking it once tells you that you reached the right machine.
+- <strong>Key file:</strong> a file that signs you in instead of a password. Some server providers give you one.
+
+</details>
+
+## What you need
+
+- <strong>A way to sign in to the host with SSH.</strong> For a Linux server, its provider gives you the address and your user name. To check that it works, open Terminal (macOS) or PowerShell (Windows) and run the command below with your user name and the server's address. The first time, answer <code dir="ltr">yes</code> when it asks whether to trust the server.
+
+  <Code code={commands.signIn} lang="sh" />
+
+  For a Mac or Windows PC as the host, you turn on SSH sign-in in its system settings; [Use another computer as the host](#use-another-computer-as-the-host) shows how.
+- <strong>For a Linux server, {productName} installed and started on it.</strong> [Installation › Linux server](../install/linux/) shows how. {productName}'s server program, octoboardd, is what the app calls the daemon.
+- <strong>The {productName} app on this computer</strong>, for macOS or Windows, unless you'll use only a browser.
+
+## Connect to a Linux server
+
+<Steps>
+
+1. Sign in to the server over SSH as the user who runs {productName}, run this command and copy the line beginning with <code dir="ltr">{commands.connectionScheme}</code>: the connection details, which tell the app where and how to connect.
+
+   <Code code={commands.connection} lang="sh" />
+
+   If this computer reaches the server at a different address or SSH port, add <code dir="ltr">{commands.host}</code> or <code dir="ltr">{commands.sshPort}</code> to the command to print the right connection details.
+
+   The QR code it also prints holds the same line. No app scans it yet.
+2. In the {productName} app on this computer, open <strong>Remote devices</strong> from the rail on the left or, on macOS, choose <strong>Remote › Remote Devices</strong> from the menu bar. On Windows, you can also choose <strong>Remote devices</strong> from the window's system menu or from the taskbar icon's jump list.
+3. Select <strong>Add remote daemon</strong>, then <strong>Paste</strong> under <strong>Connection details</strong> to fill in the fields.
+4. Under <strong>Authentication</strong>, choose <strong>Password</strong> if you sign in with your account password. Choose <strong>Key file</strong> if your server provider gave you a key file instead (often named like <code dir="ltr">id_ed25519</code> or ending in <code dir="ltr">.pem</code>), and enter where it is on this computer.
+5. Select <strong>Save</strong>, then <strong>Connect</strong>. Enter your password if it asks.
+
+   If you pasted the connection details, the server's identity (its fingerprint) came with them, and the app checks it for you. If you typed the address by hand, the app shows a fingerprint the first time. To be sure you reached the right machine, compare it with the one this command prints on the server, and connect only if they match:
+
+   <Code code={commands.fingerprintCommand} lang="sh" />
+
+</Steps>
+
+You'll know it worked when a separate {productName} window opens, showing the server's projects and sessions.
+
+## Use another computer as the host
+
+You can also reach a Mac or Windows PC that runs the {productName} app.
+
+<Steps>
+
+1. On the computer you want to reach, open <strong>Settings › Remote access</strong> in {productName}.
+2. Select <strong>Open System Settings</strong> (macOS) or <strong>Open Settings</strong> (Windows) there, and turn on <strong>Remote Login</strong> (macOS) or <strong>OpenSSH Server</strong> (Windows), following the path the row gives, so this computer accepts SSH sign-ins. This needs an administrator. Back in {productName}, the row then shows <strong>On</strong>.
+3. Turn on <strong>Allow remote access</strong>, select <strong>Allow</strong> to confirm, and keep {productName} running: if you quit it, remote access stops.
+4. On the <strong>{productName} app</strong> tab, select <strong>Copy connection details</strong>, and send them to the other computer, for example by email or chat.
+5. On the computer you'll work from, add the host as in steps 2 to 5 of [Connect to a Linux server](#connect-to-a-linux-server), pasting the details you sent. Sign in with your user name and password on the host.
+
+</Steps>
+
+You'll know it worked when a separate window opens with the host's projects and sessions.
+
+## From a browser
+
+<Steps>
+
+1. Get the SSH forward command:
+
+   - <strong>On a Mac or Windows host,</strong> first do steps 1 to 3 of [Use another computer as the host](#use-another-computer-as-the-host). Then, on the <strong>Browser</strong> tab, look at <strong>Step 1: SSH forward</strong>. Click the address in the command to choose how your other computer reaches this one (or choose <strong>Enter the address yourself</strong> and replace <code dir="ltr">{commands.server}</code> later), then select <strong>Copy forward command</strong>. Also select <strong>Copy address</strong> under <strong>Step 2: Browser address</strong>.
+   - <strong>On a Linux server,</strong> run this on the server. It prints the browser address, then the SSH command to run.
+
+     <Code code={commands.address} lang="sh" />
+
+     Replace <code dir="ltr">{commands.server}</code> in the command with the server's address.
+2. On the computer you'll browse from, run the SSH command in Terminal (macOS) or PowerShell (Windows). The window may ask for your password, then shows nothing more; that's normal. Leave it open while you work: closing it disconnects the browser.
+3. Open the browser address, which starts with <code dir="ltr">http://127.0.0.1:</code>, in your browser.
+
+</Steps>
+
+You'll know it worked when {productName} opens in the browser tab without asking you to sign in.
+
+Only someone who can reach {productName} through the SSH forward can use this address. Keep it private: its key gives full control, and it stays in the browser's history and bookmarks, and syncs to your other devices if browser sync is on.
+
+## If it doesn't work
+
+- <strong>“Could not reach the server”, or the SSH command says “Connection refused” or times out:</strong> SSH sign-in is off on the host, or the address or SSH port is wrong. Check that <strong>Remote Login</strong> or <strong>OpenSSH Server</strong> is on, and that you can sign in with the <code dir="ltr">ssh</code> command above.
+- <strong>“Could not sign in”, or “Permission denied”:</strong> the user name, password or key file is wrong.
+- <strong>“The host key does not match”:</strong> the machine answering isn't the one you connected to before. This happens after a server is reinstalled, but it can also mean something is wrong. Don't continue until you know why.
+- <strong>The browser page doesn't load:</strong> the SSH window was closed, or its command stopped. Run it again and reload the page.
+
+## Security
+
+- <strong>No extra public ports:</strong> {productName} only accepts connections from the host itself, so to connect from another computer you first need to sign in to the host over SSH. This is why you need SSH, or one of the [relays](../choose-how-to-connect/).
+- <strong>Check which machine you reach:</strong> the app remembers the host key, the machine's SSH identity, on the first successful connection and blocks the connection with an alert if that identity later changes.
+- <strong>No password stored:</strong> after you first sign in with a password or your own key file, the app sets up a separate SSH key for this computer to use for future sign-ins.
+- <strong>Take away a computer's access:</strong> remove that computer's entry from the host's list of allowed SSH keys (<code dir="ltr">{commands.authorizedKeys}</code> on Linux and macOS). That key then can't sign in again; a connection already open stays until it ends.
+
+## In a remote window
+
+- <strong>One window per SSH destination:</strong> connections with a different user name, host or SSH port each open their own window, so their projects, sessions and notifications never mix.
+- <strong>See each connection's status:</strong> open the app's menu bar icon on macOS or its notification-area icon on Windows to see a tab for each connection.
+- <strong>Open remote websites here:</strong> when an agent starts a website on the host, click the <code dir="ltr">{commands.localhost}</code> link it gives, and the app opens that website on this computer through SSH.
+- <strong>Open remote files here:</strong> view a file in the remote window or download a copy to open in this computer's default app for that file.
+- <strong>Reconnect automatically:</strong> if the network drops, the window keeps trying to reconnect until it gets through or you close it.

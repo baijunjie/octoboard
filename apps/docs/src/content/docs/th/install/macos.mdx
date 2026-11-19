@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "สำหรับ Mac ที่ใช้ชิป Apple silicon และ Intel บน macOS 11 ขึ้นไป"
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+สำหรับ Mac ที่ใช้ชิป Apple silicon และ Intel บน macOS 11 ขึ้นไป
+
+<LinkButton href={downloads.macos}>ดาวน์โหลดสำหรับ macOS</LinkButton>
+
+<Aside>แอป macOS อยู่ในช่วงเบต้า</Aside>
+
+## ติดตั้ง
+
+<Steps>
+
+1. ดาวน์โหลดแอปด้วยปุ่มด้านบน คุณจะได้ดิสก์อิมเมจ ซึ่งเป็นไฟล์ที่ชื่อลงท้ายด้วย <code dir="ltr">.dmg</code>
+2. เปิดไฟล์ที่ดาวน์โหลดมา ในหน้าต่างที่เปิดขึ้น ให้ลาก {productName} ไปวางบนโฟลเดอร์ Applications
+3. เปิด {productName} จากโฟลเดอร์ Applications หรือจาก Launchpad
+4. ติดตั้งเอเจนต์เขียนโค้ดอย่างน้อยหนึ่งตัว (ดูด้านล่าง) แล้วเลือก <strong>เพิ่มโปรเจ็กต์</strong> ใน {productName} เพื่อเปิดโฟลเดอร์โปรเจ็กต์
+
+</Steps>
+
+เมื่อหน้าต่างหลักเปิดขึ้น ก็เป็นอันเสร็จเรียบร้อย
+
+## ติดตั้งเอเจนต์เขียนโค้ด
+
+{productName} ไม่มีเอเจนต์ AI มาให้ ให้ติดตั้งตัวที่คุณอยากใช้ตามคำแนะนำของแต่ละตัว แล้วลงชื่อเข้าใช้ {productName} จะค้นหาเอเจนต์เหล่านั้นให้เองโดยอัตโนมัติ รองรับ
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## การอัปเดต
+
+เมื่อมีเวอร์ชันใหม่ {productName} จะแจ้งให้คุณทราบ และคุณติดตั้งได้จากในแอปเลย ไม่ต้องกลับมาที่หน้านี้อีก
+
+<a href={downloads.releases}>เวอร์ชันก่อนหน้าทั้งหมด</a>

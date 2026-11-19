@@ -77,7 +77,7 @@ const load = async (language, theme, width = 1440) => {
   await version().waitFor();
 };
 try {
-  for (const language of ["en", "zh-Hans", "ar"]) for (const theme of ["light", "dark"]) {
+  for (const language of ["en", "zh-CN", "ar"]) for (const theme of ["light", "dark"]) {
     await load(language, theme);
     const old = await version().elementHandle();
     await version().focus();

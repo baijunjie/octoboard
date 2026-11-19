@@ -1,0 +1,43 @@
+---
+title: "Pilih cara terhubung"
+description: "Bandingkan cara memakai Octoboard di server Linux atau komputer lain: SSH, Tailscale, dan UU Remote."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+
+{productName} tidak pernah membuka dirinya ke jaringan, jadi komputer lain memerlukan jalur yang aman untuk mencapainya. SSH adalah login terenkripsi standar yang sudah ada di macOS, Windows, dan Linux, dan menjadi jalan masuk utama: dari aplikasi desktop atau dari browser. Jika Anda tidak ingin mengaktifkan login SSH di host, relay pihak ketiga, Tailscale atau UU Remote, dapat membawa koneksi browser sebagai gantinya.
+
+<strong>Host</strong> adalah mesin tempat {productName} berjalan dan yang ingin Anda jangkau.
+
+<Aside type="tip" title="Cara paling sederhana">
+Jika sedikit jeda input dan gambar yang buram tidak masalah bagi Anda, Anda tidak perlu pengaturan mana pun di bawah ini: buka host lewat desktop jarak jauh [UU Remote](https://uuyc.163.com/) dan gunakan {productName} langsung di host. Cara ini berlaku untuk host Mac atau Windows, bukan server Linux. Antarmuka UU Remote berbahasa Mandarin. Untuk jendela yang tajam dan responsif di komputer Anda sendiri, pilih salah satu cara di bawah.
+</Aside>
+
+| | [SSH](../remote-connections/) | [Tailscale](../browser-over-tailscale/) | [UU Remote](../browser-over-uu-remote/) |
+| --- | --- | --- | --- |
+| Dipakai dari | Aplikasi desktop atau browser | Hanya browser | Hanya browser |
+| Host yang didukung | Server Linux, Mac, PC Windows | Server Linux, Mac, PC Windows | Hanya Mac atau PC Windows |
+| Di host Anda aktifkan atau instal | Login SSH (Login Jarak Jauh di Mac, OpenSSH Server di Windows; server Linux sudah memilikinya) | Tailscale; host Mac atau Linux juga memerlukan socat | UU Remote; host Mac juga memerlukan socat |
+| Di komputer Anda sendiri Anda instal | Tidak ada tambahan | Tailscale; juga socat di komputer Mac atau Linux | UU Remote (Mac atau Windows) |
+| Lalu lintas data melewati | Koneksi langsung, tanpa pihak ketiga | Jaringan Tailscale, dengan akun Anda | Layanan NetEase UU Remote, dengan akun Anda |
+| Berfungsi saat tidak berada di jaringan yang sama | Hanya jika host dapat dijangkau: di jaringan yang sama, di alamat publik, atau lewat VPN | Ya | Ya |
+| Paling cocok untuk | Server; aplikasi desktop lengkap; host Mac dan Linux yang juga dipakai orang lain untuk login | Menjangkau mesin Anda sendiri dari mana saja tanpa SSH | Pengguna di Tiongkok daratan yang sudah memakai UU Remote |
+
+## Sebelum memilih relay
+
+Panduan relay memerlukan lebih banyak langkah daripada SSH: Anda menjalankan perintah di kedua komputer dan membiarkannya tetap berjalan di jendela yang terbuka selama Anda bekerja.
+
+<Aside type="caution">
+Panduan Tailscale dan UU Remote belum diuji sepenuhnya di antara dua perangkat. Keduanya mengikuti dokumentasi layanan tersebut dan pemeriksaan {productName} sendiri.
+</Aside>
+
+<Aside type="caution" title="Hanya di komputer yang tidak dipakai login orang lain">
+Dengan relay, akun pengguna lain di host atau di komputer Anda sendiri dapat menangkap kunci browser. Pakai Tailscale atau UU Remote hanya di komputer yang hanya Anda yang login. [Terhubung melalui SSH](../remote-connections/) tidak memiliki kelemahan ini di host Mac atau Linux, dan komputer Anda sendiri juga tidak memilikinya saat memakai aplikasi desktop. Di browser, komputer Anda tetap memilikinya, karena penerusan SSH di sana juga mendengarkan di port <code dir="ltr">127.0.0.1</code>.
+</Aside>
+
+## Selanjutnya
+
+- [Terhubung melalui SSH](../remote-connections/): untuk server Linux, atau untuk memakai aplikasi desktop.
+- [Browser melalui Tailscale](../browser-over-tailscale/): hanya browser, host apa pun, tanpa SSH.
+- [Browser melalui UU Remote](../browser-over-uu-remote/): hanya browser, host Mac atau Windows, tanpa SSH.

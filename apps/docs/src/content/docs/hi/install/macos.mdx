@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "Apple silicon और Intel वाले Mac के लिए, macOS 11 या उसके बाद के वर्शन पर।"
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Apple silicon और Intel वाले Mac के लिए, macOS 11 या उसके बाद के वर्शन पर।
+
+<LinkButton href={downloads.macos}>macOS के लिए डाउनलोड करें</LinkButton>
+
+<Aside>macOS ऐप बीटा में है।</Aside>
+
+## इंस्टॉल करें
+
+<Steps>
+
+1. ऊपर दिए बटन से ऐप डाउनलोड करें। आपको एक डिस्क इमेज मिलेगी, यानी ऐसी फ़ाइल जिसके नाम का अंत <code dir="ltr">.dmg</code> से होता है।
+2. डाउनलोड की गई फ़ाइल खोलें। जो विंडो खुले उसमें {productName} को Applications फ़ोल्डर पर खींचकर छोड़ें।
+3. {productName} को Applications फ़ोल्डर या Launchpad से खोलें।
+4. कम से कम एक कोडिंग एजेंट इंस्टॉल करें (नीचे देखें), फिर {productName} में <strong>प्रोजेक्ट जोड़ें</strong> चुनकर कोई प्रोजेक्ट फ़ोल्डर खोलें।
+
+</Steps>
+
+मुख्य विंडो खुल जाए, तो काम पूरा हुआ।
+
+## कोडिंग एजेंट इंस्टॉल करें
+
+{productName} में कोई AI एजेंट शामिल नहीं है। जिन्हें आप इस्तेमाल करना चाहते हैं, उन्हें उनके अपने निर्देशों के अनुसार इंस्टॉल करें और उनमें साइन इन करें। {productName} उन्हें अपने आप ढूँढ लेता है। यह इनके साथ काम करता है:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## अपडेट
+
+नया वर्शन आने पर {productName} आपको बता देता है, और आप उसे ऐप के अंदर से ही इंस्टॉल कर सकते हैं। इस पेज पर लौटने की ज़रूरत नहीं है।
+
+<a href={downloads.releases}>सभी पुराने वर्शन</a>

@@ -73,9 +73,12 @@ pub(super) const MIGRATIONS: &[&str] = &[
          created_at INTEGER NOT NULL
      );
      CREATE INDEX pages_session_id ON pages (session_id);",
-    // 4 to 5: Allow remote access and the browser port on Windows.
+    // 4 to 5: Allow remote access and the browser port on Windows; the interface language's two
+    // Chinese tags become region tags (`zh-Hans` to `zh-CN`, `zh-Hant` to `zh-TW`).
     "ALTER TABLE settings ADD COLUMN allow_remote_access INTEGER NOT NULL DEFAULT 0;
-     ALTER TABLE settings ADD COLUMN remote_access_port INTEGER;",
+     ALTER TABLE settings ADD COLUMN remote_access_port INTEGER;
+     UPDATE settings SET interface_language = 'zh-CN' WHERE interface_language = 'zh-Hans';
+     UPDATE settings SET interface_language = 'zh-TW' WHERE interface_language = 'zh-Hant';",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -1088,6 +1091,74 @@ mod tests {
             settings.auto_pull_repositories,
             "the row's other values stay"
         );
+    }
+
+    /// Migrating a version 4 database gives the two Chinese languages the region tags the
+    /// interface now offers in place of the script tags it held them by.
+    #[test]
+    fn migrating_a_version_4_database_renames_its_chinese_language_tag() {
+        for (index, (held, current)) in [("zh-Hans", "zh-CN"), ("zh-Hant", "zh-TW")]
+            .into_iter()
+            .enumerate()
+        {
+            let path = temp_db(&format!("migrate-chinese-v4-{index}"));
+            {
+                let conn = Connection::open(&path).expect("version 4 database");
+                conn.execute_batch(PAST_SCHEMAS[3])
+                    .expect("version 4 schema");
+                conn.pragma_update(None, "user_version", 4)
+                    .expect("version");
+                conn.pragma_update(None, "application_id", APPLICATION_ID)
+                    .expect("application id");
+                conn.execute(
+                    "INSERT INTO settings (id, interface_language) VALUES ('singleton', ?1)",
+                    [held],
+                )
+                .expect("settings");
+            }
+            let store = Store::open(&path).expect("migrated");
+            assert_eq!(
+                store.interface_language().unwrap().as_deref(),
+                Some(current)
+            );
+        }
+    }
+
+    /// The Chinese rename is part of the version 4 to 5 step, so a database older than 4 gets it
+    /// too, and a language other than the two Chinese script tags is kept as it was.
+    #[test]
+    fn migrating_an_older_database_renames_only_the_chinese_language_tags() {
+        for (index, (held, current)) in [
+            ("zh-Hans", "zh-CN"),
+            ("zh-Hant", "zh-TW"),
+            ("ja", "ja"),
+            ("zh-CN", "zh-CN"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let path = temp_db(&format!("migrate-chinese-v3-{index}"));
+            {
+                let conn = Connection::open(&path).expect("version 3 database");
+                conn.execute_batch(PAST_SCHEMAS[2])
+                    .expect("version 3 schema");
+                conn.pragma_update(None, "user_version", 3)
+                    .expect("version");
+                conn.pragma_update(None, "application_id", APPLICATION_ID)
+                    .expect("application id");
+                conn.execute(
+                    "INSERT INTO settings (id, interface_language) VALUES ('singleton', ?1)",
+                    [held],
+                )
+                .expect("settings");
+            }
+            let store = Store::open(&path).expect("migrated");
+            assert_eq!(
+                store.interface_language().unwrap().as_deref(),
+                Some(current),
+                "{held}"
+            );
+        }
     }
 
     /// Migrating a version 4 database adds Allow remote access, off, and the browser port, unset,

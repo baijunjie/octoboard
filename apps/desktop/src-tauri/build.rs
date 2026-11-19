@@ -104,7 +104,7 @@ fn generate_native_localizations() {
     for input in [
         "../scripts/native-localizations.mjs",
         "localizations/en.json",
-        "localizations/zh-Hans.json",
+        "localizations/zh-CN.json",
         "Info.template.plist",
     ] {
         println!("cargo:rerun-if-changed={input}");

@@ -118,7 +118,7 @@ it("answers a request at once, behind the broadcasts that arrived before its rep
 });
 
 it("fails a request the reconnect cut off in the UI's language, as a closed connection", async () => {
-  setLanguage("zh-Hans");
+  setLanguage("zh-CN");
   try {
     const client = newClient();
     const reply = client.request({ type: "shutdown" });

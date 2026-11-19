@@ -28,11 +28,42 @@ test("web builds precede output tests", () => {
   assert.ok(web.indexOf("web build") < web.indexOf("web tests"));
 });
 
+test("a docs change checks only the docs: lint of the package, its type check, its build, then its tests as heavy steps", () => {
+  const docs = steps(["apps/docs/astro.config.ts"]);
+  assert.deepEqual(docs.map((step) => step.label), ["identity check", "provider-neutral core", "docs lint", "docs type check", "docs build", "docs tests"]);
+  const [, , lintStep, typecheck, build, tests] = docs;
+  assert.ok(lintStep.cmd.includes("eslint") && lintStep.cmd.at(-1) === "apps/docs");
+  assert.deepEqual(typecheck.cmd, ["pnpm", "--filter", "@octoboard/docs", "typecheck"]);
+  assert.deepEqual(build.cmd, ["pnpm", "--filter", "@octoboard/docs", "build"]);
+  assert.deepEqual(tests.cmd, ["pnpm", "--filter", "@octoboard/docs", "test"]);
+  assert.ok(build.heavy && tests.heavy && !typecheck.heavy && !lintStep.heavy);
+  assert.deepEqual(labels(["apps/docs/README.md"]), []);
+});
+
+test("a docs build precedes the docs tests, which read its output", () => {
+  const docs = labels(["apps/docs/astro.config.ts"]);
+  assert.ok(docs.indexOf("docs build") < docs.indexOf("docs tests"));
+});
+
+test("a docs page also checks the website, whose SEO test reads the docs' content directory", () => {
+  const selected = labels(["apps/docs/src/content/docs/index.md"]);
+  for (const label of ["docs lint", "docs build", "docs tests", "web lint", "web build", "web tests"]) assert.ok(selected.includes(label), label);
+});
+
+test("a change to the language list the docs build their locales from checks the docs as well as the UI", () => {
+  for (const file of ["packages/ui/src/i18n/languages.ts", "packages/ui/package.json"]) {
+    const selected = labels([file]);
+    for (const label of ["ui tests", "docs lint", "docs type check", "docs build"]) assert.ok(selected.includes(label), `${file}: ${label}`);
+  }
+  assert.ok(!labels(["apps/web/app/app.vue"]).includes("docs build"));
+});
+
 test("--full lists every consumer's steps, light steps before heavy ones", () => {
   const full = checkSteps({ mode: "full" });
   assert.deepEqual(full.map((step) => step.label), [
-    "identity check", "provider-neutral core", "verify lint", "verify tests", "ui lint", "ui type check", "web lint", "web type check", "web locales", "desktop lint",
-    "desktop script tests", "rustfmt check", "ui tests", "web build", "web tests", "rust clippy", "rust tests",
+    "identity check", "provider-neutral core", "verify lint", "verify tests", "ui lint", "ui type check", "web lint", "web type check", "web locales", "docs lint",
+    "docs type check", "desktop lint", "desktop script tests", "rustfmt check", "ui tests", "web build", "web tests", "docs build", "docs tests", "rust clippy",
+    "rust tests",
   ]);
   const firstHeavy = full.findIndex((step) => step.heavy);
   assert.ok(full.slice(firstHeavy).every((step) => step.heavy));

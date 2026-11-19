@@ -1,0 +1,89 @@
+---
+title: "Linux サーバー"
+description: "Octoboard のサーバー用プログラム octoboardd を、root 権限なしで Linux サーバーにインストールします。macOS または Windows のアプリからも、ブラウザからも、SSH 経由で使えます。"
+---
+
+import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
+import { commands, downloads, productName } from "../../../../commands.ts";
+
+{productName} のサーバー用プログラム octoboardd（アプリでは「デーモン」と呼びます）を、root 権限なしで Linux サーバーにインストールします。macOS または Windows のアプリからも、ブラウザからも、SSH 経由で使えます。
+
+x86_64 と aarch64 に対応し、ディストリビューションは問いません。
+
+<Aside>Linux サーバー用プログラムはベータ版です。</Aside>
+
+## 始める前に
+
+- **SSH でサインインできる Linux サーバー。** SSH とは、別のマシンに安全にサインインして、コマンドを入力するための仕組みです。サーバーのアドレスとユーザー名は、サーバーの提供元から案内されます。
+- **自分のコンピューターに入れた {productName} アプリ。**[macOS](../macos/) 用または [Windows](../windows/) 用です。デスクトップアプリで作業する場合に必要です（おすすめです）。
+
+サインインするには、自分のコンピューターでターミナル（macOS）または PowerShell（Windows）を開き、次のコマンドを実行します。<code dir="ltr">&lt;you&gt;</code> の部分は自分のユーザー名に、<code dir="ltr">{commands.server}</code> の部分はサーバーのアドレスに置き換えてください。初回は、サーバーを信頼するか尋ねられるので、<code dir="ltr">yes</code> と答えます。
+
+<Code code={commands.signIn} lang="sh" />
+
+以下の手順 1 と 2 は、サインインしたそのウィンドウで、サーバー上で実行します。
+
+## インストール
+
+<Steps>
+
+1. サーバーに octoboardd をインストールします。
+
+   <Code code={commands.install} lang="sh" />
+
+   <code dir="ltr">Installed octoboardd</code> で始まる行が表示されます。
+2. サーバーで octoboardd を起動します。
+
+   <Code code={commands.start} lang="sh" />
+
+   <code dir="ltr">{productName} started</code> で始まる行が表示されます。
+3. 自分のコンピューターから、次のどちらかの方法でつなぎます。
+
+   - <strong>デスクトップアプリから（おすすめ）:</strong> SSH ガイドの [Linux サーバーに接続する](../../remote-connections/#linux-サーバーに接続する)に従います。
+   - <strong>ブラウザから:</strong> サーバーで次のコマンドを実行します。
+
+     <Code code={commands.address} lang="sh" />
+
+     2 つのものが表示されます。<code dir="ltr">http://127.0.0.1:</code> で始まるブラウザのアドレスと、<code dir="ltr">ssh</code> コマンドです。自分のコンピューターで <code dir="ltr">ssh</code> コマンドをコピーし、<code dir="ltr">{commands.server}</code> をサーバーのアドレス（サインインに使う IP アドレスまたは名前）に置き換えて、ターミナルまたは PowerShell で実行します。パスワードを聞かれることがあり、その後は何も表示されませんが、正常です。そのウィンドウは開いたままにしてください。閉じると接続が切れます。そのうえで、表示されたアドレスをブラウザで開きます。
+
+</Steps>
+
+デスクトップアプリの新しいウィンドウ、またはブラウザのタブで {productName} が開けば成功です。
+
+## octoboardd が見つからないとき
+
+インストール時に、<code dir="ltr">.local/bin</code> で終わるフォルダー（たとえば <code dir="ltr">/home/&lt;you&gt;/.local/bin</code>）が PATH に入っていないと表示された場合、シェルは <code dir="ltr">octoboardd</code> を名前だけでは見つけられません。インストール時に表示されたフルパスで実行するか、<code dir="ltr">{commands.binDir}</code> を PATH に追加（たとえば <code dir="ltr">~/.profile</code> に記述）してから、もう一度サインインしてください。
+
+## ログアウトや再起動のあとも動かし続ける
+
+<code dir="ltr">{commands.start}</code> で起動した octoboardd は、サーバーが再起動すると止まり、自動では再開しません。もう一度 <code dir="ltr">{commands.start}</code> を実行するか、デスクトップアプリからつなぎます（アプリが起動を提案してくれます）。サーバーによっては、サインアウトしたときにも止まります。
+
+サーバーの起動と同時に始まり、サインアウトしても動き続けるようにするには、代わりにサービスとしてインストールします。
+
+<Code code={commands.installService} lang="sh" />
+
+このコマンドは、プログラムをインストールし、systemd のユーザーサービスとして設定して起動します。続けて lingering をオンにします。これは、サインインしていない間もサービスを動かし続けるための設定です。できなかったと表示された場合は、次のコマンドを一度だけ実行してください（<code dir="ltr">sudo</code> が必要なことがあります）。
+
+<Code code={commands.linger} lang="sh" />
+
+既定のポートは <code dir="ltr">{commands.defaultPort}</code> です。別のポートを使うには、サービスのコマンドの末尾か <code dir="ltr">{commands.start}</code> に <code dir="ltr">{commands.portOption}</code> を付けます。
+
+## アップグレード
+
+{productName} が自分で勝手にアップグレードすることはありません。新しいバージョンが出るとブラウザでお知らせするので、インストールするタイミングは自分で選べます。新しいバージョンのインストールが終わると、中断されるセッションがなければ、{productName} は自動で再起動して新しいバージョンに切り替わります。中断されるセッションがある場合は、それを一覧で示して、先に確認します。
+
+- <strong>ブラウザで:</strong> 新しいバージョンがあると表示されている場所で、<strong>ダウンロードしてインストール</strong>を選びます。
+- <strong>サーバーで:</strong> 次のコマンドを実行します。
+
+  <Code code={commands.update} lang="sh" />
+
+  今すぐ再起動するか尋ねられたら、再起動するなら <code dir="ltr">y</code> と答えます。Enter キーを押すと、当面は古いバージョンのまま動かし続けます。あとで再起動するには、<code dir="ltr">{commands.restart}</code> を実行します。
+
+<code dir="ltr">{commands.update}</code> が「プログラムを置き換えられない」と表示した場合（たとえば、書き込めない場所にインストールされているときなど）は、代わりにインストールのコマンド（またはサービスのコマンド）をもう一度実行してください。安全なときは同じように再起動し、そうでなければ <code dir="ltr">{commands.restart}</code> を実行するよう案内されます。
+
+## アーカイブを直接ダウンロードする
+
+<LinkButton href={downloads["linux-x86_64"]} variant="secondary">x86_64 アーカイブ</LinkButton>
+<LinkButton href={downloads["linux-aarch64"]} variant="secondary">aarch64 アーカイブ</LinkButton>
+
+<a href={downloads.releases}>過去のバージョンをすべて見る</a>

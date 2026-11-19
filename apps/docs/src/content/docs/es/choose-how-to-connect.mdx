@@ -1,0 +1,43 @@
+---
+title: "Elige cómo conectarte"
+description: "Compara las formas de usar Octoboard en un servidor Linux o en otro equipo: SSH, Tailscale y UU Remote."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+
+{productName} nunca se abre a la red por sí mismo, así que otro equipo necesita un camino seguro hasta él. SSH es un inicio de sesión cifrado estándar, incluido en macOS, Windows y Linux, y es la vía principal: desde la app de escritorio o desde un navegador. Si prefieres no activar el inicio de sesión por SSH en el host, un relé de terceros, Tailscale o UU Remote, puede llevar la conexión de un navegador.
+
+El <strong>host</strong> es la máquina en la que se ejecuta {productName} y a la que quieres acceder.
+
+<Aside type="tip" title="La forma más sencilla">
+Si te da igual algo de retraso al escribir y una imagen borrosa, no necesitas ninguna de las configuraciones siguientes: abre el host en el escritorio remoto de [UU Remote](https://uuyc.163.com/) y usa {productName} directamente en el host. Funciona con un host Mac o Windows, no con un servidor Linux. La interfaz de UU Remote está en chino. Para tener una ventana nítida y fluida en tu propio equipo, elige una de las opciones siguientes.
+</Aside>
+
+| | [SSH](../remote-connections/) | [Tailscale](../browser-over-tailscale/) | [UU Remote](../browser-over-uu-remote/) |
+| --- | --- | --- | --- |
+| Se usa desde | App de escritorio o navegador | Solo navegador | Solo navegador |
+| Hosts compatibles | Servidor Linux, Mac, PC con Windows | Servidor Linux, Mac, PC con Windows | Solo Mac o PC con Windows |
+| En el host activas o instalas | Inicio de sesión por SSH (Acceso remoto en un Mac, OpenSSH Server en Windows; un servidor Linux ya lo tiene) | Tailscale; un host Mac o Linux también necesita socat | UU Remote; un host Mac también necesita socat |
+| En tu propio equipo instalas | Nada adicional | Tailscale; además socat en un equipo Mac o Linux | UU Remote (Mac o Windows) |
+| El tráfico pasa por | Una conexión directa, sin terceros | La red de Tailscale, con tu cuenta | El servicio de NetEase UU Remote, con tu cuenta |
+| Funciona fuera de la misma red | Solo si se puede llegar al host: en la misma red, en una dirección pública o por VPN | Sí | Sí |
+| Ideal para | Servidores; la app de escritorio completa; hosts Mac y Linux en los que también inician sesión otras personas | Acceder a tus propias máquinas desde cualquier lugar sin SSH | Usuarios de China continental que ya usan UU Remote |
+
+## Antes de elegir un relé
+
+Las guías de relé requieren más pasos que SSH: ejecutas comandos en ambos equipos y los mantienes en marcha en ventanas abiertas mientras trabajas.
+
+<Aside type="caution">
+Las guías de Tailscale y UU Remote aún no se han probado por completo entre dos dispositivos. Siguen la documentación de esos servicios y las comprobaciones propias de {productName}.
+</Aside>
+
+<Aside type="caution" title="Solo en equipos en los que nadie más inicia sesión">
+Con un relé, otra cuenta de usuario del host o de tu propio equipo podría capturar la clave del navegador. Usa Tailscale o UU Remote solo en equipos en los que inicies sesión únicamente tú. [Conectarse por SSH](../remote-connections/) no tiene este punto débil en un host Mac o Linux, y tu propio equipo tampoco lo tiene si usas la app de escritorio. En un navegador, tu equipo sigue teniéndolo, porque allí el reenvío de SSH también escucha en un puerto <code dir="ltr">127.0.0.1</code>.
+</Aside>
+
+## Siguiente
+
+- [Conectarse por SSH](../remote-connections/): para un servidor Linux o para usar la app de escritorio.
+- [Navegador a través de Tailscale](../browser-over-tailscale/): solo navegador, cualquier host, sin SSH.
+- [Navegador a través de UU Remote](../browser-over-uu-remote/): solo navegador, host Mac o Windows, sin SSH.

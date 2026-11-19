@@ -672,7 +672,7 @@ const viMessages = {
   "provider.codex.openInApp": "Mở trong ứng dụng Codex",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
-const zhHans = {
+const zhCN = {
   "provider.codex.relocation_config_unreadable": "对话已复制到 {path}，但无法更新目标账户中该会话线程的记录：{detail}。会话仍在原账户上。",
   "provider.codex.relocation_config_unreadable.summary": "对话已复制到 {path}，但无法更新目标账户中该会话线程的记录。",
   "provider.codex.relocation_config_unreadable.remedy": "请检查该账户的 {configToml}，确保文件可读且 TOML 格式正确，或将其移除，然后再次尝试切换。",
@@ -718,7 +718,7 @@ const zhHans = {
   "provider.codex.openInApp": "在 Codex 应用中打开",
 } as const;
 
-const zhHantMessages = {
+const zhTWMessages = {
   "provider.codex.relocation_config_unreadable": "對話已複製到 {path}，但無法更新目標帳號中此工作階段執行緒的記錄：{detail}。工作階段仍在原帳號上。",
   "provider.codex.relocation_config_unreadable.summary": "對話已複製到 {path}，但無法更新目標帳號中此工作階段執行緒的記錄。",
   "provider.codex.relocation_config_unreadable.remedy": "請檢查此帳號的 {configToml}，確保檔案可讀且 TOML 格式正確，或將其移除，然後再次嘗試切換。",
@@ -804,7 +804,7 @@ export const codex = {
     "th": { ...names, ...thMessages },
     "tr": { ...names, ...trMessages },
     "vi": { ...names, ...viMessages },
-    "zh-Hans": { ...names, ...zhHans },
-    "zh-Hant": { ...names, ...zhHantMessages },
+    "zh-CN": { ...names, ...zhCN },
+    "zh-TW": { ...names, ...zhTWMessages },
   },
 } as const satisfies ProviderPresentation;

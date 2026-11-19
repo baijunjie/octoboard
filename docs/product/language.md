@@ -4,7 +4,7 @@
 
 Octoboard offers 17 languages, identified by these language tags:
 
-`ar`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `pt`, `ru`, `th`, `tr`, `vi`, `zh-Hans`, `zh-Hant`
+`ar`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `pt`, `ru`, `th`, `tr`, `vi`, `zh-CN`, `zh-TW`
 
 The list is ordered **alphabetically by tag**, not by each language's name. That order is the order of the options in
 Settings, and it breaks ties when a system language matches more than one entry (see "How the system's languages map
@@ -56,7 +56,9 @@ One preferred language maps onto the list like this:
 - Chinese with a region but no script takes the script that region conventionally uses: `TW`, `HK` and `MO` mean
   Traditional (`Hant`), `CN` and `SG` mean Simplified (`Hans`). Any other region implies no script. A script written in
   the tag itself wins over the region (`zh-Hant-CN` is Traditional).
-- A script conflict never matches: a Traditional Chinese preference never lands on `zh-Hans`, and `zh-Latn` maps to
+- The two Chinese entries are region tags, so they too take the script of their region: `zh-CN` is Simplified,
+  `zh-TW` Traditional.
+- A script conflict never matches: a Traditional Chinese preference never lands on `zh-CN`, and `zh-Latn` maps to
   nothing. When either side has no script, the language alone decides.
 - When several entries match, the earlier one in list order wins.
 
@@ -67,8 +69,8 @@ Some consequences:
 | `en-GB` | `en` |
 | `fr-CA` | `fr` |
 | `pt-PT`, `pt` | `pt` |
-| `zh-TW`, `zh-HK`, `zh-MO`, `zh-Hant` | `zh-Hant` |
-| `zh-CN`, `zh-SG`, `zh`, `zh-Hans` | `zh-Hans` |
+| `zh-TW`, `zh-HK`, `zh-MO`, `zh-Hant`, `zh-Hant-HK` | `zh-TW` |
+| `zh-CN`, `zh-SG`, `zh`, `zh-Hans`, `zh-Hans-CN` | `zh-CN` |
 | `nl` only | `en` (nothing maps) |
 | `nl`, then `fr-CA` | `fr` (the first that maps) |
 
@@ -169,6 +171,11 @@ A client with no copy — on its first launch, or once its storage has been clea
 from the system until it has connected, then switches to the language the daemon holds; the switch may be briefly
 visible. Without that storage nothing is kept: every load renders in the language picked from the system until it has
 connected.
+
+Values written by an earlier version that named the two Chinese languages `zh-Hans` and `zh-Hant` are read as `zh-CN`
+and `zh-TW`: the daemon renames the language it holds when it opens its database, and a client reads such a cached copy
+as the new tag. A configuration document of such a version is renamed the same way as it is imported (see "Versions"
+in `docs/product/configuration-export-and-import.md`).
 
 ## The language the daemon holds
 

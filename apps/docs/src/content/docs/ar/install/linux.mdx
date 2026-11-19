@@ -1,0 +1,89 @@
+---
+title: "خادم Linux"
+description: "ثبّت octoboardd، برنامج خادم Octoboard، على خادم Linux دون صلاحيات root. يمكنك الوصول إليه من تطبيق macOS أو Windows، أو من متصفح، وكلاهما عبر SSH."
+---
+
+import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
+import { commands, downloads, productName } from "../../../../commands.ts";
+
+ثبّت octoboardd، برنامج خادم {productName} (يسمّيه التطبيق «الخدمة»)، على خادم Linux دون صلاحيات root. يمكنك الوصول إليه من تطبيق macOS أو Windows، أو من متصفح، وكلاهما عبر SSH.
+
+لمعماريتي x86_64 وaarch64، على أي توزيعة.
+
+<Aside>برنامج خادم Linux في مرحلة النسخة التجريبية.</Aside>
+
+## قبل أن تبدأ
+
+- **خادم Linux يمكنك تسجيل الدخول إليه عبر SSH.** SSH طريقة آمنة لتسجيل الدخول إلى جهاز آخر وكتابة الأوامر عليه. يعطيك مزوّد الخادم عنوانه واسم المستخدم الخاص بك.
+- **تطبيق {productName} على كمبيوترك**، لنظام [macOS](../macos/) أو [Windows](../windows/)، إذا أردت العمل في تطبيق سطح المكتب (موصى به).
+
+لتسجيل الدخول، افتح Terminal (في macOS) أو PowerShell (في Windows) على كمبيوترك وشغّل الأمر أدناه، مع وضع اسم المستخدم الخاص بك مكان <code dir="ltr">&lt;you&gt;</code> وعنوان الخادم مكان <code dir="ltr">{commands.server}</code>. في المرة الأولى، أجب بـ <code dir="ltr">yes</code> عندما يسأل هل تثق بالخادم.
+
+<Code code={commands.signIn} lang="sh" />
+
+تُنفَّذ الخطوتان 1 و2 أدناه على الخادم، في نافذة تسجيل الدخول هذه.
+
+## التثبيت
+
+<Steps>
+
+1. ثبّت octoboardd على الخادم.
+
+   <Code code={commands.install} lang="sh" />
+
+   يطبع سطرًا يبدأ بـ <code dir="ltr">Installed octoboardd</code>.
+2. شغّله على الخادم.
+
+   <Code code={commands.start} lang="sh" />
+
+   يطبع سطرًا يبدأ بـ <code dir="ltr">{productName} started</code>.
+3. اتصل به من كمبيوترك بإحدى طريقتين:
+
+   - <strong>من تطبيق سطح المكتب (موصى به):</strong> اتبع [الاتصال بخادم Linux](../../remote-connections/#الاتصال-بخادم-linux) في دليل SSH.
+   - <strong>من متصفح:</strong> شغّل هذا الأمر على الخادم.
+
+     <Code code={commands.address} lang="sh" />
+
+     يطبع شيئين: عنوان متصفح يبدأ بـ <code dir="ltr">http://127.0.0.1:</code>، وأمر <code dir="ltr">ssh</code>. على كمبيوترك، انسخ أمر <code dir="ltr">ssh</code>، واستبدل <code dir="ltr">{commands.server}</code> بعنوان الخادم (عنوان IP أو الاسم الذي تسجّل به الدخول إليه)، ثم شغّله في Terminal أو PowerShell. قد يطلب كلمة المرور، ثم لا يعرض شيئًا بعد ذلك؛ وهذا طبيعي. اترك تلك النافذة مفتوحة: إغلاقها يقطع الاتصال. ثم افتح العنوان المطبوع في متصفحك.
+
+</Steps>
+
+ستعرف أن كل شيء نجح عندما يفتح {productName} في نافذة جديدة من تطبيق سطح المكتب، أو في تبويب المتصفح.
+
+## إذا لم يُعثر على octoboardd
+
+إذا قال التثبيت إن مجلدًا ينتهي بـ <code dir="ltr">.local/bin</code> (مثل <code dir="ltr">/home/&lt;you&gt;/.local/bin</code>) ليس في PATH، فهذا يعني أن الصدفة (shell) لا تجد <code dir="ltr">octoboardd</code> بالاسم. شغّله بالمسار الكامل الذي طبعه التثبيت، أو أضف <code dir="ltr">{commands.binDir}</code> إلى PATH (مثلًا في <code dir="ltr">~/.profile</code>) وسجّل الدخول من جديد.
+
+## إبقاؤه قيد التشغيل بعد تسجيل الخروج أو إعادة التشغيل
+
+عند تشغيله بـ <code dir="ltr">{commands.start}</code>، يتوقف octoboardd عندما يُعاد تشغيل الخادم، ولا شيء يشغّله من جديد تلقائيًا: شغّل <code dir="ltr">{commands.start}</code> مرة أخرى، أو اتصل من تطبيق سطح المكتب الذي يعرض تشغيله لك. وبعض الخوادم توقفه أيضًا عند تسجيل الخروج.
+
+لكي يبدأ مع كل تشغيل للخادم ويستمر بعد تسجيل الخروج، ثبّته بدلًا من ذلك كخدمة:
+
+<Code code={commands.installService} lang="sh" />
+
+يثبّت هذا الأمر البرنامج، ويضبطه كخدمة مستخدم في systemd، ويشغّله. ثم يفعّل خاصية lingering التي تتيح لخدماتك العمل وأنت غير مسجّل الدخول. وإذا قال إنه لم يستطع ذلك، فشغّل هذا الأمر مرة واحدة (وقد يحتاج إلى <code dir="ltr">sudo</code>):
+
+<Code code={commands.linger} lang="sh" />
+
+المنفذ الافتراضي هو <code dir="ltr">{commands.defaultPort}</code>. لاستخدام منفذ آخر، أضف <code dir="ltr">{commands.portOption}</code> إلى نهاية أمر الخدمة، أو إلى <code dir="ltr">{commands.start}</code>.
+
+## الترقية
+
+لا يرقّي {productName} نفسه بنفسه أبدًا: عند صدور نسخة جديدة يخبرك المتصفح، وأنت تختار متى تثبّتها. بعد تثبيت النسخة الجديدة، يعيد {productName} التشغيل إليها من تلقاء نفسه إذا لم تكن هناك جلسة ستنقطع؛ وإن كانت هناك جلسات ستنقطع فإنه يعرضها ويسألك أولًا.
+
+- <strong>في المتصفح:</strong> اختر <strong>تنزيل وتثبيت</strong> حيث تظهر رسالة أن نسخة جديدة متاحة.
+- <strong>على الخادم:</strong> شغّل هذا الأمر.
+
+  <Code code={commands.update} lang="sh" />
+
+  إذا سأل هل تريد إعادة التشغيل الآن، فأجب بـ <code dir="ltr">y</code> لإعادة التشغيل، أو اضغط Enter لإبقاء النسخة القديمة قيد التشغيل في الوقت الحالي. لإعادة التشغيل لاحقًا، شغّل <code dir="ltr">{commands.restart}</code>.
+
+إذا قال <code dir="ltr">{commands.update}</code> إنه لا يستطيع استبدال البرنامج، مثلًا لأنه مثبّت في مكان لا يمكنك الكتابة فيه، فشغّل أمر التثبيت (أو أمر الخدمة) من جديد بدلًا من ذلك. فهو يعيد التشغيل بالطريقة نفسها عندما يكون ذلك آمنًا، وإلا طلب منك تشغيل <code dir="ltr">{commands.restart}</code>.
+
+## تنزيل الأرشيف بدلًا من ذلك
+
+<LinkButton href={downloads["linux-x86_64"]} variant="secondary">أرشيف x86_64</LinkButton>
+<LinkButton href={downloads["linux-aarch64"]} variant="secondary">أرشيف aarch64</LinkButton>
+
+<a href={downloads.releases}>كل الإصدارات السابقة</a>

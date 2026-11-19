@@ -4,24 +4,29 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { LANGUAGES } from "@octoboard/ui/languages";
 import { formatPrivacyDate } from "../seo/privacy-date.ts";
-import { featureGroups, homeFeatures, remoteGuides, remoteTopics } from "../seo/page-outline.ts";
-import { formatMessage, readLocaleMessages, renderAgentFiles } from "../seo/agent-documents.ts";
-import { remoteAppLabels, remoteCode } from "../seo/remote-references.ts";
-import { fallbackDownloads, type Downloads } from "../seo/downloads.ts";
+import { featureGroups, homeFeatures, remoteGuidePage } from "../seo/page-outline.ts";
+import { renderRemoteRedirectPages, renderRetiredLocalePages } from "../seo/redirect-pages.ts";
+import { readLocaleMessages, renderAgentFiles } from "../seo/agent-documents.ts";
+import { downloadTabs, fallbackDownloads, type Downloads } from "../seo/downloads.ts";
 import {
   buildJsonLd,
+  isIndexedPage,
   localeCodeFromPath,
   locales,
+  currentLocaleCode,
+  retiredLocaleCodes,
+  localizedPath,
   markdownFile,
   ogLocaleAlternates,
   pageKind,
   pagePaths,
+  docsPages,
+  docsPath,
   robotsTxt,
 } from "../seo/site-seo.ts";
 
 const siteUrl = "https://octoboard.dev/";
 const appConfig = JSON.parse(readFileSync(new URL("../../../config/app.json", import.meta.url), "utf8"));
-const port = appConfig.defaultServerPort;
 const repositoryUrl = "https://github.com/baijunjie/octoboard";
 const releaseBase = `${repositoryUrl}/releases/download`;
 const downloads: Downloads = {
@@ -34,11 +39,11 @@ const downloads: Downloads = {
 test("page paths keep the English home unprefixed and the other pages as sibling files", () => {
   assert.equal(pageKind("/"), "home");
   assert.equal(pageKind("/privacy/"), "privacy");
-  assert.equal(pageKind("/zh-Hant/privacy/"), "privacy");
+  assert.equal(pageKind("/zh-TW/privacy/"), "privacy");
   assert.equal(pageKind("/download/"), "download");
-  assert.equal(pageKind("/zh/download/"), "download");
-  assert.equal(pageKind("/remote/"), "remote");
-  assert.equal(pageKind("/ar/remote/"), "remote");
+  assert.equal(pageKind("/zh-CN/download/"), "download");
+  assert.equal(pageKind("/zh/download/"), "other");
+  assert.equal(pageKind("/remote/"), "other");
   assert.equal(pageKind("/download/macos/"), "other");
   assert.equal(pageKind("/404/"), "other");
   assert.equal(pageKind("/pr/"), "other");
@@ -47,12 +52,11 @@ test("page paths keep the English home unprefixed and the other pages as sibling
   assert.equal(localeCodeFromPath("/id/"), "id");
   assert.equal(markdownFile("/"), "index.md");
   assert.equal(markdownFile("/privacy/"), "privacy.md");
-  assert.equal(markdownFile("/zh/"), "zh.md");
-  assert.equal(markdownFile("/zh-Hant/privacy/"), "zh-Hant/privacy.md");
+  assert.equal(markdownFile("/zh-CN/"), "zh-CN.md");
+  assert.equal(markdownFile("/zh-TW/privacy/"), "zh-TW/privacy.md");
   assert.equal(markdownFile("/download/"), "download.md");
-  assert.equal(markdownFile("/zh/download/"), "zh/download.md");
-  assert.equal(markdownFile("/remote/"), "remote.md");
-  assert.equal(markdownFile("/ar/remote/"), "ar/remote.md");
+  assert.equal(markdownFile("/zh-CN/download/"), "zh-CN/download.md");
+  assert.throws(() => markdownFile("/remote/"));
 });
 
 test("the feature wall groups keep distinct capabilities in reading order", () => {
@@ -63,22 +67,29 @@ test("the feature wall groups keep distinct capabilities in reading order", () =
   ]);
 });
 
-test("remote guide references use the application labels in every locale", async () => {
-  const messages = await readLocaleMessages(fileURLToPath(new URL("../i18n/locales/", import.meta.url)));
+test("the docs link keeps the language's code, with English unprefixed", () => {
+  assert.equal(docsPath("/", "en"), "/docs/");
+  assert.equal(docsPath("/", "zh-CN"), "/docs/zh-CN/");
+  assert.equal(docsPath("/octoboard/", "zh-TW"), "/octoboard/docs/zh-TW/");
+  assert.equal(docsPath("/", "en", docsPages.linux), "/docs/install/linux/");
+  assert.equal(docsPath("/octoboard/", "zh-CN", docsPages.remoteConnections), "/octoboard/docs/zh-CN/remote-connections/");
+  assert.equal(docsPath(siteUrl, "ar", docsPages.macos), "https://octoboard.dev/docs/ar/install/macos/");
+  assert.equal(docsPath("/", "ja", docsPages.chooseHowToConnect), "/docs/ja/choose-how-to-connect/");
+});
+
+test("each download tab and the remote guide link to a page the docs have in every language", () => {
+  assert.deepEqual(downloadTabs.map((tab) => [tab.id, tab.docsPage]), [
+    ["macos", "install/macos/"],
+    ["windows", "install/windows/"],
+    ["linux", "install/linux/"],
+  ]);
+  assert.equal(remoteGuidePage, "remote-connections/");
+  const content = new URL("../../docs/src/content/docs/", import.meta.url);
   for (const locale of locales) {
-    const source = readFileSync(new URL(`../../../packages/ui/src/i18n/messages/${locale.language}.ts`, import.meta.url), "utf8");
-    for (const [key, appKey] of Object.entries(remoteAppLabels)) {
-      const prefix = `"${appKey}":`;
-      const value = source.slice(source.indexOf(prefix) + prefix.length).match(/^\s*("(?:[^"\\]|\\.)*")/);
-      assert.ok(source.includes(prefix) && value, `${locale.language}: missing application label ${appKey}`);
-      assert.equal(messages[locale.code][key], JSON.parse(value[1]), `${locale.language}: ${key}`);
-    }
-    if (["zh-Hans", "zh-Hant", "ja"].includes(locale.language)) {
-      const reference = String.raw`\{(?:remoteLabel\w+|settingsPath)\}`;
-      const padded = new RegExp(` ${reference}|${reference} `);
-      for (const key of ["remoteStepConnectBody", "remoteWindowsMenu", "remoteHostSsh", "remoteHostAllow", "remoteHostDetails", "remoteBrowserCommand"]) {
-        assert.doesNotMatch(messages[locale.code][key], padded, `${locale.language}: ${key}`);
-      }
+    for (const page of Object.values(docsPages)) {
+      const stem = `${locale.code === "en" ? "" : `${locale.code}/`}${page.replace(/\/$/, "")}`;
+      const found = [".md", ".mdx"].some((extension) => existsSync(new URL(`${stem}${extension}`, content)));
+      assert.ok(found, `${locale.code}: the docs have no ${page}`);
     }
   }
 });
@@ -90,6 +101,70 @@ test("robots allows search, retrieval, and training", () => {
   assert.match(robots, /Content-Usage: train-ai=y/);
   assert.equal(robots.includes("Disallow"), false);
   assert.match(robots, /Sitemap: https:\/\/octoboard\.dev\/sitemap\.xml/);
+  assert.match(robots, /Sitemap: https:\/\/octoboard\.dev\/docs\/sitemap-index\.xml/);
+});
+
+test("every page published under a retired Chinese code redirects to the same page under the language's tag", () => {
+  const pages = renderRetiredLocalePages("/site/");
+  const expected: Record<string, string> = {
+    "zh/index.html": "/site/zh-CN/",
+    "zh/privacy/index.html": "/site/zh-CN/privacy/",
+    "zh/download/index.html": "/site/zh-CN/download/",
+    "zh-Hant/index.html": "/site/zh-TW/",
+    "zh-Hant/privacy/index.html": "/site/zh-TW/privacy/",
+    "zh-Hant/download/index.html": "/site/zh-TW/download/",
+  };
+  assert.deepEqual(Object.keys(pages).sort(), Object.keys(expected).sort());
+  for (const [path, target] of Object.entries(expected)) {
+    assert.ok(pages[path].includes(`<meta http-equiv="refresh" content="0; url=${target}">`), path);
+    assert.match(pages[path], /<meta name="robots" content="noindex, nofollow">/);
+    // The script carries the query and fragment on to the new address, and the page names the language in English.
+    assert.ok(pages[path].includes(`location.replace(${JSON.stringify(target)} + location.search + location.hash)`), path);
+    assert.ok(pages[path].includes(`<a href="${target}">`), path);
+    assert.equal(/\P{ASCII}/u.test(pages[path]), false, path);
+  }
+  assert.ok(pages["zh/index.html"].includes(">Simplified Chinese</a>"));
+  assert.ok(pages["zh-Hant/index.html"].includes(">Traditional Chinese</a>"));
+  assert.equal(currentLocaleCode("zh"), "zh-CN");
+  assert.equal(currentLocaleCode("zh-Hant"), "zh-TW");
+  assert.equal(currentLocaleCode("ja"), "ja");
+});
+
+test("a retired Chinese code maps to a current language's code and is never one itself", () => {
+  assert.deepEqual({ ...retiredLocaleCodes }, { zh: "zh-CN", "zh-Hant": "zh-TW" });
+  for (const [retired, current] of Object.entries(retiredLocaleCodes)) {
+    assert.ok(locales.some((locale) => locale.code === current), current);
+    assert.equal(locales.some((locale) => locale.code === retired), false, retired);
+    assert.equal(currentLocaleCode(retired), current);
+    assert.equal(currentLocaleCode(current), current);
+    // A retired address is not a language's page: a path under it is English, and no page kind.
+    assert.equal(localeCodeFromPath(`/${retired}/privacy/`), "en");
+    assert.equal(pageKind(`/${retired}/privacy/`), "other");
+  }
+  // A code that is not retired, whether current, unknown or an object's own property name, comes back as it is.
+  for (const code of ["en", "zh-CN", "zh-TW", "ja", "zh-Hans", "ZH", "", "constructor", "toString", "__proto__"]) {
+    assert.equal(currentLocaleCode(code), code, JSON.stringify(code));
+  }
+});
+
+test("each language's former remote connections address redirects to the docs guide in that language", () => {
+  const pages = renderRemoteRedirectPages("/site/");
+  assert.deepEqual(
+    Object.keys(pages).sort(),
+    [...locales.map(({ code }) => code), "zh", "zh-Hant"].map((code) => localizedPath(code, "remote/index.html")).sort(),
+  );
+  assert.ok(pages["zh/remote/index.html"].includes('url=/site/docs/zh-CN/remote-connections/"'));
+  assert.ok(pages["zh-Hant/remote/index.html"].includes('url=/site/docs/zh-TW/remote-connections/"'));
+  for (const { code } of locales) {
+    const page = pages[localizedPath(code, "remote/index.html")];
+    const target = docsPath("/site/", code, remoteGuidePage);
+    assert.ok(page.includes(`<meta http-equiv="refresh" content="0; url=${target}">`), code);
+    // The remote guide's fragments are dropped: the sections of the old page no longer exist.
+    assert.ok(page.includes(`location.replace(${JSON.stringify(target)})`), code);
+    assert.ok(page.includes(`<a href="${target}">`), code);
+    assert.match(page, /<meta name="robots" content="noindex, nofollow">/);
+    assert.equal(page.includes('rel="canonical"'), false);
+  }
 });
 
 // The sitemap comes from @nuxtjs/sitemap, so it is checked on the generated output of a
@@ -106,19 +181,61 @@ test(
   () => {
     const sitemap = readFileSync(generatedSitemap, "utf8");
     assert.match(sitemap, /<\?xml-stylesheet type="text\/xsl" href="[^"]*\/__sitemap__\/style\.xsl"\?>/);
-    assert.equal(sitemap.match(/<url>/g)?.length, locales.length * pagePaths.length);
-    assert.match(sitemap, /hreflang="zh-Hans" href="https:\/\/octoboard\.dev\/zh\/"/);
+    // The pages that ask not to be indexed are the ones the sitemap leaves out.
+    const indexedPaths = pagePaths.filter((path) => isIndexedPage(pageKind(`/${path}`)));
+    assert.equal(sitemap.match(/<url>/g)?.length, locales.length * indexedPaths.length);
+    assert.equal(sitemap.includes("/privacy/"), false);
+    assert.match(sitemap, /hreflang="zh-CN" href="https:\/\/octoboard\.dev\/zh-CN\/"/);
+    assert.match(sitemap, /hreflang="zh-TW" href="https:\/\/octoboard\.dev\/zh-TW\/"/);
     assert.match(sitemap, /hreflang="x-default" href="https:\/\/octoboard\.dev\/"/);
-    assert.equal(sitemap.includes("/zh-Hans/"), false);
+    assert.equal(sitemap.includes("/zh/"), false);
+    assert.equal(sitemap.includes("/zh-Hant/"), false);
     assert.equal(sitemap.includes("/404"), false);
     assert.match(sitemap, /<loc>https:\/\/octoboard\.dev\/download\/<\/loc>/);
-    assert.match(sitemap, /<loc>https:\/\/octoboard\.dev\/zh\/download\/<\/loc>/);
-    assert.ok(sitemap.includes("<loc>https://octoboard.dev/remote/</loc>"));
-    assert.ok(sitemap.includes("<loc>https://octoboard.dev/zh/remote/</loc>"));
+    assert.match(sitemap, /<loc>https:\/\/octoboard\.dev\/zh-CN\/download\/<\/loc>/);
+    assert.equal(sitemap.includes("/remote/"), false);
     for (const target of ["macos", "windows", "linux-x86_64", "linux-aarch64"]) {
       assert.equal(sitemap.includes(`/download/${target}/`), false);
     }
     assert.equal(sitemap.includes("install.sh"), false);
+    for (const { code } of locales) {
+      const path = localizedPath(code, "remote/index.html");
+      const page = readFileSync(new URL(path, generatedSitemap), "utf8");
+      assert.ok(page.includes(`url=${docsPath("/", code, remoteGuidePage)}"`), path);
+    }
+  },
+);
+
+test(
+  "a page that asks not to be indexed says so in every language, and the other pages keep their canonical and alternates",
+  {
+    skip: !existsSync(generatedSitemap)
+      ? "run pnpm --filter @octoboard/web build first"
+      : false,
+  },
+  () => {
+    const read = (path: string) => readFileSync(new URL(path, generatedSitemap), "utf8");
+    for (const { code } of locales) {
+      for (const path of pagePaths) {
+        const kind = pageKind(`/${path}`);
+        const file = localizedPath(code, `${path}index.html`);
+        const page = read(file);
+        if (isIndexedPage(kind)) {
+          assert.equal(page.includes("noindex"), false, file);
+          assert.match(page, /rel="canonical"/, file);
+          assert.match(page, /hreflang="x-default"/, file);
+          assert.match(page, /rel="alternate" type="text\/markdown"/, file);
+          for (const link of page.match(/<link[^>]*hreflang="[^"]*"[^>]*>/g) ?? []) {
+            assert.equal(link.includes("/privacy/"), false, `${file}: ${link}`);
+          }
+        } else {
+          assert.match(page, /<meta name="robots" content="noindex, follow">/, file);
+          assert.equal(page.includes('rel="canonical"'), false, file);
+          assert.equal(page.includes("hreflang="), false, file);
+          assert.equal(page.includes('type="text/markdown"'), false, file);
+        }
+      }
+    }
   },
 );
 
@@ -132,18 +249,22 @@ test("each locale has a 1200 by 630 share image", () => {
   }
 });
 
-test("the site offers the application's languages, in its order, with Simplified Chinese at /zh/", () => {
+test("the site offers the application's languages, in its order, with each language at its tag", () => {
   assert.deepEqual(locales.map((locale) => locale.language), [...LANGUAGES]);
   assert.deepEqual(locales.filter((locale) => locale.dir).map((locale) => locale.code), ["ar"]);
-  const chinese = locales.find((locale) => locale.language === "zh-Hans");
-  assert.equal(chinese?.code, "zh");
+  const chinese = locales.find((locale) => locale.language === "zh-CN");
+  assert.equal(chinese?.code, "zh-CN");
   assert.equal(chinese?.ogLocale, "zh_CN");
-  assert.equal(chinese?.file, "zh-Hans.json");
+  assert.equal(chinese?.file, "zh-CN.json");
   assert.equal(chinese?.name, "简体中文");
+  const traditional = locales.find((locale) => locale.language === "zh-TW");
+  assert.equal(traditional?.code, "zh-TW");
+  assert.equal(traditional?.ogLocale, "zh_TW");
+  assert.equal(traditional?.file, "zh-TW.json");
 });
 
 test("Open Graph locales use a territory, including Simplified Chinese", () => {
-  assert.equal(locales.find((locale) => locale.code === "zh")?.ogLocale, "zh_CN");
+  assert.equal(locales.find((locale) => locale.code === "zh-CN")?.ogLocale, "zh_CN");
   assert.equal(locales.find((locale) => locale.code === "en")?.ogLocale, "en_US");
   assert.equal(ogLocaleAlternates("en").includes("en_US"), false);
   assert.equal(ogLocaleAlternates("en").length, locales.length - 1);
@@ -170,7 +291,7 @@ test("structured data points at the fixed download addresses without claiming an
     logoUrl: `${siteUrl}logo.png`,
     licenseUrl: "https://github.com/baijunjie/octoboard/blob/main/LICENSE",
     downloadUrls: [`${siteUrl}download/macos/`, `${siteUrl}download/linux-x86_64/`],
-    languages: ["en", "zh-Hans"],
+    languages: ["en", "zh-CN"],
     featureTitles: ["Coordinate"],
     questions: [{ question: "Where?", answer: "Locally." }],
   });
@@ -272,29 +393,18 @@ test("agent documents follow the pages and carry the download and install inform
   assert.ok(page.includes(`[Download for macOS](${downloads.macos})`));
   assert.ok(page.includes(`[Download for Windows](${downloads.windows})`));
   assert.ok(page.includes("curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh"));
-  assert.ok(page.includes("`sh -s -- --service`"));
-  assert.ok(page.includes("```sh\noctoboardd start\noctoboardd address\n```"));
-  assert.ok(
-    page.includes(`\`ssh -o ExitOnForwardFailure=yes -L 127.0.0.1:${port}:/home/<you>/.octoboard/browser.sock <you>@<server>\``),
-  );
-  assert.ok(page.includes('`loginctl enable-linger "$USER"`'));
-  // The script turns lingering on itself; the command is for when it says it could not.
-  assert.match(page, /The script then turns on lingering[^\n]*if it says it could not, run `loginctl enable-linger "\$USER"` once/);
-  // octoboardd may not be on the PATH right after the install.
-  assert.ok(page.includes("If the install says `~/.local/bin` is not on your PATH, run `octoboardd start` by the full path it prints"));
-  assert.ok(page.includes("`octoboardd restart`"));
-  assert.equal(page.includes("your-server"), false);
   assert.ok(page.includes(`[x86_64 archive](${downloads["linux-x86_64"]})`));
   assert.ok(page.includes(`[aarch64 archive](${downloads["linux-aarch64"]})`));
   assert.ok(page.includes("[All releases](https://github.com/baijunjie/octoboard/releases)"));
   assert.match(page, /macOS 11 or later/);
-  assert.match(page, /Select “More info”, then “Run anyway”/);
-  assert.ok(page.includes("loginctl enable-linger"));
-  assert.match(home, /Requirements and installation steps for each system are on the download page\./);
+  // The steps and troubleshooting are in the docs; the download page links to them.
+  for (const moved of ["octoboardd start", "enable-linger", "--service", "Run anyway", "for your user account only", "Git for Windows"]) {
+    assert.equal(page.includes(moved), false, `the download page no longer carries ${moved}`);
+  }
+  for (const system of ["macos", "windows", "linux"]) {
+    assert.ok(page.includes(`[Read the installation guide](https://octoboard.dev/docs/install/${system}/)`), system);
+  }
   assert.equal(home.includes("x64-setup.exe"), false);
-  assert.match(page, /installs Octoboard for your user account only/);
-  assert.doesNotMatch(page, /Claude Code and Codex also need Git for Windows/);
-  assert.doesNotMatch(page, /Install the coding-agent CLIs you want to use yourself/);
   assert.match(home, /The app is free and open source under the MIT License\./);
   assert.equal(home.includes("Awaiting instructions"), false);
   assert.match(home, /Do I need to set up my projects and CLI configuration again\?/);
@@ -303,44 +413,25 @@ test("agent documents follow the pages and carry the download and install inform
     const body = files[markdownFile(locale.code === "en" ? "/" : `/${locale.code}/`)];
     const catalog = messages[locale.code];
     const download = files[markdownFile(locale.code === "en" ? "/download/" : `/${locale.code}/download/`)];
-    for (const key of [
-      "downloadMacosRequirements", "downloadWindowsRequirements", "downloadWindowsUserOnly",
-      "downloadWindowsSmartScreen", "downloadUpdates",
-    ]) {
-      const text = catalog[key].replaceAll("{appName}", "Octoboard");
-      assert.ok(download.includes(text), `${locale.code}: missing installation guidance: ${key}`);
+    for (const key of ["downloadMacosRequirements", "downloadWindowsRequirements"]) {
+      assert.ok(download.includes(catalog[key]), `${locale.code}: missing requirements: ${key}`);
     }
-    for (const key of ["downloadAgentsNote", "downloadWindowsGit"]) {
-      assert.equal(download.includes(catalog[key]), false, `${locale.code}: unrelated setup guidance: ${key}`);
-    }
-    const steps = [
+    const linux = [
+      `## ${catalog.downloadLinuxTitle}`,
       `### ${catalog.downloadInstallStep}`,
       "```sh\ncurl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh\n```",
-      `### ${catalog.downloadStartStep}`,
-      "```sh\noctoboardd start\noctoboardd address\n```",
-      `### ${catalog.downloadOpenStep}`,
-      formatMessage(catalog.remoteBrowserServer, { server: "`<server>`" }),
-      catalog.downloadBrowserSteps,
-      `### ${catalog.downloadOptionsLabel}`,
+      catalog.downloadArchivesLabel,
+      `[${catalog.downloadGuideLink}](${docsPath(siteUrl, locale.code, docsPages.linux)})`,
     ];
-    let previousStep = -1;
-    for (const step of steps) {
-      const position = download.indexOf(step);
-      assert.ok(position > previousStep, `${locale.code}: missing or reordered Linux step: ${step}`);
-      previousStep = position;
+    let previousPart = -1;
+    for (const part of linux) {
+      const position = download.indexOf(part);
+      assert.ok(position > previousPart, `${locale.code}: missing or reordered Linux part: ${part}`);
+      previousPart = position;
     }
-    const options = download.slice(previousStep);
-    for (const command of [
-      "`~/.local/bin`",
-      "`octoboardd start`",
-      "`octoboardd address`",
-      `\`ssh -o ExitOnForwardFailure=yes -L 127.0.0.1:${port}:/home/<you>/.octoboard/browser.sock <you>@<server>\``,
-      "`--port <port>`",
-      "`sh -s -- --service`",
-      '`loginctl enable-linger "$USER"`',
-      "`octoboardd restart`",
-    ]) {
-      assert.ok(options.includes(command), `${locale.code}: missing Linux option: ${command}`);
+    for (const tab of downloadTabs) {
+      const guide = `[${catalog.downloadGuideLink}](${docsPath(siteUrl, locale.code, tab.docsPage)})`;
+      assert.ok(download.includes(guide), `${locale.code}: ${tab.id} installation guide`);
     }
     for (const key of ["faqProjectIsolationAnswer", "faqAgentChoiceAnswer"]) {
       const answer = catalog[key].replaceAll("{appName}", "Octoboard");
@@ -350,59 +441,10 @@ test("agent documents follow the pages and carry the download and install inform
     assert.ok(privacy.includes(formatPrivacyDate(locale.language)));
     assert.ok(privacy.includes(catalog.privacyWebsiteConsentBody));
     assert.ok(privacy.includes(catalog.privacyRemoteHostsBody));
-    const remoteRoute = locale.code === "en" ? "/remote/" : `/${locale.code}/remote/`;
-    const remoteFile = markdownFile(remoteRoute);
-    const remotePage = files[remoteFile];
-    assert.ok(remotePage.startsWith(`# ${catalog.remoteEyebrow}\n`), locale.code);
-    assert.ok(remotePage.includes(`Canonical: ${siteUrl}${remoteRoute.slice(1)}`), locale.code);
-    const guideLink = `[${catalog.remoteGuideLink}](${siteUrl}${remoteFile})`;
-    assert.ok(body.includes(guideLink), locale.code);
-    assert.ok(download.includes(guideLink), locale.code);
-    const labels = Object.fromEntries(Object.keys(remoteAppLabels).map((key) => [
-      key,
-      `**${catalog[key].replaceAll("{appName}", "Octoboard")}**`,
-    ]));
-    const referenceValues = {
-      ...labels,
-      ...Object.fromEntries(Object.entries(remoteCode).map(([key, command]) => [key, `\`${command}\``])),
-      settingsPath: `${labels.remoteLabelSettings} › ${labels.remoteLabelAccess}`,
-      appName: "Octoboard",
-    };
-    const remoteText = (key: string) => formatMessage(catalog[key], referenceValues);
-    assert.ok(remotePage.includes(labels.remoteLabelPaste), locale.code);
-    assert.ok(remotePage.includes(labels.remoteLabelSave), locale.code);
-    let remotePosition = -1;
-    for (const guide of remoteGuides(siteUrl)) {
-      const section = remotePage.indexOf(`## ${catalog[guide.key]}`);
-      assert.ok(section > remotePosition, `${locale.code}: ${guide.key}`);
-      remotePosition = section;
-      for (const [index, step] of guide.steps.entries()) {
-        const position = remotePage.indexOf(`${index + 1}. ${remoteText(step.key)}`, remotePosition);
-        assert.ok(position > remotePosition, `${locale.code}: ${step.key}`);
-        assert.ok(!body.includes(remoteText(step.key)), `${locale.code}: guide instructions moved off the homepage`);
-        remotePosition = position;
-        if ("command" in step) assert.ok(remotePage.includes(`   ${step.command}`), locale.code);
-        if ("notes" in step) {
-          for (const note of step.notes) {
-            const notePosition = remotePage.indexOf(`   ${remoteText(note)}`, remotePosition);
-            assert.ok(notePosition > remotePosition, `${locale.code}: ${note}`);
-            remotePosition = notePosition;
-          }
-        }
-      }
-    }
-    for (const { key, items } of remoteTopics) {
-      const section = remotePage.indexOf(`## ${catalog[key]}`);
-      assert.ok(section > remotePosition, `${locale.code}: ${key}`);
-      remotePosition = section;
-      for (const item of items) {
-        const lead = remoteText(`${item}Lead`);
-        assert.match(lead, /[:：]$/u, `${locale.code}: ${item} lead`);
-        const position = remotePage.indexOf(`- **${lead}** ${remoteText(item)}`, remotePosition);
-        assert.ok(position > remotePosition, `${locale.code}: ${item}`);
-        remotePosition = position;
-      }
-    }
+    const guide = docsPath(siteUrl, locale.code, remoteGuidePage);
+    assert.ok(body.includes(`[${catalog.remoteGuideLink}](${guide})`), locale.code);
+    assert.ok(download.includes(`[${catalog.downloadSshGuideLink}](${guide})`), locale.code);
+    assert.equal(download.includes(`[${catalog.remoteGuideLink}](`), false, locale.code);
     const headings = [
       "featureWallTitle",
       ...featureGroups.flatMap((group) => [group.key, ...group.features.map((key) => `${key}FeatureTitle`)]),
@@ -441,8 +483,7 @@ test("agent documents follow the pages and carry the download and install inform
   assert.equal(home.includes("Replay workflow"), false);
   assert.match(files["privacy.md"], /GitHub privacy statement/);
   assert.match(files["privacy.md"], /“Analytics settings” in the site footer/);
-  assert.match(files["remote.md"], /On Windows, you can also choose \*\*Remote devices\*\* from the window’s system menu or the taskbar icon’s jump list/);
-  assert.match(files["remote.md"], /`ssh-keygen -lf \/etc\/ssh\/ssh_host_ed25519_key\.pub`/);
+  assert.equal(Object.keys(files).some((name) => /(^|\/)remote\.md$/.test(name)), false);
   assert.match(files["ja.md"], /Canonical: https:\/\/octoboard\.dev\/ja\//);
   assert.match(llms, /Support: support@octoboard\.dev/);
   assert.match(llms, /https:\/\/octoboard\.dev\/index\.md/);
@@ -450,18 +491,30 @@ test("agent documents follow the pages and carry the download and install inform
   assert.match(llms, /macOS on Apple silicon and Intel · Windows on x64 · Linux server on x86_64 and aarch64 · Beta/);
   assert.match(llms, /macOS: Beta/);
   assert.match(llms, /Windows: Beta/);
-  assert.match(llms, /Requirements and installation steps for each system are on the download page\./);
+  assert.match(llms, /Requirements for each system, and a link to its installation guide, are on the download page\./);
+  assert.equal(llms.includes("installation steps for each system are on the download page"), false);
   assert.match(llms, /Linux: Server · Beta/);
   assert.ok(llms.includes("curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh"));
   assert.ok(llms.includes(downloads["linux-aarch64"]));
+  assert.ok(llms.includes("[Read the installation guide](https://octoboard.dev/docs/install/linux/)"));
+  assert.ok(llms.includes("[Read the SSH connection guide](https://octoboard.dev/docs/remote-connections/)"));
+  assert.ok(llms.includes("[Read the installation guide](https://octoboard.dev/docs/install/macos/)"));
+  assert.ok(llms.includes("[Read the installation guide](https://octoboard.dev/docs/install/windows/)"));
+  // Each app's guide follows its own download link, ahead of the next app's.
+  assert.ok(
+    llms.includes(
+      `(${downloads.macos})\n- [Read the installation guide](https://octoboard.dev/docs/install/macos/)\n- [Download for Windows]`,
+    ),
+  );
+  assert.ok(llms.includes("[Docs](https://octoboard.dev/docs/)"));
   assert.equal(llms.includes("Windows: Planned"), false);
   assert.match(llms, /iOS: Planned/);
   assert.match(llms, /Android: Planned/);
   assert.match(llms, /\[All releases\]\(https:\/\/github\.com\/baijunjie\/octoboard\/releases\)/);
   assert.match(llms, /\[all languages\]\(https:\/\/octoboard\.dev\/llms-full\.txt\)/);
-  assert.match(files["sitemap.md"], /https:\/\/octoboard\.dev\/zh\/privacy\.md/);
-  assert.ok(files["sitemap.md"].includes("https://octoboard.dev/zh/remote.md"));
-  assert.match(llms, /\]\(https:\/\/octoboard\.dev\/remote\.md\)/);
+  assert.match(files["sitemap.md"], /https:\/\/octoboard\.dev\/zh-CN\/privacy\.md/);
+  assert.equal(files["sitemap.md"].includes("remote.md"), false);
+  assert.equal(llms.includes("remote.md"), false);
   const sections = files["sitemap.md"].match(/^## .+$/gm) ?? [];
   assert.deepEqual(sections, ["## Root", ...locales.filter((locale) => locale.code !== "en").map((locale) => `## ${locale.code}`).sort()]);
   assert.match(files["sitemap.md"], /## Root\n- \[[^\n]+\]\(https:\/\/octoboard\.dev\/index\.md\)\n- \[[^\n]+\]\(https:\/\/octoboard\.dev\/download\.md\)\n- \[[^\n]+\]\(https:\/\/octoboard\.dev\/privacy\.md\)/);
@@ -527,7 +580,7 @@ test("the policy revision date stays on November 18 across time zones", () => {
     for (const zone of ["Pacific/Honolulu", "Asia/Tokyo", "UTC"]) {
       process.env.TZ = zone;
       assert.equal(formatPrivacyDate("en"), "November 18, 2026");
-      assert.equal(formatPrivacyDate("zh-Hans"), "2026年11月18日");
+      assert.equal(formatPrivacyDate("zh-CN"), "2026年11月18日");
     }
   } finally {
     if (previous === undefined) delete process.env.TZ;

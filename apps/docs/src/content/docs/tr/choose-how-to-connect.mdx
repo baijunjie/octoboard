@@ -1,0 +1,43 @@
+---
+title: "Bağlanma yolunu seçin"
+description: "Octoboard’u bir Linux sunucusunda veya başka bir bilgisayarda kullanmanın yollarını karşılaştırın: SSH, Tailscale ve UU Remote."
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+
+{productName} kendini hiçbir zaman ağa açmaz, bu yüzden başka bir bilgisayarın ona güvenli bir yol bulması gerekir. SSH, macOS, Windows ve Linux’ta yerleşik standart bir şifreli oturum açma yöntemidir ve asıl yoldur: masaüstü uygulamasından ya da bir tarayıcıdan. Ana makinede SSH ile oturum açmayı açmak istemezseniz, üçüncü taraf bir aktarıcı olan Tailscale veya UU Remote, bunun yerine bir tarayıcının bağlantısını taşıyabilir.
+
+<strong>Ana makine</strong>, {productName} uygulamasının çalıştığı ve ulaşmak istediğiniz makinedir.
+
+<Aside type="tip" title="En basit yol">
+Biraz giriş gecikmesi ve bulanık bir görüntü sizin için sorun değilse aşağıdaki kurulumların hiçbirine gerek yok: ana makineyi [UU Remote](https://uuyc.163.com/)’un uzak masaüstünde açın ve {productName} uygulamasını doğrudan ana makinede kullanın. Bu, Mac veya Windows ana makinelerde çalışır, Linux sunucusunda çalışmaz. UU Remote’un arayüzü Çincedir. Kendi bilgisayarınızda net ve hızlı tepki veren bir pencere için aşağıdaki yollardan birini seçin.
+</Aside>
+
+| | [SSH](../remote-connections/) | [Tailscale](../browser-over-tailscale/) | [UU Remote](../browser-over-uu-remote/) |
+| --- | --- | --- | --- |
+| Şuradan kullanılır | Masaüstü uygulaması veya tarayıcı | Yalnızca tarayıcı | Yalnızca tarayıcı |
+| Desteklenen ana makineler | Linux sunucusu, Mac, Windows bilgisayarı | Linux sunucusu, Mac, Windows bilgisayarı | Yalnızca Mac veya Windows bilgisayarı |
+| Ana makinede açtığınız ya da kurduğunuz | SSH ile oturum açma (Mac’te Uzaktan Oturum Açma, Windows’ta OpenSSH Server; Linux sunucusunda zaten vardır) | Tailscale; Mac veya Linux ana makinesinde ayrıca socat | UU Remote; Mac ana makinesinde ayrıca socat |
+| Kendi bilgisayarınıza kurduğunuz | Ek bir şey gerekmez | Tailscale; Mac veya Linux bilgisayarında ayrıca socat | UU Remote (Mac veya Windows) |
+| Trafiğin geçtiği yer | Doğrudan bağlantı, üçüncü taraf yok | Tailscale’in ağı, hesabınızla | NetEase UU Remote’un hizmeti, hesabınızla |
+| Aynı ağda değilken çalışır mı | Yalnızca ana makineye ulaşılabiliyorsa: aynı ağda, genel bir adreste veya VPN üzerinden | Evet | Evet |
+| En uygun olduğu durum | Sunucular; tam masaüstü uygulaması; başkalarının da oturum açtığı Mac ve Linux ana makineleri | Kendi makinelerinize SSH olmadan her yerden ulaşmak | Zaten UU Remote kullanan, anakara Çin’deki kullanıcılar |
+
+## Bir aktarıcı seçmeden önce
+
+Aktarıcı kılavuzları SSH’den daha fazla adım içerir: her iki bilgisayarda da komutlar çalıştırır ve siz çalışırken onları açık pencerelerde çalışır durumda tutarsınız.
+
+<Aside type="caution">
+Tailscale ve UU Remote kılavuzları henüz iki cihaz arasında tam olarak sınanmadı. Bu hizmetlerin kendi belgelerini ve {productName} uygulamasının kendi denetimlerini izlerler.
+</Aside>
+
+<Aside type="caution" title="Yalnızca başka kimsenin oturum açmadığı bilgisayarlarda">
+Bir aktarıcıyla, ana makinedeki veya kendi bilgisayarınızdaki başka bir kullanıcı hesabı tarayıcının anahtarını ele geçirebilir. Tailscale veya UU Remote’u yalnızca sizin oturum açtığınız bilgisayarlarda kullanın. [SSH ile bağlanma](../remote-connections/) yöntemi, Mac veya Linux ana makinesinde bu zayıflığa sahip değildir; masaüstü uygulamasını kullandığınızda kendi bilgisayarınızda da yoktur. Ancak tarayıcıda bilgisayarınızda bu zayıflık yine vardır, çünkü orada da SSH yönlendirmesi bir <code dir="ltr">127.0.0.1</code> bağlantı noktasını dinler.
+</Aside>
+
+## Sonraki adım
+
+- [SSH ile bağlanın](../remote-connections/): bir Linux sunucusu için veya masaüstü uygulamasını kullanmak için.
+- [Tailscale üzerinden tarayıcı](../browser-over-tailscale/): yalnızca tarayıcı, her ana makine, SSH yok.
+- [UU Remote üzerinden tarayıcı](../browser-over-uu-remote/): yalnızca tarayıcı, Mac veya Windows ana makinesi, SSH yok.

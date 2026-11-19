@@ -19,7 +19,7 @@ it("isolates application preferences from the host origin and resets on every lo
   host.setItem("octoboard.language", "ja");
   installPreviewStorage();
   expect(localStorage.getItem("octoboard.language")).toBeNull();
-  localStorage.setItem("octoboard.language", "zh-Hans");
+  localStorage.setItem("octoboard.language", "zh-CN");
   sessionStorage.setItem("example", "session");
   expect(host.getItem("octoboard.language")).toBe("ja");
   expect(localStorage.getItem("example")).toBeNull();

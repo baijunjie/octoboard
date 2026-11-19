@@ -1,0 +1,12 @@
+import { productName } from "../../commands.ts";
+
+{/* The host's steps both relay guides share: turning on remote access and copying the browser address. Pass
+`windows` on a Windows host, which also needs the browser port. */}
+
+在 {productName} 中打开<strong>设置 › 远程访问</strong>，开启<strong>允许远程访问</strong>，再点击<strong>允许</strong>确认。开关下方会出现两个标签页。在<strong>浏览器</strong>标签页的<strong>第 2 步：浏览器地址</strong>处，点击<strong>复制地址</strong>。{props.windows ? <>同时记下<strong>浏览器端口</strong>下显示的端口号。</> : null}
+
+请用只有你自己能看到的方式把地址传到另一台电脑，比如发给自己的笔记：它的作用相当于密码。
+
+跳过<strong>第 1 步：SSH 转发</strong>。应用的设置里多处提到 SSH，这里可以不用管，本指南只用到浏览器地址。
+
+请保持 {productName} 运行，退出后远程访问会随之中断。

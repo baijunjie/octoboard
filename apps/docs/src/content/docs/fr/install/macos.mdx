@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "Pour les Mac Apple silicon et Intel, sous macOS 11 ou version ultérieure."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Pour les Mac Apple silicon et Intel, sous macOS 11 ou version ultérieure.
+
+<LinkButton href={downloads.macos}>Télécharger pour macOS</LinkButton>
+
+<Aside>L’app macOS est en version bêta.</Aside>
+
+## Installation
+
+<Steps>
+
+1. Téléchargez l’app avec le bouton ci-dessus. Vous obtenez une image disque, un fichier dont le nom se termine par <code dir="ltr">.dmg</code>.
+2. Ouvrez le fichier téléchargé. Dans la fenêtre qui s’ouvre, faites glisser {productName} sur le dossier Applications.
+3. Ouvrez {productName} depuis votre dossier Applications ou depuis le Launchpad.
+4. Installez au moins un agent de code (voir ci-dessous), puis sélectionnez <strong>Ajouter un projet</strong> dans {productName} pour ouvrir un dossier de projet.
+
+</Steps>
+
+Quand la fenêtre principale s’ouvre, c’est terminé.
+
+## Installer un agent de code
+
+{productName} n’inclut aucun agent IA. Installez ceux que vous voulez utiliser en suivant leurs propres instructions, et connectez-vous-y. {productName} les trouve automatiquement. Il fonctionne avec :
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## Mises à jour
+
+Quand une nouvelle version est disponible, {productName} vous le signale, et vous pouvez l’installer depuis l’app. Vous n’avez pas besoin de revenir sur cette page.
+
+<a href={downloads.releases}>Toutes les versions précédentes</a>

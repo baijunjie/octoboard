@@ -18,8 +18,8 @@ import { ru } from "./messages/ru";
 import { th } from "./messages/th";
 import { tr } from "./messages/tr";
 import { vi } from "./messages/vi";
-import { zhHans } from "./messages/zh-Hans";
-import { zhHant } from "./messages/zh-Hant";
+import { zhCN } from "./messages/zh-CN";
+import { zhTW } from "./messages/zh-TW";
 
 /** The CLDR plural categories; which of them a language needs is what `Intl.PluralRules` reports. */
 export type PluralCategory = "zero" | "one" | "two" | "few" | "many" | "other";
@@ -138,8 +138,8 @@ export const CATALOGS: Partial<Record<Language, Partial<Record<MessageKey, Messa
   "th": th,
   "tr": tr,
   "vi": vi,
-  "zh-Hans": zhHans,
-  "zh-Hant": zhHant,
+  "zh-CN": zhCN,
+  "zh-TW": zhTW,
 };
 
 const pluralRules = new Map<Language, Intl.PluralRules>();

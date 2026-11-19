@@ -3,8 +3,6 @@ import React, { Suspense, useEffect } from "react";
 
 import { trackSuspenseFallback } from "../../components/hooks/lazyReadiness";
 import { AgentIcon } from "../../components/icons/AgentIcon";
-import { PasteButton } from "../../components/controls/PasteButton";
-import { TextInput } from "../../components/form/TextInput";
 import { ExternalLink } from "../../components/text/ExternalLink";
 import { StatusIcon } from "../../components/status/StatusIcon";
 import { createFixtureDaemon } from "../../fixtures/fixtureDaemon";
@@ -17,7 +15,6 @@ import { DaemonProvider } from "../../store";
 import { RenderedDiff, useRendererScope } from "../../viewer/code/codeRenderer";
 import { ready } from "./main";
 
-const noop = () => {};
 const daemon = createFixtureDaemon({ state: snapshotState({}) });
 const accounts = [
   { name: "Claude Code", quota: quotaOf("claude", "work", "max", [quotaWindow("session", 38, 117)]) },
@@ -104,17 +101,6 @@ export function FeatureView({ feature }: { feature: string }): React.ReactElemen
           <ArrowUpRight size={19} className="end-glyph" />
         </div>
       </section>;
-      break;
-    case "remoteDevices":
-      content = <div className="remote-details-view card-fills">
-        <TextInput
-          label={t("remoteDaemons.form.details")}
-          value="octoboard+ssh://alex@server:22"
-          dir="ltr"
-          onChange={noop}
-          trailing={<PasteButton variant="secondary" besideField focusOnPress={false} failedText={t("remoteDaemons.form.details.pasteFailedTitle")} onPaste={noop} />}
-        />
-      </div>;
       break;
     case "nativeProjectSessions":
       content = <ul className="feature-surface preview-list">

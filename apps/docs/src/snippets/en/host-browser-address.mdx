@@ -1,0 +1,12 @@
+import { productName } from "../../commands.ts";
+
+{/* The host's steps both relay guides share: turning on remote access and copying the browser address. Pass
+`windows` on a Windows host, which also needs the browser port. */}
+
+In {productName}, open <strong>Settings › Remote access</strong>, turn on <strong>Allow remote access</strong> and select <strong>Allow</strong> to confirm. Two tabs then appear below the switch. On the <strong>Browser</strong> tab, select <strong>Copy address</strong> under <strong>Step 2: Browser address</strong>.{props.windows ? <> Also note the number under <strong>Browser port</strong>.</> : null}
+
+Get the address to the other computer in a way only you can read, such as a note to yourself: it works like a password.
+
+Skip <strong>Step 1: SSH forward</strong>. The app's settings mention SSH in several places; you can ignore that here, since this guide uses only the browser address.
+
+Keep {productName} running: if you quit it, remote access stops.

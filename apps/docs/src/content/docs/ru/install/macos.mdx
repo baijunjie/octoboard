@@ -1,0 +1,40 @@
+---
+title: "macOS"
+description: "Для Mac с чипом Apple и Intel, macOS 11 или новее."
+---
+
+import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
+import { downloads, productName } from "../../../../commands.ts";
+
+Для Mac с чипом Apple и Intel, macOS 11 или новее.
+
+<LinkButton href={downloads.macos}>Скачать для macOS</LinkButton>
+
+<Aside>Приложение для macOS находится на стадии беты.</Aside>
+
+## Установка
+
+<Steps>
+
+1. Скачайте приложение кнопкой выше. Вы получите образ диска — файл, имя которого заканчивается на <code dir="ltr">.dmg</code>.
+2. Откройте скачанный файл. В открывшемся окне перетащите {productName} в папку «Программы».
+3. Откройте {productName} из папки «Программы» или из Launchpad.
+4. Установите хотя бы одного кодирующего агента (см. ниже), затем нажмите <strong>Добавить проект</strong> в {productName}, чтобы открыть папку проекта.
+
+</Steps>
+
+Когда откроется главное окно, всё готово.
+
+## Установка кодирующего агента
+
+{productName} не включает ИИ-агента. Установите тех, которыми хотите пользоваться, по их собственным инструкциям и войдите в них. {productName} найдёт их автоматически. Он работает с:
+
+- [Claude Code](https://code.claude.com/docs/en/setup)
+- [Codex](https://github.com/openai/codex)
+- [Grok Build](https://docs.x.ai/build/overview)
+
+## Обновления
+
+Когда выходит новая версия, {productName} сообщает об этом, и вы можете установить её прямо в приложении. Возвращаться на эту страницу не нужно.
+
+<a href={downloads.releases}>Все прежние версии</a>

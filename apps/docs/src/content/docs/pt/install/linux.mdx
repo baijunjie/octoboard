@@ -1,0 +1,89 @@
+---
+title: "Servidor Linux"
+description: "Instale o octoboardd, o programa de servidor do Octoboard, em um servidor Linux sem root. Acesse-o pelo app para macOS ou Windows, ou por um navegador, sempre por SSH."
+---
+
+import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
+import { commands, downloads, productName } from "../../../../commands.ts";
+
+Instale o octoboardd, o programa de servidor do {productName} (o app o chama de daemon), em um servidor Linux sem root. Acesse-o pelo app para macOS ou Windows, ou por um navegador, sempre por SSH.
+
+Para x86_64 e aarch64, em qualquer distribuição.
+
+<Aside>O programa de servidor para Linux está em beta.</Aside>
+
+## Antes de começar
+
+- **Um servidor Linux em que você possa fazer login por SSH.** SSH é uma forma segura de fazer login em outra máquina e digitar comandos nela. O provedor do servidor informa o endereço dele e o seu nome de usuário.
+- **O app {productName} no seu próprio computador**, para [macOS](../macos/) ou [Windows](../windows/), se você quiser trabalhar no app para desktop (recomendado).
+
+Para fazer login, abra o Terminal (macOS) ou o PowerShell (Windows) no seu próprio computador e execute o comando abaixo, com o seu nome de usuário no lugar de <code dir="ltr">&lt;you&gt;</code> e o endereço do servidor no lugar de <code dir="ltr">{commands.server}</code>. Na primeira vez, responda <code dir="ltr">yes</code> quando ele perguntar se deve confiar no servidor.
+
+<Code code={commands.signIn} lang="sh" />
+
+Os passos 1 e 2 abaixo são executados no servidor, nessa janela em que você fez login.
+
+## Instalar
+
+<Steps>
+
+1. Instale o octoboardd no servidor.
+
+   <Code code={commands.install} lang="sh" />
+
+   Ele imprime uma linha que começa com <code dir="ltr">Installed octoboardd</code>.
+2. Inicie-o no servidor.
+
+   <Code code={commands.start} lang="sh" />
+
+   Ele imprime uma linha que começa com <code dir="ltr">{productName} started</code>.
+3. Conecte-se a ele a partir do seu próprio computador, de uma de duas formas:
+
+   - <strong>Pelo app para desktop (recomendado):</strong> siga [Conectar a um servidor Linux](../../remote-connections/#conectar-a-um-servidor-linux) no guia de SSH.
+   - <strong>Por um navegador:</strong> execute isto no servidor.
+
+     <Code code={commands.address} lang="sh" />
+
+     Ele imprime duas coisas: um endereço de navegador, que começa com <code dir="ltr">http://127.0.0.1:</code>, e um comando <code dir="ltr">ssh</code>. No seu próprio computador, copie o comando <code dir="ltr">ssh</code>, substitua <code dir="ltr">{commands.server}</code> pelo endereço do servidor (o endereço IP ou o nome que você usa para fazer login nele) e execute-o no Terminal ou no PowerShell. Ele pode pedir a sua senha e depois não mostra mais nada; isso é normal. Deixe essa janela aberta: fechá-la corta a conexão. Depois, abra o endereço impresso no navegador.
+
+</Steps>
+
+Você saberá que funcionou quando o {productName} abrir na nova janela do app para desktop ou na aba do navegador.
+
+## Se o octoboardd não for encontrado
+
+Se a instalação disser que uma pasta terminada em <code dir="ltr">.local/bin</code> (por exemplo, <code dir="ltr">/home/&lt;you&gt;/.local/bin</code>) não está no seu PATH, o shell não consegue encontrar o <code dir="ltr">octoboardd</code> pelo nome. Execute-o pelo caminho completo que a instalação imprimiu ou adicione <code dir="ltr">{commands.binDir}</code> ao seu PATH (por exemplo, em <code dir="ltr">~/.profile</code>) e faça login de novo.
+
+## Mantê-lo em execução depois de sair ou reiniciar
+
+Iniciado com <code dir="ltr">{commands.start}</code>, o octoboardd para quando o servidor reinicia e nada o inicia de novo por conta própria: execute <code dir="ltr">{commands.start}</code> outra vez ou conecte-se pelo app para desktop, que se oferece para iniciá-lo para você. Alguns servidores também o encerram quando você sai da sessão.
+
+Para que ele inicie sempre que o servidor iniciar e continue em execução depois que você sair, instale-o como um serviço:
+
+<Code code={commands.installService} lang="sh" />
+
+Isso instala o programa, configura-o como um serviço de usuário do systemd e o inicia. Em seguida, ativa o lingering, que permite que seus serviços sejam executados enquanto você não está conectado. Se ele disser que não conseguiu, execute isto uma vez (pode ser necessário usar <code dir="ltr">sudo</code>):
+
+<Code code={commands.linger} lang="sh" />
+
+A porta padrão é <code dir="ltr">{commands.defaultPort}</code>. Para usar outra, adicione <code dir="ltr">{commands.portOption}</code> ao final do comando do serviço ou de <code dir="ltr">{commands.start}</code>.
+
+## Atualizar
+
+O {productName} nunca se atualiza sozinho: quando houver uma nova versão, o navegador avisa e você escolhe quando instalá-la. Depois que a nova versão estiver instalada, o {productName} reinicia nela por conta própria quando nenhuma sessão for interrompida; se alguma for, ele as lista e pergunta antes.
+
+- <strong>No navegador:</strong> selecione <strong>Baixar e instalar</strong> onde aparecer o aviso de que há uma nova versão.
+- <strong>No servidor:</strong> execute este comando.
+
+  <Code code={commands.update} lang="sh" />
+
+  Se ele perguntar se deve reiniciar agora, responda <code dir="ltr">y</code> para reiniciar ou pressione Enter para manter a versão antiga em execução por enquanto. Para reiniciar depois, execute <code dir="ltr">{commands.restart}</code>.
+
+Se o <code dir="ltr">{commands.update}</code> disser que não consegue substituir o programa, por exemplo porque ele foi instalado em um lugar onde você não pode gravar, execute de novo o comando de instalação (ou o comando do serviço). Ele reinicia da mesma forma quando for seguro e, caso contrário, diz para você executar <code dir="ltr">{commands.restart}</code>.
+
+## Baixar o arquivo compactado
+
+<LinkButton href={downloads["linux-x86_64"]} variant="secondary">Arquivo x86_64</LinkButton>
+<LinkButton href={downloads["linux-aarch64"]} variant="secondary">Arquivo aarch64</LinkButton>
+
+<a href={downloads.releases}>Todas as versões anteriores</a>

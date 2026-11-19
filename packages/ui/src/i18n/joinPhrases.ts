@@ -40,7 +40,7 @@ export function joinValues(language: Language, values: string[]): string {
 }
 
 function joinWith(language: Language, format: Intl.ListFormat, phrases: string[]): string {
-  if (language !== "zh-Hans") return format.format(phrases);
+  if (language !== "zh-CN") return format.format(phrases);
   // Only adjust the separators: user-provided names and errors must stay verbatim. Directional
   // isolates do not change whether Chinese and Latin text meet at the separator's edge.
   const parts = format.formatToParts(phrases);

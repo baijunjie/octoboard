@@ -1,0 +1,12 @@
+import { productName } from "../../commands.ts";
+
+{/* The host's steps both relay guides share: turning on remote access and copying the browser address. Pass
+`windows` on a Windows host, which also needs the browser port. */}
+
+在 {productName} 中開啟<strong>設定 › 遠端存取</strong>，開啟<strong>允許遠端存取</strong>，再點選<strong>允許</strong>確認。開關下方會出現兩個分頁。在<strong>瀏覽器</strong>分頁的<strong>步驟 2：瀏覽器位址</strong>處，點選<strong>複製位址</strong>。{props.windows ? <>同時記下<strong>瀏覽器連接埠</strong>下顯示的連接埠號碼。</> : null}
+
+請用只有你自己看得到的方式把位址傳到另一台電腦，例如傳給自己的筆記：它的作用就像密碼。
+
+跳過<strong>步驟 1：SSH 轉送</strong>。應用程式的設定裡有多處提到 SSH，這裡可以不用理會，本指南只會用到瀏覽器位址。
+
+請讓 {productName} 保持執行，結束後遠端存取也會隨之中斷。

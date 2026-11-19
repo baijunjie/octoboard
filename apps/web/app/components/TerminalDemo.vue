@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defaultServerPort as port, installCommand, linuxCommandParts } from "../../seo/downloads";
+import { defaultServerPort as port, installCommand, linuxCommands } from "../../seo/downloads";
 
 // public/demo-workspace.webp, the picture in the browser window, is the site's own product preview
 // (public/preview/website-preview.html?scene=overview&lang=en, as built by `pnpm --filter @octoboard/web build`)
@@ -44,10 +44,10 @@ const lines: Line[] = [
     kind: "out",
     text: `Start it with \`octoboardd start\` (port ${port}; \`--port N\` picks another), then run \`octoboardd address\`: it prints the address to open and the SSH forward to open it through.`,
   },
-  { window: 0, kind: "cmd", text: linuxCommandParts.start },
+  { window: 0, kind: "cmd", text: linuxCommands.start },
   { window: 0, kind: "out", text: `octoboardd listening on 127.0.0.1:${port} with key 3f9c…` },
   { window: 0, kind: "out", text: `${config.public.appName} started: pid 4242, http://127.0.0.1:${port}` },
-  { window: 0, kind: "cmd", text: linuxCommandParts.address },
+  { window: 0, kind: "cmd", text: linuxCommands.address },
   { window: 0, kind: "out", text: `http://127.0.0.1:${port}/?key=3f9c…` },
   {
     window: 0,

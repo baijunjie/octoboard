@@ -282,7 +282,7 @@ it("still refuses a handoff when the receiving account it would start on is kept
   expect(onHandedOff).not.toHaveBeenCalled();
 });
 
-it.each([["en", "handed off. A new session"], ["zh-Hans", "移交。另一个智能体的新会话"]] as const)("joins the two sentences as %s does", (language, joined) => {
+it.each([["en", "handed off. A new session"], ["zh-CN", "移交。另一个智能体的新会话"]] as const)("joins the two sentences as %s does", (language, joined) => {
   const before = currentLanguage();
   setLanguage(language);
   onTestFinished(() => setLanguage(before));

@@ -51,7 +51,7 @@ it("collapses a preview's description by default, preserves its expansion across
   choose("Phone 390");
   act(() => {
     const language = controls().querySelector("select")!;
-    language.value = "zh-Hans";
+    language.value = "zh-CN";
     language.dispatchEvent(new Event("change", { bubbles: true }));
   });
   expect(description()).toBe(first);
@@ -59,7 +59,7 @@ it("collapses a preview's description by default, preserves its expansion across
   const selected = new URLSearchParams(window.location.search);
   expect(selected.get("theme")).toBe("dark");
   expect(selected.get("width")).toBe("390");
-  expect(selected.get("lang")).toBe("zh-Hans");
+  expect(selected.get("lang")).toBe("zh-CN");
 
   selectPreview("Second preview");
   expect(description()).not.toBe(first);
