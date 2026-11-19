@@ -1364,6 +1364,7 @@ mod records {
             holder_floor: None,
             from_version: "0.1.0".into(),
             from_schema: None,
+            from_holder_floor: None,
             path: "/opt/octoboardd".into(),
         };
         installation.files.write_installed(&record).unwrap();
@@ -1375,13 +1376,14 @@ mod records {
     }
 
     #[test]
-    fn the_schema_version_a_build_read_is_recorded_and_read_back() {
+    fn the_schema_version_and_holder_floor_a_build_had_are_recorded_and_read_back() {
         let installation = Installation::new("record-schema");
         let record = super::super::record::Installed {
             version: "0.2.0".into(),
             holder_floor: None,
             from_version: "0.1.0".into(),
             from_schema: Some(3),
+            from_holder_floor: Some("0.0.9".into()),
             path: "/opt/octoboardd".into(),
         };
         installation.files.write_installed(&record).unwrap();
@@ -1510,6 +1512,10 @@ mod requests {
         assert_eq!(
             answer(RestartRefusal::FollowsApplication),
             error_code::DAEMON_UPDATE_UNAVAILABLE
+        );
+        assert_eq!(
+            answer(RestartRefusal::DaemonUpdateRunning),
+            error_code::DAEMON_UPDATE_RUNNING
         );
     }
 
@@ -1949,6 +1955,7 @@ mod requests {
                 holder_floor: Some("0.1.0".into()),
                 from_version: env!("CARGO_PKG_VERSION").into(),
                 from_schema: None,
+                from_holder_floor: None,
                 path: crate::hostfs::canonical(&installation.exe)
                     .unwrap()
                     .to_string_lossy()
@@ -1960,6 +1967,118 @@ mod requests {
         let status = state.daemon_update.status().unwrap();
         assert_eq!(status.phase, DaemonUpdatePhase::Installed);
         assert_eq!(status.installed.unwrap().version.as_deref(), Some(VERSION));
+    }
+
+    /// The restart check learns of what `octoboardd update` left at once, rather than at the next
+    /// check, so that browsers offer the restart the command left to the user; not while the
+    /// update lock is held, as the file may be being replaced then.
+    #[tokio::test]
+    async fn the_restart_check_learns_of_an_update_made_from_the_command_line() {
+        let (state, installation, _dir) = enabled("update-adopt-at-check", newer_host());
+        installation
+            .files
+            .write_installed(&super::super::record::Installed {
+                version: VERSION.into(),
+                holder_floor: Some("0.1.0".into()),
+                from_version: env!("CARGO_PKG_VERSION").into(),
+                from_schema: None,
+                from_holder_floor: None,
+                path: crate::hostfs::canonical(&installation.exe)
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned(),
+            })
+            .unwrap();
+        let lock = crate::platform::fs::try_lock_file(&installation.files.lock()).unwrap();
+        super::super::learn_of_command_line_update(&state);
+        assert_eq!(phase(&state.daemon_update), DaemonUpdatePhase::Idle);
+        drop(lock);
+
+        super::super::learn_of_command_line_update(&state);
+        let status = state.daemon_update.status().unwrap();
+        assert_eq!(status.phase, DaemonUpdatePhase::Installed);
+        assert_eq!(status.installed.unwrap().version.as_deref(), Some(VERSION));
+    }
+
+    /// The restart check forgets an update the command line then rolled back, so that no browser
+    /// goes on offering a restart into a build that is not at the launch path any more; with the
+    /// update lock held, nothing is looked at.
+    #[tokio::test]
+    async fn the_restart_check_learns_of_a_rollback_made_from_the_command_line() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static ROLLED_BACK: AtomicBool = AtomicBool::new(false);
+        fn running(_: &Path) -> bool {
+            ROLLED_BACK.load(Ordering::SeqCst)
+        }
+        let (state, installation, _dir) =
+            enabled_running("update-forget-at-check", newer_host(), running);
+        installation
+            .files
+            .write_installed(&super::super::record::Installed {
+                version: VERSION.into(),
+                holder_floor: Some("0.1.0".into()),
+                from_version: env!("CARGO_PKG_VERSION").into(),
+                from_schema: None,
+                from_holder_floor: None,
+                path: crate::hostfs::canonical(&installation.exe)
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned(),
+            })
+            .unwrap();
+        super::super::learn_of_command_line_update(&state);
+        assert_eq!(phase(&state.daemon_update), DaemonUpdatePhase::Installed);
+
+        // `octoboardd update --rollback` put the running build back and forgot its record.
+        ROLLED_BACK.store(true, Ordering::SeqCst);
+        installation.files.forget_installed().unwrap();
+        let lock = crate::platform::fs::try_lock_file(&installation.files.lock()).unwrap();
+        super::super::learn_of_command_line_update(&state);
+        assert_eq!(
+            phase(&state.daemon_update),
+            DaemonUpdatePhase::Installed,
+            "nothing is learned of while the lock is held"
+        );
+        drop(lock);
+
+        super::super::learn_of_command_line_update(&state);
+        let status = state.daemon_update.status().unwrap();
+        assert_eq!(status.installed, None);
+        assert_ne!(status.phase, DaemonUpdatePhase::Installed);
+    }
+
+    /// Where the update is not enabled the restart check learns of nothing and does not fail.
+    #[tokio::test]
+    async fn the_restart_check_learns_of_nothing_where_updating_is_not_enabled() {
+        let (state, _dir) = app_state("update-learn-disabled");
+        super::super::learn_of_command_line_update(&state);
+        assert!(state.daemon_update.status().is_none());
+    }
+
+    /// A restart under the daemon's own download is refused, however it is asked for, and foreseen
+    /// by the restart check: it would end the download.
+    #[tokio::test]
+    async fn a_restart_is_refused_while_the_daemons_own_download_runs() {
+        let (state, _installation, _dir) = enabled("restart-under-download", newer_host());
+        super::super::check_requested(&state).await.unwrap();
+        until(&state, |updates| {
+            updates.status().unwrap().available.is_some()
+        })
+        .await;
+        let (claim, _release) = state.daemon_update.begin_install(&state).unwrap();
+        assert_eq!(
+            state.restart_refusal(),
+            Some(RestartRefusal::DaemonUpdateRunning)
+        );
+        assert_eq!(
+            state.request_planned_restart(),
+            Err(RestartRefusal::DaemonUpdateRunning)
+        );
+        let err = super::super::restart_requested(&state).unwrap_err();
+        assert_eq!(code_of(&err), error_code::DAEMON_UPDATE_RUNNING);
+        assert!(!state.stop_asked());
+        drop(claim);
+        assert_eq!(state.restart_refusal(), None);
     }
 
     #[tokio::test]
@@ -1982,6 +2101,7 @@ mod requests {
                     holder_floor: None,
                     from_version: "0.0.0".into(),
                     from_schema: None,
+                    from_holder_floor: None,
                     path,
                 })
                 .unwrap();
@@ -2038,6 +2158,7 @@ mod requests {
                 holder_floor: Some("0.1.0".into()),
                 from_version: env!("CARGO_PKG_VERSION").into(),
                 from_schema: None,
+                from_holder_floor: None,
                 path: crate::hostfs::canonical(&installation.exe)
                     .unwrap()
                     .to_string_lossy()
@@ -2429,6 +2550,7 @@ mod hardening {
                 holder_floor: None,
                 from_version: env!("CARGO_PKG_VERSION").into(),
                 from_schema: None,
+                from_holder_floor: None,
                 path: crate::hostfs::canonical(&installation.exe)
                     .unwrap()
                     .to_string_lossy()
@@ -2473,6 +2595,7 @@ mod hardening {
                 holder_floor: None,
                 from_version: env!("CARGO_PKG_VERSION").into(),
                 from_schema: None,
+                from_holder_floor: None,
                 path: crate::hostfs::canonical(&installation.exe)
                     .unwrap()
                     .to_string_lossy()
@@ -3090,6 +3213,7 @@ fn record_update(installation: &Installation, from_schema: Option<i64>) {
             holder_floor: None,
             from_version: "0.1.0".into(),
             from_schema,
+            from_holder_floor: None,
             path: crate::hostfs::canonical(&installation.exe)
                 .unwrap()
                 .to_string_lossy()
@@ -3144,6 +3268,7 @@ mod rolling_back {
                 holder_floor: None,
                 from_version: "0.1.0".into(),
                 from_schema: Some(4),
+                from_holder_floor: None,
                 path: "/somewhere/else/octoboardd".into(),
             })
             .unwrap();
@@ -3233,6 +3358,7 @@ mod rolling_back {
                 holder_floor: None,
                 from_version: "7.7.7".into(),
                 from_schema: Some(3),
+                from_holder_floor: None,
                 path: "/somewhere/else/octoboardd".into(),
             })
             .unwrap();

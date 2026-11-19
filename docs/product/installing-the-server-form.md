@@ -170,8 +170,14 @@ status 1:
    holds it, the script refuses, installing nothing, and says to run it again once that update has ended. **Without
    `flock` the lock is not taken**, and nothing keeps the script and an update of the daemon's own (from the browser or
    `octoboardd update`) from replacing the executable at the same time: do not run the script while one is under way.
-5. **Says what next**, unless `--service` was given (below): with a daemon of this user running, that `octoboardd
-   restart` moves it to the new version and that its sessions keep running; otherwise, to start it with `octoboardd
+5. **Restarts a running daemon, or says what next**, unless `--service` was given (below): with a daemon of this user
+   running, it lets the update lock go and runs `octoboardd restart --if-safe` with the new binary, which restarts the
+   daemon into the new version where that interrupts no session, and otherwise lists what the restart would interrupt
+   and leaves it to `octoboardd restart`, which asks first (see "Running in the background from the command line" in
+   `docs/product/daemon-command-line.md`). Where it does not restart (it would interrupt work, the daemon refused, the
+   restart failed, or the new binary does not take `--if-safe`), the script says that `octoboardd restart` moves the
+   daemon to the new version and that its sessions keep running: the restart itself names no command to run next, so
+   the advice is given once. With no daemon running, to start it with `octoboardd
    start` (on the default server port, `--port N` picking another) and then to run `octoboardd address`, which prints
    the address to open and the SSH forward to open it through (see "The browser socket" in
    `docs/product/server-form.md`). In these messages, and in those of `--service`,
@@ -190,7 +196,9 @@ With `--service`, after installing the binary, the script:
 - reloads the user's systemd manager and enables the unit, so that it starts at boot; when the user's manager cannot be
   reached it fails, saying to log in over SSH rather than with `su`, so that a user session exists;
 - then:
-  - **the service already running**: does not restart it, and says to run `octoboardd restart` to move it to the new
+  - **the service already running**: restarts it as step 5 does, with `octoboardd restart --if-safe`, where that
+    interrupts no session, and when the unit changed then says to open the address `octoboardd address` prints, as
+    the new unit's port may differ; where it does not restart it, it says to run `octoboardd restart` to move it to the new
     version — and, when the unit changed, to the new unit, port included — with its sessions kept running, then to open
     the address `octoboardd address` prints. That planned restart has systemd start the next daemon from the new unit
     and the new binary (see "Planned restart and planned stop" in `docs/product/planned-restart-and-planned-stop.md`);
@@ -217,16 +225,20 @@ without the command, exits with status 2. The daemon's own options (`--port` and
 
 ## Upgrading
 
-A newer version is installed in any of three ways, each followed by a restart:
+A newer version is installed in any of three ways, each followed by a restart, which each makes by itself where it
+interrupts no session:
 
-- **From the browser**: **Download and install** in the update notice or in Settings' Updates section, then **Restart
-  now** (see `docs/product/server-form-updates.md`). This needs the official release build, which the install script
-  installs, and an install directory the daemon's user may write to.
-- **With `octoboardd update`** on the server, then `octoboardd restart` (see "The `octoboardd update` command" in
+- **From the browser**: **Download and install** in the update notice or in Settings' Updates section, which restarts
+  into the update once installed, asking first where that would interrupt work (see
+  `docs/product/server-form-updates.md`). This needs the official release build, which the install script installs,
+  and an install directory the daemon's user may write to.
+- **With `octoboardd update`** on the server, which restarts the same way, asking in a terminal and otherwise leaving
+  the restart to `octoboardd restart` where it would interrupt work (see "The `octoboardd update` command" in
   `docs/product/server-form-updates.md`). Both of these first run the new build with `--version`, and replace nothing
   unless it answers with the release's version.
-- **By running the install script again**, then `octoboardd restart` (see "Running in the background from the command
-  line" in `docs/product/daemon-command-line.md`). This is the way for a daemon that does not update itself or cannot
+- **By running the install script again**, which restarts a running daemon where that interrupts nothing and otherwise
+  leaves it to `octoboardd restart` (see "Running in the background from the command line" in
+  `docs/product/daemon-command-line.md`). This is the way for a daemon that does not update itself or cannot
   replace its own executable; for the latter the browser offers the script's command to copy, told the executable's
   directory and the daemon's channel, for the owner of that directory to run on the server (see "Downloading and
   replacing the executable" in `docs/product/server-form-updates.md`).

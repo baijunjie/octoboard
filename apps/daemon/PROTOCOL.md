@@ -2321,9 +2321,9 @@ once with "an earlier download is still being given up" (`daemon_update_download
 `daemon_update_check_failed` for a check). Progress is announced every 256 KiB of the archive and at most about four
 times a second. The daemon holds `~/.octoboard/update.lock` while it does this, which
 `octoboardd update` takes too, so that the two never replace the file together (`daemon_update_running`). After a
-replacement the daemon writes `~/.octoboard/update-installed.json` (`version`, `holder_floor`, `from_version`, `from_schema`, the database schema version the replaced build reads, `path`), by
-which a daemon learns, at its next check or `update_daemon`, of an update `octoboardd update` made under it: it then says
-`installed`.
+replacement the daemon writes `~/.octoboard/update-installed.json` (`version`, `holder_floor`, `from_version`, `from_schema`, the database schema version the replaced build reads, `from_holder_floor`, the holder floor of the replaced build, `path`), by
+which a daemon learns, at its next check, `update_daemon` or `POST /restart-check` (which `octoboardd update` asks once it
+has replaced the file), of an update `octoboardd update` made under it: it then says `installed`.
 
 **Restarting.** `restart_daemon` asks for the planned restart `POST /restart` and `octoboardd restart` make, so every
 session keeps running, with its screen, under the successor. Under a service manager the daemon exits with status 75 and
@@ -2332,17 +2332,24 @@ launch path. If that successor does not start, and the file at the launch path i
 while the running build is the one kept as `octoboardd.previous`, the daemon swaps the two back (as `octoboardd update
 --rollback` does, forgetting `update-installed.json`) and starts the running build instead, unless the database is at a
 schema version above the running build's or the update lock is held; otherwise it exits with the error and the sessions
-are kept for the next start. Under a service manager nothing falls back. Before it, a client asks `handover_check` with `installed.holder_floor` and `installed.version` as the
+are kept for the next start. Under a service manager nothing falls back. It is refused with `daemon_update_running` while
+this daemon downloads an update, as `POST /restart` is. Before it, a client asks `handover_check` with `installed.holder_floor` and `installed.version` as the
 `holder_floor` and `target_version`, to list the sessions and terminals the restart would interrupt, and asks the user.
 The window that asked reloads itself once the daemon is back with `hello.daemon_version` equal to the installed version
 (any other version than the one it greeted with before, where the installed version is not known), or with a `hello` of
 another protocol generation, since the daemon serves its own build's page; while it waits, it keeps reconnecting for up to
 60 seconds after sending the restart. Windows whose page is of another version than the daemon's `hello` offer a reload.
 
-`octoboardd update [--check] [--rollback] [--channel stable|beta]` does the same from the command line, in its own process:
-`update` downloads, checks and replaces now and says to run `octoboardd restart`, warning when the release's
-`holder_floor` is above the running version, which means the restart interrupts sessions started by older builds;
-`--check` only checks (exit 0 up to date, 10 an update is available, 1 failure); `--rollback` swaps `octoboardd.previous`
+`octoboardd update [--check] [--rollback] [--channel stable|beta] [--yes | --no-restart]` does the same from the command
+line, in its own process: `update` downloads, checks and replaces now, lets the update lock go, and restarts a running
+daemon into the release as `octoboardd restart` does, judged by the release's `version` and `holder_floor` through
+`POST /restart-check`: at once where the restart interrupts nothing, after asking where it would or may and standard input
+is a terminal, and otherwise (or with `--no-restart`) not at all, exiting 0; `--yes` restarts without asking. A restart
+that would or may interrupt work and that the check foresees refused is not requested (exit 1), nor one into the
+version the daemon runs already; while a stop or restart is under way (`stop_in_progress`), nothing is requested and the
+command follows it, exiting 0 once a daemon runs in its place and 1 when none does. Whatever came of the restart, the command
+then asks `POST /restart-check` again, for the daemon to learn of the update. A rollback is followed by the same restart, judged by
+the version and `from_holder_floor` the record keeps of the build put back. `--check` only checks (exit 0 up to date, 10 an update is available, 1 failure); `--rollback` swaps `octoboardd.previous`
 and the current executable, which keeps the current one as the previous, and names the version it goes back to (from
 `update-installed.json`, else by running the previous build with `--version`); it refuses (exit 1, nothing changed) when
 the database is at a schema version above the one the previous build reads (`from_schema`), naming the newest copy
@@ -4484,8 +4491,32 @@ It is refused with `409` and a JSON body, `{"reason": "<reason>", "message": "<E
 | `follows_application` | the daemon follows the desktop application (it was started with `--parent-pid`), which starts the daemon it talks to itself |
 | `holders_in_service` | the daemon leaves the next start to a service manager, and a process holder it started runs inside the systemd unit the daemon itself runs in, having no unit of its own, so the unit's stop would end every session and shell terminal that holder runs; such a holder counts from its start, and then while it runs a session or shell terminal of the daemon, until it is lost or its start fails. The refusal is decided atomically with admitting new programs there: once a restart is accepted, a session or terminal that would run inside the unit is refused until the restart completes |
 | `agent_update_running` | an update of an agent's CLI is running (see "Agent CLI versions"), which the restart's exit would cut off mid-install; ask again once it has ended. An update requested once a restart has been accepted is refused with `daemon_shutting_down` |
+| `daemon_update_running` | the daemon downloads and installs an update of itself (see "Daemon updates"), which the restart would end; ask again once it has ended |
 
 A stop asked for before it, of either kind, stays the one made.
+
+## `POST /restart-check` — what a planned restart would interrupt
+
+What `octoboardd restart` and `octoboardd update` ask before a planned restart, to tell the user what it would interrupt
+and ask first, as a window does with `handover_check`. The body is JSON, `{"holder_floor": "<version>" | null,
+"target_version": "<version>" | null}`, the holder floor and version of the build the next daemon starts from; either may
+be left out or `null` where the caller does not know it, and an empty body asks with neither. It is behind the guard like
+every route, changes nothing of the sessions, and answers `200` with a JSON body; a body that does not read is `400`.
+Before it answers, a daemon that updates itself learns of an update or rollback `octoboardd update` made under it, as at
+its next check (see "Daemon updates"), unless the update lock is held. The answer:
+
+| Field | Meaning |
+|---|---|
+| `verdict` | `safe` where nothing that asks would end; `interrupts` where the range is known and something listed would end; `may_interrupt` where the range is not known (as `handover_check`'s `known: false`) and something running may end |
+| `known` | As in `handover_check`: both ends of the range were given and read |
+| `sessions` | `[{"id", "title", "status"}]`: with a known range, the sessions `handover_check` lists, those not carried over, whatever they are doing (`title` and `status` empty where the record cannot be read); without one, every recorded session whose shown status has a process (`starting`, `working`, `waiting_user`, `dormant` or `idle`), as a window counts them. `status` is the status a client is shown, as the protocol names it |
+| `shell_terminals` | `[{"id", "title"}]`: the busy ones among the shell terminals `handover_check` lists, a listed one the daemon no longer finds counting as busy; one at its prompt is closed by the restart too but does not count, as in a window |
+| `unreached_shell_terminals` | How many shell terminals of holders not linked to yet `handover_check` lists; each counts, since whether one is busy is not known |
+| `refusal` | `{"reason", "message"}` of the refusal a planned restart asked for now would meet (the reasons of `POST /restart`, and `stop_in_progress` while a stop or restart is under way), else `null`. Foreseen without claiming anything: the restart itself is judged again |
+
+The rule is the one a window applies to `handover_check` before an update restart; the two are kept in step. A daemon
+that predates the route answers `404`, which the command line takes as a daemon that cannot say what the restart would
+interrupt.
 
 ## `POST /planned-stop` — a planned stop
 

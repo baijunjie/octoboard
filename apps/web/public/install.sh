@@ -6,9 +6,10 @@
 #
 # It reads the newest version from the release manifest of the chosen channel, downloads the archive for this
 # machine's architecture, checks its SHA-256 and its signature, and replaces ~/.local/bin/octoboardd in one rename
-# (keeping the replaced file as octoboardd.previous, for `octoboardd update --rollback`), so a running daemon keeps
-# running on the old file until it restarts. Run it again to upgrade. With --service it also installs and starts a
-# systemd user unit that starts the daemon at boot.
+# (keeping the replaced file as octoboardd.previous, for `octoboardd update --rollback`). A daemon that runs is then
+# restarted into the new file where that interrupts no session (`octoboardd restart --if-safe`); otherwise it keeps
+# running on the old file until `octoboardd restart`. Run it again to upgrade. With --service it also installs and
+# starts a systemd user unit that starts the daemon at boot.
 #
 # The signature is checked with `minisign` where it is installed, else with the octoboardd being upgraded, which has
 # the release key built in (`octoboardd verify-archive`). Where neither can (a first install without minisign) the
@@ -369,7 +370,7 @@ main() {
   if [ "$service" = true ]; then
     install_service
   elif [ "$running" = true ]; then
-    say "A daemon is running from the file this replaced. Run \`$run_as restart\` to move it to $version; its sessions keep running."
+    restart_if_safe "A daemon is running from the file this replaced. Run \`$run_as restart\` to move it to $version; its sessions keep running." || :
   else
     say "Start it with \`$run_as start\` (port $port; \`--port N\` picks another), then run \`$run_as address\`: it prints the address to open and the SSH forward to open it through."
   fi
@@ -380,9 +381,22 @@ main() {
   esac
 }
 
+# Restarts the daemon that runs into the build just installed, where that interrupts no session: `restart --if-safe`,
+# which says otherwise what the restart would interrupt, naming no command to run next. The update lock is let go
+# first: the daemon's next daemon falls back to the build that ran, where the new one does not start, only while no
+# other process holds it. Where the restart was not made (declined as one that would interrupt work, status 4,
+# refused, not come back, or not asked, a build without --if-safe), says $1, the advice to restart by hand, and
+# returns 1.
+restart_if_safe() {
+  exec 9>&-
+  if "$binary" restart --if-safe < /dev/null; then return 0; fi
+  say "$1"
+  return 1
+}
+
 # Takes the update lock the daemon and `octoboardd update` hold while they replace the executable
-# (<data directory>/update.lock, flock(2)), for the rest of the run. Without flock, or before the daemon has made its
-# data directory (so that it has never run), it is not taken ("The install script" in
+# (<data directory>/update.lock, flock(2)), until `restart_if_safe` lets it go before a restart, or the run ends.
+# Without flock, or before the daemon has made its data directory (so that it has never run), it is not taken ("The install script" in
 # docs/product/installing-the-server-form.md says not to run the two together then).
 take_update_lock() {
   data_dir="$HOME/.octoboard"
@@ -412,9 +426,11 @@ install_service() {
   systemctl --user enable octoboardd.service > /dev/null 2>&1 || fail "could not enable octoboardd.service."
   if systemctl --user is-active --quiet octoboardd.service; then
     if [ "$changed" = true ]; then
-      say "The service is running from the file and the unit this replaced. Run \`$run_as restart\` to move it to $version and to the new unit, port $port included; its sessions keep running. Then open the address \`$run_as address\` prints."
+      if restart_if_safe "The service is running from the file and the unit this replaced. Run \`$run_as restart\` to move it to $version and to the new unit, port $port included; its sessions keep running. Then open the address \`$run_as address\` prints."; then
+        say "The new unit's port may differ from the old one: open the address \`$run_as address\` prints."
+      fi
     else
-      say "The service is running from the file this replaced. Run \`$run_as restart\` to move it to $version; its sessions keep running."
+      restart_if_safe "The service is running from the file this replaced. Run \`$run_as restart\` to move it to $version; its sessions keep running." || :
     fi
   elif [ "$running" = true ]; then
     say "Installed and enabled the service, but did not start it: a daemon started outside it is running. Stop that one (\`$run_as stop\`) and run \`systemctl --user start octoboardd\`."

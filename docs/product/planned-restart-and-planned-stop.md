@@ -12,9 +12,10 @@ command line" in `docs/product/daemon-command-line.md`), by the control route `P
 and which `octoboardd restart` sends wherever the daemon's key is recorded, or by the signal `SIGUSR1`, which it sends
 outside Windows to a daemon whose key is not. A page served by a daemon that
 updates itself asks for one with **Restart now** once an update is installed, which is refused, with an alert saying
-why, wherever a planned restart is refused below and, unlike the others, also while a download of the update runs or
-while any stop or restart is already asked for (see "Restarting into the update" in
-`docs/product/server-form-updates.md`). A planned stop is asked for by the control route `POST /planned-stop` or the
+why, wherever a planned restart is refused below and, unlike the others, also while any stop or restart is already asked
+for (see "Restarting into the update" in `docs/product/server-form-updates.md`). Before asking, `octoboardd restart` in a
+terminal and `octoboardd update` ask the daemon what the restart would interrupt (`POST /restart-check`) and ask the user
+first where it would interrupt work, as the page's **Restart now** does. A planned stop is asked for by the control route `POST /planned-stop` or the
 WebSocket request `planned_stop`; both answer at once. They are refused, and nothing is stopped, only for a daemon a
 service manager runs (see below) while a process holder it started runs inside the systemd unit the daemon itself runs
 in, on the same terms as a planned restart: the daemon exits with status 0 after the stop, the unit stops, and that
@@ -40,7 +41,9 @@ A planned restart is refused too, and nothing is stopped, while an update of an 
 answers `409` with the reason `agent_update_running`; the page's **Restart now** is unavailable while the page knows of
 such an update, and otherwise fails with that code), since the exit would
 cut the update off mid-install, and an update asked for once a restart has been accepted is refused as the daemon
-shutting down; a planned stop with no successor is never refused for an update. A
+shutting down; a planned stop with no successor is never refused for an update. A planned restart is refused too, and
+nothing is stopped, while a daemon that updates itself downloads its update (`POST /restart` answers `409` with the
+reason `daemon_update_running`), since the exit would end the download. A
 planned stop or restart asked for while an ordinary stop (the shutdown request, a termination signal) is already asked
 for does not replace it, and a planned stop asked for after the desktop application's quit note is made ordinary (see
 "The quit note" in `docs/product/application-lifecycle.md`); an ordinary stop asked for before a planned one has begun

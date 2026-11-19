@@ -196,10 +196,8 @@ pub(crate) async fn update_requested(state: &Arc<AppState>) -> Result<i64> {
 pub(crate) fn restart_requested(state: &Arc<AppState>) -> Result<()> {
     setup_of(state)?;
     state.refuse_while_shutting_down()?;
-    // A restart under a download would end it, and the update with it.
-    if state.daemon_update.download_running() {
-        return Err(refused(InstallRefusal::Running));
-    }
+    // A restart under a download is refused there (`RestartRefusal::DaemonUpdateRunning`), as
+    // `POST /restart` is.
     match state.request_planned_restart_unless_stopping() {
         Ok(()) => {
             tracing::info!("a planned restart was asked for to run the daemon's update");
@@ -217,6 +215,9 @@ pub(super) fn restart_refused(refusal: RestartRefusal) -> anyhow::Error {
         RestartRefusal::HoldersInService => holders_in_service_refusal(),
         RestartRefusal::AgentUpdateRunning => {
             CodedError::raised(error_code::AGENT_UPDATE_RUNNING, refusal.message(), &[])
+        }
+        RestartRefusal::DaemonUpdateRunning => {
+            CodedError::raised(error_code::DAEMON_UPDATE_RUNNING, refusal.message(), &[])
         }
         // A daemon that follows an application never enables the update, so this is not reached
         // through `restart_daemon`; it is that daemon's answer all the same.
@@ -312,6 +313,23 @@ fn run_install(
         .daemon_update
         .record_installed(&claim, release, outcome.map(|done| done.replaced));
     drop(lock);
+}
+
+/// Learns at once of what `octoboardd update` did to this daemon's executable meanwhile, rather
+/// than at the next check: an update it installed, after which the status says installed and every
+/// browser offers the restart, or a rollback, after which there is nothing to restart into. The
+/// command asks `POST /restart-check` once it has replaced the file and let the update lock go,
+/// which does this first. Nothing where the update is not enabled, or while the lock is held: the
+/// file may be being replaced. Blocking.
+pub(crate) fn learn_of_command_line_update(state: &AppState) {
+    let Some(setup) = state.daemon_update.setup() else {
+        return;
+    };
+    let Ok(_lock) = fs::try_lock_file(&setup.files.lock()) else {
+        return;
+    };
+    forget_rolled_back(state, &setup);
+    adopt_recorded(state, &setup);
 }
 
 /// Learns of an update `octoboardd update` installed over this daemon's executable: the record it

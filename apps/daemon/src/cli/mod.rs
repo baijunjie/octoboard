@@ -16,6 +16,9 @@ mod installation;
 #[cfg(test)]
 mod key_source_tests;
 mod owner_endpoint;
+mod restart_check;
+#[cfg(all(test, unix))]
+mod restart_tests;
 mod succession;
 pub(crate) mod update;
 mod verify_archive;
@@ -93,17 +96,29 @@ pub(crate) enum Command {
     /// as interrupted.
     Stop,
     /// Restart the daemon running against this data directory on the same address, keeping every
-    /// session it runs running, with its screen, under the daemon that takes over. Refused for a
-    /// daemon that follows the desktop application.
-    Restart,
+    /// session it runs running, with its screen, under the daemon that takes over. Where the
+    /// daemon this executable would start cannot take some of them over (a process holder older
+    /// than it adopts), it says which and asks first when run in a terminal; run otherwise, it
+    /// restarts regardless. Refused for a daemon that follows the desktop application.
+    Restart {
+        /// Restart without asking, whatever the restart would interrupt.
+        #[arg(long, conflicts_with = "if_safe")]
+        yes: bool,
+        /// Restart only when it would interrupt nothing; otherwise say what it would interrupt and
+        /// exit with status 4 without restarting.
+        #[arg(long)]
+        if_safe: bool,
+    },
     /// Say whether a daemon runs against this data directory, and where it listens; exits 3 when
     /// none does.
     Status,
     /// Download the latest daemon, check it against the release key and replace this executable
-    /// with it, keeping the previous one as `octoboardd.previous`. The running daemon keeps
-    /// running the build it started as until `octoboardd restart`, which keeps every session
-    /// running. Where the user may not write to the executable's directory, upgrade by hand with
-    /// the install script instead. Refused for a daemon that follows the desktop application.
+    /// with it, keeping the previous one as `octoboardd.previous`, then restart the running daemon
+    /// into it as `octoboardd restart` does, keeping every session running. Where the restart
+    /// would interrupt some (a process holder older than the new build adopts), it says which and
+    /// asks first when run in a terminal, and run otherwise leaves the restart for later. Where
+    /// the user may not write to the executable's directory, upgrade by hand with the install
+    /// script instead. Refused for a daemon that follows the desktop application.
     Update {
         /// Only check: exits 0 when up to date, 10 when a newer daemon is published and 1 when the
         /// check failed.
@@ -117,6 +132,13 @@ pub(crate) enum Command {
         /// `beta`.
         #[arg(long, value_parser = parse_channel)]
         channel: Option<protocol::DaemonUpdateChannel>,
+        /// Restart the running daemon without asking, whatever the restart would interrupt.
+        #[arg(long, conflicts_with_all = ["check", "no_restart"])]
+        yes: bool,
+        /// Only replace the executable: leave the running daemon on the build it runs until
+        /// `octoboardd restart`.
+        #[arg(long, conflicts_with = "check")]
+        no_restart: bool,
     },
     /// Check that a downloaded release archive is the one the release key signed and that the
     /// signature names the archive's file name; exits 0 when it is and 1 when it is not, changing
@@ -308,19 +330,25 @@ pub(crate) fn run(command: Command) -> Result<()> {
     match command {
         Command::Start { port } => std::process::exit(background::start(port)?),
         Command::Stop => std::process::exit(background::stop()?),
-        Command::Restart => std::process::exit(background::restart()?),
+        Command::Restart { yes, if_safe } => std::process::exit(restart_check::run_restart(
+            restart_check::mode_of(yes, if_safe, restart_check::Mode::Regardless),
+        )?),
         Command::Status => std::process::exit(background::status()?),
         Command::Update {
             check,
             rollback,
             channel,
+            yes,
+            no_restart,
         } => {
             let task = match (check, rollback) {
                 (true, _) => update::Task::Check,
                 (_, true) => update::Task::Rollback,
                 _ => update::Task::Install,
             };
-            std::process::exit(update::run(task, channel)?)
+            let restart = (!no_restart)
+                .then(|| restart_check::mode_of(yes, false, restart_check::Mode::OnlyIfSafe));
+            std::process::exit(update::run(task, channel, restart)?)
         }
         Command::VerifyArchive { archive, signature } => {
             std::process::exit(verify_archive::run(&archive, &signature))
@@ -515,11 +543,29 @@ mod tests {
     }
 
     #[test]
-    fn restart_takes_no_option() {
+    fn restart_takes_yes_or_if_safe_and_no_daemon_option() {
         assert!(matches!(
             parse(&["restart"]).unwrap().command,
-            Some(Command::Restart)
+            Some(Command::Restart {
+                yes: false,
+                if_safe: false
+            })
         ));
+        assert!(matches!(
+            parse(&["restart", "--yes"]).unwrap().command,
+            Some(Command::Restart {
+                yes: true,
+                if_safe: false
+            })
+        ));
+        assert!(matches!(
+            parse(&["restart", "--if-safe"]).unwrap().command,
+            Some(Command::Restart {
+                yes: false,
+                if_safe: true
+            })
+        ));
+        assert!(parse(&["restart", "--yes", "--if-safe"]).is_err());
         assert!(parse(&["restart", "--port", "7531"]).is_err());
     }
 
@@ -610,14 +656,16 @@ mod tests {
     }
 
     #[test]
-    fn update_takes_a_check_a_rollback_or_a_channel_and_no_daemon_option() {
+    fn update_takes_a_check_a_rollback_a_channel_or_how_to_restart_and_no_daemon_option() {
         let update = |args: &[&str]| parse(&[&["update"], args].concat());
         assert!(matches!(
             update(&[]).unwrap().command,
             Some(Command::Update {
                 check: false,
                 rollback: false,
-                channel: None
+                channel: None,
+                yes: false,
+                no_restart: false
             })
         ));
         assert!(matches!(
@@ -625,7 +673,9 @@ mod tests {
             Some(Command::Update {
                 check: true,
                 rollback: false,
-                channel: None
+                channel: None,
+                yes: false,
+                no_restart: false
             })
         ));
         assert!(matches!(
@@ -633,7 +683,8 @@ mod tests {
             Some(Command::Update {
                 check: false,
                 rollback: true,
-                channel: None
+                channel: None,
+                ..
             })
         ));
         assert!(matches!(
@@ -651,6 +702,25 @@ mod tests {
                 ..
             })
         ));
+        assert!(matches!(
+            update(&["--yes"]).unwrap().command,
+            Some(Command::Update {
+                yes: true,
+                no_restart: false,
+                ..
+            })
+        ));
+        assert!(matches!(
+            update(&["--rollback", "--no-restart"]).unwrap().command,
+            Some(Command::Update {
+                rollback: true,
+                no_restart: true,
+                ..
+            })
+        ));
+        assert!(update(&["--yes", "--no-restart"]).is_err());
+        assert!(update(&["--check", "--yes"]).is_err());
+        assert!(update(&["--check", "--no-restart"]).is_err());
         assert!(update(&["--check", "--rollback"]).is_err());
         assert!(update(&["--rollback", "--channel", "beta"]).is_err());
         assert!(update(&["--channel", "nightly"]).is_err());

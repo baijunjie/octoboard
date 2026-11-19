@@ -89,11 +89,52 @@ export function quitHolders(sessions: readonly Session[], terminals: readonly Sh
 
 /** What a restart asks about: the sessions it names, what holds it up among them and the terminals, and what it says
  * beyond them. */
-interface RestartConfirmation {
+export interface RestartConfirmation {
   holders: QuitHolders;
   sessions: Session[];
   detail: RestartDetail;
   keepsRest: boolean;
+}
+
+/** What a restart would interrupt, given the daemon's `answer` (undefined where it gave none in time) and the window's
+ * `sessions` and `terminals`. With a proven answer, every running session it lists, whatever it is doing, and its busy
+ * shell terminals (one this window does not hold counts as busy) and those it could not reach; the sessions it lists
+ * that this window does not hold are kept as a count. Without one (no answer, or one that proves nothing), every
+ * session with a running process and every busy shell terminal, as what may be interrupted, with the terminals it could
+ * not reach where an answer said so. The daemon's `impact_of` (`apps/daemon/src/coordinator/handover_check.rs`) applies
+ * the same rule for the command line; the cases in `apps/daemon/testdata/restart_impact_cases.json`, which a test of
+ * each runs, keep the two in step. */
+export function restartConfirmation(
+  answer: HandoverCheck | undefined,
+  sessions: readonly Session[],
+  terminals: readonly ShellTerminal[],
+): RestartConfirmation {
+  if (!answer?.known) {
+    const mayEnd = sessions.filter((s) => isLive(s.status));
+    const holders = { sessions: mayEnd.length > 0, terminals: quitHolders([], terminals).terminals };
+    // An answer that proves nothing still says which terminals the daemon could not reach.
+    const unreachedTerminals = answer ? answer.unreachedShellTerminals.length : 0;
+    return { holders, sessions: mayEnd, detail: { ...NO_RESTART_DETAIL, uncertain: true, unreachedTerminals }, keepsRest: false };
+  }
+  const listedSessions = sessions.filter((s) => answer.sessions.includes(s.id));
+  const listedTerminals = terminals.filter((terminal) => answer.shellTerminals.includes(terminal.id));
+  const unnamedSessions = answer.sessions.length - listedSessions.length;
+  // A terminal the daemon lists that this window does not hold may be busy, so it counts as busy.
+  const unheldTerminals = answer.shellTerminals.length - listedTerminals.length;
+  const unreachedTerminals = answer.unreachedShellTerminals.length;
+  // A listed terminal at its prompt is ended by the restart too but does not ask on its own, so nothing could be
+  // said about the rest.
+  const keepsRest = unreachedTerminals === 0 && listedTerminals.every((terminal) => terminal.state !== "running" || terminal.busy);
+  const holders = {
+    sessions: listedSessions.length + unnamedSessions > 0,
+    terminals: unheldTerminals > 0 || quitHolders([], listedTerminals).terminals,
+  };
+  return { holders, sessions: listedSessions, detail: { uncertain: false, unnamedSessions, unreachedTerminals }, keepsRest };
+}
+
+/** Whether a quit or restart that would end what `confirmation` says asks the user first. */
+export function confirmationAsks(confirmation: RestartConfirmation): boolean {
+  return confirmation.holders.sessions || confirmation.holders.terminals || confirmation.detail.unreachedTerminals > 0;
 }
 
 interface UseAppExitOptions {
@@ -217,38 +258,12 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     }
   };
 
-  /** What a restart would interrupt. With the daemon's proven answer, every running session it lists, whatever it is
-   * doing, and its busy shell terminals (one this window does not hold counts as busy) and those it could not reach;
-   * the sessions it lists that this window does not hold are kept as a count. Without one (no answer, or one that
-   * proves nothing), every session with a running process and every busy shell terminal, as what may be interrupted,
-   * with the terminals it could not reach where an answer said so. */
+  /** What a restart would interrupt, read once the daemon has answered (see `restartConfirmation`). */
   const interruptedByRestart = async (holderFloor: string | null, targetVersion: string | null): Promise<RestartConfirmation> => {
     const { getSessions, getShellTerminals, checkHandover } = optionsRef.current;
     const answer = checkHandover && (await withinTimeout(checkHandover(holderFloor, targetVersion), HANDOVER_CHECK_TIMEOUT_MS));
     // Read after the answer, which can take a while.
-    const sessions = getSessions?.() ?? [];
-    const terminals = getShellTerminals?.() ?? [];
-    if (!answer?.known) {
-      const mayEnd = sessions.filter((s) => isLive(s.status));
-      const holders = { sessions: mayEnd.length > 0, terminals: quitHolders([], terminals).terminals };
-      // An answer that proves nothing still says which terminals the daemon could not reach.
-      const unreachedTerminals = answer ? answer.unreachedShellTerminals.length : 0;
-      return { holders, sessions: mayEnd, detail: { ...NO_RESTART_DETAIL, uncertain: true, unreachedTerminals }, keepsRest: false };
-    }
-    const listedSessions = sessions.filter((s) => answer.sessions.includes(s.id));
-    const listedTerminals = terminals.filter((terminal) => answer.shellTerminals.includes(terminal.id));
-    const unnamedSessions = answer.sessions.length - listedSessions.length;
-    // A terminal the daemon lists that this window does not hold may be busy, so it counts as busy.
-    const unheldTerminals = answer.shellTerminals.length - listedTerminals.length;
-    const unreachedTerminals = answer.unreachedShellTerminals.length;
-    // A listed terminal at its prompt is ended by the restart too but does not ask on its own, so nothing could be
-    // said about the rest.
-    const keepsRest = unreachedTerminals === 0 && listedTerminals.every((terminal) => terminal.state !== "running" || terminal.busy);
-    const holders = {
-      sessions: listedSessions.length + unnamedSessions > 0,
-      terminals: unheldTerminals > 0 || quitHolders([], listedTerminals).terminals,
-    };
-    return { holders, sessions: listedSessions, detail: { uncertain: false, unnamedSessions, unreachedTerminals }, keepsRest };
+    return restartConfirmation(answer, getSessions?.() ?? [], getShellTerminals?.() ?? []);
   };
 
   const request = async (restart: boolean, holderFloor: string | null = null, targetVersion: string | null = null): Promise<void> => {
@@ -273,7 +288,7 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
         keepsRest: false,
       };
     if (requestId !== requestCount.current) return;
-    if (holders.sessions || holders.terminals || detail.unreachedTerminals > 0) {
+    if (confirmationAsks({ holders, sessions, detail, keepsRest })) {
       setExitHolders(holders);
       setExitInterrupted(sessions);
       setExitKeepsRest(keepsRest);

@@ -176,10 +176,10 @@ function makeWorld(t: test.TestContext, shims: Shims = {}): World {
     ]);
   }
   if (shims.systemctl === true) {
-    // Nothing is active, so a service gets started.
+    // Nothing is active (so a service gets started) unless SYSTEMCTL_ACTIVE_EXIT is 0, which says the unit runs.
     writeExecutable(path.join(world.shim, "systemctl"), [
       'echo "systemctl $*" >> "$SHIM_LOG"',
-      'case "$*" in *is-active*) exit 3 ;; esac',
+      'case "$*" in *is-active*) exit "${SYSTEMCTL_ACTIVE_EXIT:-3}" ;; esac',
       "exit 0",
     ]);
   }
@@ -264,11 +264,13 @@ function publish(world: World, options: PublishOptions = {}): Published {
     mkdirSync(path.join(staging, folder), { recursive: true });
     const marker = `octoboardd stub ${version} ${arch}`;
     // Answers `--version` and `status` as the daemon does (`status` exits STUB_STATUS_EXIT, default 1: not running),
-    // and `verify-archive` as a build that predates it does, with an exit of 2.
+    // `restart` by logging what it was given, whether it still holds descriptor 9 (the update lock) and whether it could read
+    // standard input, and exiting STUB_RESTART_EXIT (default 0), and `verify-archive` as a build that predates it does, with an exit of 2.
     writeExecutable(path.join(staging, folder, "octoboardd"), [
       'case "$1" in',
       `  --version) echo "octoboardd ${version}"; exit 0 ;;`,
       '  status) exit "${STUB_STATUS_EXIT:-1}" ;;',
+      '  restart) if { true >&9; } 2> /dev/null; then echo "restart holding descriptor 9" >> "$SHIM_LOG"; fi; if read -r typed; then echo "restart read standard input" >> "$SHIM_LOG"; fi; echo "restart $2" >> "$SHIM_LOG"; exit "${STUB_RESTART_EXIT:-0}" ;;',
       "  verify-archive) exit 2 ;;",
       "esac",
       `echo "${marker}"`,
@@ -290,10 +292,11 @@ function publish(world: World, options: PublishOptions = {}): Published {
   return published;
 }
 
-function run(world: World, args: string[], env: Record<string, string> = {}) {
+function run(world: World, args: string[], env: Record<string, string> = {}, input?: string) {
   return spawnSync("/bin/sh", [installScript, ...args], {
     cwd: world.root,
     encoding: "utf8",
+    input,
     env: {
       PATH: world.shim,
       HOME: world.home,
@@ -1009,14 +1012,14 @@ test("the restart advice names the command the same way", { skip }, (t) => {
   let world = makeWorld(t);
   publish(world);
   writeOldBinary(world, { version: "1.0.0" });
-  let result = run(world, [], { STUB_STATUS_EXIT: "0" });
+  let result = run(world, [], { STUB_STATUS_EXIT: "0", STUB_RESTART_EXIT: "1" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, new RegExp(`Run \`${installed(world)} restart\` to move it to 1\\.2\\.3`));
 
   world = makeWorld(t);
   publish(world);
   writeOldBinary(world, { version: "1.0.0" });
-  result = run(world, [], { STUB_STATUS_EXIT: "0", PATH: `${world.binDir}:${world.shim}` });
+  result = run(world, [], { STUB_STATUS_EXIT: "0", STUB_RESTART_EXIT: "1", PATH: `${world.binDir}:${world.shim}` });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Run `octoboardd restart` to move it to 1\.2\.3/);
 });
@@ -1138,19 +1141,119 @@ test("--bin-dir picks the directory, which is created when it is missing", { ski
   assert.match(result.stdout, /is not on your PATH/);
 });
 
-test("when a daemon answers octoboardd status after the install, it says to run octoboardd restart", { skip }, (t) => {
+test("when a daemon answers octoboardd status after the install, it is restarted where that is safe", { skip }, (t) => {
+  // The restart goes ahead, or says itself why not: nothing more to advise.
   let world = makeWorld(t);
   publish(world);
   writeOldBinary(world, { text: "old" });
   let result = run(world, [], { STUB_STATUS_EXIT: "0" });
   assert.equal(result.status, 0, result.stderr);
+  assert.match(logged(world), /^restart --if-safe$/m);
+  assert.doesNotMatch(result.stdout, /octoboardd restart/);
+
+  // It was refused, did not come back, or the build has no --if-safe: the advice to restart by hand.
+  world = makeWorld(t);
+  publish(world);
+  writeOldBinary(world, { text: "old" });
+  result = run(world, [], { STUB_STATUS_EXIT: "0", STUB_RESTART_EXIT: "2" });
+  assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /octoboardd restart/);
 
+  // No daemon: nothing is restarted.
   world = makeWorld(t);
   publish(world);
   result = run(world, [], { STUB_STATUS_EXIT: "1" });
   assert.equal(result.status, 0, result.stderr);
   assert.doesNotMatch(result.stdout, /octoboardd restart/);
+  assert.doesNotMatch(logged(world), /^restart/m);
+});
+
+test("the restart is asked for with the update lock let go", { skip }, (t) => {
+  const world = makeWorld(t, { flock: true });
+  publish(world);
+  mkdirSync(path.join(world.home, ".octoboard"));
+  writeOldBinary(world, { version: "1.0.0" });
+  const result = run(world, [], { STUB_STATUS_EXIT: "0" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(logged(world), /^flock -n 9$/m);
+  assert.match(logged(world), /^restart --if-safe$/m);
+  assert.doesNotMatch(logged(world), /holding descriptor 9/);
+});
+
+test("the restart is asked for with --if-safe and with nothing to read from the script's standard input", { skip }, (t) => {
+  const world = makeWorld(t);
+  publish(world);
+  writeOldBinary(world, { version: "1.0.0" });
+  // Something is waiting to be read, which the restart's prompt would take if it were given the script's input.
+  const result = run(world, [], { STUB_STATUS_EXIT: "0" }, "y\n");
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(logged(world), /^restart --if-safe$/m);
+  assert.doesNotMatch(logged(world), /read standard input/);
+});
+
+test("a restart that was declined, refused, failed or not known leaves the advice to restart by hand, and the install stands", { skip }, (t) => {
+  // 4: `--if-safe` declined a restart that would interrupt work.
+  for (const exit of ["1", "2", "4", "127"]) {
+    const world = makeWorld(t);
+    publish(world);
+    writeOldBinary(world, { text: "old" });
+    const result = run(world, [], { STUB_STATUS_EXIT: "0", STUB_RESTART_EXIT: exit });
+    assert.equal(result.status, 0, `${exit}: ${result.stderr}`);
+    assert.match(result.stdout, new RegExp(`Run \`${installed(world)} restart\` to move it to 1\\.2\\.3`), exit);
+    assert.match(logged(world), /^restart --if-safe$/m, exit);
+    // The advice is given once, by the script, and the restart's own words name no command.
+    assert.equal(result.stdout.match(/restart` to move it/g)?.length, 1, `${exit}: ${result.stdout}`);
+    assert.match(output(installed(world)), /octoboardd stub 1\.2\.3/, exit);
+  }
+});
+
+test("with --service and the service running, it is restarted where that is safe, else the advice names the unit", { skip }, (t) => {
+  // The file changed and the unit with it (a first run wrote another unit), and the restart went ahead: no advice.
+  let world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  writeOldBinary(world, { text: "old" });
+  mkdirSync(path.join(world.home, ".config", "systemd", "user"), { recursive: true });
+  writeFileSync(path.join(world.home, ".config", "systemd", "user", "octoboardd.service"), "[Service]\nExecStart=/old\n");
+  let result = run(world, ["--service"], { SYSTEMCTL_ACTIVE_EXIT: "0", STUB_STATUS_EXIT: "1", FAKE_LINGER: "yes" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(logged(world), /^restart --if-safe$/m);
+  assert.doesNotMatch(logged(world), /^systemctl --user start /m);
+  assert.doesNotMatch(result.stdout, /Run `.*restart`/);
+  // The new unit may listen on another port: where to open it is still said, once.
+  assert.equal(result.stdout.match(/open the address `.* address` prints/g)?.length, 1, result.stdout);
+
+  // Not done: the advice for a changed unit.
+  world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  writeOldBinary(world, { text: "old" });
+  mkdirSync(path.join(world.home, ".config", "systemd", "user"), { recursive: true });
+  writeFileSync(path.join(world.home, ".config", "systemd", "user", "octoboardd.service"), "[Service]\nExecStart=/old\n");
+  result = run(world, ["--service"], { SYSTEMCTL_ACTIVE_EXIT: "0", STUB_STATUS_EXIT: "1", STUB_RESTART_EXIT: "1", FAKE_LINGER: "yes" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Run `.* restart` to move it to 1\.2\.3 and to the new unit, port \d+ included/);
+  // The restart was not made, so the port is not said to differ after one that was.
+  assert.doesNotMatch(result.stdout, /port may differ/);
+  assert.equal(result.stdout.match(/open the address `.* address` prints/g)?.length, 1, result.stdout);
+
+  // The unit is the same: the advice without the unit.
+  world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"], { FAKE_LINGER: "yes" }).status, 0);
+  writeOldBinary(world, { text: "old" });
+  result = run(world, ["--service"], { SYSTEMCTL_ACTIVE_EXIT: "0", STUB_STATUS_EXIT: "1", STUB_RESTART_EXIT: "1", FAKE_LINGER: "yes" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /The service is running from the file this replaced\. Run `.* restart` to move it to 1\.2\.3; its sessions keep running\./);
+  assert.doesNotMatch(result.stdout, /new unit/);
+  assert.doesNotMatch(result.stdout, /port may differ/);
+});
+
+test("with --service and the service not running, nothing is restarted", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  const result = run(world, ["--service"], { FAKE_LINGER: "yes" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(logged(world), /^systemctl --user start octoboardd\.service$/m);
+  assert.doesNotMatch(logged(world), /^restart/m);
 });
 
 test("with --service, lingering is turned on for the user where it is off, and advised where that is refused", { skip }, (t) => {

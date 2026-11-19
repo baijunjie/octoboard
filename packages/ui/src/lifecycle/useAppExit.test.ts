@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
@@ -9,7 +11,7 @@ import { sessionOf } from "../fixtures/builders";
 import type { ExitCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { SessionStatus, ShellTerminal } from "../protocol";
-import { HANDOVER_CHECK_TIMEOUT_MS, quitHolders, useAppExit, type HandoverCheck } from "./useAppExit";
+import { confirmationAsks, HANDOVER_CHECK_TIMEOUT_MS, quitHolders, restartConfirmation, useAppExit, type HandoverCheck } from "./useAppExit";
 import { BROWSER_HOST } from "../test/hosts";
 import { fakeTimers } from "../test/clock";
 
@@ -54,6 +56,45 @@ describe("quitHolders", () => {
     expect(holdsQuit([], [shell("running", false)])).toBe(false);
     expect(holdsQuit([], [shell("exited", false)])).toBe(false);
     expect(quitHolders([sessionOf("a", "c", "p", "A", "working")], [shell("running", true)])).toEqual({ sessions: true, terminals: true });
+  });
+});
+
+/** A case of `apps/daemon/testdata/restart_impact_cases.json`, which the daemon's restart check runs too. */
+interface RestartCase {
+  name: string;
+  known: boolean;
+  sessions: { id: string; status: SessionStatus }[];
+  listedSessions: string[];
+  shellTerminals: { id: string; state: ShellTerminal["state"]; busy: boolean }[];
+  listedShellTerminals: string[];
+  unreachedShellTerminals: number;
+  verdict: "safe" | "interrupts" | "may_interrupt";
+  countedSessions: string[];
+  countedShellTerminals: string[];
+}
+
+describe("the restart rule shared with the daemon's restart check", () => {
+  const { cases } = JSON.parse(
+    readFileSync(new URL("../../../../apps/daemon/testdata/restart_impact_cases.json", pathToFileURL(`${import.meta.dirname}/`)), "utf8"),
+  ) as { cases: RestartCase[] };
+
+  it.each(cases.map((testCase) => [testCase.name, testCase] as const))("%s", (_, testCase) => {
+    const sessions = testCase.sessions.map(({ id, status }) => sessionOf(id, "c", "p", id, status));
+    const terminals = testCase.shellTerminals.map(({ id, state, busy }): ShellTerminal => ({ id, project_id: "p", worktree: null, cwd: "/p", title: "zsh", renamed: false, state, busy, created_at: 0 }));
+    const answer: HandoverCheck = {
+      known: testCase.known,
+      sessions: testCase.listedSessions,
+      shellTerminals: testCase.listedShellTerminals,
+      unreachedShellTerminals: Array.from({ length: testCase.unreachedShellTerminals }, (_unused, n) => `unreached-${n}`),
+    };
+    const confirmation = restartConfirmation(answer, sessions, terminals);
+    const verdict = !confirmationAsks(confirmation) ? "safe" : confirmation.detail.uncertain ? "may_interrupt" : "interrupts";
+    expect(verdict).toBe(testCase.verdict);
+    const held = new Set(testCase.sessions.map(({ id }) => id));
+    expect(confirmation.sessions.map(({ id }) => id)).toEqual(testCase.countedSessions.filter((id) => held.has(id)));
+    expect(confirmation.sessions.length + confirmation.detail.unnamedSessions).toBe(testCase.countedSessions.length);
+    expect(confirmation.holders.terminals).toBe(testCase.countedShellTerminals.length > 0);
+    expect(confirmation.detail.unreachedTerminals).toBe(testCase.unreachedShellTerminals);
   });
 });
 

@@ -64,6 +64,13 @@ pub fn previous_fits_database(files: &Files, real: &Path, database: &Path) -> Da
     }
 }
 
+/// The holder floor of the build kept beside `real`, as the record of the replacement names it:
+/// what a restart after a rollback to that build is judged by. `None` where no record names it (an
+/// install script made the replacement, or a build before the floor was recorded).
+pub fn previous_holder_floor(files: &Files, real: &Path) -> Option<String> {
+    record_of(files, real).and_then(|record| record.from_holder_floor)
+}
+
 /// The version of the build kept beside `real`: as the record of the replacement names it, else as
 /// the build says when run with `--version`. `None` when neither tells. Blocking.
 pub fn previous_version(files: &Files, real: &Path) -> Option<String> {

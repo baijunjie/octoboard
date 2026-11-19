@@ -212,8 +212,25 @@ fn ended_by(from: &Owner, deadline: Instant) -> bool {
     true
 }
 
-pub(super) fn restart() -> Result<i32> {
-    let began = Instant::now();
+/// What `restart` does once [`BeforeRestart`] has decided.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Proceed {
+    /// Request the restart, and wait for the next daemon.
+    Request,
+    /// Request nothing: a stop or restart is under way already. Wait for the next daemon as
+    /// after a request, and report it, or that none came.
+    Follow,
+    /// End with this exit status.
+    End(i32),
+}
+
+/// What `restart` asks before it requests the restart of the daemon `owner` names, whose key, if
+/// recorded, it is given.
+pub(super) type BeforeRestart<'a> = dyn FnMut(&Owner, Option<&str>) -> Result<Proceed> + 'a;
+
+/// Restarts the daemon that runs, once `before` lets it (`octoboardd restart`, and `octoboardd
+/// update` after it replaced the file): the exit status.
+pub(super) fn restart(before: &mut BeforeRestart<'_>) -> Result<i32> {
     let owner = match find_daemon(RESTART_WAIT, true)? {
         Found::Running { owner, .. } => owner,
         Found::NotRunning { .. } => {
@@ -251,10 +268,24 @@ pub(super) fn restart() -> Result<i32> {
     // Read before the request, since a daemon removes its record as it ends: a successor of an
     // earlier build, which records no predecessor, shows itself by this key.
     let key = owner.recorded_key();
+    let follow = match before(&owner, key.as_deref())? {
+        Proceed::End(status) => return Ok(status),
+        Proceed::Follow => true,
+        Proceed::Request => false,
+    };
+    // `before` may have waited on the user for long: a daemon that has ended meanwhile (stopped,
+    // or restarted from elsewhere) is not asked again, nor its successor in its place.
+    if !follow && !owner.identity.is_running() {
+        return ended_meanwhile(&owner);
+    }
+    // The wait for the next daemon is counted from the request: `before` may have asked the user.
+    let began = Instant::now();
     // Asked over loopback wherever the key is recorded, so that a refusal (a holder inside the
     // daemon's own service, say) comes back with its reason at once; the signal, which carries no
-    // answer, only for a daemon whose key is not recorded, as an earlier build's is not.
+    // answer, only for a daemon whose key is not recorded, as an earlier build's is not. Nothing
+    // is asked of a daemon already stopping or restarting, which is followed as it is.
     let asked = match key.as_deref() {
+        _ if follow => Asked::Accepted,
         Some(key) => request_over_loopback(&owner, key, "/restart")?,
         None => match proc::request_restart(&owner.identity) {
             Sent::Delivered => Asked::Accepted,
@@ -272,9 +303,10 @@ pub(super) fn restart() -> Result<i32> {
     // of its own resets the request while it ends, and its successor follows. One that has ended
     // is judged by the loop below like any other, so that a service manager restarting it is
     // waited for.
-    let not_accepting = match asked {
-        Asked::Accepted => false,
-        Asked::Gone => true,
+    let how = match asked {
+        _ if follow => HowEnded::Followed,
+        Asked::Accepted => HowEnded::Requested,
+        Asked::Gone => HowEnded::NotAccepting,
         Asked::Refused(message) => {
             eprintln!("{} refused the restart: {message}", crate::APP_NAME);
             return Ok(1);
@@ -309,7 +341,7 @@ pub(super) fn restart() -> Result<i32> {
                     eprintln!(
                         "{}, but another daemon has started since and is left running: pid {}, \
                          {}; nothing shows that the restarted one handed over to it",
-                        stopped_phrase(owner.identity.pid.0, not_accepting),
+                        stopped_phrase(owner.identity.pid.0, how),
                         next.identity.pid.0,
                         address(next.port)
                     );
@@ -330,12 +362,26 @@ pub(super) fn restart() -> Result<i32> {
             // recorded itself, has removed the note.
             && !instance_lock::is_running()?
         {
-            eprintln!(
-                "{}, and no daemon runs in its place: it crashed or was stopped, a stop asked for \
-                 meanwhile cut the restart short, or the next daemon did not start; the log says \
-                 which",
-                stopped_phrase(owner.identity.pid.0, not_accepting)
-            );
+            if how == HowEnded::Followed {
+                // A service manager starts the daemon it runs: `start` would start another beside
+                // it.
+                let advice = if owner.service_managed == Some(true) {
+                    "its log says why"
+                } else {
+                    "start it with `octoboardd start`"
+                };
+                eprintln!(
+                    "{}; no daemon runs in its place: {advice}",
+                    stopped_phrase(owner.identity.pid.0, how)
+                );
+            } else {
+                eprintln!(
+                    "{}, and no daemon runs in its place: it crashed or was stopped, a stop asked \
+                     for meanwhile cut the restart short, or the next daemon did not start; the \
+                     log says which",
+                    stopped_phrase(owner.identity.pid.0, how)
+                );
+            }
             return Ok(1);
         }
         if Instant::now() >= deadline {
@@ -359,6 +405,45 @@ pub(super) fn restart() -> Result<i32> {
         );
     }
     Ok(1)
+}
+
+/// What `restart` says, and its exit status, when the daemon `owner` names has ended while the
+/// restart was being decided, found as every command finds a daemon ([`find_daemon`]), which waits
+/// out a planned restart half-way: one that runs in its place has restarted already (0); none
+/// running, or one that has not recorded itself by the end of the wait, is a failure (1).
+fn ended_meanwhile(owner: &Owner) -> Result<i32> {
+    match find_daemon(RESTART_WAIT, true)? {
+        Found::Running { owner: next, .. } if next.identity != owner.identity => {
+            println!(
+                "{} (pid {}) restarted while the restart was being decided: pid {}, {}; not \
+                 restarting it again",
+                crate::APP_NAME,
+                owner.identity.pid.0,
+                next.identity.pid.0,
+                address(next.port)
+            );
+            Ok(0)
+        }
+        Found::Unrecorded => {
+            eprintln!("{}", no_record("restarting", RESTART_WAIT, lock_holder()));
+            Ok(1)
+        }
+        Found::Running { .. } | Found::NotRunning { .. } => {
+            // A service manager starts the daemon it runs: `start` would start another beside it.
+            let advice = if owner.service_managed == Some(true) {
+                "; its log says why"
+            } else {
+                "; start it with `octoboardd start`"
+            };
+            eprintln!(
+                "{} (pid {}) stopped while the restart was being decided, and no daemon runs in \
+                 its place{advice}",
+                crate::APP_NAME,
+                owner.identity.pid.0
+            );
+            Ok(1)
+        }
+    }
 }
 
 /// What `stop` and `restart` know of the daemon `owner` names, which they asked, for
@@ -393,17 +478,30 @@ fn earlier_build_may_be_restarted(owner: &Owner, awaited: &Awaited<'_>, now: Ins
             .is_some_and(|since| now.saturating_duration_since(since) < SERVICE_RESTART_GRACE)
 }
 
-/// What `restart` says of the daemon with pid `pid` that has ended: that it stopped to restart,
-/// or, where it no longer accepted the request (`not_accepting`), that it had stopped or was
-/// stopping already, which the command cannot tell apart.
-fn stopped_phrase(pid: u32, not_accepting: bool) -> String {
-    if not_accepting {
-        format!(
+/// How the daemon `restart` waits on came to end.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HowEnded {
+    /// It took the restart the command requested.
+    Requested,
+    /// It no longer accepted the request: it had stopped or was stopping already, which the
+    /// command cannot tell apart.
+    NotAccepting,
+    /// Nothing was requested: it was stopping or restarting already, and the command followed it.
+    Followed,
+}
+
+/// What `restart` says of the daemon with pid `pid` that has ended, as `how` it came to.
+fn stopped_phrase(pid: u32, how: HowEnded) -> String {
+    match how {
+        HowEnded::NotAccepting => format!(
             "{} (pid {pid}) was no longer accepting the restart and has stopped",
             crate::APP_NAME
-        )
-    } else {
-        format!("{} stopped (pid {pid}) to restart", crate::APP_NAME)
+        ),
+        HowEnded::Followed => format!(
+            "{} (pid {pid}) was already stopping and has stopped",
+            crate::APP_NAME
+        ),
+        HowEnded::Requested => format!("{} stopped (pid {pid}) to restart", crate::APP_NAME),
     }
 }
 
@@ -955,6 +1053,33 @@ pub(super) mod tests {
         }
     }
 
+    /// Reads one request from `reader`: its request line, with its line end, and the body its
+    /// head announces. The whole of it is read, so that an answer is not sent over unread input
+    /// (a reset on Windows, which can discard it). `None` where no request line comes.
+    pub(in crate::cli) fn read_request(
+        reader: &mut BufReader<std::net::TcpStream>,
+    ) -> Option<(String, Vec<u8>)> {
+        let mut request_line = String::new();
+        if reader.read_line(&mut request_line).unwrap_or(0) == 0 {
+            return None;
+        }
+        let mut body_len = 0;
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap_or(0) == 0 || line.trim().is_empty() {
+                break;
+            }
+            if let Some((name, value)) = line.split_once(':') {
+                if name.eq_ignore_ascii_case("content-length") {
+                    body_len = value.trim().parse().unwrap_or(0);
+                }
+            }
+        }
+        let mut body = vec![0u8; body_len];
+        reader.read_exact(&mut body).ok();
+        Some((request_line, body))
+    }
+
     /// Answers one request with `response`, and gives its request line (through the first line
     /// of the head) back through the handle.
     pub(in crate::cli) fn answer_once(
@@ -967,25 +1092,7 @@ pub(super) mod tests {
             let (stream, _) = listener.accept().expect("a request");
             stream.set_read_timeout(Some(PATIENCE)).unwrap();
             let mut reader = BufReader::new(stream);
-            let mut request_line = String::new();
-            reader.read_line(&mut request_line).expect("a request line");
-            // The rest of the head, up to the blank line, and then the body it announces, so the
-            // answer is not sent over unread input (a reset on Windows, which can discard it).
-            let mut body_len = 0;
-            loop {
-                let mut line = String::new();
-                reader.read_line(&mut line).expect("a header");
-                if line.trim().is_empty() {
-                    break;
-                }
-                if let Some((name, value)) = line.split_once(':') {
-                    if name.eq_ignore_ascii_case("content-length") {
-                        body_len = value.trim().parse().expect("a content length");
-                    }
-                }
-            }
-            let mut body = vec![0u8; body_len];
-            reader.read_exact(&mut body).expect("the body");
+            let (request_line, _) = read_request(&mut reader).expect("a request");
             reader
                 .get_mut()
                 .write_all(response.as_bytes())

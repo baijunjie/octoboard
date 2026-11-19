@@ -128,13 +128,39 @@ free is gone at once.
   exits with status 1. A desktop application whose daemon is stopped this way does not start it again and says the
   daemon exited, as for any daemon that ends with status 0 (see "Starting up" in
   `docs/product/application-lifecycle.md`).
-- **`octoboardd restart`** asks the daemon for a planned restart (see
-  `docs/product/planned-restart-and-planned-stop.md`) and takes no option. With no daemon running by the end of the wait
+- **`octoboardd restart [--yes | --if-safe]`** asks the daemon for a planned restart (see
+  `docs/product/planned-restart-and-planned-stop.md`). With no daemon running by the end of the wait
   above it says so and exits with status 1. It also exits with status 1, restarting nothing, for a running daemon that
   no usable `daemon.owner` names by then (as `stop` does); for one that follows the desktop application, saying that the
   application restarts it itself; for one that could not install its handler for the request, whose record does not say
   whether it follows an application and which the request would end rather than restart, saying to stop and start it
-  instead. Otherwise, wherever `daemon.key` holds the daemon's key, on every host, it sends the planned-restart request
+  instead.
+
+  Before the request, where its standard input is a terminal, it asks the daemon (`POST /restart-check`) what a restart
+  into the build it runs itself would interrupt — the build of the file it was run from, which it takes for the one the
+  daemon starts its next daemon from, as `octoboardd update` does — judged by that build's version and holder floor, as
+  the in-app restart judges it (see "Restarting into the update" in `docs/product/server-form-updates.md`). Where nothing
+  that asks would end it says that every session keeps running and goes on; where sessions or shell terminals running a
+  command would end, or may (the daemon cannot tell, as one from before the check cannot), it lists them and asks
+  `Restart now? [y/N]`, and anything but a yes leaves the daemon running, saying `not restarted`, with status 0. A
+  restart the daemon would refuse is not asked about: where it would interrupt work, or may, it is not requested
+  either, the command saying the daemon's reason and exiting with status 1; where it would interrupt nothing, the
+  request below says the daemon's reason. A stop or restart already under way is not added to: the command says that
+  Octoboard is already stopping or restarting, requests nothing, and follows it as it follows a restart it requested
+  (below), exiting 0 once a daemon runs in its place; where none does (the stop was an ordinary one, say), it says
+  that the daemon was already stopping and has stopped and that no daemon runs in its place, advising `octoboardd
+  start` only for a daemon no service manager runs, and exits with status 1. Where the daemon has ended by the time the
+  user has answered (stopped, or restarted from elsewhere), it is not asked again: the command finds the daemon as
+  above, waiting out a restart half-way, and says what it found, exiting 0 where another daemon runs in its place, and
+  1 where none does or one has not recorded itself by the end of the wait (advising `octoboardd start` only for a
+  daemon no service manager runs). Run with no terminal (a script, a pipe), it asks nothing and
+  restarts regardless, as it always has. **`--yes`** restarts regardless, asking nothing and checking nothing;
+  **`--if-safe`** checks in any case and restarts only where nothing would end, otherwise listing what would (or may)
+  end, saying that it is not restarting as the restart would (or may) interrupt that work, and exiting with status
+  **4** without restarting and without naming a command to run next: what the install script runs after an upgrade,
+  which names it. The two cannot be given together.
+
+  Otherwise, wherever `daemon.key` holds the daemon's key, on every host, it sends the planned-restart request
   (`POST /restart`) over loopback to the port `daemon.owner` records, with that key, which goes only into that loopback
   request, as `stop` sends it on Windows, so that a refusal comes back at once: a daemon that refuses the request (see
   `docs/product/planned-restart-and-planned-stop.md` for when it does) makes `restart` say that it refused the restart,
@@ -251,8 +277,9 @@ free is gone at once.
     key is then rotated through it as above.
 
 `octoboardd update` acts on the installed executable rather than on the running daemon: it checks for, downloads and
-puts in place a newer release, or puts the previous one back, and leaves the restart to `octoboardd restart` (see "The
-`octoboardd update` command" in `docs/product/server-form-updates.md`).
+puts in place a newer release, or puts the previous one back, then restarts a running daemon into it as `octoboardd
+restart` does, with the same check, leaving the restart for later where it would interrupt work and there is no terminal
+to ask in (see "The `octoboardd update` command" in `docs/product/server-form-updates.md`).
 
 ## Another device reaching the daemon over SSH
 

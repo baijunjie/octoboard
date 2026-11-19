@@ -271,14 +271,57 @@ pub(super) async fn shutdown(State(state): State<Arc<AppState>>) -> impl IntoRes
 
 /// The request to make a planned restart: `main` hands every terminal over to its holder, and the
 /// next daemon comes up on the same address and adopts them. It answers `202` at once and does not
-/// wait for that; a refusal (`RestartRefusal`) is `409` with a JSON body naming
-/// the reason, and stops nothing.
+/// wait for that; a refusal (`RestartRefusal`, a download of the daemon's own update under way
+/// among them) is `409` with a JSON body naming the reason, and stops nothing.
 pub(super) async fn restart(State(state): State<Arc<AppState>>) -> Reply {
     match state.request_planned_restart() {
         Ok(()) => Reply::status(StatusCode::ACCEPTED),
         Err(refusal) => {
             tracing::info!(reason = refusal.code(), "a planned restart was refused");
             refusal_reply(refusal)
+        }
+    }
+}
+
+/// What `POST /restart-check` is asked: the next daemon's holder floor and version, either `null`
+/// or left out where the caller does not know it.
+#[derive(Debug, Default, serde::Deserialize)]
+struct RestartCheckAsked {
+    #[serde(default)]
+    holder_floor: Option<String>,
+    #[serde(default)]
+    target_version: Option<String>,
+}
+
+/// The question a command line asks before a planned restart: what a restart into a daemon of the
+/// holder floor and version given would interrupt, and whether it would be refused now
+/// (`handover_check::restart_impact`). It first learns of an update or rollback `octoboardd
+/// update` made under this daemon (`self_update::learn_of_command_line_update`), so that every
+/// browser offers the restart at once when the command leaves it to the user. Answers `200` with
+/// the impact as JSON; a body that does not read is `400`. Changes nothing else.
+pub(super) async fn restart_check(State(state): State<Arc<AppState>>, body: Bytes) -> Reply {
+    let asked: RestartCheckAsked = if body.iter().all(u8::is_ascii_whitespace) {
+        RestartCheckAsked::default()
+    } else {
+        match serde_json::from_slice(&body) {
+            Ok(asked) => asked,
+            Err(_) => return Reply::status(StatusCode::BAD_REQUEST),
+        }
+    };
+    let impact = tokio::task::spawn_blocking(move || {
+        crate::self_update::learn_of_command_line_update(&state);
+        crate::coordinator::handover_check::restart_impact(
+            &state,
+            asked.holder_floor.as_deref(),
+            asked.target_version.as_deref(),
+        )
+    })
+    .await;
+    match impact {
+        Ok(impact) => Reply::json(&impact),
+        Err(err) => {
+            tracing::error!(%err, "the restart check did not finish");
+            Reply::status(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
 }

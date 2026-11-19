@@ -1,6 +1,7 @@
 //! `stop`, `status` and `start` against a daemon caught half-way through a planned restart: one
 //! that holds the lock but has not recorded itself yet, and the free lock between a daemon that
-//! noted it hands over and its successor; and `restart` against a daemon that refuses it.
+//! noted it hands over and its successor. `restart` against a stand-in daemon is in
+//! `restart_tests.rs`, which uses the helpers here.
 //!
 //! The commands run as processes of their own (this test binary, running only
 //! [`command_child`]) with a scratch home directory, against a stand-in daemon, another such
@@ -18,7 +19,6 @@ use std::time::{Duration, Instant};
 use clap::Parser;
 
 use super::Cli;
-use crate::cli::background::tests::answer_once;
 use crate::owner_record::{Owner, Predecessor};
 use crate::platform::proc::ProcessIdentity;
 use crate::test_support::{ScratchDir, PATIENCE, TEST_KEY};
@@ -44,6 +44,10 @@ const RECORD_PORT: &str = "OCTOBOARD_TEST_STAND_IN_PORT";
 
 /// The variable that, set, has [`stand_in_child`] record that it accepts the owner key.
 const RECORD_OWNER_KEY: &str = "OCTOBOARD_TEST_STAND_IN_OWNER_KEY";
+
+/// The variable that, set, has [`stand_in_child`] record that a service manager starts its
+/// successor, as a daemon run by systemd records.
+const RECORD_SERVICE_MANAGED: &str = "OCTOBOARD_TEST_STAND_IN_SERVICE_MANAGED";
 
 /// The variable that, set, has [`stand_in_child`] record that it follows the desktop application.
 const RECORD_APPLICATION: &str = "OCTOBOARD_TEST_STAND_IN_APPLICATION";
@@ -93,7 +97,7 @@ fn stand_in_child() {
     let port = std::env::var(RECORD_PORT).map_or(PORT, |port| port.parse().unwrap());
     let owner = Owner::current(port, std::env::var_os(RECORD_APPLICATION).is_some(), true)
         .unwrap()
-        .with_service_manager(false)
+        .with_service_manager(std::env::var_os(RECORD_SERVICE_MANAGED).is_some())
         .with_predecessor(predecessor)
         .with_owner_key(std::env::var_os(RECORD_OWNER_KEY).is_some());
     owner.record_key(TEST_KEY).unwrap();
@@ -115,7 +119,7 @@ fn predecessor_text(predecessor: Predecessor) -> String {
     }
 }
 
-fn in_home(home: &Path, test: &str) -> Command {
+pub(super) fn in_home(home: &Path, test: &str) -> Command {
     let mut command = Command::new(std::env::current_exe().unwrap());
     command
         .args(["--exact", test, "--ignored", "--nocapture"])
@@ -127,16 +131,16 @@ fn in_home(home: &Path, test: &str) -> Command {
 }
 
 /// A command started by [`command`], ended with the test, whether or not it finished.
-struct CommandChild(Option<Child>);
+pub(super) struct CommandChild(Option<Child>);
 
 impl CommandChild {
     /// Whether it has not ended yet.
-    fn running(&mut self) -> bool {
+    pub(super) fn running(&mut self) -> bool {
         self.0.as_mut().unwrap().try_wait().unwrap().is_none()
     }
 
     /// Whether it ends within the test's patience.
-    fn ends(&mut self) -> bool {
+    pub(super) fn ends(&mut self) -> bool {
         crate::session::wait::wait_for(PATIENCE, || !self.running())
     }
 }
@@ -151,7 +155,7 @@ impl Drop for CommandChild {
 }
 
 /// Starts `octoboardd <arguments>` with `home` as its home directory.
-fn command(home: &Path, arguments: &str) -> CommandChild {
+pub(super) fn command(home: &Path, arguments: &str) -> CommandChild {
     CommandChild(Some(
         in_home(home, "cli::background_tests::command_child")
             .env(ARGUMENTS, arguments)
@@ -161,7 +165,7 @@ fn command(home: &Path, arguments: &str) -> CommandChild {
 }
 
 /// A stand-in daemon running with `home` as its home directory.
-struct StandIn {
+pub(super) struct StandIn {
     child: Child,
     /// The lines it prints, read on a thread of their own so that waiting for one is bounded.
     lines: Receiver<String>,
@@ -178,7 +182,7 @@ impl StandIn {
 
     /// [`StandIn::start`] for one that records `port` as the port it listens on, and records itself
     /// at once.
-    fn start_on(home: &Path, port: u16) -> Self {
+    pub(super) fn start_on(home: &Path, port: u16) -> Self {
         Self::spawn(home, |command| {
             command
                 .env(RECORD_AFTER, "0")
@@ -186,9 +190,19 @@ impl StandIn {
         })
     }
 
+    /// [`StandIn::start_on`] for one that records that a service manager starts its successor.
+    pub(super) fn start_service_managed_on(home: &Path, port: u16) -> Self {
+        Self::spawn(home, |command| {
+            command
+                .env(RECORD_AFTER, "0")
+                .env(RECORD_PORT, port.to_string())
+                .env(RECORD_SERVICE_MANAGED, "1");
+        })
+    }
+
     /// [`StandIn::start`] for one that records itself at once, as accepting the owner key when
     /// `owner_key`, and returns once it has.
-    fn start_now(home: &Path, owner_key: bool) -> Self {
+    pub(super) fn start_now(home: &Path, owner_key: bool) -> Self {
         let mut stand_in = Self::spawn(home, |command| {
             command.env(RECORD_AFTER, "0");
             if owner_key {
@@ -213,7 +227,7 @@ impl StandIn {
     }
 
     /// [`StandIn::start`] for one that records the daemon `after` as its predecessor.
-    fn start_after(home: &Path, record_after: Duration, after: Predecessor) -> Self {
+    pub(super) fn start_after(home: &Path, record_after: Duration, after: Predecessor) -> Self {
         Self::spawn(home, |command| {
             command
                 .env(RECORD_AFTER, record_after.as_millis().to_string())
@@ -230,7 +244,7 @@ impl StandIn {
     }
 
     /// [`StandIn::start_held`] for one that records the daemon `after` as its predecessor.
-    fn start_held_after(home: &Path, after: Predecessor) -> Self {
+    pub(super) fn start_held_after(home: &Path, after: Predecessor) -> Self {
         Self::spawn(home, |command| {
             command
                 .env(RECORD_WHEN_TOLD, "1")
@@ -275,12 +289,12 @@ impl StandIn {
         }
     }
 
-    fn pid(&self) -> u32 {
+    pub(super) fn pid(&self) -> u32 {
         self.child.id()
     }
 
     /// Tells one started by [`StandIn::start_held`] to record itself, and returns once it has.
-    fn record(&mut self) {
+    pub(super) fn record(&mut self) {
         let stdin = self.child.stdin.as_mut().unwrap();
         writeln!(stdin).unwrap();
         stdin.flush().unwrap();
@@ -292,8 +306,15 @@ impl StandIn {
         crate::session::wait::wait_for(PATIENCE, || self.child.try_wait().unwrap().is_some())
     }
 
+    /// Ends it by closing its standard input, which it holds the lock until, and returns once it
+    /// has ended and let the lock go.
+    pub(super) fn end(&mut self) {
+        drop(self.child.stdin.take());
+        assert!(self.ends(), "the stand-in did not end");
+    }
+
     /// Whether it has not ended.
-    fn running(&mut self) -> bool {
+    pub(super) fn running(&mut self) -> bool {
         self.child.try_wait().unwrap().is_none()
     }
 }
@@ -306,7 +327,7 @@ impl Drop for StandIn {
     }
 }
 
-fn finished(mut child: CommandChild) -> (i32, String, String) {
+pub(super) fn finished(mut child: CommandChild) -> (i32, String, String) {
     let Output {
         status,
         stdout,
@@ -320,7 +341,7 @@ fn finished(mut child: CommandChild) -> (i32, String, String) {
 }
 
 /// The lines of a command's output that are its own, without what the test harness prints.
-fn said(output: &str) -> String {
+pub(super) fn said(output: &str) -> String {
     output
         .lines()
         .filter(|line| line.starts_with(crate::APP_NAME))
@@ -330,13 +351,13 @@ fn said(output: &str) -> String {
 
 /// Writes a daemon's note of its handover again every half second until dropped, which keeps the
 /// note fresh for as long as a command under test takes.
-struct Renewal {
+pub(super) struct Renewal {
     done: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
 impl Renewal {
-    fn start(owner: Owner, data: std::path::PathBuf) -> Self {
+    pub(super) fn start(owner: Owner, data: std::path::PathBuf) -> Self {
         let done = Arc::new(AtomicBool::new(false));
         let ended = done.clone();
         let thread = std::thread::spawn(move || {
@@ -620,36 +641,6 @@ fn start_names_a_daemon_that_records_itself_while_it_waits() {
         ),
         "{stdout}"
     );
-}
-
-/// `restart` asks a daemon whose key is recorded over loopback, at the port it records, so a
-/// refusal comes back with its reason at once: the command says it on stderr and exits 1 without
-/// waiting for a restart, and the daemon, which was asked rather than signalled, still runs.
-#[test]
-fn restart_reports_a_refusal_from_a_daemon_that_records_its_key_and_leaves_it_running() {
-    let home = ScratchDir::new("restart-refused");
-    let text = "a holder is in service";
-    let body = format!(r#"{{"reason":"holders_in_service","message":"{text}"}}"#);
-    let (port, served) = answer_once(format!(
-        "HTTP/1.1 409 Conflict\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}",
-        body.len()
-    ));
-    let mut stand_in = StandIn::start_on(&home, port);
-    let mut restart = command(&home, "restart");
-    // Well inside the command's own wait of ninety seconds for a restart that never came.
-    assert!(restart.ends(), "it went on waiting after the refusal");
-    let (code, stdout, stderr) = finished(restart);
-    assert_eq!(code, 1, "{stdout}{stderr}");
-    assert_eq!(
-        said(&stderr),
-        format!("{} refused the restart: {text}", crate::APP_NAME),
-        "{stdout}"
-    );
-    assert_eq!(
-        served.join().unwrap(),
-        format!("POST /restart?key={TEST_KEY} HTTP/1.1\r\n")
-    );
-    assert!(stand_in.running(), "the refused daemon was ended");
 }
 
 /// `proxy` and `address --json` exit 3 with no daemon running, 4 with a daemon that has no owner

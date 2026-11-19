@@ -160,6 +160,7 @@ pub fn install(
         holder_floor: release.holder_floor.clone(),
         from_version: env!("CARGO_PKG_VERSION").to_owned(),
         from_schema: Some(crate::store::Store::SCHEMA_VERSION),
+        from_holder_floor: Some(crate::holder::compat::FLOOR.to_owned()),
         path: real.to_string_lossy().into_owned(),
     }) {
         tracing::warn!(%err, "recording the update failed");

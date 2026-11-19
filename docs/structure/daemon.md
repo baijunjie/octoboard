@@ -169,8 +169,9 @@ there is no UI build or when `VITE_DAEMON_KEY` or `VITE_DAEMON_PORT` is set. `ap
 the pnpm package `@octoboard/daemon`, only to run that cargo build after the UI's (`build` script, a dependency on
 `@octoboard/ui`); it has no test script. Test-only files (`tests.rs`, `*_tests.rs`, `test_support/` and
 `store/test_support.rs`, and the `layering_tests/` directory) sit beside the code they test, and `apps/daemon/testdata/`
-holds the captured agent screens and records tests replay, and `testdata/self_update/`, a signed test archive and its
-test key for the self-update's tests. `apps/daemon/dist/` holds hand-written distribution files, not build output
+holds the captured agent screens and records tests replay, `testdata/restart_impact_cases.json`, the cases of what a
+restart would interrupt that the restart check's test and the UI's `useAppExit.test.ts` both run, and
+`testdata/self_update/`, a signed test archive and its test key for the self-update's tests. `apps/daemon/dist/` holds hand-written distribution files, not build output
 (`dist/systemd/octoboardd.service`, an example systemd user unit for running the daemon in the background on Linux,
 which the Linux release archive ships and the website's `install.sh` installs with `--service`).
 
@@ -227,8 +228,10 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   macOS and the owner pipe on Windows; `proxy` carries bytes between its standard input and output and the endpoint, and
   `address --json` prints the owner key, the protocol generation and the release version of the daemon there),
   `connection.rs` the `connection` mode, which prints the connection details (`connection_details`) as a line and a QR
-  code, `update.rs` the user's `update [--check] [--rollback] [--channel]` (the server form's update from the command
-  line, over `self_update/`, refused for a daemon that follows the application), `succession.rs` how those commands find
+  code, `update.rs` the user's `update [--check] [--rollback] [--channel] [--yes | --no-restart]` (the server form's
+  update from the command line, over `self_update/`, refused for a daemon that follows the application),
+  `restart_check.rs` what `restart` and `update` ask the daemon before a planned restart (`POST /restart-check`) and
+  whether they go ahead, ask the user or leave it, `succession.rs` how those commands find
   the daemon through a planned restart caught half-way (`find_daemon`, `next_may_come`), tell the daemon that took over
   from it (`succession`, by the predecessor it records) and pass a successor its predecessor on stdin (`handover_input`,
   `handed_over_from`), the process holding the instance lock, which `background.rs` names where the host says
@@ -266,7 +269,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   left running, nothing ended or recorded; an ordinary stop asked for meanwhile cuts it short), `handover_check.rs` (the
   `handover_check` request: given the next daemon's holder floor and version, which running sessions and shell
   terminals, and which shell terminals of holders not yet reached, a planned stop followed by that daemon would not
-  carry over, judged by `holder::compat::Range`), `archive_cleanup.rs` (a daemon task) and `resume_on_start.rs` (a
+  carry over, judged by `holder::compat::Range`; and `restart_impact`, the same read as a window asks the user about it,
+  for `POST /restart-check`), `archive_cleanup.rs` (a daemon task) and `resume_on_start.rs` (a
   daemon task: at start, resumes the interrupted sessions when the `resume_sessions_on_start` setting is on, through the
   same path as resuming an interrupted session; the store lists them, `Store::list_interrupted_sessions`, and the
   adopted ones are not among them, as they never stopped) and `remote_access.rs` (`RemoteAccess`,

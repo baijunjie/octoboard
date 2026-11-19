@@ -6,25 +6,31 @@
 //! past what that build reads is refused, with the copy from before the migration named
 //! (`crate::self_update::rollback`).
 //!
-//! None of it restarts the daemon: the file is replaced under a running one, which goes on running
-//! the build it started as until `octoboardd restart` (a planned restart that keeps every session
-//! running). The update lock (`update.lock` in the data directory) keeps this command and the
-//! daemon's own update from replacing the file together.
+//! Once the file is replaced, a daemon that runs is restarted into it as `octoboardd restart`
+//! restarts it (`super::restart_check`): at once where every session can be handed over, after
+//! asking where the restart would or may interrupt some and there is a terminal to ask in, and not
+//! at all where there is none (or with `--no-restart`), the daemon going on running the build it
+//! started as until `octoboardd restart`. The update lock (`update.lock` in the data directory)
+//! keeps this command and the daemon's own update from replacing the file together; it is let go
+//! before the restart.
 
 use std::io::Write;
 use std::path::Path;
 
 use anyhow::{Context, Result};
 
+use super::restart_check::{self, Mode, Restarted, Target};
 use crate::platform::{fs, proc};
 use crate::protocol::DaemonUpdateChannel;
 use crate::self_update::check::{check, Checked};
 use crate::self_update::fetch::UreqFetcher;
 use crate::self_update::install::{self, InstallError, Sources};
-use crate::self_update::manifest::{install_command, install_command_for, is_newer, Release};
+use crate::self_update::manifest::{install_command, install_command_for};
 use crate::self_update::record::Files;
 use crate::self_update::replace::{self, ReplaceError};
-use crate::self_update::rollback::{previous_fits_database, previous_version, DatabaseFit};
+use crate::self_update::rollback::{
+    previous_fits_database, previous_holder_floor, previous_version, DatabaseFit,
+};
 use crate::self_update::verify::release_key;
 use crate::self_update::RUNNING;
 
@@ -52,10 +58,23 @@ pub(crate) struct Environment<'a> {
     /// Whether a daemon runs against this data directory: the build it runs is the one an update
     /// replaces, which may not be the build of this process.
     pub daemon_running: bool,
+    /// Restarts the daemon that runs into the build given, once the file is replaced and the lock
+    /// let go, or leaves it running as it is: [`restart_check::restart_into`], or the daemon told
+    /// of the update with `--no-restart`.
+    pub restart: &'a dyn Fn(&Target) -> Result<Restarted>,
+    /// Tells the daemon that runs of the file replaced under it, whatever came of the restart, so
+    /// that browsers offer the restart at once where it was not made
+    /// ([`restart_check::tell_daemon`]).
+    pub tell: &'a dyn Fn(),
 }
 
-/// Runs `task` as `octoboardd update` does, returning the exit status.
-pub(super) fn run(task: Task, channel: Option<DaemonUpdateChannel>) -> Result<i32> {
+/// Runs `task` as `octoboardd update` does, restarting the daemon that runs into what it installed
+/// in `restart`'s mode, or with `None` leaving it running as it is; the exit status.
+pub(super) fn run(
+    task: Task,
+    channel: Option<DaemonUpdateChannel>,
+    restart: Option<Mode>,
+) -> Result<i32> {
     if !cfg!(feature = "self-update") || !proc::self_update_host() {
         eprintln!(
             "this build of {} does not update itself; upgrade by hand with `{}`",
@@ -98,6 +117,11 @@ pub(super) fn run(task: Task, channel: Option<DaemonUpdateChannel>) -> Result<i3
         database: &crate::paths::db_path(),
         channel,
         daemon_running,
+        restart: &|target| match restart {
+            Some(mode) => restart_check::restart_into(target, mode),
+            None => Ok(Restarted::Left),
+        },
+        tell: &restart_check::tell_daemon,
     };
     let (stdout, stderr) = (&mut std::io::stdout(), &mut std::io::stderr());
     perform(task, &environment, stdout, stderr)
@@ -111,19 +135,84 @@ pub(crate) fn perform(
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<i32> {
-    match task {
-        Task::Check => check_only(environment, out, err),
-        Task::Install => {
-            let Some(_lock) = take_lock(environment.files, err)? else {
-                return Ok(1);
-            };
-            install_newer(environment, out, err)
-        }
-        Task::Rollback => {
-            let Some(_lock) = take_lock(environment.files, err)? else {
-                return Ok(1);
-            };
-            roll_back(environment, out, err)
+    let replacing = match task {
+        Task::Check => return check_only(environment, out, err),
+        Task::Install => install_newer,
+        Task::Rollback => roll_back,
+    };
+    let Some(lock) = take_lock(environment.files, err)? else {
+        return Ok(1);
+    };
+    let finished = replacing(environment, out, err)?;
+    // Let go before the restart: the next daemon falls back to the build that ran, where the new
+    // one does not start, only while no other process holds it (`self_update::successor`), and the
+    // daemon learns of the update only once it is free.
+    drop(lock);
+    match finished {
+        Finished::Replaced(target) => restart_after(environment, &target, out),
+        Finished::Status(status) => Ok(status),
+    }
+}
+
+/// What installing or rolling back came to.
+enum Finished {
+    /// The file was replaced by the build given, which a restart would start.
+    Replaced(Target),
+    /// Nothing to restart into; the exit status.
+    Status(i32),
+}
+
+/// Restarts the daemon that runs into `target`, once the file is replaced, or says why not, then
+/// tells the daemon of the replacement whatever came of it; the exit status.
+fn restart_after(
+    environment: &Environment<'_>,
+    target: &Target,
+    out: &mut dyn Write,
+) -> Result<i32> {
+    if !environment.daemon_running {
+        writeln!(
+            out,
+            "no {} runs against this data directory, so there is nothing to restart",
+            crate::APP_NAME
+        )?;
+        return Ok(0);
+    }
+    let restarted = restart_unless_running(environment, target, out);
+    (environment.tell)();
+    restarted
+}
+
+/// [`restart_after`]'s restart: none where the daemon runs the target's version already (a
+/// rollback to the build it runs, say), which it says.
+fn restart_unless_running(
+    environment: &Environment<'_>,
+    target: &Target,
+    out: &mut dyn Write,
+) -> Result<i32> {
+    let running = environment.files.read_daemon_version();
+    if let Some(version) = running
+        .as_deref()
+        .filter(|running| target.version.as_deref() == Some(*running))
+    {
+        writeln!(
+            out,
+            "the running {} runs {version} already, so there is nothing to restart into",
+            crate::APP_NAME
+        )?;
+        return Ok(0);
+    }
+    match (environment.restart)(target)? {
+        Restarted::Ran(status) => Ok(status),
+        Restarted::Left => {
+            writeln!(
+                out,
+                "the running {} goes on running {} until `octoboardd restart`, which asks first \
+                 in a terminal, or `octoboardd restart --yes`, which restarts it whatever it \
+                 interrupts",
+                crate::APP_NAME,
+                restarting_from(environment)
+            )?;
+            Ok(0)
         }
     }
 }
@@ -180,16 +269,16 @@ fn install_newer(
     environment: &Environment<'_>,
     out: &mut dyn Write,
     err: &mut dyn Write,
-) -> Result<i32> {
+) -> Result<Finished> {
     let release = match check(environment.sources.fetcher, environment.channel, RUNNING) {
         Ok(Checked::UpToDate) => {
             writeln!(out, "{} {RUNNING} is up to date", crate::APP_NAME)?;
-            return Ok(0);
+            return Ok(Finished::Status(0));
         }
         Ok(Checked::Available(release)) => release,
         Err(detail) => {
             writeln!(err, "could not check for an update: {detail}")?;
-            return Ok(1);
+            return Ok(Finished::Status(1));
         }
     };
     let mut downloading = false;
@@ -218,12 +307,10 @@ fn install_newer(
                     .unwrap_or_default()
                     .display()
             )?;
-            writeln!(
-                out,
-                "{}",
-                restart_advice(&release, &restarting_from(environment))
-            )?;
-            Ok(0)
+            Ok(Finished::Replaced(Target {
+                version: Some(release.version.clone()),
+                holder_floor: release.holder_floor.clone(),
+            }))
         }
         Ok(done) => {
             writeln!(
@@ -232,7 +319,7 @@ fn install_newer(
                  nothing was changed",
                 done.path.display()
             )?;
-            Ok(1)
+            Ok(Finished::Status(1))
         }
         Err(InstallError::NotWritable(path)) => {
             writeln!(
@@ -242,11 +329,11 @@ fn install_newer(
                 path.display(),
                 install_command_for(&path, environment.channel)
             )?;
-            Ok(1)
+            Ok(Finished::Status(1))
         }
         Err(failure) => {
             writeln!(err, "the update failed: {}", failure.detail())?;
-            Ok(1)
+            Ok(Finished::Status(1))
         }
     }
 }
@@ -261,31 +348,11 @@ fn restarting_from(environment: &Environment<'_>) -> String {
         .unwrap_or_else(|| RUNNING.to_owned())
 }
 
-/// What to do next after an update, and what the restart would cost: a restart is planned and keeps
-/// every session running, except those in a holder older than the release's floor, which the
-/// daemon at version `running` adopts from.
-fn restart_advice(release: &Release, running: &str) -> String {
-    let interrupts = release
-        .holder_floor
-        .as_deref()
-        .is_some_and(|floor| is_newer(floor, running));
-    let mut advice =
-        "run `octoboardd restart` to run it, which keeps every session running".to_owned();
-    if interrupts {
-        advice.push_str(&format!(
-            "; sessions started by a build older than {} cannot be handed over, so the restart \
-             interrupts them",
-            release.holder_floor.as_deref().unwrap_or_default()
-        ));
-    }
-    advice
-}
-
 fn roll_back(
     environment: &Environment<'_>,
     out: &mut dyn Write,
     err: &mut dyn Write,
-) -> Result<i32> {
+) -> Result<Finished> {
     let real = match install::replaceable(environment.launch) {
         Ok(real) => real,
         Err(InstallError::NotWritable(path)) => {
@@ -294,11 +361,11 @@ fn roll_back(
                 "{} cannot be replaced by this user, so it cannot be rolled back",
                 path.display()
             )?;
-            return Ok(1);
+            return Ok(Finished::Status(1));
         }
         Err(failure) => {
             writeln!(err, "could not roll back: {}", failure.detail())?;
-            return Ok(1);
+            return Ok(Finished::Status(1));
         }
     };
     match previous_fits_database(environment.files, &real, environment.database) {
@@ -318,11 +385,12 @@ fn roll_back(
             backups,
         } => {
             refuse_across_schema(environment, database, reads, &backups, err)?;
-            return Ok(1);
+            return Ok(Finished::Status(1));
         }
     }
     // Read before the swap: the record names the build kept beside the file as it stands.
     let version = previous_version(environment.files, &real);
+    let holder_floor = previous_holder_floor(environment.files, &real);
     match replace::swap_with_previous(&real) {
         Ok(()) => {
             // What `update-installed.json` says was installed no longer holds for this file.
@@ -331,17 +399,16 @@ fn roll_back(
                 out,
                 "rolled {} back to {}; the build it replaced is kept as `{}`",
                 real.display(),
-                version.map_or_else(
+                version.as_deref().map_or_else(
                     || "the previous build (its version is not known)".to_owned(),
                     |version| format!("{} {version}", crate::APP_NAME)
                 ),
                 replace::previous_path(&real).unwrap_or_default().display()
             )?;
-            writeln!(
-                out,
-                "run `octoboardd restart` to run it, which keeps every session running"
-            )?;
-            Ok(0)
+            Ok(Finished::Replaced(Target {
+                version,
+                holder_floor,
+            }))
         }
         Err(
             ReplaceError::Failed(detail)
@@ -349,7 +416,7 @@ fn roll_back(
             | ReplaceError::Refused(detail),
         ) => {
             writeln!(err, "could not roll back: {detail}")?;
-            Ok(1)
+            Ok(Finished::Status(1))
         }
         Err(ReplaceError::NotWritable(path)) => {
             writeln!(
@@ -357,7 +424,7 @@ fn roll_back(
                 "{} cannot be replaced by this user, so it cannot be rolled back",
                 path.display()
             )?;
-            Ok(1)
+            Ok(Finished::Status(1))
         }
     }
 }
@@ -397,6 +464,7 @@ fn refuse_across_schema(
 
 #[cfg(test)]
 mod tests {
+    use std::cell::{Cell, RefCell};
     use std::sync::Mutex;
     use std::time::Duration;
 
@@ -485,6 +553,16 @@ mod tests {
         database: std::path::PathBuf,
         key: PublicKey,
         daemon_running: bool,
+        /// What the stand-in for the restart answers.
+        restart_answer: Restarted,
+        /// The build each restart was asked for, in order.
+        restarts: RefCell<Vec<Target>>,
+        /// Whether the update lock was free at every restart.
+        lock_free_at_restart: Cell<bool>,
+        /// How often the daemon was told of the replacement.
+        told: Cell<usize>,
+        /// Whether the update lock was free at every telling.
+        lock_free_at_tell: Cell<bool>,
     }
 
     impl Fixture {
@@ -501,6 +579,11 @@ mod tests {
                 exe,
                 key: PublicKey::from_base64(TEST_KEY.trim()).unwrap(),
                 daemon_running: false,
+                restart_answer: Restarted::Ran(0),
+                restarts: RefCell::default(),
+                lock_free_at_restart: Cell::new(true),
+                told: Cell::new(0),
+                lock_free_at_tell: Cell::new(true),
             }
         }
 
@@ -571,6 +654,29 @@ mod tests {
                 database: &self.database,
                 channel,
                 daemon_running: self.daemon_running,
+                restart: &|target| {
+                    self.restarts.borrow_mut().push(target.clone());
+                    // The lock is an `flock` on an open file description that a child another
+                    // test is spawning shares until it execs, so it may outlive its release for a
+                    // moment under load: polled up to `PATIENCE`, returning at once when free.
+                    let free =
+                        crate::session::wait::wait_for(crate::test_support::PATIENCE, || {
+                            fs::try_lock_file(&self.files.lock()).is_ok()
+                        });
+                    self.lock_free_at_restart
+                        .set(self.lock_free_at_restart.get() && free);
+                    Ok(self.restart_answer)
+                },
+                tell: &|| {
+                    self.told.set(self.told.get() + 1);
+                    // Polled as at the restart: the daemon learns only once the lock is free.
+                    let free =
+                        crate::session::wait::wait_for(crate::test_support::PATIENCE, || {
+                            fs::try_lock_file(&self.files.lock()).is_ok()
+                        });
+                    self.lock_free_at_tell
+                        .set(self.lock_free_at_tell.get() && free);
+                },
             };
             let (mut out, mut err) = (Vec::new(), Vec::new());
             let status = perform(task, &environment, &mut out, &mut err).unwrap();
@@ -634,14 +740,14 @@ mod tests {
     }
 
     #[test]
-    fn an_update_replaces_the_executable_and_says_to_restart() {
+    fn an_update_replaces_the_executable_and_has_nothing_to_restart_with_no_daemon() {
         let fixture = Fixture::new("cli-update-install");
         let host = Host::publishing("9.9.9", "0.0.0");
         let (status, out, err) = fixture.run(Task::Install, &host);
         assert_eq!(status, 0, "{err}");
         assert!(out.contains("to 9.9.9"), "{out}");
-        assert!(out.contains("octoboardd restart"), "{out}");
-        assert!(!out.contains("interrupts"), "{out}");
+        assert!(out.contains("nothing to restart"), "{out}");
+        assert!(fixture.restarts.borrow().is_empty());
         assert_eq!(
             std::fs::read(&fixture.exe).unwrap(),
             b"#!/bin/sh\necho new daemon\n"
@@ -653,29 +759,56 @@ mod tests {
         assert_eq!(fixture.files.read_installed().unwrap().version, "9.9.9");
     }
 
+    /// A daemon that runs is restarted into the release installed, judged by its version and
+    /// holder floor, with the update lock let go first.
     #[test]
-    fn the_restart_is_said_to_interrupt_what_a_holder_floor_above_this_build_leaves_behind() {
-        let fixture = Fixture::new("cli-update-floor");
-        let (status, out, _) = fixture.run(Task::Install, &Host::publishing("9.9.9", "9.0.0"));
-        assert_eq!(status, 0);
-        assert!(out.contains("interrupts them"), "{out}");
-        assert!(out.contains("older than 9.0.0"), "{out}");
+    fn a_running_daemon_is_restarted_into_the_release_installed() {
+        let mut fixture = Fixture::new("cli-update-restart");
+        fixture.daemon_running = true;
+        let (status, out, err) = fixture.run(Task::Install, &Host::publishing("9.9.9", "9.0.0"));
+        assert_eq!(status, 0, "{err}");
+        assert!(!out.contains("not restarted"), "{out}");
+        assert_eq!(
+            fixture.restarts.borrow().as_slice(),
+            [Target {
+                version: Some("9.9.9".into()),
+                holder_floor: Some("9.0.0".into()),
+            }]
+        );
+        assert!(fixture.lock_free_at_restart.get());
     }
 
-    /// A daemon that runs is restarted from the version it runs, which `daemon.version` records,
-    /// not from this process's build.
+    /// A restart left for later (declined, or no terminal to ask in) is no failure: the update is
+    /// installed, and the daemon goes on running the version it runs.
     #[test]
-    fn the_warning_compares_the_floor_with_the_running_daemons_version() {
-        // Below this build's version, so no warning when no daemon runs.
-        let host = Host::publishing("9.9.9", "0.1.0-beta.1");
-        let (_, out, _) = Fixture::new("cli-update-floor-none").run(Task::Install, &host);
-        assert!(!out.contains("interrupts"), "{out}");
+    fn a_restart_left_for_later_says_what_the_daemon_runs_until_then() {
+        let mut fixture = Fixture::new("cli-update-restart-left");
+        fixture.daemon_running = true;
+        fixture.restart_answer = Restarted::Left;
+        fixture.files.write_daemon_version("0.0.9").unwrap();
+        let (status, out, _) = fixture.run(Task::Install, &Host::publishing("9.9.9", "0.0.0"));
+        assert_eq!(status, 0);
+        assert!(
+            out.contains("goes on running 0.0.9 until `octoboardd restart`"),
+            "{out}"
+        );
+        assert!(out.contains("`octoboardd restart --yes`"), "{out}");
+        assert!(!out.contains("update --yes"), "{out}");
+        assert_eq!(fixture.files.read_installed().unwrap().version, "9.9.9");
+    }
 
-        let mut running = Fixture::new("cli-update-floor-running");
-        running.daemon_running = true;
-        running.files.write_daemon_version("0.0.9").unwrap();
-        let (_, out, _) = running.run(Task::Install, &host);
-        assert!(out.contains("interrupts them"), "{out}");
+    /// A restart that fails or is refused fails the command, the update installed all the same.
+    #[test]
+    fn a_failed_restart_fails_the_command_and_keeps_the_update() {
+        let mut fixture = Fixture::new("cli-update-restart-failed");
+        fixture.daemon_running = true;
+        fixture.restart_answer = Restarted::Ran(1);
+        let (status, _, _) = fixture.run(Task::Install, &Host::publishing("9.9.9", "0.0.0"));
+        assert_eq!(status, 1);
+        assert_eq!(
+            std::fs::read(&fixture.exe).unwrap(),
+            b"#!/bin/sh\necho new daemon\n"
+        );
     }
 
     #[test]
@@ -685,6 +818,10 @@ mod tests {
         let (status, out, _) = fixture.run(Task::Install, &host);
         assert_eq!(status, 0);
         assert!(out.contains("up to date"), "{out}");
+        assert!(
+            fixture.restarts.borrow().is_empty(),
+            "nothing to restart into"
+        );
         assert_eq!(
             host.asked.lock().unwrap().len(),
             1,
@@ -787,7 +924,7 @@ mod tests {
         assert!(fixture.files.read_installed().is_some());
         let (status, out, err) = fixture.run(Task::Rollback, &host);
         assert_eq!(status, 0, "{err}");
-        assert!(out.contains("octoboardd restart"), "{out}");
+        assert!(out.contains("nothing to restart"), "{out}");
         assert_eq!(
             std::fs::read(&fixture.exe).unwrap(),
             b"the daemon that runs"
@@ -835,6 +972,7 @@ mod tests {
                 holder_floor: None,
                 from_version: "0.1.0".into(),
                 from_schema,
+                from_holder_floor: None,
                 path: fixture.real().to_string_lossy().into_owned(),
             })
             .unwrap();
@@ -849,6 +987,26 @@ mod tests {
             fixture.files.read_installed().unwrap().from_schema,
             Some(crate::store::Store::SCHEMA_VERSION)
         );
+    }
+
+    /// A rollback restarts a daemon that runs into the build put back, judged by the version and
+    /// holder floor the update recorded of it.
+    #[test]
+    fn a_rollback_restarts_into_the_build_put_back() {
+        let mut fixture = Fixture::new("cli-update-rollback-restart");
+        let host = Host::publishing("9.9.9", "0.0.0");
+        fixture.run(Task::Install, &host);
+        fixture.daemon_running = true;
+        let (status, _, err) = fixture.run(Task::Rollback, &host);
+        assert_eq!(status, 0, "{err}");
+        assert_eq!(
+            fixture.restarts.borrow().as_slice(),
+            [Target {
+                version: Some(env!("CARGO_PKG_VERSION").into()),
+                holder_floor: Some(crate::holder::compat::FLOOR.into()),
+            }]
+        );
+        assert!(fixture.lock_free_at_restart.get());
     }
 
     #[test]
@@ -1001,5 +1159,265 @@ mod tests {
         let (status, out, err) = fixture.run(Task::Rollback, &Host::publishing("9.9.9", "0.0.0"));
         assert_eq!(status, 0, "{err}");
         assert!(!out.contains("nothing records"), "{out}");
+    }
+
+    /// The holder floor of the build replaced is recorded at the install, for a rollback to judge
+    /// the restart by.
+    #[test]
+    fn an_update_records_the_holder_floor_the_replaced_build_had() {
+        let fixture = Fixture::new("cli-update-records-floor");
+        let (status, _, err) = fixture.run(Task::Install, &Host::publishing("9.9.9", "0.0.0"));
+        assert_eq!(status, 0, "{err}");
+        assert_eq!(
+            fixture.files.read_installed().unwrap().from_holder_floor,
+            Some(crate::holder::compat::FLOOR.to_owned())
+        );
+    }
+
+    /// A rollback judges the restart by the floor the record names, not by this build's own.
+    #[test]
+    fn a_rollback_restarts_by_the_holder_floor_the_record_names() {
+        let mut fixture = Fixture::new("cli-update-rollback-recorded-floor");
+        let host = Host::publishing("9.9.9", "0.0.0");
+        fixture.run(Task::Install, &host);
+        let mut record = fixture.files.read_installed().unwrap();
+        record.from_holder_floor = Some("0.0.7".into());
+        fixture.files.write_installed(&record).unwrap();
+        fixture.daemon_running = true;
+        let (status, _, err) = fixture.run(Task::Rollback, &host);
+        assert_eq!(status, 0, "{err}");
+        assert_eq!(
+            fixture.restarts.borrow().as_slice(),
+            [Target {
+                version: Some(record.from_version),
+                holder_floor: Some("0.0.7".into()),
+            }]
+        );
+    }
+
+    /// A record from before the floor was recorded, or none at all, leaves what the restart goes
+    /// into unknown rather than guessed.
+    #[test]
+    fn a_rollback_to_a_build_with_no_recorded_floor_or_version_restarts_into_the_unknown() {
+        let mut fixture = Fixture::new("cli-update-rollback-unrecorded");
+        fixture.daemon_running = true;
+        std::fs::write(fixture.previous(), b"the daemon that runs").unwrap();
+        record_update(&fixture, None);
+        let (status, _, err) = fixture.run(Task::Rollback, &Host::publishing("9.9.9", "0.0.0"));
+        assert_eq!(status, 0, "{err}");
+        assert_eq!(
+            fixture.restarts.borrow().as_slice(),
+            [Target {
+                version: Some("0.1.0".into()),
+                holder_floor: None,
+            }]
+        );
+
+        // Put there by an install script: no record, and a file that cannot say what it is.
+        let mut fixture = Fixture::new("cli-update-rollback-no-record");
+        fixture.daemon_running = true;
+        std::fs::write(fixture.previous(), b"not something that runs").unwrap();
+        let (status, _, err) = fixture.run(Task::Rollback, &Host::publishing("9.9.9", "0.0.0"));
+        assert_eq!(status, 0, "{err}");
+        assert_eq!(
+            fixture.restarts.borrow().as_slice(),
+            [Target {
+                version: None,
+                holder_floor: None,
+            }]
+        );
+    }
+
+    /// The daemon is told of what was installed whatever came of the restart, so that browsers
+    /// offer the restart where it was not made; with no daemon there is nobody to tell.
+    #[test]
+    fn the_daemon_is_told_of_the_update_whatever_came_of_the_restart() {
+        let host = Host::publishing("9.9.9", "0.0.0");
+        for answer in [Restarted::Ran(0), Restarted::Ran(1), Restarted::Left] {
+            let mut fixture = Fixture::new("cli-update-told");
+            fixture.daemon_running = true;
+            fixture.restart_answer = answer;
+            fixture.run(Task::Install, &host);
+            assert_eq!(fixture.told.get(), 1, "{answer:?}");
+            assert!(
+                fixture.lock_free_at_tell.get(),
+                "{answer:?}: the daemon was told with the update lock held"
+            );
+        }
+        let fixture = Fixture::new("cli-update-told-none");
+        fixture.run(Task::Install, &host);
+        assert_eq!(fixture.told.get(), 0);
+    }
+
+    /// A rollback to the build the daemon runs already restarts nothing, and says why; the daemon
+    /// is told all the same.
+    #[test]
+    fn a_restart_into_the_version_the_daemon_runs_is_not_made() {
+        let host = Host::publishing("9.9.9", "0.0.0");
+        let mut fixture = Fixture::new("cli-update-rollback-same");
+        fixture.run(Task::Install, &host);
+        fixture.daemon_running = true;
+        fixture
+            .files
+            .write_daemon_version(env!("CARGO_PKG_VERSION"))
+            .unwrap();
+        let (status, out, err) = fixture.run(Task::Rollback, &host);
+        assert_eq!(status, 0, "{err}");
+        assert!(
+            out.contains(&format!(
+                "runs {} already, so there is nothing to restart into",
+                env!("CARGO_PKG_VERSION")
+            )),
+            "{out}"
+        );
+        assert!(fixture.restarts.borrow().is_empty());
+        assert_eq!(fixture.told.get(), 1);
+    }
+
+    /// A rollback with no daemon to restart says there is none, and one left for later says what
+    /// the daemon runs until then.
+    #[test]
+    fn a_rollback_says_what_became_of_the_restart() {
+        let host = Host::publishing("9.9.9", "0.0.0");
+        let fixture = Fixture::new("cli-update-rollback-no-daemon");
+        fixture.run(Task::Install, &host);
+        let (status, out, _) = fixture.run(Task::Rollback, &host);
+        assert_eq!(status, 0);
+        assert!(out.contains("nothing to restart"), "{out}");
+        assert!(fixture.restarts.borrow().is_empty());
+
+        let mut fixture = Fixture::new("cli-update-rollback-left");
+        fixture.run(Task::Install, &host);
+        fixture.daemon_running = true;
+        fixture.restart_answer = Restarted::Left;
+        fixture.files.write_daemon_version("9.9.9").unwrap();
+        let (status, out, _) = fixture.run(Task::Rollback, &host);
+        assert_eq!(status, 0);
+        assert!(
+            out.contains("goes on running 9.9.9 until `octoboardd restart`"),
+            "{out}"
+        );
+        assert_eq!(
+            std::fs::read(&fixture.exe).unwrap(),
+            b"the daemon that runs"
+        );
+    }
+
+    /// Nothing is restarted where nothing was installed or rolled back: up to date, a check that
+    /// failed, an archive refused, a rollback refused, or the lock held by another.
+    #[test]
+    fn nothing_is_restarted_where_nothing_was_replaced() {
+        let mut fixture = Fixture::new("cli-update-no-restart");
+        fixture.daemon_running = true;
+
+        let (status, _, _) = fixture.run(Task::Install, &Host::publishing(RUNNING, "0.0.0"));
+        assert_eq!(status, 0);
+
+        let failing = Host {
+            manifest: Err(FetchError::Failed("offline".into())),
+            asked: Mutex::default(),
+            on_beta: false,
+        };
+        let (status, _, _) = fixture.run(Task::Install, &failing);
+        assert_eq!(status, 1);
+
+        let mut host = Host::publishing("9.9.9", "0.0.0");
+        let mut manifest: serde_json::Value =
+            serde_json::from_str(host.manifest.as_ref().unwrap()).unwrap();
+        manifest["platforms"][platform_key()]["sha256"] = "0".repeat(64).into();
+        host.manifest = Ok(manifest.to_string());
+        let (status, _, _) = fixture.run(Task::Install, &host);
+        assert_eq!(status, 1);
+
+        // No previous build to go back to.
+        let (status, _, _) = fixture.run(Task::Rollback, &Host::publishing("9.9.9", "0.0.0"));
+        assert_eq!(status, 1);
+
+        let _held = fs::try_lock_file(&fixture.files.lock()).unwrap();
+        for task in [Task::Install, Task::Rollback] {
+            let (status, _, _) = fixture.run_once(
+                task,
+                &Host::publishing("9.9.9", "0.0.0"),
+                DaemonUpdateChannel::Stable,
+            );
+            assert_eq!(status, 1);
+        }
+        assert!(fixture.restarts.borrow().is_empty());
+        assert_eq!(
+            fixture.told.get(),
+            0,
+            "the daemon was told of a replacement that was not made"
+        );
+        assert_eq!(
+            std::fs::read(&fixture.exe).unwrap(),
+            b"the daemon that runs"
+        );
+    }
+
+    /// The restart is skipped only where the daemon is read to run the target's version already;
+    /// another version, or one that cannot be read, is restarted into as usual, and what the
+    /// restart says is the command's status.
+    #[test]
+    fn the_restart_is_skipped_only_for_the_version_the_daemon_is_read_to_run() {
+        let host = Host::publishing("9.9.9", "0.0.0");
+        // Runs the target's version already: nothing to restart into, said, and told all the same.
+        let mut fixture = Fixture::new("cli-update-same-version");
+        fixture.daemon_running = true;
+        fixture.restart_answer = Restarted::Ran(1);
+        fixture.files.write_daemon_version("9.9.9").unwrap();
+        let (status, out, err) = fixture.run(Task::Install, &host);
+        assert_eq!(status, 0, "{err}");
+        assert!(
+            out.contains("runs 9.9.9 already, so there is nothing to restart into"),
+            "{out}"
+        );
+        assert!(fixture.restarts.borrow().is_empty());
+        assert_eq!(fixture.told.get(), 1);
+        assert!(fixture.lock_free_at_tell.get());
+        assert_eq!(fixture.files.read_installed().unwrap().version, "9.9.9");
+
+        // Another version.
+        let mut fixture = Fixture::new("cli-update-other-version");
+        fixture.daemon_running = true;
+        fixture.files.write_daemon_version("0.0.9").unwrap();
+        let (status, out, _) = fixture.run(Task::Install, &host);
+        assert_eq!(status, 0);
+        assert!(!out.contains("already"), "{out}");
+        assert_eq!(fixture.restarts.borrow().len(), 1);
+
+        // Not readable: the file is there but does not read as a version.
+        let mut fixture = Fixture::new("cli-update-unreadable-version");
+        fixture.daemon_running = true;
+        fixture.files.write_daemon_version("not a version").unwrap();
+        let (status, out, _) = fixture.run(Task::Install, &host);
+        assert_eq!(status, 0);
+        assert!(!out.contains("already"), "{out}");
+        assert_eq!(fixture.restarts.borrow().len(), 1);
+    }
+
+    /// A rollback refused across a schema change replaces nothing, so restarts nothing.
+    #[test]
+    fn a_rollback_refused_across_a_schema_change_restarts_nothing() {
+        let mut fixture = Fixture::new("cli-update-rollback-refused-no-restart");
+        let host = Host::publishing("9.9.9", "0.0.0");
+        fixture.run(Task::Install, &host);
+        fixture.database_at(crate::store::Store::SCHEMA_VERSION + 1);
+        fixture.daemon_running = true;
+        let (status, _, _) = fixture.run(Task::Rollback, &host);
+        assert_eq!(status, 1);
+        assert!(fixture.restarts.borrow().is_empty());
+    }
+
+    /// The restart's own status is the command's, whatever it is: the update stays installed.
+    #[test]
+    fn the_status_of_the_restart_is_the_status_of_the_command() {
+        for status in [0, 1, 2] {
+            let mut fixture = Fixture::new("cli-update-restart-status");
+            fixture.daemon_running = true;
+            fixture.restart_answer = Restarted::Ran(status);
+            let (got, _, _) = fixture.run(Task::Install, &Host::publishing("9.9.9", "0.0.0"));
+            assert_eq!(got, status);
+            assert_eq!(fixture.files.read_installed().unwrap().version, "9.9.9");
+        }
     }
 }

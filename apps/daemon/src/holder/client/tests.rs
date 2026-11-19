@@ -1919,7 +1919,10 @@ fn a_holder_started_in_the_daemons_service_counts_while_it_starts_and_not_once_i
         })
         .expect("holders"),
     );
-    assert!(!holders.any_in_daemon_service(), "nothing is started yet");
+    assert!(
+        !holders.runs_programs_in_service(),
+        "nothing is started yet"
+    );
 
     let starting = holders.clone();
     let start = std::thread::spawn(move || starting.link().map(|_| ()));
@@ -1937,7 +1940,7 @@ fn a_holder_started_in_the_daemons_service_counts_while_it_starts_and_not_once_i
         std::thread::sleep(Duration::from_millis(10));
     };
     assert!(
-        holders.any_in_daemon_service(),
+        holders.runs_programs_in_service(),
         "a holder whose start is waiting for its registry file counts"
     );
 
@@ -1959,7 +1962,7 @@ fn a_holder_started_in_the_daemons_service_counts_while_it_starts_and_not_once_i
     .expect("the registry file");
     assert!(start.join().unwrap().is_err(), "the link was refused");
     assert!(
-        !holders.any_in_daemon_service(),
+        !holders.runs_programs_in_service(),
         "a holder whose start failed counts"
     );
 }
@@ -1986,13 +1989,13 @@ fn a_linked_holder_in_the_daemons_service_counts_while_it_runs_a_terminal() {
         .expect("holders");
         holders.link().expect("the holder starts");
         assert!(
-            !holders.any_in_daemon_service(),
+            !holders.runs_programs_in_service(),
             "a holder started as {placement:?} with no terminal counts"
         );
 
         let terminal = holders.spawn(sleeping_spec()).expect("the terminal starts");
         assert_eq!(
-            holders.any_in_daemon_service(),
+            holders.runs_programs_in_service(),
             counts,
             "a holder started as {placement:?} that runs a terminal counts as in the daemon's service"
         );
@@ -2000,7 +2003,7 @@ fn a_linked_holder_in_the_daemons_service_counts_while_it_runs_a_terminal() {
         terminal.end();
         drop(terminal);
         let deadline = Instant::now() + PATIENCE;
-        while holders.any_in_daemon_service() {
+        while holders.runs_programs_in_service() {
             assert!(
                 Instant::now() < deadline,
                 "a holder that runs no terminal any more still counts"
@@ -2063,7 +2066,7 @@ fn a_restart_claim_is_refused_while_a_holder_in_the_daemons_service_runs_a_progr
         drop(terminal);
     }
     let deadline = Instant::now() + PATIENCE;
-    while holders.any_in_daemon_service() {
+    while holders.runs_programs_in_service() {
         assert!(Instant::now() < deadline, "the terminals still count");
         std::thread::sleep(Duration::from_millis(20));
     }
@@ -2117,7 +2120,7 @@ fn nothing_is_linked_or_used_in_the_daemons_service_once_a_stop_is_claimed() {
         .expect("the terminal is refused");
     assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN, "{err:#}");
     assert!(
-        !holders.any_in_daemon_service(),
+        !holders.runs_programs_in_service(),
         "a refused terminal was recorded"
     );
 }
@@ -2178,7 +2181,7 @@ fn a_claim_dropped_uncommitted_reopens_the_daemons_service_only_when_no_other_ho
     released.end();
     drop(released);
     let deadline = Instant::now() + PATIENCE;
-    while holders.any_in_daemon_service() {
+    while holders.runs_programs_in_service() {
         assert!(Instant::now() < deadline, "the terminal still counts");
         std::thread::sleep(Duration::from_millis(20));
     }

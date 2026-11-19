@@ -1,0 +1,168 @@
+{
+  "description": "What a restart into an update would interrupt, as the daemon's restart check (coordinator/handover_check.rs, impact_of) and a window's restart confirmation (packages/ui/src/lifecycle/useAppExit.ts, restartConfirmation) read the daemon's handover check. A Rust test and a UI test both run every case, so that the two copies of the rule stay in step. `sessions` are the sessions the daemon records (and the window holds) with the status a client is shown; `listedSessions`, `listedShellTerminals` and `unreachedShellTerminals` are the handover check's answer; `countedShellTerminals` is checked by the daemon's test, and by the UI's only as whether any is counted.",
+  "cases": [
+    {
+      "name": "known range, nothing listed but terminals at their prompt or exited",
+      "known": true,
+      "sessions": [{ "id": "a", "status": "working" }],
+      "listedSessions": [],
+      "shellTerminals": [
+        { "id": "prompt", "state": "running", "busy": false },
+        { "id": "exited", "state": "exited", "busy": false }
+      ],
+      "listedShellTerminals": ["prompt", "exited"],
+      "unreachedShellTerminals": 0,
+      "verdict": "safe",
+      "countedSessions": [],
+      "countedShellTerminals": []
+    },
+    {
+      "name": "known range, a listed session counts whatever it is doing",
+      "known": true,
+      "sessions": [
+        { "id": "a", "status": "idle" },
+        { "id": "b", "status": "working" }
+      ],
+      "listedSessions": ["a"],
+      "shellTerminals": [],
+      "listedShellTerminals": [],
+      "unreachedShellTerminals": 0,
+      "verdict": "interrupts",
+      "countedSessions": ["a"],
+      "countedShellTerminals": []
+    },
+    {
+      "name": "known range, a listed session with no record still counts",
+      "known": true,
+      "sessions": [],
+      "listedSessions": ["ghost"],
+      "shellTerminals": [],
+      "listedShellTerminals": [],
+      "unreachedShellTerminals": 0,
+      "verdict": "interrupts",
+      "countedSessions": ["ghost"],
+      "countedShellTerminals": []
+    },
+    {
+      "name": "known range, a busy listed terminal and one no longer known count, one at its prompt does not",
+      "known": true,
+      "sessions": [],
+      "listedSessions": [],
+      "shellTerminals": [
+        { "id": "busy", "state": "running", "busy": true },
+        { "id": "prompt", "state": "running", "busy": false }
+      ],
+      "listedShellTerminals": ["busy", "prompt", "gone"],
+      "unreachedShellTerminals": 0,
+      "verdict": "interrupts",
+      "countedSessions": [],
+      "countedShellTerminals": ["busy", "gone"]
+    },
+    {
+      "name": "known range, an unreached terminal alone asks",
+      "known": true,
+      "sessions": [],
+      "listedSessions": [],
+      "shellTerminals": [],
+      "listedShellTerminals": [],
+      "unreachedShellTerminals": 1,
+      "verdict": "interrupts",
+      "countedSessions": [],
+      "countedShellTerminals": []
+    },
+    {
+      "name": "unknown range, every session with a process may end, one still starting included",
+      "known": false,
+      "sessions": [
+        { "id": "a", "status": "starting" },
+        { "id": "b", "status": "idle" },
+        { "id": "c", "status": "interrupted" },
+        { "id": "d", "status": "archived" },
+        { "id": "e", "status": "waiting_user" },
+        { "id": "f", "status": "dormant" }
+      ],
+      "listedSessions": ["b", "c"],
+      "shellTerminals": [],
+      "listedShellTerminals": [],
+      "unreachedShellTerminals": 0,
+      "verdict": "may_interrupt",
+      "countedSessions": ["a", "b", "e", "f"],
+      "countedShellTerminals": []
+    },
+    {
+      "name": "unknown range, a session listed but without a process does not count",
+      "known": false,
+      "sessions": [{ "id": "x", "status": "interrupted" }],
+      "listedSessions": ["x"],
+      "shellTerminals": [{ "id": "prompt", "state": "running", "busy": false }],
+      "listedShellTerminals": ["prompt"],
+      "unreachedShellTerminals": 0,
+      "verdict": "safe",
+      "countedSessions": [],
+      "countedShellTerminals": []
+    },
+    {
+      "name": "unknown range, a busy terminal may end",
+      "known": false,
+      "sessions": [{ "id": "x", "status": "archived" }],
+      "listedSessions": [],
+      "shellTerminals": [
+        { "id": "busy", "state": "running", "busy": true },
+        { "id": "prompt", "state": "running", "busy": false }
+      ],
+      "listedShellTerminals": ["busy", "prompt"],
+      "unreachedShellTerminals": 0,
+      "verdict": "may_interrupt",
+      "countedSessions": [],
+      "countedShellTerminals": ["busy"]
+    },
+    {
+      "name": "unknown range, an unreached terminal alone asks",
+      "known": false,
+      "sessions": [],
+      "listedSessions": [],
+      "shellTerminals": [],
+      "listedShellTerminals": [],
+      "unreachedShellTerminals": 2,
+      "verdict": "may_interrupt",
+      "countedSessions": [],
+      "countedShellTerminals": []
+    },
+    {
+      "name": "known range, an exited terminal does not count even when it still reads as busy",
+      "known": true,
+      "sessions": [],
+      "listedSessions": [],
+      "shellTerminals": [{ "id": "exited", "state": "exited", "busy": true }],
+      "listedShellTerminals": ["exited"],
+      "unreachedShellTerminals": 0,
+      "verdict": "safe",
+      "countedSessions": [],
+      "countedShellTerminals": []
+    },
+    {
+      "name": "unknown range, an exited terminal does not count even when it still reads as busy",
+      "known": false,
+      "sessions": [],
+      "listedSessions": [],
+      "shellTerminals": [{ "id": "exited", "state": "exited", "busy": true }],
+      "listedShellTerminals": ["exited"],
+      "unreachedShellTerminals": 0,
+      "verdict": "safe",
+      "countedSessions": [],
+      "countedShellTerminals": []
+    },
+    {
+      "name": "unknown range, a live session and a busy terminal together may end",
+      "known": false,
+      "sessions": [{ "id": "a", "status": "working" }],
+      "listedSessions": ["a"],
+      "shellTerminals": [{ "id": "busy", "state": "running", "busy": true }],
+      "listedShellTerminals": ["busy"],
+      "unreachedShellTerminals": 0,
+      "verdict": "may_interrupt",
+      "countedSessions": ["a"],
+      "countedShellTerminals": ["busy"]
+    }
+  ]
+}

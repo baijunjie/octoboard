@@ -47,7 +47,9 @@ pub(crate) mod unpack;
 pub(crate) mod verify;
 
 pub(crate) use successor::{start_successor, SuccessorStart};
-pub(crate) use task::{check_requested, restart_requested, start, update_requested};
+pub(crate) use task::{
+    check_requested, learn_of_command_line_update, restart_requested, start, update_requested,
+};
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};

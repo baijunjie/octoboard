@@ -4,10 +4,11 @@ The server form (the daemon `octoboardd` alone on a Linux server; see `docs/prod
 way the desktop application does (see `docs/product/in-app-updates.md`): the daemon looks for a newer release by itself
 and the browser says when it finds one, but **nothing is downloaded and nothing is restarted on the daemon's own**. The
 new executable is downloaded, checked and put in place only when the user asks — **Download and install** in a browser,
-or `octoboardd update` on the server. A successful installation started in a browser also requests a planned restart,
-checking first whether sessions can be handed over (see "Restarting into the update" below). An update installed from
-the command line waits for **Restart now** in a browser or `octoboardd restart` on the server. Upgrading with the install
-script instead is in "Upgrading" in `docs/product/installing-the-server-form.md`.
+or `octoboardd update` on the server. A successful installation, from either, also requests a planned restart, checking
+first whether sessions can be handed over: one that interrupts nothing goes ahead, one that would or may interrupt work
+is asked about first (see "Restarting into the update" below and "The `octoboardd update` command"). An update the
+command line installed and did not restart waits for **Restart now** in a browser or `octoboardd restart` on the server.
+Upgrading with the install script instead is in "Upgrading" in `docs/product/installing-the-server-form.md`.
 
 ## Which daemons update themselves
 
@@ -168,8 +169,10 @@ refusal (see below) ends it. `octoboardd update` does the same in its own proces
   included, keeps the executable from being replaced.
 - **One at a time**: the daemon and `octoboardd update` never replace the executable together; whichever comes second is
   refused as busy. The install script takes the same lock where it can, and is refused the same way (see step 4 of "The
-  install script" in `docs/product/installing-the-server-form.md`). A daemon learns of an update `octoboardd update` installed under it at its next check or download
-  request, and then shows it as installed.
+  install script" in `docs/product/installing-the-server-form.md`). A daemon learns of an update `octoboardd update` installed under it
+  as soon as the command has replaced the file, which then asks it what a restart would interrupt (and even with
+  `--no-restart`), and otherwise at its next check or download request, and then shows it as installed: every browser
+  offers **Restart now** at once where the command left the restart for later.
 
 **Download and install** is refused, saying why in an error alert (see "When something fails" below), while a download is
 already under way, once an update is installed, when no update has been found, when the executable's directory is not
@@ -224,7 +227,9 @@ installation, it does not retry when that update ends; **Restart now** remains f
 comes from the daemon when an agent update began after the press, saying that restarting the daemon now could leave
 the agent partly updated and to try again when the update finishes. A page whose connection to the daemon is not open sends nothing and says that the connection is
 closed. `octoboardd restart` on the server
-restarts into the update just the same.
+restarts into the update just the same, with the same check: it says what the restart would interrupt and asks first when
+run in a terminal (see "The daemon's command line" in `docs/product/daemon-command-line.md`), and `octoboardd restart`
+is also refused while a download is under way.
 
 ## When the update does not start
 
@@ -298,13 +303,49 @@ not reported in this one; the update stays offered, so it can be tried again.
 ## The `octoboardd update` command
 
 ```sh
-octoboardd update [--channel stable|beta]
+octoboardd update [--channel stable|beta] [--yes | --no-restart]
 octoboardd update --check [--channel stable|beta]
-octoboardd update --rollback
+octoboardd update --rollback [--yes | --no-restart]
 ```
 
-It works on the installation, not through the running daemon, in its own process, and never restarts anything: a daemon
-running from the executable it replaces runs on as the build it started as until `octoboardd restart`.
+It works on the installation in its own process, then restarts a daemon that runs into what it put in place, as the
+in-app update does: the update lock is let go first, and the restart is the planned restart `octoboardd restart` makes,
+with the same check (see "Restarting into the update" above). The command asks the running daemon what a restart into
+the build it installed would interrupt, judged by that build's version and holder floor:
+
+- **Nothing that asks would end** (every session is carried over, and so is every shell terminal running a command): it
+  says `restarting Octoboard into <version>; every session keeps running` and restarts, printing the next daemon's pid
+  and address as `octoboardd restart` does.
+- **Something would end, or may** (the daemon cannot tell which it carries over, as a daemon from before the check
+  cannot): it lists the sessions, by title, id and what each is doing, and the shell terminals running a command, that
+  the restart would interrupt (or may), says that every other session keeps running and an interrupted session can be
+  resumed, and then, where its standard input is a terminal, asks `Restart now? [y/N]`; only a yes restarts, and
+  anything else says `not restarted`. Run otherwise (a script, a pipe, cron), it does not restart, saying that the
+  restart would interrupt the work listed (or may, where the daemon cannot tell). Either way, not restarting, it says
+  that the running daemon goes on running its version until `octoboardd restart` (which asks first in a terminal) or
+  `octoboardd restart --yes` (which restarts it whatever it interrupts), and exits 0: the update is installed.
+- **`--yes`** restarts without asking, whatever the restart interrupts (a restart the daemon refuses is requested all
+  the same, and the daemon says why); **`--no-restart`** only replaces the executable, leaving the daemon on its build
+  until `octoboardd restart`.
+- **A restart the daemon would refuse** (an agent's CLI being updated, holders inside the daemon's systemd unit, its own
+  download) is not asked about. Where it would interrupt work, or may, the command does not request it: it says the
+  daemon's reason (`Octoboard would refuse the restart: …`) and exits 1, so that the restart never goes ahead
+  unconfirmed should the reason clear meanwhile. Where it would interrupt nothing, the command requests it, and the
+  daemon says its reason, with exit status 1, or restarts where the reason has cleared.
+- **A stop or restart already under way** (from a browser, say) is not added to: the command says that Octoboard is
+  already stopping or restarting, requests nothing, and follows it as `octoboardd restart` follows its own, exiting 0
+  once a daemon runs in its place and 1 when none does, as `--yes` would.
+- **The daemon already runs the version put in place** (a rollback to the build it runs, say): it says there is nothing
+  to restart into, and exits 0.
+- **The daemon ended while the restart was decided** (stopped, or restarted from elsewhere while the command asked):
+  it is not asked again; the command waits out a restart half-way, as every command does, and says what it found,
+  with exit status 0 where another daemon runs in its place and 1 where none does (advising `octoboardd start` only
+  for a daemon no service manager runs).
+- **A requested restart that ends with no daemon in place** exits 1, as `octoboardd restart` does.
+- **No daemon running**: it says there is nothing to restart, and exits 0.
+
+Whatever came of the restart, and with `--no-restart` too, the command then tells the running daemon of the update
+(`POST /restart-check`), so that browsers offer **Restart now** at once where it was not made.
 
 It reads the manifest and downloads the archive through the proxy its own environment names, the environment of the
 shell it was run from, not the login shell environment the daemon uses (see "When the daemon checks" above): reading
@@ -314,11 +355,9 @@ version comes from" in `docs/product/agent-cli-updates.md`); like the daemon, it
 
 - **`octoboardd update`** checks the channel and, when a newer version is available, downloads, checks and replaces the
   executable as "Downloading and replacing the executable" above describes, saying when it starts downloading. It then
-  says which file it updated, from which version to which, that the previous build is kept as `octoboardd.previous`, and
-  to run `octoboardd restart`, which keeps every session running; when the release's holder floor is above the version
-  the running daemon runs (or, with none running, this build's), it adds that the sessions started by builds older than
-  the floor cannot be handed over and the restart interrupts them. It exits with status 0, also when there is nothing
-  newer, which it says. It exits with status 1, saying why on its error output, when the check fails, the update fails
+  says which file it updated, from which version to which, and that the previous build is kept as
+  `octoboardd.previous`, and restarts the daemon into it as above, judged by the release's version and holder floor. It
+  exits with status 0, also when there is nothing newer, which it says, and restarts nothing then. It exits with status 1, saying why on its error output, when the check fails, the update fails
   (a new build that did not answer `--version` with the release's version included), the file at the path is no longer
   the build it runs, or the directory is not writable, in which case it says to have the owner of that directory upgrade
   it with the install command for that directory and the channel (see "Downloading and replacing the executable"
@@ -328,7 +367,11 @@ version comes from" in `docs/product/agent-cli-updates.md`); like the daemon, it
 - **`--rollback`** puts `octoboardd.previous` (kept by the last update, rollback or run of the install script) back at
   the executable's path in one step and keeps what was there as `octoboardd.previous`, so a rollback can itself be
   rolled back, removes `update-installed.json`, says which version it rolled back to and that the build it replaced is
-  kept as `octoboardd.previous`, then says to run `octoboardd restart`.
+  kept as `octoboardd.previous`, then restarts the daemon into it as above, judged by the version and holder floor
+  `update-installed.json` recorded of the build it went back to. Sessions started since the update usually run in a
+  process holder newer than that build, which it cannot take over, so the restart lists them; where nothing records
+  that build's holder floor (the install script put it there, or a build from before the floor was recorded), the
+  restart may interrupt any running session, and says so.
   The version is the one `update-installed.json` records as replaced, when it records the replacement of this file,
   else the one `octoboardd.previous --version` answers within **10 seconds**; when neither tells, it says it rolled back
   to the previous build, whose version is not known. A daemon that had an update installed forgets it once its path
@@ -350,7 +393,8 @@ version comes from" in `docs/product/agent-cli-updates.md`); like the daemon, it
 - **`--channel stable|beta`** chooses the channel; without it the command takes the daemon's setting, reading the
   daemon's database read-only and never upgrading it, and Stable where there is none. `--check` and `--rollback` cannot
   be given together, `--rollback` takes no `--channel`, any other channel name is a usage error, and the daemon's own
-  options (`--port`, `--parent-pid`, `--service-managed`) are not accepted with it.
+  options (`--port`, `--parent-pid`, `--service-managed`) are not accepted with it. `--yes` and `--no-restart` cannot
+  be given together, and neither with `--check`.
 
 It refuses, with status 1, while the running daemon follows the desktop application, which updates it itself; on a
 daemon that does not update itself (see "Which daemons update themselves" above); and, except with `--check`, while the

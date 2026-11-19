@@ -62,6 +62,9 @@ pub enum RestartRefusal {
     /// to its own deadline (`AgentClis::wait_for_updates`); one a service manager makes is cut at
     /// the unit's `TimeoutStopSec`, which kills the update.
     AgentUpdateRunning,
+    /// The daemon downloads and installs an update of itself, which a restart would end, and the
+    /// update with it. Only a restart is refused with it.
+    DaemonUpdateRunning,
 }
 
 impl RestartRefusal {
@@ -72,6 +75,7 @@ impl RestartRefusal {
             Self::StopInProgress => "stop_in_progress",
             Self::HoldersInService => "holders_in_service",
             Self::AgentUpdateRunning => "agent_update_running",
+            Self::DaemonUpdateRunning => "daemon_update_running",
         }
     }
 
@@ -89,6 +93,10 @@ impl RestartRefusal {
             }
             Self::AgentUpdateRunning => {
                 "an agent CLI update is running; try again when it finishes"
+            }
+            Self::DaemonUpdateRunning => {
+                "an update of the daemon is being downloaded, which a restart would end; try again \
+                 when it finishes"
             }
         }
     }
@@ -126,6 +134,59 @@ fn claim_unless_refused<C>(
         HolderClaim::Claimed(claim) => Ok(Some(claim)),
         HolderClaim::NothingToClaim => Ok(None),
     }
+}
+
+/// The refusals of a planned restart judged before the stop is asked, in their order: following an
+/// application, the daemon's own download (`downloading`), then the holders inside its service,
+/// through `holders`, which claims the restart when acting and only looks when foreseeing
+/// ([`AppState::restart_refusal`]). A following daemon never downloads, so the first two never
+/// meet.
+fn judge_restart<C>(
+    follows_application: bool,
+    downloading: bool,
+    service_managed: bool,
+    holders: impl FnOnce() -> HolderClaim<C>,
+) -> Result<Option<C>, RestartRefusal> {
+    if downloading && !follows_application {
+        return Err(RestartRefusal::DaemonUpdateRunning);
+    }
+    claim_unless_refused(follows_application, service_managed, holders)
+}
+
+/// The refusals of a planned restart judged under the stop's lock as it is asked, in their order:
+/// a stop asked for already (`stopping`), then an agent CLI update running (`updating`, read only
+/// where no stop is asked for). [`AppState::ask_planned`] takes a stop asked for as that stop's
+/// rather than refusing it, except where its caller refuses it.
+fn judge_stop(stopping: bool, updating: impl FnOnce() -> bool) -> Option<RestartRefusal> {
+    if stopping {
+        Some(RestartRefusal::StopInProgress)
+    } else if updating() {
+        Some(RestartRefusal::AgentUpdateRunning)
+    } else {
+        None
+    }
+}
+
+/// Every refusal a planned restart would meet, in the order it is judged ([`judge_restart`] then
+/// [`judge_stop`]), with `holders` only looked at: what [`AppState::restart_refusal`] foresees.
+fn foresee_restart(
+    follows_application: bool,
+    downloading: bool,
+    service_managed: bool,
+    holders_in_service: bool,
+    stopping: bool,
+    updating: impl FnOnce() -> bool,
+) -> Option<RestartRefusal> {
+    let holders = || {
+        if holders_in_service {
+            HolderClaim::Refused
+        } else {
+            HolderClaim::<()>::NothingToClaim
+        }
+    };
+    judge_restart(follows_application, downloading, service_managed, holders)
+        .err()
+        .or_else(|| judge_stop(stopping, updating))
 }
 
 /// Settles a claim once the stop it was taken for has been asked: committed through `commit`
@@ -201,12 +262,16 @@ impl AppState {
     fn ask_planned(&self, successor: bool) -> Result<bool, RestartRefusal> {
         let mut refusal = None;
         let made = self.stop.send_if_modified(|stop| {
-            if stop.is_some() {
-                return false;
-            }
-            if successor && self.agent_clis.any_updating() {
-                refusal = Some(RestartRefusal::AgentUpdateRunning);
-                return false;
+            match judge_stop(stop.is_some(), || {
+                successor && self.agent_clis.any_updating()
+            }) {
+                None => {}
+                // Taken as that stop's: the caller says whether it refuses it.
+                Some(RestartRefusal::StopInProgress) => return false,
+                Some(other) => {
+                    refusal = Some(other);
+                    return false;
+                }
             }
             *stop = Some(if self.application_said_quit() {
                 StopKind::Ordinary
@@ -227,10 +292,28 @@ impl AppState {
     /// dropped, so a stop that is then not made (refused, or another asked for first) leaves
     /// admission as it was; [`settle`] keeps it once the stop is made.
     fn claim_restart(&self) -> Result<Option<StopClaim>, RestartRefusal> {
-        claim_unless_refused(
+        judge_restart(
             self.follows_application(),
+            self.daemon_update.download_running(),
             self.service_managed(),
             Self::claim_holders,
+        )
+    }
+
+    /// Why a planned restart asked for now would be refused, without asking for it or claiming
+    /// anything: what `POST /restart-check` tells a command line before it asks the user. A stop
+    /// asked for already counts, as `restart_daemon` refuses it, though `POST /restart` would take
+    /// the request as that stop's. The answer may no longer hold by the time the restart is asked
+    /// for, which is judged again then.
+    pub fn restart_refusal(&self) -> Option<RestartRefusal> {
+        foresee_restart(
+            self.follows_application(),
+            self.daemon_update.download_running(),
+            self.service_managed(),
+            crate::holder::client::current()
+                .is_some_and(|holders| holders.runs_programs_in_service()),
+            self.stop_asked(),
+            || self.agent_clis.any_updating(),
         )
     }
 
@@ -599,6 +682,50 @@ mod tests {
             .expect("an ordinary stop asked for reads as asked for");
     }
 
+    /// The refusal a restart would meet now is foreseen without asking for it: none for a daemon
+    /// at rest, each of those that apply otherwise, and no stop asked for or claim made.
+    #[tokio::test]
+    async fn the_refusal_a_restart_would_meet_is_foreseen_without_asking_for_it() {
+        use crate::protocol::AgentId;
+
+        let (state, _dir) = app_state("stop-restart-foreseen");
+        assert_eq!(state.restart_refusal(), None);
+        assert!(!state.stop_asked(), "foreseeing asked for a stop");
+
+        // The refusal of a restart asked for is the one foreseen.
+        let claim = state
+            .agent_clis
+            .begin_update(&state, AgentId::CODEX, Duration::from_secs(60))
+            .unwrap();
+        assert_eq!(
+            state.restart_refusal(),
+            Some(RestartRefusal::AgentUpdateRunning)
+        );
+        assert_eq!(
+            state.request_planned_restart(),
+            Err(RestartRefusal::AgentUpdateRunning)
+        );
+        assert!(!state.stop_asked());
+        drop(claim);
+        assert_eq!(state.restart_refusal(), None);
+
+        // A stop asked for already is foreseen as one, though a request for a restart would be
+        // taken as that stop's.
+        state.request_shutdown();
+        assert_eq!(
+            state.restart_refusal(),
+            Some(RestartRefusal::StopInProgress)
+        );
+
+        let (following, _following_dir) = app_state("stop-restart-foreseen-follows");
+        following.set_follows_application();
+        assert_eq!(
+            following.restart_refusal(),
+            Some(RestartRefusal::FollowsApplication)
+        );
+        assert!(!following.stop_asked());
+    }
+
     /// A daemon that follows an application refuses a planned restart, and asks for no stop; a
     /// planned stop with no successor it still takes.
     #[tokio::test]
@@ -650,7 +777,8 @@ mod tests {
                 RestartRefusal::FollowsApplication
                 | RestartRefusal::StopInProgress
                 | RestartRefusal::HoldersInService
-                | RestartRefusal::AgentUpdateRunning => refusal,
+                | RestartRefusal::AgentUpdateRunning
+                | RestartRefusal::DaemonUpdateRunning => refusal,
             }
         }
         let all = [
@@ -658,6 +786,7 @@ mod tests {
             listed(RestartRefusal::StopInProgress),
             listed(RestartRefusal::HoldersInService),
             listed(RestartRefusal::AgentUpdateRunning),
+            listed(RestartRefusal::DaemonUpdateRunning),
         ];
         let codes: std::collections::HashSet<_> =
             all.iter().map(|refusal| refusal.code()).collect();
@@ -706,6 +835,82 @@ mod tests {
             Err(RestartRefusal::FollowsApplication)
         );
         assert_eq!(claimed.get(), 2, "a refused restart claims nothing");
+    }
+
+    /// Every refusal is foreseen, by the same ordered rule the restart is judged by: a `match` with
+    /// no wildcard, so that a new refusal has to be given the inputs that foresee it.
+    #[test]
+    fn every_restart_refusal_is_foreseen() {
+        fn inputs(refusal: RestartRefusal) -> (bool, bool, bool, bool, bool, bool) {
+            // (follows, downloading, managed, holders in service, stopping, updating)
+            match refusal {
+                RestartRefusal::FollowsApplication => (true, false, false, false, false, false),
+                RestartRefusal::DaemonUpdateRunning => (false, true, false, false, false, false),
+                RestartRefusal::HoldersInService => (false, false, true, true, false, false),
+                RestartRefusal::StopInProgress => (false, false, false, false, true, false),
+                RestartRefusal::AgentUpdateRunning => (false, false, false, false, false, true),
+            }
+        }
+        for refusal in [
+            RestartRefusal::FollowsApplication,
+            RestartRefusal::DaemonUpdateRunning,
+            RestartRefusal::HoldersInService,
+            RestartRefusal::StopInProgress,
+            RestartRefusal::AgentUpdateRunning,
+        ] {
+            let (follows, downloading, managed, in_service, stopping, updating) = inputs(refusal);
+            assert_eq!(
+                foresee_restart(follows, downloading, managed, in_service, stopping, || {
+                    updating
+                }),
+                Some(refusal),
+                "{refusal:?}"
+            );
+        }
+        assert_eq!(
+            foresee_restart(false, false, true, false, false, || false),
+            None
+        );
+        // Holders inside the service count only where a service manager restarts the daemon.
+        assert_eq!(
+            foresee_restart(false, false, false, true, false, || false),
+            None
+        );
+    }
+
+    /// The refusals are judged in one order, whether foreseen or met: following an application,
+    /// the daemon's download, the holders, a stop asked for, an agent CLI update.
+    #[test]
+    fn the_refusals_are_judged_in_one_order() {
+        let all = || foresee_restart(true, true, true, true, true, || true);
+        assert_eq!(all(), Some(RestartRefusal::FollowsApplication));
+        assert_eq!(
+            foresee_restart(false, true, true, true, true, || true),
+            Some(RestartRefusal::DaemonUpdateRunning)
+        );
+        assert_eq!(
+            foresee_restart(false, false, true, true, true, || true),
+            Some(RestartRefusal::HoldersInService)
+        );
+        assert_eq!(
+            foresee_restart(false, false, true, false, true, || true),
+            Some(RestartRefusal::StopInProgress)
+        );
+        let read = std::cell::Cell::new(false);
+        judge_stop(true, || {
+            read.set(true);
+            true
+        });
+        assert!(
+            !read.get(),
+            "the updates are not read where a stop is asked for"
+        );
+        assert_eq!(
+            judge_restart(false, true, true, || -> HolderClaim<()> {
+                panic!("a restart refused for the download claims nothing")
+            }),
+            Err(RestartRefusal::DaemonUpdateRunning)
+        );
     }
 
     /// A claim that records whether it was committed or released, standing in for the holders'

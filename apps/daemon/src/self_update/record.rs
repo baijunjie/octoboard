@@ -37,6 +37,11 @@ pub struct Installed {
     /// `None` in a record written before it was recorded. A rollback to that build checks it.
     #[serde(default)]
     pub from_schema: Option<i64>,
+    /// The holder floor of the replaced build (its `holder::compat::FLOOR`): the oldest holder it
+    /// adopts, which a restart after a rollback to that build is judged by. `None` in a record
+    /// written before it was recorded.
+    #[serde(default)]
+    pub from_holder_floor: Option<String>,
     /// The executable that was replaced.
     pub path: String,
 }

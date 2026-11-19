@@ -102,6 +102,7 @@ fn routes(state: Arc<AppState>) -> Router {
         .route("/mcp/:token", post(callbacks::mcp_call))
         .route("/shutdown", post(callbacks::shutdown))
         .route("/restart", post(callbacks::restart))
+        .route("/restart-check", post(callbacks::restart_check))
         .route("/planned-stop", post(callbacks::planned_stop))
         .route("/key-check", get(keys::key_check))
         .route("/owner-key/rotate", post(keys::rotate_owner_key))
@@ -132,6 +133,7 @@ mod tests {
                 "POST /mcp/x",
                 "POST /shutdown",
                 "POST /restart",
+                "POST /restart-check",
                 "POST /planned-stop",
                 "GET /key-check",
                 "POST /owner-key/rotate",
@@ -315,6 +317,129 @@ mod tests {
             .await
             .expect("the stop was asked for");
         assert_eq!(kind, crate::state::StopKind::Planned { successor: true });
+    }
+
+    /// The restart check answers what a restart would interrupt, here nothing, and the refusal it
+    /// would meet, and asks for no stop.
+    #[tokio::test]
+    async fn the_restart_check_answers_the_impact_and_stops_nothing() {
+        let (state, _dir) = app_state("server-restart-check");
+        state.set_follows_application();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let served = state.clone();
+        tokio::spawn(async move { axum::serve(listener, router(served)).await });
+        let host = format!("Host: 127.0.0.1:{port}");
+
+        let (status, body) = tokio::task::spawn_blocking(move || {
+            response_of(port, &keyed("POST /restart-check"), &[&host])
+        })
+        .await
+        .expect("the request ran");
+        assert_eq!(status, 200, "{body}");
+        let impact: crate::coordinator::handover_check::RestartImpact =
+            serde_json::from_str(&body).expect("the impact as JSON");
+        assert_eq!(
+            impact.verdict,
+            crate::coordinator::handover_check::RestartVerdict::Safe
+        );
+        assert!(!impact.known, "no range was given");
+        assert_eq!(
+            impact.refusal.map(|refusal| refusal.reason).as_deref(),
+            Some("follows_application")
+        );
+        assert!(!state.stop_asked());
+    }
+
+    /// Posts `body` to `/restart-check` of the router over `state` as the command line does, and
+    /// gives the answer, or the HTTP status the daemon refused it with.
+    async fn ask_restart_check(
+        state: &std::sync::Arc<crate::state::AppState>,
+        body: &'static str,
+    ) -> Result<crate::coordinator::handover_check::RestartImpact, u16> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let served = state.clone();
+        tokio::spawn(async move { axum::serve(listener, router(served)).await });
+        let answer = tokio::task::spawn_blocking(move || {
+            crate::loopback::post(port, TEST_KEY, "/restart-check", body.as_bytes(), PATIENCE)
+        })
+        .await
+        .expect("the request ran");
+        match answer {
+            Ok(body) => Ok(serde_json::from_slice(&body).expect("the impact as JSON")),
+            Err(err) => Err(crate::loopback::error_status(&err).expect("an error status")),
+        }
+    }
+
+    /// Given the holder floor and version of the next daemon, the restart check lists what it
+    /// would interrupt, a session whatever it is doing included, and asks for no stop.
+    #[tokio::test]
+    async fn the_restart_check_lists_what_a_known_range_would_interrupt() {
+        use crate::coordinator::handover_check::RestartVerdict;
+        use crate::protocol::{AgentId, SessionStatus};
+
+        let (state, dir) = app_state("server-restart-check-known");
+        crate::state::test_support::insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = crate::test_support::fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+
+        let impact = ask_restart_check(
+            &state,
+            r#"{"holder_floor": "0.0.0", "target_version": "9.9.9"}"#,
+        )
+        .await
+        .expect("answered");
+        assert_eq!(impact.verdict, RestartVerdict::Interrupts);
+        assert!(impact.known);
+        assert_eq!(impact.sessions.len(), 1);
+        assert_eq!(impact.sessions[0].id, "s");
+        assert_eq!(impact.sessions[0].status, "idle");
+        assert_eq!(impact.refusal, None);
+        assert!(!state.stop_asked(), "the check asked for a stop");
+    }
+
+    /// A body that leaves the range out, gives it as `null` or is empty asks with none: what runs
+    /// may be interrupted.
+    #[tokio::test]
+    async fn the_restart_check_without_a_range_says_what_may_be_interrupted() {
+        use crate::coordinator::handover_check::RestartVerdict;
+        use crate::protocol::{AgentId, SessionStatus};
+
+        let (state, dir) = app_state("server-restart-check-unknown");
+        crate::state::test_support::insert_record(&state, &dir, "s", SessionStatus::Working);
+        let live = crate::test_support::fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+
+        for body in [
+            "",
+            "{}",
+            r#"{"holder_floor": null, "target_version": null}"#,
+            r#"{"holder_floor": "0.0.0"}"#,
+        ] {
+            let impact = ask_restart_check(&state, body).await.expect("answered");
+            assert_eq!(impact.verdict, RestartVerdict::MayInterrupt, "{body:?}");
+            assert!(!impact.known, "{body:?}");
+            assert_eq!(impact.sessions.len(), 1, "{body:?}");
+        }
+    }
+
+    /// A body that does not read is told `400`, and nothing is asked of the daemon.
+    #[tokio::test]
+    async fn the_restart_check_refuses_a_body_that_does_not_read() {
+        let (state, _dir) = app_state("server-restart-check-bad-body");
+        for body in [
+            "not json",
+            r#"{"holder_floor": 7}"#,
+            r#"{"target_version": ["1"]}"#,
+        ] {
+            assert_eq!(
+                ask_restart_check(&state, body).await.err(),
+                Some(400),
+                "{body}"
+            );
+        }
+        assert!(!state.stop_asked());
     }
 
     /// The handshake a browser sends: a refusal must come before the upgrade, and an allowed
