@@ -667,6 +667,16 @@ pub mod error_code {
     pub const INVALID_FILE_MASK: Code = Code("invalid_file_mask");
     /// A browse request was given up because a newer one took its slot. A client shows nothing.
     pub const REQUEST_SUPERSEDED: Code = Code("request_superseded");
+    /// A `read_reply_part` named a reply the daemon no longer holds: its last part was sent, it
+    /// expired, or the connection that asked for it is not this one. Ask for the whole read again.
+    pub const REPLY_PART_UNAVAILABLE: Code = Code("reply_part_unavailable");
+    /// A part of a pasted image upload does not continue where the parts before it ended, runs past
+    /// the size the upload was created with, or the parts end short of it. `params` names
+    /// `expected_offset` and `size`. The upload is discarded.
+    pub const UPLOAD_PARTS_MISMATCH: Code = Code("upload_parts_mismatch");
+    /// A pasted image upload request named an upload this connection does not hold: never created
+    /// here, already saved or deleted, discarded after a refusal, or expired. Upload again.
+    pub const UPLOAD_UNAVAILABLE: Code = Code("upload_unavailable");
 }
 
 /// Codes carried by `ModelsUnavailable`; `PROTOCOL.md` lists each with its params. Like an error

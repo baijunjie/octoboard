@@ -73,8 +73,26 @@ The window saves an image with the control request `save_pasted_image`:
 |---|---|
 | `session` | The session whose terminal the image is pasted into |
 | `data` | The image file's bytes, base64-encoded: a PNG, JPEG, GIF or WebP file (judged by its signature, which also gives the file's extension), at most 10 MiB decoded |
+| `upload` | In place of `data`, an upload of the same connection whose parts hold the image (see "Uploading the image in parts" below). Exactly one of `data` and `upload` is given; the window always sends `data` |
 
 It is answered with `pasted_image_saved`, carrying `id` and `path`, the absolute path of the saved file as the
 daemon's host spells paths. It is refused with `unknown_session` for an id that names no session and
 `session_not_running` for a session with no process. Data over 10 MiB, data that is not one of the four formats or not
 valid base64, and a write that fails are errors with no code.
+
+### Uploading the image in parts
+
+For a client whose link cannot carry the whole image in one message within the daemon's 45 seconds of silence, the
+daemon also takes the image in parts; the window never uploads this way. The client starts an upload of the image's
+size (`create_pasted_image_upload`), sends its bytes in order in parts of at most 1 MiB each
+(`write_pasted_image_part`), and then saves it with `save_pasted_image` naming the upload. The saved file, its
+formats, its 10 MiB limit and the answer are those of the single-message request.
+
+The parts are held in the daemon's memory only, so an upload that is not saved leaves nothing behind. An upload
+belongs to the connection that started it and is discarded when it is deleted (`delete_pasted_image_upload`), when
+any of its requests is refused, 60 seconds after it was started or last received a part, or when the connection
+closes; a request naming a discarded upload is refused with `upload_unavailable`, and parts that do not continue
+where the received bytes end, run past the declared size, or end short of it at the save are refused with
+`upload_parts_mismatch`. A connection holds at most 2 uploads at once, and all connections' uploads together at most
+64 MiB of declared sizes; past either, starting an upload is refused with `limit_exceeded`. The requests' fields and
+refusals in full are in "Uploading a pasted image in parts" in `apps/daemon/PROTOCOL.md`.

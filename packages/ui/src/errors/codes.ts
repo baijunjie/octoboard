@@ -321,6 +321,7 @@ const CORE_CODES = {
   remote_access_refused_to_browser: { origin: "daemon", unexpected: "the Remote access section is offered only in the application's own window, never in a browser" },
   // A rotation racing remote access being turned off in another window, or a daemon that stopped offering it.
   remote_access_unavailable: { origin: "daemon", recovery: "none" },
+  reply_part_unavailable: { origin: "daemon", unexpected: "a reply read in parts, which the window never asks for" },
   repository_name_missing: { origin: "daemon", recovery: "path", codeParams: ["url"] },
   request_superseded: { origin: "daemon", unexpected: "a browse request given up for a newer one, which the window shows nothing for" },
   request_timed_out: { origin: "client", recovery: "connection" },
@@ -403,6 +404,8 @@ const CORE_CODES = {
   unreadable_request: { origin: "daemon", unexpected: "the window sends only requests of the shapes it knows", detailBlock: true },
   unshared_state_database: { origin: "daemon", recovery: "none", codeParams: ["path"], nameParams: ["name"] },
   unsupported_file_type: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { unmerged: { codeParams: ["path"] } }, variantOf: (params) => params.file_type === "unmerged" ? "unmerged" : undefined },
+  upload_parts_mismatch: { origin: "daemon", unexpected: "a pasted image uploaded in parts, which the window never does" },
+  upload_unavailable: { origin: "daemon", unexpected: "a pasted image uploaded in parts, which the window never does" },
   upstream_not_a_remote: { origin: "daemon", recovery: "gitFailure" },
   // Raised by every checked write (a settings control, a form dialog, an import); its `fields` and `versions` params
   // are for the window's own reconciliation, not for the sentence.

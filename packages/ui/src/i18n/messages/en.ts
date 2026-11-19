@@ -786,6 +786,9 @@ export const en = {
   "daemon.pull_merge_conflict": "Merging the upstream into this branch causes conflicts, so the merge was cancelled and nothing changed: {detail}",
   "daemon.pull_merge_conflict.summary": "Merging the upstream into this branch causes conflicts, so the merge was cancelled and nothing changed.",
   "daemon.request_superseded": "A newer request took the place of this one.",
+  "daemon.reply_part_unavailable": "That part of the reply is no longer available.",
+  "daemon.upload_parts_mismatch": "The parts of the image did not match, so the upload was discarded.",
+  "daemon.upload_unavailable": "That image upload is no longer available.",
   "daemon.trust_directory_too_broad":
     "{path} is too broad to trust as a whole. It is the filesystem root or your home directory, or it contains one of them. Trust this project on its own, or move it under a narrower folder and trust that folder.",
   "daemon.trust_directory_unreachable": "{path} or the folder above it did not respond in time, so that folder could not be checked. Uncheck the folder option to trust this project on its own, or try again once the volume responds again.",

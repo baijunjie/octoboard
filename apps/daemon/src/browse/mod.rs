@@ -25,6 +25,7 @@ pub mod ignored;
 pub mod lane;
 pub mod line_counts;
 pub mod live;
+pub mod reply_parts;
 pub mod scope;
 pub mod source;
 pub mod tree_diff;
@@ -301,6 +302,10 @@ pub fn serve(
         // `search_content`, and no other caller builds one.
         BrowseBody::SearchProjectContent(_) => Err(anyhow::anyhow!(
             "a content search is streamed over a control connection, not read in one reply"
+        )),
+        // A part of a reply the control connection's lane holds, which serves it.
+        BrowseBody::ReadReplyPart { .. } => Err(anyhow::anyhow!(
+            "a reply part is read from the control connection holding the reply"
         )),
         BrowseBody::ReadProjectFile {
             project,

@@ -523,6 +523,14 @@ export type BrowseRequest = {
    * snapshot does not find is then looked for once more in a fresh one.
    */
   asked_by_person?: boolean,
+  /**
+   * Deliver the reply in parts of at most this many bytes: a reply whose serialized form is
+   * larger is held by the daemon and sent as `reply_part`s, the rest of them asked for with
+   * `read_reply_part`. Cut to `budget::MAX_REPLY_PART_BYTES` and raised to
+   * `budget::MIN_REPLY_PART_BYTES`. Ignored by `search_project_content`, `read_file_range` and
+   * `read_reply_part`.
+   */
+  part_bytes?: number,
 } & ({
   "type": "get_project_source",
   project: string,
@@ -639,6 +647,12 @@ export type BrowseRequest = {
   change: ComparedChangeRef,
   old: SideVersion,
   new: SideVersion,
+}
+  | {
+  "type": "read_reply_part",
+  reply: string,
+  offset: number,
+  length?: number,
 });
 
 /**
@@ -2319,6 +2333,11 @@ export type Event = {
   path: string,
 }
 | {
+  "type": "pasted_image_upload_created",
+  id: string | null,
+  upload: string,
+}
+| {
   "type": "native_apps",
   id: string | null,
   agents: Array<Agent>,
@@ -2406,6 +2425,14 @@ export type Event = {
   version: string,
   data: string,
   launchable?: boolean,
+}
+| {
+  "type": "reply_part",
+  id: string | null,
+  reply: string,
+  offset: number,
+  total: number,
+  data: string,
 }
 | {
   "type": "project_changes",
@@ -4387,7 +4414,23 @@ export type Request = {
   | {
   "type": "save_pasted_image",
   session: string,
+  data?: string,
+  upload?: string,
+}
+  | {
+  "type": "create_pasted_image_upload",
+  session: string,
+  size: number,
+}
+  | {
+  "type": "write_pasted_image_part",
+  upload: string,
+  offset: number,
   data: string,
+}
+  | {
+  "type": "delete_pasted_image_upload",
+  upload: string,
 }
   | {
   "type": "interrupt_session",
@@ -5284,7 +5327,23 @@ export type RequestBody = {
 | {
   "type": "save_pasted_image",
   session: string,
+  data?: string,
+  upload?: string,
+}
+| {
+  "type": "create_pasted_image_upload",
+  session: string,
+  size: number,
+}
+| {
+  "type": "write_pasted_image_part",
+  upload: string,
+  offset: number,
   data: string,
+}
+| {
+  "type": "delete_pasted_image_upload",
+  upload: string,
 }
 | {
   "type": "interrupt_session",

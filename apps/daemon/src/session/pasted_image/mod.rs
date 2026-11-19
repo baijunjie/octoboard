@@ -7,6 +7,9 @@
 //! window pastes the path it is answered with. The file goes away with the scratch directory, when
 //! the session's process ends; the agent has read the image into its conversation by then.
 //!
+//! On a slow link the image can instead come in parts (`upload`), so that no single frame takes
+//! longer than the control socket's silence limit to arrive.
+//!
 //! The name is made only of characters a path detection in an agent does not split on: no space,
 //! and an extension that says what the bytes are, which is what an agent goes by.
 
@@ -21,8 +24,11 @@ use crate::hostfs::replace::{replace_beside, Permissions};
 use crate::protocol::{error_code, CodedError};
 use crate::state::AppState;
 
-/// The largest image taken, in bytes. The request carries it base64-encoded in one frame, which a
-/// WebSocket message holds at most 16 MiB of, so this stays under three quarters of that.
+pub mod upload;
+
+/// The largest image taken, in bytes. The single-frame request carries it base64-encoded in one
+/// frame, which a WebSocket message holds at most 16 MiB of, so this stays under three quarters of
+/// that; an upload in parts is held to the same limit.
 pub const MAX_BYTES: usize = 10 * 1024 * 1024;
 
 /// The directory under a session's scratch directory the images go in.
@@ -37,19 +43,7 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 /// window shows as it is: it limits the size before sending and sends only those formats.
 /// **Blocks.**
 pub fn save(state: &AppState, session_id: &str, data: &str) -> Result<PathBuf> {
-    state.session_record(session_id)?;
-    let not_running = || {
-        CodedError::raised(
-            error_code::SESSION_NOT_RUNNING,
-            "this session is not running",
-            &[("session", session_id)],
-        )
-    };
-    // The process's own scratch directory, gone from it once the process has ended.
-    let scratch = state
-        .live_session(session_id)
-        .and_then(|live| live.scratch_dir())
-        .ok_or_else(not_running)?;
+    let scratch = scratch_of(state, session_id)?;
     // Four characters hold three bytes, so a longer text is over the limit whatever it decodes to.
     if data.len() > MAX_BYTES.div_ceil(3) * 4 {
         bail!("the image is larger than {MAX_BYTES} bytes");
@@ -57,10 +51,39 @@ pub fn save(state: &AppState, session_id: &str, data: &str) -> Result<PathBuf> {
     let bytes = STANDARD
         .decode(data)
         .context("the image is not valid base64")?;
+    write_image(session_id, &scratch, &bytes)
+}
+
+/// [`save`] for an image already decoded, as an upload's parts hold it. **Blocks.**
+pub fn save_bytes(state: &AppState, session_id: &str, bytes: &[u8]) -> Result<PathBuf> {
+    let scratch = scratch_of(state, session_id)?;
+    write_image(session_id, &scratch, bytes)
+}
+
+/// The running session's own scratch directory, which is gone once its process has ended.
+/// Refused with `unknown_session` or `session_not_running`.
+pub(crate) fn scratch_of(state: &AppState, session_id: &str) -> Result<PathBuf> {
+    state.session_record(session_id)?;
+    state
+        .live_session(session_id)
+        .and_then(|live| live.scratch_dir())
+        .ok_or_else(|| not_running(session_id))
+}
+
+fn not_running(session_id: &str) -> anyhow::Error {
+    CodedError::raised(
+        error_code::SESSION_NOT_RUNNING,
+        "this session is not running",
+        &[("session", session_id)],
+    )
+}
+
+/// Writes `bytes` as an image file under `scratch`, the session's scratch directory.
+fn write_image(session_id: &str, scratch: &std::path::Path, bytes: &[u8]) -> Result<PathBuf> {
     if bytes.len() > MAX_BYTES {
         bail!("the image is larger than {MAX_BYTES} bytes");
     }
-    let Some(extension) = extension_of(&bytes) else {
+    let Some(extension) = extension_of(bytes) else {
         bail!("the image is not a PNG, JPEG, GIF or WebP file");
     };
     // Only this directory is created, never the scratch directory above it: the process may end
@@ -69,7 +92,9 @@ pub fn save(state: &AppState, session_id: &str, data: &str) -> Result<PathBuf> {
     match std::fs::create_dir(&directory) {
         Ok(()) => {}
         Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Err(not_running()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return Err(not_running(session_id))
+        }
         Err(err) => {
             return Err(err).with_context(|| format!("creating {}", directory.display()));
         }
@@ -80,7 +105,7 @@ pub fn save(state: &AppState, session_id: &str, data: &str) -> Result<PathBuf> {
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     // The owner's alone, like everything else in the scratch directory.
-    replace_beside(&path, &bytes, Permissions::Private)
+    replace_beside(&path, bytes, Permissions::Private)
         .with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
 }
@@ -108,30 +133,30 @@ mod tests {
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
 
-    use super::{save, MAX_BYTES};
+    use super::{save, save_bytes, MAX_BYTES};
     use crate::protocol::{error_code, AgentId, Event, RequestBody, SessionStatus};
     use crate::state::test_support::insert_record;
     use crate::state::AppState;
     use crate::test_support::{app_state, code_of, fake_live_session_in, ScratchDir};
 
-    const PNG: &[u8] = b"\x89PNG\r\n\x1a\nrest of the image";
-    const JPEG: &[u8] = b"\xff\xd8\xff\xe0rest of the image";
+    pub(super) const PNG: &[u8] = b"\x89PNG\r\n\x1a\nrest of the image";
+    pub(super) const JPEG: &[u8] = b"\xff\xd8\xff\xe0rest of the image";
     const GIF_87: &[u8] = b"GIF87arest of the image";
     const GIF_89: &[u8] = b"GIF89arest of the image";
     const WEBP: &[u8] = b"RIFF\x10\x00\x00\x00WEBPVP8 rest";
 
-    struct Fixture {
-        state: Arc<AppState>,
-        id: String,
+    pub(super) struct Fixture {
+        pub(super) state: Arc<AppState>,
+        pub(super) id: String,
         /// The stand-in process, which ends before the directory its state lives in goes.
         live: Option<Box<dyn std::any::Any>>,
         _dir: ScratchDir,
         /// The directory of the sessions' scratch directories.
-        run: ScratchDir,
+        pub(super) run: ScratchDir,
     }
 
     /// A state with a stored session record, running when `running`.
-    fn fixture(running: bool) -> Fixture {
+    pub(super) fn fixture(running: bool) -> Fixture {
         let id = "pasted-image-session".to_string();
         let (state, dir) = app_state("pasted-image");
         insert_record(&state, &dir, &id, SessionStatus::Working);
@@ -152,11 +177,11 @@ mod tests {
         }
     }
 
-    fn encoded(bytes: &[u8]) -> String {
+    pub(super) fn encoded(bytes: &[u8]) -> String {
         STANDARD.encode(bytes)
     }
 
-    fn pasted_directory(f: &Fixture, id: &str) -> PathBuf {
+    pub(super) fn pasted_directory(f: &Fixture, id: &str) -> PathBuf {
         f.run.join(id).join("pasted")
     }
 
@@ -171,6 +196,83 @@ mod tests {
         assert!(path.is_absolute(), "{path:?}");
         assert_eq!(std::fs::read(&path).unwrap(), PNG);
         assert_eq!(path.parent().unwrap(), pasted_directory(&f, &f.id));
+    }
+
+    #[tokio::test]
+    async fn already_decoded_bytes_are_saved_as_the_same_file_save_writes() {
+        let f = fixture(true);
+        let path = save_bytes(&f.state, &f.id, JPEG).unwrap();
+        assert!(path.is_absolute(), "{path:?}");
+        assert_eq!(extension(&path), "jpg");
+        assert_eq!(std::fs::read(&path).unwrap(), JPEG);
+        assert_eq!(path.parent().unwrap(), pasted_directory(&f, &f.id));
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with("paste-"), "{name:?}");
+        assert!(!name.chars().any(char::is_whitespace), "{name:?}");
+        let other = save_bytes(&f.state, &f.id, JPEG).unwrap();
+        assert_ne!(path, other);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn bytes_saved_as_decoded_are_the_owners_alone() {
+        use std::os::unix::fs::PermissionsExt;
+        let f = fixture(true);
+        let path = save_bytes(&f.state, &f.id, PNG).unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    #[tokio::test]
+    async fn bytes_of_exactly_the_limit_are_taken_and_one_byte_over_is_not() {
+        let f = fixture(true);
+        let mut at_limit = PNG.to_vec();
+        at_limit.resize(MAX_BYTES, 0);
+        let path = save_bytes(&f.state, &f.id, &at_limit).unwrap();
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), MAX_BYTES as u64);
+
+        let mut over = PNG.to_vec();
+        over.resize(MAX_BYTES + 1, 0);
+        let refused = save_bytes(&f.state, &f.id, &over).unwrap_err();
+        assert!(format!("{refused:#}").contains("larger"), "{refused:#}");
+    }
+
+    #[tokio::test]
+    async fn bytes_that_are_none_of_the_four_formats_are_refused_and_leave_no_file() {
+        let f = fixture(true);
+        for bytes in [
+            &b""[..],
+            b"just some text",
+            b"\x89PNG",
+            b"RIFF\x10\x00\x00\x00WEB",
+        ] {
+            let err = save_bytes(&f.state, &f.id, bytes).unwrap_err();
+            assert!(
+                err.downcast_ref::<crate::protocol::CodedError>().is_none(),
+                "{bytes:?} is refused as a plain error: {err:#}"
+            );
+        }
+        assert!(!pasted_directory(&f, &f.id).exists());
+    }
+
+    #[tokio::test]
+    async fn bytes_for_a_session_that_is_unknown_or_not_running_are_refused_as_such() {
+        let f = fixture(true);
+        let err = save_bytes(&f.state, "no-such-session", PNG).unwrap_err();
+        assert_eq!(code_of(&err), error_code::UNKNOWN_SESSION);
+        let stopped = fixture(false);
+        let err = save_bytes(&stopped.state, &stopped.id, PNG).unwrap_err();
+        assert_eq!(code_of(&err), error_code::SESSION_NOT_RUNNING);
+        assert!(!pasted_directory(&stopped, &stopped.id).exists());
+    }
+
+    #[tokio::test]
+    async fn bytes_saved_for_a_scratch_directory_removed_since_are_not_made_again() {
+        let f = fixture(true);
+        std::fs::remove_dir_all(f.run.join(&f.id)).unwrap();
+        let err = save_bytes(&f.state, &f.id, PNG).unwrap_err();
+        assert_eq!(code_of(&err), error_code::SESSION_NOT_RUNNING);
+        assert!(!f.run.join(&f.id).exists());
     }
 
     #[tokio::test]
@@ -335,7 +437,8 @@ mod tests {
             Some("request-7".to_string()),
             RequestBody::SavePastedImage {
                 session: f.id.clone(),
-                data: encoded(JPEG),
+                data: Some(encoded(JPEG)),
+                upload: None,
             },
         )
         .await
@@ -358,11 +461,79 @@ mod tests {
             None,
             RequestBody::SavePastedImage {
                 session: f.id.clone(),
-                data: encoded(PNG),
+                data: Some(encoded(PNG)),
+                upload: None,
             },
         )
         .await
         .unwrap_err();
         assert_eq!(code_of(&err), error_code::SESSION_NOT_RUNNING);
+    }
+
+    async fn handled(f: &Fixture, body: RequestBody) -> anyhow::Result<Option<Event>> {
+        crate::coordinator::handle(&f.state, Some("request-1".to_string()), body).await
+    }
+
+    #[tokio::test]
+    async fn the_request_with_an_upload_is_refused_where_the_parts_are_not_held_and_writes_nothing()
+    {
+        let f = fixture(true);
+        let err = handled(
+            &f,
+            RequestBody::SavePastedImage {
+                session: f.id.clone(),
+                data: None,
+                upload: Some("upload-0".to_string()),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(!format!("{err:#}").is_empty());
+        assert!(!pasted_directory(&f, &f.id).exists());
+    }
+
+    #[tokio::test]
+    async fn the_request_with_both_data_and_an_upload_or_with_neither_is_refused() {
+        let f = fixture(true);
+        for (data, upload) in [
+            (Some(encoded(PNG)), Some("upload-0".to_string())),
+            (None, None),
+        ] {
+            let result = handled(
+                &f,
+                RequestBody::SavePastedImage {
+                    session: f.id.clone(),
+                    data,
+                    upload,
+                },
+            )
+            .await;
+            assert!(result.is_err(), "{result:?}");
+        }
+        assert!(!pasted_directory(&f, &f.id).exists());
+    }
+
+    #[tokio::test]
+    async fn the_requests_about_an_upload_are_served_on_a_control_connection_only() {
+        let f = fixture(true);
+        let bodies = [
+            RequestBody::CreatePastedImageUpload {
+                session: f.id.clone(),
+                size: 100,
+            },
+            RequestBody::WritePastedImagePart {
+                upload: "upload-0".to_string(),
+                offset: 0,
+                data: encoded(PNG),
+            },
+            RequestBody::DeletePastedImageUpload {
+                upload: "upload-0".to_string(),
+            },
+        ];
+        for body in bodies {
+            let result = handled(&f, body).await;
+            assert!(result.is_err(), "{result:?}");
+        }
+        assert!(!pasted_directory(&f, &f.id).exists());
     }
 }

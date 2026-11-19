@@ -544,6 +544,14 @@ pub struct BrowseRequest {
     #[serde(default)]
     #[cfg_attr(test, ts(optional = nullable))]
     pub asked_by_person: bool,
+    /// Deliver the reply in parts of at most this many bytes: a reply whose serialized form is
+    /// larger is held by the daemon and sent as `reply_part`s, the rest of them asked for with
+    /// `read_reply_part`. Cut to `budget::MAX_REPLY_PART_BYTES` and raised to
+    /// `budget::MIN_REPLY_PART_BYTES`. Ignored by `search_project_content`, `read_file_range` and
+    /// `read_reply_part`.
+    #[serde(default)]
+    #[cfg_attr(test, ts(optional))]
+    pub part_bytes: Option<u64>,
     #[serde(flatten)]
     #[cfg_attr(test, schemars(with = "super::schema::Flattened<BrowseBody>"))]
     pub body: BrowseBody,
@@ -570,6 +578,7 @@ pub const BROWSE_REQUEST_TYPES: &[&str] = &[
     "list_project_commits",
     "read_project_commit_change",
     "read_project_commit_change_bodies",
+    "read_reply_part",
 ];
 
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
@@ -717,5 +726,15 @@ pub enum BrowseBody {
         change: ComparedChangeRef,
         old: SideVersion,
         new: SideVersion,
+    },
+    /// The part from `offset` of a reply the daemon holds after answering a request that carried
+    /// `part_bytes` with a `reply_part`; `reply` is the handle that part named. `length` defaults to
+    /// that request's `part_bytes`, and is cut and raised as it is. Answered with `reply_part`.
+    ReadReplyPart {
+        reply: String,
+        offset: u64,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        length: Option<u64>,
     },
 }

@@ -5100,6 +5100,30 @@
                 "null"
               ]
             },
+            "upload": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "pasted_image_upload_created"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "upload"
+          ],
+          "description": "The reply to `create_pasted_image_upload`: `upload` is the handle its parts and its\n`save_pasted_image` name, valid on this connection only."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "agents": {
               "type": "array",
               "items": {
@@ -5466,6 +5490,46 @@
             "data"
           ],
           "description": "The reply to `read_file_range`: `data` is the base64 of the bytes read from `offset`, empty\nat or past the end of the file; `size` and `version` are the file's at this read.\n`launchable` is set only when true: the file has an executable bit. What a name says the\nsystem would run is for the client to judge by the system that opens the copy."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "reply": {
+              "type": "string"
+            },
+            "offset": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "total": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "data": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "reply_part"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "reply",
+            "offset",
+            "total",
+            "data"
+          ],
+          "description": "One part of a browse reply delivered in parts: the reply to a browse request that carried\n`part_bytes` and whose reply is larger, and to each `read_reply_part`. `reply` is the handle\nof the reply the daemon holds, `total` the length in bytes of its serialized form, and `data`\nthe base64 of its bytes from `offset`. Joined in order, the parts are the reply as it would\nhave been sent whole, the id of the request that asked for it included."
         },
         {
           "type": "object",

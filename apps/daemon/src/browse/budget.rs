@@ -24,6 +24,28 @@ pub const MAX_FILE_BYTES: usize = 4 * 1024 * 1024;
 /// among the connection's events, so it is kept small enough not to hold them back for long.
 pub const MAX_RANGE_BYTES: usize = 1024 * 1024;
 
+/// The most bytes of a held reply one `reply_part` carries, before base64: the same as a file
+/// range part, for the same reason.
+pub const MAX_REPLY_PART_BYTES: usize = MAX_RANGE_BYTES;
+
+/// The fewest bytes a part size is raised to, so that a reply is not read in a flood of tiny
+/// requests.
+pub const MIN_REPLY_PART_BYTES: usize = 16 * 1024;
+
+/// What a reply held for parts keeps reserved beside its text: one part's frame at the largest
+/// part size, base64-encoded, with room for the rest of the frame.
+pub const REPLY_PART_ROOM: usize = MAX_REPLY_PART_BYTES.div_ceil(3) * 4 + 64 * 1024;
+
+/// How long a held reply is kept after its latest part was written, with no part asked for.
+pub const HELD_REPLY_IDLE: Duration = Duration::from_secs(60);
+
+/// A part size a request asked for, cut and raised to the bounds.
+pub fn reply_part_bytes(asked: u64) -> usize {
+    usize::try_from(asked)
+        .unwrap_or(usize::MAX)
+        .clamp(MIN_REPLY_PART_BYTES, MAX_REPLY_PART_BYTES)
+}
+
 /// The most entries one directory listing carries before it is cut and marked incomplete. The
 /// largest directories seen in real projects held 6,418 entries (a Gradle cache) and 4,536 (an
 /// icon package under `node_modules`); 99.99 % held under 1,600.
@@ -390,6 +412,8 @@ pub fn reservation_for(body: &BrowseBody) -> usize {
         BrowseBody::ListProjectBranches { .. } => BRANCH_LIST_RESERVATION,
         BrowseBody::CompareProjectBranches { .. } => COMPARISON_RESERVATION,
         BrowseBody::ListProjectCommits { .. } => COMMITS_RESERVATION,
+        // A part is sent from the room its held reply keeps.
+        BrowseBody::ReadReplyPart { .. } => 0,
     }
 }
 
@@ -451,5 +475,40 @@ mod tests {
         let mut budget = ChangeBudget::default();
         assert!(budget.admit(&conflicted("\"\u{1}".into())));
         assert_eq!(budget.path_bytes, 2 + 6);
+    }
+
+    #[test]
+    fn a_part_size_asked_for_is_kept_within_the_bounds_of_a_part() {
+        assert_eq!(reply_part_bytes(0), MIN_REPLY_PART_BYTES);
+        assert_eq!(reply_part_bytes(1), MIN_REPLY_PART_BYTES);
+        assert_eq!(
+            reply_part_bytes(MIN_REPLY_PART_BYTES as u64 - 1),
+            MIN_REPLY_PART_BYTES
+        );
+        let between = (MIN_REPLY_PART_BYTES + MAX_REPLY_PART_BYTES) / 2;
+        assert_eq!(reply_part_bytes(between as u64), between);
+        assert_eq!(
+            reply_part_bytes(MIN_REPLY_PART_BYTES as u64),
+            MIN_REPLY_PART_BYTES
+        );
+        assert_eq!(
+            reply_part_bytes(MAX_REPLY_PART_BYTES as u64),
+            MAX_REPLY_PART_BYTES
+        );
+        assert_eq!(
+            reply_part_bytes(MAX_REPLY_PART_BYTES as u64 + 1),
+            MAX_REPLY_PART_BYTES
+        );
+        assert_eq!(reply_part_bytes(u64::MAX), MAX_REPLY_PART_BYTES);
+    }
+
+    #[test]
+    fn reading_a_part_of_a_held_reply_reserves_nothing_of_its_own() {
+        let body = BrowseBody::ReadReplyPart {
+            reply: "reply-0".to_string(),
+            offset: 0,
+            length: None,
+        };
+        assert_eq!(reservation_for(&body), 0);
     }
 }

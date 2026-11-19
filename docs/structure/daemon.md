@@ -180,7 +180,10 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 - `src/server/` — the router of `PROTOCOL.md`, built twice by `mod.rs`: `router` for the loopback TCP port (the launch
   key alone, and no UI on a host with browser sockets) and `browser_router` for the browser's way in (the browser
   socket, and on Windows the browser port and the owner pipe: the launch key or the owner key, and the embedded UI);
-  `control.rs` the control socket, `terminal.rs` the terminal socket (a per-connection `Registration` settles the
+  `control.rs` the control socket (it serves what belongs to one connection itself, in frame order, not through the
+  coordinator: the pasted-image upload requests, with the connection's own `session::pasted_image::upload::Uploads`,
+  and the browse reads with `browse::lane::Lane`, `read_reply_part` and a request's `part_bytes` included; the
+  coordinator's arms for those forms only refuse), `terminal.rs` the terminal socket (a per-connection `Registration` settles the
   attach's precedence at its deadline in a task of its own and lets the client go however the connection ends; for a
   held terminal, a call that may resize it runs on a blocking thread), `callbacks.rs` the hook, git-ref, revert-gate,
   context-window and MCP routes, `access.rs` the Host/Origin/key guard, one `Access` per listener (the rules are
@@ -397,8 +400,11 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   (`pull_project_branch`: its plan, the fast-forward, the confirmed merge, and the refusals), which `status.rs` calls
   into, and `mod.rs` holds the helpers pull, push and switch share (`not_a_repository`, `no_git_or`).
 - `src/browse/` — project-browsing reads for the control socket and the MCP read tools; `mod.rs`'s `serve` is the entry,
-  with `budget.rs` (including `ChangeBudget`, the one cut of a change listing) and `lane.rs` the limits every read is
-  held to (the upstream-lookup budgets live in `git/remote_branches.rs`). `scope.rs` resolves the project, directory and
+  with `budget.rs` (including `ChangeBudget`, the one cut of a change listing, and the sizes of a reply's parts) and
+  `lane.rs` the limits every read is held to, which also holds a reply too large for one frame for the client to read in
+  parts (`Lane::submit_paged` holds it, `Lane::read_part` serves `read_reply_part`; `reply_parts.rs` builds a part's
+  frame and the answer for a reply no longer held; the wire is "Reading a reply in parts" in `apps/daemon/PROTOCOL.md`)
+  (the upstream-lookup budgets live in `git/remote_branches.rs`). `scope.rs` resolves the project, directory and
   worktree a request works in (and a path for a host action: `resolve_project_path`, `resolve_project_directory`,
   `project_live_roots`); `changes.rs` lists the worktree's changes and `change_read.rs` reads one change for them, for
   `compare.rs` and for `commits.rs`; `content.rs` encodes a body for the wire; `content_search/` searches the files' contents for `search_project_content` (`mod.rs` the parallel walk with ripgrep's libraries (`ignore`, `globset`, `grep-searcher`, `grep-regex`) and the batches its matches are handed back in, `mask.rs` the file mask, `line.rs` a matching line's clipped text and UTF-16 ranges, `refusal.rs` why a pattern or a mask is refused), streamed through `lane.rs`'s `Lane::submit_stream` (an `ack`, then events carved out of the request's reservation) from `mod.rs`'s `search_content`; `live.rs` reads the live files under a scope: a whole regular file (`read_file`, and `read_resolved` for a path already resolved, which `path_links::read` uses too), a part of one (`read_range`, answering `read_file_range`, which a client copying a file reads it in parts with), and what a content search opens without following a link: a file (`open_searchable`) and the directory it is limited to (`directory_within`).
@@ -515,9 +521,11 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   presses on a provider's input box, each seen on the screen before the next, which that clear and an interrupt's
   clearing of the prompt share), `output_pace.rs` (whether the parsed screen shows a whole frame, from the agent's
   recent output), `paste_apart.rs` (submitting a message whose Enter has to wait until the agent has taken its paste;
-  `NotSubmitted`), `pasted_image.rs` (an image the user pasted into the terminal, written as a file under the process's
-  scratch directory (`PtyCore::scratch_dir`) for the agent to read by path: the `save_pasted_image` request, answered by
-  `pasted_image_saved`), `swap.rs` (the stash of the draft around a message, the hold on the input while it is
+  `NotSubmitted`), `pasted_image/` (an image the user pasted into the terminal, written as a file under the process's
+  scratch directory (`PtyCore::scratch_dir`) for the agent to read by path: `mod.rs` the `save_pasted_image` request,
+  answered by `pasted_image_saved`; `upload.rs` the images uploaded in parts first, held in memory per connection
+  (`Uploads`) under a daemon-wide budget (`UploadBudget`, `AppState::pasted_image_uploads`) until the save takes them;
+  the wire is "Uploading a pasted image in parts" in `apps/daemon/PROTOCOL.md`), `swap.rs` (the stash of the draft around a message, the hold on the input while it is
   recovered, which a bound ends so that a message is not held without end, and `write_message_input_as`, the queue's
   write of a message under its id), `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the
   `TrustCarrier` interface of a provider that records the trust in a per-session home; `screen.rs` reads a provider's
@@ -909,7 +917,8 @@ Where a file goes. The rules the code in it follows are in the convention docs, 
 them is `docs/README.md`, "Coding conventions".
 
 - A new control-socket request: its types in `src/protocol/` (and `PROTOCOL.md`), its handler under `src/coordinator/`
-  reached from the dispatcher in `mod.rs`; regenerate `packages/ui/src/protocol.generated.ts` and the schema in
+  reached from the dispatcher in `mod.rs`; a request that works on state one connection holds (an upload, a held browse
+  reply) is served by `src/server/control.rs` instead, and the coordinator's arm for it only refuses; regenerate `packages/ui/src/protocol.generated.ts` and the schema in
   `contracts/protocol/` as `docs/conventions/protocol-and-contracts.md`, "Wire types and generated files" says, and
   follow its "The envelope and field conventions".
 - A new code the daemon names a failure or notice by: a `pub const` of the matching module in `src/protocol/codes.rs`

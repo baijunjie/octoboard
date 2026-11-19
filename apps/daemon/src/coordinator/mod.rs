@@ -80,7 +80,7 @@ pub mod validate;
 use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 
 use crate::accounts::mcp_sign_in::{self, McpAuthAction};
 use crate::accounts::{mcp_inventory, quotas};
@@ -912,7 +912,18 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::SavePastedImage { session, data } => {
+        RequestBody::SavePastedImage {
+            session,
+            data,
+            upload,
+        } => {
+            // An upload's parts are held by the control connection that sent them, which serves
+            // the save of one itself; only the single-frame form reaches here.
+            let data = match (data, upload) {
+                (Some(data), None) => data,
+                (None, Some(_)) => bail!("an image upload is saved on the connection that sent it"),
+                _ => bail!("save_pasted_image takes exactly one of data and upload"),
+            };
             let state = Arc::clone(state);
             let path = tokio::task::spawn_blocking(move || {
                 crate::session::pasted_image::save(&state, &session, &data)
@@ -922,6 +933,13 @@ async fn handle_inner(
                 id: request_id,
                 path: path.to_string_lossy().into_owned(),
             }))
+        }
+
+        // Served by the control connection, which holds its uploads' parts.
+        RequestBody::CreatePastedImageUpload { .. }
+        | RequestBody::WritePastedImagePart { .. }
+        | RequestBody::DeletePastedImageUpload { .. } => {
+            bail!("an image upload is served on a control connection")
         }
 
         RequestBody::InterruptSession { session } => {

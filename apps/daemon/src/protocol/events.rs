@@ -549,6 +549,12 @@ pub enum Event {
         id: Option<String>,
         path: String,
     },
+    /// The reply to `create_pasted_image_upload`: `upload` is the handle its parts and its
+    /// `save_pasted_image` name, valid on this connection only.
+    PastedImageUploadCreated {
+        id: Option<String>,
+        upload: String,
+    },
     /// The reply to `probe_native_apps`: the agents whose desktop application is installed on the
     /// daemon's host.
     NativeApps {
@@ -646,6 +652,18 @@ pub enum Event {
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         #[cfg_attr(test, ts(optional = nullable))]
         launchable: bool,
+    },
+    /// One part of a browse reply delivered in parts: the reply to a browse request that carried
+    /// `part_bytes` and whose reply is larger, and to each `read_reply_part`. `reply` is the handle
+    /// of the reply the daemon holds, `total` the length in bytes of its serialized form, and `data`
+    /// the base64 of its bytes from `offset`. Joined in order, the parts are the reply as it would
+    /// have been sent whole, the id of the request that asked for it included.
+    ReplyPart {
+        id: Option<String>,
+        reply: String,
+        offset: u64,
+        total: u64,
+        data: String,
     },
     /// The reply to `list_project_changes`. `head` is the commit the staged changes are against,
     /// `null` before the first commit; `complete` is false when the list was cut at a budget.

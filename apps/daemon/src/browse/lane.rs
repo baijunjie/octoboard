@@ -26,15 +26,15 @@
 //! for room on the reply queue with its read slot given back, its reading threads paused until
 //! the slot is taken back, and its cancel watched (see [`Stream::send`]).
 
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use anyhow::Result;
-use tokio::sync::{mpsc, Notify, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{mpsc, oneshot, Notify, OwnedSemaphorePermit, Semaphore};
 
-use crate::browse::{budget, Cancelled};
+use crate::browse::{budget, reply_parts, Cancelled};
 use crate::protocol::{error_code, CodedError, Event};
 
 /// The daemon-wide part of the bounds: one per daemon, shared by every connection.
@@ -135,6 +135,10 @@ pub struct Frame {
     _retained: OwnedSemaphorePermit,
     _connection: OwnedSemaphorePermit,
     _pending: OwnedSemaphorePermit,
+    /// For a part of a held reply, its turn: the reply's room for one part is in use until the
+    /// frame is written, the next part request waits until then, and the reply's idle time counts
+    /// from then.
+    _part: Option<PartTurn>,
 }
 
 impl Frame {
@@ -151,6 +155,7 @@ impl Frame {
             _retained: permit(),
             _connection: permit(),
             _pending: permit(),
+            _part: None,
         }
     }
 }
@@ -191,6 +196,125 @@ struct InFlight {
     requests: HashMap<u64, Arc<Cancel>>,
     slots: HashMap<String, u64>,
     closed: bool,
+    /// Replies held to be read in parts, by handle.
+    held: HashMap<String, HeldReply>,
+    next_reply: u64,
+    /// The handles of the latest replies a newer request in their slot released, so that a part
+    /// asked for afterwards is answered `request_superseded` rather than `reply_part_unavailable`.
+    superseded_replies: VecDeque<String>,
+}
+
+/// How many released handles [`InFlight::superseded_replies`] remembers.
+const SUPERSEDED_REPLIES_KEPT: usize = 64;
+
+impl InFlight {
+    /// Forgets request `seq`, and its hold on `slot` unless a newer request has taken it.
+    fn unregister(&mut self, seq: u64, slot: Option<&str>) {
+        self.requests.remove(&seq);
+        if let Some(slot) = slot {
+            if self.slots.get(slot) == Some(&seq) {
+                self.slots.remove(slot);
+            }
+        }
+    }
+
+    /// Releases the held reply `handle`: drops its text, and its reservation once no part of it
+    /// is left to write; a part request waiting for its turn is answered as for a released one.
+    fn release(&mut self, handle: &str, superseded: bool) {
+        let Some(held) = self.held.remove(handle) else {
+            return;
+        };
+        held.shared.released.cancel();
+        if superseded {
+            if self.superseded_replies.len() == SUPERSEDED_REPLIES_KEPT {
+                self.superseded_replies.pop_front();
+            }
+            self.superseded_replies.push_back(handle.to_string());
+        }
+    }
+
+    /// The answer to a part asked of `handle`, a reply no longer held.
+    fn gone(&self, id: Option<String>, handle: &str) -> Event {
+        if self.superseded_replies.iter().any(|h| h == handle) {
+            superseded(id)
+        } else {
+            reply_parts::unavailable(id, handle)
+        }
+    }
+}
+
+/// A browse reply larger than the part size its request asked for, kept to be read in parts.
+#[derive(Debug)]
+struct HeldReply {
+    text: Arc<String>,
+    /// The slot of the request it answers: a newer request in that slot releases it.
+    slot: Option<String>,
+    /// The part size the request asked for, the default of each `read_reply_part`.
+    part_bytes: usize,
+    shared: Arc<HeldShared>,
+}
+
+/// What a held reply keeps until its last part is written: its reservation (the reply's text and
+/// the room for one part's frame), its place among the connection's outstanding requests, and when
+/// it expires.
+#[derive(Debug)]
+struct HeldShared {
+    /// The bytes of the reservation one part's frame may use beside the text.
+    room: usize,
+    /// Set when the reply is released, waking the part requests waiting for their turn.
+    released: Cancel,
+    /// The end of the queue of part requests: the turn the next one waits on. One part is in
+    /// flight at a time, so that the room covers it, and parts are served in the order they were
+    /// asked for, since a request takes its place here before anything it does is spawned.
+    tail: Mutex<Option<oneshot::Receiver<()>>>,
+    /// The part requests queued or in flight; a reply with any is not expired.
+    queued: AtomicUsize,
+    expires: Mutex<tokio::time::Instant>,
+    _retained: OwnedSemaphorePermit,
+    _connection: OwnedSemaphorePermit,
+    _pending: OwnedSemaphorePermit,
+}
+
+impl HeldShared {
+    /// Takes the next place in the queue of part requests: the turn to wait for (none when the
+    /// queue is empty) and this request's own, which lets the next one go when dropped.
+    fn take_turn(self: &Arc<Self>) -> (Option<oneshot::Receiver<()>>, PartTurn) {
+        let (done, next) = oneshot::channel();
+        let previous = self
+            .tail
+            .lock()
+            .expect("held reply lock poisoned")
+            .replace(next);
+        self.queued.fetch_add(1, Ordering::Relaxed);
+        (
+            previous,
+            PartTurn {
+                shared: self.clone(),
+                _done: done,
+            },
+        )
+    }
+}
+
+/// A part request's place in its reply's queue, carried by the part's [`Frame`] until it is
+/// written: the next part request goes once it is dropped, and the reply's idle time counts from
+/// then.
+#[derive(Debug)]
+pub struct PartTurn {
+    shared: Arc<HeldShared>,
+    _done: oneshot::Sender<()>,
+}
+
+impl Drop for PartTurn {
+    fn drop(&mut self) {
+        self.shared.queued.fetch_sub(1, Ordering::Relaxed);
+        *self
+            .shared
+            .expires
+            .lock()
+            .expect("held reply lock poisoned") =
+            tokio::time::Instant::now() + budget::HELD_REPLY_IDLE;
+    }
 }
 
 /// One control connection's browse lane.
@@ -248,14 +372,35 @@ impl Lane {
         }
     }
 
-    /// Starts `work` for request `id`, under the lane's bounds, reserving `reservation` bytes —
-    /// the most its reply and its buffers can come to — for it; its reply, or its failure, goes
-    /// back on the connection. Returns once the request is under way, or once its refusal is on
-    /// the control queue.
+    /// [`Lane::submit_paged`] for a request whose reply is never held, as most tests submit one.
+    #[cfg(test)]
     pub async fn submit<W>(
         self: &Arc<Self>,
         id: Option<String>,
         slot: Option<String>,
+        reservation: usize,
+        work: W,
+    ) where
+        W: FnOnce(&AtomicBool) -> Result<Event> + Send + 'static,
+    {
+        self.submit_paged(id, slot, None, reservation, work).await;
+    }
+
+    /// Starts `work` for request `id`, under the lane's bounds, reserving `reservation` bytes —
+    /// the most its reply and its buffers can come to — for it; its reply, or its failure, goes
+    /// back on the connection. Returns once the request is under way, or once its refusal is on
+    /// the control queue.
+    ///
+    /// With `part_bytes` (already cut and raised to the bounds), the request asked for its reply in
+    /// parts of at most that many bytes: a reply larger than that is held, and its first part sent
+    /// as a `reply_part`; the rest are read with [`Lane::read_part`]. The reply keeps
+    /// room in its reservation for one part's frame beside its text, and its place among the
+    /// outstanding requests, until it is released.
+    pub async fn submit_paged<W>(
+        self: &Arc<Self>,
+        id: Option<String>,
+        slot: Option<String>,
+        part_bytes: Option<usize>,
         reservation: usize,
         work: W,
     ) where
@@ -269,19 +414,279 @@ impl Lane {
         };
         let lane = self.clone();
         tokio::spawn(async move {
-            let outcome = lane.run(&cancel, reservation, work).await;
-            lane.unregister(seq, slot.as_deref());
-            lane.deliver(id, &cancel, pending, outcome).await;
+            let room = part_bytes.map_or(0, |_| budget::REPLY_PART_ROOM);
+            let outcome = lane.run(&cancel, reservation, room, work).await;
+            match part_bytes {
+                // Still in its slot, so that holding the reply and leaving the slot are one step
+                // a newer request in the slot cannot come between.
+                Some(part_bytes) => {
+                    lane.deliver_paged(id, seq, &cancel, pending, outcome, slot, part_bytes)
+                        .await;
+                }
+                None => {
+                    lane.unregister(seq, slot.as_deref());
+                    lane.deliver(id, &cancel, pending, outcome).await;
+                }
+            }
         });
     }
 
-    /// Starts `work` for request `id` as [`Lane::submit`] does, for a request answered with `ack`
+    /// Answers `read_reply_part`: the part of the held reply `handle` from `offset`, `length`
+    /// bytes of it (the request's part size when absent; cut and raised to the bounds), as a
+    /// `reply_part` on the reply queue. Parts are served in the order they were asked for, one at a
+    /// time: a request waits for its turn while an earlier part of the same reply is still being
+    /// written. The part reaching the end of the reply releases it. A reply no
+    /// longer held is answered `reply_part_unavailable`, or `request_superseded` where a newer
+    /// request in its slot released it.
+    pub async fn read_part(
+        self: &Arc<Self>,
+        id: Option<String>,
+        handle: String,
+        offset: u64,
+        length: Option<u64>,
+    ) {
+        let Some(pending) = self.admit_pending(&id).await else {
+            return;
+        };
+        // The place in the queue is taken here, before anything is spawned, so that parts are
+        // served in the order their frames came.
+        let found = {
+            let in_flight = self.in_flight.lock().expect("lane lock poisoned");
+            if in_flight.closed {
+                return;
+            }
+            match in_flight.held.get(&handle) {
+                Some(held) => {
+                    let (previous, turn) = held.shared.take_turn();
+                    Ok((previous, turn, held.shared.clone()))
+                }
+                None => Err(in_flight.gone(id.clone(), &handle)),
+            }
+        };
+        let (previous, turn, shared) = match found {
+            Ok(found) => found,
+            Err(gone) => {
+                self.answer(gone, pending).await;
+                return;
+            }
+        };
+        let lane = self.clone();
+        tokio::spawn(async move {
+            if let Some(previous) = previous {
+                tokio::select! {
+                    _ = previous => {}
+                    () = shared.released.cancelled() => {}
+                }
+            }
+            let found = {
+                let in_flight = lane.in_flight.lock().expect("lane lock poisoned");
+                match in_flight.held.get(&handle) {
+                    Some(held) => Ok((
+                        held.text.clone(),
+                        length.map_or(held.part_bytes, budget::reply_part_bytes),
+                    )),
+                    None => Err(in_flight.gone(id.clone(), &handle)),
+                }
+            };
+            let (text, want) = match found {
+                Ok(found) => found,
+                Err(gone) => {
+                    drop(turn);
+                    lane.answer(gone, pending).await;
+                    return;
+                }
+            };
+            lane.send_part(id, &handle, &text, offset, want, turn, pending)
+                .await;
+        });
+    }
+
+    /// Builds the part of `text` from `offset` and puts it on the reply queue, releasing the reply
+    /// when the part reaches its end; a part that cannot fit the reply's room is answered with its
+    /// error.
+    #[allow(clippy::too_many_arguments)]
+    async fn send_part(
+        &self,
+        id: Option<String>,
+        handle: &str,
+        text: &str,
+        offset: u64,
+        want: usize,
+        turn: PartTurn,
+        pending: OwnedSemaphorePermit,
+    ) {
+        let room = turn.shared.room;
+        let part = match reply_parts::part_frame(id.clone(), handle, text, offset, want, room) {
+            Ok(part) => part,
+            Err(err) => {
+                drop(turn);
+                self.answer(Event::from_error(id, &err), pending).await;
+                return;
+            }
+        };
+        if part.reaches_end {
+            self.in_flight
+                .lock()
+                .expect("lane lock poisoned")
+                .release(handle, false);
+        }
+        let frame = Frame {
+            text: part.text,
+            _retained: self.empty_share(),
+            _connection: self.empty_share(),
+            _pending: pending,
+            _part: Some(turn),
+        };
+        let _ = self.content.send(frame).await;
+    }
+
+    /// A share of nothing, for a frame whose bytes another holder reserved.
+    fn empty_share(&self) -> OwnedSemaphorePermit {
+        self.retained
+            .clone()
+            .try_acquire_many_owned(0)
+            .expect("a share of nothing is always granted")
+    }
+
+    /// [`Lane::deliver`] for a request that asked for parts of `part_bytes`, still registered as
+    /// `seq` in its slot: a reply that fits one part is sent whole, with the room kept for a part
+    /// given back; a larger one is held and its first part sent. Leaving the slot and holding the
+    /// reply happen under one lock, so a newer request in the slot either cancelled this one before
+    /// (it is answered `request_superseded`) or comes after and releases the held reply.
+    #[allow(clippy::too_many_arguments)]
+    async fn deliver_paged(
+        self: &Arc<Self>,
+        id: Option<String>,
+        seq: u64,
+        cancel: &Cancel,
+        pending: OwnedSemaphorePermit,
+        outcome: Result<Reply>,
+        slot: Option<String>,
+        part_bytes: usize,
+    ) {
+        let mut reply = match outcome {
+            Ok(reply) if !cancel.is_cancelled() && reply.text.len() > part_bytes => reply,
+            Ok(mut reply) => {
+                self.unregister(seq, slot.as_deref());
+                drop(reply.retained.split(reply.room));
+                drop(reply.connection.split(reply.room));
+                reply.room = 0;
+                return self.deliver(id, cancel, pending, Ok(reply)).await;
+            }
+            outcome => {
+                self.unregister(seq, slot.as_deref());
+                return self.deliver(id, cancel, pending, outcome).await;
+            }
+        };
+        let shared = Arc::new(HeldShared {
+            room: std::mem::take(&mut reply.room),
+            released: Cancel::default(),
+            tail: Mutex::new(None),
+            queued: AtomicUsize::new(0),
+            expires: Mutex::new(tokio::time::Instant::now() + budget::HELD_REPLY_IDLE),
+            _retained: reply.retained,
+            _connection: reply.connection,
+            _pending: pending,
+        });
+        let text = Arc::new(reply.text);
+        let held = {
+            let mut in_flight = self.in_flight.lock().expect("lane lock poisoned");
+            in_flight.unregister(seq, slot.as_deref());
+            if in_flight.closed || cancel.is_cancelled() {
+                None
+            } else {
+                let handle = format!("reply-{}", in_flight.next_reply);
+                in_flight.next_reply += 1;
+                let (_, turn) = shared.take_turn();
+                in_flight.held.insert(
+                    handle.clone(),
+                    HeldReply {
+                        text: text.clone(),
+                        slot,
+                        part_bytes,
+                        shared: shared.clone(),
+                    },
+                );
+                Some((handle, turn))
+            }
+        };
+        let Some((handle, turn)) = held else {
+            let closed = self.in_flight.lock().expect("lane lock poisoned").closed;
+            drop(text);
+            // Its place among the outstanding requests goes with `shared`, so the refusal is
+            // queued on its own; nobody is left to answer once the lane is closed.
+            drop(shared);
+            if !closed {
+                let _ = self.control.send(superseded(id)).await;
+            }
+            return;
+        };
+        self.expire_when_idle(handle.clone(), Arc::downgrade(&shared));
+        drop(shared);
+        let pending = self.pending_share();
+        self.send_part(id, &handle, &text, 0, part_bytes, turn, pending)
+            .await;
+    }
+
+    /// A place among the outstanding requests that holds none, for the first part of a held
+    /// reply: the reply itself holds the request's.
+    fn pending_share(&self) -> OwnedSemaphorePermit {
+        self.pending
+            .clone()
+            .try_acquire_many_owned(0)
+            .expect("a share of nothing is always granted")
+    }
+
+    /// Releases the held reply `handle` once it has gone the lane's idle time with no part in
+    /// flight since its latest was written; ends as soon as it is released otherwise.
+    fn expire_when_idle(self: &Arc<Self>, handle: String, shared: std::sync::Weak<HeldShared>) {
+        let lane = Arc::downgrade(self);
+        tokio::spawn(async move {
+            loop {
+                let Some(at) = shared
+                    .upgrade()
+                    .map(|shared| *shared.expires.lock().expect("held reply lock poisoned"))
+                else {
+                    return;
+                };
+                tokio::time::sleep_until(at).await;
+                let Some(lane) = lane.upgrade() else {
+                    return;
+                };
+                let mut in_flight = lane.in_flight.lock().expect("lane lock poisoned");
+                let Some(held) = in_flight.held.get(&handle) else {
+                    return;
+                };
+                let in_use = held.shared.queued.load(Ordering::Relaxed) > 0;
+                let expires = *held
+                    .shared
+                    .expires
+                    .lock()
+                    .expect("held reply lock poisoned");
+                if in_use {
+                    // A part asked for or being written: its turn sets the expiry anew once
+                    // written.
+                    *held
+                        .shared
+                        .expires
+                        .lock()
+                        .expect("held reply lock poisoned") =
+                        tokio::time::Instant::now() + budget::HELD_REPLY_IDLE;
+                } else if expires <= tokio::time::Instant::now() {
+                    in_flight.release(&handle, false);
+                    return;
+                }
+            }
+        });
+    }
+
+    /// Starts `work` for request `id` as [`Lane::submit_paged`] does, for a request answered with `ack`
     /// and followed by events: `work` sends the `ack` and those events through the [`Stream`] it is
     /// handed, and returns the last event. Every event after the `ack` is carved out of
     /// `reservation`, and keeps its share until its frame has been written, so `reservation` bounds
     /// all the bytes the request sends; the last event keeps the request's place among the
     /// outstanding ones until it is written too. A failure before the `ack` is answered as
-    /// [`Lane::submit`] answers one. Once the request is acknowledged its id has its answer, so
+    /// [`Lane::submit_paged`] answers one. Once the request is acknowledged its id has its answer, so
     /// nothing else is ever sent for it: a cancel ends it with nothing more sent, since a newer
     /// request has taken its place or nobody is left to read it, and `work` itself ends every
     /// other way it can stop with its last event (a failure it returns, or a panic, is only
@@ -428,6 +833,7 @@ impl Lane {
                     _retained: stream.retained,
                     _connection: stream.connection,
                     _pending: pending,
+                    _part: None,
                 };
                 // Superseded while its last event waits for room, it sends nothing more. The wait
                 // has no deadline of its own: a client that takes no frame for the connection's
@@ -474,18 +880,24 @@ impl Lane {
                     previous.cancel();
                 }
             }
+            let released: Vec<String> = in_flight
+                .held
+                .iter()
+                .filter(|(_, held)| held.slot.as_deref() == Some(slot))
+                .map(|(handle, _)| handle.clone())
+                .collect();
+            for handle in released {
+                in_flight.release(&handle, true);
+            }
         }
         Some((seq, cancel))
     }
 
     fn unregister(&self, seq: u64, slot: Option<&str>) {
-        let mut in_flight = self.in_flight.lock().expect("lane lock poisoned");
-        in_flight.requests.remove(&seq);
-        if let Some(slot) = slot {
-            if in_flight.slots.get(slot) == Some(&seq) {
-                in_flight.slots.remove(slot);
-            }
-        }
+        self.in_flight
+            .lock()
+            .expect("lane lock poisoned")
+            .unregister(seq, slot);
     }
 
     /// Cancels everything outstanding and refuses anything submitted later: the connection has
@@ -496,13 +908,26 @@ impl Lane {
         for cancel in in_flight.requests.values() {
             cancel.cancel();
         }
+        let held: Vec<String> = in_flight.held.keys().cloned().collect();
+        for handle in held {
+            in_flight.release(&handle, false);
+        }
     }
 
     /// Waits for a reservation from the connection and from the daemon and for a read slot, then
     /// runs `work` on a blocking thread and serializes its reply into a buffer of exactly its
     /// size, shrinking both reservations to it. Gives up at any point once cancelled. A reply
     /// that would not fit its reservation is refused rather than held past the budget.
-    async fn run<W>(&self, cancel: &Arc<Cancel>, reservation: usize, work: W) -> Result<Reply>
+    ///
+    /// `keep` bytes of what the reply does not need, at most, stay reserved beside it, as the room
+    /// a reply held for parts sends each part's frame from.
+    async fn run<W>(
+        &self,
+        cancel: &Arc<Cancel>,
+        reservation: usize,
+        keep: usize,
+        work: W,
+    ) -> Result<Reply>
     where
         W: FnOnce(&AtomicBool) -> Result<Event> + Send + 'static,
     {
@@ -533,12 +958,14 @@ impl Lane {
         })
         .await??;
         let unused = reservation.saturating_sub(text.len());
-        drop(connection.split(unused));
-        drop(retained.split(unused));
+        let room = keep.min(unused);
+        drop(connection.split(unused - room));
+        drop(retained.split(unused - room));
         Ok(Reply {
             text,
             retained,
             connection,
+            room,
         })
     }
 
@@ -561,6 +988,7 @@ impl Lane {
                     _retained: reply.retained,
                     _connection: reply.connection,
                     _pending: pending,
+                    _part: None,
                 };
                 let _ = self.content.send(frame).await;
                 return;
@@ -725,6 +1153,7 @@ impl Stream {
                 .connection
                 .split(0)
                 .expect("an empty share always splits"),
+            _part: None,
         });
         Ok(SendOutcome::Sent)
     }
@@ -793,6 +1222,8 @@ struct Reply {
     text: String,
     retained: OwnedSemaphorePermit,
     connection: OwnedSemaphorePermit,
+    /// The bytes of the shares kept beside the text as room for one part's frame.
+    room: usize,
 }
 
 fn superseded(id: Option<String>) -> Event {
@@ -807,6 +1238,9 @@ fn superseded(id: Option<String>) -> Event {
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
+
+    use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
 
     use super::*;
     use crate::test_support::PATIENCE;
@@ -1331,5 +1765,820 @@ mod tests {
         drop(first);
         let second = tokio::time::timeout(PATIENCE, gate.admit(600)).await;
         assert!(second.is_ok());
+    }
+
+    /// What the tests of replies read in parts need of a lane: both of its queues, and the gate
+    /// whose retained bytes they watch.
+    struct Paged {
+        lane: Arc<Lane>,
+        gate: Arc<Gate>,
+        control: mpsc::Receiver<Event>,
+        content: mpsc::Receiver<Frame>,
+    }
+
+    /// The retained bytes the gate and the lane of a paged test each hold.
+    const ROOMY: usize = 8 << 20;
+
+    /// What a request in a paged test reserves: more than the largest reply it makes and the room
+    /// a held reply keeps beside it.
+    const RESERVE: usize = 4 << 20;
+
+    fn paged(pending: usize) -> Paged {
+        let gate = Arc::new(Gate::new(4, ROOMY));
+        let (control_tx, control) = mpsc::channel(64);
+        let (content_tx, content) = mpsc::channel(64);
+        let lane = Arc::new(Lane::new(
+            gate.clone(),
+            pending,
+            ROOMY,
+            control_tx,
+            content_tx,
+        ));
+        Paged {
+            lane,
+            gate,
+            control,
+            content,
+        }
+    }
+
+    /// A work item whose reply serializes to `n` bytes more than an empty `ack` does.
+    fn big(n: usize) -> impl FnOnce(&AtomicBool) -> Result<Event> + Send + 'static {
+        move |_| Ok(ack(&"x".repeat(n)))
+    }
+
+    /// The bytes a reply made of `big(n)` serializes to.
+    fn overhead() -> usize {
+        serde_json::to_string(&ack("")).unwrap().len()
+    }
+
+    /// The text of `big(n)`'s reply sent whole by a plain submit.
+    async fn whole(n: usize) -> String {
+        let mut p = paged(8);
+        p.lane
+            .submit(Some("plain".into()), None, RESERVE, big(n))
+            .await;
+        next(&mut p.content).await.text
+    }
+
+    fn json_of(frame: &Frame) -> serde_json::Value {
+        serde_json::from_str(&frame.text).expect("a frame is JSON")
+    }
+
+    fn data_of(frame: &serde_json::Value) -> Vec<u8> {
+        STANDARD
+            .decode(frame["data"].as_str().expect("data is text"))
+            .expect("data is base64")
+    }
+
+    fn handle_of(frame: &serde_json::Value) -> String {
+        frame["reply"].as_str().expect("a reply handle").to_string()
+    }
+
+    fn param(event: &Event, name: &str) -> Option<String> {
+        match event {
+            Event::Error { params, .. } => params.get(name).cloned(),
+            _ => None,
+        }
+    }
+
+    fn error_id(event: &Event) -> Option<String> {
+        match event {
+            Event::Error { id, .. } => id.clone(),
+            _ => None,
+        }
+    }
+
+    /// The first part of a reply of `n` extra bytes asked for in parts of `part_bytes` under
+    /// `slot`, as a frame still unwritten, and the reply's handle.
+    async fn first_part(
+        p: &mut Paged,
+        slot: Option<&str>,
+        part_bytes: usize,
+        n: usize,
+    ) -> (Frame, String) {
+        p.lane
+            .submit_paged(
+                Some("ask".into()),
+                slot.map(str::to_string),
+                Some(part_bytes),
+                RESERVE,
+                big(n),
+            )
+            .await;
+        let frame = next(&mut p.content).await;
+        let handle = handle_of(&json_of(&frame));
+        (frame, handle)
+    }
+
+    /// Asks for the part of `handle` from `offset` as request `id` and takes its frame.
+    async fn part_at(
+        p: &mut Paged,
+        id: &str,
+        handle: &str,
+        offset: u64,
+        length: Option<u64>,
+    ) -> Frame {
+        p.lane
+            .read_part(Some(id.into()), handle.to_string(), offset, length)
+            .await;
+        next(&mut p.content).await
+    }
+
+    /// Reads every part after the first, writing each before asking for the next; returns the
+    /// bytes of the reply from `offset` on, with each part's length.
+    async fn read_to_end(
+        p: &mut Paged,
+        handle: &str,
+        mut offset: u64,
+        total: u64,
+        lengths: &[Option<u64>],
+    ) -> (Vec<u8>, Vec<usize>) {
+        let mut joined = Vec::new();
+        let mut sizes = Vec::new();
+        let mut round = 0;
+        while offset < total {
+            let id = format!("read-{round}");
+            let frame = part_at(p, &id, handle, offset, lengths[round % lengths.len()]).await;
+            let json = json_of(&frame);
+            assert_eq!(json["type"], "reply_part");
+            assert_eq!(json["id"], id.as_str());
+            assert_eq!(json["reply"], handle);
+            assert_eq!(json["offset"], offset);
+            assert_eq!(json["total"], total);
+            let data = data_of(&json);
+            assert!(!data.is_empty(), "a part before the end carries bytes");
+            offset += data.len() as u64;
+            sizes.push(data.len());
+            joined.extend(data);
+            drop(frame);
+            round += 1;
+        }
+        (joined, sizes)
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_reply_that_fits_the_part_size_is_sent_whole_and_keeps_nothing_extra() {
+        let mut plain = paged(8);
+        plain
+            .lane
+            .submit(Some("a".into()), None, RESERVE, big(100))
+            .await;
+        let whole_frame = next(&mut plain.content).await;
+        let plain_held = ROOMY - plain.gate.retained_available();
+
+        let mut p = paged(8);
+        p.lane
+            .submit_paged(
+                Some("a".into()),
+                None,
+                Some(budget::MIN_REPLY_PART_BYTES),
+                RESERVE,
+                big(100),
+            )
+            .await;
+        let frame = next(&mut p.content).await;
+        assert_eq!(frame.text, whole_frame.text);
+        assert_eq!(json_of(&frame)["type"], "ack");
+        assert_eq!(
+            ROOMY - p.gate.retained_available(),
+            plain_held,
+            "the gate holds what a plain submit leaves"
+        );
+        assert_eq!(
+            ROOMY - p.lane.retained.available_permits(),
+            plain_held,
+            "the connection holds what a plain submit leaves"
+        );
+        assert_eq!(p.lane.pending.available_permits(), 7);
+        drop(frame);
+        assert_eq!(p.gate.retained_available(), ROOMY);
+        assert_eq!(p.lane.retained.available_permits(), ROOMY);
+        assert_eq!(p.lane.pending.available_permits(), 8);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_reply_of_exactly_the_part_size_is_sent_whole_and_one_byte_more_is_held() {
+        let part = budget::MIN_REPLY_PART_BYTES;
+        let mut p = paged(8);
+        p.lane
+            .submit_paged(
+                Some("exact".into()),
+                None,
+                Some(part),
+                RESERVE,
+                big(part - overhead()),
+            )
+            .await;
+        let frame = next(&mut p.content).await;
+        assert_eq!(frame.text.len(), part);
+        assert_eq!(json_of(&frame)["type"], "ack");
+        drop(frame);
+
+        p.lane
+            .submit_paged(
+                Some("over".into()),
+                None,
+                Some(part),
+                RESERVE,
+                big(part - overhead() + 1),
+            )
+            .await;
+        let frame = next(&mut p.content).await;
+        let json = json_of(&frame);
+        assert_eq!(json["type"], "reply_part");
+        assert_eq!(json["total"], part + 1);
+        assert_eq!(data_of(&json).len(), part);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_request_without_a_part_size_is_never_held() {
+        let mut p = paged(8);
+        p.lane
+            .submit(Some("a".into()), None, RESERVE, big(100_000))
+            .await;
+        let frame = next(&mut p.content).await;
+        assert_eq!(json_of(&frame)["type"], "ack");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_larger_reply_is_answered_with_its_first_part_and_a_handle() {
+        let n = 100_000;
+        let text = whole(n).await;
+        let part = 20_000;
+        let mut p = paged(8);
+        let (frame, handle) = first_part(&mut p, None, part, n).await;
+        let json = json_of(&frame);
+        assert_eq!(json["type"], "reply_part");
+        assert_eq!(json["id"], "ask");
+        assert!(!handle.is_empty());
+        assert_eq!(json["offset"], 0);
+        assert_eq!(json["total"], text.len());
+        assert_eq!(data_of(&json), &text.as_bytes()[..part]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_parts_of_a_held_reply_joined_in_order_are_the_reply_a_plain_submit_sends() {
+        let n = 100_000;
+        let text = whole(n).await;
+        let part = 20_000;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, part, n).await;
+        let mut joined = data_of(&json_of(&first));
+        drop(first);
+        let (rest, sizes) =
+            read_to_end(&mut p, &handle, part as u64, text.len() as u64, &[None]).await;
+        joined.extend(rest);
+        assert_eq!(joined, text.as_bytes());
+        // Each part asked for without a length is the size the request asked for, the last
+        // holding what is left.
+        let (last, full) = sizes.split_last().unwrap();
+        assert!(full.iter().all(|size| *size == part), "{sizes:?}");
+        assert_eq!(*last, text.len() - part - full.len() * part);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn parts_of_different_lengths_still_join_to_the_reply() {
+        let n = 150_000;
+        let text = whole(n).await;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, 20_000, n).await;
+        let mut joined = data_of(&json_of(&first));
+        drop(first);
+        let lengths = [Some(30_000), Some(17_000), None, Some(100_000)];
+        let (rest, _) = read_to_end(
+            &mut p,
+            &handle,
+            joined.len() as u64,
+            text.len() as u64,
+            &lengths,
+        )
+        .await;
+        joined.extend(rest);
+        assert_eq!(joined, text.as_bytes());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_length_below_the_floor_is_raised_and_one_above_the_ceiling_is_cut() {
+        let n = 2 << 20;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, 20_000, n).await;
+        drop(first);
+        let tiny = part_at(&mut p, "tiny", &handle, 20_000, Some(1)).await;
+        assert_eq!(data_of(&json_of(&tiny)).len(), budget::MIN_REPLY_PART_BYTES);
+        drop(tiny);
+        let huge = part_at(&mut p, "huge", &handle, 20_000, Some(u64::MAX)).await;
+        assert_eq!(data_of(&json_of(&huge)).len(), budget::MAX_REPLY_PART_BYTES);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn an_offset_at_or_past_the_end_answers_empty_data_at_the_end_and_releases_the_reply() {
+        let n = 50_000;
+        let total = whole(n).await.len() as u64;
+        for offset in [total, total + 1_000, u64::MAX] {
+            let mut p = paged(8);
+            let (first, handle) = first_part(&mut p, None, 20_000, n).await;
+            drop(first);
+            let frame = part_at(&mut p, "end", &handle, offset, None).await;
+            let json = json_of(&frame);
+            assert_eq!(json["type"], "reply_part", "offset {offset}");
+            assert_eq!(json["data"], "", "offset {offset}");
+            assert_eq!(json["offset"], total, "offset {offset}");
+            assert_eq!(json["total"], total, "offset {offset}");
+            drop(frame);
+
+            p.lane
+                .read_part(Some("after".into()), handle.clone(), 0, None)
+                .await;
+            let refusal = next(&mut p.control).await;
+            assert_eq!(
+                code_of(&refusal),
+                Some(error_code::REPLY_PART_UNAVAILABLE),
+                "offset {offset}"
+            );
+            assert_eq!(p.gate.retained_available(), ROOMY, "offset {offset}");
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_part_reaching_the_end_releases_the_reply_and_gives_everything_back() {
+        let n = 50_000;
+        let total = whole(n).await.len() as u64;
+        let part = 20_000;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, part, n).await;
+        drop(first);
+        let (_, sizes) = read_to_end(&mut p, &handle, part as u64, total, &[None]).await;
+        assert_eq!(sizes.iter().sum::<usize>() as u64, total - part as u64);
+
+        // The last part is written, which released the reply: a part asked for now is refused.
+        p.lane
+            .read_part(Some("late".into()), handle.clone(), 0, None)
+            .await;
+        let refusal = next(&mut p.control).await;
+        assert_eq!(code_of(&refusal), Some(error_code::REPLY_PART_UNAVAILABLE));
+        assert_eq!(param(&refusal, "reply").as_deref(), Some(handle.as_str()));
+        assert_eq!(error_id(&refusal).as_deref(), Some("late"));
+
+        assert_eq!(p.gate.retained_available(), ROOMY);
+        assert_eq!(p.lane.retained.available_permits(), ROOMY);
+        assert_eq!(p.lane.pending.available_permits(), 8);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_last_part_gives_back_the_reservation_only_once_its_frame_is_written() {
+        let n = 50_000;
+        let total = whole(n).await.len() as u64;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, 20_000, n).await;
+        drop(first);
+        let last = part_at(&mut p, "last", &handle, 0, Some(total)).await;
+        assert!(data_of(&json_of(&last)).len() as u64 == total);
+        assert!(
+            p.gate.retained_available() < ROOMY,
+            "the part still being written holds the reply's room"
+        );
+        drop(last);
+        assert_eq!(p.gate.retained_available(), ROOMY);
+        assert_eq!(p.lane.pending.available_permits(), 8);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_held_reply_keeps_its_text_and_room_for_one_part_until_it_is_released() {
+        let n = 100_000;
+        let text_len = whole(n).await.len();
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, 20_000, n).await;
+        drop(first);
+        let held = text_len + budget::REPLY_PART_ROOM;
+        assert_eq!(ROOMY - p.gate.retained_available(), held);
+        assert_eq!(ROOMY - p.lane.retained.available_permits(), held);
+        assert_eq!(
+            p.lane.pending.available_permits(),
+            7,
+            "the held reply is one outstanding request"
+        );
+
+        let second = part_at(&mut p, "second", &handle, 20_000, None).await;
+        drop(second);
+        assert_eq!(ROOMY - p.gate.retained_available(), held);
+        assert_eq!(p.lane.pending.available_permits(), 7);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_held_reply_counts_against_the_pending_bound_until_it_is_released() {
+        let n = 50_000;
+        let total = whole(n).await.len() as u64;
+        let part = 20_000;
+        let mut p = paged(2);
+        let (first, handle) = first_part(&mut p, None, part, n).await;
+        drop(first);
+
+        // The held reply holds one of the two places; a blocked read holds the other.
+        let (release, blocked) = std::sync::mpsc::channel::<()>();
+        p.lane
+            .submit(Some("blocked".into()), None, 1024, move |_| {
+                let _ = blocked.recv();
+                Ok(ack("blocked"))
+            })
+            .await;
+        p.lane.submit(Some("c".into()), None, 1024, big(1)).await;
+        let refusal = next(&mut p.control).await;
+        assert_eq!(code_of(&refusal), Some(error_code::LIMIT_EXCEEDED));
+        assert_eq!(
+            param(&refusal, "limit").as_deref(),
+            Some("pending_requests")
+        );
+        assert_eq!(param(&refusal, "max").as_deref(), Some("2"));
+        assert_eq!(error_id(&refusal).as_deref(), Some("c"));
+
+        // Asking for a part takes a place too, so it is refused the same way while none is free.
+        p.lane
+            .read_part(Some("part".into()), handle.clone(), part as u64, None)
+            .await;
+        let refusal = next(&mut p.control).await;
+        assert_eq!(code_of(&refusal), Some(error_code::LIMIT_EXCEEDED));
+        assert_eq!(
+            param(&refusal, "limit").as_deref(),
+            Some("pending_requests")
+        );
+        assert_eq!(error_id(&refusal).as_deref(), Some("part"));
+
+        release.send(()).unwrap();
+        drop(next(&mut p.content).await);
+        read_to_end(&mut p, &handle, part as u64, total, &[None]).await;
+
+        // Released by its last part: both places are free again.
+        p.lane.submit(Some("d".into()), None, 1024, big(1)).await;
+        p.lane.submit(Some("e".into()), None, 1024, big(1)).await;
+        let (d, e) = (next(&mut p.content).await, next(&mut p.content).await);
+        p.lane.submit(Some("f".into()), None, 1024, big(1)).await;
+        let refusal = next(&mut p.control).await;
+        assert_eq!(code_of(&refusal), Some(error_code::LIMIT_EXCEEDED));
+        assert_eq!(error_id(&refusal).as_deref(), Some("f"));
+        drop((d, e));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_newer_request_in_the_slot_releases_the_held_reply_and_a_part_asked_for_is_superseded(
+    ) {
+        let n = 100_000;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, Some("viewer"), 20_000, n).await;
+        drop(first);
+        p.lane
+            .submit(Some("newer".into()), Some("viewer".into()), RESERVE, |_| {
+                Ok(ack("newer"))
+            })
+            .await;
+        p.lane
+            .read_part(Some("late".into()), handle.clone(), 20_000, None)
+            .await;
+        let refusal = next(&mut p.control).await;
+        assert_eq!(code_of(&refusal), Some(error_code::REQUEST_SUPERSEDED));
+        assert_eq!(error_id(&refusal).as_deref(), Some("late"));
+        let reply = next(&mut p.content).await;
+        assert!(reply.text.contains("\"newer\""));
+        drop(reply);
+        assert_eq!(p.gate.retained_available(), ROOMY);
+        assert_eq!(p.lane.pending.available_permits(), 8);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_request_in_another_slot_or_none_leaves_a_held_reply_alone() {
+        let n = 100_000;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, Some("viewer"), 20_000, n).await;
+        drop(first);
+        p.lane
+            .submit(Some("other".into()), Some("elsewhere".into()), 1024, |_| {
+                Ok(ack("other"))
+            })
+            .await;
+        p.lane
+            .submit(Some("slotless".into()), None, 1024, |_| Ok(ack("slotless")))
+            .await;
+        drop(next(&mut p.content).await);
+        drop(next(&mut p.content).await);
+        let part = part_at(&mut p, "part", &handle, 20_000, None).await;
+        assert_eq!(json_of(&part)["type"], "reply_part");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_reply_that_finishes_after_a_newer_request_took_its_slot_is_superseded_not_held() {
+        let mut p = paged(8);
+        let (finish, finishing) = std::sync::mpsc::channel::<()>();
+        p.lane
+            .submit_paged(
+                Some("old".into()),
+                Some("viewer".into()),
+                Some(20_000),
+                RESERVE,
+                move |_| {
+                    // Ignores the cancel, as a read past its last check would.
+                    let _ = finishing.recv();
+                    Ok(ack(&"x".repeat(100_000)))
+                },
+            )
+            .await;
+        p.lane
+            .submit(Some("new".into()), Some("viewer".into()), 1024, |_| {
+                Ok(ack("new"))
+            })
+            .await;
+        let _ = finish.send(());
+        let refusal = next(&mut p.control).await;
+        assert_eq!(code_of(&refusal), Some(error_code::REQUEST_SUPERSEDED));
+        assert_eq!(error_id(&refusal).as_deref(), Some("old"));
+        let reply = next(&mut p.content).await;
+        assert!(reply.text.contains("\"new\""));
+        drop(reply);
+        crate::test_support::tasks_idle().await;
+        assert!(p.content.try_recv().is_err(), "no part of the old reply");
+        assert_eq!(p.gate.retained_available(), ROOMY);
+        assert_eq!(p.lane.pending.available_permits(), 8);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn only_one_part_of_a_reply_is_in_flight_and_the_next_waits_for_its_frame_to_be_written()
+    {
+        let n = 100_000;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, 20_000, n).await;
+        p.lane
+            .read_part(Some("second".into()), handle.clone(), 20_000, None)
+            .await;
+        crate::test_support::tasks_idle().await;
+        assert!(
+            p.content.try_recv().is_err(),
+            "sent while the first was in flight"
+        );
+        assert!(p.control.try_recv().is_err());
+        drop(first);
+        let second = next(&mut p.content).await;
+        let json = json_of(&second);
+        assert_eq!(json["id"], "second");
+        assert_eq!(json["offset"], 20_000);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_part_waiting_for_its_turn_is_superseded_when_a_newer_request_releases_the_reply() {
+        let n = 100_000;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, Some("viewer"), 20_000, n).await;
+        p.lane
+            .read_part(Some("waiting".into()), handle.clone(), 20_000, None)
+            .await;
+        crate::test_support::tasks_idle().await;
+        p.lane
+            .submit(Some("newer".into()), Some("viewer".into()), 1024, |_| {
+                Ok(ack("newer"))
+            })
+            .await;
+        let refusal = next(&mut p.control).await;
+        assert_eq!(code_of(&refusal), Some(error_code::REQUEST_SUPERSEDED));
+        assert_eq!(error_id(&refusal).as_deref(), Some("waiting"));
+        drop(first);
+        drop(next(&mut p.content).await);
+        assert_eq!(p.gate.retained_available(), ROOMY);
+        assert_eq!(p.lane.pending.available_permits(), 8);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn closing_the_lane_releases_the_held_replies() {
+        let n = 100_000;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, 20_000, n).await;
+        drop(first);
+        assert!(p.gate.retained_available() < ROOMY);
+        p.lane.close();
+        assert_eq!(p.gate.retained_available(), ROOMY);
+        assert_eq!(p.lane.retained.available_permits(), ROOMY);
+
+        // Nobody is left to read an answer: nothing is sent for a part asked for now.
+        p.lane
+            .read_part(Some("late".into()), handle, 20_000, None)
+            .await;
+        crate::test_support::tasks_idle().await;
+        assert!(p.control.try_recv().is_err());
+        assert!(p.content.try_recv().is_err());
+        assert_eq!(p.lane.pending.available_permits(), 8);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_part_asked_of_a_reply_that_never_existed_is_unavailable() {
+        let mut p = paged(8);
+        p.lane
+            .read_part(Some("lost".into()), "reply-99".into(), 0, None)
+            .await;
+        let refusal = next(&mut p.control).await;
+        assert_eq!(code_of(&refusal), Some(error_code::REPLY_PART_UNAVAILABLE));
+        assert_eq!(param(&refusal, "reply").as_deref(), Some("reply-99"));
+        assert_eq!(p.lane.pending.available_permits(), 8);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_held_reply_is_released_after_the_idle_time_counted_from_its_latest_part_written() {
+        let n = 100_000;
+        let text_len = whole(n).await.len();
+        let held = text_len + budget::REPLY_PART_ROOM;
+        let second = Duration::from_secs(1);
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, 20_000, n).await;
+        drop(first);
+
+        // Short of the idle time since the first part was written: still held.
+        tokio::time::advance(budget::HELD_REPLY_IDLE - second).await;
+        crate::test_support::tasks_idle().await;
+        assert_eq!(ROOMY - p.gate.retained_available(), held);
+
+        // A part asked for now moves the time on from when it is written.
+        drop(part_at(&mut p, "second", &handle, 20_000, None).await);
+        tokio::time::advance(budget::HELD_REPLY_IDLE - second).await;
+        crate::test_support::tasks_idle().await;
+        assert_eq!(
+            ROOMY - p.gate.retained_available(),
+            held,
+            "counted from the first part, not the latest"
+        );
+
+        // Past it with no part asked for: released, and everything is given back.
+        tokio::time::advance(second * 2).await;
+        crate::test_support::tasks_idle().await;
+        assert_eq!(p.gate.retained_available(), ROOMY);
+        assert_eq!(p.lane.retained.available_permits(), ROOMY);
+        assert_eq!(p.lane.pending.available_permits(), 8);
+        p.lane
+            .read_part(Some("late".into()), handle.clone(), 40_000, None)
+            .await;
+        let refusal = next(&mut p.control).await;
+        assert_eq!(code_of(&refusal), Some(error_code::REPLY_PART_UNAVAILABLE));
+        assert_eq!(param(&refusal, "reply").as_deref(), Some(handle.as_str()));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_part_still_being_written_is_not_expired_and_the_idle_time_starts_when_it_is() {
+        let n = 100_000;
+        let text_len = whole(n).await.len();
+        let held = text_len + budget::REPLY_PART_ROOM;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, 20_000, n).await;
+
+        // Many idle times pass with the frame unwritten, as on a stalled link.
+        tokio::time::advance(budget::HELD_REPLY_IDLE * 5).await;
+        crate::test_support::tasks_idle().await;
+        assert_eq!(ROOMY - p.gate.retained_available(), held);
+
+        // The idle time counts from the write, not from the frame being queued.
+        drop(first);
+        tokio::time::advance(budget::HELD_REPLY_IDLE - Duration::from_secs(1)).await;
+        crate::test_support::tasks_idle().await;
+        assert_eq!(ROOMY - p.gate.retained_available(), held);
+        let part = part_at(&mut p, "after", &handle, 20_000, None).await;
+        assert_eq!(json_of(&part)["type"], "reply_part");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn parts_asked_back_to_back_are_served_in_the_order_asked_one_at_a_time() {
+        let n = 100_000;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, 20_000, n).await;
+        // Asked at once, with the first part's frame still unwritten and nothing awaited between.
+        for (id, offset) in [("p1", 20_000), ("p2", 40_000), ("p3", 60_000)] {
+            p.lane
+                .read_part(Some(id.into()), handle.clone(), offset, None)
+                .await;
+        }
+        crate::test_support::tasks_idle().await;
+        assert!(
+            p.content.try_recv().is_err(),
+            "sent while the first was in flight"
+        );
+        drop(first);
+        for (id, offset) in [("p1", 20_000), ("p2", 40_000), ("p3", 60_000)] {
+            let frame = next(&mut p.content).await;
+            let json = json_of(&frame);
+            assert_eq!(json["id"], id);
+            assert_eq!(json["offset"], offset);
+            crate::test_support::tasks_idle().await;
+            assert!(
+                p.content.try_recv().is_err(),
+                "{id} was still in flight when the next was sent"
+            );
+            assert!(p.control.try_recv().is_err(), "{id}: nothing is refused");
+            drop(frame);
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_middle_part_asked_before_the_last_is_served_before_it_and_is_not_unavailable() {
+        let n = 50_000;
+        let total = whole(n).await.len() as u64;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, 20_000, n).await;
+        p.lane
+            .read_part(Some("middle".into()), handle.clone(), 20_000, Some(20_000))
+            .await;
+        p.lane
+            .read_part(Some("last".into()), handle.clone(), 40_000, Some(total))
+            .await;
+        drop(first);
+        let middle = next(&mut p.content).await;
+        assert_eq!(json_of(&middle)["id"], "middle");
+        assert_eq!(json_of(&middle)["type"], "reply_part");
+        drop(middle);
+        let last = next(&mut p.content).await;
+        let json = json_of(&last);
+        assert_eq!(
+            (json["id"].as_str(), json["offset"].as_u64()),
+            (Some("last"), Some(40_000))
+        );
+        assert_eq!(data_of(&json).len() as u64, total - 40_000);
+        assert!(p.control.try_recv().is_err());
+        drop(last);
+        assert_eq!(p.gate.retained_available(), ROOMY);
+        assert_eq!(p.lane.pending.available_permits(), 8);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_part_asked_after_the_one_reaching_the_end_finds_the_reply_released() {
+        let n = 50_000;
+        let total = whole(n).await.len() as u64;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, 20_000, n).await;
+        p.lane
+            .read_part(Some("last".into()), handle.clone(), 20_000, Some(total))
+            .await;
+        p.lane
+            .read_part(Some("after".into()), handle.clone(), 20_000, None)
+            .await;
+        drop(first);
+        let last = next(&mut p.content).await;
+        assert_eq!(json_of(&last)["id"], "last");
+        drop(last);
+        let refusal = next(&mut p.control).await;
+        assert_eq!(code_of(&refusal), Some(error_code::REPLY_PART_UNAVAILABLE));
+        assert_eq!(error_id(&refusal).as_deref(), Some("after"));
+        assert_eq!(p.gate.retained_available(), ROOMY);
+        assert_eq!(p.lane.pending.available_permits(), 8);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_reply_with_a_part_queued_behind_one_in_flight_is_not_expired() {
+        let n = 100_000;
+        let mut p = paged(8);
+        let (first, handle) = first_part(&mut p, None, 20_000, n).await;
+        p.lane
+            .read_part(Some("queued".into()), handle.clone(), 20_000, None)
+            .await;
+        // Many idle times pass with the first frame unwritten and a part waiting for it.
+        tokio::time::advance(budget::HELD_REPLY_IDLE * 5).await;
+        crate::test_support::tasks_idle().await;
+        assert!(p.control.try_recv().is_err());
+        drop(first);
+        let queued = next(&mut p.content).await;
+        let json = json_of(&queued);
+        assert_eq!(json["type"], "reply_part");
+        assert_eq!(json["id"], "queued");
+        assert_eq!(json["offset"], 20_000);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_reply_that_finishes_for_a_cancelled_request_is_answered_superseded_and_gives_everything_back(
+    ) {
+        let mut p = paged(8);
+        let (finish, finishing) = std::sync::mpsc::channel::<()>();
+        p.lane
+            .submit_paged(
+                Some("old".into()),
+                Some("viewer".into()),
+                Some(20_000),
+                RESERVE,
+                move |_| {
+                    let _ = finishing.recv();
+                    Ok(ack(&"x".repeat(100_000)))
+                },
+            )
+            .await;
+        p.lane
+            .submit(Some("new".into()), Some("viewer".into()), 1024, |_| {
+                Ok(ack("new"))
+            })
+            .await;
+        let _ = finish.send(());
+        let refusal = next(&mut p.control).await;
+        assert_eq!(code_of(&refusal), Some(error_code::REQUEST_SUPERSEDED));
+        assert_eq!(error_id(&refusal).as_deref(), Some("old"));
+        drop(next(&mut p.content).await);
+        crate::test_support::tasks_idle().await;
+        // Nothing was held for the old request, so no reply is there to read, and its slot is free.
+        p.lane
+            .read_part(Some("late".into()), "reply-0".into(), 0, None)
+            .await;
+        let refusal = next(&mut p.control).await;
+        assert_eq!(code_of(&refusal), Some(error_code::REPLY_PART_UNAVAILABLE));
+        assert_eq!(p.gate.retained_available(), ROOMY);
+        assert_eq!(p.lane.retained.available_permits(), ROOMY);
+        assert_eq!(p.lane.pending.available_permits(), 8);
     }
 }

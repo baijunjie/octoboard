@@ -494,6 +494,34 @@
             "new"
           ],
           "description": "As `ReadProjectChangeBodies`, for a change of a commit."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reply": {
+              "type": "string"
+            },
+            "offset": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "length": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "read_reply_part"
+            }
+          },
+          "required": [
+            "type",
+            "reply",
+            "offset"
+          ],
+          "description": "The part from `offset` of a reply the daemon holds after answering a request that carried\n`part_bytes` with a `reply_part`; `reply` is the handle that part named. `length` defaults to\nthat request's `part_bytes`, and is cut and raised as it is. Answered with `reply_part`."
         }
       ]
     },
@@ -509,6 +537,12 @@
         "asked_by_person": {
           "type": "boolean",
           "description": "Whether a person has just asked for this reply (opened a menu, pressed Try again or\nRefresh), rather than a client asking again while it is on screen: a `git` the cached shell\nsnapshot does not find is then looked for once more in a fresh one."
+        },
+        "part_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Deliver the reply in parts of at most this many bytes: a reply whose serialized form is\nlarger is held by the daemon and sent as `reply_part`s, the rest of them asked for with\n`read_reply_part`. Cut to `budget::MAX_REPLY_PART_BYTES` and raised to\n`budget::MIN_REPLY_PART_BYTES`. Ignored by `search_project_content`, `read_file_range` and\n`read_reply_part`."
         }
       },
       "allOf": [
@@ -2438,6 +2472,9 @@
             "data": {
               "type": "string"
             },
+            "upload": {
+              "type": "string"
+            },
             "type": {
               "type": "string",
               "const": "save_pasted_image"
@@ -2445,10 +2482,76 @@
           },
           "required": [
             "type",
+            "session"
+          ],
+          "description": "Saves an image the user pasted into the terminal of a running session as a file on the daemon\nhost, for its agent to read by path: `data` is the image as a PNG, JPEG, GIF or WebP file,\nbase64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`), or `upload`\nnames an upload of this connection whose parts hold it; exactly one of the two is given.\nAnswered with `pasted_image_saved`. Refused with `unknown_session` or\n`session_not_running`, and for an upload with `upload_unavailable` or\n`upload_parts_mismatch`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "size": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "create_pasted_image_upload"
+            }
+          },
+          "required": [
+            "type",
             "session",
+            "size"
+          ],
+          "description": "Starts uploading a pasted image of `size` bytes (1 to 10 MiB) in parts, for a running\nsession; served on the control connection, which holds the parts. Answered with\n`pasted_image_upload_created`. Refused with `unknown_session`, `session_not_running`, or\n`limit_exceeded` (`image_uploads`, `image_upload_bytes`). See\n`crate::session::pasted_image::upload`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "upload": {
+              "type": "string"
+            },
+            "offset": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "data": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "write_pasted_image_part"
+            }
+          },
+          "required": [
+            "type",
+            "upload",
+            "offset",
             "data"
           ],
-          "description": "Saves an image the user pasted into the terminal of a running session as a file on the daemon\nhost, for its agent to read by path: `data` is the image as a PNG, JPEG, GIF or WebP file,\nbase64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`). Answered with\n`pasted_image_saved`. Refused with `unknown_session` or `session_not_running`."
+          "description": "Adds the next part of an upload: `data` is base64, at most 1 MiB decoded, and `offset` the\nbytes received before it. Answered with `ack`. Refused with `upload_unavailable`,\n`upload_parts_mismatch` or `limit_exceeded` (`upload_part_bytes`), discarding the upload."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "upload": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "delete_pasted_image_upload"
+            }
+          },
+          "required": [
+            "type",
+            "upload"
+          ],
+          "description": "Discards an upload. Answered with `ack`, also for an upload this connection no longer holds."
         },
         {
           "type": "object",

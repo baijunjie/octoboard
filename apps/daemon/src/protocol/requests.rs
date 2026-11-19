@@ -698,11 +698,40 @@ pub enum RequestBody {
     },
     /// Saves an image the user pasted into the terminal of a running session as a file on the daemon
     /// host, for its agent to read by path: `data` is the image as a PNG, JPEG, GIF or WebP file,
-    /// base64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`). Answered with
-    /// `pasted_image_saved`. Refused with `unknown_session` or `session_not_running`.
+    /// base64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`), or `upload`
+    /// names an upload of this connection whose parts hold it; exactly one of the two is given.
+    /// Answered with `pasted_image_saved`. Refused with `unknown_session` or
+    /// `session_not_running`, and for an upload with `upload_unavailable` or
+    /// `upload_parts_mismatch`.
     SavePastedImage {
         session: String,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        data: Option<String>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        upload: Option<String>,
+    },
+    /// Starts uploading a pasted image of `size` bytes (1 to 10 MiB) in parts, for a running
+    /// session; served on the control connection, which holds the parts. Answered with
+    /// `pasted_image_upload_created`. Refused with `unknown_session`, `session_not_running`, or
+    /// `limit_exceeded` (`image_uploads`, `image_upload_bytes`). See
+    /// `crate::session::pasted_image::upload`.
+    CreatePastedImageUpload {
+        session: String,
+        size: u64,
+    },
+    /// Adds the next part of an upload: `data` is base64, at most 1 MiB decoded, and `offset` the
+    /// bytes received before it. Answered with `ack`. Refused with `upload_unavailable`,
+    /// `upload_parts_mismatch` or `limit_exceeded` (`upload_part_bytes`), discarding the upload.
+    WritePastedImagePart {
+        upload: String,
+        offset: u64,
         data: String,
+    },
+    /// Discards an upload. Answered with `ack`, also for an upload this connection no longer holds.
+    DeletePastedImageUpload {
+        upload: String,
     },
     /// Stops the turn the session's agent is running, keeping its process and conversation; see
     /// `crate::session::interrupt`.
@@ -1506,7 +1535,10 @@ impl RequestBody {
             | Self::Shutdown
             | Self::PlannedStop
             | Self::HandoverCheck { .. }
-            | Self::SavePastedImage { .. } => false,
+            | Self::SavePastedImage { .. }
+            | Self::CreatePastedImageUpload { .. }
+            | Self::WritePastedImagePart { .. }
+            | Self::DeletePastedImageUpload { .. } => false,
         }
     }
 }
