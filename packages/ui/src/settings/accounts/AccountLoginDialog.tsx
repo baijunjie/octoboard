@@ -5,6 +5,7 @@ import { DaemonErrorMessage } from "../../components/alerts/DaemonErrorMessage";
 import { DetailsDisclosure } from "../../components/alerts/ErrorDetailsDisclosure";
 import { errorRemedy, rawErrorDetails } from "../../components/alerts/errorParts";
 import { ExternalLink } from "../../components/text/ExternalLink";
+import { MarkLineBox } from "../../components/status/MarkLineBox";
 import { InlineReference } from "../../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { CodedError, type CodedMessage } from "../../errors/codedError";
@@ -206,8 +207,8 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
       )}
     >
       <p><Message id="settings.accounts.login.intro" params={{ agent: agentChip, name: who }} /></p>
-      <div className="mt-2 flex items-center gap-2 text-sm">
-        <WaitingIcon className="text-accent" />
+      <div className="mt-2 flex items-start gap-2 text-sm">
+        <MarkLineBox size="text-sm"><WaitingIcon className="text-accent" /></MarkLineBox>
         {/* While the login starts, the intro line above already says "Logging in…", so the arc stands alone. */}
         {login?.status === "waiting" && (
           <span aria-hidden>
