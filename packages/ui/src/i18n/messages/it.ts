@@ -1122,6 +1122,7 @@ export const it: Translation<"one" | "many" | "other"> = {
   "welcome.toolInstalled": "Installato",
   "welcome.toolNotFound": "Non rilevato",
   "welcome.toolChecking": "Verifica…",
+  "welcome.notDetectedTools": { one: "{count} strumento non rilevato", other: "{count} strumenti non rilevati", many: "{count} strumenti non rilevati" },
   "welcome.toolsHint": "Per aprire una sessione, installa almeno uno strumento e verifica che sia nel {pathVar}.",
   "terminal.actions": "Azioni del terminale",
   "terminal.copy": "Copia",

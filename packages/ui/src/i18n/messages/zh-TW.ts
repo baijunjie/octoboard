@@ -1162,6 +1162,7 @@ export const zhTW: Translation<"other"> = {
   "welcome.toolInstalled": "已安裝",
   "welcome.toolNotFound": "未偵測到",
   "welcome.toolChecking": "偵測中…",
+  "welcome.notDetectedTools": { other: "{count} 個未偵測到的工具" },
   "welcome.toolsHint": "安裝至少一種工具並設定到 {pathVar} 中，即可開啟工作階段。",
   "terminal.actions": "終端機操作",
   "terminal.copy": "複製",

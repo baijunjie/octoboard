@@ -1122,6 +1122,7 @@ export const fr: Translation<"one" | "many" | "other"> = {
   "welcome.toolInstalled": "Installé",
   "welcome.toolNotFound": "Non détecté",
   "welcome.toolChecking": "Vérification…",
+  "welcome.notDetectedTools": { one: "{count} outil non détecté", other: "{count} outils non détectés", many: "{count} outils non détectés" },
   "welcome.toolsHint": "Pour ouvrir une session, installez au moins un outil et vérifiez qu’il est présent dans votre {pathVar}.",
   "terminal.actions": "Actions du terminal",
   "terminal.copy": "Copier",

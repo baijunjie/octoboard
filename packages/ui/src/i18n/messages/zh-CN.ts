@@ -1204,6 +1204,7 @@ export const zhCN: Translation<"other"> = {
   "welcome.toolInstalled": "已安装",
   "welcome.toolNotFound": "未检测到",
   "welcome.toolChecking": "检测中…",
+  "welcome.notDetectedTools": { other: "{count} 个未检测到的工具" },
   "welcome.toolsHint": "安装至少一种工具并配置到 {pathVar} 中，即可打开会话。",
 
   "terminal.actions": "终端操作",

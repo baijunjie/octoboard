@@ -1,14 +1,14 @@
 import React from "react";
 
 import { StatusAnnouncer } from "../announce/StatusAnnouncer";
-import { buttonClassName, Disclosure, DisclosureBody, DisclosureContent, DisclosureHeading, DisclosureIndicator, DisclosureTrigger, TabPanel, Tabs } from "../../primitives";
+import { Disclosure, DisclosureHeading, TabPanel, Tabs } from "../../primitives";
+import { FlushDisclosureContent, QuietDisclosureTrigger } from "../disclosure/QuietDisclosure";
 import { TextTabStrip } from "../tabs/TextTabStrip";
 import { useT } from "../../i18n/react";
 
 /** The collapsed Advanced section of a dialog, folded away by default as what is inside is rarely
- * set. The trigger is drawn as a small ghost button in muted text, by the user's decision, so at
- * rest it reads as an action rather than a field label set in from the others. `ms-0` drops the
- * button's negative icon margin on the label's side of the chevron. */
+ * set, under a `QuietDisclosureTrigger`, so at rest it reads as an action rather than a field label
+ * set in from the others. */
 export function AdvancedSection({
   expanded,
   onExpandedChange,
@@ -26,10 +26,7 @@ export function AdvancedSection({
   return (
     <Disclosure expanded={expanded} onExpandedChange={onExpandedChange}>
       <DisclosureHeading>
-        <DisclosureTrigger className={`${buttonClassName({ variant: "ghost", size: "sm" })} text-app-muted hover:text-foreground ui-keyboard-focus:text-foreground`}>
-          {t("dialog.agentSettings.advanced")}
-          <DisclosureIndicator className="ms-0" />
-        </DisclosureTrigger>
+        <QuietDisclosureTrigger>{t("dialog.agentSettings.advanced")}</QuietDisclosureTrigger>
       </DisclosureHeading>
       {/* Outside the folded body, and only while the section is open. The body stays mounted while
           folded, so a region inside it would be past its first write delay by the time the section
@@ -37,18 +34,11 @@ export function AdvancedSection({
           the body: text that appears with its region, which VoiceOver does not say. Mounted with
           each opening, the region writes the note after its delay, with the trigger still focused. */}
       {expanded && <StatusAnnouncer text={status} />}
-      {/* HeroUI pads the body by 8px on every side and the content clips what overflows it, so that
-          padding is the room the fields' focus rings need. Taking all of it out as a margin would
-          reach past the dialog body, whose own slack is 4px, so the content takes 4px of it back
-          and the body's inner element the other 4px, which lands the content (the pickers, or the
-          frame around the tabs) in line with the fields above with 2px of ring to spare inside the
-          clip. The padding left above the first note and below the last field is HeroUI's own, the
-          same on both sides. */}
-      <DisclosureContent className="-mx-1">
-        <DisclosureBody className="-mx-1 flex flex-col gap-4">
-          {children}
-        </DisclosureBody>
-      </DisclosureContent>
+      {/* `FlushDisclosureContent` lands the content (the pickers, or the frame around the tabs) in
+          line with the fields above, inside the dialog body's 4px of slack. */}
+      <FlushDisclosureContent className="flex flex-col gap-4">
+        {children}
+      </FlushDisclosureContent>
     </Disclosure>
   );
 }

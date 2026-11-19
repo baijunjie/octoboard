@@ -20,21 +20,43 @@ has been detected on the machine.
   machine with nothing on it is set up from one that has. It is there only where the window can open a file, which the
   macOS application and a browser both can; where it cannot, New console stands alone.
 
-- Below the actions, a **supported CLI tools** heading and a card containing a list: **Claude Code**, **Codex**, then
-  **Grok Build**. Each row carries its tool's provider mark, name and status badge. The list stays visible for the whole
-  no-console state, whether detection is pending, some tools are available, or none has been detected.
+- Below the actions, a **supported CLI tools** heading and a card containing a list of the supported tools, in the
+  order **Claude Code**, **Codex**, **Grok Build**. Each row carries its tool's provider mark, name and status badge.
+  The card stays visible for the whole no-console state, whether detection is pending, some tools are available, or
+  none has been detected.
 
 The badges distinguish three states: a tool detected on the user's login shell `PATH` is shown as installed; one
 whose binary does not resolve there is shown as not detected; one whose availability is not yet known is shown as
 being checked. Not detected does not establish that the tool is uninstalled. Status is conveyed by text and a glyph
-as well as colour, and each status update is announced to assistive technology with the tool's name.
+as well as colour.
 
-A hint below the card explains that opening a session requires installing at least one supported tool and making it
-available on `PATH`. **New console stays enabled regardless of these statuses**: creating a console starts no agent.
-Session availability rules are in "When no agent can open a session" in `docs/product/opening-sessions.md`.
+Which tools the card lists depends on whether any tool has been detected:
 
-When the window is too short to fit the screen, its content scrolls vertically so the actions, list and hint remain
-reachable. On narrow windows, the action row and tool row contents wrap rather than being cut off.
+- **While no tool is detected** — every tool still being checked, none detected, or a mix of the two — the card lists
+  every tool, each with its status, and there is nothing below it.
+- **Once at least one tool is detected**, the card lists only the detected tools and those still being checked, in the
+  order above. The tools not detected move out of it into a **disclosure below the card**, collapsed, whose trigger
+  gives how many tools are not detected. Expanded, it shows them in a second card, each with its not detected badge.
+  The disclosure is there only while at least one tool is not detected, and starts collapsed each time it appears;
+  while it stays, it is left as the user sets it. A tool detected later moves up out of it into the card, and one that
+  stops being detected moves down into it — unless it was the only one detected, in which case every tool is back in
+  the card. Rows leaving the card slide out and the card's height follows (see
+  `docs/product/collection-motion.md`).
+
+Each row in the card announces its own status updates to assistive technology, with the tool's name; rows inside the
+disclosure announce nothing. A row that moves up from the disclosure into the card arrives already showing its new
+status, so it announces nothing itself; the change in count is announced instead. When the number of tools not
+detected changes after the screen has appeared — detection landing, or a tool installed or removed later — the new
+count is announced once, each time it changes, unless the disclosure goes away (no tool is left not detected, or none
+is detected any more), which is not announced. A disclosure already there when the screen appears is not announced.
+
+A hint below the list (and below the disclosure, when there is one) explains that opening a session requires
+installing at least one supported tool and making it available on `PATH`. **New console stays enabled regardless of
+these statuses**: creating a console starts no agent. Session availability rules are in "When no agent can open a
+session" in `docs/product/opening-sessions.md`.
+
+When the window is too short to fit the screen, its content scrolls vertically so the actions, list, disclosure and hint
+remain reachable. On narrow windows, the action row and tool row contents wrap rather than being cut off.
 
 ## What is not on screen with no console
 
@@ -78,7 +100,8 @@ still hidden.
   its New console button (see "Moving focus between regions with F6" in
   `docs/product/moving-focus-between-regions.md`); Import configuration, where shown, is the next Tab stop.
 - The content area itself becomes a Tab stop only when it overflows, so the keyboard can scroll it; the tool rows
-  and their badges do not add Tab stops. `F6` continues to land on New console even while the area scrolls.
+  and their badges do not add Tab stops. The trigger of the disclosure of tools not detected, while there is one, is
+  the next Tab stop after the actions. `F6` continues to land on New console even while the area scrolls.
 - Wherever the window would hand keyboard focus to the terminal — the connection banner's Retry going away, a toast
   being dealt with — it hands focus to the New console button instead, and leaves focus on nothing when it is already on
   nothing. This is the rule the terminal itself follows with no session selected and nothing to offer in its place,

@@ -1330,6 +1330,7 @@ export const en = {
   "welcome.toolInstalled": "Installed",
   "welcome.toolNotFound": "Not detected",
   "welcome.toolChecking": "Checking…",
+  "welcome.notDetectedTools": { one: "{count} tool not detected", other: "{count} tools not detected" },
   "welcome.toolsHint": "To open a session, install at least one tool and make sure it is on your {pathVar}.",
 
   "terminal.actions": "Terminal actions",

@@ -1179,6 +1179,7 @@ export const tr: Translation<"one" | "other"> = {
   "welcome.toolInstalled": "Yüklü",
   "welcome.toolNotFound": "Algılanmadı",
   "welcome.toolChecking": "Kontrol ediliyor…",
+  "welcome.notDetectedTools": { one: "Algılanmayan {count} araç", other: "Algılanmayan {count} araç" },
   "welcome.toolsHint": "Oturum açmak için en az bir araç yükleyin ve {pathVar} değerinizde bulunduğundan emin olun.",
   "terminal.actions": "Terminal işlemleri",
   "terminal.copy": "Kopyala",

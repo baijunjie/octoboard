@@ -1122,6 +1122,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "welcome.toolInstalled": "مثبت",
   "welcome.toolNotFound": "لم يُكتشف",
   "welcome.toolChecking": "جارٍ الفحص…",
+  "welcome.notDetectedTools": { zero: "لم تُكتشف أي أداة", one: "أداة واحدة لم تُكتشف", two: "أداتان لم تُكتشفا", few: "{count} أدوات لم تُكتشف", many: "{count} أداة لم تُكتشف", other: "{count} أداة لم تُكتشف" },
   "welcome.toolsHint": "لفتح جلسة، ثبّت أداة واحدة على الأقل وتأكد من توفرها في {pathVar}.",
   "terminal.actions": "إجراءات الوحدة الطرفية",
   "terminal.copy": "نسخ",

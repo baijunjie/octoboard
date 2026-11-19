@@ -1121,6 +1121,7 @@ export const hi: Translation<"one" | "other"> = {
   "welcome.toolInstalled": "इंस्टॉल है",
   "welcome.toolNotFound": "नहीं मिला",
   "welcome.toolChecking": "जाँच हो रही है…",
+  "welcome.notDetectedTools": { one: "{count} टूल नहीं मिला", other: "{count} टूल नहीं मिले" },
   "welcome.toolsHint": "सेशन खोलने के लिए कम से कम एक टूल इंस्टॉल करें और जाँचें कि वह आपके {pathVar} में है।",
   "terminal.actions": "टर्मिनल की कार्रवाइयाँ",
   "terminal.copy": "कॉपी करें",

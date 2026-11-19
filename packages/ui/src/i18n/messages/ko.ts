@@ -1162,6 +1162,7 @@ export const ko: Translation<"other"> = {
   "welcome.toolInstalled": "설치됨",
   "welcome.toolNotFound": "감지되지 않음",
   "welcome.toolChecking": "확인 중…",
+  "welcome.notDetectedTools": { other: "감지되지 않은 도구 {count}개" },
   "welcome.toolsHint": "세션을 열려면 도구를 하나 이상 설치하고 {pathVar}에 있는지 확인해 주세요.",
   "terminal.actions": "터미널 작업",
   "terminal.copy": "복사",

@@ -1122,6 +1122,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "welcome.toolInstalled": "Установлен",
   "welcome.toolNotFound": "Не обнаружен",
   "welcome.toolChecking": "Проверка…",
+  "welcome.notDetectedTools": { one: "{count} инструмент не обнаружен", few: "{count} инструмента не обнаружены", many: "{count} инструментов не обнаружено", other: "{count} инструмента не обнаружено" },
   "welcome.toolsHint": "Чтобы открыть сеанс, установите хотя бы один инструмент и убедитесь, что он доступен в вашем {pathVar}.",
   "terminal.actions": "Действия терминала",
   "terminal.copy": "Скопировать",

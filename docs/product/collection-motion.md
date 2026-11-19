@@ -8,7 +8,8 @@ rows of Settings' Git section that come and go with its Where sessions develop c
 `docs/product/git-settings.md`), the section tabs of Settings and the rows, group headings and blocks of a Settings section
 as a search hides and shows them (see `docs/product/searching-settings.md`), selected tags and wrapping chips, the file and Git change lists and trees, the accounts
 listed in the account quota panel on the rail, the rows of the rail's Processes popover, the web links of a process
-tree's card in the Processes panel, and tab strips: the agent tabs in Settings' Agent accounts section, in
+tree's card in the Processes panel, the welcome screen's card of supported tools (see "What the welcome screen shows"
+in `docs/product/welcome-screen.md`), and tab strips: the agent tabs in Settings' Agent accounts section, in
 the account quota panel and in the console dialog's Advanced section, and the Terminal panel's tabs. The quota meters
 within one account are not such a collection: they appear and disappear without motion as its readings change, and
 neither are the pickers of the project dialog's Git workflow tab, which appear and disappear without motion as its
@@ -22,7 +23,8 @@ items. Entrances and exits accelerate and then decelerate; surviving items ease 
 Actions take effect without waiting for the animation to finish. A departing item no longer accepts input or
 keyboard focus and is no longer exposed to assistive technology. A surviving control keeps keyboard focus; when
 the focused item is removed, that surface's usual focus handoff applies. In the collections whose rows are separated
-by dividers — the rows of a Settings section and the accounts in the account quota panel — the last row that
+by dividers — the rows of a Settings section, the accounts in the account quota panel and the welcome screen's card of
+supported tools — the last row that
 stays loses its divider as soon as the rows after it start leaving, not once they have gone.
 
 The first appearance of a collection shows its items without animation. Adding an item to an already displayed empty
@@ -64,6 +66,9 @@ In the sidebar, a project's sessions body grows or shrinks over the same **300 m
 and bottom edges while they fade in or out. Projects below it follow that changing height without a second slide
 on top of it. A change to the actual order of projects or sessions still uses the collection movement described
 above, including while a project is expanding or folding.
+
+The welcome screen's card of supported tools follows its rows the same way: as tools leave it for the disclosure of
+tools not detected below it, or come back up from it, its height changes over the same **300 ms** instead of jumping.
 
 When the panel holding the Settings section on screen is scrolled to its end and the group shrinks, the scroll
 position comes down with the group over the same time instead of jumping at once.

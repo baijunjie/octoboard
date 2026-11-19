@@ -1122,6 +1122,7 @@ export const id: Translation<"other"> = {
   "welcome.toolInstalled": "Diinstal",
   "welcome.toolNotFound": "Tidak terdeteksi",
   "welcome.toolChecking": "Memeriksa…",
+  "welcome.notDetectedTools": { other: "{count} alat tidak terdeteksi" },
   "welcome.toolsHint": "Untuk membuka sesi, instal setidaknya satu alat dan pastikan tersedia di {pathVar} Anda.",
   "terminal.actions": "Tindakan terminal",
   "terminal.copy": "Salin",

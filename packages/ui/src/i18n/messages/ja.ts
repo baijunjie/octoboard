@@ -1161,6 +1161,7 @@ export const ja: Translation<"other"> = {
   "welcome.toolInstalled": "インストール済み",
   "welcome.toolNotFound": "未検出",
   "welcome.toolChecking": "確認中…",
+  "welcome.notDetectedTools": { other: "未検出のツール（{count} 件）" },
   "welcome.toolsHint": "セッションを開くには、ツールを1つ以上インストールし、{pathVar} から実行できるようにしてください。",
   "terminal.actions": "ターミナルの操作",
   "terminal.copy": "コピー",

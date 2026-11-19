@@ -1149,6 +1149,7 @@ export const de: Translation<"one" | "other"> = {
   "welcome.toolInstalled": "Installiert",
   "welcome.toolNotFound": "Nicht erkannt",
   "welcome.toolChecking": "Wird geprüft…",
+  "welcome.notDetectedTools": { one: "{count} Werkzeug nicht erkannt", other: "{count} Werkzeuge nicht erkannt" },
   "welcome.toolsHint": "Installiere mindestens ein Werkzeug und stelle sicher, dass es in deinem {pathVar} verfügbar ist, um eine Sitzung zu öffnen.",
   "terminal.actions": "Terminalaktionen",
   "terminal.copy": "Kopieren",

@@ -1160,6 +1160,7 @@ export const th: Translation<"other"> = {
   "welcome.toolInstalled": "ติดตั้งแล้ว",
   "welcome.toolNotFound": "ตรวจไม่พบ",
   "welcome.toolChecking": "กำลังตรวจสอบ…",
+  "welcome.notDetectedTools": { other: "เครื่องมือที่ตรวจไม่พบ {count} รายการ" },
   "welcome.toolsHint": "หากต้องการเปิดเซสชัน ให้ติดตั้งเครื่องมืออย่างน้อยหนึ่งตัวและตรวจสอบว่าอยู่ใน {pathVar}",
   "terminal.actions": "การทำงานของเทอร์มินัล",
   "terminal.copy": "คัดลอก",

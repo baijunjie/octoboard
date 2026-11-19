@@ -1121,6 +1121,7 @@ export const vi: Translation<"other"> = {
   "welcome.toolInstalled": "Đã cài đặt",
   "welcome.toolNotFound": "Chưa phát hiện",
   "welcome.toolChecking": "Đang kiểm tra…",
+  "welcome.notDetectedTools": { other: "{count} công cụ chưa phát hiện" },
   "welcome.toolsHint": "Để mở phiên, cài ít nhất một công cụ và đảm bảo công cụ có trong {pathVar}.",
   "terminal.actions": "Thao tác terminal",
   "terminal.copy": "Sao chép",
