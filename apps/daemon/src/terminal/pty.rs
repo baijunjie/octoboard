@@ -367,6 +367,12 @@ impl PtyCore {
         Ok(())
     }
 
+    /// Withdraws this client's size and display, so that it only watches; see [`Fan::watch`].
+    pub fn watch(&self, client: u64) {
+        let update = self.move_client_size(|resize| self.fan.watch(client, resize));
+        self.tell_client_update(update);
+    }
+
     /// Applies what follows the most recently active client again, once an attach's precedence
     /// may have lapsed; see [`Fan::settle_activity`].
     pub fn settle_activity(&self) {
@@ -812,7 +818,7 @@ impl PtyCore {
 
     /// Whether a change of the terminal's size waits on its host's answer, which a held terminal's
     /// does: a caller on the runtime makes one off its worker then ([`Self::activate`],
-    /// [`Self::request_size`], [`Self::settle_activity`], [`Self::leave`]).
+    /// [`Self::request_size`], [`Self::watch`], [`Self::settle_activity`], [`Self::leave`]).
     pub fn resize_waits(&self) -> bool {
         self.backend.resize_waits_on_reply()
     }

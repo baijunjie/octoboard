@@ -133,6 +133,7 @@ async fn hooks_and_agent_signals_win_over_a_programs_reports() {
                 .flat_map(|frame| match frame {
                     Outgoing::Output(bytes) => bytes.to_vec(),
                     Outgoing::Paint { .. } => panic!("a paint in place of output"),
+                    Outgoing::Size(_) => panic!("a size change in place of output"),
                 })
                 .collect(),
             Delivery::Wait | Delivery::Over => panic!("no output after the reports"),

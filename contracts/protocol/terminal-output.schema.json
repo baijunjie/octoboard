@@ -42,6 +42,37 @@
             "answered"
           ],
           "description": "Sent first on attaching to a live process, before the first paint, and again before each\nfresh paint that replaces output the client fell too far behind on: the paint's length in\nbytes, the count of bytes of output handed to the clients when it was taken, which live\noutput counts on from, and how many of its leading bytes hold only output whose queries are\nnot the client's to answer: all of them, since the paint asks nothing."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cols": {
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "rows": {
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "held": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "size"
+            }
+          },
+          "required": [
+            "type",
+            "cols",
+            "rows",
+            "held"
+          ],
+          "description": "The terminal's size: sent on attaching to a live process right after the `replay` mark,\nbefore the first paint, again after the mark of each fresh paint, and whenever the size\nchanges, or whether a client holds it does, at that point in the output, so the output\nthat follows is laid out for it. `held` is whether any attached client has asked for a\nsize (with `resize`) and not withdrawn it: while none has, the terminal keeps the size it\nhas, and a client that asks for one takes it over."
         }
       ],
       "description": "Daemon-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY output."

@@ -6486,6 +6486,9 @@ export type TermControl = {
 }
 | {
   "type": "activate"
+}
+| {
+  "type": "watch"
 };
 
 /**
@@ -6496,6 +6499,12 @@ export type TermEvent = {
   length: number,
   offset: number,
   answered: number,
+}
+| {
+  "type": "size",
+  cols: number,
+  rows: number,
+  held: boolean,
 };
 
 /**

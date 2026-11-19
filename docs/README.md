@@ -239,7 +239,8 @@ Where to start, by question:
 - [Answers to a program's queries](product/terminal-queries.md) — which terminal queries Octoboard answers itself, the
   colours and sizes a program reads, and the queries the clients answer.
 - [A terminal shown on several clients](product/terminals-on-several-clients.md) — which client counts as most
-  recently active, how a terminal's size is decided while several clients show it, and where its colours come from.
+  recently active, how a terminal's size is decided while several clients show it, how clients are told the size, a
+  client that only watches without sizing it, and where its colours come from.
 - [Terminal panel](product/terminal-panel.md) — the right pane's Terminal panel: tabs, actions and the shell terminal.
 - [Terminal font size](product/terminal-font-size.md) — the terminals' font size: the Appearance row, the shortcuts, how
   every open terminal follows it and where it is kept.

@@ -31,6 +31,7 @@ import {
   isButtonlessMotion,
   MOUSE_REPORT,
   planOutputWrites,
+  type ReplayMark,
   RESET_REPORTING_MODES,
   type SelectionGuard,
   writeInSlices,
@@ -211,7 +212,7 @@ export class TerminalController {
    * `acknowledge`). */
   private parsedUnacknowledged = 0;
   /** This connection's replay mark, until the first paint it describes has arrived. */
-  private replayMark?: TermEvent;
+  private replayMark?: ReplayMark;
   /** The point in the output the last frame of this connection ended at, counted as the daemon
    * counts it; unknown before the replay mark. */
   private outputEnd?: number;

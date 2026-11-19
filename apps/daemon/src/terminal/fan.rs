@@ -33,6 +33,16 @@ pub const CREDIT_WINDOW: usize = 512 * 1024;
 /// one slow client neither throttles the program nor holds up the other clients.
 pub const BACKLOG_CAP: usize = 4 * 1024 * 1024;
 
+/// The terminal's size as the clients are told it: its rows and columns, and whether any attached
+/// client has asked for a size and not withdrawn it, which is what decides it (see [`Fan::request_size`]). While none
+/// has, the terminal keeps the size it has, and a client that asks for one takes it over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TermSize {
+    pub rows: u16,
+    pub cols: u16,
+    pub held: bool,
+}
+
 /// What is sent to a client following live output, in order.
 #[derive(Debug, Clone)]
 pub enum Outgoing {
@@ -40,15 +50,24 @@ pub enum Outgoing {
     Output(Bytes),
     /// A fresh paint of the screen, without history, in place of output the client had fallen too
     /// far behind on ([`BACKLOG_CAP`]): `offset` is where it leaves the output, as the replay mark
-    /// of an attach says.
-    Paint { offset: u64, paint: Bytes },
+    /// of an attach says, and `size` the terminal's size at that point.
+    Paint {
+        offset: u64,
+        paint: Bytes,
+        size: TermSize,
+    },
+    /// The terminal's size changed, or whether a client holds it did, at this point in the output:
+    /// the output after it is laid out for the new size.
+    Size(TermSize),
 }
 
 impl Outgoing {
-    /// The bytes it sends.
-    pub fn size(&self) -> usize {
+    /// The bytes of output it sends, which the client's credit counts: none for a size, a text
+    /// frame.
+    pub fn bytes(&self) -> usize {
         match self {
             Self::Output(bytes) | Self::Paint { paint: bytes, .. } => bytes.len(),
+            Self::Size(_) => 0,
         }
     }
 }
@@ -78,6 +97,9 @@ struct Subscriber {
     /// Whether the client has acknowledged anything yet: until it does, the credit does not hold
     /// it back, so a client that predates the acknowledgements is not stalled by them.
     acknowledging: bool,
+    /// A size published while output it follows was parsed and not yet handed to the client
+    /// (see [`State::publish_size`]), sent once that output is.
+    held_back_size: Option<TermSize>,
     /// Wakes the client's connection when there may be something for it to take.
     wake: Arc<Notify>,
 }
@@ -95,6 +117,9 @@ struct State {
     /// and without a sequence held back until its end arrives. Points in the output the clients
     /// name (the replay mark, a reply's offset) count these.
     delivered: u64,
+    /// The end of the output last added to the clients' backlogs ([`State::deliver`]): short of
+    /// `delivered` between a chunk's parsing and its delivery, which take the lock apart.
+    handed: u64,
     subscribers: Vec<Subscriber>,
     next_id: u64,
     /// No client follows the output any more; see [`Fan::close`].
@@ -104,11 +129,14 @@ struct State {
     replies: ReplyRoute,
     /// Which attached client was active most recently.
     activity: Activity,
-    /// The size, as rows and columns, each attached client last asked for. The most recently
-    /// active one's is the terminal's size; see [`Fan::request_size`].
+    /// The size, as rows and columns, each attached client last asked for and has not withdrawn
+    /// ([`Fan::watch`]). The most recently active one's is the terminal's size; see
+    /// [`Fan::request_size`].
     sizes: HashMap<u64, (u16, u16)>,
     /// The size the PTY and the parsed screen have, as rows and columns.
     size: (u16, u16),
+    /// The size the attached clients were last told of; see [`State::publish_size`].
+    published: TermSize,
     /// The display each attached client last reported. The most recently active one's is what
     /// the program's colour and size queries are answered with.
     displays: HashMap<u64, DisplayFacts>,
@@ -153,6 +181,9 @@ pub struct Answering {
     /// When the precedence attaching gave the client lapses, unless it is used before: the one
     /// deadline [`Fan::settle_activity`] is to be called at.
     pub precedence_lapses: Instant,
+    /// The terminal's size when the first paint was taken. Later changes reach the client as
+    /// [`Outgoing::Size`] at the point in the output they were made.
+    pub size: TermSize,
 }
 
 pub struct Fan(Mutex<State>);
@@ -181,6 +212,7 @@ impl Fan {
             terminal,
             total: 0,
             delivered: 0,
+            handed: 0,
             subscribers: Vec::new(),
             next_id: 0,
             closed: false,
@@ -188,6 +220,11 @@ impl Fan {
             activity: Activity::default(),
             sizes: HashMap::new(),
             size: (rows, cols),
+            published: TermSize {
+                rows,
+                cols,
+                held: false,
+            },
             displays: HashMap::new(),
             display_seed,
             queries: None,
@@ -266,6 +303,7 @@ impl Fan {
             backlog_bytes: 0,
             unacknowledged: opening.len(),
             acknowledging: false,
+            held_back_size: None,
             wake: wake.clone(),
         });
         // Attaching is activity, though it changes neither the display nor the size: the client
@@ -279,6 +317,7 @@ impl Fan {
                 client,
                 offset: from,
                 precedence_lapses,
+                size: fan.published,
             }),
         }
     }
@@ -309,8 +348,8 @@ impl Fan {
             let Some(frame) = sub.backlog.pop_front() else {
                 break;
             };
-            sub.backlog_bytes -= frame.size();
-            sub.unacknowledged += frame.size();
+            sub.backlog_bytes -= frame.bytes();
+            sub.unacknowledged += frame.bytes();
             frames.push(frame);
         }
         if frames.is_empty() {
@@ -377,6 +416,26 @@ impl Fan {
         }
         fan.sizes.insert(client, (rows, cols));
         Ok(fan.reconcile(Instant::now(), resize_pty))
+    }
+
+    /// Withdraws the size `client` asked for and the display it reported: it goes back to watching,
+    /// taking no part in either until it asks for a size or reports a display again. The size and
+    /// display of the most recently active client that has one apply in their place, as when a
+    /// client leaves ([`Self::leave`]); with no client asking for a size, the terminal keeps the
+    /// one it has. Returns what to write to the program, as [`Self::report_display`] does.
+    #[must_use = "what is returned is the program's to read, and only the caller can write it"]
+    pub fn watch(
+        &self,
+        client: u64,
+        resize_pty: impl FnOnce(u16, u16) -> anyhow::Result<()>,
+    ) -> Vec<u8> {
+        let mut fan = self.lock();
+        if fan.closed || !fan.subscribers.iter().any(|sub| sub.id == client) {
+            return Vec::new();
+        }
+        fan.sizes.remove(&client);
+        fan.displays.remove(&client);
+        fan.reconcile(Instant::now(), resize_pty)
     }
 
     /// Applies what follows the most recently active client at `now` again, together under the
@@ -555,7 +614,9 @@ impl Fan {
             fan.terminal.frozen().is_none(),
             "the terminal's screen has been frozen"
         );
-        fan.resize_screen(rows, cols, resize_pty)
+        let resized = fan.resize_screen(rows, cols, resize_pty);
+        fan.publish_size();
+        resized
     }
 
     /// Takes output that is history into the replay and the parsed screen as plain output, as
@@ -719,14 +780,17 @@ impl State {
     }
 
     /// Adds `chunk`, the output that ends at `end`, to the backlog of every client that attached
-    /// before that point (a client that attached since has it in its first paint already), and
+    /// before that point (a client that attached since has it in its first paint already),
+    /// followed by a size published while the chunk was on its way ([`State::publish_size`]), and
     /// replaces a backlog grown past [`BACKLOG_CAP`] with a fresh paint, taken now: the chunk has
     /// been parsed, so the paint leaves the output where the backlog would have.
     fn deliver(&mut self, chunk: &Bytes, end: u64) {
+        self.handed = end;
         if self.closed {
             return;
         }
         let offset = self.delivered;
+        let size = self.published;
         let Self {
             subscribers,
             terminal,
@@ -736,13 +800,21 @@ impl State {
         for sub in subscribers.iter_mut().filter(|sub| sub.from < end) {
             sub.backlog_bytes += chunk.len();
             sub.backlog.push_back(Outgoing::Output(chunk.clone()));
+            // A size published since the chunk was parsed, which was parsed at the size before.
+            if let Some(held_back) = sub.held_back_size.take() {
+                sub.backlog.push_back(Outgoing::Size(held_back));
+            }
             if sub.backlog_bytes > BACKLOG_CAP {
                 let paint = paint
                     .get_or_insert_with(|| Bytes::from(terminal.paint(0)))
                     .clone();
                 sub.backlog.clear();
                 sub.backlog_bytes = paint.len();
-                sub.backlog.push_back(Outgoing::Paint { offset, paint });
+                sub.backlog.push_back(Outgoing::Paint {
+                    offset,
+                    paint,
+                    size,
+                });
             }
             sub.wake.notify_one();
         }
@@ -780,7 +852,37 @@ impl State {
                 );
             }
         }
+        self.publish_size();
         self.apply_display(now)
+    }
+
+    /// Tells every attached client the terminal's size, at this point in the output, where it or
+    /// whether a client holds it has changed since they were last told. A chunk parsed and not yet
+    /// delivered was parsed at the size before: a client it is still to reach is told after it.
+    fn publish_size(&mut self) {
+        let (rows, cols) = self.size;
+        let size = TermSize {
+            rows,
+            cols,
+            held: !self.sizes.is_empty(),
+        };
+        if size == self.published {
+            return;
+        }
+        self.published = size;
+        if self.closed {
+            return;
+        }
+        let in_flight = self.handed < self.delivered;
+        let delivered = self.delivered;
+        for sub in &mut self.subscribers {
+            if in_flight && sub.from < delivered {
+                sub.held_back_size = Some(size);
+                continue;
+            }
+            sub.backlog.push_back(Outgoing::Size(size));
+            sub.wake.notify_one();
+        }
     }
 
     /// Resizes the terminal with `resize_pty` to the size the most recently active client at
@@ -825,7 +927,9 @@ mod tests {
     use std::sync::Arc;
     use std::time::Instant;
 
-    use super::{Attached, Delivery, Fan, Outgoing, BACKLOG_CAP, CREDIT_WINDOW, RING_CAPACITY};
+    use super::{
+        Attached, Delivery, Fan, Outgoing, TermSize, BACKLOG_CAP, CREDIT_WINDOW, RING_CAPACITY,
+    };
     use crate::protocol::TerminalAppearance;
     use crate::terminal::activity::ATTACH_CLAIM;
     use crate::terminal::display::{DisplayFacts, DisplayFallback, DisplaySeed};
@@ -864,13 +968,14 @@ mod tests {
                 match fan.take_output(self.client) {
                     Delivery::Send(frames) => {
                         for frame in frames {
-                            let len = frame.size() as u64;
+                            let len = frame.bytes() as u64;
                             match frame {
                                 Outgoing::Output(bytes) => self.received.extend_from_slice(&bytes),
                                 Outgoing::Paint { paint, .. } => {
                                     self.paints += 1;
                                     self.received.extend_from_slice(&paint);
                                 }
+                                Outgoing::Size(_) => {}
                             }
                             fan.acknowledge(self.client, len);
                         }
@@ -1451,6 +1556,470 @@ mod tests {
         );
     }
 
+    /// What reached a client, in order: output and the size events between it.
+    #[derive(Debug, PartialEq)]
+    enum Seen {
+        Output(Vec<u8>),
+        Size(TermSize),
+    }
+
+    /// Takes everything waiting for `client`, without acknowledging any of it.
+    fn seen(fan: &Fan, client: u64) -> Vec<Seen> {
+        let mut all = Vec::new();
+        while let Delivery::Send(frames) = fan.take_output(client) {
+            for frame in frames {
+                all.push(match frame {
+                    Outgoing::Output(bytes) => Seen::Output(bytes.to_vec()),
+                    Outgoing::Size(size) => Seen::Size(size),
+                    Outgoing::Paint { .. } => panic!("a paint in place of output"),
+                });
+            }
+        }
+        all
+    }
+
+    fn size(rows: u16, cols: u16, held: bool) -> TermSize {
+        TermSize { rows, cols, held }
+    }
+
+    /// A PTY resize that fails the test: the size must not be touched.
+    fn no_resize(_: u16, _: u16) -> anyhow::Result<()> {
+        panic!("the terminal was resized")
+    }
+
+    #[test]
+    fn an_attach_is_told_the_size_and_whether_a_client_holds_it() {
+        let fan = Fan::new(24, 80, false);
+        let first = fan.attach(0);
+        assert_eq!(
+            first.answering.as_ref().expect("a live client").size,
+            size(24, 80, false)
+        );
+
+        let _ = fan
+            .request_size(client_of(&first), 30, 100, keep_size)
+            .unwrap();
+        let second = fan.attach(0);
+        assert_eq!(
+            second.answering.as_ref().expect("a live client").size,
+            size(30, 100, true),
+            "the size at the point of the paint, and that a client holds it"
+        );
+        let _ = fan.leave(client_of(&first), keep_size);
+        let third = fan.attach(0);
+        assert_eq!(
+            third.answering.as_ref().expect("a live client").size,
+            size(30, 100, false),
+            "the holder left: the size stays, held no more"
+        );
+    }
+
+    #[test]
+    fn a_size_change_reaches_every_client_at_its_place_in_the_output() {
+        let fan = Fan::new(24, 80, false);
+        let (first_attached, second_attached) = (fan.attach(0), fan.attach(0));
+        let (first, second) = (client_of(&first_attached), client_of(&second_attached));
+        let _ = push(&fan, b"before");
+        let _ = fan.request_size(first, 30, 100, keep_size).unwrap();
+        let _ = push(&fan, b"after");
+
+        let expected = vec![
+            Seen::Output(b"before".to_vec()),
+            Seen::Size(size(30, 100, true)),
+            Seen::Output(b"after".to_vec()),
+        ];
+        assert_eq!(seen(&fan, first), expected);
+        assert_eq!(seen(&fan, second), expected);
+    }
+
+    #[test]
+    fn a_change_of_whether_a_client_holds_the_size_is_sent_with_the_size_unchanged() {
+        let fan = Fan::new(24, 80, false);
+        let (first_attached, second_attached) = (fan.attach(0), fan.attach(0));
+        let (first, second) = (client_of(&first_attached), client_of(&second_attached));
+
+        let _ = fan.request_size(first, 24, 80, no_resize).unwrap();
+        assert_eq!(seen(&fan, first), [Seen::Size(size(24, 80, true))]);
+        assert_eq!(seen(&fan, second), [Seen::Size(size(24, 80, true))]);
+
+        let _ = fan.watch(first, no_resize);
+        assert_eq!(seen(&fan, second), [Seen::Size(size(24, 80, false))]);
+        let _ = fan.request_size(first, 24, 80, no_resize).unwrap();
+        let _ = fan.leave(first, no_resize);
+        assert_eq!(
+            seen(&fan, second),
+            [
+                Seen::Size(size(24, 80, true)),
+                Seen::Size(size(24, 80, false))
+            ],
+            "the only holder leaving"
+        );
+    }
+
+    #[test]
+    fn nothing_is_sent_while_neither_the_size_nor_whether_it_is_held_changes() {
+        let fan = Fan::new(24, 80, false);
+        let (first_attached, second_attached) = (fan.attach(0), fan.attach(0));
+        let (first, second) = (client_of(&first_attached), client_of(&second_attached));
+        let _ = fan.request_size(first, 30, 100, keep_size).unwrap();
+        let _ = seen(&fan, first);
+        let _ = seen(&fan, second);
+
+        let _ = fan.request_size(first, 30, 100, no_resize).unwrap();
+        let _ = fan.activate(first, no_resize);
+        let _ = fan.activate(second, no_resize);
+        let _ = fan.report_display(second, light());
+        let _ = fan.settle_activity(Instant::now() + 10 * ATTACH_CLAIM, no_resize);
+        let _ = fan.watch(second, no_resize);
+        let _ = fan.leave(second, no_resize);
+        assert!(seen(&fan, first).is_empty());
+        assert!(seen(&fan, second).is_empty());
+    }
+
+    #[test]
+    fn a_second_holder_that_leaves_keeps_the_size_held_and_follows_the_first() {
+        let fan = Fan::new(24, 80, false);
+        let (first_attached, second_attached) = (fan.attach(0), fan.attach(0));
+        let (first, second) = (client_of(&first_attached), client_of(&second_attached));
+        let _ = fan.request_size(first, 30, 100, keep_size).unwrap();
+        let _ = fan.request_size(second, 20, 50, keep_size).unwrap();
+        let _ = seen(&fan, first);
+        let _ = fan.leave(second, keep_size);
+        assert_eq!(seen(&fan, first), [Seen::Size(size(30, 100, true))]);
+    }
+
+    #[test]
+    fn a_watcher_takes_no_part_in_the_size_by_attaching_or_being_used() {
+        let fan = Fan::new(24, 80, false);
+        let holder_attached = fan.attach(0);
+        let holder = client_of(&holder_attached);
+        let _ = fan.request_size(holder, 30, 100, keep_size).unwrap();
+        let _ = fan.activate(holder, no_resize);
+
+        // Within the attach's precedence, the watcher is the most recently active client.
+        let watcher_attached = fan.attach(0);
+        let watcher = client_of(&watcher_attached);
+        assert_eq!(
+            watcher_attached.answering.as_ref().unwrap().size,
+            size(30, 100, true)
+        );
+        let _ = fan.activate(watcher, no_resize);
+        let _ = fan.settle_activity(Instant::now(), no_resize);
+        let _ = fan.settle_activity(Instant::now() + 10 * ATTACH_CLAIM, no_resize);
+        let _ = fan.activate(holder, no_resize);
+        let _ = fan.activate(watcher, no_resize);
+        assert_eq!(
+            seen(&fan, holder),
+            [Seen::Size(size(30, 100, true))],
+            "told once, of the holder's own size, and nothing after"
+        );
+        assert_eq!(seen(&fan, watcher), []);
+    }
+
+    #[test]
+    fn a_watcher_alone_leaves_the_terminal_the_size_it_has() {
+        let fan = Fan::new(24, 80, false);
+        let attached = fan.attach(0);
+        let watcher = client_of(&attached);
+        let _ = fan.activate(watcher, no_resize);
+        let _ = fan.settle_activity(Instant::now() + 10 * ATTACH_CLAIM, no_resize);
+        assert!(seen(&fan, watcher).is_empty());
+        assert_eq!(
+            fan.attach(0).answering.unwrap().size,
+            size(24, 80, false),
+            "no client has asked for a size"
+        );
+    }
+
+    #[test]
+    fn a_watcher_takes_the_terminal_over_by_asking_for_a_size_and_becoming_active() {
+        let fan = Fan::new(24, 80, false);
+        let resized = std::cell::RefCell::new(Vec::new());
+        let resize = |rows: u16, cols: u16| {
+            resized.borrow_mut().push((rows, cols));
+            Ok(())
+        };
+        let taken = || std::mem::take(&mut *resized.borrow_mut());
+        let (holder_attached, watcher_attached) = (fan.attach(0), fan.attach(0));
+        let (holder, watcher) = (client_of(&holder_attached), client_of(&watcher_attached));
+        let _ = fan.request_size(holder, 30, 100, resize).unwrap();
+        let _ = fan.activate(holder, resize);
+        assert_eq!(taken(), [(30, 100)]);
+        let _ = seen(&fan, holder);
+        let _ = seen(&fan, watcher);
+
+        let _ = fan.request_size(watcher, 20, 50, resize).unwrap();
+        assert!(
+            taken().is_empty(),
+            "the holder was used last, so a size alone is only kept"
+        );
+        assert!(seen(&fan, holder).is_empty());
+        let _ = fan.activate(watcher, resize);
+        assert_eq!(taken(), [(20, 50)]);
+        let expected = [Seen::Size(size(20, 50, true))];
+        assert_eq!(seen(&fan, holder), expected);
+        assert_eq!(seen(&fan, watcher), expected);
+
+        let _ = fan.activate(holder, resize);
+        assert_eq!(taken(), [(30, 100)], "its size counts as any client's does");
+    }
+
+    #[test]
+    fn watching_gives_the_size_to_the_next_most_recently_active_client_that_has_one() {
+        let fan = Fan::new(24, 80, false);
+        let resized = std::cell::RefCell::new(Vec::new());
+        let resize = |rows: u16, cols: u16| {
+            resized.borrow_mut().push((rows, cols));
+            Ok(())
+        };
+        let taken = || std::mem::take(&mut *resized.borrow_mut());
+        let attached: Vec<_> = (0..3).map(|_| fan.attach(0)).collect();
+        let (first, second, third) = (
+            client_of(&attached[0]),
+            client_of(&attached[1]),
+            client_of(&attached[2]),
+        );
+        let _ = fan.request_size(first, 30, 100, resize).unwrap();
+        let _ = fan.request_size(second, 20, 50, resize).unwrap();
+        assert_eq!(taken(), [(30, 100), (20, 50)]);
+        let _ = seen(&fan, third);
+
+        let _ = fan.watch(third, resize);
+        assert!(
+            taken().is_empty() && seen(&fan, third).is_empty(),
+            "a client that asked for nothing watches already"
+        );
+        let _ = fan.watch(second, resize);
+        assert_eq!(taken(), [(30, 100)]);
+        assert_eq!(seen(&fan, third), [Seen::Size(size(30, 100, true))]);
+        assert_eq!(
+            fan.attach(0).answering.unwrap().size,
+            size(30, 100, true),
+            "the one that is left holds it"
+        );
+
+        let _ = fan.watch(first, resize);
+        assert!(taken().is_empty(), "no client asks for a size: it is kept");
+        assert_eq!(seen(&fan, third), [Seen::Size(size(30, 100, false))]);
+        let _ = fan.watch(first, resize);
+        assert!(seen(&fan, third).is_empty());
+    }
+
+    #[test]
+    fn watching_by_a_client_that_is_not_attached_changes_nothing() {
+        let fan = Fan::new(24, 80, false);
+        let attached = fan.attach(0);
+        let client = client_of(&attached);
+        let _ = fan.request_size(client, 30, 100, keep_size).unwrap();
+        let _ = seen(&fan, client);
+        assert!(fan.watch(client + 100, no_resize).is_empty());
+        assert!(seen(&fan, client).is_empty());
+        let _ = fan.leave(client, keep_size);
+        assert!(fan.watch(client, no_resize).is_empty());
+    }
+
+    #[test]
+    fn watching_takes_back_the_display_that_answered_the_programs_queries() {
+        let fan = Fan::new(24, 80, false);
+        let (first_attached, second_attached) = (fan.attach(0), fan.attach(0));
+        let (first, second) = (client_of(&first_attached), client_of(&second_attached));
+        let _ = fan.report_display(first, light());
+        let black = DisplayFacts::reported("#ffffff", "#000000", "#ffffff", None).unwrap();
+        let _ = fan.report_display(second, black);
+        assert_eq!(background(&fan), b"\x1b]11;rgb:0000/0000/0000\x07");
+
+        let _ = fan.watch(second, keep_size);
+        assert_eq!(
+            background(&fan),
+            LIGHT_BACKGROUND,
+            "the next client's display answers"
+        );
+    }
+
+    #[test]
+    fn a_fresh_paint_in_place_of_a_discarded_backlog_carries_the_current_size() {
+        let fan = Fan::new(24, 80, false);
+        let stalled = fan.attach(100);
+        let stalled_client = client_of(&stalled);
+        let reading = fan.attach(100);
+        let mut reader = Reader::new(&fan, &reading);
+        let _ = fan
+            .request_size(client_of(&reading), 30, 100, keep_size)
+            .unwrap();
+        let mut pushed = 0;
+        let mut i = 0;
+        while pushed < 2 * BACKLOG_CAP {
+            let chunk = line(i);
+            let _ = push(&fan, &chunk);
+            pushed += chunk.len();
+            reader.read(&fan);
+            i += 1;
+        }
+        // A change after the paint was queued reaches the client behind it.
+        let _ = fan
+            .request_size(client_of(&reading), 40, 120, keep_size)
+            .unwrap();
+
+        let mut frames = Vec::new();
+        while let Delivery::Send(more) = fan.take_output(stalled_client) {
+            fan.acknowledge(
+                stalled_client,
+                more.iter().map(Outgoing::bytes).sum::<usize>() as u64,
+            );
+            frames.extend(more);
+        }
+        let Some(Outgoing::Paint { size: painted, .. }) = frames.first() else {
+            panic!("the stalled client is not sent a paint first: {frames:?}");
+        };
+        assert_eq!(
+            *painted,
+            size(30, 100, true),
+            "the size queued behind the output the paint replaced was discarded with it"
+        );
+        let sizes: Vec<_> = frames
+            .iter()
+            .filter_map(|frame| match frame {
+                Outgoing::Size(size) => Some(*size),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(sizes, [size(40, 120, true)]);
+        assert!(matches!(frames.last(), Some(Outgoing::Size(_))));
+    }
+
+    #[test]
+    fn a_size_published_while_a_chunk_is_being_handed_over_follows_that_chunk() {
+        let fan = Fan::new(24, 80, false);
+        let (first_attached, second_attached) = (fan.attach(0), fan.attach(0));
+        let (first, second) = (client_of(&first_attached), client_of(&second_attached));
+        let _ = fan.push(b"parsed at the old size", |_, _| {
+            let _ = fan.request_size(first, 30, 100, keep_size).unwrap();
+        });
+        let _ = push(&fan, b"next");
+
+        let expected = vec![
+            Seen::Output(b"parsed at the old size".to_vec()),
+            Seen::Size(size(30, 100, true)),
+            Seen::Output(b"next".to_vec()),
+        ];
+        assert_eq!(seen(&fan, first), expected);
+        assert_eq!(seen(&fan, second), expected);
+    }
+
+    #[test]
+    fn several_sizes_published_while_a_chunk_is_being_handed_over_all_come_after_it() {
+        let fan = Fan::new(24, 80, false);
+        let attached = fan.attach(0);
+        let client = client_of(&attached);
+        let _ = fan.push(b"chunk", |_, _| {
+            let _ = fan.request_size(client, 30, 100, keep_size).unwrap();
+            let _ = fan.request_size(client, 40, 120, keep_size).unwrap();
+        });
+        let frames = seen(&fan, client);
+        assert_eq!(frames.first(), Some(&Seen::Output(b"chunk".to_vec())));
+        assert!(
+            frames[1..]
+                .iter()
+                .all(|frame| matches!(frame, Seen::Size(_))),
+            "{frames:?}"
+        );
+        assert_eq!(
+            frames.last(),
+            Some(&Seen::Size(size(40, 120, true))),
+            "the client ends on the size the terminal has"
+        );
+    }
+
+    #[test]
+    fn a_client_attached_while_a_chunk_is_being_handed_over_has_it_in_its_paint_and_is_told_a_size_at_once(
+    ) {
+        let fan = Fan::new(24, 80, false);
+        let early_attached = fan.attach(0);
+        let early = client_of(&early_attached);
+        let late = std::cell::RefCell::new(None);
+        let _ = fan.push(b"in the paint", |_, _| {
+            let attached = fan.attach(0);
+            let _ = fan.request_size(early, 30, 100, keep_size).unwrap();
+            *late.borrow_mut() = Some(attached);
+        });
+        let late = late.into_inner().unwrap();
+        let late_client = client_of(&late);
+
+        let mut shown = TerminalSnapshot::new(24, 80);
+        shown.process(&late.opening);
+        assert!(shown.visible_text().contains("in the paint"));
+        assert_eq!(
+            late.answering.as_ref().unwrap().size,
+            size(24, 80, false),
+            "the size its paint was taken at"
+        );
+        assert_eq!(
+            seen(&fan, late_client),
+            [Seen::Size(size(30, 100, true))],
+            "the chunk is not sent again, and the size is not held back behind it"
+        );
+        assert_eq!(
+            seen(&fan, early),
+            [
+                Seen::Output(b"in the paint".to_vec()),
+                Seen::Size(size(30, 100, true))
+            ]
+        );
+    }
+
+    #[test]
+    fn a_chunk_that_overflows_the_backlog_into_a_paint_carries_the_size_published_while_it_was_handed_over(
+    ) {
+        let fan = Fan::new(24, 80, false);
+        let stalled_attached = fan.attach(0);
+        let stalled = client_of(&stalled_attached);
+        let holder_attached = fan.attach(0);
+        let holder = client_of(&holder_attached);
+        let chunk = vec![b'x'; BACKLOG_CAP + 1];
+        let _ = fan.push(&chunk, |_, _| {
+            let _ = fan.request_size(holder, 30, 100, keep_size).unwrap();
+        });
+
+        let mut frames = Vec::new();
+        while let Delivery::Send(more) = fan.take_output(stalled) {
+            frames.extend(more);
+        }
+        let [Outgoing::Paint { size: painted, .. }] = frames.as_slice() else {
+            panic!("a paint alone, with no separate size behind it: {frames:?}");
+        };
+        assert_eq!(*painted, size(30, 100, true));
+    }
+
+    #[test]
+    fn a_size_event_is_no_output_and_is_not_counted_against_the_credit() {
+        assert_eq!(Outgoing::Size(size(24, 80, true)).bytes(), 0);
+
+        let fan = Fan::new(24, 80, false);
+        let attached = fan.attach(0);
+        let client = client_of(&attached);
+        fan.acknowledge(client, attached.opening.len() as u64);
+        let unacknowledged = |fan: &Fan| {
+            fan.lock()
+                .subscribers
+                .iter()
+                .find(|sub| sub.id == client)
+                .map(|sub| sub.unacknowledged)
+                .unwrap()
+        };
+        let before = unacknowledged(&fan);
+        for cols in 2..400 {
+            let _ = fan.request_size(client, 24, cols, keep_size).unwrap();
+        }
+        let Delivery::Send(frames) = fan.take_output(client) else {
+            panic!("size events wait for a client with credit");
+        };
+        assert_eq!(frames.len(), 398);
+        assert!(frames
+            .iter()
+            .all(|frame| matches!(frame, Outgoing::Size(_))));
+        assert_eq!(unacknowledged(&fan), before);
+    }
+
     #[test]
     fn logging_the_queries_records_the_daemons_answers() {
         let fan = Fan::new(24, 80, false);
@@ -1632,7 +2201,7 @@ mod tests {
     /// The size of the output a client has been sent, from what [`Fan::take_output`] returned.
     fn sent(delivery: &Delivery) -> usize {
         match delivery {
-            Delivery::Send(frames) => frames.iter().map(Outgoing::size).sum(),
+            Delivery::Send(frames) => frames.iter().map(Outgoing::bytes).sum(),
             Delivery::Wait | Delivery::Over => 0,
         }
     }
@@ -1715,16 +2284,16 @@ mod tests {
         while let Delivery::Send(frames) = fan.take_output(stalled_client) {
             fan.acknowledge(
                 stalled_client,
-                frames.iter().map(Outgoing::size).sum::<usize>() as u64,
+                frames.iter().map(Outgoing::bytes).sum::<usize>() as u64,
             );
             resumed.extend(frames);
         }
-        let Some(Outgoing::Paint { offset, paint }) = resumed.first() else {
+        let Some(Outgoing::Paint { offset, paint, .. }) = resumed.first() else {
             panic!("the resumed client is not sent a paint first: {resumed:?}");
         };
         assert_eq!(
             *offset,
-            fan.lock().delivered - resumed[1..].iter().map(|f| f.size() as u64).sum::<u64>(),
+            fan.lock().delivered - resumed[1..].iter().map(|f| f.bytes() as u64).sum::<u64>(),
             "the paint leaves the output where the output after it takes over"
         );
         let mut shown = TerminalSnapshot::new(24, 80);
@@ -1737,7 +2306,7 @@ mod tests {
         }
         assert_eq!(shown.visible_text(), fan.lock().terminal.visible_text());
         assert!(
-            paint.len() + resumed[1..].iter().map(Outgoing::size).sum::<usize>() <= BACKLOG_CAP,
+            paint.len() + resumed[1..].iter().map(Outgoing::bytes).sum::<usize>() <= BACKLOG_CAP,
             "the backlog was discarded rather than sent"
         );
     }

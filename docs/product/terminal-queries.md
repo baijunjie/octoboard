@@ -46,7 +46,8 @@ a browser, a phone), and most queries are answered by Octoboard itself rather th
   the person turning to its terminal, but not what its terminal sends by itself — is set out in "The most recently
   active client" in `docs/product/terminals-on-several-clients.md`; the same client decides the terminal's size.
 - **While none of a terminal's clients has told its display** — before the first one does, and once every client that
-  had has left — a program reads the colours of whichever of these two is more recent:
+  had has left or gone back to watching (see "Watching a terminal" in `docs/product/terminals-on-several-clients.md`)
+  — a program reads the colours of whichever of these two is more recent:
   - **the appearance the session's terminal was launched for**: the light or dark appearance a window sends with each
     launch it asks for (which launches those are, and which have no window behind them, is set out in "Grok Build's
     theme" in `docs/product/per-agent-launch-specifics.md`). It counts from the moment the launch begins. So a program
@@ -61,8 +62,8 @@ a browser, a phone), and most queries are answered by Octoboard itself rather th
   `#e4e4e6` on background `#1e1f22` (dark) and `#383a42` on `#fafafa` (light), with cursor `#808080` in both.
 - **Which of the two is more recent is weighed when the terminal starts, and again whenever its display is next brought
   up to date**: input sent from a client or the person turning to its terminal, a client telling its display or asking
-  for a size, the 30 seconds an attach counts for running out, or a client leaving. A display told on another terminal
-  does not change what a program reads in between.
+  for a size, the 30 seconds an attach counts for running out, a client going back to watching, or a client leaving. A
+  display told on another terminal does not change what a program reads in between.
 - **The cell is 8 by 17 pixels while none of the terminal's clients has told its display**; only colours are taken
   from the launch's appearance or from another terminal's client, never a cell size. A client that does not know its
   cell size is taken to have that cell too.

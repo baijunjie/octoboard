@@ -5,6 +5,9 @@ import type { TermEvent } from "../protocol";
 // The pure parts of the output pipeline: what output is made of and how it is handed to xterm. The
 // controller keeps everything that depends on its session, socket and status.
 
+/** The replay mark that comes before a paint: where the paint leaves the output. */
+export type ReplayMark = Extract<TermEvent, { type: "replay" }>;
+
 /** A focus report (`CSI I`, `CSI O`): xterm does not mark it as the user's, but it is this view
  * gaining or losing focus, not an answer to a query. */
 // eslint-disable-next-line no-control-regex -- Focus reports begin with the escape control character.
@@ -66,7 +69,7 @@ interface PlannedWrite {
  */
 export function planOutputWrites(
   data: Uint8Array,
-  mark: TermEvent | undefined,
+  mark: ReplayMark | undefined,
   outputEnd: number | undefined,
 ): { writes: PlannedWrite[]; outputEnd: number | undefined } {
   if (mark && mark.length === data.length) {

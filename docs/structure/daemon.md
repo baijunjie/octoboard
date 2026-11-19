@@ -449,7 +449,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   backend started: the reader thread, input (`lock_input` takes the lock on the platform `Pty`, which every write into
   the terminal is made under), freezing, exit observation, scratch directory and crash-cleanup entry, `fan.rs` the
   output fan-out of parsed screen, replay ring and attached clients, which also keeps each client's requested size and
-  applies the most recently active client's (a client attaching to a live terminal starts from a first paint of the
+  applies the most recently active client's (a client may instead only watch, taking no part in the size), and tells
+  every client the size at the point in the output where it changes, `Outgoing::Size`, with the first paint and a
+  repaint carrying the size they were taken at (a client attaching to a live terminal starts from a first paint of the
   parsed screen, taken under the fan lock; the daemon answers the program's queries there, so the queries it answers are
   left out of what clients receive and stream offsets count the bytes delivered), and each client's flow control: a
   backlog of what is waiting for it, the count of bytes sent and not yet acknowledged (`CREDIT_WINDOW`), and a wake-up

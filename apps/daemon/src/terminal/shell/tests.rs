@@ -442,7 +442,7 @@ async fn a_shell_that_exits_leaves_its_terminal_exited_with_its_output_until_clo
         loop {
             match shell.take_output(client) {
                 crate::terminal::fan::Delivery::Send(frames) => {
-                    let sent: usize = frames.iter().map(|frame| frame.size()).sum();
+                    let sent: usize = frames.iter().map(|frame| frame.bytes()).sum();
                     shell.acknowledge(client, sent as u64);
                 }
                 crate::terminal::fan::Delivery::Wait => wake.notified().await,

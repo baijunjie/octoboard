@@ -16,7 +16,7 @@ use crate::server::access::Admission;
 use crate::session::LiveSession;
 use crate::state::AppState;
 use crate::terminal::display::DisplayFacts;
-use crate::terminal::fan::{Answering, Attached, Delivery, Outgoing};
+use crate::terminal::fan::{Answering, Attached, Delivery, Outgoing, TermSize};
 use crate::terminal::input_class::is_terminal_protocol;
 use crate::terminal::pty::PtyCore;
 use crate::terminal::shell::ShellProcess;
@@ -435,6 +435,7 @@ async fn handle_term(
             client,
             offset,
             precedence_lapses,
+            size,
         }),
         Some(wake),
     ) = (answering, live)
@@ -447,7 +448,10 @@ async fn handle_term(
     };
     // Let go however the connection ends from here on, an early return included.
     let registration = Registration::new(terminal.clone(), client, precedence_lapses);
-    if send_paint(&mut socket, offset, opening).await.is_err() {
+    if send_paint(&mut socket, offset, size, opening)
+        .await
+        .is_err()
+    {
         return;
     }
     // Control frames are read only from here on, so a resize the client sent on connecting is
@@ -524,6 +528,9 @@ async fn handle_term(
                             Ok(TermControl::Ack { bytes }) => pty.acknowledge(client, bytes),
                             Ok(TermControl::Activate) => {
                                 terminal.moving_size(move |pty| pty.activate(client)).await;
+                            }
+                            Ok(TermControl::Watch) => {
+                                terminal.moving_size(move |pty| pty.watch(client)).await;
                             }
                             Err(err) => tracing::debug!(terminal = %id, %err, "unreadable terminal control frame"),
                         }
@@ -668,9 +675,12 @@ async fn forward_output(socket: &mut WebSocket, pty: &PtyCore, client: u64) -> b
         for frame in frames {
             let sent = match frame {
                 Outgoing::Output(bytes) => socket.send(Message::Binary(bytes.to_vec())).await,
-                Outgoing::Paint { offset, paint } => {
-                    send_paint(socket, offset, paint.to_vec()).await
-                }
+                Outgoing::Paint {
+                    offset,
+                    paint,
+                    size,
+                } => send_paint(socket, offset, size, paint.to_vec()).await,
+                Outgoing::Size(size) => send_size(socket, size).await,
             };
             if sent.is_err() {
                 return false;
@@ -679,12 +689,14 @@ async fn forward_output(socket: &mut WebSocket, pty: &PtyCore, client: u64) -> b
     }
 }
 
-/// Sends a paint behind its replay mark: its length, `offset`, where it leaves the output, and
+/// Sends a paint behind its replay mark (its length, `offset`, where it leaves the output, and
 /// that all of it is output whose queries are not the client's to answer, since a paint asks
-/// nothing.
+/// nothing) and the terminal's `size` at that point, so the client takes that size before it
+/// writes the paint.
 async fn send_paint(
     socket: &mut WebSocket,
     offset: u64,
+    size: TermSize,
     paint: Vec<u8>,
 ) -> Result<(), axum::Error> {
     let mark = TermEvent::Replay {
@@ -694,7 +706,16 @@ async fn send_paint(
     };
     let text = serde_json::to_string(&mark).expect("a replay mark serializes");
     socket.send(Message::Text(text)).await?;
+    send_size(socket, size).await?;
     socket.send(Message::Binary(paint)).await
+}
+
+/// Tells the client the terminal's size, and whether a client holds it.
+async fn send_size(socket: &mut WebSocket, size: TermSize) -> Result<(), axum::Error> {
+    let TermSize { rows, cols, held } = size;
+    let event = TermEvent::Size { cols, rows, held };
+    let text = serde_json::to_string(&event).expect("a size event serializes");
+    socket.send(Message::Text(text)).await
 }
 
 #[cfg(test)]
@@ -1177,6 +1198,16 @@ mod tests {
             .find(|mark| mark["type"] == "replay")
             .unwrap_or_else(|| panic!("no fresh paint for the stalled client: {texts:?}"));
         assert!(paint["length"].as_u64().unwrap() > 0);
+        let after_mark = texts
+            .iter()
+            .position(|text| text.contains("\"replay\""))
+            .and_then(|mark| texts.get(mark + 1))
+            .unwrap_or_else(|| panic!("no size after the fresh paint's mark: {texts:?}"));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(after_mark).unwrap(),
+            serde_json::json!({ "type": "size", "cols": 80, "rows": 24, "held": false }),
+            "the fresh paint is followed by the terminal's size"
+        );
         assert!(
             seen.len() < flooded,
             "the backlog was discarded rather than sent: {} of {flooded} bytes",
@@ -1392,6 +1423,128 @@ mod tests {
         size_becomes(&live, 40, 120).await;
 
         first.close(None).await.unwrap();
+        server.abort();
+        let _ = server.await;
+        drop((live, dir));
+    }
+
+    /// The next frame to reach `socket`, text or binary.
+    async fn next_frame(socket: &mut Socket) -> tokio_tungstenite::tungstenite::Message {
+        use tokio_tungstenite::tungstenite::Message as Frame;
+        loop {
+            match tokio::time::timeout(PATIENCE, socket.next())
+                .await
+                .expect("no frame arrived")
+            {
+                Some(Ok(Frame::Ping(_) | Frame::Pong(_))) => {}
+                Some(Ok(frame)) => return frame,
+                other => panic!("the socket ended: {other:?}"),
+            }
+        }
+    }
+
+    /// The next text frame to reach `socket`, parsed.
+    async fn next_text(socket: &mut Socket) -> serde_json::Value {
+        use tokio_tungstenite::tungstenite::Message as Frame;
+        loop {
+            if let Frame::Text(text) = next_frame(socket).await {
+                return serde_json::from_str(&text).expect("a text frame is JSON");
+            }
+        }
+    }
+
+    /// The next `size` frame to reach `socket`.
+    async fn next_size(socket: &mut Socket) -> serde_json::Value {
+        loop {
+            let text = next_text(socket).await;
+            if text["type"] == "size" {
+                return text;
+            }
+        }
+    }
+
+    /// Reads the three frames an attach to a live process opens with, in order, and returns the
+    /// `size` frame between the mark and the paint.
+    async fn opening_size(socket: &mut Socket) -> serde_json::Value {
+        use tokio_tungstenite::tungstenite::Message as Frame;
+        let Frame::Text(mark) = next_frame(socket).await else {
+            panic!("the replay mark is not the first frame");
+        };
+        let mark: serde_json::Value = serde_json::from_str(&mark).unwrap();
+        assert_eq!(mark["type"], "replay");
+        let Frame::Text(size) = next_frame(socket).await else {
+            panic!("the size is not the frame after the mark");
+        };
+        let size: serde_json::Value = serde_json::from_str(&size).unwrap();
+        let Frame::Binary(paint) = next_frame(socket).await else {
+            panic!("the paint is not the frame after the size");
+        };
+        assert_eq!(paint.len() as u64, mark["length"].as_u64().unwrap());
+        size
+    }
+
+    /// An attach is told the terminal's size between the replay mark and the paint, a client that
+    /// asks for a size is a holder every client is told of, a client that never asked only
+    /// watches whatever it does, `watch` hands the size back, and a watcher takes the terminal
+    /// over by asking for one.
+    #[tokio::test]
+    async fn clients_are_told_the_size_and_whether_it_is_held_and_a_watcher_can_take_it_over() {
+        use tokio_tungstenite::tungstenite::Message as Frame;
+
+        let (state, dir) = app_state("server-watching");
+        let live = raw_echo("watching");
+        crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+        state.register_live(live.clone());
+        printed_since(&live, 0, b"READY").await;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let served = state.clone();
+        let server = tokio::spawn(async move { axum::serve(listener, router(served)).await });
+        let url = format!("ws://127.0.0.1:{port}/ws/term/watching?key={TEST_KEY}");
+        let control = |value: serde_json::Value| Frame::Text(value.to_string());
+        let resize = |cols: u16, rows: u16| {
+            control(serde_json::json!({ "type": "resize", "cols": cols, "rows": rows }))
+        };
+        let activate = || control(serde_json::json!({ "type": "activate" }));
+        let watch = || control(serde_json::json!({ "type": "watch" }));
+        let size = |cols: u16, rows: u16, held: bool| serde_json::json!({ "type": "size", "cols": cols, "rows": rows, "held": held });
+
+        let (mut first, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+        assert_eq!(
+            opening_size(&mut first).await,
+            size(80, 24, false),
+            "nobody has asked for a size yet"
+        );
+
+        let (mut second, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+        opening_size(&mut second).await;
+        send_and_see(&mut second, vec![resize(100, 30)], b"<two>").await;
+        size_becomes(&live, 30, 100).await;
+        assert_eq!(next_size(&mut first).await, size(100, 30, true));
+
+        let (mut third, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+        assert_eq!(
+            opening_size(&mut third).await,
+            size(100, 30, true),
+            "a later attach is told the size the holder asked for"
+        );
+        // A watcher's attach, activity and input leave the size alone.
+        send_and_see(&mut third, vec![activate()], b"<three>").await;
+        size_becomes(&live, 30, 100).await;
+
+        send_and_see(&mut second, vec![watch()], b"<watch>").await;
+        assert_eq!(next_size(&mut first).await, size(100, 30, false));
+        assert_eq!(next_size(&mut third).await, size(100, 30, false));
+        size_becomes(&live, 30, 100).await;
+
+        send_and_see(&mut third, vec![resize(90, 25), activate()], b"<take>").await;
+        size_becomes(&live, 25, 90).await;
+        assert_eq!(next_size(&mut first).await, size(90, 25, true));
+
+        for mut socket in [first, second, third] {
+            socket.close(None).await.unwrap();
+        }
         server.abort();
         let _ = server.await;
         drop((live, dir));

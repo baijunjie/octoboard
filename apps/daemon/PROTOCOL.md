@@ -4028,10 +4028,19 @@ session's alone.
   client does not answer: all of them, since the paint asks nothing. The same mark comes before each fresh paint the
   flow control below sends in place of a backlog, and the client counts the output on from its `offset`. A saved,
   frozen or no-process preview and an exited shell's paint get no mark.
+- Right after each mark, before its paint, the daemon sends the terminal's **size**:
+  `{"type":"size","cols":N,"rows":N,"held":B}`, so the client takes that size before it writes the paint. It sends the
+  same frame again whenever the size changes, or whether a client holds it does, placed at that point in the output, so
+  the output after it is laid out for the new size (a repaint the daemon has the program make, by resizing it one row
+  and back, shows as two). `held` is whether any attached client has asked for a size (`resize`) and not withdrawn it
+  (`watch`); while none has, the terminal keeps the size it has, and a client that asks for one takes it over. Like the
+  mark, the frame does not count against the flow control's credit. A daemon that sends no `size` before the paint
+  predates it.
 - Client to daemon: **binary** frames are raw PTY input, written through verbatim. **Text** frames are JSON control:
   `{"type":"resize","cols":N,"rows":N}`, `{"type":"reply","data":"…","offset":O}` and
   `{"type":"display","foreground":"#rrggbb","background":"#rrggbb","cursor":"#rrggbb","cell_width":W,"cell_height":H}`
-  (both below), `{"type":"ack","bytes":N}` (flow control, below) and `{"type":"activate"}` ("Display.", below).
+  (both below), `{"type":"ack","bytes":N}` (flow control, below), `{"type":"activate"}` ("Display.", below) and
+  `{"type":"watch"}` (below).
   Supported dimensions are 2–1,000 columns and 1–500 rows; other sizes are ignored and logged. A `resize` asks for a
   size rather than setting it: the terminal has the size the most recently active client that has asked for one (see
   "Display." below for what makes a client active) last asked for. A client's latest size is kept, and applied, without
@@ -4043,6 +4052,15 @@ session's alone.
   handoff, an agent's transfer of a session it owns, or a change of its account's sharing), its input waits unwritten in
   the connection: it goes in once the hold ends with the session still running, and when the socket ends first (the
   session archived or restarted) it is reported as `terminal_input_lost`.
+- **Watching.** A client that has not asked for a size only watches: its attach, its input and its `activate` change
+  nothing about the size, its input still reaches the program, and it shows the terminal at the size the `size` frames
+  tell it. A watcher sends no `display` either, since a display it reported would answer the program's queries and
+  could have the program redraw for every client. To take the terminal over, a client sends `resize`, `display` and
+  `activate` (a `resize` alone is applied only while the client is the most recently active one; its attach's
+  precedence may have lapsed); from then on its size counts as any client's does. `{"type":"watch"}` takes it back to
+  watching: its size and display no longer count, those of the most recently active client that has one apply in
+  their place, and with no client asking for a size the terminal keeps the one it has. A daemon of the same generation
+  that predates watching ignores `watch` and sends no `size`.
 - **Answers to the program's queries.** A program asks its terminal things through its output — the cursor position
   (`CSI 6n`), a colour (`OSC 11 ?`), the device attributes — and reads the answer as input. The daemon answers these
   itself from its parsed copy of the terminal, the moment it reads them, whether any client is attached or not, and

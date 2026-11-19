@@ -25,10 +25,12 @@ scrollback it shows, and how its size and colours are set.
   (a terminal that attached then gets no scrollback, and shows a blank normal screen once the agent leaves the alternate
   one), character sets, tab stops, colour palette changes, and keyboard-protocol enhancements an agent asked for (the
   kitty keyboard flags).
-- The first paint is drawn at the size the agent's terminal has at that moment. The size the attaching client reports
-  is applied after its paint, and an agent told a different size redraws for it over the painted screen. Attaching
-  makes the client the most recently active one, which is what decides the size while several clients show the
-  terminal (see "The terminal's size" in `docs/product/terminals-on-several-clients.md`).
+- The first paint is drawn at the size the agent's terminal has at that moment, which the client is told just before
+  the paint (see "Clients are told the size" in `docs/product/terminals-on-several-clients.md`). The size the
+  attaching client reports, if it asks for one, is applied after its paint, and an agent told a different size
+  redraws for it over the painted screen. Attaching makes the client the most recently active one, which is what
+  decides the size while several clients show the terminal (see "The terminal's size" in
+  `docs/product/terminals-on-several-clients.md`).
 - A reattach always redraws from a new first paint rather than appending to what is on screen, so scrollback older
   than the daemon's 10,000 rows is lost on every reconnect.
 
