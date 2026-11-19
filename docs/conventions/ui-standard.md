@@ -126,7 +126,8 @@ account in its agent mark's tooltip where that names only the agent and its acco
 name's own style and never an `InlineReference`. It is the shared `StatusBadge`, the only small badge component for a
 status; a bare count after a row's name (the rail processes panel's rows, a Focus view chip's count) uses `CountBadge`,
 which reuses the default small bordered `StatusBadge`: green (`success`) in the processes list and neutral in a Focus
-view chip.
+view chip. A count in a list's section heading, and the file count after a commit row's subject in the change
+list, is not a badge: it is plain secondary text in the heading's type (`text-xs font-medium text-app-muted`).
 
 The Remote devices sidebar uses 16px connection status glyphs with indicator tooltips. Connected and Opened in browser
 use the success tint foreground, with a chain link and a browser window respectively. Reconnecting uses the

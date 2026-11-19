@@ -190,8 +190,8 @@ const commitLabel = (commit: CommitRef, count: number, language: string): string
  * band's own smaller type) yet the parent of the folders and changes beneath it, which it must not
  * read as lighter than: the rows' text size, a chevron like a directory's, and the commit's short
  * id in muted monospace text, then its subject in the normal foreground at medium weight, which
- * fades out where it is too long with its whole text as its tooltip, and the muted count of its
- * changes, which stays in view after it. It sits in the flow
+ * fades out where it is too long with its whole text as its tooltip, and the count of its changes in
+ * the section heading count's type (small, medium weight, muted), which stays in view after it. It sits in the flow
  * rather than pinned under the band, as a directory's row does; its row is named by `commitLabel`,
  * the same three in the same order.
  */
@@ -207,7 +207,7 @@ function CommitRow({ commit, count, isExpanded }: { commit: CommitRef; count: nu
       ) : (
         <span className="flex-1" />
       )}
-      <span className="shrink-0 text-app-muted">{new Intl.NumberFormat(language).format(count)}</span>
+      <span className="shrink-0 text-xs font-medium text-app-muted">{new Intl.NumberFormat(language).format(count)}</span>
     </RowContent>
   );
 }
