@@ -30,6 +30,7 @@ why.
   - `docs/conventions/i18n-in-code.md`
   - `docs/conventions/desktop-shell.md`
   - `docs/conventions/website.md`
+  - `docs/conventions/docs-site.md`
   - `docs/conventions/comments.md`
   - `docs/conventions/tests.md`
   - `docs/conventions/tooling.md`
