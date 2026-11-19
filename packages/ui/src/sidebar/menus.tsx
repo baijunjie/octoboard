@@ -454,7 +454,7 @@ export function sessionMenu(
   return [
     { label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, shortcut: "L", onClick: () => handlers.onSetLocked(session, !session.locked) },
     ...(focused ? [] : [{ ...pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned)), shortcut: "P" }]),
-    ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="focusMode" />, commandShortcut: { label: focusShortcut ?? ariaBinding(bindingFor("focusMode"), host), matches: (event: KeyboardEvent) => matchesCommand("focusMode", event, host) }, onClick: () => handlers.onFocus(focusTarget) }] : []),
+    ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="enterFocusMode" />, commandShortcut: { label: focusShortcut ?? ariaBinding(bindingFor("enterFocusMode"), host), matches: (event: KeyboardEvent) => matchesCommand("enterFocusMode", event, host) }, onClick: () => handlers.onFocus(focusTarget) }] : []),
     ...(session.kind === "console" ? ["separator" as const, colourSubmenu(t, handlers, session)] : []),
     "separator",
     copyId,

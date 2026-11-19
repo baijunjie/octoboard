@@ -98,7 +98,7 @@ export function createProcessReplies({ scenario, store, fail, refuseUnknownProje
     list_processes: (body) => {
       if (scenario.processes?.list === "pending") return neverReplied();
       if (scenario.processes?.list) return fail(scenario.processes.list);
-      firstListedAt ??= Date.now();
+      firstListedAt = firstListedAt ?? Date.now();
       if (scenario.processes?.listLater && Date.now() - firstListedAt >= LIST_LATER_AFTER_MS) return fail(scenario.processes.listLater);
       if ("session_id" in body) {
         if (!store.getState().sessions.has(body.session_id)) return fail({ code: "unknown_session", params: { session: body.session_id }, message: `unknown session ${body.session_id}` });
@@ -114,7 +114,7 @@ export function createProcessReplies({ scenario, store, fail, refuseUnknownProje
     list_all_processes: () => {
       if (scenario.processes?.list === "pending") return neverReplied();
       if (scenario.processes?.list) return fail(scenario.processes.list);
-      firstAllListedAt ??= Date.now();
+      firstAllListedAt = firstAllListedAt ?? Date.now();
       if (scenario.processes?.listLater && Date.now() - firstAllListedAt >= LIST_LATER_AFTER_MS) return fail(scenario.processes.listLater);
       return { type: "all_processes_listed", id: null, counts: allProcessCounts() };
     },

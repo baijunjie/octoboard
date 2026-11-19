@@ -5,7 +5,7 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { PlatformAdapter } from "../platform";
-import { OpenShellTerminal, RowActions, RowPathScope } from "./RowActions";
+import { FindInDirectory, OpenShellTerminal, RowActions, RowPathScope } from "./RowActions";
 import { ChangeList } from "./git/ChangeList";
 import { change, changeViewFixture, committedChange, mountRows } from "./browserTestSupport";
 import { changeItems } from "./git/changes";
@@ -366,4 +366,42 @@ it("opens immediately with a disabled absolute path and usable relative path whi
   act(() => relative.click());
   await flush();
   expect(writeText).toHaveBeenCalledExactlyOnceWith("src/a.ts");
+});
+
+it("offers a folder Find in folder, first and with its wire path, only where the Files mode provides it, and a file never", async () => {
+  const findIn = vi.fn();
+  const folder = mountRows(
+    <FindInDirectory.Provider value={findIn}>
+      <RowPathScope.Provider value={{ project: "p" }}><RowActions path="src/caf%C3%A9" name="café" directory /></RowPathScope.Provider>
+    </FindInDirectory.Provider>,
+    { notifications },
+  );
+  act(() => actionsOf(folder).click());
+  await flush();
+  const entries = [...document.querySelectorAll<HTMLElement>('[role="menu"] > *')].map((element) => (element.getAttribute("role") === "separator" ? "-" : element.textContent));
+  expect(entries.slice(0, 3)).toEqual(["Find in folder", "-", "Copy relative path"]);
+  act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === "Find in folder")!.click());
+  expect(findIn).toHaveBeenCalledExactlyOnceWith("src/caf%C3%A9");
+
+  const file = mountRows(
+    <FindInDirectory.Provider value={findIn}>
+      <RowPathScope.Provider value={{ project: "p" }}><RowActions path="src/a.ts" name="a.ts" /></RowPathScope.Provider>
+    </FindInDirectory.Provider>,
+    { notifications },
+  );
+  act(() => actionsOf(file).click());
+  await flush();
+  expect(openInItems()).toContain("Copy relative path");
+  expect(openInItems()).not.toContain("Find in folder");
+});
+
+it("leaves Find in folder out of a folder's menu where nothing provides it", async () => {
+  const container = mountRows(
+    <RowPathScope.Provider value={{ project: "p" }}><RowActions path="src" name="src" directory /></RowPathScope.Provider>,
+    { notifications },
+  );
+  act(() => actionsOf(container).click());
+  await flush();
+  expect(openInItems()).not.toContain("Find in folder");
+  expect(openInItems()[0]).toBe("Copy relative path");
 });

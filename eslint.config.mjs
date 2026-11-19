@@ -5,7 +5,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import vue from "eslint-plugin-vue";
 import globals from "globals";
 import tseslint from "typescript-eslint";
-import uiLayers from "./packages/ui/eslint.layers.mjs";
+import uiLayers, { UI_TESTS } from "./packages/ui/eslint.layers.mjs";
 import lucide from "./scripts/eslint/lucide-aria-hidden.mjs";
 
 const javascript = ["**/*.{js,mjs,cjs}"];
@@ -79,6 +79,16 @@ export default defineConfig(
       // Lint-only: it has no bearing on what the compiler compiles. What it finds is state set from
       // an effect when an input changes, which moving into render would change what each commit shows.
       "react-hooks/set-state-in-effect": "off",
+    },
+  },
+  {
+    // The React Compiler cannot lower `??=`, so a component or hook holding one is left uncompiled
+    // (`docs/conventions/ui-code.md`, "The React Compiler"). Tests and test support may keep it: they are not what
+    // users run.
+    files: ["packages/ui/src/**/*.{ts,tsx}"],
+    ignores: [...UI_TESTS, "packages/ui/src/test/**"],
+    rules: {
+      "no-restricted-syntax": ["error", { selector: "AssignmentExpression[operator='??=']", message: "The React Compiler cannot lower `??=`: write `x = x ?? y`, an `if`, or a getter for a module-level value made on first use (docs/conventions/ui-code.md, \"The React Compiler\")." }],
     },
   },
   ...uiLayers,

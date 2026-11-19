@@ -202,6 +202,13 @@ export function daemonParams<V = never>(
   if (/^\d+$/.test(all.count ?? "")) shown.count = Number(all.count);
   if ((code === CODE.account_in_use || code === CODE.account_has_running_sessions) && /^\d+$/.test(all.sessions ?? "")) shown.count = Number(all.sessions);
   if (code === CODE.field_too_long && /^\d+$/.test(all.limit ?? "")) shown.limit = Number(all.limit);
+  // Where a refused regular expression fails, as the 1-based character it is shown as. The daemon's `offset` counts
+  // UTF-16 units; with the `query` the refusal was worded with (`useContentSearch` adds it), characters are counted as
+  // the user sees them, an emoji as one.
+  if (code === CODE.invalid_search_pattern && /^\d+$/.test(all.offset ?? "")) {
+    const offset = Number(all.offset);
+    shown.position = (all.query === undefined ? offset : [...all.query.slice(0, offset)].length) + 1;
+  }
   // The window is worded in the UI's language from its structured params; a refusal without them, as a quota of
   // its English `window` name.
   if (code === CODE.account_quota_exhausted) {

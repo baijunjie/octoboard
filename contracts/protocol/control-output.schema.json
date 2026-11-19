@@ -2262,6 +2262,76 @@
         }
       ]
     },
+    "ContentMatch": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The file's path relative to the project, as a wire path."
+        },
+        "line": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "The line's number, counted from 1."
+        },
+        "text": {
+          "type": "string",
+          "description": "The line's text, read as UTF-8 with replacement characters, without its line ending, and\nclipped to about 250 characters around its first match, so that the match shows."
+        },
+        "text_start": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "description": "Where `text` starts in the whole line, in UTF-16 code units: 0 unless the start of the line\nis clipped. A range's place in `text` is its offset less this."
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MatchRange"
+          },
+          "description": "Every match in the line, in order and not overlapping, as UTF-16 code unit offsets (a\nJavaScript string's indices, `end` exclusive) in the whole line, read as `text` is; one\nmay lie partly or wholly outside the clipped `text`."
+        },
+        "clipped_end": {
+          "type": "boolean",
+          "description": "Whether `text` leaves out the end of the line."
+        }
+      },
+      "required": [
+        "path",
+        "line",
+        "text",
+        "text_start",
+        "ranges",
+        "clipped_end"
+      ],
+      "description": "One line of a file that matches a content search."
+    },
+    "ContentSearchStop": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "time",
+          "description": "The search ran for its whole time budget."
+        },
+        {
+          "type": "string",
+          "const": "matches",
+          "description": "It found as many matches as one search reports."
+        },
+        {
+          "type": "string",
+          "const": "bytes_read",
+          "description": "It read as many bytes of files as one search reads."
+        },
+        {
+          "type": "string",
+          "const": "result_bytes",
+          "description": "Its matches came to as many bytes as one search sends."
+        }
+      ],
+      "description": "The bound that ended a content search before it had searched every file."
+    },
     "ContentSource": {
       "oneOf": [
         {
@@ -5214,6 +5284,74 @@
         {
           "type": "object",
           "properties": {
+            "search": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "matches": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ContentMatch"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "project_content_matches"
+            }
+          },
+          "required": [
+            "type",
+            "search",
+            "project",
+            "matches"
+          ],
+          "description": "A batch of a content search's matches, sent as the search finds them, after the `ack` to\n`search_project_content`; `search` and `project` echo the request."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "search": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "matches": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "files": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "stopped_by": {
+              "$ref": "#/$defs/ContentSearchStop"
+            },
+            "type": {
+              "type": "string",
+              "const": "project_content_search_ended"
+            }
+          },
+          "required": [
+            "type",
+            "search",
+            "project",
+            "matches",
+            "files",
+            "complete"
+          ],
+          "description": "The last event of a content search: how many matches (`matches`, counting every match in a\nline) and files with a match (`files`) it found, and whether it searched every file it was\nto (`complete`). `stopped_by` names the bound that ended it early; an incomplete search\nwithout one could not read some file or folder."
+        },
+        {
+          "type": "object",
+          "properties": {
             "id": {
               "type": [
                 "string",
@@ -7529,6 +7667,26 @@
         }
       ],
       "description": "Where an account's login is."
+    },
+    "MatchRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "description": "A match within a [`ContentMatch`]'s line: `start` to `end` (exclusive), in UTF-16 code units of\nthe whole line."
     },
     "McpInventoryFailure": {
       "oneOf": [

@@ -446,8 +446,8 @@ field. The field starts empty at each opening, and matching is a case-insensitiv
 the typed text ignored. (Source: user decision.)
 
 The Focus mode entry in the selected session's menu is an exception: it shows the current configurable window
-shortcut instead of a single letter. Other sessions' menus omit that entry. The focus view's exit button shows the
-same current shortcut in its tooltip.
+shortcut, Enter focus mode's, instead of a single letter. Other sessions' menus omit that entry. The focus view's exit
+button shows the current Leave focus mode shortcut in its tooltip.
 
 Key caps write a combination in the notation of the host's keyboard, one cap per key with no `+` between them. On an
 Apple keyboard the modifiers are HeroUI's glyphs, ⌃ ⌥ ⇧ ⌘ in that order. Elsewhere they are the key names Ctrl, Alt,
@@ -856,6 +856,13 @@ report page are the exception: their content is the agent's, which may give a pl
 - A search field (a `SearchField`, a filter or find field) neither takes an example nor has a default: its placeholder
   is the standard word for searching, the shared catalog key `common.search` ("Search", 搜索), at every search field
   alike; its accessible label names what is searched ("Search settings"). (Source: user decision.)
+
+- A field that takes a syntax of its own, with no visible label to say what it is, names itself and gives an example of
+  the syntax rather than its default: Find in files' file mask reads "File mask, such as *.ts, !*.test.ts", the example
+  being exactly what the daemon accepts, and its description says the rest (commas, `!`, empty searches every file).
+  The example shows in full at every supported width and language: the field gets a minimum width that fits its
+  placeholder, or its row wraps before it would cut it (the file mask's row is held to the width its placeholder
+  measures, so the row wraps). (Source: user decision.)
 
 The placeholder is a hint, never an initial input value or a substitute for the field's label, accessible name,
 description or validation. Leaving a field empty retains its existing requiredness and default behavior.
@@ -1435,6 +1442,11 @@ tooltip does not wait for a reveal scroll to settle. The marks inside the panel 
 Single-line text that may be clipped uses `FadeOverflow` (`packages/ui/src/components/text/FadeOverflow.tsx`: an edge
 fade, a hover marquee and a full-text tooltip while clipped), never an ellipsis (`truncate`, `text-ellipsis`) or a line
 clamp. (Source: user decision.)
+
+The rule covers the UI's own text: labels, names, headings and details, a file's name or folder in a row or heading
+included. An excerpt of code or of a file's content (a search result's line) is outside it: it is not a label to read
+in full on hover but a run of the file cut to show what matters in it, so it may be cut with an ellipsis where the cut
+is (Find in files cuts a result's line before its match). (Source: user decision.)
 
 A clipped name, heading or detail scrolls only while the pointer is over its own text region. Independent labels
 within a row, card or header have independent hover regions; pointing at neighbouring text, an indicator, padding
@@ -2364,7 +2376,9 @@ these — HeroUI's bare `EmptyState` is reached only through this component.
 - The line under it says only what the heading cannot: why it is empty or a bare fact about the subject (the size of a
   body that cannot be drawn). It never restates the heading, and a state that has nothing more to say carries no line at
   all. A button takes the user where the thing is made; the line does not give navigation instructions. A second way out
-  is a different action, not another entry for the same destination.
+  is a different action, not another entry for the same destination. When one panel stands for a state that several
+  causes lead to (an incomplete search: a bound reached, or files that could not be read), the line is true for every
+  one of them, or is chosen per cause; it never names one cause for all.
 - The `compact` row, for a sidebar list in either normal or focus mode and for other nested lists, has no room for
   that line. Its message is plain text rather than a heading; where the list has one creation action, the whole row
   performs it. The main content's full panel carries the current action without a competing full panel in the sidebar.
@@ -2824,6 +2838,28 @@ branch badge and trailing controls, the project name and chevron, and session me
 with them. Do not space individual trailing icons with the text row's gap or add local offsets. Verify the shared
 columns with actions hidden, hovered, focused and open, including right-to-left layout.
 
+**A field and what stands beside it in one row.** Every button in a row with a field, icon or text, takes the field's
+shape: as tall as the field at every width, so a row never mixes 36- and 40-pixel controls, and with the field's
+corners, never a button's pill or circle. An icon button (an action on the field, such as Paste, or a toggle that
+changes what it searches) is a square of that height, not a 24-pixel row icon, which beside a field reads as a stray
+glyph; a text button (Browse, Go) keeps its own width. Each keeps its usual fill: an action is HeroUI's `secondary`
+button and a toggle its filled `default` toggle. The field and each control beside it are 8 pixels apart
+(`--field-row-gap`), the gap between two fields in a row, never the 4-pixel gap of a row's icons. A single-line field
+is 36 pixels tall, 40 below 768 pixels (`sm`, which the project sets to 768), where HeroUI grows a field's text to 16
+pixels so a phone does not zoom into it; HeroUI's search field keeps 36 at every width, so
+`packages/ui/src/primitives/Field.css` sizes its group by its input as a text field is, in the components layer so a
+caller's own height (a menu's filter row) still wins. The rule lives in two places and no call site restates it:
+`FieldRow` (`packages/ui/src/components/form/FieldRow.tsx`) lays out the row and its gap, and `TextInput`'s `trailing`
+is drawn in one; the wrapper `Button`'s `besideField`, which `ToggleButton` shares and `IconToggle` and `PasteButton`
+pass on, gives any button the one `field-control` utility (`FIELD_CONTROL_CLASS`): the height of
+`--field-control-size` (`packages/ui/src/styles/layout.css`), the field's radius, and the same width when icon-only.
+Built this way: the Files mode's filter row, Find in files' file mask row, the remote daemon form's connection details
+with Paste, every directory field with Browse (`useDirectoryBrowse`) and the directory picker's path with Go. Two
+kinds of row are outside the rule: a control drawn inside the field's frame (a search field's Clear button, Find in
+files' match options), which is the field's own and sized by it; and a compact toolbar whose field is cut to the
+row-control height (the viewer's find bar, a 24-pixel field among 24-pixel step and close icons, 4 pixels apart),
+where field and icons already share one height.
+
 WCAG 2.2 SC 2.5.8 also excepts an **Inline** target: one "in a sentence, or its size is otherwise constrained by the
 line-height of non-target text". A status mark standing in running text (the inline form in "How a mark is drawn and
 opened") is such a target: it is drawn within the text's line and cannot be larger without growing it.
@@ -2982,6 +3018,11 @@ lands on the wrong side. Two forms, one per kind of text:
 Isolate where the value enters the sentence, and prefer the point every value of a kind passes through: `daemonMessage`
 isolates every param of a daemon message, which covers a browse error's too. A name the user typed is isolated for the
 same reason as a path — it may be in any script.
+
+**A left-to-right value field whose placeholder is prose** isolates the example inside the placeholder (`isolate`, as
+for any string) and lays the placeholder out in the interface's direction while the field is empty: `dir="ltr"` only
+once it holds a value. Under `dir="ltr"` an Arabic placeholder reads in the wrong order, its example reordered against
+it (Find in files' file mask, `ContentSearchDialog`).
 
 Two cases take no isolate, and putting one there breaks something:
 

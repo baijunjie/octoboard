@@ -55,6 +55,7 @@ it("does not slide in the first panel of a pane that was just shown, however lat
     act(() =>
       root.render(
         <PanelStack
+          onViewFile={() => {}}
           owner={{ kind: "project", project }}
           project={{ id: project, name: project } as Project}
           active

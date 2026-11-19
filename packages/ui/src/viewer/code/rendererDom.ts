@@ -314,14 +314,65 @@ export function refocusControl(root: ShadowRoot, wanted: { gap: number; kind: Ex
 
 /**
  * Scrolls the line numbered `line` (1-based) of a rendered file into the middle of its scrolling
- * frame. Whether it did: `false` while the frame has drawn no such line, which is the case until
- * the library has drawn the file and for a line the file does not have.
+ * frame, vertically only. Whether it found the line: `false` while the frame has drawn no such line,
+ * which is the case until the library has drawn the file and for a line the file does not have.
+ *
+ * Not `scrollIntoView`, which also scrolls sideways: the line's element starts under the sticky line
+ * numbers, so even its `inline: "nearest"` scrolls the unwrapped code by the gutter's width and hides
+ * the start of every line under it.
  */
 export function scrollToLine(frame: HTMLElement, line: number): boolean {
-  const target = shadowRootOf(frame)?.querySelector(`[data-line="${line}"]`);
-  if (!target) return false;
-  target.scrollIntoView({ block: "center", inline: "nearest" });
+  const root = shadowRootOf(frame);
+  const target = root?.querySelector(`[data-line="${line}"]`);
+  if (!root || !target) return false;
+  const region = codeRegionOf(root);
+  if (!region) return true;
+  const rect = target.getBoundingClientRect();
+  const box = region.getBoundingClientRect();
+  region.scrollTop = Math.max(0, region.scrollTop + rect.top - box.top - (region.clientHeight - rect.height) / 2);
   return true;
+}
+
+/** Scrolls `scroller` sideways only where `range` is not wholly within its visible width from `visibleLeft` (a viewport
+ * position), bringing the range's start a quarter of the way into that width, so some of the text before it shows. */
+function revealSideways(scroller: Element, range: Range, visibleLeft: number): void {
+  if (scroller.scrollWidth <= scroller.clientWidth) return;
+  const rect = range.getBoundingClientRect();
+  const visibleRight = scroller.getBoundingClientRect().left + scroller.clientWidth;
+  if (rect.left >= visibleLeft && rect.right <= visibleRight) return;
+  scroller.scrollLeft = Math.max(0, scroller.scrollLeft + rect.left - visibleLeft - (visibleRight - visibleLeft) / 4);
+}
+
+/** Scrolls unwrapped rendered code sideways to bring `range` (a range of its text) into view where it is not, beside the
+ * sticky line numbers rather than under them. Wrapped code does not scroll sideways and is left as it is. */
+export function revealCodeRangeSideways(range: Range): void {
+  // `[data-code]` is the library's horizontal scroller of unwrapped code, and `[data-gutter]` its sticky line numbers.
+  const scroller = range.startContainer.parentElement?.closest("[data-code]");
+  if (!scroller) return;
+  const gutter = scroller.querySelector("[data-gutter]");
+  revealSideways(scroller, range, gutter ? gutter.getBoundingClientRect().right : scroller.getBoundingClientRect().left);
+}
+
+/** Scrolls a preformatted element sideways to bring `range` (a range of its text) into view where it is not. */
+export function revealTextRangeSideways(pre: HTMLElement, range: Range): void {
+  revealSideways(pre, range, pre.getBoundingClientRect().left + (parseFloat(getComputedStyle(pre).paddingLeft) || 0));
+}
+
+/** The element holding the code of the line numbered `line` (1-based) of a rendered file, not its line number: `undefined`
+ * while the frame has drawn no such line. */
+export function codeLineOf(frame: HTMLElement, line: number): Element | undefined {
+  return shadowRootOf(frame)?.querySelector(`[data-content] [data-line="${line}"]`) ?? undefined;
+}
+
+/** Where the line numbered `line` (1-based) starts in `text`, or `undefined` for a line the text does not have. */
+export function lineStart(text: string, line: number): number | undefined {
+  let offset = 0;
+  for (let at = 1; at < line; at++) {
+    const next = text.indexOf("\n", offset);
+    if (next < 0) return undefined;
+    offset = next + 1;
+  }
+  return offset;
 }
 
 /**
@@ -334,12 +385,8 @@ export function scrollTextToLine(pre: HTMLElement, line: number): void {
   const node = pre.firstChild;
   if (node?.nodeType !== Node.TEXT_NODE) return;
   const text = node.textContent ?? "";
-  let offset = 0;
-  for (let at = 1; at < line; at++) {
-    const next = text.indexOf("\n", offset);
-    if (next < 0) return;
-    offset = next + 1;
-  }
+  const offset = lineStart(text, line);
+  if (offset === undefined) return;
   const range = pre.ownerDocument.createRange();
   range.setStart(node, offset);
   range.setEnd(node, Math.min(offset + 1, text.length));

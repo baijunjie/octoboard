@@ -71,13 +71,13 @@ function flush(): void {
 
 function scheduleMeasure(element: Element): void {
   dirty.add(element);
-  flushFrame ??= requestAnimationFrame(flush);
+  if (flushFrame === undefined) flushFrame = requestAnimationFrame(flush);
 }
 
 let sharedObserver: ResizeObserver | undefined;
 
 function observe(element: Element, update: () => void): () => void {
-  sharedObserver ??= new ResizeObserver((entries) => {
+  sharedObserver = sharedObserver ?? new ResizeObserver((entries) => {
     for (const entry of entries) scheduleMeasure(entry.target);
   });
   updaters.set(element, update);

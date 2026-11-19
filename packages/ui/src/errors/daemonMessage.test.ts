@@ -599,3 +599,45 @@ describe("the refusals of removing an account with its directory moved to the Tr
     expect(richMessageCode("project_directory_trash_failed", { detail: "full", cause: "signing_in" })).toBe("project_directory_trash_failed.summary");
   });
 });
+
+describe("a refused content search pattern or file mask", () => {
+  const detail = "regex parse error:\n    reindex(\n           ^\nerror: unclosed group";
+  const pattern = (params: Record<string, string>, language: Language = "en") => daemonMessage(language, "invalid_search_pattern", { detail, ...params }, "x", records);
+  const mask = (params: Record<string, string>, language: Language = "en") => daemonMessage(language, "invalid_file_mask", { glob: "src/[a", detail: "unclosed character class; missing ']'", ...params }, "x", records);
+
+  it("words a regular expression from why and where it fails, the offset shown as a 1-based character, never the crate's text", () => {
+    expect(pattern({ cause: "unclosed_group", offset: "7" })).toBe("The regular expression is not valid: the parenthesis at character 8 is never closed.");
+    expect(pattern({ cause: "unclosed_group", offset: "7" }, "zh-Hans")).toBe("正则表达式有误：第 8 个字符处的括号没有闭合。");
+    expect(pattern({ cause: "unopened_group", offset: "0" })).toContain("closing parenthesis at character 1 has no opening one");
+    expect(pattern({ cause: "line_break" })).toBe("The regular expression is not valid: it matches a line break, which a search line by line never finds.");
+    expect(pattern({ cause: "other", offset: "3" })).toBe("The regular expression is not valid at character 4.");
+    for (const cause of ["unclosed_group", "unopened_group", "unclosed_class", "invalid_repetition", "invalid_escape", "unsupported", "line_break", "other"]) {
+      for (const language of Object.keys(CATALOGS) as Language[]) {
+        const text = pattern({ cause, offset: "7" }, language);
+        expect(text, `${cause} ${language}`).not.toContain("regex parse error");
+        expect(text, `${cause} ${language}`).not.toContain("{");
+      }
+    }
+  });
+
+  it("counts the character a regular expression fails at as the user sees it, an emoji as one, given the query", () => {
+    // "😀" is two UTF-16 units: the daemon's offset of the "(" is 3, the third character.
+    expect(pattern({ cause: "unclosed_group", offset: "3", query: "😀a(" })).toContain("the parenthesis at character 3 is never closed");
+    expect(pattern({ cause: "unclosed_group", offset: "3" })).toContain("at character 4");
+  });
+
+  it("falls back to the code's own sentence for a cause this client does not know, or a place-naming cause with no offset", () => {
+    expect(pattern({ cause: "something_new", offset: "2" })).toBe("The regular expression is not valid at character 3.");
+    expect(pattern({ cause: "unclosed_group" })).toBe("The regular expression is not valid.");
+    expect(pattern({})).toBe("The regular expression is not valid.");
+  });
+
+  it("words a glob of the file mask from why it fails, naming the glob", () => {
+    expect(mask({ cause: "unclosed_class" })).toBe(`The file mask ${isolate("src/[a")} is not valid: the bracket is never closed.`);
+    expect(mask({ cause: "unclosed_class" }, "zh-Hans")).toBe(`文件掩码 ${isolate("src/[a")} 有误：方括号没有闭合。`);
+    expect(mask({ cause: "unclosed_alternation", glob: "*.{md" })).toContain("Commas separate patterns, even inside braces.");
+    expect(mask({ cause: "other" })).toBe(`The file mask ${isolate("src/[a")} is not valid.`);
+    expect(mask({ cause: "something_new" })).toBe(`The file mask ${isolate("src/[a")} is not valid.`);
+    expect(mask({ cause: "unclosed_class" })).not.toContain("missing");
+  });
+});

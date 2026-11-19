@@ -57,6 +57,7 @@ function mount({ open, peek, floating }: { open: string[]; peek?: PanePeek; floa
             <button type="button" id="agent">agent terminal</button>
           </div>
           <PanelStack
+            onViewFile={() => {}}
             owner={{ kind: "project", project: "p" }}
             project={{ id: "p", name: "p" } as Project}
             active

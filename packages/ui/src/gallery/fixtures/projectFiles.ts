@@ -22,6 +22,9 @@ const { console: console_, web, api, sessions } = SAMPLE;
 const state = snapshotState({ consoles: [console_], projects: [web, api], sessions });
 /** Website with a shell already running, so a terminal a row starts is told from it by its tab. */
 const shellState = snapshotState({ consoles: [console_], projects: [web, api], sessions, shellTerminals: [shellTerminalOf("sh-1", web, "pnpm dev", 0, { busy: true })] });
+/** Shows the session's project in the Files panel. The wait is for the pane's entrance: in a window too narrow to dock
+ * it, the pane floats in with a fade the page marks no end of, and a picture taken before it has settled catches the
+ * card half drawn; a docked pane has no entrance, and the listing itself is waited on by the step that presses a row. */
 const openFiles = [(ui: Ui) => ui.press(ui.session("Fix the summary layout")), (ui: Ui) => ui.showPanel("files"), (ui: Ui) => ui.wait(400)];
 const filterFiles: FixtureFiles = {
   ...SAMPLE_FILES,
@@ -92,7 +95,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A project session's files",
-    description: "The Files panel docked in a wide window is one rounded card with a hairline edge and the shadow of the sidebar's floating card, 16px from the terminal (the width handle's gap) and 8px from the window's end, the bottom and the top bar, the gaps showing the terminal's own background rather than a sidebar-coloured column. Its 40px header runs the project name, the Files and Changes tabs, the filter, Collapse all folders (enabled, with src open) and refresh buttons, then Close panel, with no icon before the name; Files has no maximize, even beside the Terminal panel. The top bar has the Terminal toggle, not pressed, before the Files toggle, pressed, and no toggle for the pane itself. Folders come first in natural order, with .git and the system files .DS_Store and ._server.ts left out. src is expanded and main.ts is selected, its rounded highlight keeping space on all four sides, as Git rows do. Expand or collapse a folder to watch its children fade in and settle down from just above their rows, or fade out toward the folder, while following rows slide into place. Collapse all folders uses the same motion for all open folders. Press a file for the viewer, then Left/Right to visit visible files. Switch between the Website and Search API sessions to see the pane fade in place, without sliding, onto Search API's own tree. Switching between the two Website sessions keeps the tree steady. A project's Open panel submenu offers Files while its Files panel is not on screen.",
+    description: "The Files panel docked in a wide window is one rounded card with a hairline edge and the shadow of the sidebar's floating card, 16px from the terminal (the width handle's gap) and 8px from the window's end, the bottom and the top bar, the gaps showing the terminal's own background rather than a sidebar-coloured column. Its 40px header runs the project name, the Files and Changes tabs, the filter, Find in files (a magnifier over lines of text), Collapse all folders (enabled, with src open) and refresh buttons, then Close panel, with no icon before the name; Files has no maximize, even beside the Terminal panel. The top bar has the Terminal toggle, not pressed, before the Files toggle, pressed, and no toggle for the pane itself. Folders come first in natural order, with .git and the system files .DS_Store and ._server.ts left out. src is expanded and main.ts is selected, its rounded highlight keeping space on all four sides, as Git rows do. Expand or collapse a folder to watch its children fade in and settle down from just above their rows, or fade out toward the folder, while following rows slide into place. Collapse all folders uses the same motion for all open folders. Press a file for the viewer, then Left/Right to visit visible files. Switch between the Website and Search API sessions to see the pane fade in place, without sliding, onto Search API's own tree. Switching between the two Website sessions keeps the tree steady. A project's Open panel submenu offers Files while its Files panel is not on screen.",
     state,
     filesByProject: {
       [api.id]: {
@@ -121,7 +124,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Files that Git ignores in the tree",
-    description: "dist, node_modules, target and .env are Git-ignored: each row is dimmed under a translucent veil of the pane's surface, name and icon together, as the sidebar dims its inactive projects, and so is everything inside the opened ignored folder (node_modules / left-pad), while src and the other tracked entries stay at full strength. .env is the selected row, so its veil is lifted; each ignored row lifts its own veil the same way while the pointer is on it, it holds keyboard focus or its actions menu is open. With src and node_modules open, Collapse all folders in the header, between the filter and Refresh buttons, is enabled; press it to fold both.",
+    description: "dist, node_modules, target and .env are Git-ignored: each row is dimmed under a translucent veil of the pane's surface, name and icon together, as the sidebar dims its inactive projects, and so is everything inside the opened ignored folder (node_modules / left-pad), while src and the other tracked entries stay at full strength. .env is the selected row, so its veil is lifted; each ignored row lifts its own veil the same way while the pointer is on it, it holds keyboard focus or its actions menu is open. With src and node_modules open, Collapse all folders in the header, between Find in files and the Refresh button, is enabled; press it to fold both.",
     state,
     files: ignoredTreeFiles,
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press(ui.t("browser.tree.row.ignored", { name: "node_modules" })), (ui) => ui.press(ui.t("browser.tree.row.ignored", { name: "left-pad" })), (ui) => ui.press(ui.t("browser.tree.row.ignored", { name: ".env" })), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
@@ -152,7 +155,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Matching files throughout the project",
-    description: "The filter sits above the matching files, which stay in the folder tree: both server.ts files match the trimmed, case-insensitive filename query without opening any folders first, each under its folders, which start open and can be folded. The Include ignored files toggle, not pressed (a file with a cross), ends the field's row: the Git-ignored matches (dist, node_modules and a generated server.gen.ts) are left out, so no row is dimmed. The header reads the project title, then the Files and Changes tabs, then the filter, Collapse all folders and Refresh buttons and Close panel at the end; Files has no layout choice. Each tab keeps its own query and folded folders.",
+    description: "The filter sits above the matching files, which stay in the folder tree: both server.ts files match the trimmed, case-insensitive filename query without opening any folders first, each under its folders, which start open and can be folded. The Include ignored files toggle, not pressed (a file with a cross), ends the field's row: the Git-ignored matches (dist, node_modules and a generated server.gen.ts) are left out, so no row is dimmed. The header reads the project title, then the Files and Changes tabs, then the filter, Find in files, Collapse all folders and Refresh buttons and Close panel at the end; Files has no layout choice. Each tab keeps its own query and folded folders.",
     state,
     files: filterFiles,
     steps: [
@@ -265,7 +268,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A folder’s context menu",
-    description: "Right-clicking the src folder opens its menu at the pointer. Copy relative path and Copy absolute path form their own group above Open in. Open in groups File manager, which opens the folder, and Terminal, which starts a shell in it, beside the framed terminal icon; there is no Default application for a folder.",
+    description: "Right-clicking the src folder opens its menu at the pointer. Find in folder, with the magnifier icon of the header's Find in files, comes first above a separator (a file's menu has none). Copy relative path and Copy absolute path form their own group above Open in. Open in groups File manager, which opens the folder, and Terminal, which starts a shell in it, beside the framed terminal icon; there is no Default application for a folder.",
     state,
     steps: [...openFiles, (ui) => ui.contextMenu("src"), (ui) => ui.press(ui.t("common.openIn"))],
   },

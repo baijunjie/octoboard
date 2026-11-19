@@ -93,7 +93,9 @@ it("leaves the current console as it is when another window creates one", async 
   expect(isCurrent(main.name)).toBe(true);
 });
 
-const pressFocusShortcut = () => act(async () => void window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyF", key: "F", shiftKey: true, metaKey: IS_MAC, ctrlKey: !IS_MAC, bubbles: true, cancelable: true })));
+const pressFocusKey = (code: "ArrowRight" | "ArrowLeft") => act(async () => void window.dispatchEvent(new KeyboardEvent("keydown", { code, key: code, altKey: true, metaKey: IS_MAC, ctrlKey: !IS_MAC, bubbles: true, cancelable: true })));
+const pressEnterFocusShortcut = () => pressFocusKey("ArrowRight");
+const pressExitFocusShortcut = () => pressFocusKey("ArrowLeft");
 const inFocusMode = () => document.querySelector("[data-focus-exit]") !== null;
 
 // A console session, with a coordinator bound to it and a worker bound to the coordinator; and a session bound to
@@ -117,7 +119,7 @@ it.each([
 ])("leaves a console session's focus mode when %s takes the selection out of it", async (_, change) => {
   const daemon = mountTeam();
   await pressElement(row(captain.title));
-  await pressFocusShortcut();
+  await pressEnterFocusShortcut();
   expect(inFocusMode()).toBe(true);
   await pressElement(row(worker.title));
   expect(topBarText()).toContain(worker.title);
@@ -137,7 +139,9 @@ it("keeps a focus mode entered beside the selection through another session's st
 
   await deliver(daemon, { type: "session_upserted", session: { ...captain, status: "working" } });
   expect(inFocusMode()).toBe(true);
-  await pressFocusShortcut();
+  await pressEnterFocusShortcut();
+  expect(inFocusMode()).toBe(true);
+  await pressExitFocusShortcut();
   expect(inFocusMode()).toBe(false);
 });
 

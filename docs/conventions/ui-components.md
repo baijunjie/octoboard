@@ -139,6 +139,10 @@ The helper for each need is in `docs/structure/ui.md`, "Shared entry points"; th
   `ActionMenuItem.commandShortcut` / `runMenuCommand`, and components never import `shortcuts/`** (lint: the
   `components/` layer does not).
 - **A search field takes no placeholder of its own**; see `docs/conventions/ui-standard.md`, "Input placeholders".
+- **A field with a button or another field beside it in one row stands in a `FieldRow`, and a button there, icon or
+  text, takes the wrapper `Button`'s `besideField` (shared by `ToggleButton`, passed on by `IconToggle` and
+  `PasteButton`)**, never a gap, a height, corners or an icon-only look of its own; see
+  `docs/conventions/ui-standard.md`, "Pointer target size" ("A field and what stands beside it in one row").
 - **Pinned section headings use `StickyHeading`; a pinned row or strip that is not a heading spreads
   `useStickyHeadingFocus`.** The scroll fade's padding would otherwise scroll the list on every focus move onto the
   pinned element.
@@ -190,7 +194,9 @@ use `InlineReference`").
   `attempt` answers. A failure after the submit passed, a daemon refusal included, opens the error alert instead.
 - **A field marked invalid by hand keeps `validationBehavior="aria"` and renders its message through
   `FieldErrorMessage`** (`role="alert"` on its own element inside `FieldError`; never `role` on `FieldError`, which
-  react-aria drops). `native` validation locks the dialog out of submitting.
+  react-aria drops). `native` validation locks the dialog out of submitting. A `SearchField` takes that message through
+  its `error` prop, drawn under the whole field, its trailing toggles included; a `TextField` holding a `FieldRow` puts
+  the `FieldErrorMessage` after the row, so it sits under the input and the button beside it.
 - **A form dialog that edits a console, a project or an account uses `useCheckedEdit` and sends only the fields the user
   changed, with their `base_versions`.** Two clients changing different fields then do not conflict; a field the store
   moved past is put back to the current value and, if the user had edited it, announced through

@@ -569,6 +569,30 @@ it("codeDrawn waits for the renderer to draw into the frame the name finds", asy
   expect(done).toBe(true);
 });
 
+it("waitForText waits until the page holds the text, isolates aside, and fails when it never does", async () => {
+  document.body.innerHTML = "<p></p>";
+  let done = false;
+  const waiting = createUi(document, "en").waitForText("3 matches in a.ts").then(() => { done = true; });
+  await vi.advanceTimersByTimeAsync(500);
+  expect(done).toBe(false);
+  document.querySelector("p")!.textContent = "3 matches in \u2068a.ts\u2069";
+  await settle(waiting);
+  expect(done).toBe(true);
+  await expect(settle(createUi(document, "en").waitForText("never"))).rejects.toThrow(/never showed "never"/);
+});
+
+it("waitUntil waits until the condition holds of the page, and says what never came", async () => {
+  document.body.innerHTML = "";
+  let done = false;
+  const waiting = createUi(document, "en").waitUntil((doc) => doc.querySelector("p") !== null, "a paragraph").then(() => { done = true; });
+  await vi.advanceTimersByTimeAsync(500);
+  expect(done).toBe(false);
+  document.body.innerHTML = "<p></p>";
+  await settle(waiting);
+  expect(done).toBe(true);
+  await expect(settle(createUi(document, "en").waitUntil(() => false, "nothing"))).rejects.toThrow(/Never came: nothing/);
+});
+
 it("codeDrawn fails on a frame that holds plain text", async () => {
   document.body.innerHTML = "<div role=\"region\" tabindex=\"0\" aria-label=\"src/a.ts\">plain</div>";
   await expect(settle(createUi(document, "en").codeDrawn("src/a.ts"))).rejects.toThrow(/never drew its code/);

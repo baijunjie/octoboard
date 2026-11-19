@@ -42,6 +42,37 @@ pub const MAX_SEARCH_PATH_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_SEARCH_DEPTH: usize = 128;
 pub const SEARCH_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// The bounds of one content search (`browse::content_search`). Its time, matches, file size and
+/// line length follow VS Code's defaults; the bytes it reads and sends are set from measurements
+/// (see "Browse budgets" in `apps/daemon/PROTOCOL.md`). Reaching any but the file size ends the
+/// search marked incomplete; a larger file is skipped.
+pub const CONTENT_SEARCH_TIMEOUT: Duration = Duration::from_secs(10);
+pub const MAX_CONTENT_MATCHES: usize = 20_000;
+pub const MAX_CONTENT_FILE_BYTES: u64 = 50 * 1024 * 1024;
+pub const MAX_CONTENT_BYTES_READ: u64 = 2 * 1024 * 1024 * 1024;
+pub const MAX_CONTENT_RESULT_BYTES: usize = 8 * 1024 * 1024;
+/// The characters of a matching line a content search sends, around its first match, and how many
+/// of them come before that match when the line is clipped at its start.
+pub const MAX_CONTENT_LINE_CHARS: usize = 250;
+pub const CONTENT_LINE_CHARS_BEFORE: usize = 40;
+/// A batch of a content search's matches is sent once it holds this many matching lines or this
+/// many bytes of text, or once its first match has waited this long.
+pub const CONTENT_BATCH_LINES: usize = 500;
+pub const CONTENT_BATCH_TEXT_BYTES: usize = 128 * 1024;
+pub const CONTENT_BATCH_WAIT: Duration = Duration::from_millis(100);
+/// The longest line a content search reads, the most each of its walk threads' buffers grows to;
+/// a file with a longer line cannot be searched and leaves the search incomplete.
+pub const MAX_CONTENT_LINE_BYTES: usize = 2 * 1024 * 1024;
+/// How many files' matches a content search's walk threads hand over ahead of its batches.
+pub const CONTENT_FILES_AHEAD: usize = 16;
+/// The longest `search` name a content search takes, which each of its events echoes.
+pub const MAX_SEARCH_NAME_BYTES: usize = 256;
+/// The room a content search keeps in its reservation for its last event.
+pub const CONTENT_END_BYTES: usize = 4 * 1024;
+/// What a content search reserves: every byte it sends, its batches and its last event, which
+/// leave as they are found and give their share back as each is written.
+pub const CONTENT_SEARCH_RESERVATION: usize = MAX_CONTENT_RESULT_BYTES + CONTENT_END_BYTES;
+
 /// The most stdout a metadata `git` command (`rev-parse`, `worktree list`, `ls-files` and
 /// `ls-tree` for one path, `grep -c` over a change's two blobs) may print. A `worktree list` entry
 /// is about 200 bytes, so this is thousands of worktrees; past it the command is killed rather
@@ -344,6 +375,7 @@ pub fn reservation_for(body: &BrowseBody) -> usize {
     match body {
         BrowseBody::ListProjectDir { .. } => LISTING_RESERVATION,
         BrowseBody::SearchProjectFiles { .. } => SEARCH_RESERVATION,
+        BrowseBody::SearchProjectContent(_) => CONTENT_SEARCH_RESERVATION,
         BrowseBody::GetProjectSource { .. }
         | BrowseBody::ReadProjectFile { .. }
         | BrowseBody::ReadPathLink { .. } => READ_RESERVATION,
@@ -367,6 +399,9 @@ const _: () = assert!(RANGE_RESERVATION <= READ_RESERVATION);
 const _: () = assert!(LISTING_RESERVATION <= READ_RESERVATION);
 const _: () = assert!(READ_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(SEARCH_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
+const _: () = assert!(CONTENT_SEARCH_RESERVATION <= READ_RESERVATION);
+// The last event, with its `search` and a project id, fits the room kept for it.
+const _: () = assert!(MAX_SEARCH_NAME_BYTES * 2 < CONTENT_END_BYTES);
 const _: () = assert!(IGNORED_PATHS_TIMEOUT.as_secs() < SEARCH_TIMEOUT.as_secs());
 const _: () = assert!(CHANGE_LIST_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(DIFF_RESERVATION <= MAX_RETAINED_PER_CONNECTION);

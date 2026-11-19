@@ -137,7 +137,7 @@ export function PanelStack({
   /** The floating pane's hover reveal; `undefined` while the pane is docked. */
   peek: PanePeek | undefined;
   peekKind: PanelKind | undefined;
-  onViewFile?: PanelContentProps["onViewFile"];
+  onViewFile: PanelContentProps["onViewFile"];
   /** Closing a panel that was only floating in dismisses the floating pane. */
   onDismiss: () => void;
   /** An explicit header close, independently of hover, resizing and owner changes. */

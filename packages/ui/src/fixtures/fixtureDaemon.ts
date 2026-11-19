@@ -4,7 +4,7 @@ import { daemonMessage } from "../errors/daemonMessage";
 import type { Translate } from "../i18n/catalog";
 import { currentLanguage, t } from "../i18n/language";
 import type { Event, ClientRequestBody } from "../protocol";
-import { createImportProgressListeners, type Daemon, type WindowNotification } from "../store";
+import { createContentSearchListeners, createImportProgressListeners, type Daemon, type WindowNotification } from "../store";
 import { broadcastNotification, errorNotification } from "../store/notifications";
 import type { Fixture, NotificationFixture } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -90,6 +90,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
 
   const gitReply = createGitReplies(git, fail);
   const importProgress = createImportProgressListeners();
+  const contentSearches = createContentSearchListeners();
   const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail, () => providerSettingChoices.current, importProgress.deliver, (tag) => store.setState((current) => ({ settings: { ...current.settings, interface_language: tag } })));
   const guards = createAccountGuards(context);
   const ledger = createProcessLedger(context);
@@ -100,7 +101,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     createAgentCliReplies(context),
     createSettingsReplies(context),
     createProjectReplies(context, ledger),
-    createFileReplies(context),
+    createFileReplies(context, contentSearches.deliver),
     createProcessReplies(context, ledger),
     createLifecycleReplies(context),
   );
@@ -138,6 +139,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     // listener of the import the request named, before the reply. The real daemon may deliver an event after the reply
     // (see `apps/daemon/PROTOCOL.md`, "Configuration import"); a scenario does not rely on either order.
     onImportProgress: importProgress.subscribe,
+    onContentSearch: contentSearches.subscribe,
     dismissTrustPrompt: (session) =>
       store.setState((state) => ({ trustPrompts: state.trustPrompts.filter((p) => p.session !== session) })),
     reconnect: () => {},

@@ -288,7 +288,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
   // entering at its end (its left under RTL) starts past it, and a narrower row keeps its old width, as the items
   // leaving and those sliding up start past its new end. It is let go once they are done.
   const hold = (newOuterWidth: number) => {
-    held ??= { minWidth: list.style.minWidth, overflow: list.style.overflow };
+    held = held ?? { minWidth: list.style.minWidth, overflow: list.style.overflow };
     list.style.overflow = "clip";
     if (newOuterWidth < outerWidth) list.style.minWidth = `${outerWidth}px`;
     clearTimeout(holdTimer);

@@ -12,8 +12,8 @@ import type { FocusTarget } from "../sidebar/types";
 import { useDaemonStore } from "../store";
 
 /**
- * The sidebar's focus mode from the keyboard: ⇧⌘F enters the selected session's context or leaves focus mode, and
- * ⌃Tab moves along a console session's switch strip. `stableFocus` sets the focus mode for the sidebar's rows.
+ * The sidebar's focus mode from the keyboard: one key enters the selected session's context, another leaves focus
+ * mode (`enterFocusMode` and `exitFocusMode`), and ⌃Tab moves along a console session's switch strip. `stableFocus` sets the focus mode for the sidebar's rows.
  */
 export function useFocusMode({
   focus,
@@ -39,11 +39,19 @@ export function useFocusMode({
   suspended?: boolean;
 }) {
   const selectedTarget = useDaemonStore(useShallow((s) => selectedSessionFocusTarget(selectedSession, s.projects, s.sessions)));
-  // ⇧⌘F: into the focus mode of the selected session's context, or back out of focus mode.
-  useFocusShortcut(() => {
-    if (suspended || (!focus && !selectedTarget)) return;
-    if (!focus && selectedSession) selectConsole(selectedSession.console_id);
-    setFocus(focus ? undefined : selectedTarget);
+  // Into the focus mode of the selected session's context, or back out of focus mode; a press that would change
+  // nothing (focus mode already in or out) runs neither (`useFocusShortcut`).
+  const canEnter = !suspended && !focus && !!selectedTarget;
+  const canExit = !suspended && focus !== undefined;
+  useFocusShortcut({
+    canEnter,
+    canExit,
+    enter: () => {
+      if (!selectedTarget) return;
+      if (selectedSession) selectConsole(selectedSession.console_id);
+      setFocus(selectedTarget);
+    },
+    exit: () => setFocus(undefined),
   });
 
   // The console sessions a console session's focus mode offers to switch between (its switch strip),

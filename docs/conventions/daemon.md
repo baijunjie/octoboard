@@ -93,6 +93,9 @@ file sits and which directory owns what is in [`docs/structure/daemon.md`](../st
   wall time with the last run, treat a clock gone backwards as due and run once at start; a `tokio::time::interval`,
   `sleep` or `Instant` of that length does not advance while the machine sleeps and fires days late
   (`coordinator/archive_cleanup.rs` is the shape).
+- **A worker that waits for a shared condition (a bound reached, a count dropping) holds nothing that counts toward
+  that condition while it waits.** What it holds is handed over first, or it does not wait: a condition only the
+  waiters can satisfy is satisfied only by the timeout.
 - **A check made early in a request handler or daemon task is stale by the time it acts.** Every control request runs on
   a task of its own on a multi-threaded runtime, so another request can run between any two lines. Where acting on it
   would do harm, take a claim on `AppState` that the competing path checks too (`begin_launch`;

@@ -30,9 +30,9 @@ The letter is matched against the character typed, with no modifier held. Holdin
 action, and input-method composition does not activate an item. Once the menu closes its letters have no effect.
 Arrow keys, Enter, Space and Escape keep the menu's usual navigation and activation behavior.
 
-The selected session's Focus mode item shows and takes the current configurable Toggle focus mode combination,
+The selected session's Focus mode item shows and takes the current configurable Enter focus mode combination,
 including its modifiers, instead of a fixed letter. It is offered only outside focus mode on a selected session that
-is not archived and has an available context. Its availability and target follow "The focus mode shortcut" in
+is not archived and has an available context. Its availability and target follow "The focus mode shortcuts" in
 `docs/product/focus-mode.md`. That combination works in the menu's main list; another menu, a submenu or a dialog
 suppresses it. It does not repeat while held. The project's Focus mode item keeps its fixed `F`.
 
@@ -85,12 +85,14 @@ and `⌃⇧Tab` on an Apple keyboard, `Ctrl+Tab` and `Ctrl+Shift+Tab` elsewhere.
 | Navigation | **Previous console session** | `Ctrl+Shift+Tab` | yes | the desktop app on any system |
 | Navigation | **Next region of the window** | `F6` | no | every client |
 | Navigation | **Previous region of the window** | `Shift+F6` | no | every client |
-| Focus mode | **Toggle focus mode** | `Shift+Cmd+F` | yes | every client |
+| Focus mode | **Enter focus mode** | `Option+Cmd+→` | yes | every client |
+| Focus mode | **Leave focus mode** | `Option+Cmd+←` | yes | every client |
 | Terminal | **Increase terminal font size** | `Cmd+=` (also `Cmd++`) | yes | every client, while a terminal has focus |
 | Terminal | **Decrease terminal font size** | `Cmd+-` | yes | every client, while a terminal has focus |
 | Terminal | **Reset terminal font size** | `Cmd+0` | yes | every client, while a terminal has focus |
 | Application | **New session** | `Cmd+N` | yes | every client |
 | Application | **New session with defaults** | `Shift+Cmd+N` | yes | every client |
+| Application | **Find in files** | `Shift+Cmd+F` | yes | every client |
 | Application | **Open settings** | `Cmd+,` | yes | every client (in the macOS desktop app its native menu takes the key; wherever there is no native menu — the Windows desktop app and a browser — the page does) |
 | Editing | **Undo**, **Redo**, **Cut**, **Copy**, **Paste**, **Select all** | `Cmd+Z`, `Shift+Cmd+Z`, `Cmd+X`, `Cmd+C`, `Cmd+V`, `Cmd+A` | no | the desktop app (its native menu) |
 | Editing | **Find** | `Cmd+F` | no | every client |
@@ -123,9 +125,9 @@ default keys, and nothing otherwise.
 
 What each command does: Back and Forward in "Keyboard shortcuts" in `docs/product/navigation-history.md`; the
 console-session keys in "The switch strip" in `docs/product/focus-mode.md`; the region keys in
-`docs/product/moving-focus-between-regions.md`; Toggle focus mode in "The focus mode shortcut" in
+`docs/product/moving-focus-between-regions.md`; Enter focus mode and Leave focus mode in "The focus mode shortcuts" in
 `docs/product/focus-mode.md`; the two New session commands in "Creating sessions from the keyboard" in
-`docs/product/sidebar.md`; the three terminal font size
+`docs/product/sidebar.md`; Find in files in "Opening it" in `docs/product/finding-in-files.md`; the three terminal font size
 commands in "The size and how it is changed" in `docs/product/terminal-font-size.md`; Open settings in "Opening
 and closing Settings" in `docs/product/settings.md`; Find, which acts only in the file viewer, where it finds in the
 file (see `docs/product/finding-in-the-file-viewer.md`), and in Settings, where it focuses the search field (see "The
@@ -225,7 +227,9 @@ The same rules decide what a recording accepts, what a reset may put back and wh
   Windows key without Ctrl is refused as the system's. The one exception is Tab with ⌃ on an Apple keyboard, with any
   mix of ⌥ and ⇧, which the console-session keys use.
 - **An editing key with the primary modifier**: the arrow keys, Home, End, Page Up, Page Down, Backspace, Delete and
-  Enter, which with ⌘ (Ctrl) move the caret or edit text in every text field and in the terminal.
+  Enter, which with ⌘ (Ctrl) move the caret or edit text in every text field and in the terminal. The one exception is
+  an arrow key with ⌘ and ⌥ (Ctrl and Alt elsewhere) and no other modifier, which neither moves the caret in a text
+  field nor is used by the programs in a terminal; focus mode's commands have it by default.
 - **A combination the system keeps for itself**: on an Apple keyboard `Cmd+Space` and ``Cmd+` ``, with any modifiers
   but ⌃, and ⌘ with Tab, with any other modifiers; elsewhere Tab with Ctrl and Alt or the Windows key, such as
   `Ctrl+Alt+Tab`. **Tab is accepted only with Control**: on an Apple keyboard ⌃Tab with any mix of ⌥ and ⇧, elsewhere
@@ -243,7 +247,8 @@ The same rules decide what a recording accepts, what a reset may put back and wh
 
 Where a configurable shortcut is shown it is the command's current one, and it changes as soon as the shortcut does:
 
-- the selected session menu's Focus mode item and the Leave focus mode button's tooltip;
+- the selected session menu's Focus mode item, Enter focus mode's, and the Leave focus mode button's tooltip, Leave
+  focus mode's;
 - the tooltips that name a shortcut: the **+** that the New session commands act on, which shows the shortcut of
   whichever of the two it would take (see "Creating sessions from the keyboard" in `docs/product/sidebar.md`);
 - the macOS desktop app's native menu, whose **Settings…** item carries Open settings' shortcut.
@@ -272,12 +277,18 @@ together with `primary` or `other`: a value holding both is not a combination in
 its default.
 
 ```json
-{ "focusMode": { "code": "KeyK", "primary": true, "shift": true }, "back": { "code": "BracketLeft", "primary": true, "alt": true } }
+{ "enterFocusMode": { "code": "KeyK", "primary": true, "shift": true }, "back": { "code": "BracketLeft", "primary": true, "alt": true } }
 ```
 
-The command ids are `back`, `forward`, `nextConsoleSession`, `previousConsoleSession`, `focusMode`,
-`increaseTerminalFontSize`, `decreaseTerminalFontSize`, `resetTerminalFontSize`, `newSession`, `quickCreate` (New
-session with defaults) and `openSettings`. The fixed window keys and menu letters have none.
+The command ids are `back`, `forward`, `nextConsoleSession`, `previousConsoleSession`, `enterFocusMode`,
+`exitFocusMode` (Leave focus mode), `increaseTerminalFontSize`, `decreaseTerminalFontSize`, `resetTerminalFontSize`,
+`newSession`, `quickCreate` (New session with defaults), `findInFiles` and `openSettings`. The fixed window keys and
+menu letters have none.
+
+An entry under `focusMode`, the id of the single command that once toggled focus mode, is read as `enterFocusMode`'s,
+so a kept or imported shortcut of it moves to Enter focus mode; when the same object also has an `enterFocusMode` entry,
+that one stands and the `focusMode` entry is dropped, without being counted among the entries that could not be used.
+Leave focus mode keeps its own shortcut either way.
 
 **Such an object is judged as a whole set**, against the bindings the whole set would leave, so that two commands
 swapping their shortcuts, or a chain of moves, stands whatever order the entries are written in. An entry is dropped

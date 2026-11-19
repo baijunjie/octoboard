@@ -18,6 +18,7 @@ export function testDaemon({ state, request = () => Promise.reject(new Error("no
     showNotice: () => {},
     onNotification: () => () => {},
     onImportProgress: () => () => {},
+    onContentSearch: () => () => {},
     dismissTrustPrompt: () => {},
     reconnect: () => {},
     terminalUrl: () => "",

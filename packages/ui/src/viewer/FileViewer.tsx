@@ -20,6 +20,7 @@ import { useRendererScope } from "./code/codeRenderer";
 import { changeStatus, type ViewerSubject } from "./content";
 import { ControlsSlot } from "./controlsSlot";
 import { diffLayout } from "./code/diffLayout";
+import type { LineRange } from "./code/lineMarks";
 import { FindBar, FindToggle } from "./find/FindBar";
 import {
   CopyPathButton,
@@ -58,12 +59,15 @@ export function FileViewer({
   navigation,
   location,
   line,
+  marks,
 }: {
   subject: ViewerSubject;
   onClose: () => void;
   navigation?: ViewerNavigation;
   /** The line of a file to scroll to and mark; ignored for a change and for an image. */
   line?: number;
+  /** Ranges of `line`'s text to mark, as a match of a content search, for as long as the file is shown at that line. */
+  marks?: readonly LineRange[];
   /** How a link or an image in a document is followed. The document's path is the subject's. */
   location?: Omit<MarkdownLocation, "path">;
 }): React.ReactElement {
@@ -270,7 +274,7 @@ export function FileViewer({
             <ControlsSlot value={controls}>
               <MarkdownLocationProvider value={{ path: subject.path, ...location }}>
                 <StandInActionContext value={standInAction}>
-                  <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} line={line} />
+                  <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} line={line} marks={marks} />
                 </StandInActionContext>
               </MarkdownLocationProvider>
             </ControlsSlot>

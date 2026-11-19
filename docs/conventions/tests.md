@@ -180,8 +180,9 @@ interaction rules a gallery scenario shows are in [`ui-standard.md`](ui-standard
   code under test throw on an unparsable token rather than default (`|| 0`). Render the real component that owns the
   behaviour and the real control it keys on, not a host that calls the hook and wires the listeners itself.
 - **A faked daemon request that fails rejects with a `CodedError` carrying the code, whose message is the catalog
-  sentence** (a lost connection is `CodedError(…, "connection_closed", {})`), never a plain `Error` (new code; existing
-  fakes are not migrated); one that succeeds answers with the reply type `REPLY_TYPES` names, and a request whose real
+  sentence** (a lost connection is `CodedError(…, "connection_closed", {})`; a daemon code with its params is
+  `daemonError(code, params)` from `src/test/daemonError.ts`, which words the message from the catalog), never a plain
+  `Error` and never a made-up message (new code; existing fakes are not migrated); one that succeeds answers with the reply type `REPLY_TYPES` names, and a request whose real
   reply is not `ack` is never answered with a catch-all `{ type: "ack" }`. `looseRequestSender` checks no reply type, so
   the test would otherwise run a path the app never takes.
 - **A test of focus after a handoff that React commits asserts `data-focus-visible` on the element React Aria marks
@@ -266,7 +267,9 @@ interaction rules a gallery scenario shows are in [`ui-standard.md`](ui-standard
   `tree_diff::tree_diff_stdout` does with `TREE_DIFF_STDOUT_OVERRIDE` (`browse/tree_diff.rs`; `budget.rs` holds only the
   constant). Set the override around the call in the test, clear it after, and assert what happens past the limit. The
   override is per thread, so it reaches only code on the test's own thread: anything moved onto `spawn_blocking` or
-  through the coordinator reads the real figure.
+  through the coordinator reads the real figure. Where the work runs on threads of its own, which such an override
+  cannot reach, the limit may instead be lowered through a bounds value passed to the function: a `Bounds` struct whose
+  `standard()` reads `budget.rs`, as `browse::content_search::Bounds` does.
 - **A test that makes something unwritable or unreadable checks what the machine allows before asserting a refusal** and
   returns when it cannot happen (`libc::geteuid() == 0`, or try the write): root ignores permission modes. A test of a
   check on the directories above its scratch directory runs the check first and asserts the refusal if it already
@@ -339,8 +342,11 @@ application tests (`packages/ui/src/fixtures/`). How to run, sweep and compare i
   floated in by hovering a toggle, a docked pane's width grip); a width chosen with the control is raised to it. A
   scenario carries one or the other, and a comment beside `minWidth` says why. Write a `height` only where a step needs
   a window too short for a dialog's body, which then scrolls.
-- **A step waits on a condition** (the `Ui` helpers, which wait for the control they act on), not on time; a fixed
-  `ui.wait(ms)` only with a comment saying why the UI shows nothing to wait on (a timer inside the page).
+- **A step waits on a condition** (the `Ui` helpers, which wait for the control they act on; `waitForControl`,
+  `waitForText` and `waitUntil` for a state with nothing to act on), not on time; a fixed `ui.wait(ms)` only with a
+  comment saying why the UI shows nothing to wait on (a timer inside the page). A fixed wait in a shared step list (such
+  as `openFiles` in `src/gallery/fixtures/projectFiles.ts`) carries that comment once, where the list is defined, not
+  at each scenario that spreads it.
 - **Steps run at any width the page's width control picks,** so they name controls as in a docked window; use
   `ui.showPanel` and `ui.closeDrawer` where the layout needs them.
 - **`held: true` and `held: "from-start"` only for views that exist only while the shortcut modifier is held.**

@@ -552,7 +552,7 @@ it("closes a narrow window's drawer when a new device's form is asked for", asyn
   expect(topBarButton("Hide remote devices")).toBeNull();
 });
 
-const pressFocusShortcut = () => act(async () => void window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyF", key: "F", shiftKey: true, metaKey: true, ctrlKey: false, bubbles: true, cancelable: true })));
+const pressFocusKey = (code: "ArrowRight" | "ArrowLeft") => act(async () => void window.dispatchEvent(new KeyboardEvent("keydown", { code, key: code, altKey: true, metaKey: true, ctrlKey: false, bubbles: true, cancelable: true })));
 const addButton = () => document.querySelector<HTMLElement>("[data-region=sidebar] [aria-label='Add remote daemon']");
 
 it("reads the list of devices once at start, and raises one alert where that read fails", async () => {
@@ -592,15 +592,15 @@ it("records no visit for the page while its list is not read yet, so Back leaves
   expect(topBar().textContent).toContain(fix.title);
 });
 
-it("does nothing for the focus mode shortcut on the page", async () => {
+it("does nothing for the focus mode shortcuts on the page", async () => {
   await mountDesktop();
-  // The same shortcut enters the focus mode of the selected session off the page.
-  await pressFocusShortcut();
+  // The same shortcuts enter and leave the focus mode of the selected session off the page.
+  await pressFocusKey("ArrowRight");
   expect(document.querySelector("[data-focus-exit]")).not.toBeNull();
-  await pressFocusShortcut();
+  await pressFocusKey("ArrowLeft");
   expect(document.querySelector("[data-focus-exit]")).toBeNull();
   await showPage();
-  await pressFocusShortcut();
+  await pressFocusKey("ArrowRight");
   expect(document.querySelector("[data-focus-exit]")).toBeNull();
   expect(page()).not.toBeNull();
   await leavePage();

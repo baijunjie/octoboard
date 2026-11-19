@@ -15,7 +15,8 @@ import type { ExpansionStatus, SeparatorLabels } from "./expansion";
 import { FrameSurface } from "../FrameSurface";
 import { hasHunks, linesAfterLastHunk, withoutNoNewlineMarkers } from "./patch";
 import { FIND_REGION } from "../find/findDom";
-import { focusFirstSeparatorControl, scrollTextToLine, scrollToLine } from "./rendererDom";
+import { focusFirstSeparatorControl, revealCodeRangeSideways, revealTextRangeSideways, scrollTextToLine, scrollToLine } from "./rendererDom";
+import { codeLineMarks, paintLineMarks, clearLineMarks, textLineMarks, useLineMarkOwner, type LineRange } from "./lineMarks";
 import { useHost } from "../../platform/react";
 import { isSelectAll, selectCode } from "../selectAll";
 import { ViewerEditMenu } from "../ViewerEditMenu";
@@ -40,14 +41,17 @@ export function PlainText({
   label,
   theme,
   line,
+  marks,
   scrollKey,
 }: {
   text: string;
   label: string;
   theme: "light" | "dark";
-  /** A line to bring into view; it is not marked, there being no per-line markup to mark. It is
+  /** A line to bring into view; the line itself is not marked, there being no per-line markup to mark. It is
    * brought into view once for each `scrollKey` (the file shown) and line. */
   line?: number;
+  /** Ranges of `line`'s text to mark, for as long as this file is shown at this line. */
+  marks?: readonly LineRange[];
   scrollKey?: string;
 }): React.ReactElement {
   const frame = useCodeFrame(label);
@@ -67,7 +71,15 @@ export function PlainText({
     if (line === undefined || scrolledTo.current === asked || !pre.current) return;
     scrolledTo.current = asked;
     scrollTextToLine(pre.current, line);
-  }, [line, scrollKey]);
+    const first = marks?.length ? textLineMarks(pre.current, line, marks)[0] : undefined;
+    if (first) revealTextRangeSideways(pre.current, first);
+  }, [line, scrollKey, marks]);
+  const markOwner = useLineMarkOwner();
+  useEffect(() => {
+    if (line === undefined || !marks?.length || !pre.current) return;
+    paintLineMarks(markOwner, textLineMarks(pre.current, line, marks));
+    return () => clearLineMarks(markOwner);
+  }, [markOwner, text, line, marks, scrollKey]);
   return (
     <FrameSurface focused={frame.region.focused}>
       <pre dir="ltr" {...fade} {...FIND_REGION} onKeyDown={frame.onKeyDown}>
@@ -146,6 +158,7 @@ export function CodeSurface({
   text,
   theme,
   line,
+  marks,
 }: {
   resetKey: string;
   name: string;
@@ -153,29 +166,48 @@ export function CodeSurface({
   theme: "light" | "dark";
   /** A line to mark and scroll to once drawn. A file shown as plain text has no marked line. */
   line?: number;
+  /** Ranges of `line`'s text to mark, plain text included, for as long as this file is shown at this line: they are
+   * marked again each time the code is drawn again (a theme or wrap change), and taken off when another file or
+   * line is shown. */
+  marks?: readonly LineRange[];
 }): React.ReactElement {
   const t = useT();
   const [plainFor, setPlainFor] = useState<string>();
   const onPlainChange = useCallback((plain: boolean) => setPlainFor(plain ? resetKey : undefined), [resetKey]);
   const label = t("viewer.contents", { name: isolate(name) });
   const wrap = wordWrap.useValue();
-  const anchor = useRef<HTMLDivElement>(null);
+  // A state rather than a ref, so the line is looked for again once the box is in the page: a renderer that reports its
+  // drawing from its own layout effect does so before the box around it is attached.
+  const [anchor, setAnchor] = useState<HTMLDivElement | null>(null);
   // The line is brought into view once for each file and line asked for: the renderer reports every
   // drawing (a theme change, a wrap change), and the reader may have scrolled on since.
   const scrolledTo = useRef<string>(undefined);
   const showLine = useCallback(() => {
     const asked = `${resetKey}\0${line}`;
-    if (line === undefined || scrolledTo.current === asked || !anchor.current) return;
-    if (scrollToLine(anchor.current, line)) scrolledTo.current = asked;
-  }, [resetKey, line]);
+    if (line === undefined || scrolledTo.current === asked || !anchor) return;
+    if (!scrollToLine(anchor, line)) return;
+    scrolledTo.current = asked;
+    // Sideways only for a mark out of view, as on a long line.
+    const first = marks?.length ? codeLineMarks(anchor, line, marks)[0] : undefined;
+    if (first) revealCodeRangeSideways(first);
+  }, [resetKey, line, marks, anchor]);
   // A new line in a file already drawn; one asked for with the file is shown once it is drawn.
   useEffect(showLine, [showLine]);
+  const markOwner = useLineMarkOwner();
+  const markLine = useCallback(() => {
+    if (line === undefined || !marks?.length || !anchor) return;
+    paintLineMarks(markOwner, codeLineMarks(anchor, line, marks));
+  }, [markOwner, resetKey, line, marks, anchor]);
+  useEffect(() => {
+    markLine();
+    return () => clearLineMarks(markOwner);
+  }, [markLine, markOwner]);
   if (textPlan(text) === "plain") {
     return (
       <>
         <WrapToggle />
         <FileNotice sentence={t("viewer.plain.large")} />
-        <PlainText text={text} label={label} theme={theme} line={line} scrollKey={resetKey} />
+        <PlainText text={text} label={label} theme={theme} line={line} marks={marks} scrollKey={resetKey} />
       </>
     );
   }
@@ -183,7 +215,7 @@ export function CodeSurface({
     <>
       <WrapToggle />
       <FileNotice tone="failed" sentence={t("viewer.plain.unrenderable")} speak />
-      <PlainText text={text} label={label} theme={theme} line={line} scrollKey={resetKey} />
+      <PlainText text={text} label={label} theme={theme} line={line} marks={marks} scrollKey={resetKey} />
     </>
   );
   return (
@@ -193,7 +225,7 @@ export function CodeSurface({
         <WrapToggle />
         <CodeFrame label={label} resetKey={resetKey} theme={theme}>
           {(onDrawn) => (
-            <div ref={anchor} className="contents">
+            <div ref={setAnchor} className="contents">
               <HighlightedFile
                 name={name}
                 text={text}
@@ -204,6 +236,7 @@ export function CodeSurface({
                 onDrawn={() => {
                   onDrawn();
                   showLine();
+                  markLine();
                 }}
               />
             </div>

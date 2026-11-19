@@ -35,10 +35,11 @@ export interface PanelContentProps {
   /** The panel is being resized every frame (a maximized card while the sidebar's dock eases): a
    * terminal keeps its size until this ends, then fits once. */
   resizing: boolean;
-  /** Shows a project file a path in a terminal's output named, in the file viewer. `returnFocus`
+  /** Shows a project file in the file viewer over the window: one a path in a terminal's output named, or a result of
+   * the Files panel's Find in files. `returnFocus`
    * puts focus back where the click came from once the viewer closes, and says whether it took
    * it; the agent terminal takes it when `returnFocus` is absent or returns false. */
-  onViewFile?: (file: ViewedFile, returnFocus?: () => boolean) => void;
+  onViewFile: (file: ViewedFile, returnFocus?: () => boolean) => void;
 }
 
 /** One kind of panel. The content starts with a `PanelHeader`, which supplies the stack's own
@@ -58,8 +59,8 @@ export interface PanelEntry {
   Content: React.ComponentType<PanelContentProps>;
 }
 
-function FilesContent({ project, active, selectedSessionId, switching, focusTerminal }: PanelContentProps): React.ReactElement | null {
-  return project ? <LazyProjectBrowser project={project} active={active} selectedSessionId={selectedSessionId} switching={switching} focusTerminal={focusTerminal} /> : null;
+function FilesContent({ project, active, selectedSessionId, switching, focusTerminal, onViewFile }: PanelContentProps): React.ReactElement | null {
+  return project ? <LazyProjectBrowser project={project} active={active} selectedSessionId={selectedSessionId} switching={switching} focusTerminal={focusTerminal} onViewFile={onViewFile} /> : null;
 }
 
 function TerminalContent({ project, switching, resizing, onViewFile }: PanelContentProps): React.ReactElement | null {

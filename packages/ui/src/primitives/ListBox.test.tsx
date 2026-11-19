@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { ListBox, ListBoxItem, ListBoxItemLabel } from "./ListBox";
@@ -39,4 +40,62 @@ it("renders only a window of a large list while retaining its item count and pos
   expect(choices[0]!.textContent).toBe("Branch 0");
   expect(choices[0]!.getAttribute("aria-posinset")).toBe("1");
   expect(choices[0]!.getAttribute("aria-setsize")).toBe("1000");
+});
+
+function selectable(selectedId: string | null | undefined, onSelectedChange: (id: string) => void, onAction?: (id: string) => void) {
+  return (
+    <ListBox label="Results" selectedId={selectedId} onSelectedChange={onSelectedChange} onAction={onAction}>
+      <ListBoxItem id="a" textValue="a">a</ListBoxItem>
+      <ListBoxItem id="b" textValue="b">b</ListBoxItem>
+      <ListBoxItem id="c" textValue="c">c</ListBoxItem>
+    </ListBox>
+  );
+}
+const options = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('[role="option"]')];
+const selectedOf = (container: HTMLElement) => options(container).filter((item) => item.getAttribute("aria-selected") === "true").map((item) => item.textContent);
+
+it("selects the item selectedId names, one at a time, and follows it as it changes", () => {
+  const { container, render } = mount(selectable("b", vi.fn()));
+  expect(selectedOf(container)).toEqual(["b"]);
+  render(selectable("c", vi.fn()));
+  expect(selectedOf(container)).toEqual(["c"]);
+  render(selectable(null, vi.fn()));
+  expect(selectedOf(container)).toEqual([]);
+});
+
+it("leaves its items unselectable without onSelectedChange", () => {
+  const { container } = mount(
+    <ListBox label="Plain"><ListBoxItem id="a" textValue="a">a</ListBoxItem></ListBox>,
+  );
+  expect(options(container)[0]!.hasAttribute("aria-selected")).toBe(false);
+});
+
+it("reports the item a click chooses without activating it, and never another one for a press on the selected item", () => {
+  const changed = vi.fn();
+  const action = vi.fn();
+  const { container } = mount(selectable("a", changed, action));
+  pressWithMouse(options(container)[2]!);
+  expect(changed).toHaveBeenCalledExactlyOnceWith("c");
+  expect(action).not.toHaveBeenCalled();
+  changed.mockClear();
+  // A selection is never emptied or moved by a press on the item already selected.
+  pressWithMouse(options(container)[0]!);
+  expect(changed).not.toHaveBeenCalled();
+});
+
+it("moves the selection with the arrow keys and activates the selected item on Enter", () => {
+  const changed = vi.fn();
+  const action = vi.fn();
+  const { container } = mount(selectable("a", changed, action));
+  const key = (target: Element, name: string) =>
+    act(() => {
+      target.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }));
+      target.dispatchEvent(new KeyboardEvent("keyup", { key: name, bubbles: true, cancelable: true }));
+    });
+  act(() => options(container)[0]!.focus());
+  key(document.activeElement!, "ArrowDown");
+  expect(changed).toHaveBeenLastCalledWith("b");
+  expect(action).not.toHaveBeenCalled();
+  key(document.activeElement!, "Enter");
+  expect(action).toHaveBeenCalledTimes(1);
 });

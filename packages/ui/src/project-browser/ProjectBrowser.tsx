@@ -10,9 +10,11 @@ import { ROW_ICON_BUTTON_CLASS } from "../components/controls/RowControls";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useT } from "../i18n/react";
 import { PanelHeader } from "../components/panel/PanelHeader";
+import { useLatest } from "../components/hooks/useLatest";
 import type { Project } from "../protocol";
 import { useDaemonStore } from "../store";
 import { FileViewer } from "../viewer/FileViewer";
+import type { ViewedFile } from "../viewer/viewedFile";
 import { useProjectBrowserState } from "./browserState";
 import { setGitModeWorktree } from "./gitModeWorktree";
 import { FileFilterField, useFileFilterState } from "./FileFilterField";
@@ -20,8 +22,11 @@ import { BrowserViewControls } from "./BrowserViewControls";
 import { FilesPanel } from "./files/FilesPanel";
 import { useFilesMode } from "./files/useFilesMode";
 import { GitView } from "./git/GitView";
-import { RowPathScope } from "./RowActions";
+import { FindInDirectory, RowPathScope } from "./RowActions";
 import { useGitReview } from "./git/useGitReview";
+import { ContentSearchDialog } from "./files/contentSearch/ContentSearchDialog";
+import { findInFilesLauncher } from "./files/contentSearch/findInFilesLauncher";
+import { useContentSearchState } from "./files/contentSearch/useContentSearchState";
 
 /** How long the header's Refresh icon spins at least, so a refresh that settles at once still reads
  * as having happened: half a turn of the slow spin (2 s per turn). The icon looks the same every
@@ -48,6 +53,7 @@ export function ProjectBrowser({
   active,
   selectedSessionId,
   switching = false,
+  onViewFile,
 }: {
   project: Project;
   /** Whether the browser is on screen, docked or floating in; only then is it refreshed on its own. */
@@ -60,6 +66,8 @@ export function ProjectBrowser({
    * projects: it fades in where it stands. Read once, as it mounts, so a pane that docks or floats
    * in with it, or one it stays in, plays nothing. */
   switching?: boolean;
+  /** Shows a file over the window, at a line with ranges of it marked: where a result of Find in files opens. */
+  onViewFile: (file: ViewedFile, returnFocus?: () => boolean) => void;
 }): React.ReactElement {
   const t = useT();
   const [fadesIn] = useState(switching);
@@ -81,6 +89,18 @@ export function ProjectBrowser({
   // which blurs it to `<body>`, and it hands focus to Refresh beside it.
   const filesFocus = useFocusHandoff(() => refreshRef.current?.focus());
   useEffect(() => browser.touch(), []);
+
+  // Find in files: the header's button, a folder's Find in folder and the window's shortcut open it; what it searched
+  // for last is kept while the browser is mounted.
+  const contentSearch = useContentSearchState();
+  const findButtonRef = useRef<HTMLButtonElement>(null);
+  // The shortcut in the Git mode switches to the Files mode first, whose header holds the button focus comes back to
+  // once a result is opened.
+  const showFromShortcut = useLatest(() => {
+    if (mode !== "files") browser.setMode("files");
+    contentSearch.show();
+  });
+  useEffect(() => (active ? findInFilesLauncher.register(() => showFromShortcut.current()) : undefined), [active]);
 
   // A document link replaces the file on screen. Closing the change viewer here does not move
   // focus to its row: that would take focus out of the file viewer that is about to show.
@@ -135,6 +155,8 @@ export function ProjectBrowser({
               <div className="contents" onFocus={filesFocus.onFocus} onBlur={filesFocus.onBlur}>
                 <BrowserViewControls
                   filter={activeFilter}
+                  findInFiles={mode === "files" ? () => contentSearch.show() : undefined}
+                  findInFilesRef={findButtonRef}
                   collapseAll={mode === "files" ? { disabled: !files.canCollapseAll, onPress: files.collapseAll } : undefined}
                   foldDirectories={mode === "git" ? git.foldDirectories : undefined}
                   layout={mode === "git" ? { value: browser.layout, onChange: browser.setLayout } : undefined}
@@ -154,7 +176,9 @@ export function ProjectBrowser({
           </PanelHeader>
           <FileFilterField contextKey={tab} state={activeFilter} ignoredToggle={mode === "files"} incomplete={mode === "files" && files.searchIncomplete} label={t("browser.filter.label")} />
           {mode === "files" ? <TabPanel key="files" id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
-            <FilesPanel project={project.id} files={files} refreshRef={refreshRef} focusHandoff={filesFocus} />
+            <FindInDirectory.Provider value={contentSearch.show}>
+              <FilesPanel project={project.id} files={files} refreshRef={refreshRef} focusHandoff={filesFocus} />
+            </FindInDirectory.Provider>
           </TabPanel> : <TabPanel key="changes" id="changes" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <RowPathScope.Provider value={{ project: project.id, worktree: git.worktree }}>
               <GitView
@@ -171,6 +195,27 @@ export function ProjectBrowser({
           </TabPanel>}
         </Tabs>
       </div>
+      {contentSearch.open && (
+        <ContentSearchDialog
+          project={project.id}
+          directory={contentSearch.open.directory}
+          query={contentSearch.query}
+          options={contentSearch.options}
+          onQueryChange={contentSearch.setQuery}
+          onOptionsChange={contentSearch.setOptions}
+          onClose={contentSearch.close}
+          onOpen={(match) => {
+            contentSearch.close();
+            // The viewer gives focus back to the header's button as it closes, while the browser still shows it.
+            onViewFile({ project: project.id, path: match.path, line: match.line, marks: match.ranges }, () => {
+              const button = findButtonRef.current;
+              if (!button?.isConnected) return false;
+              button.focus();
+              return true;
+            });
+          }}
+        />
+      )}
       {files.viewer && (
         <FileViewer
           subject={files.viewer.subject}

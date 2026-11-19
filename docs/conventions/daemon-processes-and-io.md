@@ -92,7 +92,8 @@ through its provider, not branched on in generic code). The helpers named here a
 - **Replace a file whole with `hostfs::replace::replace_file`, and expect failure on Windows.** A file held by a dying
   process refuses a replace or a delete; treat that as a transient, not a broken disk, and let startup cleanup tolerate
   it.
-- **A project's file content is read only through `live::read_file` or `live::read_resolved` (`browse::live`), never
+- **A project's file content is read only through `live::read_file` or `live::read_resolved` (`browse::live`), or opened for a
+  content search through `live::open_searchable`, never
   `File::open`, `fs::read` or `fs::read_to_string`.** A project holds whatever the user or an agent put there: a link
   out of it, a FIFO whose open blocks, a device that reads forever, a file swapped mid-read. A fixture of plain files
   cannot show the difference.

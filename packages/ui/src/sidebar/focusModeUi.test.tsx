@@ -42,15 +42,15 @@ it.each(["project", "console"] as const)("omits Enter focus mode from a selected
   expect(labels).not.toContain("Focus mode");
 });
 
-it.each(["project", "console"] as const)("shows the live global focus binding in the %s exit tooltip", (view) => {
+it.each(["project", "console"] as const)("shows the live Leave focus mode binding in the %s exit tooltip", (view) => {
   fakeTimers();
   const host = mount(view);
   enter(host.querySelector<HTMLButtonElement>('button[aria-label="Leave focus mode"]')!);
   runPendingTimers();
   const tooltip = openTooltip()!;
   expect(tooltip.textContent).toContain("Leave focus mode");
-  expect(tooltip.querySelector("kbd")?.textContent?.endsWith("F")).toBe(true);
-  expect(tooltip.querySelector("kbd")?.textContent).not.toBe("F");
-  act(() => { expect(setBinding("focusMode", { code: "KeyG", primary: true, alt: true }, BROWSER_HOST)).toBeUndefined(); });
+  expect(tooltip.querySelector("kbd")?.textContent?.endsWith("←")).toBe(true);
+  expect(tooltip.querySelector("kbd")?.textContent).not.toBe("←");
+  act(() => { expect(setBinding("exitFocusMode", { code: "KeyG", primary: true, alt: true }, BROWSER_HOST)).toBeUndefined(); });
   expect(openTooltip()?.querySelector("kbd")?.textContent?.endsWith("G")).toBe(true);
 });

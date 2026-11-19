@@ -97,6 +97,17 @@ regress = "0.12"
 # Encodes the connection details `octoboardd connection` prints as a QR code, drawn in the terminal
 # with block characters; without default features it pulls in no image library.
 qrcode = { version = "0.14.1", default-features = false }
+# The project content search (`browse::content_search`): ripgrep's own libraries for a parallel walk
+# that applies Git's ignore rules (`ignore`), the file mask's globs (`globset`, which `ignore` is
+# built on), and line-oriented matching with binary detection (`grep-searcher`, `grep-regex`,
+# `grep-matcher`). The `regex` syntax they match with differs from JavaScript's. `regex-syntax`, which
+# `grep-regex` parses with, parses a query that does not compile again, to tell why and where.
+ignore = "0.4"
+globset = "0.4"
+grep-searcher = "0.1"
+grep-regex = "0.1"
+grep-matcher = "0.1"
+regex-syntax = "0.8"
 
 # The platform layer's Unix modules (`src/platform`), the PTY backend of `platform::term` among
 # them.

@@ -50,18 +50,29 @@ const primary = (code: string, modifiers: Omit<Binding, "code" | "primary"> = {}
 
 /** The commands the user can rebind, in the order they are listed in, with their defaults. The console-session
  * switch's are Control with Tab on every keyboard (`ctrl`): ⌃Tab on an Apple one, Ctrl+Tab elsewhere, where the
- * platform's other modifier, the Windows key, has Tab for the system's Task View. */
+ * platform's other modifier, the Windows key, has Tab for the system's Task View.
+ *
+ * Focus mode's are ⌥⌘→ and ⌥⌘← (Ctrl+Alt+→ and Ctrl+Alt+← elsewhere): ⌘ or Ctrl with an arrow, Alt with one and ⇧⌘ with
+ * one move the caret or select in terminals and text fields, while ⌥⌘ with an arrow is taken by neither the
+ * application nor the programs in its terminals, and an arrow types no character under AltGr (which Ctrl+Alt is on
+ * Windows). GNOME keeps Ctrl+Alt+← and → for its workspaces, so in a browser there they never reach the page, and Chrome
+ * on macOS takes ⌥⌘← and ⌥⌘→ for the previous and next tab. So in a browser a press that would not change focus mode
+ * keeps its default for the browser, while stopped short of the terminal, which would send it to the agent; the desktop
+ * app has no tabs and takes every press, since a key it lets through can make the system beep
+ * (`sidebar/focusShortcut.tsx`). */
 const REBINDABLE = [
   { id: "back", label: "settings.shortcuts.command.back", group: "navigation", binding: primary("BracketLeft"), availability: "macApp" },
   { id: "forward", label: "settings.shortcuts.command.forward", group: "navigation", binding: primary("BracketRight"), availability: "macApp" },
   { id: "nextConsoleSession", label: "settings.shortcuts.command.nextConsoleSession", group: "navigation", binding: { code: "Tab", ctrl: true }, availability: "app" },
   { id: "previousConsoleSession", label: "settings.shortcuts.command.previousConsoleSession", group: "navigation", binding: { code: "Tab", ctrl: true, shift: true }, availability: "app" },
-  { id: "focusMode", label: "settings.shortcuts.command.focusMode", group: "focus", binding: primary("KeyF", { shift: true }), availability: "always" },
+  { id: "enterFocusMode", label: "settings.shortcuts.command.enterFocusMode", group: "focus", binding: primary("ArrowRight", { alt: true }), availability: "always" },
+  { id: "exitFocusMode", label: "settings.shortcuts.command.exitFocusMode", group: "focus", binding: primary("ArrowLeft", { alt: true }), availability: "always" },
   { id: "increaseTerminalFontSize", label: "settings.shortcuts.command.increaseTerminalFontSize", group: "terminal", binding: primary("Equal"), availability: "always" },
   { id: "decreaseTerminalFontSize", label: "settings.shortcuts.command.decreaseTerminalFontSize", group: "terminal", binding: primary("Minus"), availability: "always" },
   { id: "resetTerminalFontSize", label: "settings.shortcuts.command.resetTerminalFontSize", group: "terminal", binding: primary("Digit0"), availability: "always" },
   { id: "newSession", label: "settings.shortcuts.command.newSession", group: "application", binding: primary("KeyN"), availability: "always" },
   { id: "quickCreate", label: "settings.shortcuts.command.quickCreate", group: "application", binding: primary("KeyN", { shift: true }), availability: "always" },
+  { id: "findInFiles", label: "settings.shortcuts.command.findInFiles", group: "application", binding: primary("KeyF", { shift: true }), availability: "always" },
   { id: "openSettings", label: "settings.shortcuts.command.openSettings", group: "application", binding: primary("Comma"), availability: "always" },
 ] as const satisfies readonly Omit<ShortcutCommand, "rebindable">[];
 

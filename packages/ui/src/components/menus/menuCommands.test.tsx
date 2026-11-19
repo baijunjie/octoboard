@@ -20,7 +20,7 @@ async function mount(disabled = false) {
   const command = vi.fn();
   const childCommand = vi.fn();
   const windowCommand = vi.fn();
-  const matches = (event: KeyboardEvent) => matchesCommand("focusMode", event, BROWSER_HOST);
+  const matches = (event: KeyboardEvent) => matchesCommand("enterFocusMode", event, BROWSER_HOST);
   const shortcut = { label: "Shift+Control+F", matches };
   let deactivate!: () => void;
   function View() {
@@ -46,7 +46,7 @@ async function mount(disabled = false) {
   const menu = document.querySelector<HTMLElement>("[role=menu]")!;
   act(() => menu.focus());
   const press = (target: EventTarget = menu, init: KeyboardEventInit = {}) => {
-    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...eventKey(defaultBinding("focusMode"), BROWSER_HOST), ...init });
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...eventKey(defaultBinding("enterFocusMode"), BROWSER_HOST), ...init });
     act(() => { target.dispatchEvent(event); });
     return event;
   };

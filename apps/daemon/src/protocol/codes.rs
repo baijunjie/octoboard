@@ -658,6 +658,13 @@ pub mod error_code {
     /// made from that filter's output, which cannot be read without writing an object. `params`
     /// names the `path` and the `filter` driver.
     pub const CLEAN_FILTERED: Code = Code("clean_filtered");
+    /// A content search whose query, read as a regular expression, does not compile. `params`
+    /// names the `cause` (`browse::content_search::refusal::PatternCause`), `offset`, the UTF-16 offset
+    /// into the query of where it fails, when known, and `detail`, the matcher's own explanation.
+    pub const INVALID_SEARCH_PATTERN: Code = Code("invalid_search_pattern");
+    /// A content search whose file mask holds a glob that does not compile. `params` names the
+    /// `glob`, the `cause` (`browse::content_search::refusal::MaskCause`) and `detail`, the explanation.
+    pub const INVALID_FILE_MASK: Code = Code("invalid_file_mask");
     /// A browse request was given up because a newer one took its slot. A client shows nothing.
     pub const REQUEST_SUPERSEDED: Code = Code("request_superseded");
 }

@@ -243,6 +243,20 @@ html {
   flex-shrink: 0;
 }
 
+/* A button beside a field (`besideField` on `Button` and `ToggleButton`), icon or text: as tall as the field at every
+   width, with the field's corners rather than a button's pill, and an icon-only one as wide as it is tall. A text
+   button keeps its own width. */
+@utility field-control {
+  height: var(--field-control-size);
+  min-width: 0;
+  flex-shrink: 0;
+  border-radius: var(--radius-field);
+  &:is(.button--icon-only, .toggle-button--icon-only) {
+    width: var(--field-control-size);
+    padding: 0;
+  }
+}
+
 @import "./styles/layout.css";
 
 @import "./sessions/sessionColours.css";

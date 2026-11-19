@@ -155,8 +155,11 @@ export function TextArea({ rows, placeholder, dir, required }: { rows?: number; 
  * field's own clear behaviour) and `clearButton`, a layer `Button` that becomes the field's clear action and is
  * seated at the end of the field. The field clears itself on Escape and calls `onSubmit` on Enter. `inputRef` holds
  * its input, and `controls` names what the search filters (`aria-controls`). `value` and `onChange` are left out
- * where a parent's context supplies them. */
-export function SearchField({ inputRef, placeholder, controls, onSubmit, trailing, clearButton, value, onChange, onBlur, label, describedBy, disabled, readOnly, autoFocus, variant, fullWidth, className }: Omit<TextFieldBaseProps, "children" | "value" | "onChange"> & {
+ * where a parent's context supplies them. With `invalid` it is marked invalid (`aria-invalid` and the danger outline), for
+ * a query refused where it is searched; the message goes in `error` (a `FieldErrorMessage`), under the whole field,
+ * which the field names in its description. */
+export function SearchField({ inputRef, placeholder, controls, onSubmit, trailing, clearButton, error, value, onChange, onBlur, label, describedBy, disabled, invalid, readOnly, autoFocus, variant, fullWidth, className }: Omit<TextFieldBaseProps, "children" | "value" | "onChange"> & {
+  invalid?: boolean;
   /** Takes no edit while still focusable, as a `TextField`'s, which on a touch device raises no on-screen keyboard. */
   readOnly?: boolean;
   value?: string;
@@ -167,6 +170,8 @@ export function SearchField({ inputRef, placeholder, controls, onSubmit, trailin
   onSubmit?: () => void;
   trailing?: React.ReactNode;
   clearButton?: React.ReactElement;
+  /** What is wrong with the field, under it (a `FieldErrorMessage`): the field names it in its description. */
+  error?: React.ReactNode;
 }): React.ReactElement {
   return (
     <HeroSearchField
@@ -178,6 +183,8 @@ export function SearchField({ inputRef, placeholder, controls, onSubmit, trailin
       aria-describedby={describedBy}
       aria-controls={controls}
       isDisabled={useDisabled(disabled)}
+      isInvalid={invalid}
+      validationBehavior="aria"
       isReadOnly={readOnly}
       autoFocus={autoFocus}
       variant={variant}
@@ -190,6 +197,7 @@ export function SearchField({ inputRef, placeholder, controls, onSubmit, trailin
         {trailing !== undefined && <OutsideFieldParts>{trailing}</OutsideFieldParts>}
         {clearButton && <FieldClearContext.Provider value={SEARCH_CLEAR}>{clearButton}</FieldClearContext.Provider>}
       </HeroSearchField.Group>
+      {error}
     </HeroSearchField>
   );
 }

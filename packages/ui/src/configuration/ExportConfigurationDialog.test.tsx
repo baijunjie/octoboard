@@ -247,15 +247,15 @@ async function savedSettings(daemonLanguage: string | undefined, capabilities: P
 }
 
 it("adds this client's changed keyboard shortcuts to a full export, and to nothing else", async () => {
-  shortcutOverrides.set({ focusMode: FOCUS });
+  shortcutOverrides.set({ enterFocusMode: FOCUS });
   onTestFinished(() => shortcutOverrides.set({}));
   const { saved, full } = await savedSettings(undefined);
-  expect(saved).toMatchObject({ ...full.settings, keyboard_shortcuts: { focusMode: FOCUS } });
+  expect(saved).toMatchObject({ ...full.settings, keyboard_shortcuts: { enterFocusMode: FOCUS } });
 });
 
 /** Gives this client a changed shortcut, the background run on and the Markdown style GitHub, restored when the test ends. */
 function holdClientSettings() {
-  shortcutOverrides.set({ focusMode: FOCUS });
+  shortcutOverrides.set({ enterFocusMode: FOCUS });
   runInBackground.set(true);
   markdownStyle.set("github");
   terminalFontSize.set(18);
@@ -288,7 +288,7 @@ it("adds the client's appearance, Markdown style and terminal font size with App
 });
 
 it("adds the general settings of its platform and the keyboard shortcuts only with their sections", async () => {
-  shortcutOverrides.set({ focusMode: FOCUS });
+  shortcutOverrides.set({ enterFocusMode: FOCUS });
   runInBackground.set(true);
   onTestFinished(() => {
     shortcutOverrides.set({});
@@ -353,7 +353,7 @@ it("adds whether this client shows its menu bar icon where its platform has one"
 });
 
 it("leaves a single console's export as the daemon sent it, whatever this client has changed", async () => {
-  shortcutOverrides.set({ focusMode: FOCUS });
+  shortcutOverrides.set({ enterFocusMode: FOCUS });
   markdownStyle.set("github");
   onTestFinished(() => {
     shortcutOverrides.set({});

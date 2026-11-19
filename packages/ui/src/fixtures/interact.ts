@@ -288,6 +288,12 @@ export interface Ui {
   contextMenuRegion: (name: Matcher) => Promise<void>;
   /** Waits for a control to be rendered without focusing or activating it. */
   waitForControl: (matcher: Matcher) => Promise<void>;
+  /** Waits until the page holds `text`, for a state that has no control to wait on (an empty state, a field's error, a
+   * count); bidi isolates are ignored. */
+  waitForText: (text: string) => Promise<void>;
+  /** Waits until `look` holds of the page, for a condition no other step names; `what` says what never came, when it
+   * does not. */
+  waitUntil: (look: (doc: Document) => boolean, what: string) => Promise<void>;
   /** Waits until the code frame named `name` (a scroll region, as `tabToRegion` finds it) has drawn its highlighted
    * code: the renderer draws it a moment after the frame is there, and a step that selects the code (Select All)
    * before then selects nothing. Fails if the frame never draws any, which also catches one that holds plain text. */
@@ -998,6 +1004,12 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     },
     async waitForControl(matcher) {
       await waitFor(() => find(matcher), `No control matching ${String(matcher)} appeared`);
+    },
+    async waitUntil(look, what) {
+      await waitFor(() => (look(doc) ? true : undefined), `Never came: ${what}`);
+    },
+    async waitForText(text) {
+      await waitFor(() => (withoutIsolates(doc.body.textContent ?? "").includes(text) ? true : undefined), `The page never showed ${JSON.stringify(text)}`);
     },
     async codeDrawn(matcher) {
       await waitFor(() => {

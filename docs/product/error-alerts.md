@@ -57,7 +57,9 @@ submit, and goes when the value changes or stops being wrong; the submit button 
   the **Agent** field in "The session dialog" in `docs/product/opening-sessions.md`, "Handing off from the window" in
   `docs/product/handing-off-sessions.md` and "The user's approval of an owner's switch" in
   `docs/product/switching-session-accounts.md`), and, in a switch request, an account asked for that no longer exists
-  or that the session is on already.
+  or that the session is on already;
+- a search query read as a regular expression, or a pattern of the file mask, that the daemon refuses as Find in files
+  searches (see "What the modal says" in `docs/product/finding-in-files.md`).
 
 Once a submit has passed the form's own validation, anything that goes wrong afterwards is a failure of the operation
 and opens the error alert, with the form left open and its values intact. This includes a refusal by the daemon about
@@ -255,6 +257,8 @@ The places with an empty-state failure:
 
 - the project pane: its code that could not be loaded, the project's directory that could not be listed, and a file
   name search that failed (see `docs/product/project-pane.md`);
+- Find in files: a search that failed, in the result list's place (see "What the modal says" in
+  `docs/product/finding-in-files.md`);
 - the Git mode: the repository that could not be read or Git review being unavailable, the branches when none has been
   listed yet, and the change list when nothing is listed and the one part of it that failed left it empty (see
   `docs/product/project-pane-git-mode.md` and "What the list says instead" in
@@ -429,6 +433,8 @@ The places with a warning mark:
 - the Files tab's root listing that was cut short, after the pane's title, a folder of the tree whose listing was cut
   short, after its name, and a file name search that is incomplete, inside the search field (see "Rows and the
   keyboard" and "Filtering by file name" in `docs/product/project-pane.md`);
+- a Find in files search that is incomplete, after its count (see "What the modal says" in
+  `docs/product/finding-in-files.md`);
 - in the Git mode: uncommitted changes of the change list that were cut short, and a worktree whose copy of the
   project's folder cannot be read, at the end of the Worktree line, one mark saying both when both hold (see
   "Uncommitted changes" and "What the list says instead" in `docs/product/project-pane-git-change-list.md`);

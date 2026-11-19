@@ -462,7 +462,7 @@ const documentWith = (extra: Record<string, unknown>, settings: InspectedSetting
  * command this version has no name for and one that clashes with a key the file gives an earlier entry, which keeps it. */
 const SHORTCUTS = {
   keyboard_shortcuts: {
-    focusMode: { code: "KeyG", primary: true, shift: true },
+    enterFocusMode: { code: "KeyG", primary: true, shift: true },
     quickCreate: { code: "KeyK", primary: true, shift: true },
     newSession: { code: "KeyO", primary: true },
     teleport: { code: "KeyT", primary: true, shift: true },
@@ -816,7 +816,7 @@ const fileOf = (inspection: Omit<Inspection, "type">, held?: Record<string, unkn
     {
       ...(sections.includes("appearance") && { markdown_style: CLIENT_VALUES.markdown_style }),
       ...(sections.includes("general") && { session_order: CLIENT_VALUES.session_order }),
-      ...(sections.includes("keyboard_shortcuts") && { keyboard_shortcuts: { focusMode: SHORTCUTS.keyboard_shortcuts.focusMode } }),
+      ...(sections.includes("keyboard_shortcuts") && { keyboard_shortcuts: { enterFocusMode: SHORTCUTS.keyboard_shortcuts.enterFocusMode } }),
       ...held,
     },
     inspection.settings,

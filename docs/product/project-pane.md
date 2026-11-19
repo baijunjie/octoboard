@@ -48,7 +48,8 @@ the chosen tab, then **Refresh**, then the panel's own **Close panel**. Spare wi
 buttons. The tabs are compact, with a pill behind the selected tab and muted labels on the others, and no filled track
 behind them. The tabs and Close panel have priority over the project title and other icon buttons; their behavior in a
 narrow header is in "A panel's header" in `docs/product/right-pane-panels.md`. Files offers the file-name filter toggle
-(see "Filtering by file name" below) and then **Collapse all folders** (see "Collapse all folders" below); Changes
+(see "Filtering by file name" below), then **Find in files**, which searches the project's file contents (see
+`docs/product/finding-in-files.md`), and then **Collapse all folders** (see "Collapse all folders" below); Changes
 offers its filter toggle, then, while its list is grouped by folder, Expand all folders or Collapse all folders, then
 Group by folder (see "The Changes view" in `docs/product/project-pane-git-mode.md`). The buttons keep that place in
 loading, empty and error states too. Pressing Refresh or either tab's button that folds the folders with the mouse
@@ -236,7 +237,8 @@ shows the matching files as a tree, each name under its folders (see "Always a f
 restores the unfiltered tree.
 
 - Only the **file name**, the last part of its path, is matched, by containment, ignoring case and whitespace around
-  the query. Folder names and file contents are not searched. An empty query is no filter: the ordinary tree is shown.
+  the query. Folder names are not searched, nor are file contents, which Find in files searches (see
+  `docs/product/finding-in-files.md`). An empty query is no filter: the ordinary tree is shown.
 - Dot files are included. **Ignored entries** (see "Ignored entries" above) **are left out by default**: an ignored
   file is not matched and an ignored folder is not searched. The names "What is listed" above leaves out are excluded
   at every depth, with everything beneath them. Symbolic links to files
@@ -331,7 +333,10 @@ groups its changes under. **Right-clicking a row opens the same menu at the poin
 desktop app).
 
 - The menu starts with **Copy relative path**, then **Copy absolute path**, as top-level actions in a group of their
-  own, followed by a separator and the **Open in** submenu, omitting unavailable actions. On a file's row Open in holds
+  own, followed by a separator and the **Open in** submenu, omitting unavailable actions. A folder's row in Files — a
+  symbolic link listed as a folder included — puts **Find in folder** before them, in a group of its own, which opens
+  Find in files limited to that folder (see "Opening it" in `docs/product/finding-in-files.md`); the Git mode's folder
+  rows have no Find in folder. On a file's row Open in holds
   **File manager**, then **Default application**; on a folder's row — a symbolic link listed as a folder included —
   **File manager**, then **Terminal**. In a remote window of the desktop application, whose daemon is another machine's,
   File manager and Default application are left out, and so is Open in when nothing is left in it (see "The remote

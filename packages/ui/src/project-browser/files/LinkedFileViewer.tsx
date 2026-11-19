@@ -36,6 +36,7 @@ function ProjectFileViewer({ file, onClose, onOpenFile }: { file: ViewedProjectF
       subject={subject}
       onClose={onClose}
       line={file.line}
+      marks={file.marks}
       location={
         file.worktree === undefined
           ? {
@@ -59,5 +60,5 @@ function PathLinkViewer({ file, onClose }: { file: ViewedLinkedFile; onClose: ()
   useEffect(() => reader.open(file.link), [file]);
   if (!reader.subject) return null;
   const subject = file.launchable ? { ...reader.subject, launchable: true } : reader.subject;
-  return <FileViewer subject={subject} onClose={onClose} line={file.line} />;
+  return <FileViewer subject={subject} onClose={onClose} line={file.line} marks={file.marks} />;
 }

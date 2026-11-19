@@ -306,11 +306,34 @@ async fn submit_browse(state: &Arc<AppState>, lane: &Arc<Lane>, request: BrowseR
     let state = state.clone();
     let id = request.id.clone();
     let reservation = budget::reservation_for(&request.body);
+    let body = match request.body {
+        crate::protocol::BrowseBody::SearchProjectContent(search) => {
+            lane.submit_stream(
+                request.id,
+                request.slot,
+                reservation,
+                move |cancel, stream| {
+                    crate::browse::search_content(
+                        &state,
+                        search,
+                        &state
+                            .host_tools
+                            .isolated_git_per_request(request.asked_by_person),
+                        cancel,
+                        stream,
+                    )
+                },
+            )
+            .await;
+            return;
+        }
+        body => body,
+    };
     lane.submit(request.id, request.slot, reservation, move |cancel| {
         crate::browse::serve(
             &state,
             id,
-            request.body,
+            body,
             &state
                 .host_tools
                 .isolated_git_per_request(request.asked_by_person),

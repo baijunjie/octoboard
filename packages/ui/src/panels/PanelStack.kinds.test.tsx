@@ -60,6 +60,7 @@ function mount(overlay = false) {
         <>
           <Probe />
           <PanelStack
+            onViewFile={() => {}}
             owner={{ kind: "project", project }}
             project={{ id: project, name: project } as Project}
             active

@@ -54,6 +54,15 @@ function textNodesIn(node: Node, skip = NOT_TEXT): Text[] {
   return found;
 }
 
+/** The range covering `[start, end)` of the text a reader sees in `element` (a line of rendered code), or `undefined`
+ * where the element's text does not reach `start`. A `start` before the text or an `end` past it is held to it. */
+export function textRangeIn(element: Element, start: number, end: number): Range | undefined {
+  const block = textBlock(textNodesIn(element));
+  const from = Math.max(0, start);
+  const to = Math.min(end, block.text.length);
+  return from < to ? rangeIn(block, from, to) : undefined;
+}
+
 /** The text blocks of one shadow root: the lines of its code. */
 function codeBlocks(root: ShadowRoot): TextBlock[] {
   return codeBlocksOf(root).map((element) => textBlock(textNodesIn(element, `${NOT_TEXT}, [data-separator]`)));

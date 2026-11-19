@@ -498,7 +498,7 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Leave focus mode shortcut tooltip",
-    description: "The focused back button's tooltip says Leave focus mode and shows the current global Focus mode shortcut as key caps. The same binding enters focus mode from a selected session's menu and leaves it again.",
+    description: "The focused back button's tooltip says Leave focus mode and shows the current Leave focus mode shortcut (⌥⌘← by default) as key caps; Enter focus mode, which a selected session's menu shows, has a key of its own.",
     state: consoleFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     steps: [

@@ -36,7 +36,7 @@ const uiImports = (patterns = [], { alerts = true, generated = true } = {}) => {
 };
 
 const UI_SRC = "packages/ui/src";
-const UI_TESTS = ["**/*.test.{ts,tsx}", "**/*{TestSupport,testSupport,TestState}.{ts,tsx}"];
+export const UI_TESTS = ["**/*.test.{ts,tsx}", "**/*{TestSupport,testSupport,TestState}.{ts,tsx}"];
 // The rule sees only the import's text, not the file it resolves to, so each block is for files at one depth
 // below src/: there exactly `depth` steps of `../` reach src/, and the name after them is a top-level directory
 // (followed by `/`) or a file at src/'s root. A name after fewer steps is a sibling inside the same directory,

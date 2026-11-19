@@ -12,6 +12,12 @@ const RESERVED_CODES = new Set(["Escape", "F6", "ContextMenu"]);
 /** The keys that move the caret or edit text, which a shortcut with ⌘ or Ctrl would take from every text field and the terminal. */
 const EDITING_CODES = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Backspace", "Delete", "Enter"]);
 
+/** ⌥⌘ (Ctrl+Alt) with an arrow and nothing else, the one editing combination no text field or terminal program
+ * moves the caret with, which focus mode's commands take by default. */
+function isPrimaryAltArrow(binding: Binding): boolean {
+  return binding.code.startsWith("Arrow") && binding.alt === true && !binding.shift && !binding.other;
+}
+
 /** The number and symbol keys, which with Shift held type another character. */
 const SHIFTED_CODE = /^(Digit\d|Minus|Equal|BracketLeft|BracketRight|Semicolon|Quote|Backquote|Backslash|Comma|Period|Slash)$/;
 
@@ -36,7 +42,7 @@ function problemOfKey(stored: Binding, host: ModifierHost): ShortcutProblem | un
     if (!binding.other) return { reason: "needsModifier" };
     return { reason: apple ? "terminalControl" : "osReserved" };
   }
-  if (EDITING_CODES.has(binding.code)) return { reason: "editingKey" };
+  if (EDITING_CODES.has(binding.code) && !isPrimaryAltArrow(binding)) return { reason: "editingKey" };
   if (apple && OS_RESERVED_CODES.has(binding.code) && !binding.other) return { reason: "osReserved" };
   if (binding.code === "Tab") return !apple && !binding.other && !binding.alt ? undefined : { reason: "osReserved" };
   // Ctrl+C interrupts the terminal's process; ⌘C is the Copy of the native menu, a conflict of its own.

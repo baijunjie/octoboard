@@ -614,19 +614,21 @@ it("says nothing of keyboard shortcuts when the document carries none", async ()
   expect(settingLines()["Changed shortcuts"]).toBeUndefined();
 });
 
-it("says what the document's keyboard shortcuts would do on this device", async () => {
+it("says what the document's keyboard shortcuts would do on this device, an older client's focus mode binding as Enter focus mode", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
+  // `focusMode` is the id an older client saved Toggle focus mode under; its binding moves to Enter focus mode, named
+  // as this client names it and set against that command's default here.
   await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS, bad: 1 }) });
   expect(settingLines()["Changed shortcuts"]).toEqual({
     badge: "Set to the file's",
     note: "1 of the file's shortcuts differs from the default. Shortcut changes apply only to this browser.",
-    values: ["Toggle focus mode: CtrlShiftK (now CtrlShiftF)"],
+    values: ["Enter focus mode: CtrlShiftK (now CtrlAlt→)"],
   });
 });
 
 it("groups the application settings as the Settings dialog does, each group in the order of its section", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
-  await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS }) });
+  await reviewingSettings({ text: withShortcuts({ enterFocusMode: FOCUS }) });
   const groups = settingGroupsOf(document.body.querySelector("[role=tabpanel]")!);
   expect(groups.map((group) => group.title)).toEqual(["General", "Appearance", "Agent behavior", "Git", "Keyboard shortcuts", "Cleanup"]);
   expect(groups[0].lines).toEqual(["Resume sessions on start", "Prevent sleep", "When to prevent sleep", "Close idle terminals when closing the panel"]);
@@ -679,20 +681,20 @@ it("lists the General card in the order of the section on a desktop app, the set
 it("replaces this device's keyboard shortcuts with the document's once the settings are applied, and reports it", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
   shortcutOverrides.set({ quickCreate: { code: "KeyJ", primary: true, shift: true } });
-  await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS, bad: 1 }), reply: echoing() });
+  await reviewingSettings({ text: withShortcuts({ enterFocusMode: FOCUS, bad: 1 }), reply: echoing() });
   await press("Import");
-  expect(bindingFor("focusMode")).toEqual(FOCUS);
+  expect(bindingFor("enterFocusMode")).toEqual(FOCUS);
   expect(bindingFor("quickCreate")).toEqual({ code: "KeyN", primary: true, shift: true });
   await openTab("Settings");
   const applied = resultSettingLines();
-  expect(applied["Changed shortcuts"]).toEqual({ badge: "1 change from the default", note: "1 shortcut in the file could not be applied here and was left out.", values: ["Toggle focus mode: CtrlShiftK"] });
+  expect(applied["Changed shortcuts"]).toEqual({ badge: "1 change from the default", note: "1 shortcut in the file could not be applied here and was left out.", values: ["Enter focus mode: CtrlShiftK"] });
 });
 
 it("leaves this device's keyboard shortcuts alone unless the settings are included", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
-  await reviewing({ text: withShortcuts({ focusMode: FOCUS }), reply: echoing() });
+  await reviewing({ text: withShortcuts({ enterFocusMode: FOCUS }), reply: echoing() });
   await press("Import");
-  expect(bindingFor("focusMode")).not.toEqual(FOCUS);
+  expect(bindingFor("enterFocusMode")).not.toEqual(FOCUS);
   expect(text()).not.toContain("Changed shortcuts");
 });
 
@@ -722,18 +724,18 @@ it("leaves this device's keyboard shortcuts alone when the settings could not be
       ? Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: null, settings_error: { code: "import_settings_missing", params: {}, message: "no settings" } as never })
       : reply(body);
   shortcutOverrides.set({ quickCreate: QUICK_CREATE });
-  await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS }), reply: failing });
+  await reviewingSettings({ text: withShortcuts({ enterFocusMode: FOCUS }), reply: failing });
   await checkSettings();
   await press("Import");
   expect(bindingFor("quickCreate")).toEqual(QUICK_CREATE);
-  expect(bindingFor("focusMode")).not.toEqual(FOCUS);
+  expect(bindingFor("enterFocusMode")).not.toEqual(FOCUS);
 });
 
-it.each([[[FOCUS]], ["focusMode"], [null], [7]])("ignores a keyboard_shortcuts echo that is not an object (%j)", async (echo) => {
+it.each([[[FOCUS]], ["enterFocusMode"], [null], [7]])("ignores a keyboard_shortcuts echo that is not an object (%j)", async (echo) => {
   onTestFinished(() => shortcutOverrides.set({}));
-  await importing({ focusMode: FOCUS }, { keyboard_shortcuts: echo });
+  await importing({ enterFocusMode: FOCUS }, { keyboard_shortcuts: echo });
   expect(bindingFor("quickCreate")).toEqual(QUICK_CREATE);
-  expect(bindingFor("focusMode")).not.toEqual(FOCUS);
+  expect(bindingFor("enterFocusMode")).not.toEqual(FOCUS);
 });
 
 it("leaves this device's keyboard shortcuts alone when the document carries none, whatever else is applied", async () => {

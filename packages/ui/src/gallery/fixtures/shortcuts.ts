@@ -32,20 +32,20 @@ const chord = (binding: Binding): Step => (ui) => ui.chord(binding);
 
 /** The changes a user has made: valid on every platform, none equal to a default. */
 const customised: Overrides = {
-  focusMode: { code: "KeyG", primary: true, shift: true },
+  enterFocusMode: { code: "KeyG", primary: true, shift: true },
   quickCreate: { code: "KeyK", primary: true, shift: true },
   newSession: { code: "KeyO", primary: true },
 };
 
 /** A focus-mode key moved away and its default taken by another command, so putting it back is refused. */
 const defaultTaken: Overrides = {
-  focusMode: { code: "KeyG", primary: true, shift: true },
-  quickCreate: { code: "KeyF", primary: true, shift: true },
+  enterFocusMode: { code: "KeyG", primary: true, shift: true },
+  quickCreate: { code: "ArrowRight", primary: true, alt: true },
 };
 
 /** Changes that use every modifier a Windows keyboard can bind (Ctrl, Alt, Shift), so the key caps of each show. */
 const customisedWindows: Overrides = {
-  focusMode: { code: "KeyG", primary: true, alt: true, shift: true },
+  enterFocusMode: { code: "KeyG", primary: true, alt: true, shift: true },
   newSession: { code: "KeyO", primary: true, alt: true },
 };
 
@@ -58,7 +58,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in a browser",
     description:
-      "A changeable shortcut shows only its key caps, which are themselves the edit button: they darken on hover, and pressing them records a new combination. Fixed shortcuts have a lock in the reserved trailing slot. Navigation lists only the two region keys, Focus mode lists only Toggle focus mode, Terminal lists Increase, Decrease and Reset terminal font size (the shortcut modifier with =, - and 0), Application lists New session, New session with defaults and Open settings, in that order, and Editing lists Find. The introduction names the current browser as the scope, and Restore defaults is absent while every key is a default.",
+      "A changeable shortcut shows only its key caps, which are themselves the edit button: they darken on hover, and pressing them records a new combination. Fixed shortcuts have a lock in the reserved trailing slot. Navigation lists only the two region keys, Focus mode lists Enter focus mode and Leave focus mode (the shortcut modifier and Alt with → and ←), Terminal lists Increase, Decrease and Reset terminal font size (the shortcut modifier with =, - and 0), Application lists New session, New session with defaults, Find in files and Open settings, in that order, and Editing lists Find. The introduction names the current browser as the scope, and Restore defaults is absent while every key is a default.",
     state,
     steps: openSection,
   },
@@ -68,7 +68,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in the desktop app",
     description:
-      "The introduction names the current desktop app as the scope. Navigation includes Back and Forward and the console-session switch, with the key caps of each changeable combination themselves the edit button. Fixed region keys align with those buttons and carry a lock in the trailing slot. Focus mode (Toggle focus mode alone), Terminal (the three font size commands, as ⌘=, ⌘- and ⌘0) and Application (the two New session commands, then Open settings) follow; scroll to Editing and Window to see their fixed keys with the same lock treatment.",
+      "The introduction names the current desktop app as the scope. Navigation includes Back and Forward and the console-session switch, with the key caps of each changeable combination themselves the edit button. Fixed region keys align with those buttons and carry a lock in the trailing slot. Focus mode (Enter focus mode and Leave focus mode, as ⌥⌘→ and ⌥⌘←), Terminal (the three font size commands, as ⌘=, ⌘- and ⌘0) and Application (the two New session commands, Find in files, then Open settings) follow; scroll to Editing and Window to see their fixed keys with the same lock treatment.",
     desktopApp: true,
     host: MAC_HOST,
     state,
@@ -80,7 +80,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in the Windows app",
     description:
-      "The Windows app lists the console-session switch before the fixed region keys, with no Back, Forward or native-menu commands. The key caps of each changeable combination are the edit button, written with Windows key names in Ctrl, Alt and Shift order rather than Apple glyphs. Toggle focus mode and New session show changed combinations with a reset icon in the reserved trailing slot; unchanged rows leave that slot empty and fixed rows show a lock. Open settings remains changeable, the Terminal group's three font size commands follow Focus mode as the Ctrl key cap with =, - or 0, the New session commands sit in Application above Open settings, and the introduction names the current desktop app as the scope.",
+      "The Windows app lists the console-session switch before the fixed region keys, with no Back, Forward or native-menu commands. The key caps of each changeable combination are the edit button, written with Windows key names in Ctrl, Alt and Shift order rather than Apple glyphs. Enter focus mode and New session show changed combinations with a reset icon in the reserved trailing slot; unchanged rows leave that slot empty and fixed rows show a lock. Open settings remains changeable, Leave focus mode keeps its default, Ctrl Alt ←, the Terminal group's three font size commands follow Focus mode as the Ctrl key cap with =, - or 0, the New session commands and Find in files sit in Application above Open settings, and the introduction names the current desktop app as the scope.",
     desktopApp: true,
     host: WINDOWS_HOST,
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions, ...WINDOWS_MACHINE }),
@@ -93,7 +93,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts, some changed",
     description:
-      "Toggle focus mode under Focus mode, and New session and New session with defaults under Application, show their changed key caps, with a reset icon in the reserved trailing slot. Unchanged rows keep the same spacing without a reset icon, and fixed rows use that slot for a lock. Restore defaults sits at the end of the introduction. Choose 560px to see each row stack its controls below its name while preserving their end alignment.",
+      "Enter focus mode under Focus mode, and New session and New session with defaults under Application, show their changed key caps, with a reset icon in the reserved trailing slot. Unchanged rows keep the same spacing without a reset icon, and fixed rows use that slot for a lock. Restore defaults sits at the end of the introduction. Choose 560px to see each row stack its controls below its name while preserving their end alignment.",
     state,
     preferences: customisedPreferences(customised),
     steps: openSection,
@@ -114,7 +114,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "exceptional",
     title: "Keyboard shortcuts, a key another command has",
     description:
-      "Recording continues on the New session row, which names the command that already has the combination, \"Toggle focus mode\", in a danger-coloured line under its name; nothing is saved. A combination the desktop app has, one without a modifier, one the window or the system keeps and a terminal control key refuse in the same line, each with its own wording.",
+      "Recording continues on the New session row, which names the command that already has the combination, \"Find in files\", in a danger-coloured line under its name; nothing is saved. A combination the desktop app has, one without a modifier, one the window or the system keeps and a terminal control key refuse in the same line, each with its own wording.",
     state,
     steps: [...openSection, recordFor("newSession"), chord({ code: "KeyF", primary: true, shift: true })],
   },
@@ -124,10 +124,10 @@ export const shortcutsScenarios: Scenario[] = [
     category: "exceptional",
     title: "Keyboard shortcuts, a default another command holds",
     description:
-      "Resetting Toggle focus mode is refused because New session with defaults now holds its default. The row keeps its changed key caps and reset icon, with a danger-coloured explanation below its name; it is not recording.",
+      "Resetting Enter focus mode is refused because New session with defaults now holds its default. The row keeps its changed key caps and reset icon, with a danger-coloured explanation below its name; it is not recording.",
     state,
     preferences: customisedPreferences(defaultTaken),
-    steps: [...openSection, (ui) => ui.press(ui.t("settings.shortcuts.resetLabel", { command: ui.t("settings.shortcuts.command.focusMode") }))],
+    steps: [...openSection, (ui) => ui.press(ui.t("settings.shortcuts.resetLabel", { command: ui.t("settings.shortcuts.command.enterFocusMode") }))],
   },
   {
     id: "settings-shortcuts-editing-key",

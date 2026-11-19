@@ -49,7 +49,7 @@ export function SessionActions({
   const t = useT();
   const inFocusMode = useContext(FocusModeContext);
   const host = useHost();
-  const focusBinding = useBinding("focusMode");
+  const focusBinding = useBinding("enterFocusMode");
   const focusTarget = useDaemonStore(useShallow((s) => selected && !inFocusMode ? selectedSessionFocusTarget(session, s.projects, s.sessions) : undefined));
   const { store } = useDaemon();
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);

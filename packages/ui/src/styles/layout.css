@@ -5,6 +5,13 @@
   --row-control-gap: 4px;
   --row-leading-icon-gap: var(--row-control-gap);
   --row-controls-max-width: calc(2 * var(--row-control-size) + 2 * var(--row-control-gap));
+  /* The height of a single-line field (HeroUI's input and, through `primitives/Field.css`, its search field), which
+     every button standing beside a field in one row takes too (`field-control`, square when icon-only): 36px, and 40px
+     below 768px (`sm`, which this project sets to 768px), where a field's text grows to 16px. */
+  --field-control-size: 2.25rem;
+  /* The gap between a field and the field or button beside it in one row (`FieldRow`): the 8px the app spaces
+     controls in a row with, as between Find in files' query and file mask, never the 4px of a row's icons. */
+  --field-row-gap: 0.5rem;
 
   /* The horizontal inset shared by the sidebar and the right pane: a header, a bar, a heading or a
      row's content starts `--pane-inset` from the pane's edge. A row's hover or selected fill sits
@@ -100,4 +107,10 @@
      invert them. */
   --z-index-banner: var(--z-index-overlay);
   --z-index-dialog-backdrop: calc(var(--z-index-overlay) - 1);
+}
+
+@media (width < theme(--breakpoint-sm)) {
+  :root {
+    --field-control-size: 2.5rem;
+  }
 }

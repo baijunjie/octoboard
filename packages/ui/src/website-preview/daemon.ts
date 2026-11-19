@@ -14,7 +14,8 @@ function browsedProject(body: ClientRequestBody): string | undefined {
 }
 
 /** The shared single-repository fixtures are reused behind a project router; app state and
- * terminals still belong to one shared daemon. Every request stays inside these in-memory fakes. */
+ * terminals still belong to one shared daemon. Every request stays inside these in-memory fakes, and the events a
+ * project's daemon sends for a request (a content search's) reach the page's listeners. */
 export function createPreviewDaemon(scenario: Fixture): Daemon {
   const daemon = createFixtureDaemon({ ...scenario, files: {}, git: null });
   const projects = new Map(
@@ -33,6 +34,12 @@ export function createPreviewDaemon(scenario: Fixture): Daemon {
   );
   return {
     ...daemon,
+    // A content search is asked of its project's daemon, whose events come to that daemon's listeners: every search
+    // has a name of its own, so a listener hears its search from whichever daemon runs it.
+    onContentSearch: (search, listener) => {
+      const listening = [daemon, ...projects.values()].map((source) => source.onContentSearch(search, listener));
+      return () => listening.forEach((stop) => stop());
+    },
     request: looseRequestSender(async (body: ClientRequestBody): Promise<Event> => {
       if (!BROWSE_REQUESTS.has(body.type)) return daemon.request(body);
       const project = browsedProject(body);

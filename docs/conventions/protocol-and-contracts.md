@@ -9,7 +9,8 @@ declared and worded is in `docs/conventions/error-codes.md`; file placement is i
 ## Wire types and generated files
 
 - **A wire type is added in the daemon's Rust types (`apps/daemon/src/protocol/`) and documented in
-  `apps/daemon/PROTOCOL.md`; its handler is under `src/coordinator/`.** The UI never writes a wire type by hand:
+  `apps/daemon/PROTOCOL.md`; its handler is under `src/coordinator/`, or for a browse request in `src/browse/`, served
+  through `browse::lane`.** The UI never writes a wire type by hand:
   `packages/ui/src/protocol.generated.ts` is regenerated and never edited (ESLint ignores it as test-written).
 - **The committed JSON Schema (`contracts/protocol/`) and TypeScript bindings are regenerated after the Rust change**
   with `OCTOBOARD_WRITE_BINDINGS=1 pnpm test:rust -p octoboardd protocol::schema` and `... bindings`. The same tests
@@ -33,6 +34,12 @@ specified in `apps/daemon/PROTOCOL.md`, "What every client implements"; this doc
 request or a field keeps them (no request field named `id`; a new update field is tri-state in Rust, the schema and the
 bindings). What goes beyond it:
 
+- **A request answered with `ack` and then events (the content search) goes through `Lane::submit_stream`.** Every
+  event carries the client's correlation field (`search`), whose length is bounded and refused before the `ack`; after
+  the `ack` the request ends with its last event, or with nothing when superseded or disconnected, and never with an
+  `error` carrying its id (why: the `ack` already answered the id, and a client takes one answer per id). A streamed
+  request holds its read slot for as long as any of its threads read. Where it gives the slot back while it waits on
+  the reply queue, its readers pause until the slot is taken back.
 - **Derived state reaches clients as an event of its own carrying the whole record**, replayed inside `snapshot`
   (console and project state), or, for one session, as a `Session` field the store never reads or writes, filled in by
   `AppState::wire_session`, through which every `Session` record a client receives passes. Why: every `*_upserted`

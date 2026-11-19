@@ -121,6 +121,26 @@ export function FindBar({
         {count}
       </span>
       <StatusAnnouncer text={spoken} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />
+      <FindOptionToggles options={options} onOptionsChange={onOptionsChange} />
+      <Button tooltip={t("viewer.find.previous")} iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.previous")} disabled={stepDisabled} onPress={() => onStep("previous")} focusOnPress={false}>
+        <ChevronUp className="size-4" />
+      </Button>
+      <Button tooltip={t("viewer.find.next")} iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.next")} disabled={stepDisabled} onPress={() => onStep("next")} focusOnPress={false}>
+        <ChevronDown className="size-4" />
+      </Button>
+      <Button tooltip={t("viewer.find.close")} iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.close")} onPress={onClose}>
+        <X className="size-4" />
+      </Button>
+    </div>
+  );
+}
+
+/** The three switches of a search: Match case, Whole word and Use regular expression, each a toggle that keeps focus
+ * where it was (in the query) as it is pressed. Shared by the viewer's find bar and the project's content search. */
+export function FindOptionToggles<O extends FindOptions>({ options, onOptionsChange }: { options: O; onOptionsChange: (options: O) => void }): React.ReactElement {
+  const t = useT();
+  return (
+    <>
       {OPTIONS.map(({ option, label, Icon }) => (
         <Tooltip key={option} content={t(label)}>
           <ToggleButton
@@ -137,16 +157,7 @@ export function FindBar({
           </ToggleButton>
         </Tooltip>
       ))}
-      <Button tooltip={t("viewer.find.previous")} iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.previous")} disabled={stepDisabled} onPress={() => onStep("previous")} focusOnPress={false}>
-        <ChevronUp className="size-4" />
-      </Button>
-      <Button tooltip={t("viewer.find.next")} iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.next")} disabled={stepDisabled} onPress={() => onStep("next")} focusOnPress={false}>
-        <ChevronDown className="size-4" />
-      </Button>
-      <Button tooltip={t("viewer.find.close")} iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.close")} onPress={onClose}>
-        <X className="size-4" />
-      </Button>
-    </div>
+    </>
   );
 }
 

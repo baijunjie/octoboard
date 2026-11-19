@@ -140,12 +140,12 @@ describe("importDisagreement over accounts", () => {
 });
 
 describe("withClientValuesEcho", () => {
-  const focusMode = { code: "KeyK", primary: true, shift: true };
+  const enterFocusMode = { code: "KeyK", primary: true, shift: true };
   const asked = (settings: unknown) => ({ type: "import_configuration" as const, document: { settings }, apply_settings: [...SETTINGS_SECTIONS] });
   const applied = result([], { settings_applied: { auto_pull_repositories: true } });
 
   it("hands back the document's shortcuts in what was applied, an empty object included", () => {
-    expect(withClientValuesEcho(asked({ keyboard_shortcuts: { focusMode } }), applied).settings_applied).toEqual({ ...documentSettings({ auto_pull_repositories: true }), keyboard_shortcuts: { focusMode } });
+    expect(withClientValuesEcho(asked({ keyboard_shortcuts: { enterFocusMode } }), applied).settings_applied).toEqual({ ...documentSettings({ auto_pull_repositories: true }), keyboard_shortcuts: { enterFocusMode } });
     expect(withClientValuesEcho(asked({ keyboard_shortcuts: {} }), applied).settings_applied?.keyboard_shortcuts).toEqual({});
   });
 
@@ -182,7 +182,7 @@ describe("withClientValuesEcho", () => {
     expect(withClientValuesEcho(asked({}), applied)).toBe(applied);
     expect(withClientValuesEcho(asked({ keyboard_shortcuts: null }), applied)).toBe(applied);
     const none = result([]);
-    expect(withClientValuesEcho(asked({ keyboard_shortcuts: { focusMode } }), none)).toBe(none);
+    expect(withClientValuesEcho(asked({ keyboard_shortcuts: { enterFocusMode } }), none)).toBe(none);
   });
 });
 

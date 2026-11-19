@@ -8,6 +8,7 @@ import { previewRepositories } from "./repositories";
 import { createPreviewDaemon } from "./daemon";
 import { createPreviewScenario } from "./scenarios";
 import type { TerminalScript } from "../fixtures/fakeTerminal";
+import type { ContentSearchEvent } from "../store";
 
 /** What a terminal output draws first, at the classic width. */
 const screenOf = (output: string | TerminalScript | undefined) =>
@@ -430,4 +431,39 @@ describe("the website's eight independent repository fixtures", () => {
       }
     },
   );
+});
+
+describe("a content search in the website preview", () => {
+  /** The events of `search` until it ends, which a project's own daemon sends after the `ack`. */
+  const eventsOf = (api: ReturnType<typeof daemon>, search: string) =>
+    new Promise<ContentSearchEvent[]>((resolve) => {
+      const events: ContentSearchEvent[] = [];
+      const stop = api.onContentSearch(search, (event) => {
+        events.push(event);
+        if (event.type === "project_content_search_ended") {
+          stop();
+          resolve(events);
+        }
+      });
+    });
+
+  it.each([...previewRepositories])("searches %s's own files, the whole project or one folder of it", async (id, repository) => {
+    const api = daemon();
+    const path = primaryFiles[id];
+    const file = repository.files[path];
+    if (!file || !("text" in file) || !file.text) throw new Error("Missing business source");
+    // A run of the primary file's text, which the search must find there.
+    const query = file.text.split("\n").find((line) => line.trim().length >= 8)!.trim().slice(0, 8);
+    const whole = eventsOf(api, `${id}-whole`);
+    expect(await api.request({ type: "search_project_content", project: id, search: `${id}-whole`, query })).toEqual({ type: "ack", id: null });
+    const found = (await whole).flatMap((event) => (event.type === "project_content_matches" ? event.matches.map((match) => match.path) : []));
+    expect(found).toContain(path);
+    expect(found.every((match) => match in repository.files)).toBe(true);
+    const folder = posix.dirname(path);
+    const limited = eventsOf(api, `${id}-folder`);
+    await api.request({ type: "search_project_content", project: id, search: `${id}-folder`, query, directory: folder });
+    const inFolder = (await limited).flatMap((event) => (event.type === "project_content_matches" ? event.matches.map((match) => match.path) : []));
+    expect(inFolder).toContain(path);
+    expect(inFolder.every((match) => match.startsWith(`${folder}/`))).toBe(true);
+  });
 });

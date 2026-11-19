@@ -16,6 +16,7 @@ export function IconToggle({
   expanded,
   inHeader,
   landing,
+  besideField = false,
   ref,
   children,
 }: {
@@ -29,6 +30,10 @@ export function IconToggle({
   inHeader?: boolean;
   /** Makes the toggle where F6 lands while the region it reveals is hidden. */
   landing?: boolean;
+  /** Stands beside a field in one row (`FieldRow`): the filled toggle with `ToggleButton`'s `besideField`, the field's
+   * height and corners as every button beside a field has, rather than the bare 24px icon of a row's controls, which
+   * beside a field reads as a stray glyph. */
+  besideField?: boolean;
   /** The button itself, for a region that has to hand keyboard focus back to it as it goes. */
   ref?: React.Ref<HTMLButtonElement>;
   /** The icon of the current state. */
@@ -42,8 +47,9 @@ export function IconToggle({
         data-section-heading-control={inHeader ? "" : undefined}
         iconOnly
         size="sm"
-        variant="ghost"
-        className={`icon-toggle row-icon-control ${ROW_ICON_BUTTON_CLASS}`}
+        variant={besideField ? "default" : "ghost"}
+        besideField={besideField}
+        className={besideField ? "icon-toggle" : `icon-toggle row-icon-control ${ROW_ICON_BUTTON_CLASS}`}
         label={label}
         expanded={expanded}
         data-region-landing={landing || undefined}

@@ -53,8 +53,8 @@ A session row's action menu offers:
 - **Pin** / **Unpin**.
 - **Focus mode** — offered only on the selected session that is not archived, while no focus mode is active and the
   session has an available focus context. This applies to project and console sessions alike; an unselected session
-  has no such entry. It enters the same context as the global Toggle focus mode command (see "The focus mode
-  shortcut" in `docs/product/focus-mode.md`). Its key cap shows that command's current configurable combination,
+  has no such entry. It enters the same context as the global Enter focus mode command (see "The focus mode
+  shortcuts" in `docs/product/focus-mode.md`). Its key cap shows that command's current configurable combination,
   which also activates the item while this menu's main list holds keyboard focus.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
 - **Colour** — a console session's row only: a submenu of swatches where the user chooses the console session's colour
@@ -188,7 +188,7 @@ the session the menu belongs to under "Menu keyboard shortcuts" in `docs/product
 | Archive | A |
 | Delete | D |
 
-Focus mode is separate from these fixed letters: when offered, it shows and takes the current Toggle focus mode
+Focus mode is separate from these fixed letters: when offered, it shows and takes the current Enter focus mode
 combination described above. Colour, Switch account and Bind to open submenus or a panel, so none of them has a
 temporary letter shortcut.
 

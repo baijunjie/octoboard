@@ -1,7 +1,8 @@
 import type { Event } from "../protocol";
+import type { LineRange } from "./code/lineMarks";
 
 /** A file in a project's directory, or in one of its worktrees, for the viewer to show, and the line
- * to show it at. `read`, when given, is the reply of reading it already, which the viewer starts
+ * to show it at, with the ranges of that line's text to mark (a content search's matches on it). `read`, when given, is the reply of reading it already, which the viewer starts
  * from instead of showing itself loading. */
 export interface ViewedProjectFile {
   project: string;
@@ -9,6 +10,7 @@ export interface ViewedProjectFile {
   /** A wire path below the project's, or the worktree's, directory. */
   path: string;
   line?: number;
+  marks?: readonly LineRange[];
   /** A heading of a Markdown document to scroll to, as a link to one asks. */
   fragment?: string;
   read?: Extract<Event, { type: "project_file" }>;
@@ -22,6 +24,7 @@ export interface ViewedLinkedFile {
   link: string;
   project?: string;
   line?: number;
+  marks?: readonly LineRange[];
   launchable?: true;
 }
 

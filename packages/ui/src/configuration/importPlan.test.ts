@@ -200,40 +200,44 @@ describe("outcomeOf", () => {
 });
 
 describe("the keyboard shortcuts of a document", () => {
-  const focusMode = { code: "KeyK", primary: true, shift: true };
+  const enterFocusMode = { code: "KeyK", primary: true, shift: true };
   const quickCreate = { code: "KeyJ", primary: true, shift: true };
 
   it("are the object in its settings, an empty one meaning every default, and nothing for anything else", () => {
-    expect(documentShortcuts({ settings: { keyboard_shortcuts: { focusMode } } })).toEqual({ focusMode });
+    expect(documentShortcuts({ settings: { keyboard_shortcuts: { enterFocusMode } } })).toEqual({ enterFocusMode });
     expect(documentShortcuts({ settings: { keyboard_shortcuts: {} } })).toEqual({});
-    for (const document of [undefined, null, {}, { settings: null }, { settings: {} }, { settings: { keyboard_shortcuts: null } }, { settings: { keyboard_shortcuts: [focusMode] } }, { settings: { keyboard_shortcuts: "focusMode" } }]) {
+    for (const document of [undefined, null, {}, { settings: null }, { settings: {} }, { settings: { keyboard_shortcuts: null } }, { settings: { keyboard_shortcuts: [enterFocusMode] } }, { settings: { keyboard_shortcuts: "enterFocusMode" } }]) {
       expect(documentShortcuts(document)).toBeUndefined();
     }
     expect(shortcutsRecord(7)).toBeUndefined();
   });
 
   it("are counted as those that can stand, and compared with the ones given", () => {
-    expect(shortcutsReview({ focusMode, bad: 1 }, {})).toMatchObject({ count: 1, changed: [expect.anything()] });
-    expect(shortcutsReview({ focusMode }, { focusMode })).toMatchObject({ count: 1, changed: [] });
+    expect(shortcutsReview({ enterFocusMode, bad: 1 }, {})).toMatchObject({ count: 1, changed: [expect.anything()] });
+    expect(shortcutsReview({ enterFocusMode }, { enterFocusMode })).toMatchObject({ count: 1, changed: [] });
     expect(shortcutsReview({}, {})).toMatchObject({ count: 0, changed: [] });
     expect(shortcutsReview({}, { quickCreate })).toMatchObject({ count: 0, changed: [expect.anything()] });
   });
 
   it("list the commands whose binding would change, with the binding they would get and the one they have", () => {
-    const focusModeDefault = defaultBinding("focusMode");
+    const enterFocusModeDefault = defaultBinding("enterFocusMode");
     const quickCreateDefault = defaultBinding("quickCreate");
-    expect(shortcutsReview({ focusMode, bad: 1 }, {}).changed).toEqual([{ label: "settings.shortcuts.command.focusMode", binding: focusMode, current: focusModeDefault }]);
-    expect(shortcutsReview({ focusMode }, { focusMode }).changed).toEqual([]);
+    expect(shortcutsReview({ enterFocusMode, bad: 1 }, {}).changed).toEqual([{ label: "settings.shortcuts.command.enterFocusMode", binding: enterFocusMode, current: enterFocusModeDefault }]);
+    expect(shortcutsReview({ enterFocusMode }, { enterFocusMode }).changed).toEqual([]);
     expect(shortcutsReview({}, { quickCreate }).changed).toEqual([{ label: "settings.shortcuts.command.quickCreate", binding: quickCreateDefault, current: quickCreate }]);
     // Only the commands that differ, in the order the commands are listed.
-    expect(shortcutsReview({ quickCreate: focusMode }, { focusMode }).changed).toEqual([
-      { label: "settings.shortcuts.command.focusMode", binding: focusModeDefault, current: focusMode },
-      { label: "settings.shortcuts.command.quickCreate", binding: focusMode, current: quickCreateDefault },
+    expect(shortcutsReview({ quickCreate: enterFocusMode }, { enterFocusMode }).changed).toEqual([
+      { label: "settings.shortcuts.command.enterFocusMode", binding: enterFocusModeDefault, current: enterFocusMode },
+      { label: "settings.shortcuts.command.quickCreate", binding: enterFocusMode, current: quickCreateDefault },
     ]);
   });
 
+  it("review an older client's Toggle focus mode (`focusMode`) as a change to Enter focus mode", () => {
+    expect(shortcutsReview({ focusMode: enterFocusMode }, {}).changed).toEqual([{ label: "settings.shortcuts.command.enterFocusMode", binding: enterFocusMode, current: defaultBinding("enterFocusMode") }]);
+  });
+
   it("count a swap and a chain whole", () => {
-    expect(shortcutsReview({ focusMode: { code: "KeyN", primary: true, shift: true }, quickCreate: { code: "KeyF", primary: true, shift: true } }, {})).toMatchObject({ count: 2, changed: [expect.anything(), expect.anything()] });
+    expect(shortcutsReview({ enterFocusMode: { code: "KeyN", primary: true, shift: true }, quickCreate: { code: "KeyF", primary: true, alt: true } }, {})).toMatchObject({ count: 2, changed: [expect.anything(), expect.anything()] });
   });
 });
 

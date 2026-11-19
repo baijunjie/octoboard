@@ -65,7 +65,7 @@ export function reconcileExpandPins(
     const pin = prev.get(consoleId) ?? false;
     const reconciled = reconcileExpandPin(pin, ids, collapsed);
     if (reconciled !== pin) {
-      next ??= new Map(prev);
+      next = next ?? new Map(prev);
       next.set(consoleId, reconciled);
     }
   }

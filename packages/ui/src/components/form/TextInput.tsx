@@ -2,6 +2,7 @@ import React from "react";
 
 import { useTrimmedField } from "./useTrimmedField";
 import { FieldErrorMessage } from "./FieldErrorMessage";
+import { FieldRow } from "./FieldRow";
 import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
 import { Input, Label, TextField } from "../../primitives";
 
@@ -96,10 +97,10 @@ export function TextInput({
           HeroUI's own `InputGroup` would seat the control inside the field's frame, which is a
           different control from the secondary button the project dialog browses with. */}
       {trailing ? (
-        <div className="flex items-center gap-2">
+        <FieldRow>
           {input}
           {trailing}
-        </div>
+        </FieldRow>
       ) : (
         input
       )}

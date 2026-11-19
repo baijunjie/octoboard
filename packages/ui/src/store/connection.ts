@@ -8,6 +8,7 @@ import { daemonMessage } from "../errors/daemonMessage";
 import { daemonRefusedKey, daemonWsUrl, isLocalDaemon, type DaemonAddress } from "../daemon";
 import { currentLanguage, t } from "../i18n/language";
 import type { Event, ClientRequestBody } from "../protocol";
+import { createContentSearchListeners, isContentSearchEvent, type ContentSearchEvent } from "./contentSearchListeners";
 import { createImportProgressListeners, type ImportProgressEvent } from "./importProgressListeners";
 import { createOwnTrustNotices } from "./ownTrustNotices";
 import { reducer, type Action } from "./reducer";
@@ -38,6 +39,10 @@ export interface Daemon {
    * arrive after the import's reply, so the caller unsubscribes once that comes (the client does not do so itself) and
    * hears nothing of it. */
   onImportProgress: (importId: string, listener: (event: ImportProgressEvent) => void) => () => void;
+  /** Calls `listener` for each event of the content search `search` names (the `search` its request carried): its
+   * batches of matches and its end, until the returned unsubscribe is called. Events go to the asking connection only,
+   * and those of a search no listener holds are dropped. */
+  onContentSearch: (search: string, listener: (event: ContentSearchEvent) => void) => () => void;
   /** Drops a trust prompt from the queue, whether it was answered or declined — declining leaves the
    * confirmation for the user in the terminal, and the daemon asks again for it only after a
    * `snapshot`. */
@@ -80,6 +85,7 @@ export function createDaemon(
     remote ? { ...ENDLESS_RECONNECT, beforeRetry } : BRIEF_RECONNECT,
   );
   const importProgress = createImportProgressListeners();
+  const contentSearches = createContentSearchListeners();
   const notificationListeners = new Set<(notification: WindowNotification) => void>();
   const pendingNotifications: WindowNotification[] = [];
   const notify = (notification: WindowNotification) => {
@@ -98,6 +104,10 @@ export function createDaemon(
     }
     if (event.type === "configuration_import_progress") {
       importProgress.deliver(event);
+      return;
+    }
+    if (isContentSearchEvent(event)) {
+      contentSearches.deliver(event);
       return;
     }
     if (event.type === "session_notice" && ownTrustNotices.claim(event)) return;
@@ -144,6 +154,7 @@ export function createDaemon(
       return () => void notificationListeners.delete(listener);
     },
     onImportProgress: importProgress.subscribe,
+    onContentSearch: contentSearches.subscribe,
     dismissTrustPrompt: (session) => dispatch({ kind: "dismiss_trust_prompt", session }),
     reconnect: () => client.reconnect(),
     terminalUrl: (session) => daemonWsUrl(address, `/ws/term/${session}`),
@@ -166,6 +177,7 @@ export function createInertDaemon(): Daemon {
     showNotice: () => {},
     onNotification: () => () => {},
     onImportProgress: () => () => {},
+    onContentSearch: () => () => {},
     dismissTrustPrompt: () => {},
     reconnect: () => {},
     terminalUrl: () => "",

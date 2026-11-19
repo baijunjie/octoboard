@@ -8,6 +8,7 @@ import { BodyView } from "./BodyView";
 import { ChangeView } from "./ChangeView";
 import type { ViewerContent, ViewerSubject } from "./content";
 import type { DiffLayout } from "./code/diffLayout";
+import type { LineRange } from "./code/lineMarks";
 import { FIRST_ANNOUNCEMENT_DELAY_MS } from "./notices";
 import { Disconnected, DISCONNECTED, Failure, Loading, ViewerFirstContentContext, ViewerPaintedContext } from "./viewerStates";
 
@@ -52,12 +53,14 @@ function ViewerContentBody({
   layout,
   onLayoutChange,
   line,
+  marks,
 }: {
   subject: ViewerSubject;
   name: string;
   layout: DiffLayout;
   onLayoutChange: (layout: DiffLayout) => void;
   line?: number;
+  marks?: readonly LineRange[];
 }): React.ReactElement {
   const t = useT();
   const { resolved: theme } = useOctoboardTheme();
@@ -70,7 +73,7 @@ function ViewerContentBody({
     case "disconnected":
       return <Disconnected what={content.what} />;
     case "file":
-      return <BodyView resetKey={key} name={name} body={content.body} theme={theme} asDocument liveFile={subject.host !== undefined || subject.linkHost !== undefined} line={line} />;
+      return <BodyView resetKey={key} name={name} body={content.body} theme={theme} asDocument liveFile={subject.host !== undefined || subject.linkHost !== undefined} line={line} marks={marks} />;
     case "conflict":
       // The conflict and its kind are the title's status badge; a conflicted file that could not be read
       // is that failure alone.

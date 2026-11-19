@@ -64,7 +64,7 @@ function FocusHeader({
     // this header's trailing menus line up with the menu on a row or card. The start stays put.
     <div ref={ref} className={`${PANE_HEADER_FRAME_CLASS} gap-1 ps-(--row-fill-inset) pe-(--pane-inset)`}>
       <Button
-        tooltip={<ShortcutTooltip action="focusMode">{t("sidebar.focus.exit")}</ShortcutTooltip>}
+        tooltip={<ShortcutTooltip action="exitFocusMode">{t("sidebar.focus.exit")}</ShortcutTooltip>}
         tooltipPlacement="bottom"
         iconOnly
         size="sm"

@@ -180,7 +180,7 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Menu of a project session on Windows",
-    description: "The selected project session's menu offers Focus mode with the global shortcut written as text key caps, Ctrl, Shift and F, in place of the symbols of an Apple keyboard. The caps are wider than the symbols: look that the menu's width holds them beside the label and that no item's label is cut. Choose Spanish, Italian or Russian with the language control to see the longest labels (\"Modo de concentración\", \"Modalità concentrazione\", \"Режим фокусирования\") fit, and Arabic to see the caps keep their writing order with a gap between them.",
+    description: "The selected project session's menu offers Focus mode with the global shortcut written as text key caps, Ctrl, Alt and →, in place of the symbols of an Apple keyboard. The caps are wider than the symbols: look that the menu's width holds them beside the label and that no item's label is cut. Choose Spanish, Italian or Russian with the language control to see the longest labels (\"Modo de concentración\", \"Modalità concentrazione\", \"Режим фокусирования\") fit, and Arabic to see the caps keep their writing order with a gap between them.",
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions: [bare], ...WINDOWS_MACHINE }),
     host: WINDOWS_HOST,
     steps: [(ui) => ui.press(ui.session(bare.title)), openMenu(bare.title)],

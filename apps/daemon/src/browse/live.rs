@@ -137,6 +137,53 @@ fn open_regular(
     Ok((file, opened))
 }
 
+/// Opens the regular file `path` names inside `scope` for a content search to read, refusing a
+/// link in any of its components: `Ok(None)` for anything but a regular file, and for one larger
+/// than `limit`, which the search skips. Opened without waiting for a writer, so a FIFO swapped in
+/// is refused before anything is read from it.
+pub(crate) fn open_searchable(
+    scope: &Path,
+    path: &RelPath,
+    limit: u64,
+) -> io::Result<Option<fs::File>> {
+    let Some(on_disk) = path.host_path() else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "the host cannot name this path",
+        ));
+    };
+    let file = platform::open_without_links(scope, &on_disk, Opens::File)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() || metadata.len() > limit {
+        return Ok(None);
+    }
+    Ok(Some(file))
+}
+
+/// The canonical directory `path` names inside `scope`, for a read limited to it, with no symbolic link
+/// anywhere in its path: refused as a read of it is when it leads outside the project or does not
+/// exist, and with `unsupported_file_type` when it is not a directory, `file_type` `symlink` when a
+/// link inside the project lies on its path.
+pub(crate) fn directory_within(scope: &Path, path: &RelPath) -> Result<PathBuf> {
+    let canonical = resolve(scope, path)?;
+    let on_disk = path.host_path().ok_or_else(|| unnameable(path))?;
+    let lexical = scope.join(&on_disk);
+    let metadata = platform::stat(&lexical, Links::Keep).map_err(|err| io_failure(path, &err))?;
+    if metadata.metadata.file_type().is_symlink() {
+        return Err(unsupported(path, "symlink"));
+    }
+    if !metadata.metadata.is_dir() {
+        return Err(unsupported(path, file_type_name(&metadata.metadata)));
+    }
+    match platform::open_without_links(scope, &on_disk, Opens::Directory) {
+        // The path as the disk spells it, so that what is found below it is named so too on a
+        // volume that ignores case.
+        Ok(_) => Ok(canonical),
+        Err(err) if platform::is_symlink_loop(&err) => Err(unsupported(path, "symlink")),
+        Err(err) => Err(io_failure(path, &err)),
+    }
+}
+
 /// A part of a regular file, with the file's size and version at the read.
 #[derive(Debug)]
 pub struct FileRange {
@@ -479,7 +526,7 @@ fn search_bounded(
 /// ASCII case is ignored, since the systems that write these files do not keep to one spelling
 /// (Windows writes `Desktop.ini` too). The list is stated in docs/product/project-pane.md's "What
 /// is listed" section.
-fn is_left_out(name: &[u8]) -> bool {
+pub(super) fn is_left_out(name: &[u8]) -> bool {
     const NAMES: [&[u8]; 9] = [
         b".git",
         b".DS_Store",
@@ -835,5 +882,24 @@ mod tests {
         assert_eq!(code(read), error_code::SOURCE_CHANGED);
         let listed = list_resolved(&scope, &resolved_sub, &sub, 10, 1024, &never()).unwrap_err();
         assert_eq!(code(listed), error_code::SOURCE_CHANGED);
+    }
+
+    #[test]
+    fn a_file_opened_for_a_content_search_refuses_a_link_in_any_component() {
+        #[cfg(target_os = "linux")]
+        if openat2_is_refused() {
+            eprintln!("skipped: openat2 is refused, so only the last component is held");
+            return;
+        }
+        let scope = ScratchDir::new("live-searchable");
+        let scope = crate::hostfs::canonical(&*scope).unwrap();
+        fs::create_dir_all(scope.join("real/deeper")).unwrap();
+        fs::write(scope.join("real/deeper/file.txt"), b"inside").unwrap();
+        symlink(scope.join("real"), scope.join("link")).unwrap();
+        let through = RelPath::parse("link/deeper/file.txt").unwrap();
+        let err = open_searchable(&scope, &through, 1024).unwrap_err();
+        assert!(platform::is_symlink_loop(&err), "{err}");
+        let direct = RelPath::parse("real/deeper/file.txt").unwrap();
+        assert!(open_searchable(&scope, &direct, 1024).unwrap().is_some());
     }
 }

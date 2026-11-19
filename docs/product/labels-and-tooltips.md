@@ -128,7 +128,8 @@ application buttons and the Keyboard shortcuts section's Cancel and Reset button
   "A panel's header" in `docs/product/right-pane-panels.md`);
 - the Refresh button at the end of the account's name line in an account's Connectors and MCP dialog (see "The
   Connectors and MCP dialog" in `docs/product/account-mcp-servers-and-connectors.md`);
-- the project pane's Refresh button, the Files tab's Collapse all folders button (see `docs/product/project-pane.md`)
+- the project pane's Refresh button, the Files tab's Find in files button (see `docs/product/finding-in-files.md`) and
+  Collapse all folders button (see `docs/product/project-pane.md`)
   and the Changes tab's button that is named Expand all folders or Collapse all folders by what pressing it will do
   (see "Flat or grouped by folder" in `docs/product/project-pane-git-change-list.md`), the Committed section heading's
   button that is named Expand all commits or Collapse all commits by what pressing it will do (see "Grouped by commit"
@@ -281,7 +282,8 @@ A control that switches a view between two states is **one icon button**, not a 
 the sidebar toggle (see "The sidebar toggle and the panel toggles" in `docs/product/window-layout.md`), the file
 viewer's four view controls (see "The header" in `docs/product/file-viewer.md`), the Files mode's two — its file-name
 filter toggle and the toggle in its filter field that includes ignored files (see "Filtering by file name" in
-`docs/product/project-pane.md`) — and the Git mode's three — the toggle of its change filter field (see "Filtering by
+`docs/product/project-pane.md`) — plus the same include-ignored toggle in Find in files (see "Ignored files" in
+`docs/product/finding-in-files.md`), and the Git mode's three — the toggle of its change filter field (see "Filtering by
 file name" in `docs/product/project-pane-git-change-list.md`), Group by folder (see "Flat or grouped by folder" in the
 same doc) and Group by commit (see "Grouped by commit" in the same doc). For all of them:
 

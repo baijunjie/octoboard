@@ -23,6 +23,7 @@ export const PREFERENCE_KEYS = {
   projectBrowsers: "octoboard.projectBrowsers",
   diffLayout: "octoboard.diffLayout",
   wordWrap: "octoboard.wordWrap",
+  contentSearchSplit: "octoboard.contentSearchSplit",
   markdownView: "octoboard.markdownView",
   markdownStyle: "octoboard.markdownStyle",
   terminalFontSize: "octoboard.terminalFontSize",

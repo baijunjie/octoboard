@@ -28,17 +28,21 @@ export interface BrowseShare {
  * - `documentImages`: the images a document names, one at a time in one slot, whose next read cancels the one let go
  *   of.
  * - `viewer`: the viewer's read, file or change, in one slot for the whole window.
+ * - `contentSearch`: the window's one content search, in one slot (`BROWSE_SLOTS.contentSearch`), counted by the daemon
+ *   from its request until its last event, not only until its `ack`: a search the user has moved on from keeps its unit
+ *   until it stops, beside the one replacing it.
  * - `viewerBodies`: the read of a change's whole bodies, in a slot apart from the viewer's so a click on a separator
  *   never cancels the read of a patch still on its way. It also counts for the parts of a file's download
  *   (`BROWSE_SLOTS.download`), which are asked one at a time and only for a file shown, never beside a change's
  *   bodies, but for the one part still out when the download is given up.
  */
 export const BROWSE_SHARES = {
-  listings: { places: 6, replacementUnits: 0 },
+  listings: { places: 4, replacementUnits: 0 },
   lists: { places: 2, replacementUnits: 2 },
   documentImages: { places: 1, replacementUnits: 1 },
   viewer: { places: 1, replacementUnits: 1 },
   viewerBodies: { places: 1, replacementUnits: 1 },
+  contentSearch: { places: 1, replacementUnits: 1 },
 } as const satisfies Record<string, BrowseShare>;
 
 /** The slots shared across the window. A window shows one subject at a time, whichever project and mode it is from,
@@ -47,6 +51,8 @@ export const BROWSE_SLOTS = {
   viewer: "viewer",
   viewerBodies: "viewer-bodies",
   documentImage: "document-image",
+  /** The content search (`project-browser/files/contentSearch/useContentSearch.ts`): one at a time in the window. */
+  contentSearch: "content-search",
   /** The parts of the file a remote window copies to this computer (`viewer/download/downloadFile.ts`). */
   download: "download",
 } as const;

@@ -23,7 +23,7 @@ function loaderOf(state: State): () => Promise<ThirdPartyLicenses> {
     return () => {
       const now = performance.now();
       if (failedAt === undefined || now - failedAt < SAME_MOUNT_MS) {
-        failedAt ??= now;
+        failedAt = failedAt ?? now;
         return Promise.reject(new Error("Gallery: the list failed to load."));
       }
       return Promise.resolve(state.failsOnce);

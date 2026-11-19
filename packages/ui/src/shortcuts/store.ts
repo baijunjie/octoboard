@@ -15,13 +15,30 @@ export function effectiveBindings(overrides: Overrides): Record<CommandId, Bindi
   return Object.fromEntries(REBINDABLE_COMMANDS.map((command) => [command.id, overrides[command.id] ?? command.binding])) as Record<CommandId, Binding>;
 }
 
+/** Command ids an older client wrote, each with the command its binding now belongs to. `focusMode` toggled focus
+ * mode on one key, which entering and leaving now have one each: its key goes on entering, the way into focus mode
+ * from anywhere, while leaving keeps its default and the focus view's exit button. */
+const RENAMED_IDS: Readonly<Record<string, CommandId>> = { focusMode: "enterFocusMode" };
+
+/** `record` with each entry under an id in `RENAMED_IDS` moved to the command it names, unless the record already
+ * has an entry for that command, which then wins and the old one is dropped. */
+function withRenamedIds(record: Record<string, unknown>): Record<string, unknown> {
+  const entries = Object.entries(record).flatMap(([id, binding]): [string, unknown][] => {
+    const current = Object.hasOwn(RENAMED_IDS, id) ? RENAMED_IDS[id] : undefined;
+    if (current === undefined) return [[id, binding]];
+    return Object.hasOwn(record, current) ? [] : [[current, binding]];
+  });
+  return Object.fromEntries(entries);
+}
+
 /**
  * The overrides a stored or imported value holds, with what cannot stand dropped: an id that names
  * no command, a binding that is not one, one equal to the default, and one that fails
  * `validateBinding` against the bindings the whole set leaves, so a swap or a chain of moves stands
  * whatever order it is written in. Two entries that claim one combination leave the earlier one in
  * the value's own order. `skipped` counts the entries dropped for any reason but being the default
- * already.
+ * already; an entry under an old id (`RENAMED_IDS`) dropped because its successor has an entry of its own is not
+ * counted either, its command keeping the entry the value gives it.
  *
  * The value may come from another platform, in a configuration document: each entry is judged as
  * the keys it is on `host` (`onHost`), its `primary` and `other` the modifiers `host` has under those
@@ -34,7 +51,7 @@ export function sanitizeOverrides(value: unknown, host: ModifierHost): { overrid
   const overrides: Overrides = {};
   let skipped = 0;
   if (typeof value !== "object" || value === null || Array.isArray(value)) return { overrides, skipped };
-  const record = value as Record<string, unknown>;
+  const record = withRenamedIds(value as Record<string, unknown>);
   const candidates: [CommandId, Binding][] = [];
   for (const id of Object.keys(record)) {
     const binding = parseBinding(record[id]);

@@ -100,6 +100,7 @@ export const REPLY_TYPES = {
   set_remote_access_port: "ack",
   get_project_source: "project_source",
   search_project_files: "project_file_matches",
+  search_project_content: "ack",
   list_project_dir: "project_dir",
   read_project_file: "project_file",
   read_path_link: "path_link_file",

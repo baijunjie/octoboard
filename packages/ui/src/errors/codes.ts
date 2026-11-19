@@ -1,6 +1,6 @@
 import { EXAMPLE_CONVERSATION_ID } from "../agents/conversationId";
 import { CodedError, type MessageParams } from "./codedError";
-import { accountTrashFailedCause, pathLinkRefusedCause, projectTrashFailedCause } from "./causes";
+import { accountTrashFailedCause, invalidFileMaskCause, invalidSearchPatternCause, pathLinkRefusedCause, projectTrashFailedCause } from "./causes";
 import { PROVIDER_CODES } from "../agents/providers";
 import type { ErrorRecovery } from "./errorRecovery";
 import type { PlatformHost } from "../i18n/platformTerms";
@@ -226,9 +226,15 @@ const CORE_CODES = {
   invalid_branch_name: { origin: "daemon", recovery: "branch", codeParams: ["branch"] },
   invalid_change: { origin: "daemon", unexpected: "the window names only sides the change's group can read" },
   invalid_commit: { origin: "daemon", unexpected: "the window names only commits the daemon gave it", codeParams: ["commit"] },
+  // Worded from its `cause`, never from the glob crate's English `detail`; `other`, or a cause this client does not
+  // know, is the code's own sentence.
+  invalid_file_mask: { origin: "daemon", recovery: "none", codeParams: ["glob"], variants: { unclosed_class: { codeParams: ["glob"] }, unclosed_alternation: { codeParams: ["glob"] }, unopened_alternation: { codeParams: ["glob"] }, invalid_range: { codeParams: ["glob"] } }, variantOf: (params) => { const cause = invalidFileMaskCause(params.cause); return cause === "other" ? undefined : cause; } },
   invalid_launch_setting: { origin: "daemon", recovery: "launchSetting", codeParams: ["field", "value"] },
   invalid_path: { origin: "daemon", recovery: "path", codeParams: ["path"] },
   invalid_remote_url: { origin: "daemon", recovery: "remote", codeParams: ["url"] },
+  // Worded from its `cause` and where the query fails (`offset`, shown as the 1-based `position`), never from the regex
+  // crate's English `detail`; a cause that names a place arriving without one is the code's own sentence.
+  invalid_search_pattern: { origin: "daemon", recovery: "none", variants: { unclosed_group: {}, unopened_group: {}, unclosed_class: {}, invalid_repetition: {}, invalid_escape: {}, unsupported: {}, line_break: {}, other: {} }, variantOf: (params) => { const cause = invalidSearchPatternCause(params.cause); return cause === "line_break" || params.offset !== undefined ? cause : undefined; } },
   launch_failed: { origin: "daemon", unexpected: "shown as the failure its `reason_code` names", nested: "failureAndRemedy", failureNotice: true, alertTitle: true, nameParams: ["title"], variants: { title: { nameParams: ["title"] } } },
   limit_exceeded: { origin: "daemon", recovery: "limit" },
   login_already_running: { origin: "daemon", recovery: "none" },

@@ -34,13 +34,13 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
 
   describe("matching", () => {
     it("matches the physical key with exactly the modifiers of the binding", () => {
-      const focusMode: Binding = { code: "KeyF", primary: true, shift: true };
-      expect(matches(focusMode, press(focusMode))).toBe(true);
-      expect(matches(focusMode, new KeyboardEvent("keydown", { code: "KeyF", shiftKey: true, ...primary, key: "ł" }))).toBe(true);
-      expect(matches(focusMode, press({ code: "KeyF", primary: true }))).toBe(false);
-      expect(matches(focusMode, press({ code: "KeyF", primary: true, shift: true, alt: true }))).toBe(false);
-      expect(matches(focusMode, press({ code: "KeyF", primary: true, shift: true, other: true }))).toBe(false);
-      expect(matches(focusMode, press({ code: "KeyN", primary: true, shift: true }))).toBe(false);
+      const enterFocusMode: Binding = { code: "KeyF", primary: true, shift: true };
+      expect(matches(enterFocusMode, press(enterFocusMode))).toBe(true);
+      expect(matches(enterFocusMode, new KeyboardEvent("keydown", { code: "KeyF", shiftKey: true, ...primary, key: "ł" }))).toBe(true);
+      expect(matches(enterFocusMode, press({ code: "KeyF", primary: true }))).toBe(false);
+      expect(matches(enterFocusMode, press({ code: "KeyF", primary: true, shift: true, alt: true }))).toBe(false);
+      expect(matches(enterFocusMode, press({ code: "KeyF", primary: true, shift: true, other: true }))).toBe(false);
+      expect(matches(enterFocusMode, press({ code: "KeyN", primary: true, shift: true }))).toBe(false);
     });
 
     it("means ⌘ on an Apple keyboard and Ctrl elsewhere by `primary`, and the other key by `other`", () => {
@@ -70,10 +70,10 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
 
     it("follows the command's current binding", () => {
       const event = press({ code: "KeyJ", primary: true, shift: true });
-      expect(matchesCommand("focusMode", event)).toBe(false);
-      expect(setBinding("focusMode", { code: "KeyJ", primary: true, shift: true })).toBeUndefined();
-      expect(matchesCommand("focusMode", event)).toBe(true);
-      expect(matchesCommand("focusMode", press(defaultBinding("focusMode")))).toBe(false);
+      expect(matchesCommand("enterFocusMode", event)).toBe(false);
+      expect(setBinding("enterFocusMode", { code: "KeyJ", primary: true, shift: true })).toBeUndefined();
+      expect(matchesCommand("enterFocusMode", event)).toBe(true);
+      expect(matchesCommand("enterFocusMode", press(defaultBinding("enterFocusMode")))).toBe(false);
     });
   });
 
@@ -159,6 +159,48 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
     });
   });
 
+  describe("Find in files and the focus mode commands", () => {
+    it("have the keys code editors use for Find in files, and ⌥⌘ with → and ← for entering and leaving focus mode", () => {
+      expect(defaultBinding("findInFiles")).toEqual({ code: "KeyF", primary: true, shift: true });
+      expect(defaultBinding("enterFocusMode")).toEqual({ code: "ArrowRight", primary: true, alt: true });
+      expect(defaultBinding("exitFocusMode")).toEqual({ code: "ArrowLeft", primary: true, alt: true });
+      const find = REBINDABLE_COMMANDS.find((command) => command.id === "findInFiles")!;
+      expect([find.group, find.availability]).toEqual(["application", "always"]);
+      const focus = REBINDABLE_COMMANDS.filter((command) => command.group === "focus");
+      expect(focus.map((command) => [command.id, command.availability])).toEqual([["enterFocusMode", "always"], ["exitFocusMode", "always"]]);
+    });
+
+    it("each answer to their own keys alone, with no other modifier", () => {
+      const findKeys = press(defaultBinding("findInFiles"));
+      const enterKeys = press(defaultBinding("enterFocusMode"));
+      const exitKeys = press(defaultBinding("exitFocusMode"));
+      expect(matchesCommand("findInFiles", findKeys)).toBe(true);
+      expect(matchesCommand("enterFocusMode", enterKeys)).toBe(true);
+      expect(matchesCommand("exitFocusMode", exitKeys)).toBe(true);
+      expect(matchesCommand("enterFocusMode", exitKeys)).toBe(false);
+      expect(matchesCommand("exitFocusMode", enterKeys)).toBe(false);
+      expect(matchesCommand("enterFocusMode", findKeys)).toBe(false);
+      expect(matchesCommand("findInFiles", press({ code: "KeyF", primary: true }))).toBe(false);
+      expect(matchesCommand("findInFiles", press({ code: "KeyF", primary: true, shift: true, alt: true }))).toBe(false);
+      expect(matchesCommand("enterFocusMode", press({ code: "ArrowRight", primary: true }))).toBe(false);
+      expect(matchesCommand("enterFocusMode", press({ code: "ArrowRight", primary: true, alt: true, shift: true }))).toBe(false);
+    });
+
+    it("hold their defaults against each other and against every other command", () => {
+      expect(setBinding("enterFocusMode", defaultBinding("exitFocusMode"))).toEqual({ reason: "conflict", with: "exitFocusMode" });
+      expect(setBinding("findInFiles", defaultBinding("enterFocusMode"))).toEqual({ reason: "conflict", with: "enterFocusMode" });
+      expect(setBinding("exitFocusMode", { code: "KeyJ", primary: true, alt: true })).toBeUndefined();
+      expect(setBinding("enterFocusMode", { code: "ArrowLeft", primary: true, alt: true })).toBeUndefined();
+      expect(matchesCommand("enterFocusMode", press({ code: "ArrowLeft", primary: true, alt: true }))).toBe(true);
+    });
+
+    it("leave no two defaults on the same keys", () => {
+      const bindings = REBINDABLE_COMMANDS.map((command) => command.binding);
+      for (const [i, binding] of bindings.entries()) expect(bindings.findIndex((other) => sameKeys(other, binding, host))).toBe(i);
+      for (const id of ["enterFocusMode", "exitFocusMode"] as const) expect(validateBinding(id, defaultBinding(id), defaults)).toBeUndefined();
+    });
+  });
+
   describe("the terminal font size commands", () => {
     const FONT = ["increaseTerminalFontSize", "decreaseTerminalFontSize", "resetTerminalFontSize"] as const;
 
@@ -179,12 +221,12 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
   });
 
   describe("validation", () => {
-    const check = (binding: Binding) => validateBinding("focusMode", binding, defaults);
+    const check = (binding: Binding) => validateBinding("enterFocusMode", binding, defaults);
 
     it("accepts a combination with the shortcut modifier that nothing else holds", () => {
       expect(check({ code: "KeyK", primary: true, shift: true })).toBeUndefined();
       expect(check({ code: "Digit1", primary: true, alt: true })).toBeUndefined();
-      expect(check(defaultBinding("focusMode"))).toBeUndefined();
+      expect(check(defaultBinding("enterFocusMode"))).toBeUndefined();
     });
 
     it("refuses a modifier alone, a key with no shortcut modifier, and the keys that keep their meaning", () => {
@@ -203,10 +245,16 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
       expect(check({ code: "Insert", primary: true })).toBeUndefined();
     });
 
+    it("allows ⌥⌘ (Ctrl+Alt) with an arrow and nothing else, which no field or terminal program moves the caret with", () => {
+      for (const code of ["ArrowUp", "ArrowDown"]) expect(check({ code, primary: true, alt: true })).toBeUndefined();
+      expect(check({ code: "ArrowUp", primary: true, alt: true, other: true })).toEqual({ reason: "editingKey" });
+      for (const code of ["Home", "End", "PageUp", "Backspace", "Enter"]) expect(check({ code, primary: true, alt: true })).toEqual({ reason: "editingKey" });
+    });
+
     it("refuses Shift with a number or symbol key for Open settings alone, whose key only the native menu matches", () => {
       for (const code of ["Digit1", "Comma", "Backslash", "Slash"]) {
         expect(validateBinding("openSettings", { code, primary: true, shift: true }, defaults)).toEqual({ reason: "shiftedKey" });
-        expect(validateBinding("focusMode", { code, primary: true, shift: true }, defaults)).toBeUndefined();
+        expect(validateBinding("enterFocusMode", { code, primary: true, shift: true }, defaults)).toBeUndefined();
       }
       expect(validateBinding("openSettings", { code: "KeyK", primary: true, shift: true }, defaults)).toBeUndefined();
       expect(sanitizeOverrides({ openSettings: { code: "Digit1", primary: true, shift: true } })).toEqual({ overrides: {}, skipped: 1 });
@@ -250,8 +298,8 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
 
     it("looks at the bindings as they stand, so a freed combination can be taken", () => {
       const moved = effectiveBindings({ quickCreate: { code: "KeyK", primary: true, shift: true } });
-      expect(validateBinding("focusMode", defaultBinding("quickCreate"), moved)).toBeUndefined();
-      expect(validateBinding("focusMode", { code: "KeyK", primary: true, shift: true }, moved)).toEqual({ reason: "conflict", with: "quickCreate" });
+      expect(validateBinding("enterFocusMode", defaultBinding("quickCreate"), moved)).toBeUndefined();
+      expect(validateBinding("enterFocusMode", { code: "KeyK", primary: true, shift: true }, moved)).toEqual({ reason: "conflict", with: "quickCreate" });
     });
   });
 
@@ -259,10 +307,10 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
     const stored = () => localStorage.getItem(PREFERENCE_KEYS.keyboardShortcuts);
 
     it("keep only what differs from the defaults, and drop the entry once nothing does", () => {
-      expect(setBinding("focusMode", { code: "KeyK", primary: true, shift: true })).toBeUndefined();
-      expect(JSON.parse(stored()!)).toEqual({ focusMode: { code: "KeyK", primary: true, shift: true } });
-      expect(bindingFor("focusMode")).toEqual({ code: "KeyK", primary: true, shift: true });
-      expect(setBinding("focusMode", defaultBinding("focusMode"))).toBeUndefined();
+      expect(setBinding("enterFocusMode", { code: "KeyK", primary: true, shift: true })).toBeUndefined();
+      expect(JSON.parse(stored()!)).toEqual({ enterFocusMode: { code: "KeyK", primary: true, shift: true } });
+      expect(bindingFor("enterFocusMode")).toEqual({ code: "KeyK", primary: true, shift: true });
+      expect(setBinding("enterFocusMode", defaultBinding("enterFocusMode"))).toBeUndefined();
       expect(stored()).toBeNull();
     });
 
@@ -276,8 +324,8 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
     });
 
     it("refuse a binding that cannot be used and change nothing", () => {
-      expect(setBinding("focusMode", defaultBinding("quickCreate"))).toEqual({ reason: "conflict", with: "quickCreate" });
-      expect(bindingFor("focusMode")).toEqual(defaultBinding("focusMode"));
+      expect(setBinding("enterFocusMode", defaultBinding("quickCreate"))).toEqual({ reason: "conflict", with: "quickCreate" });
+      expect(bindingFor("enterFocusMode")).toEqual(defaultBinding("enterFocusMode"));
       expect(stored()).toBeNull();
     });
 
@@ -288,21 +336,33 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
       expect(bindingFor("newSession")).toEqual(defaultBinding("newSession"));
       localStorage.setItem(PREFERENCE_KEYS.keyboardShortcuts, raw!);
       expect(sanitizeOverrides(JSON.parse(raw!)).overrides).toEqual({ newSession: { code: "KeyK", primary: true, alt: true } });
-      expect(effectiveBindings({ newSession: { code: "KeyK", primary: true, alt: true } }).focusMode).toEqual(defaultBinding("focusMode"));
+      expect(effectiveBindings({ newSession: { code: "KeyK", primary: true, alt: true } }).enterFocusMode).toEqual(defaultBinding("enterFocusMode"));
     });
 
     it("drop an unknown id, a malformed binding and one that cannot stand, and count them", () => {
       const { overrides, skipped } = sanitizeOverrides({
-        focusMode: { code: "KeyK", primary: true, shift: true },
+        enterFocusMode: { code: "KeyK", primary: true, shift: true },
         nonsense: { code: "KeyJ", primary: true },
         quickCreate: "KeyN",
         newSession: { code: "KeyK", primary: true, shift: true },
         openSettings: { code: "Escape", primary: true },
         back: defaultBinding("back"),
       });
-      expect(overrides).toEqual({ focusMode: { code: "KeyK", primary: true, shift: true } });
+      expect(overrides).toEqual({ enterFocusMode: { code: "KeyK", primary: true, shift: true } });
       expect(skipped).toBe(4);
       expect(sanitizeOverrides("not an object")).toEqual({ overrides: {}, skipped: 0 });
+    });
+
+    it("move a binding an older client saved for Toggle focus mode (`focusMode`) to Enter focus mode", () => {
+      const moved = { code: "KeyK", primary: true, shift: true };
+      expect(sanitizeOverrides({ focusMode: moved })).toEqual({ overrides: { enterFocusMode: moved }, skipped: 0 });
+      // An entry of the new command's own wins over the old one, which is dropped without counting.
+      expect(sanitizeOverrides({ focusMode: moved, enterFocusMode: { code: "KeyJ", primary: true, shift: true } })).toEqual({ overrides: { enterFocusMode: { code: "KeyJ", primary: true, shift: true } }, skipped: 0 });
+      // The old default is no override of the new command, so it stands as one too.
+      expect(sanitizeOverrides({ focusMode: { code: "KeyF", primary: true, alt: true } })).toEqual({ overrides: { enterFocusMode: { code: "KeyF", primary: true, alt: true } }, skipped: 0 });
+      expect(replaceOverrides({ focusMode: moved })).toMatchObject({ applied: 1, skipped: 0, overrides: { enterFocusMode: moved } });
+      expect(bindingFor("enterFocusMode")).toEqual(moved);
+      expect(bindingFor("exitFocusMode")).toEqual(defaultBinding("exitFocusMode"));
     });
 
     it("carry the terminal font size commands, rebound or not, through an export and an import", () => {
@@ -321,42 +381,42 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
     });
 
     it("are judged as a whole, so a swap stands whatever order it is written in", () => {
-      const focusMode = defaultBinding("focusMode");
+      const enterFocusMode = defaultBinding("enterFocusMode");
       const quickCreate = defaultBinding("quickCreate");
-      expect(sanitizeOverrides({ focusMode: quickCreate, quickCreate: focusMode })).toEqual({ overrides: { focusMode: quickCreate, quickCreate: focusMode }, skipped: 0 });
-      expect(sanitizeOverrides({ quickCreate: focusMode, focusMode: quickCreate })).toEqual({ overrides: { quickCreate: focusMode, focusMode: quickCreate }, skipped: 0 });
+      expect(sanitizeOverrides({ enterFocusMode: quickCreate, quickCreate: enterFocusMode })).toEqual({ overrides: { enterFocusMode: quickCreate, quickCreate: enterFocusMode }, skipped: 0 });
+      expect(sanitizeOverrides({ quickCreate: enterFocusMode, enterFocusMode: quickCreate })).toEqual({ overrides: { quickCreate: enterFocusMode, enterFocusMode: quickCreate }, skipped: 0 });
     });
 
     it("are judged as a whole, so a chain of moves stands whatever order it is written in", () => {
       const moved = { code: "KeyK", primary: true, shift: true };
-      const chain = { focusMode: defaultBinding("quickCreate"), quickCreate: moved };
+      const chain = { enterFocusMode: defaultBinding("quickCreate"), quickCreate: moved };
       expect(sanitizeOverrides(chain)).toEqual({ overrides: chain, skipped: 0 });
-      expect(sanitizeOverrides({ quickCreate: moved, focusMode: defaultBinding("quickCreate") })).toEqual({ overrides: { quickCreate: moved, focusMode: defaultBinding("quickCreate") }, skipped: 0 });
+      expect(sanitizeOverrides({ quickCreate: moved, enterFocusMode: defaultBinding("quickCreate") })).toEqual({ overrides: { quickCreate: moved, enterFocusMode: defaultBinding("quickCreate") }, skipped: 0 });
     });
 
     it("keep the earlier of two entries that claim one combination, and give the dropped command its default", () => {
       const claimed = { code: "KeyK", primary: true, shift: true };
-      expect(sanitizeOverrides({ focusMode: claimed, quickCreate: claimed })).toEqual({ overrides: { focusMode: claimed }, skipped: 1 });
-      expect(sanitizeOverrides({ quickCreate: claimed, focusMode: claimed })).toEqual({ overrides: { quickCreate: claimed }, skipped: 1 });
-      // The dropped quickCreate keeps its own default, which the focusMode entry then clashes with.
-      expect(sanitizeOverrides({ quickCreate: { code: "Escape", primary: true }, focusMode: defaultBinding("quickCreate") })).toEqual({ overrides: {}, skipped: 2 });
+      expect(sanitizeOverrides({ enterFocusMode: claimed, quickCreate: claimed })).toEqual({ overrides: { enterFocusMode: claimed }, skipped: 1 });
+      expect(sanitizeOverrides({ quickCreate: claimed, enterFocusMode: claimed })).toEqual({ overrides: { quickCreate: claimed }, skipped: 1 });
+      // The dropped quickCreate keeps its own default, which the enterFocusMode entry then clashes with.
+      expect(sanitizeOverrides({ quickCreate: { code: "Escape", primary: true }, enterFocusMode: defaultBinding("quickCreate") })).toEqual({ overrides: {}, skipped: 2 });
     });
 
     it("restore a default only when no other command holds it, and say who does", () => {
       setBinding("quickCreate", { code: "KeyK", primary: true, shift: true });
-      setBinding("focusMode", defaultBinding("quickCreate"));
-      expect(restoreBinding("quickCreate")).toEqual({ reason: "conflict", with: "focusMode" });
+      setBinding("enterFocusMode", defaultBinding("quickCreate"));
+      expect(restoreBinding("quickCreate")).toEqual({ reason: "conflict", with: "enterFocusMode" });
       expect(bindingFor("quickCreate")).toEqual({ code: "KeyK", primary: true, shift: true });
-      expect(restoreBinding("focusMode")).toBeUndefined();
+      expect(restoreBinding("enterFocusMode")).toBeUndefined();
       expect(restoreBinding("quickCreate")).toBeUndefined();
       expect(stored()).toBeNull();
     });
 
     it("are replaced as a whole by an import, which reports what stood and which overrides were set", () => {
       setBinding("quickCreate", { code: "KeyJ", primary: true, shift: true });
-      expect(replaceOverrides({ focusMode: { code: "KeyK", primary: true, shift: true }, bad: 1 })).toEqual({ applied: 1, skipped: 1, overrides: { focusMode: { code: "KeyK", primary: true, shift: true } } });
+      expect(replaceOverrides({ enterFocusMode: { code: "KeyK", primary: true, shift: true }, bad: 1 })).toEqual({ applied: 1, skipped: 1, overrides: { enterFocusMode: { code: "KeyK", primary: true, shift: true } } });
       expect(bindingFor("quickCreate")).toEqual(defaultBinding("quickCreate"));
-      expect(bindingFor("focusMode")).toEqual({ code: "KeyK", primary: true, shift: true });
+      expect(bindingFor("enterFocusMode")).toEqual({ code: "KeyK", primary: true, shift: true });
       expect(replaceOverrides({})).toEqual({ applied: 0, skipped: 0, overrides: {} });
       expect(stored()).toBeNull();
     });
@@ -366,7 +426,7 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
     const retired = { lock: "KeyL", pin: "KeyP", archive: "KeyA", copyId: "KeyC" };
     const overrides = Object.fromEntries(Object.entries(retired).map(([id, code]) => [id, { code, primary: true, shift: true }]));
     expect(sanitizeOverrides(overrides)).toEqual({ overrides: {}, skipped: 4 });
-    for (const code of Object.values(retired)) expect(validateBinding("focusMode", { code, primary: true, shift: true }, defaults)).toBeUndefined();
+    for (const code of Object.values(retired)) expect(validateBinding("enterFocusMode", { code, primary: true, shift: true }, defaults)).toBeUndefined();
   });
 });
 
@@ -403,8 +463,8 @@ describe("shortcuts carried between platforms", () => {
 
   it("drop an entry that would take another command's keys on this host, and move none onto another key", () => {
     // Written as the primary modifier with Tab, it is Ctrl+Tab on Windows, the switch's own default.
-    expect(sanitizeOn(WINDOWS_HOST, { focusMode: { code: "Tab", primary: true } })).toEqual({ overrides: {}, skipped: 1 });
-    expect(sanitizeOn(MAC_HOST, { focusMode: { code: "Tab", primary: true } })).toEqual({ overrides: {}, skipped: 1 });
+    expect(sanitizeOn(WINDOWS_HOST, { enterFocusMode: { code: "Tab", primary: true } })).toEqual({ overrides: {}, skipped: 1 });
+    expect(sanitizeOn(MAC_HOST, { enterFocusMode: { code: "Tab", primary: true } })).toEqual({ overrides: {}, skipped: 1 });
     // ⌃Tab written by a Mac is the switch's default there, and the Windows key with Tab on Windows.
     expect(sanitizeOn(MAC_HOST, { newSession: { code: "Tab", other: true } })).toEqual({ overrides: {}, skipped: 1 });
     expect(sanitizeOn(WINDOWS_HOST, { newSession: { code: "Tab", other: true } })).toEqual({ overrides: {}, skipped: 1 });
@@ -417,13 +477,13 @@ describe("shortcuts carried between platforms", () => {
   });
 
   it("keep a ⌘ or Ctrl shortcut as the platform's own modifier on either", () => {
-    const moved = { focusMode: { code: "KeyK", primary: true, shift: true } };
+    const moved = { enterFocusMode: { code: "KeyK", primary: true, shift: true } };
     expect(sanitizeOn(MAC_HOST, moved)).toEqual({ overrides: moved, skipped: 0 });
     expect(sanitizeOn(WINDOWS_HOST, moved)).toEqual({ overrides: moved, skipped: 0 });
   });
 
   it("keep an entry written with `ctrl` as written, judged as Control on each host", () => {
-    const control = { focusMode: { code: "KeyK", ctrl: true, shift: true } };
+    const control = { enterFocusMode: { code: "KeyK", ctrl: true, shift: true } };
     expect(sanitizeOn(WINDOWS_HOST, control)).toEqual({ overrides: control, skipped: 0 });
     // ⌃⇧K is a terminal control key on a Mac.
     expect(sanitizeOn(MAC_HOST, control)).toEqual({ overrides: {}, skipped: 1 });

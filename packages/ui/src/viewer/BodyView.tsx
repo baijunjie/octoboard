@@ -3,6 +3,7 @@ import React, { useContext, useState } from "react";
 import { PaneFailure } from "../components/alerts/PaneFailure";
 import { useT } from "../i18n/react";
 import { CodeSurface } from "./code/CodeSurface";
+import type { LineRange } from "./code/lineMarks";
 import { isMarkdownName, type ViewerBody } from "./content";
 import { ZoomableImage } from "./image/ZoomableImage";
 import { MarkdownSurface } from "./markdown/MarkdownSurface";
@@ -23,6 +24,7 @@ export function BodyView({
   asDocument = false,
   liveFile = false,
   line,
+  marks,
 }: {
   resetKey: string;
   name: string;
@@ -30,15 +32,17 @@ export function BodyView({
   theme: "light" | "dark";
   asDocument?: boolean;
   liveFile?: boolean;
+  /** A line of a text file to scroll to and mark, and ranges of its text to mark. */
   line?: number;
+  marks?: readonly LineRange[];
 }): React.ReactElement {
   const t = useT();
   const offered = useContext(StandInActionContext);
   const action = liveFile ? offered : undefined;
   switch (body.kind) {
     case "text":
-      if (asDocument && isMarkdownName(name)) return <MarkdownSurface resetKey={resetKey} name={name} text={body.text} theme={theme} line={line} />;
-      return <CodeSurface resetKey={resetKey} name={name} text={body.text} theme={theme} line={line} />;
+      if (asDocument && isMarkdownName(name)) return <MarkdownSurface resetKey={resetKey} name={name} text={body.text} theme={theme} line={line} marks={marks} />;
+      return <CodeSurface resetKey={resetKey} name={name} text={body.text} theme={theme} line={line} marks={marks} />;
     case "image":
       return <ImageView key={resetKey} name={name} body={body} theme={theme} />;
     case "binary":

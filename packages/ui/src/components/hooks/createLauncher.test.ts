@@ -29,3 +29,15 @@ it("keeps a newer registration when an older one unregisters late", () => {
   expect(second).toHaveBeenCalledTimes(1);
   expect(first).not.toHaveBeenCalled();
 });
+
+it("hands back to the registration before when the latest one unregisters", () => {
+  const launcher = createLauncher<[]>();
+  const first = vi.fn();
+  const second = vi.fn();
+  launcher.register(first);
+  const unregisterSecond = launcher.register(second);
+  unregisterSecond();
+  launcher.open();
+  expect(first).toHaveBeenCalledTimes(1);
+  expect(second).not.toHaveBeenCalled();
+});

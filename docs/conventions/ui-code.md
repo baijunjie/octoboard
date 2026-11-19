@@ -71,7 +71,8 @@ can see. `eslint.config.mjs` applies the compiler's lint rules to `packages/ui`,
   module level.
 - **Write no `??=`, no `||` whose left side holds a ternary or logical expression inside a call, and no destructuring
   with a computed key.** Name the left side in a local; copy the object and `delete` the key. The compiler cannot lower
-  them.
+  them. `??=` is refused by lint (`no-restricted-syntax` in `eslint.config.mjs`) in every file of `packages/ui/src`
+  but tests and test support; write `x = x ?? y`, an `if`, or a getter (for a module-level value made on first use).
 - **Never add `eslint-disable` for `react-hooks/exhaustive-deps` or `react-hooks/rules-of-hooks`.** The compiler skips
   any function carrying one, which is why `exhaustive-deps` is off.
 - **A `useMemo` or `useCallback` body reads only what its dependency list names.** Resolve values into locals above it;
@@ -281,6 +282,14 @@ a test that asserts only `document.activeElement` passes against a broken handof
   user may not change), shown with `ShortcutKbd` and matched with `matchesCommand` inside `useWindowShortcut`. A key
   outside the registry is missing from Settings, cannot be rebound and is outside `validate.ts`'s conflict check, so a
   user binding can collide with it and swallow it.
+- **A window shortcut whose default may also be a browser's or the system's key takes a press only when it changes
+  something, in a browser client;** a press that would change nothing stops propagation but keeps its default
+  (`KEEP_DEFAULT` from `useWindowShortcut`), so it reaches the browser and never the terminal; in the desktop app it is
+  consumed. The repeats of a held key are taken (`sidebar/focusShortcut.tsx`).
+- **Renaming or splitting a rebindable command keeps the old id readable:** add it to `RENAMED_IDS` in
+  `shortcuts/store.ts`, mapped to the command that takes its binding, so stored preferences and imported configuration
+  documents keep the user's key; a retired id with no successor is left to `sanitizeOverrides`, which drops it and
+  counts it as skipped.
 - **A matcher that accepts keys beyond its command's binding (a layout's typed `+` and `-`) yields when the pressed keys
   are another command's binding on this client**, and a press that types one command's character is never taken as
   another command by its key code (`terminal/terminalFontShortcut.ts`). `useWindowShortcut` stops propagation but not

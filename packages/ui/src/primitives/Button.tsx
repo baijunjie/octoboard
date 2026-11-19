@@ -107,6 +107,11 @@ export function baseButtonProps({
   };
 }
 
+/** The shape of a button beside a field (`besideField` on `Button` and `ToggleButton`), the `field-control` utility in
+ * `style.css`: the field's height (`--field-control-size`) and corners, square when icon-only. One class for every
+ * kind of button, so an icon button, a toggle and a text button beside a field never differ in height or shape. */
+export const FIELD_CONTROL_CLASS = "field-control";
+
 /** HeroUI's button, in its `variant` (`primary` by default) and `size` (HeroUI's `md` by default, or the project's
  * `xs`). While `pending`, a decorative indicator (a spinner by default) covers the hidden content, which keeps its
  * layout space and accessible name, and the button reports itself busy (`aria-busy`). In a busy `Modal` it is disabled,
@@ -114,6 +119,10 @@ export function baseButtonProps({
  * `busy.ts`). */
 export function Button(props: ButtonBaseProps & {
   variant?: ButtonVariant;
+  /** Stands beside a field in one row (`FieldRow`): icon or text, as tall as the field at every width and with the
+   * field's corners (`FIELD_CONTROL_CLASS`); an icon-only one is square, a text one keeps its own width. Its `variant`
+   * stays the caller's. */
+  besideField?: boolean;
   /** `submit` submits the form around it. */
   type?: "button" | "submit";
   /** Shows the pending indicator over the hidden content without changing the button's width, unavailable and busy,
@@ -149,7 +158,7 @@ export function Button(props: ButtonBaseProps & {
   hasPopup?: boolean;
   onPress?: (press: ButtonPress) => void;
 }): React.ReactElement {
-  const { variant, size, type = "button", pending, pendingIndicator, dimWhilePending = true, unavailable, tooltip, tooltipPlacement, tooltipFocusOnly, tooltipKeepOpenOnPress, onTooltipOpenChange, current, hasPopup, onPress, className, children, ref: forwarded, ...rest } = props;
+  const { variant, size, besideField = false, type = "button", pending, pendingIndicator, dimWhilePending = true, unavailable, tooltip, tooltipPlacement, tooltipFocusOnly, tooltipKeepOpenOnPress, onTooltipOpenChange, current, hasPopup, onPress, className, children, ref: forwarded, ...rest } = props;
   // Placed as a field's clear button (`SearchField`, `SelectClearButton`), it takes what makes it the field's.
   const { className: placement, ...fieldClear } = useFieldClear() ?? {};
   const disabled = useDisabled(rest.disabled, pending);
@@ -168,7 +177,7 @@ export function Button(props: ButtonBaseProps & {
   const text = why.reason ?? tooltip;
   // A tooltip that only repeats the name would be heard twice, as the name and then as the description.
   const describedBy = why.id ?? (rest.describedBy === undefined && why.reason === undefined && tooltip === rest.label ? "" : rest.describedBy);
-  const classes = [pending && "app-button--pending", size === "xs" && XS_CLASS, pending && !dimWhilePending && "[--disabled-opacity:1]", why.frozen && UNAVAILABLE_BUTTON_CLASS, className, placement].filter(Boolean).join(" ");
+  const classes = [besideField && FIELD_CONTROL_CLASS, pending && "app-button--pending", size === "xs" && XS_CLASS, pending && !dimWhilePending && "[--disabled-opacity:1]", why.frozen && UNAVAILABLE_BUTTON_CLASS, className, placement].filter(Boolean).join(" ");
   const button = (
     <HeroButton
       {...baseButtonProps({ ...rest, disabled, labelledBy: rest.labelledBy ?? (pending && !rest.label ? contentId : undefined), describedBy })}

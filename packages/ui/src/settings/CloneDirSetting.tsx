@@ -5,6 +5,7 @@ import { ChangedElsewhereAnnouncer } from "../components/announce/ChangedElsewhe
 import { ValueTooltipText } from "../components/hint/ValueTooltipText";
 import { useLatest, useStableHandler } from "../components/hooks/useLatest";
 import { useDirectoryBrowse } from "../components/dialog/DirectoryPicker";
+import { FieldRow } from "../components/form/FieldRow";
 import { useTrimmedField } from "../components/form/useTrimmedField";
 import { Message, useT } from "../i18n/react";
 import { Input, TextField, Tooltip } from "../primitives";
@@ -195,7 +196,7 @@ export function CloneDirSetting(): React.ReactElement {
         label={t("settings.cloneDir.label")}
         description={<Message id="settings.cloneDir.description.gitUrl" />}
       >
-        <div className="flex w-80 items-center gap-2">
+        <FieldRow className="w-80">
           <TextField
             label={t("settings.cloneDir.label")}
             variant="secondary"
@@ -229,7 +230,7 @@ export function CloneDirSetting(): React.ReactElement {
           {/* A mouse press on Browse leaves focus in the field until the picker opens, and a cancelled
               picker hands it back to the field rather than to Browse. */}
           {directoryBrowse.browseButton({ focusOnPress: false })}
-        </div>
+        </FieldRow>
       </SettingRow>
       {directoryBrowse.picker}
       <ChangedElsewhereAnnouncer count={replaced} labels={[t("settings.cloneDir.label")]} />

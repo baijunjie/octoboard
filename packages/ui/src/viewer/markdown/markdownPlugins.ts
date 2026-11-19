@@ -95,7 +95,8 @@ export function limitRenderings(documentPath: string) {
     let fenceChars = 0;
     const visit = (node: HastNode, parent?: HastNode) => {
       if (node.type === "element") {
-        const props = node.properties ??= {};
+        node.properties = node.properties ?? {};
+        const props = node.properties;
         if (node.tagName === "code" && parent?.tagName !== "pre" && classNamesOf(node).includes("math-inline")) {
           const length = hastText(node).replace(/\n$/, "").length;
           if (length > RENDER_BUDGETS.documentFormulaChars || formulas >= RENDER_BUDGETS.documentFormulas) props.dataOverBudget = true;
@@ -104,7 +105,8 @@ export function limitRenderings(documentPath: string) {
         if (node.tagName === "pre") {
           const code = codeChild(node);
           if (code) {
-            const properties = code.properties ??= {};
+            code.properties = code.properties ?? {};
+            const properties = code.properties;
             const fence = fenceOf(node);
             const length = fence.text.length;
             if (classNamesOf(code).includes("math-display")) {

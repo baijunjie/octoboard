@@ -3,13 +3,13 @@
 Focus mode replaces the whole sidebar — the console header and the console sessions and project lists (see
 `docs/product/sidebar.md`) — with one project or one console session. Choosing **Focus mode** from a project's action
 menu enters that project's view. The selected session's menu enters its context as described in "The focus mode
-shortcut" below. The two views are built alike, and differ in what they list.
+shortcuts" below. The two views are built alike, and differ in what they list.
 
 ## What both views show
 
 Session titles throughout either view follow "Displayed names" in `docs/product/session-titles.md`.
 
-**The header**, in both: a back button, **Leave focus mode**, which returns to the full sidebar and shows Toggle focus
+**The header**, in both: a back button, **Leave focus mode**, which returns to the full sidebar and shows Leave focus
 mode's current shortcut in its tooltip; the view's heading; and a **+** button for a new session, whose action New
 session and New session with defaults take from the keyboard while the sidebar holds the view (see "Creating sessions
 from the keyboard" in `docs/product/sidebar.md`). A project's header shows the console's name on a smaller first line
@@ -301,14 +301,19 @@ it, or bound to a coordinator that is archived too. For archived sessions the ru
 session of a coordinator that is **still live** belongs to its project's focus mode only, and selecting it from the
 console session's focus mode leaves that focus mode.
 
-## The focus mode shortcut
+## The focus mode shortcuts
 
-**A keyboard shortcut toggles focus mode**: Toggle focus mode, `Shift+Cmd+F` on a Mac (the macOS application, or a
-browser on a Mac) and `Ctrl+Shift+F` elsewhere unless the user has changed it (see
-`docs/product/keyboard-shortcuts.md`), matched on the physical key whatever the keyboard layout.
+**Two keyboard shortcuts enter and leave focus mode**: **Enter focus mode**, `Option+Cmd+→` on a Mac (the macOS
+application, or a browser on a Mac) and `Ctrl+Alt+→` elsewhere, and **Leave focus mode**, `Option+Cmd+←` and
+`Ctrl+Alt+←`, unless the user has changed them (see `docs/product/keyboard-shortcuts.md`), matched on the physical key
+whatever the keyboard layout. Neither combination moves the caret or selects text in a text field or in the programs of
+a terminal, and an arrow types no character under AltGr. Some systems and browsers keep them for themselves: GNOME on
+Linux switches workspaces with `Ctrl+Alt+←` and `Ctrl+Alt+→`, so in a browser there they never reach the page, and
+Chrome on macOS moves to the previous and next tab with `Option+Cmd+←` and `Option+Cmd+→`. Either shortcut can be
+changed to get around them.
 
-Outside focus mode, the shortcut and the selected session's **Focus mode** menu item enter the same context, switching
-the sidebar to that session's console first when needed:
+Outside focus mode, Enter focus mode and the selected session's **Focus mode** menu item enter the same context,
+switching the sidebar to that session's console first when needed:
 
 - A console session enters its own focus mode, provided it is not archived.
 - A project session bound to a console session, directly or through project coordinators, enters that console
@@ -317,22 +322,27 @@ the sidebar to that session's console first when needed:
 - A project session with no console session above it enters its project's focus mode. An owner that is missing, or
   an owner chain that loops without reaching a console session, leaves it in this case too. The project must exist
   and belong to the selected session's console.
-- With nothing selected or no available context, the shortcut does nothing.
+- With nothing selected or no available context, Enter focus mode does nothing.
 
-The global shortcut also applies to an archived project session with an available context.
+Enter focus mode also applies to an archived project session with an available context.
 
 The session-menu item is offered only for the selected session that is not archived and has an available context,
-while no focus mode is active (see "Session rows" in `docs/product/sidebar-session-rows.md`). It shows the current Toggle focus mode combination,
-which also activates it while keyboard focus is in that menu's main list. A project's own menu keeps its fixed `F`
-key and enters that project directly.
+while no focus mode is active (see "Session rows" in `docs/product/sidebar-session-rows.md`). It shows the current Enter
+focus mode combination, which also activates it while keyboard focus is in that menu's main list. A project's own menu
+keeps its fixed `F` key and enters that project directly.
 
-In either focus mode the global shortcut leaves focus mode. The header's Leave focus mode tooltip shows that same
-current combination. Changing the binding updates both the session-menu hint and the tooltip immediately.
+In either focus mode, Leave focus mode leaves it, and Enter focus mode does nothing, even with a session of another
+context selected. The header's Leave focus mode tooltip shows Leave focus mode's current combination. Changing a
+binding updates the session-menu hint and the tooltip immediately.
 
-The shortcut does nothing while a dialog, another menu, a submenu or a menu's custom panel is open, while recording a
+The shortcuts do nothing while a dialog, another menu, a submenu or a menu's custom panel is open, while recording a
 shortcut, and during input-method composition. The selected session's main menu above is the one menu exception.
-Holding the combination does not repeat the action, including after entering focus mode, so it cannot toggle back
-out while the keys remain held. The key combination never reaches the terminal, so the agent never receives it.
+Holding a combination does not repeat its action: the key's repeats do nothing.
+
+**A press that would change nothing** — Enter focus mode in focus mode or with no context to enter, Leave focus mode
+outside it, or either where the shortcuts do nothing — is left to the browser in a browser client, so the browser's own
+use of the key, such as Chrome's tab switch, still happens; the desktop app, which has no tabs, takes it. Either way a
+focus mode key never reaches the terminal, so the agent never receives it.
 
 ## Keyboard focus on entering and leaving
 
@@ -342,7 +352,7 @@ above), or selecting a session that does not belong to what is in focus. A conso
 gets it once it is running again.
 
 Where nothing takes keyboard focus that way — focus mode entered or left without a selection (a Focus mode menu item,
-a chip in a project's focus mode, the back button, the focus mode shortcut), or a selection whose terminal does not
+a chip in a project's focus mode, the back button, the focus mode shortcuts), or a selection whose terminal does not
 take it, such as an archived session or one still being resumed — and keyboard focus was in the sidebar, it moves to
 somewhere useful in the new view: after going from one console session's focus mode to another's, to the switch
 strip's current chip; otherwise, on entering, to the back button, and on leaving, to the row of the project or console

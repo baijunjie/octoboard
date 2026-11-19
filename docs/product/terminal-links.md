@@ -134,7 +134,7 @@ terminal or the button's release there. In a terminal one row high, the pointer 
   - a file name with an extension followed by a line, or a line and a column: `a.ts:42`, `a.ts:42:7`.
 
   Any path may carry such a `:line` or `:line:column`; it belongs to the link, and its line is where a file opened in
-  the file viewer is shown (see "Opened from the terminal" in `docs/product/file-viewer.md`). A path mentioned with a
+  the file viewer is shown (see "Opening at a line" in `docs/product/file-viewer.md`). A path mentioned with a
   leading `@` (`@src/a.ts`) is a link without the `@`. A compiler's position in parentheses after a path
   (`src/a.ts(12,5)`, as `tsc` writes it) leaves the path alone as the link, its line used as a `:line` is. A bare file
   name with neither a directory nor a line (`README.md`) is not taken for a path, and neither is text longer than 1024

@@ -31,7 +31,7 @@ const independent = sessionOf("independent", console_.id, project.id, "Independe
 const direct = sessionOf("direct", console_.id, project.id, "Direct", "idle", { bound_to: hub.id });
 const nested = sessionOf("nested", console_.id, project.id, "Nested", "idle", { bound_to: coordinator.id });
 
-function mount(selected: Session = nested) {
+function mount(selected: Session = nested, { desktopApp = false }: { desktopApp?: boolean } = {}) {
   const daemon = testDaemon({ state: { consoles: new Map([[console_.id, console_]]), projects: new Map([[project.id, project]]), sessions: new Map([hub, coordinator, independent, direct, nested].map((session) => [session.id, session])) } });
   const focused = vi.fn();
   const selectConsole = vi.fn();
@@ -46,15 +46,15 @@ function mount(selected: Session = nested) {
       <ActionMenu label="Other menu" items={[{ label: "Rename", icon: Focus, onClick: vi.fn() }]} />
     </FocusModeContext>;
   }
-  const host = mountHost(<View />, { daemon });
+  const host = mountHost(<View />, { daemon, platform: { kind: desktopApp ? "tauri" : "browser", host: BROWSER_HOST } });
   const terminal = host.querySelector<HTMLInputElement>("input")!;
   const open = async (title = selected.title) => {
     const trigger = host.querySelector<HTMLButtonElement>(`button[aria-label="Actions for session ${isolate(title)}"]`)!;
     await act(async () => trigger.click());
     return menuOfTrigger(trigger) as HTMLElement;
   };
-  const press = (target: EventTarget = terminal, init: KeyboardEventInit = {}) => {
-    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...eventKey(bindingFor("focusMode"), BROWSER_HOST), ...init });
+  const press = (target: EventTarget = terminal, init: KeyboardEventInit = {}, command: "enterFocusMode" | "exitFocusMode" = "enterFocusMode") => {
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...eventKey(bindingFor(command), BROWSER_HOST), ...init });
     act(() => { target.dispatchEvent(event); });
     return event;
   };
@@ -71,8 +71,47 @@ it.each([[independent, { project }], [hub, { consoleSession: hub }], [direct, { 
   expect(focused).toHaveBeenCalledExactlyOnceWith(target);
   expect(selectConsole).toHaveBeenCalledExactlyOnceWith(console_.id);
   expect(leaked).not.toHaveBeenCalled();
-  press();
+  // Held down, the key repeats what its first press did: taken, and nothing more.
+  expect(press(terminal, { repeat: true }).defaultPrevented).toBe(true);
+  expect(focused).toHaveBeenCalledOnce();
+  expect(press(terminal, {}, "exitFocusMode").defaultPrevented).toBe(true);
   expect(focused).toHaveBeenLastCalledWith(undefined);
+  expect(focused).toHaveBeenCalledTimes(2);
+});
+
+it("leaves the key to the browser, and keeps it from the terminal, when entering focus mode while in it changes nothing", () => {
+  const { focused, press, terminal } = mount();
+  press();
+  expect(focused).toHaveBeenCalledOnce();
+  const reached = vi.fn();
+  terminal.addEventListener("keydown", reached);
+  // Chrome takes ⌥⌘→ for the next tab: a press that changes nothing keeps its default, but the terminal, which would
+  // send it to the agent, never hears it.
+  expect(press().defaultPrevented).toBe(false);
+  expect(reached).not.toHaveBeenCalled();
+  expect(focused).toHaveBeenCalledOnce();
+});
+
+it("leaves the key to the browser, and keeps it from the terminal, when it is pressed to leave focus mode outside it", () => {
+  const { focused, press, terminal } = mount();
+  const reached = vi.fn();
+  terminal.addEventListener("keydown", reached);
+  expect(press(terminal, {}, "exitFocusMode").defaultPrevented).toBe(false);
+  expect(reached).not.toHaveBeenCalled();
+  expect(focused).not.toHaveBeenCalled();
+});
+
+it("takes a press that changes nothing in the desktop app, which has no tabs to leave it to", () => {
+  const { focused, press, terminal } = mount(nested, { desktopApp: true });
+  const reached = vi.fn();
+  terminal.addEventListener("keydown", reached);
+  expect(press(terminal, {}, "exitFocusMode").defaultPrevented).toBe(true);
+  expect(focused).not.toHaveBeenCalled();
+  expect(press().defaultPrevented).toBe(true);
+  expect(focused).toHaveBeenCalledOnce();
+  expect(press().defaultPrevented).toBe(true);
+  expect(focused).toHaveBeenCalledOnce();
+  expect(reached).not.toHaveBeenCalled();
 });
 
 it("reacts to owner-chain changes without a change to the selected session", () => {
@@ -81,7 +120,7 @@ it("reacts to owner-chain changes without a change to the selected session", () 
   act(() => daemon.store.setState((state) => ({ sessions: new Map(state.sessions).set(nextHub.id, nextHub).set(coordinator.id, { ...coordinator, bound_to: nextHub.id }) })));
   press();
   expect(focused).toHaveBeenCalledExactlyOnceWith({ consoleSession: nextHub });
-  press();
+  press(undefined, {}, "exitFocusMode");
   act(() => daemon.store.setState((state) => ({ sessions: new Map(state.sessions).set(nextHub.id, { ...nextHub, status: "archived" }) })));
   press();
   expect(focused).toHaveBeenCalledTimes(2);
@@ -92,9 +131,9 @@ it.each([independent, direct, nested, hub])("offers Focus mode only on the selec
   const menu = await open();
   const item = focusItem(menu)!;
   expect(item).toBeDefined();
-  expect(item.getAttribute("aria-keyshortcuts")).toBe(ariaBinding(defaultBinding("focusMode"), BROWSER_HOST));
-  expect(item.querySelector("kbd")?.textContent?.endsWith("F")).toBe(true);
-  expect(item.querySelector("kbd")?.textContent).not.toBe("F");
+  expect(item.getAttribute("aria-keyshortcuts")).toBe(ariaBinding(defaultBinding("enterFocusMode"), BROWSER_HOST));
+  expect(item.querySelector("kbd")?.textContent?.endsWith("→")).toBe(true);
+  expect(item.querySelector("kbd")?.textContent).not.toBe("→");
   act(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "f", bubbles: true, cancelable: true })));
   expect(focused).not.toHaveBeenCalled();
   expect(press(menu).defaultPrevented).toBe(true);
@@ -126,9 +165,9 @@ it("leaves an unselected session unchanged when its menu is opened", async () =>
 it("updates the open item's hint and activation when the global binding changes", async () => {
   const { open, press, focused } = mount();
   const menu = await open();
-  const old = defaultBinding("focusMode");
+  const old = defaultBinding("enterFocusMode");
   const binding = { code: "KeyG", primary: true, alt: true };
-  act(() => { expect(setBinding("focusMode", binding, BROWSER_HOST)).toBeUndefined(); });
+  act(() => { expect(setBinding("enterFocusMode", binding, BROWSER_HOST)).toBeUndefined(); });
   expect(focusItem(menu)?.getAttribute("aria-keyshortcuts")).toBe(ariaBinding(binding, BROWSER_HOST));
   expect(focusItem(menu)?.querySelector("kbd")?.textContent?.endsWith("G")).toBe(true);
   press(menu, eventKey(old, BROWSER_HOST));

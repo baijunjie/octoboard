@@ -11,6 +11,7 @@ import { textPlan } from "../code/budgets";
 import { CODE_THEMES } from "../code/codeTheme";
 import { RendererBoundary } from "../code/codeRenderer";
 import { CodeSurface } from "../code/CodeSurface";
+import type { LineRange } from "../code/lineMarks";
 import { FIND_REGION } from "../find/findDom";
 import { FencedCode } from "./FencedCode";
 import { FrameSurface } from "../FrameSurface";
@@ -38,6 +39,7 @@ export function MarkdownSurface({
   text,
   theme,
   line,
+  marks,
 }: {
   resetKey: string;
   name: string;
@@ -46,12 +48,14 @@ export function MarkdownSurface({
   /** A line to show: the document has none, so the source opens at it, whatever the user's choice
    * of view, until they choose one for this file. */
   line?: number;
+  /** Ranges of `line`'s text the source marks. */
+  marks?: readonly LineRange[];
 }): React.ReactElement {
   const preferred = markdownView.useValue();
   const askedFor = `${resetKey}\0${line}`;
   const [chosen, setChosen] = useState<{ askedFor: string; view: MarkdownView }>();
   const view = chosen?.askedFor === askedFor ? chosen.view : line !== undefined ? "source" : preferred;
-  if (textPlan(text) === "plain") return <CodeSurface resetKey={resetKey} name={name} text={text} theme={theme} line={line} />;
+  if (textPlan(text) === "plain") return <CodeSurface resetKey={resetKey} name={name} text={text} theme={theme} line={line} marks={marks} />;
   return (
     <>
       <MarkdownViewToggle
@@ -62,7 +66,7 @@ export function MarkdownSurface({
         }}
       />
       {view === "source" ? (
-        <CodeSurface resetKey={resetKey} name={name} text={text} theme={theme} line={line} />
+        <CodeSurface resetKey={resetKey} name={name} text={text} theme={theme} line={line} marks={marks} />
       ) : (
         <DocumentSurface resetKey={resetKey} name={name} text={text} theme={theme} />
       )}

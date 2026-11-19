@@ -2,7 +2,7 @@
 import { afterEach, expect, it } from "vitest";
 
 import { findPattern, DEFAULT_FIND_OPTIONS } from "./find";
-import { findMatches, findRegions, hasPlaceholder, revealMatch } from "./findDom";
+import { findMatches, findRegions, hasPlaceholder, revealMatch, textRangeIn } from "./findDom";
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -133,4 +133,19 @@ it("knows a region that still shows a placeholder", () => {
   const found = region("<div data-find-skip>Loading…</div>");
   expect(hasPlaceholder([found])).toBe(true);
   expect(hasPlaceholder([region("<pre>text</pre>")])).toBe(false);
+});
+
+it("ranges over part of a line of code, whatever tokens it is cut into, and holds the range to the line's text", () => {
+  const line = region("<div><span>const </span><span>foo</span><span> = 1;</span></div>").firstElementChild!;
+  const text = (start: number, end: number) => textRangeIn(line, start, end)?.toString();
+  expect(text(4, 10)).toBe("t foo ");
+  expect(text(0, 5)).toBe("const");
+  expect(text(-5, 3)).toBe("con");
+  expect(text(9, 99)).toBe(" = 1;");
+  expect(text(0, 99)).toBe("const foo = 1;");
+  // Nothing before the text, or from where it ends, or an empty range.
+  expect(text(14, 20)).toBeUndefined();
+  expect(text(30, 40)).toBeUndefined();
+  expect(text(3, 3)).toBeUndefined();
+  expect(text(5, 2)).toBeUndefined();
 });

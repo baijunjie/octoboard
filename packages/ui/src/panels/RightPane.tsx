@@ -46,8 +46,8 @@ export function RightPane({
   focusTerminal: () => void;
   /** The kind whose toggle the pointer is on, shown while the pane floats in with no panel open. */
   peekKind: PanelKind | undefined;
-  /** Shows a project file a path in a terminal's output named, in the file viewer. */
-  onViewFile?: PanelContentProps["onViewFile"];
+  /** Shows a project file in the file viewer (`PanelContentProps`' `onViewFile`). */
+  onViewFile: PanelContentProps["onViewFile"];
   /** Closing a panel that was only floating in dismisses the floating pane. */
   onDismiss: () => void;
   /** An explicit header close, independently of hover, resizing and owner changes. */

@@ -194,4 +194,5 @@ consoles, sessions and everything else it last read, with the connection banner 
 - **Each button and menu is named with its daemon**: "Connect to Staging", "Open Staging", "Remove Staging", and the
   row's ⋮ "Actions for remote daemon Staging". A row is named by the daemon's name and, where it is connected, the
   state its glyph shows. Tapping the glyph selects the row.
-- **Focus mode's shortcut does nothing** while the page shows (see `docs/product/focus-mode.md`).
+- **Focus mode's shortcuts do nothing** while the page shows (see "The focus mode shortcuts" in
+  `docs/product/focus-mode.md`).

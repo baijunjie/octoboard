@@ -8,14 +8,18 @@ import { type DataAttributes, definedProps } from "./props";
 /** HeroUI's list box: a list of `ListBoxItem`s, named `label` unless what holds it names it (a select's popover).
  * `onAction` receives the id of an item activated (a click, Enter). With `items` the list is built from them by the
  * `children` function and rebuilt when `items` or `dependencies` change, as react-aria caches each item's row
- * otherwise. With `rowHeight` the list is virtualized, every row that tall, for a list too long to mount whole. The rest
- * of the props (a scroll fade's, a list motion's) go on the list's element. */
-export function ListBox<T extends object>({ ref, label, items, dependencies, onAction, rowHeight, rowGap, rowPadding, className, children, ...rest }: DataAttributes & Omit<React.HTMLAttributes<HTMLDivElement>, "children"> & {
+ * otherwise. With `rowHeight` the list is virtualized, every row that tall, for a list too long to mount whole. With
+ * `onSelectedChange` one item at a time is selected, `selectedId`, which the arrow keys and a click move, while Enter
+ * and a double click activate it (`onAction`). The rest of the props (a scroll fade's, a list motion's) go on the
+ * list's element. */
+export function ListBox<T extends object>({ ref, label, items, dependencies, onAction, selectedId, onSelectedChange, rowHeight, rowGap, rowPadding, className, children, ...rest }: DataAttributes & Omit<React.HTMLAttributes<HTMLDivElement>, "children"> & {
   ref?: React.Ref<HTMLDivElement>;
   label?: string;
   items?: Iterable<T>;
   dependencies?: readonly unknown[];
   onAction?: (id: string) => void;
+  selectedId?: string | null;
+  onSelectedChange?: (id: string) => void;
   rowHeight?: number;
   /** Spacing and inset owned by the virtualized layout rather than CSS margins and padding. */
   rowGap?: number;
@@ -33,6 +37,17 @@ export function ListBox<T extends object>({ ref, label, items, dependencies, onA
         dependencies,
         onAction: onAction && ((key: string | number) => onAction(String(key))),
         className,
+      })}
+      {...(onSelectedChange && {
+        selectionMode: "single" as const,
+        selectionBehavior: "replace" as const,
+        disallowEmptySelection: true,
+        selectedKeys: selectedId === undefined || selectedId === null ? [] : [selectedId],
+        onSelectionChange: (keys: "all" | Set<string | number>) => {
+          if (keys === "all") return;
+          const [key] = keys;
+          if (key !== undefined) onSelectedChange(String(key));
+        },
       })}
     >
       {children}

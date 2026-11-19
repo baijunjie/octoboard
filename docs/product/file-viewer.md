@@ -3,7 +3,7 @@
 The **file viewer** is a read-only dialog that shows one file, or one change, at a time. At a window width of 768 px or
 less it fills the available window area, without outer margins, rounded corners or a shadow; connection and update
 notices at the bottom remain outside it. At wider widths it is nearly as large as the window, at most 1440 px wide. It
-is opened from three places:
+is opened from four places:
 
 - **a file's row in the project pane's Files mode**, by a click or Enter on the row (see "A row's actions" in
   `docs/product/project-pane.md`);
@@ -11,7 +11,9 @@ is opened from three places:
   closes and follows a change is in `docs/product/project-pane-git-change-viewer.md`;
 - **a file or folder path link in a session's terminal or a shell terminal** (see "File paths" in
   `docs/product/terminal-links.md`), whether the file lies in the project or in a temporary directory outside it; how
-  that differs is in "Opened from the terminal" below.
+  that differs is in "Opened from the terminal" below;
+- **a result of Find in files**, at the result's line, shown as a file opened from the terminal is (see "Opening a
+  result" in `docs/product/finding-in-files.md`).
 
 Nothing can be edited or saved in it.
 
@@ -320,7 +322,8 @@ below).
 menu or popover covers" in `docs/product/window-layout.md`). While the find bar is open, Escape closes the bar instead,
 and only the next Escape closes the viewer (see "Closing the find bar" in `docs/product/finding-in-the-file-viewer.md`).
 Keyboard focus then goes, for a viewer opened from Files, to the tree row of the file it showed last, not necessarily
-the one it was opened from; for one opened from the terminal, back to the terminal — from a shell terminal of the
+the one it was opened from; for one opened from a Find in files result, to the Files panel's Find in files button
+while the panel still shows it, and to the agent terminal otherwise; for one opened from the terminal, back to the terminal — from a shell terminal of the
 Terminal panel, back to that shell terminal while its tab is still there and shown, and to the agent terminal
 otherwise. A change viewer's closing is in `docs/product/project-pane-git-change-viewer.md`.
 
@@ -393,18 +396,7 @@ selected. It shows only the file it was opened on: it has no Previous file or Ne
 move it. A file found in a worktree is read from that worktree; its path in the header, and what Copy path copies, is
 its path within the project's place in that worktree, and File manager and Default application act on the file there.
 
-**Opening at a line.** The line a path link carries (`:line`, `:line:column`, or a compiler's `(line,column)`) is where
-the file is shown; a column plays no part.
-
-- In highlighted code the line is marked as selected and scrolled to the middle of the view once the code is drawn.
-- In a file shown as plain text — past the highlighting budget, or because its code could not be drawn — the line is
-  scrolled to but not marked.
-- A Markdown file opens in its source, at the line, whatever the remembered document-or-source choice says, until the
-  user chooses a view for that file; that choice is then remembered as usual (see `docs/product/markdown-documents.md`).
-  The same file opened at another line opens in its source again.
-- The line is brought into view once for each file and line: redrawing the code — a change of appearance or of the
-  wrap choice — does not scroll back to it. A line the file does not have leaves the file at its top. An image ignores
-  the line.
+A path link that carries a line opens the file at it (see "Opening at a line" below).
 
 **Links in a Markdown document** opened from the terminal open in the same viewer, as in any document (see
 `docs/product/markdown-documents.md`), with two differences: a link to a folder is not told from one to a file, so it
@@ -418,6 +410,27 @@ and that opening the file again tries once more; it is a known failure and asks 
 again. In a page the daemon serves, talking to the daemon at the address it was loaded from (see "The UI the daemon
 serves" in `docs/product/server-form.md`), the alert says instead to reload the page, then open the file again, since a
 page left open across a restart of the daemon into another build asks for code that daemon no longer has.
+
+## Opening at a line
+
+A file is opened at a line from a path link that carries one — `:line`, `:line:column`, or a compiler's
+`(line,column)`, a column playing no part — and from a result of Find in files, which also marks the matches on that
+line (see "Opening a result" in `docs/product/finding-in-files.md`).
+
+- In highlighted code the line is marked as selected and scrolled to the middle of the view once the code is drawn.
+- In a file shown as plain text — past the highlighting budget, or because its code could not be drawn — the line is
+  scrolled to but not marked; matches on it are still marked.
+- The view scrolls only up or down to the line. While lines do not wrap, it scrolls sideways only to bring the first
+  marked match into view where it is out of view, as on a long line, leaving some of the text before it showing.
+- A Markdown file opens in its source, at the line, whatever the remembered document-or-source choice says, until the
+  user chooses a view for that file; that choice is then remembered as usual (see `docs/product/markdown-documents.md`).
+  The same file opened at another line opens in its source again.
+- The line is brought into view once for each file and line: redrawing the code — a change of appearance or of the
+  wrap choice — does not scroll back to it. A line the file does not have leaves the file at its top. An image ignores
+  the line.
+- **Marked matches** look like the find bar's current match (see "The matches" in
+  `docs/product/finding-in-the-file-viewer.md`), and the find bar's own highlights are drawn over them. They stay while
+  the file is shown at that line, redrawing the code included, and go when another file or line is shown.
 
 ## Download and open
 

@@ -113,6 +113,20 @@
           ]
         },
         {
+          "$ref": "#/$defs/ContentSearchRequest",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "search_project_content"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "Searches the contents of the project's files, streaming what it finds: answered with\n`ack`, then `project_content_matches` in batches and one `project_content_search_ended`,\neach naming `search`. See \"Searching file contents\" in `apps/daemon/PROTOCOL.md`."
+        },
+        {
           "type": "object",
           "properties": {
             "project": {
@@ -593,6 +607,51 @@
         "gray"
       ],
       "description": "A console session's badge colour, one of a fixed palette of sixteen colour families, in hue\norder around the colour wheel and then the muted ones, assigned on creation and changed\nafterwards only by the user (see `Session.colour`). The daemon only ever hands the label\naround; what each one looks like in the light and the dark appearance is the UI's own\n(`packages/ui/src/sessions/sessionColours.ts`), not here. A stored label must stay readable,\nso once a release has stored it, one is renamed or removed only together with a schema version\nstep (`SCHEMA_VERSION` in `apps/daemon/src/store/schema.rs`)."
+    },
+    "ContentSearchRequest": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string"
+        },
+        "search": {
+          "type": "string",
+          "description": "The client's name for this search, which every event of it carries, so a client drops\nthose of a search it has moved on from. At most `browse::budget::MAX_SEARCH_NAME_BYTES`\nbytes; a longer one is refused before the `ack`."
+        },
+        "query": {
+          "type": "string"
+        },
+        "match_case": {
+          "type": "boolean",
+          "description": "Whether letter case must match; absent or false, letter case is ignored."
+        },
+        "whole_word": {
+          "type": "boolean",
+          "description": "Whether a match must be a whole word."
+        },
+        "regex": {
+          "type": "boolean",
+          "description": "Whether `query` is a regular expression, in the syntax of Rust's `regex` crate, rather\nthan literal text."
+        },
+        "file_mask": {
+          "type": "string",
+          "description": "Comma-separated globs a file must match, such as `*.ts, *.tsx`; one starting with `!`\nleaves the files it matches out. A glob with no `/` matches the file's name, one with a\n`/` its path relative to the project (even when `directory` is given), a leading `/`\ndropped. `*` does not cross a `/`, and matching is case-sensitive. Absent or blank, every\nfile is searched."
+        },
+        "include_ignored": {
+          "type": "boolean",
+          "description": "Whether files Git ignores, and what is inside ignored folders, are searched."
+        },
+        "directory": {
+          "type": "string",
+          "description": "A directory of the project, as a wire path, to search within instead of the whole\nproject. A path with a symbolic link in it is refused."
+        }
+      },
+      "required": [
+        "project",
+        "search",
+        "query"
+      ],
+      "description": "The fields of a `search_project_content` request."
     },
     "ContentSource": {
       "oneOf": [

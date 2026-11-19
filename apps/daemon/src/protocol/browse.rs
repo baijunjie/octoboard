@@ -63,6 +63,94 @@ pub struct WorktreeInfo {
     pub scope_cause: Option<&'static str>,
 }
 
+/// The fields of a `search_project_content` request.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize)]
+pub struct ContentSearchRequest {
+    pub project: String,
+    /// The client's name for this search, which every event of it carries, so a client drops
+    /// those of a search it has moved on from. At most `browse::budget::MAX_SEARCH_NAME_BYTES`
+    /// bytes; a longer one is refused before the `ack`.
+    pub search: String,
+    pub query: String,
+    /// Whether letter case must match; absent or false, letter case is ignored.
+    #[serde(default)]
+    #[cfg_attr(test, ts(optional = nullable))]
+    pub match_case: bool,
+    /// Whether a match must be a whole word.
+    #[serde(default)]
+    #[cfg_attr(test, ts(optional = nullable))]
+    pub whole_word: bool,
+    /// Whether `query` is a regular expression, in the syntax of Rust's `regex` crate, rather
+    /// than literal text.
+    #[serde(default)]
+    #[cfg_attr(test, ts(optional = nullable))]
+    pub regex: bool,
+    /// Comma-separated globs a file must match, such as `*.ts, *.tsx`; one starting with `!`
+    /// leaves the files it matches out. A glob with no `/` matches the file's name, one with a
+    /// `/` its path relative to the project (even when `directory` is given), a leading `/`
+    /// dropped. `*` does not cross a `/`, and matching is case-sensitive. Absent or blank, every
+    /// file is searched.
+    #[serde(default)]
+    #[cfg_attr(test, ts(optional))]
+    pub file_mask: Option<String>,
+    /// Whether files Git ignores, and what is inside ignored folders, are searched.
+    #[serde(default)]
+    #[cfg_attr(test, ts(optional = nullable))]
+    pub include_ignored: bool,
+    /// A directory of the project, as a wire path, to search within instead of the whole
+    /// project. A path with a symbolic link in it is refused.
+    #[serde(default)]
+    #[cfg_attr(test, ts(optional))]
+    pub directory: Option<String>,
+}
+
+/// One line of a file that matches a content search.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ContentMatch {
+    /// The file's path relative to the project, as a wire path.
+    pub path: String,
+    /// The line's number, counted from 1.
+    pub line: u64,
+    /// The line's text, read as UTF-8 with replacement characters, without its line ending, and
+    /// clipped to about 250 characters around its first match, so that the match shows.
+    pub text: String,
+    /// Where `text` starts in the whole line, in UTF-16 code units: 0 unless the start of the line
+    /// is clipped. A range's place in `text` is its offset less this.
+    pub text_start: u32,
+    /// Every match in the line, in order and not overlapping, as UTF-16 code unit offsets (a
+    /// JavaScript string's indices, `end` exclusive) in the whole line, read as `text` is; one
+    /// may lie partly or wholly outside the clipped `text`.
+    pub ranges: Vec<MatchRange>,
+    /// Whether `text` leaves out the end of the line.
+    pub clipped_end: bool,
+}
+
+/// A match within a [`ContentMatch`]'s line: `start` to `end` (exclusive), in UTF-16 code units of
+/// the whole line.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct MatchRange {
+    pub start: u32,
+    pub end: u32,
+}
+
+/// The bound that ended a content search before it had searched every file.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContentSearchStop {
+    /// The search ran for its whole time budget.
+    Time,
+    /// It found as many matches as one search reports.
+    Matches,
+    /// It read as many bytes of files as one search reads.
+    BytesRead,
+    /// Its matches came to as many bytes as one search sends.
+    ResultBytes,
+}
+
 /// One entry of a project directory listing.
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
@@ -468,6 +556,7 @@ pub const BROWSE_REQUEST_TYPES: &[&str] = &[
     "get_project_source",
     "list_project_dir",
     "search_project_files",
+    "search_project_content",
     "read_project_file",
     "read_path_link",
     "read_file_range",
@@ -505,6 +594,10 @@ pub enum BrowseBody {
         #[cfg_attr(test, ts(optional = nullable))]
         include_ignored: bool,
     },
+    /// Searches the contents of the project's files, streaming what it finds: answered with
+    /// `ack`, then `project_content_matches` in batches and one `project_content_search_ended`,
+    /// each naming `search`. See "Searching file contents" in `apps/daemon/PROTOCOL.md`.
+    SearchProjectContent(ContentSearchRequest),
     ReadProjectFile {
         project: String,
         #[serde(default)]

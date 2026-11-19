@@ -2,15 +2,18 @@ import { ToggleButton as HeroToggleButton, ToggleButtonGroup as HeroToggleButton
 import React from "react";
 
 import { useDisabled } from "./busy";
-import { baseButtonProps, type ButtonBaseProps } from "./Button";
+import { baseButtonProps, type ButtonBaseProps, FIELD_CONTROL_CLASS } from "./Button";
 
 /** HeroUI's toggle button: a button that stays pressed while it is on. On its own it is on while `selected`, told of
  * presses by `onSelectedChange`; in a `ToggleButtonGroup` it is the group's option keyed `id` instead, and the group
  * holds the selection. `ghost` is HeroUI's borderless toggle; `default` (the default) is its filled one. `size` takes
- * HeroUI's sizes; the project's `xs` is not offered for a toggle. */
-export function ToggleButton({ variant, size, selected, onSelectedChange, className, ...rest }: Omit<ButtonBaseProps, "size"> & {
+ * HeroUI's sizes; the project's `xs` is not offered for a toggle. `besideField` gives a toggle standing
+ * beside a field in one row (`FieldRow`) the field's height and corners, exactly as `Button`'s `besideField` does
+ * (`FIELD_CONTROL_CLASS`); its `variant` stays the caller's. */
+export function ToggleButton({ variant, size, besideField = false, selected, onSelectedChange, className, ...rest }: Omit<ButtonBaseProps, "size"> & {
   variant?: "default" | "ghost";
   size?: "sm" | "md" | "lg";
+  besideField?: boolean;
   selected?: boolean;
   onSelectedChange?: (selected: boolean) => void;
 }): React.ReactElement {
@@ -22,7 +25,7 @@ export function ToggleButton({ variant, size, selected, onSelectedChange, classN
       size={size}
       isSelected={selected}
       onChange={onSelectedChange}
-      className={className}
+      className={besideField ? `${FIELD_CONTROL_CLASS} ${className ?? ""}` : className}
     />
   );
 }

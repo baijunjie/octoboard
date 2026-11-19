@@ -81,7 +81,7 @@ async function mount(id: string, mode: "files" | "git"): Promise<() => Element> 
   const Open = () => {
     const browser = useProjectBrowserState(id);
     useEffect(() => browser.setMode(mode), []);
-    return <ProjectBrowser project={{ id, name: id } as Project} active selectedSessionId={undefined} />;
+    return <ProjectBrowser project={{ id, name: id } as Project} active selectedSessionId={undefined} onViewFile={() => {}} />;
   };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);

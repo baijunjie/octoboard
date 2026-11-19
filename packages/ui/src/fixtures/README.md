@@ -18,7 +18,10 @@ It is excluded from the production type check and from release verification, and
   `fixtureConsoles.ts`, `fixtureAccounts.ts` (accounts, and the refusals a session gets on one),
   `fixtureAgentClis.ts` (the agents' CLI versions: the up-to-date statuses a window starts with, and an update), `fixtureSettings.ts`,
   `fixtureProjects.ts` (projects and their shell terminals), `fixtureFiles.ts` (a project's files, folder listings, path
-  links and the reads of a linked file, whole and in parts), `fixtureProcesses.ts` (the process ledger) and `fixtureLifecycle.ts` (what a restart into an update would not
+  links and the reads of a linked file, whole and in parts; Find in files' `search_project_content`, which searches the
+  project's text files as the daemon does through `fixtureContentSearch.ts`, streaming its events to the listener of
+  the search; it is in `FILE_REQUESTS` like the other reads, so a page that routes those to a daemon per project, as
+  the website preview does, sends it there too and listens for its events on every daemon), `fixtureProcesses.ts` (the process ledger) and `fixtureLifecycle.ts` (what a restart into an update would not
   carry over). A request no module answers is acknowledged. A new reply goes
   into the module of its domain, not into `fixtureDaemon.ts`. `BROWSE_REQUESTS` is the set of requests that read a
   project's folder (`GIT_REQUESTS` of `fixtureGit.ts` and `FILE_REQUESTS` of `fixtureFiles.ts`, each typed against the

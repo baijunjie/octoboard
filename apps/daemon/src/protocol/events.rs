@@ -11,7 +11,8 @@ use super::agent_cli::AgentCliStatus;
 use super::agents::AgentId;
 use super::browse::{
     BranchInfo, BrowseEntry, ChangeEntry, ChangeGroup, CommitChanges, ComparisonEndpoint,
-    ContentSource, FileContent, ProjectSourceInfo, SideRead, UpstreamInfo,
+    ContentMatch, ContentSearchStop, ContentSource, FileContent, ProjectSourceInfo, SideRead,
+    UpstreamInfo,
 };
 use super::codes::Code;
 use super::configuration::{
@@ -593,6 +594,27 @@ pub enum Event {
         #[cfg_attr(test, ts(optional = nullable))]
         ignored: Vec<String>,
         complete: bool,
+    },
+    /// A batch of a content search's matches, sent as the search finds them, after the `ack` to
+    /// `search_project_content`; `search` and `project` echo the request.
+    ProjectContentMatches {
+        search: String,
+        project: String,
+        matches: Vec<ContentMatch>,
+    },
+    /// The last event of a content search: how many matches (`matches`, counting every match in a
+    /// line) and files with a match (`files`) it found, and whether it searched every file it was
+    /// to (`complete`). `stopped_by` names the bound that ended it early; an incomplete search
+    /// without one could not read some file or folder.
+    ProjectContentSearchEnded {
+        search: String,
+        project: String,
+        matches: u64,
+        files: u64,
+        complete: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        stopped_by: Option<ContentSearchStop>,
     },
     /// The reply to `read_project_file`; `project`, `worktree` and `path` echo the request.
     ProjectFile {

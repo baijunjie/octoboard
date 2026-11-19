@@ -84,3 +84,24 @@ const SHARING_CAUSES = Object.keys({ permission_denied: 0, busy: 0, not_found: 0
 export function sharingCause(raw: string | undefined): SharingCause {
   return SHARING_CAUSES.find((cause) => cause === raw) ?? "other";
 }
+
+const INVALID_SEARCH_PATTERN_CAUSES = ["unclosed_group", "unopened_group", "unclosed_class", "invalid_repetition", "invalid_escape", "unsupported", "line_break", "other"] as const;
+
+/** The `cause` of an `invalid_search_pattern`: why a content search's query, read as a regular expression, does not
+ * compile. */
+export type InvalidSearchPatternCause = (typeof INVALID_SEARCH_PATTERN_CAUSES)[number];
+
+/** `raw` as an `invalid_search_pattern` cause: one this client does not know, or none, is `other`. */
+export function invalidSearchPatternCause(raw: string | undefined): InvalidSearchPatternCause {
+  return INVALID_SEARCH_PATTERN_CAUSES.find((cause) => cause === raw) ?? "other";
+}
+
+const INVALID_FILE_MASK_CAUSES = ["unclosed_class", "unclosed_alternation", "unopened_alternation", "invalid_range", "other"] as const;
+
+/** The `cause` of an `invalid_file_mask`: why a glob of a content search's file mask does not compile. */
+export type InvalidFileMaskCause = (typeof INVALID_FILE_MASK_CAUSES)[number];
+
+/** `raw` as an `invalid_file_mask` cause: one this client does not know, or none, is `other`. */
+export function invalidFileMaskCause(raw: string | undefined): InvalidFileMaskCause {
+  return INVALID_FILE_MASK_CAUSES.find((cause) => cause === raw) ?? "other";
+}

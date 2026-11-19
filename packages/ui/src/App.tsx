@@ -79,6 +79,7 @@ import { useOpenSessionInApp } from "./components/host/useOpenSessionInApp";
 import { terminalEmptyState } from "./app/emptyState";
 import { TerminalPane } from "./terminal/TerminalPane";
 import { useTerminalFontShortcuts } from "./terminal/terminalFontShortcut";
+import { useFindInFilesShortcut } from "./app/useFindInFilesShortcut";
 import { StartupFramed } from "./StartupScreen";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { useAnnouncement } from "./app/useAnnouncement";
@@ -479,6 +480,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   }, [selectedSession?.id, selectedSession?.status, selectedSession?.bound_to, consoleSessionAboveSelection]);
 
   useTerminalFontShortcuts();
+  useFindInFilesShortcut();
 
   const { stableFocus } = useFocusMode({
     focus: sidebarView.focus,

@@ -50,13 +50,13 @@ const describedBy = (control: HTMLElement) => (control.getAttribute("aria-descri
 it("lists only the commands this client has, and says the fixed ones cannot be changed", () => {
   const browser = mount();
   expect(text(browser)).toContain("Shortcut changes apply only to this browser.");
-  expect(text(browser)).toContain("Toggle focus mode");
+  expect(text(browser)).toContain("Enter focus mode");
   for (const retired of ["Lock or unlock the session", "Pin or unpin the session", "Archive the session", "Copy session ID"]) expect(text(browser)).not.toContain(retired);
   expect(text(browser)).toContain("Next region of the window");
   expect(text(browser)).not.toContain("Back");
   expect(text(browser)).toContain("Open settings");
   expect(text(browser)).not.toContain("Undo");
-  expect(button(browser, "Change the shortcut for Toggle focus mode")).not.toBeNull();
+  expect(button(browser, "Change the shortcut for Enter focus mode")).not.toBeNull();
   expect(button(browser, "Change the shortcut for Next region of the window")).toBeNull();
   const headings = Array.from(browser.querySelectorAll("h3"));
   expect(headings.length).toBeGreaterThan(0);
@@ -65,24 +65,24 @@ it("lists only the commands this client has, and says the fixed ones cannot be c
 
 it("edits through the displayed shortcut itself, which gives way to a prompt that is not a control while recording", () => {
   const container = mount();
-  const change = button(container, "Change the shortcut for Toggle focus mode")!;
-  expect(change.querySelector('[aria-label="Ctrl+Shift+F"]')).not.toBeNull();
-  expect(describedBy(change)).toBe("Ctrl+Shift+F");
+  const change = button(container, "Change the shortcut for Enter focus mode")!;
+  expect(change.querySelector('[aria-label="Ctrl+Alt+Right"]')).not.toBeNull();
+  expect(describedBy(change)).toBe("Ctrl+Alt+Right");
   expect([...container.querySelectorAll("button")].some((control) => control.textContent === "Change")).toBe(false);
   act(() => change.click());
   const prompt = [...container.querySelectorAll("span[id]")].find((node) => node.textContent === "Press the new keys…")!;
   expect(prompt).toBeDefined();
   expect(prompt.closest("kbd, .kbd")).toBeNull();
   expect(prompt.closest("button")).toBeNull();
-  expect(button(container, "Change the shortcut for Toggle focus mode")).toBeNull();
-  const cancel = button(container, "Cancel changing the shortcut for Toggle focus mode")!;
+  expect(button(container, "Change the shortcut for Enter focus mode")).toBeNull();
+  const cancel = button(container, "Cancel changing the shortcut for Enter focus mode")!;
   expect(document.activeElement).toBe(cancel);
   expect(describedBy(cancel)).toBe("Press the new keys…");
   press({ code: "KeyK", primary: true, shift: true });
-  const updated = button(container, "Change the shortcut for Toggle focus mode")!;
+  const updated = button(container, "Change the shortcut for Enter focus mode")!;
   expect(updated.querySelector('[aria-label="Ctrl+Shift+K"]')).not.toBeNull();
   expect(describedBy(updated)).toBe("Ctrl+Shift+K");
-  const reset = button(container, "Reset the shortcut for Toggle focus mode to its default")!;
+  const reset = button(container, "Reset the shortcut for Enter focus mode to its default")!;
   expect(reset.textContent).toBe("");
   expect(reset.querySelector("svg[aria-hidden=true]")).not.toBeNull();
 });
@@ -93,8 +93,8 @@ it.each(Object.keys(CATALOGS) as Language[])("keeps the recording instruction ou
   onTestFinished(() => { act(() => setLanguage(previous)); });
   const t = translatorFor(language);
   const container = mount();
-  act(() => button(container, t("settings.shortcuts.changeLabel", { command: t("settings.shortcuts.command.focusMode") }))!.click());
-  const cancel = button(container, t("settings.shortcuts.cancelLabel", { command: t("settings.shortcuts.command.focusMode") }))!;
+  act(() => button(container, t("settings.shortcuts.changeLabel", { command: t("settings.shortcuts.command.enterFocusMode") }))!.click());
+  const cancel = button(container, t("settings.shortcuts.cancelLabel", { command: t("settings.shortcuts.command.enterFocusMode") }))!;
   const prompt = document.getElementById(cancel.getAttribute("aria-describedby")!.split(/\s+/)[0]!)!;
   expect(prompt).not.toBeNull();
   expect(prompt.textContent).toBe(t("settings.shortcuts.recording"));
@@ -108,18 +108,18 @@ it.each(Object.keys(CATALOGS) as Language[])("keeps the recording instruction ou
 
 it("cancels recording with the separate Cancel button and returns focus to the shortcut", () => {
   const container = mount();
-  act(() => button(container, "Change the shortcut for Toggle focus mode")!.click());
-  const cancel = [...container.querySelectorAll<HTMLButtonElement>('button[aria-label="Cancel changing the shortcut for Toggle focus mode"]')];
+  act(() => button(container, "Change the shortcut for Enter focus mode")!.click());
+  const cancel = [...container.querySelectorAll<HTMLButtonElement>('button[aria-label="Cancel changing the shortcut for Enter focus mode"]')];
   expect(cancel).toHaveLength(1);
   expect(cancel[0]!.textContent).toBe("");
   act(() => cancel[0]!.click());
-  const restored = button(container, "Change the shortcut for Toggle focus mode")!;
-  expect(restored.querySelector('[aria-label="Ctrl+Shift+F"]')).not.toBeNull();
+  const restored = button(container, "Change the shortcut for Enter focus mode")!;
+  expect(restored.querySelector('[aria-label="Ctrl+Alt+Right"]')).not.toBeNull();
   expect(document.activeElement).toBe(restored);
   expect(text(container)).not.toContain("Press the new keys…");
   act(() => restored.click());
   press({ code: "Escape" }, { key: "Escape" });
-  expect(document.activeElement).toBe(button(container, "Change the shortcut for Toggle focus mode"));
+  expect(document.activeElement).toBe(button(container, "Change the shortcut for Enter focus mode"));
 });
 
 it("marks a fixed shortcut accessibly without offering an edit control", () => {
@@ -133,16 +133,16 @@ it("marks a fixed shortcut accessibly without offering an edit control", () => {
 
 it.each(["Enter", " "] as const)("starts recording on the shortcut and cancels it on Cancel with %s", (key) => {
   const container = mount();
-  const change = button(container, "Change the shortcut for Toggle focus mode")!;
+  const change = button(container, "Change the shortcut for Enter focus mode")!;
   act(() => change.focus());
   tap(change, key);
-  const cancel = button(container, "Cancel changing the shortcut for Toggle focus mode")!;
+  const cancel = button(container, "Cancel changing the shortcut for Enter focus mode")!;
   expect(document.activeElement).toBe(cancel);
   tap(cancel, key);
-  const restored = button(container, "Change the shortcut for Toggle focus mode")!;
-  expect(restored.querySelector('[aria-label="Ctrl+Shift+F"]')).not.toBeNull();
+  const restored = button(container, "Change the shortcut for Enter focus mode")!;
+  expect(restored.querySelector('[aria-label="Ctrl+Alt+Right"]')).not.toBeNull();
   expect(document.activeElement).toBe(restored);
-  expect(bindingFor("focusMode")).toEqual({ code: "KeyF", primary: true, shift: true });
+  expect(bindingFor("enterFocusMode")).toEqual({ code: "ArrowRight", primary: true, alt: true });
   expect(text(container)).not.toContain("Press the new keys…");
 });
 
@@ -158,7 +158,7 @@ it("lists the font size commands in a Terminal group, between Focus and Applicat
   }
 });
 
-it.each([["a browser", undefined], ["the desktop app", APP]] as const)("lists the creation commands under Application, before Open settings, and leaves only Toggle focus mode under Focus mode, in %s", (_name, platform) => {
+it.each([["a browser", undefined], ["the desktop app", APP]] as const)("lists the creation commands and Find in files under Application, before Open settings, and leaves Enter and Leave focus mode alone under Focus mode, in %s", (_name, platform) => {
   const container = mount(platform);
   const rebindable = (heading: string) => {
     const group = Array.from(container.querySelectorAll("h3")).find((node) => node.textContent === heading)?.closest("section");
@@ -168,8 +168,8 @@ it.each([["a browser", undefined], ["the desktop app", APP]] as const)("lists th
       .filter((name) => name.startsWith("Change the shortcut for "))
       .map((name) => name.slice("Change the shortcut for ".length));
   };
-  expect(rebindable("Focus mode")).toEqual(["Toggle focus mode"]);
-  expect(rebindable("Application")).toEqual(["New session", "New session with defaults", "Open settings"]);
+  expect(rebindable("Focus mode")).toEqual(["Enter focus mode", "Leave focus mode"]);
+  expect(rebindable("Application")).toEqual(["New session", "New session with defaults", "Find in files", "Open settings"]);
 });
 
 it("records a new combination for a font size command and saves it", () => {
@@ -182,7 +182,8 @@ it("records a new combination for a font size command and saves it", () => {
 
 it("lists the Find key as Find, a fixed one, not as Find in file", () => {
   const browser = mount();
-  expect(text(browser)).not.toContain("Find in file");
+  // Find in files, another command, is listed; the Find key is not called Find in file.
+  expect(text(browser)).not.toMatch(/Find in file(?!s)/);
   expect(button(browser, "Change the shortcut for Find")).toBeNull();
   const row = [...browser.querySelectorAll("*")].find((element) => element.children.length === 0 && element.textContent === "Find");
   expect(row).toBeDefined();
@@ -206,7 +207,7 @@ it("lists Open settings, which the page handles itself, and the console-session 
   // Ctrl+Tab and Ctrl+Shift+Tab, as Windows writes them: never the Windows key, whose Tab is the system's Task View.
   expect(windows.querySelector('[aria-label="Ctrl+Tab"]')).not.toBeNull();
   expect(windows.querySelector('[aria-label="Ctrl+Shift+Tab"]')).not.toBeNull();
-  act(() => button(windows, "Change the shortcut for Toggle focus mode")!.click());
+  act(() => button(windows, "Change the shortcut for Enter focus mode")!.click());
   press({ code: "Tab", primary: true }, { key: "Tab" });
   expect(windows.querySelector(".text-danger")?.textContent).toBe("Already used for Next console session.");
   expect([...windows.querySelectorAll(".text-danger [data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Next console session"]);
@@ -214,19 +215,19 @@ it("lists Open settings, which the page handles itself, and the console-session 
 
 it("records the next combination, saves it at once and offers Reset", () => {
   const container = mount();
-  act(() => button(container, "Change the shortcut for Toggle focus mode")!.click());
+  act(() => button(container, "Change the shortcut for Enter focus mode")!.click());
   expect(text(container)).toContain("Press the new keys…");
   const event = press({ code: "KeyK", primary: true, shift: true });
   expect(event.defaultPrevented).toBe(true);
-  expect(bindingFor("focusMode")).toEqual({ code: "KeyK", primary: true, shift: true });
+  expect(bindingFor("enterFocusMode")).toEqual({ code: "KeyK", primary: true, shift: true });
   expect(text(container)).not.toContain("Press the new keys…");
-  expect(button(container, "Reset the shortcut for Toggle focus mode to its default")).not.toBeNull();
+  expect(button(container, "Reset the shortcut for Enter focus mode to its default")).not.toBeNull();
   expect(button(container, "Restore defaults") ?? [...container.querySelectorAll("button")].find((b) => b.textContent === "Restore defaults")).toBeTruthy();
 });
 
 it("says why a combination cannot be used, keeps recording and saves nothing", () => {
   const container = mount();
-  act(() => button(container, "Change the shortcut for Toggle focus mode")!.click());
+  act(() => button(container, "Change the shortcut for Enter focus mode")!.click());
   press({ code: "KeyN", primary: true, shift: true });
   expect(text(container)).toContain("Already used for New session with defaults.");
   expect(text(container)).toContain("Press the new keys…");
@@ -234,7 +235,7 @@ it("says why a combination cannot be used, keeps recording and saves nothing", (
   expect(text(container)).toContain("Hold");
   press({ code: "ShiftLeft", shift: true });
   expect(text(container)).toContain("Press the new keys…");
-  expect(bindingFor("focusMode")).toEqual({ code: "KeyF", primary: true, shift: true });
+  expect(bindingFor("enterFocusMode")).toEqual({ code: "ArrowRight", primary: true, alt: true });
 });
 
 it("stops on Escape without anything else seeing the key, and gives the keys back to the page after", () => {
@@ -243,28 +244,28 @@ it("stops on Escape without anything else seeing the key, and gives the keys bac
   const listener = (event: KeyboardEvent) => reached.push(event.code);
   window.addEventListener("keydown", listener, { capture: true });
   onTestFinished(() => window.removeEventListener("keydown", listener, { capture: true }));
-  act(() => button(container, "Change the shortcut for Toggle focus mode")!.click());
+  act(() => button(container, "Change the shortcut for Enter focus mode")!.click());
   press({ code: "Escape" }, { key: "Escape" });
   expect(reached).toEqual([]);
   expect(text(container)).not.toContain("Press the new keys…");
   press({ code: "KeyK", primary: true, shift: true });
   expect(reached).toEqual(["KeyK"]);
-  expect(bindingFor("focusMode")).toEqual({ code: "KeyF", primary: true, shift: true });
+  expect(bindingFor("enterFocusMode")).toEqual({ code: "ArrowRight", primary: true, alt: true });
 });
 
 it("resets one command, and restores every default", () => {
-  setBinding("focusMode", { code: "KeyK", primary: true, shift: true });
+  setBinding("enterFocusMode", { code: "KeyK", primary: true, shift: true });
   setBinding("quickCreate", { code: "KeyJ", primary: true, shift: true });
   const container = mount();
-  act(() => button(container, "Reset the shortcut for Toggle focus mode to its default")!.click());
-  expect(bindingFor("focusMode")).toEqual({ code: "KeyF", primary: true, shift: true });
+  act(() => button(container, "Reset the shortcut for Enter focus mode to its default")!.click());
+  expect(bindingFor("enterFocusMode")).toEqual({ code: "ArrowRight", primary: true, alt: true });
   expect(bindingFor("quickCreate")).toEqual({ code: "KeyJ", primary: true, shift: true });
   act(() => [...container.querySelectorAll("button")].find((b) => b.textContent === "Restore defaults")!.click());
   expect(bindingFor("quickCreate")).toEqual({ code: "KeyN", primary: true, shift: true });
   expect([...container.querySelectorAll("button")].some((b) => b.textContent === "Restore defaults")).toBe(false);
 });
 
-const FOCUS_MODE_CHANGE = "Change the shortcut for Toggle focus mode";
+const FOCUS_MODE_CHANGE = "Change the shortcut for Enter focus mode";
 
 it("lets an unmodified Enter or Space through to the focused shortcut button, and says nothing of them", () => {
   const container = mount();
@@ -298,7 +299,7 @@ it("shows a refusal as a field's error is, tied to the control, and speaks it ag
   press({ code: "KeyN", primary: true, shift: true });
   const message = [...container.querySelectorAll("span")].find((span) => span.textContent === "Already used for New session with defaults.")!;
   expect(message.className).toContain("text-danger");
-  expect(button(container, "Cancel changing the shortcut for Toggle focus mode")!.getAttribute("aria-describedby")?.split(/\s+/)).toContain(message.id);
+  expect(button(container, "Cancel changing the shortcut for Enter focus mode")!.getAttribute("aria-describedby")?.split(/\s+/)).toContain(message.id);
   const spoken = () => container.querySelector("[role=status]")!.textContent!;
   const first = spoken();
   press({ code: "KeyN", primary: true, shift: true });
@@ -322,10 +323,10 @@ it("names the command in a refusal as a reference in the danger tone, and speaks
 
 it("names the command as a reference when a reset is refused because its default is taken", () => {
   setBinding("quickCreate", { code: "KeyK", primary: true, shift: true });
-  setBinding("focusMode", { code: "KeyN", primary: true, shift: true });
+  setBinding("enterFocusMode", { code: "KeyN", primary: true, shift: true });
   const container = mount();
   act(() => button(container, "Reset the shortcut for New session with defaults to its default")!.click());
-  expect([...container.querySelectorAll(".text-danger [data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Toggle focus mode"]);
+  expect([...container.querySelectorAll(".text-danger [data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Enter focus mode"]);
 });
 
 it("sets a refusal that names no command as plain text with no reference in it", () => {
@@ -345,31 +346,31 @@ it("says a combination is held by a command this client does not list", () => {
 
 it("keeps a row's override and says why when its default has been taken by another command", () => {
   setBinding("quickCreate", { code: "KeyK", primary: true, shift: true });
-  setBinding("focusMode", { code: "KeyN", primary: true, shift: true });
+  setBinding("enterFocusMode", { code: "KeyN", primary: true, shift: true });
   const container = mount();
   act(() => button(container, "Reset the shortcut for New session with defaults to its default")!.click());
-  expect(text(container)).toContain("Already used for Toggle focus mode.");
+  expect(text(container)).toContain("Already used for Enter focus mode.");
   expect(bindingFor("quickCreate")).toEqual({ code: "KeyK", primary: true, shift: true });
 });
 
 it("moves focus to the shortcut button when a reset succeeds, and speaks it once the focus move is over", async () => {
   fakeTimers();
-  setBinding("focusMode", { code: "KeyK", primary: true, shift: true });
+  setBinding("enterFocusMode", { code: "KeyK", primary: true, shift: true });
   const container = mount();
   await act(async () => { await vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS); });
   const status = () => container.querySelector("[role=status]")!.textContent!.trim();
-  const reset = button(container, "Reset the shortcut for Toggle focus mode to its default")!;
+  const reset = button(container, "Reset the shortcut for Enter focus mode to its default")!;
   act(() => reset.focus());
   act(() => reset.click());
   expect(document.activeElement).toBe(button(container, FOCUS_MODE_CHANGE));
   expect(status()).toBe("");
   await act(async () => { await vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS); });
-  expect(status()).toMatch(/^Toggle focus mode is back to .*F\.$/);
+  expect(status()).toMatch(/^Enter focus mode is back to .*Right\.$/);
 });
 
 it("leaves focus on Reset when the reset is refused", () => {
   setBinding("quickCreate", { code: "KeyK", primary: true, shift: true });
-  setBinding("focusMode", { code: "KeyN", primary: true, shift: true });
+  setBinding("enterFocusMode", { code: "KeyN", primary: true, shift: true });
   const container = mount();
   const reset = button(container, "Reset the shortcut for New session with defaults to its default")!;
   act(() => reset.focus());
@@ -396,7 +397,7 @@ it.each(refusals)("says why %s cannot be used, keeps recording and saves nothing
   press(binding, { key: binding.code === "Escape" ? "Escape" : "" });
   expect(container.querySelector(".text-danger")?.textContent).toBe(message);
   expect(text(container)).toContain("Press the new keys…");
-  expect(bindingFor("focusMode")).toEqual({ code: "KeyF", primary: true, shift: true });
+  expect(bindingFor("enterFocusMode")).toEqual({ code: "ArrowRight", primary: true, alt: true });
 });
 
 it("says Open settings cannot take Shift with a number or symbol key", () => {

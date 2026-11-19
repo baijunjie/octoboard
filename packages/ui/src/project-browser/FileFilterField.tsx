@@ -1,9 +1,8 @@
-import { FileSearch, FileX } from "lucide-react";
 import React, { useEffect, useId, useRef, useState } from "react";
 
 import { FieldClearButton } from "../components/controls/FieldClearButton";
+import { FieldRow } from "../components/form/FieldRow";
 import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
-import { IconToggle } from "../components/controls/IconToggle";
 import { PaneToolbar } from "../components/panel/PaneToolbar";
 import { StatusMark } from "../components/status/StatusMark";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
@@ -11,6 +10,7 @@ import { useT } from "../i18n/react";
 import { SearchField } from "../primitives";
 import { isImeKey } from "../input/imeKey";
 import { interactionIsTouch } from "../input/lastInput";
+import { IncludeIgnoredToggle } from "./IncludeIgnoredToggle";
 
 export interface FileFilterState {
   filter: string;
@@ -89,31 +89,31 @@ export function FileFilterField({ state, label, contextKey, ignoredToggle = fals
     <div className="contents" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
       {state.filterOpen && (
         <PaneToolbar onKeyDownCapture={guardComposition} onBlur={onBlur}>
-          <SearchField
-            label={label}
-            value={state.filter}
-            onChange={state.onFilterChange}
-            fullWidth
-            className="min-w-0 flex-1"
-            inputRef={input}
-            placeholder={t("common.search")}
-            // The mark stands before the Clear button, which keeps the trailing end it has with or without the mark.
-            // When the search completes the mark goes, and focus it held goes to the input rather than to the page,
-            // ahead of the field's own `useFocusHandoff`. After a tap it leaves focus to that handoff, which takes it
-            // to the filter toggle: the input would raise the on-screen keyboard.
-            trailing={incomplete ? (
-              <>
-                {handoffFrom(`[data-status-mark-id="${markId}"]`)}
-                <StatusMark tone="warning" markId={markId} label={t("browser.filter.partial")}>{t("browser.filter.partial.details")}</StatusMark>
-              </>
-            ) : undefined}
-            clearButton={<FieldClearButton />}
-          />
-          {ignoredToggle && (
-            <IconToggle label={t(state.includeIgnored ? "browser.filter.excludeIgnored" : "browser.filter.includeIgnored")} isSelected={state.includeIgnored} onChange={state.onIncludeIgnoredChange}>
-              {state.includeIgnored ? <FileSearch className="size-4" /> : <FileX className="size-4" />}
-            </IconToggle>
-          )}
+          <FieldRow className="flex-1">
+            <SearchField
+              label={label}
+              value={state.filter}
+              onChange={state.onFilterChange}
+              fullWidth
+              className="min-w-0 flex-1"
+              inputRef={input}
+              placeholder={t("common.search")}
+              // The mark stands before the Clear button, which keeps the trailing end it has with or without the mark.
+              // When the search completes the mark goes, and focus it held goes to the input rather than to the page,
+              // ahead of the field's own `useFocusHandoff`. After a tap it leaves focus to that handoff, which takes it
+              // to the filter toggle: the input would raise the on-screen keyboard.
+              trailing={incomplete ? (
+                <>
+                  {handoffFrom(`[data-status-mark-id="${markId}"]`)}
+                  <StatusMark tone="warning" markId={markId} label={t("browser.filter.partial")}>{t("browser.filter.partial.details")}</StatusMark>
+                </>
+              ) : undefined}
+              clearButton={<FieldClearButton />}
+            />
+            {ignoredToggle && (
+              <IncludeIgnoredToggle included={state.includeIgnored} onChange={state.onIncludeIgnoredChange} />
+            )}
+          </FieldRow>
         </PaneToolbar>
       )}
     </div>

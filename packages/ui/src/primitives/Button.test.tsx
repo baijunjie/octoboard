@@ -6,7 +6,7 @@ import { act } from "react";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 
-import { BareButton, Button, buttonClassName, type ButtonPress } from "./Button";
+import { BareButton, Button, buttonClassName, type ButtonPress, FIELD_CONTROL_CLASS } from "./Button";
 import { mount, pressWithMouse } from "./testSupport";
 import { ToggleButton, ToggleButtonGroup } from "./ToggleButton";
 
@@ -233,4 +233,31 @@ it("reports a lone toggle's new state", () => {
   const { container } = mount(<ToggleButton label="Match case" selected={false} onSelectedChange={(selected) => states.push(selected)}>Aa</ToggleButton>);
   pressWithKeyboard(container.querySelector("button")!);
   expect(states).toEqual([true]);
+});
+
+it("gives an icon button and a text button beside a field the same field shape, keeping the caller's variant", () => {
+  const icon = mount(<Button besideField iconOnly label="Paste" variant="secondary">p</Button>).container.querySelector("button")!.classList;
+  const text = mount(<Button besideField variant="secondary">Browse</Button>).container.querySelector("button")!.classList;
+  for (const classes of [icon, text]) {
+    expect(classes).toContain(FIELD_CONTROL_CLASS);
+    expect(classes).toContain("button--secondary");
+  }
+  expect(icon).toContain("button--icon-only");
+  expect(text).not.toContain("button--icon-only");
+});
+
+it("leaves a button that is not beside a field without the field shape", () => {
+  const { container } = mount(<Button iconOnly label="Close" variant="ghost">x</Button>);
+  const classes = container.querySelector("button")!.classList;
+  expect(classes).not.toContain(FIELD_CONTROL_CLASS);
+  expect(classes).toContain("button--ghost");
+});
+
+it("gives a toggle beside a field the same field shape as a button, keeping the caller's variant", () => {
+  const beside = mount(<ToggleButton besideField iconOnly variant="default" label="Include ignored" selected={false}>i</ToggleButton>).container.querySelector("button")!.classList;
+  expect(beside).toContain(FIELD_CONTROL_CLASS);
+  expect(beside).not.toContain("toggle-button--ghost");
+  const plain = mount(<ToggleButton iconOnly variant="ghost" label="Match case" selected={false}>Aa</ToggleButton>).container.querySelector("button")!.classList;
+  expect(plain).not.toContain(FIELD_CONTROL_CLASS);
+  expect(plain).toContain("toggle-button--ghost");
 });

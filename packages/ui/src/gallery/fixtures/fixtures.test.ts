@@ -21,7 +21,8 @@ const VALUE_ARGUMENTS: Partial<Record<keyof Ui, number[]>> = { hoverChangeStatus
 
 /** Every scenario's steps, run against a `Ui` that presses nothing and records the names it was
  * given to look for, in `language`. Only `t`, `session` and `changeRow` are real. `key` and `type`
- * take text, `hoverCalloutStatus` a title and `daemonEvents` events, so they record nothing.
+ * take text, `hoverCalloutStatus` a title, `daemonEvents` events and `waitUntil` a condition on the page, so they
+ * record nothing.
  * Strings produced by `t` already use the current catalog: a translated label such as Italian
  * "Aggiungi account" can also fit an English frame ("{agent} account"), so that heuristic applies
  * only to names the scenario did not translate. */
@@ -40,7 +41,7 @@ async function matchersOf(language: Language, scenarios: Pick<Scenario, "id" | "
         if (property === "t") return t;
         if (property === "session" || property === "changeRow") return target[property];
         return async (...args: unknown[]) => {
-          if (property === "key" || property === "type" || property === "hoverCalloutStatus" || property === "daemonEvents") return;
+          if (property === "key" || property === "type" || property === "hoverCalloutStatus" || property === "daemonEvents" || property === "waitUntil") return;
           args.forEach((arg, index) => {
             if (VALUE_ARGUMENTS[property]?.includes(index)) return;
             if (typeof arg === "string" || typeof arg === "function") matchers.push({ id: scenario.id, matcher: arg as Matcher, translated: typeof arg === "string" && translations.has(arg) });

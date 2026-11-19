@@ -1,4 +1,4 @@
-import { Copy, FolderOpen, SquareArrowOutUpRight, SquareTerminal } from "lucide-react";
+import { Copy, FolderOpen, SquareArrowOutUpRight, SquareTerminal, TextSearch } from "lucide-react";
 import React, { createContext, useContext } from "react";
 
 import { ActionMenu } from "../components/menus/ActionMenu";
@@ -23,6 +23,10 @@ export const RowPathScope = createContext<{ project: string; worktree?: string }
  * provides; where none is provided a row offers no Terminal. */
 export const OpenShellTerminal = createContext<((folder: HostPath) => void) | undefined>(undefined);
 
+/** Opens Find in files limited to a folder of the project's directory, given its wire path; provided by the Files mode,
+ * whose rows are the project's live files. Where none is provided a folder offers no Find in folder. */
+export const FindInDirectory = createContext<((directory: string) => void) | undefined>(undefined);
+
 /** The row's button and right-click share the same actions and focus handling. */
 export function RowActions({ path, name, directory = false, reserve = false, contextTargetRef }: {
   path: string;
@@ -40,7 +44,9 @@ export function RowActions({ path, name, directory = false, reserve = false, con
   const { isLocal } = useDaemon();
   const hostPaths = useHostPathsOrEmpty();
   const openTerminal = useContext(OpenShellTerminal);
+  const findIn = useContext(FindInDirectory);
   const items: ActionMenuEntry[] = [
+    ...(directory && findIn ? [{ label: t("contentSearch.findInDirectory"), icon: TextSearch, onClick: () => findIn(path) }, "separator" as const] : []),
     { label: t("common.copyRelativePath"), icon: Copy, onClick: () => copyPath(path) },
     ...(scope ? [{
       label: t("common.copyAbsolutePath"), icon: Copy, onClick: () => {},

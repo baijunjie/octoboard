@@ -20,6 +20,7 @@ pub mod changes;
 pub mod commits;
 pub mod compare;
 pub mod content;
+pub mod content_search;
 pub mod ignored;
 pub mod lane;
 pub mod line_counts;
@@ -53,7 +54,8 @@ use crate::git::isolated::IsolatedGit;
 use crate::git::run::GitError;
 use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{
-    error_code, BrowseBody, CodedError, ContentSource, Event, RangeFile, ReadFrom,
+    error_code, BrowseBody, CodedError, ContentSearchRequest, ContentSource, Event, RangeFile,
+    ReadFrom,
 };
 use crate::state::AppState;
 use change_read::Expected;
@@ -135,6 +137,115 @@ impl<'a> BrowseGit<'a> {
     }
 }
 
+/// Runs a `search_project_content` request: refuses an over-long `search`, an unknown project, a
+/// directory that cannot be searched and a pattern or file mask that does not compile, then
+/// answers `ack` and sends the matches through `stream` in batches as they are found, returning
+/// the event that ends the search. Once the search is acknowledged, every way it can end other
+/// than a cancel is that event: a failure, even a panic of a walk thread, ends it marked
+/// incomplete, never with an `error` for an id already answered. Blocking: it reads the files on
+/// threads of its own.
+pub fn search_content(
+    state: &AppState,
+    request: ContentSearchRequest,
+    git: &dyn Fn() -> Result<IsolatedGit>,
+    cancel: &AtomicBool,
+    stream: &mut lane::Stream,
+) -> Result<Event> {
+    let bounds = content_search::Bounds::standard();
+    search_content_within(state, request, git, cancel, stream, &bounds)
+}
+
+/// [`search_content`] held to `bounds`, which a test lowers.
+fn search_content_within(
+    state: &AppState,
+    request: ContentSearchRequest,
+    git: &dyn Fn() -> Result<IsolatedGit>,
+    cancel: &AtomicBool,
+    stream: &mut lane::Stream,
+    bounds: &content_search::Bounds,
+) -> Result<Event> {
+    let ContentSearchRequest {
+        project,
+        search,
+        query,
+        match_case,
+        whole_word,
+        regex,
+        file_mask,
+        include_ignored,
+        directory,
+    } = request;
+    if search.len() > budget::MAX_SEARCH_NAME_BYTES {
+        let max = budget::MAX_SEARCH_NAME_BYTES.to_string();
+        return Err(CodedError::raised(
+            error_code::LIMIT_EXCEEDED,
+            format!("the search's name is longer than {max} bytes"),
+            &[("limit", "search_name"), ("max", &max)],
+        ));
+    }
+    let git = BrowseGit::new(git);
+    let record = stored_project(state, &project)?;
+    let scope = scope_for(&record, None, &git, cancel)?;
+    let directory = directory.as_deref().map(parse_path).transpose()?;
+    let root = content_search::root(&scope.canonical, directory.as_ref())?;
+    let compiled = content_search::Compiled::new(&content_search::Query {
+        text: query,
+        match_case,
+        whole_word,
+        regex,
+        file_mask,
+        include_ignored,
+    })?;
+    stream.ack()?;
+    let searched = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        content_search::search(
+            &scope.canonical,
+            &root,
+            &compiled,
+            bounds,
+            cancel,
+            &mut |matches, sending| {
+                let batch = Event::ProjectContentMatches {
+                    search: search.clone(),
+                    project: project.clone(),
+                    matches,
+                };
+                let sent = stream.send(
+                    &batch,
+                    budget::CONTENT_END_BYTES,
+                    sending.deadline,
+                    &mut |paused| sending.pause_readers(paused),
+                )?;
+                Ok(match sent {
+                    lane::SendOutcome::Sent => content_search::Taken::Sent,
+                    lane::SendOutcome::TooLarge => content_search::Taken::Refused,
+                    lane::SendOutcome::OutOfTime => content_search::Taken::OutOfTime,
+                })
+            },
+        )
+    }));
+    let summary = match searched {
+        Ok(Ok(summary)) => summary,
+        Ok(Err(err)) if err.downcast_ref::<Cancelled>().is_some() => return Err(err),
+        Ok(Err(err)) => {
+            tracing::warn!(error = %format!("{err:#}"), "a content search failed after its ack");
+            content_search::Summary::failed()
+        }
+        Err(_) => {
+            tracing::error!("a content search panicked after its ack");
+            content_search::Summary::failed()
+        }
+    };
+    Ok(Event::ProjectContentSearchEnded {
+        search,
+        project,
+        matches: summary.matches,
+        files: summary.files,
+        complete: summary.complete,
+        stopped_by: summary.stopped_by,
+    })
+}
+
 /// Runs one browse request to its reply. Blocking: it reads files and waits on `git`.
 pub fn serve(
     state: &AppState,
@@ -186,6 +297,11 @@ pub fn serve(
                 complete: matches.complete,
             })
         }
+        // Streamed rather than answered with one reply: the control connection hands it to
+        // `search_content`, and no other caller builds one.
+        BrowseBody::SearchProjectContent(_) => Err(anyhow::anyhow!(
+            "a content search is streamed over a control connection, not read in one reply"
+        )),
         BrowseBody::ReadProjectFile {
             project,
             worktree,

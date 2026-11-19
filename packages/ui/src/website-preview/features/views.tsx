@@ -112,7 +112,7 @@ export function FeatureView({ feature }: { feature: string }): React.ReactElemen
           value="octoboard+ssh://alex@server:22"
           dir="ltr"
           onChange={noop}
-          trailing={<PasteButton variant="secondary" focusOnPress={false} failedText={t("remoteDaemons.form.details.pasteFailedTitle")} onPaste={noop} />}
+          trailing={<PasteButton variant="secondary" besideField focusOnPress={false} failedText={t("remoteDaemons.form.details.pasteFailedTitle")} onPaste={noop} />}
         />
       </div>;
       break;

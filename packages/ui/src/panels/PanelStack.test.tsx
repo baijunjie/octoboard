@@ -48,6 +48,7 @@ function mount({ peekKind }: { peekKind?: "files" } = {}) {
       <Probe />
       {withStack && (
         <PanelStack
+          onViewFile={() => {}}
           owner={{ kind: "project", project: current }}
           project={{ id: current, name: `Proj ${current}` } as Project}
           active

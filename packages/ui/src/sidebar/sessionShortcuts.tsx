@@ -6,7 +6,7 @@ import { ShortcutKbd } from "../shortcuts/ShortcutKbd";
 import { matchesCommand } from "../shortcuts/store";
 
 /** The commands that act on sessions, which a menu item or a tooltip shows the key of. */
-export type SessionShortcutAction = Extract<CommandId, "newSession" | "quickCreate" | "focusMode">;
+export type SessionShortcutAction = Extract<CommandId, "newSession" | "quickCreate" | "enterFocusMode" | "exitFocusMode">;
 
 export function matchCreateShortcut(event: KeyboardEvent, host: ModifierHost): "newSession" | "quickCreate" | undefined {
   if (matchesCommand("newSession", event, host)) return "newSession";

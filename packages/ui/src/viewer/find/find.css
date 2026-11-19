@@ -41,6 +41,14 @@
   height: var(--find-bar-gap);
 }
 
+/* The ranges a file was opened to show (`src/viewer/code/lineMarks.ts`), painted like the current match, under the
+   find bar's highlights. */
+::highlight(octoboard-line-mark) {
+  background-color: var(--find-current-bg);
+  color: var(--find-current-fg);
+  text-decoration: underline;
+}
+
 ::highlight(octoboard-find) {
   background-color: var(--find-match-bg);
 }

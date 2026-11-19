@@ -217,7 +217,7 @@ export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }:
           errorMessage={showError("details", detailsError) && <Message id="remoteDaemons.form.details.invalid" params={{ command: <InlineReference monospace>{CONNECTION_COMMAND}</InlineReference> }} />}
           autoFocus={autoFocus}
           onBlur={() => leave("details")}
-          trailing={<PasteButton variant="secondary" focusOnPress={false} failedText={t("remoteDaemons.form.details.pasteFailedTitle")} onPaste={pasteDetails} />}
+          trailing={<PasteButton variant="secondary" besideField focusOnPress={false} failedText={t("remoteDaemons.form.details.pasteFailedTitle")} onPaste={pasteDetails} />}
         />
         <TextInput label={t("remoteDaemons.form.name")} value={fields.name} onChange={(name) => change({ name })} placeholder={t("remoteDaemons.form.name.placeholder")} />
         {/* The address in the order it is written, user, host, port, in one row where it fits, and stacked where it does

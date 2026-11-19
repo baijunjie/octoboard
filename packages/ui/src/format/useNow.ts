@@ -33,7 +33,7 @@ function subscribe(listener: () => void): () => void {
 }
 
 function getSnapshot(): number {
-  now ??= Date.now();
+  now = now ?? Date.now();
   return now;
 }
 

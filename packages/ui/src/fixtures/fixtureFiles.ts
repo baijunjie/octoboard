@@ -3,7 +3,9 @@
 import type { BrowseEntry, DirEntry, FileContent, PathLinkKind, PathLinkView } from "../protocol";
 import { refuseUnfillable } from "./banner";
 import { SAMPLE_FILES, type FixtureFile, type FixtureFiles } from "./sampleFiles";
+import { searchContent, type SearchedFile } from "./fixtureContentSearch";
 import { HOME, neverReplied, normalizedPath, type FixtureContext, type Handlers, type Handler } from "./fixtureContext";
+import type { ContentSearchEvent } from "../store";
 
 /** The names the real daemon's file name search skips at every depth, with everything beneath them:
  * Git's metadata and the files an operating system leaves in a folder, matched ignoring ASCII case
@@ -98,12 +100,12 @@ function entriesUnder(files: FixtureFiles, dir: string): BrowseEntry[] {
 /** The requests that read a project's files, which `createFileReplies` answers (the Git ones are `fixtureGit.ts`'s, see
  * `GIT_REQUESTS`). The table below is typed by this list, so a request named here without a reply, or a reply for one
  * not named here, does not compile. */
-export const FILE_REQUESTS = ["list_project_dir", "search_project_files", "read_project_file", "read_path_link", "read_file_range"] as const;
+export const FILE_REQUESTS = ["list_project_dir", "search_project_files", "search_project_content", "read_project_file", "read_path_link", "read_file_range"] as const;
 type FileRequest = (typeof FILE_REQUESTS)[number];
 
 /** The replies about files and folders: a project's own, the folders the add-project dialog lists, and the paths the
  * terminal shows as links. */
-export function createFileReplies({ scenario, store, fail, restored }: FixtureContext): Handlers {
+export function createFileReplies({ scenario, store, fail, restored }: FixtureContext, deliverContentSearch: (event: ContentSearchEvent) => void): Handlers {
   const projectFiles = (project: string) => restored.files.get(project) ?? scenario.filesByProject?.[project] ?? scenario.files ?? SAMPLE_FILES;
   /** The absolute spelling of a path the terminal showed: as given when absolute or home-relative, else under the asking project's folder. */
   const absoluteLinkPath = (project: string | undefined, path: string) => {
@@ -229,6 +231,29 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
       if ("binary" in file && file.binary.answeredParts !== undefined && body.offset >= file.binary.answeredParts * RANGE_BYTES) return neverReplied();
       const { size, bytes } = bytesOfFile(file, body.offset, Math.min(body.length, RANGE_BYTES));
       return { type: "file_range", id: null, offset: body.offset, size, version: "1", data: base64Of(bytes) };
+    },
+    // Its events come to this daemon's `onContentSearch`, which a page routing browse requests to other daemons (the
+    // website preview) forwards from the daemon it asked.
+    search_project_content: (body) => {
+      if (scenario.searchError) return fail(scenario.searchError);
+      const files = projectFiles(body.project);
+      let scope = "";
+      if (body.directory !== undefined && body.directory !== "") {
+        const directory = browsed(files, body.directory);
+        if (!("dir" in directory)) return fail({ code: "unsupported_file_type", params: { path: body.directory, file_type: "file" }, message: `${body.directory} is not a directory` });
+        scope = `${body.directory}/`;
+      }
+      const searched: SearchedFile[] = Object.entries(files)
+        .filter((entry): entry is [string, { text: string }] => "text" in entry[1])
+        .filter(([path]) => path.startsWith(scope) && !path.split("/").some(isLeftOut) && (body.include_ignored === true || !isIgnored(files, path)))
+        .map(([path, file]) => [path, file.text]);
+      // As a file search is not whole when a folder it meets is cut short or cannot be read.
+      const incomplete = Object.entries(files).some(([path, file]) => "dir" in file && (file.complete === false || file.error !== undefined) && (scope === "" || path.startsWith(scope) || `${path}/` === scope));
+      const staged = scenario.contentSearch;
+      const events = searchContent(searched, body, { incomplete, stoppedBy: typeof staged === "object" ? staged.stoppedBy : undefined, fail });
+      // The events follow the `ack`, as the daemon's do, unless the scenario keeps the search running.
+      if (staged !== "searching") setTimeout(() => events.forEach(deliverContentSearch), 0);
+      return { type: "ack", id: null };
     },
   };
 

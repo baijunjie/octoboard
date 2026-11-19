@@ -543,6 +543,8 @@ export type BrowseRequest = {
   include_ignored?: boolean,
 }
   | {
+  "type": "search_project_content"
+} & ContentSearchRequest | {
   "type": "read_project_file",
   project: string,
   worktree?: string,
@@ -1181,6 +1183,89 @@ export type Console = {
 export type ConsoleSessionColour = "red" | "orange" | "amber" | "yellow" | "lime" | "green" | "teal" | "cyan" | "sky" | "blue" | "indigo" | "violet" | "fuchsia" | "pink" | "brown" | "gray";
 
 export type ContentKind = "text" | "binary";
+
+/**
+ * One line of a file that matches a content search.
+ */
+export type ContentMatch = {
+  /**
+   * The file's path relative to the project, as a wire path.
+   */
+  path: string,
+  /**
+   * The line's number, counted from 1.
+   */
+  line: number,
+  /**
+   * The line's text, read as UTF-8 with replacement characters, without its line ending, and
+   * clipped to about 250 characters around its first match, so that the match shows.
+   */
+  text: string,
+  /**
+   * Where `text` starts in the whole line, in UTF-16 code units: 0 unless the start of the line
+   * is clipped. A range's place in `text` is its offset less this.
+   */
+  text_start: number,
+  /**
+   * Every match in the line, in order and not overlapping, as UTF-16 code unit offsets (a
+   * JavaScript string's indices, `end` exclusive) in the whole line, read as `text` is; one
+   * may lie partly or wholly outside the clipped `text`.
+   */
+  ranges: Array<MatchRange>,
+  /**
+   * Whether `text` leaves out the end of the line.
+   */
+  clipped_end: boolean,
+};
+
+/**
+ * The fields of a `search_project_content` request.
+ */
+export type ContentSearchRequest = {
+  project: string,
+  /**
+   * The client's name for this search, which every event of it carries, so a client drops
+   * those of a search it has moved on from. At most `browse::budget::MAX_SEARCH_NAME_BYTES`
+   * bytes; a longer one is refused before the `ack`.
+   */
+  search: string,
+  query: string,
+  /**
+   * Whether letter case must match; absent or false, letter case is ignored.
+   */
+  match_case?: boolean,
+  /**
+   * Whether a match must be a whole word.
+   */
+  whole_word?: boolean,
+  /**
+   * Whether `query` is a regular expression, in the syntax of Rust's `regex` crate, rather
+   * than literal text.
+   */
+  regex?: boolean,
+  /**
+   * Comma-separated globs a file must match, such as `*.ts, *.tsx`; one starting with `!`
+   * leaves the files it matches out. A glob with no `/` matches the file's name, one with a
+   * `/` its path relative to the project (even when `directory` is given), a leading `/`
+   * dropped. `*` does not cross a `/`, and matching is case-sensitive. Absent or blank, every
+   * file is searched.
+   */
+  file_mask?: string,
+  /**
+   * Whether files Git ignores, and what is inside ignored folders, are searched.
+   */
+  include_ignored?: boolean,
+  /**
+   * A directory of the project, as a wire path, to search within instead of the whole
+   * project. A path with a symbolic link in it is refused.
+   */
+  directory?: string,
+};
+
+/**
+ * The bound that ended a content search before it had searched every file.
+ */
+export type ContentSearchStop = "time" | "matches" | "bytes_read" | "result_bytes";
 
 /**
  * What a file body was actually read from, so a reply identifies the content it carries.
@@ -2283,6 +2368,21 @@ export type Event = {
   complete: boolean,
 }
 | {
+  "type": "project_content_matches",
+  search: string,
+  project: string,
+  matches: Array<ContentMatch>,
+}
+| {
+  "type": "project_content_search_ended",
+  search: string,
+  project: string,
+  matches: number,
+  files: number,
+  complete: boolean,
+  stopped_by?: Received<ContentSearchStop>,
+}
+| {
   "type": "project_file",
   id: string | null,
   project: string,
@@ -3096,6 +3196,15 @@ export type LoginFailure = {
  * Where an account's login is.
  */
 export type LoginStatus = "starting" | "waiting" | "succeeded" | "failed" | "cancelled" | "timed_out";
+
+/**
+ * A match within a [`ContentMatch`]'s line: `start` to `end` (exclusive), in UTF-16 code units of
+ * the whole line.
+ */
+export type MatchRange = {
+  start: number,
+  end: number,
+};
 
 export type McpInventoryFailure = "not_signed_in" | "cli_missing" | "timed_out" | "unsupported_agent" | "failed";
 

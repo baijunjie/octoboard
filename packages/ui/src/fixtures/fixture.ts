@@ -10,6 +10,7 @@ import type { State } from "../store";
 import type { NotifiedBroadcast } from "../store/notifications";
 import type { FixtureGit } from "./changeFixtures";
 import type { TerminalBehaviour } from "./fakeTerminal";
+import type { ContentSearchStaging } from "./fixtureContentSearch";
 import type { FixtureError, FixtureFile, FixtureFiles } from "./sampleFiles";
 
 /** Feedback the scenario raises once the app is mounted, by the route the real feedback takes to the stack: a
@@ -404,8 +405,12 @@ export interface Fixture {
   /** The files every project's browser shows (`list_project_dir`, `read_project_file`); without it,
    * `SAMPLE_FILES`. */
   files?: FixtureFiles;
-  /** What a file search of the project browser (`search_project_files`) is refused with, in place of its matches. */
+  /** What a search of the project browser (`search_project_files`, and Find in files' `search_project_content`) is
+   * refused with, in place of its matches. */
   searchError?: FixtureError;
+  /** How Find in files' `search_project_content` goes beyond what the project's text files give it (the fixture daemon
+   * searches them as the daemon does): `"searching"` never ends it, `{ stoppedBy }` ends it incomplete at that bound. */
+  contentSearch?: ContentSearchStaging;
   /** Per-project file trees for comparing project switches; entries fall back to `files`. */
   filesByProject?: Record<string, FixtureFiles>;
   /** The repository every project's Git mode shows (`get_project_source`, `list_project_changes`,

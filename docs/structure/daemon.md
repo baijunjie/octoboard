@@ -10,7 +10,7 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
 
 Stack (`apps/daemon/Cargo.toml`): tokio, axum 0.7 (HTTP and WebSocket), rusqlite with bundled SQLite, `portable-pty` and
 `alacritty_terminal` (PTYs and the parsed screen), `rmcp` (the MCP server), clap (CLI modes), `notify` (repository ref
-watching), `ureq` (the daemon's only outbound HTTP client, which reads the npm registry in `src/agents/cli/latest.rs` and the server form's release manifest and archive in `src/self_update/fetch.rs`),
+watching), ripgrep's libraries `ignore`, `globset` and `grep-*` (the project content search in `src/browse/content_search/`), `ureq` (the daemon's only outbound HTTP client, which reads the npm registry in `src/agents/cli/latest.rs` and the server form's release manifest and archive in `src/self_update/fetch.rs`),
 serde. The crate is a member of the root Cargo workspace beside the desktop shell's Tauri crate.
 
 ## Entry points
@@ -397,7 +397,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   held to (the upstream-lookup budgets live in `git/remote_branches.rs`). `scope.rs` resolves the project, directory and
   worktree a request works in (and a path for a host action: `resolve_project_path`, `resolve_project_directory`,
   `project_live_roots`); `changes.rs` lists the worktree's changes and `change_read.rs` reads one change for them, for
-  `compare.rs` and for `commits.rs`; `content.rs` encodes a body for the wire; `live.rs` reads the live files under a scope: a whole regular file (`read_file`, and `read_resolved` for a path already resolved, which `path_links::read` uses too) and a part of one (`read_range`, answering `read_file_range`, which a client copying a file reads it in parts with).
+  `compare.rs` and for `commits.rs`; `content.rs` encodes a body for the wire; `content_search/` searches the files' contents for `search_project_content` (`mod.rs` the parallel walk with ripgrep's libraries (`ignore`, `globset`, `grep-searcher`, `grep-regex`) and the batches its matches are handed back in, `mask.rs` the file mask, `line.rs` a matching line's clipped text and UTF-16 ranges, `refusal.rs` why a pattern or a mask is refused), streamed through `lane.rs`'s `Lane::submit_stream` (an `ack`, then events carved out of the request's reservation) from `mod.rs`'s `search_content`; `live.rs` reads the live files under a scope: a whole regular file (`read_file`, and `read_resolved` for a path already resolved, which `path_links::read` uses too), a part of one (`read_range`, answering `read_file_range`, which a client copying a file reads it in parts with), and what a content search opens without following a link: a file (`open_searchable`) and the directory it is limited to (`directory_within`).
 - `src/hostfs/` — host filesystem work: bounded reads, regular-file reads and appends, device/inode identity, listing,
   whole-file replacement, Trash, small entry steps (`modified`, `remove_any`, `is_same_path`), `dir_key`, and the one
   place a path is resolved against the disk (`canonical`, over `platform::names::canonical`) and compared as written

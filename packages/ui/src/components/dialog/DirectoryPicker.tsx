@@ -19,6 +19,7 @@ import { useDaemon } from "../../store";
 import { useHostPaths } from "../hooks/useHostPaths";
 import { Dialog } from "./Dialog";
 import { useRefocusIfLost } from "./dialogHooks";
+import { FieldRow } from "../form/FieldRow";
 import { useTrimmedField } from "../form/useTrimmedField";
 import { raiseError } from "../alerts/raiseError";
 import { useOptionalPlatform } from "../../platform/react";
@@ -163,12 +164,12 @@ export function DirectoryPicker({
 
   return (
     <Dialog title={title} onClose={onClose} footer={footer} onSubmit={() => void load(path)}>
-      <div className="flex gap-2">
+      <FieldRow>
         <Input ref={pathRef} {...openingFocus(true)} fullWidth variant="secondary" dir="ltr" label={t("directoryPicker.path")} placeholder={t("directoryPicker.pathExample")} {...pathField} />
-        <Button type="submit" variant="secondary">
+        <Button type="submit" variant="secondary" besideField>
           {t("directoryPicker.go")}
         </Button>
-      </div>
+      </FieldRow>
       {failure && (
         // The listing is asked for after the picker opened, so its failure announces itself; it may
         // come while the path field is still taking focus, so it waits that out.
@@ -294,7 +295,8 @@ export function pickerStart(value: string, style: PathStyle = "unix"): string {
   return isAbsoluteOrHome(value, style) ? value.trim() : "~";
 }
 
-/** The Browse button of a directory field and the picker it opens, which fills the field through `onPick`. A native
+/** The Browse button of a directory field and the picker it opens, which fills the field through `onPick`. The button
+ * stands beside the field (`besideField`, in a `FieldRow` or a `TextInput`'s `trailing`), as tall as it. A native
  * picker is used only when the daemon shares the shell's filesystem. The fallback picker is
  * returned apart from the button: it goes beside the field's form, never inside the field (a `TextInput`'s `trailing`), whose
  * react-aria contexts the picker's own input would otherwise take over. `picking` is whether the picker is open,
@@ -372,7 +374,7 @@ export function useDirectoryBrowse(
   const picking = !!pending;
   return {
     browseButton: ({ disabled, focusOnPress } = {}) => (
-      <Button type="button" variant="secondary" disabled={disabled} pending={picking} focusOnPress={focusOnPress} onPress={() => {
+      <Button type="button" variant="secondary" besideField disabled={disabled} pending={picking} focusOnPress={focusOnPress} onPress={() => {
         if (busy.current) return;
         busy.current = true;
         setPending({ value, daemon, native, title: t("dialog.chooseDirectory"), failureTitle: t("directoryPicker.navigationFailedTitle"), focus: document.activeElement instanceof HTMLElement ? document.activeElement : null });
