@@ -36,7 +36,7 @@ function RemoteDevicesButton({ shown, onPress }: { shown: boolean; onPress: () =
       onPress={onPress}
       badge={held > 0 ? <RailCountBadge count={held} overflowLabel={t("rail.countBadgeOverflow")} color="success" /> : undefined}
     >
-      <Server aria-hidden="true" className="size-4" />
+      <Server className="size-4" />
     </ChromeButton>
   );
 }

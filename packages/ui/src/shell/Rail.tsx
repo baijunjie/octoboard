@@ -263,7 +263,7 @@ export function Rail({
             </FadedScroller>
             <div data-list-motion="new-console" className="flex shrink-0">
               <ChromeButton id={NEW_CONSOLE_ID} label={t("rail.newConsole")} onPress={() => onOpenDialog({ kind: "new-console" })} tooltipPlacement="end" className="shrink-0">
-                <Plus aria-hidden="true" className="size-4" />
+                <Plus className="size-4" />
               </ChromeButton>
             </div>
           </div>
@@ -275,7 +275,7 @@ export function Rail({
           {waitingCount > 0 && (
             <ChromeButton label={t("rail.waiting", { count: waitingCount })} onPress={onNextWaiting} tooltipPlacement="end"
               badge={<RailCountBadge count={waitingCount} overflowLabel={t("rail.waitingBadgeOverflow")} color="warning" />}>
-              <Hand aria-hidden="true" className="size-4 text-warning-soft-foreground" />
+              <Hand className="size-4 text-warning-soft-foreground" />
             </ChromeButton>
           )}
           <RailProcessesEntry onOpen={onOpenProcesses} />
@@ -284,7 +284,7 @@ export function Rail({
           <RailQuotaEntry selectedSessionId={selectedSessionId} onOpenSettingsAt={onOpenSettingsAt} />
           <RailUpdateEntry focusTerminal={focusTerminal} onOpenSettingsAt={onOpenSettingsAt} />
           <ChromeButton label={t("rail.settings")} onPress={onOpenSettings} tooltipPlacement="end">
-            <Settings aria-hidden="true" className="size-4" />
+            <Settings className="size-4" />
           </ChromeButton>
         </>
       )}

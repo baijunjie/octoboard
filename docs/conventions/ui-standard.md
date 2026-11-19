@@ -1136,6 +1136,9 @@ a shortcut with nothing to do does not turn a ring on where focus already is.
 Every control has an accessible name: its visible text, or an `aria-label` when it has none.
 
 - An icon beside a name is `aria-hidden="true"`; a `lucide-react` icon already carries it, so none is written for it.
+  Lucide adds it only while the icon has no children and no `role`, `title` or other `aria-*` prop. A slot that renders
+  an icon handed in by a caller types it as `LucideIcon`, not as a generic component type, so a component that would
+  need its own `aria-hidden` cannot be put there.
 - An icon that is the only carrier of a meaning gets `role="img"` and an `aria-label`.
 - A control carrying visible text *and* a name of its own has the visible text inside the name, verbatim, numbers
   included (WCAG 2.2 A 2.5.3), so that saying what is on screen reaches it by voice. A separator of collapsed lines is

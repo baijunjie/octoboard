@@ -65,7 +65,7 @@ function ItemIcon({
 }): React.ReactElement {
   if (React.isValidElement(icon)) return icon;
   const Icon = icon;
-  return <Icon aria-hidden="true" className={`size-4 shrink-0 ${destructive ? "text-danger" : "text-app-muted"}${className ? ` ${className}` : ""}`} />;
+  return <Icon className={`size-4 shrink-0 ${destructive ? "text-danger" : "text-app-muted"}${className ? ` ${className}` : ""}`} />;
 }
 
 function isLeaf(entry: ActionMenuEntry | undefined): entry is ActionMenuItem {

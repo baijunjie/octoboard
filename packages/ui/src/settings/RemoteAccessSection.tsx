@@ -186,7 +186,7 @@ export function RemoteAccessSection(): React.ReactElement {
         >
           {loginOn === true ? (
             <StatusBadge size="lg" color="success" variant="soft" separated={false} className="inline-flex items-center gap-1">
-              <CircleCheck size={16} aria-hidden="true" />
+              <CircleCheck size={16} />
               {t("settings.remoteAccess.remoteLogin.on")}
             </StatusBadge>
           ) : (

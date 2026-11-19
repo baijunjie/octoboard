@@ -134,23 +134,23 @@ export function FindBar({
             onSelectedChange={(selected) => onOptionsChange({ ...options, [option]: selected })}
             focusOnPress={false}
           >
-            <Icon aria-hidden="true" className="size-4" />
+            <Icon className="size-4" />
           </ToggleButton>
         </TitledControl>
       ))}
       <TitledControl title={t("viewer.find.previous")}>
         <Button iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.previous")} disabled={stepDisabled} onPress={() => onStep("previous")} focusOnPress={false}>
-          <ChevronUp aria-hidden="true" className="size-4" />
+          <ChevronUp className="size-4" />
         </Button>
       </TitledControl>
       <TitledControl title={t("viewer.find.next")}>
         <Button iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.next")} disabled={stepDisabled} onPress={() => onStep("next")} focusOnPress={false}>
-          <ChevronDown aria-hidden="true" className="size-4" />
+          <ChevronDown className="size-4" />
         </Button>
       </TitledControl>
       <TitledControl title={t("viewer.find.close")}>
         <Button iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.close")} onPress={onClose}>
-          <X aria-hidden="true" className="size-4" />
+          <X className="size-4" />
         </Button>
       </TitledControl>
     </div>
@@ -163,7 +163,7 @@ export function FindToggle({ open, onToggle, ref }: { open: boolean; onToggle: (
   const t = useT();
   return (
     <IconToggle ref={ref} label={t(open ? "viewer.find.close" : "viewer.find")} isSelected={open} expanded={open} onChange={onToggle}>
-      {open ? <SearchX aria-hidden="true" className="size-4" /> : <Search aria-hidden="true" className="size-4" />}
+      {open ? <SearchX className="size-4" /> : <Search className="size-4" />}
     </IconToggle>
   );
 }

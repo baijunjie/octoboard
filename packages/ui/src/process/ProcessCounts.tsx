@@ -97,7 +97,7 @@ function ProcessGroup({ groupKey, title, rows, onPress }: {
                 {row.context !== undefined && <FadeOverflow as="span" dir="auto" className="block text-xs text-app-muted" titleWhenClipped={row.context}>{row.context}</FadeOverflow>}
               </span>
               <CountBadge count={row.count} color="success" />
-              <ChevronRight aria-hidden="true" className="-me-0.5 size-3.5 shrink-0 text-app-muted rtl:-scale-x-100" />
+              <ChevronRight className="-me-0.5 size-3.5 shrink-0 text-app-muted rtl:-scale-x-100" />
             </Button>
           </li>
         ))}

@@ -106,7 +106,7 @@ export function ConnectionBanner({
           className="flex min-h-8 items-center justify-center gap-3 bg-warning px-3 py-1 text-xs text-warning-foreground"
         >
           {state === "closed" ? (
-            <Unplug aria-hidden="true" className="size-3.5 shrink-0" />
+            <Unplug className="size-3.5 shrink-0" />
           ) : (
             <ReconnectingIcon size="compact" inBanner />
           )}

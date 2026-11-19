@@ -217,7 +217,7 @@ export function CloneDirSetting(): React.ReactElement {
             <Input
               dir="ltr"
               onHoverChange={setHovered}
-              start={<Folder size={14} aria-hidden />}
+              start={<Folder size={14} />}
               ref={input}
               inputClassName="font-mono"
               placeholder={t("settings.cloneDir.placeholder")}

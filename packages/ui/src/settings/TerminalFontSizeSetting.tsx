@@ -38,7 +38,7 @@ export function TerminalFontSizeSetting(): React.ReactElement {
                 (interactionIsTouch() ? sectionTab() : input.current)?.focus();
               }}
             >
-              <RotateCcw aria-hidden="true" className="size-4" />
+              <RotateCcw className="size-4" />
             </Button>
           </TitledControl>
         </div>

@@ -40,7 +40,7 @@ export function CardTitle({ name, fallbacks, className }: { name: string; fallba
 export function ToneLine({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
     <p className="flex items-start gap-2 text-sm">
-      <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-soft-foreground" />
+      <Info className="mt-0.5 size-4 shrink-0 text-accent-soft-foreground" />
       <span className="min-w-0">{children}</span>
     </p>
   );
@@ -101,7 +101,7 @@ export const LEFT_OUT_STATUS: StatusEntry = { label: "configuration.import.resul
 /** The glyph of a status, `size` being its size (and margin) classes. */
 export function StatusGlyph({ entry, size }: { entry: StatusEntry; size: string }): React.ReactElement {
   const Icon = entry.icon;
-  return <Icon aria-hidden="true" className={`${size} shrink-0 ${entry.tone}`} />;
+  return <Icon className={`${size} shrink-0 ${entry.tone}`} />;
 }
 
 /** A status as a line: `children` is its glyph (`StatusGlyph`, or a spinner while it is under way) and `label` its word. */
@@ -155,7 +155,7 @@ export function DirectoryLine({ label, value }: { label: string; value: string }
   return (
     <div className="flex items-start gap-1.5 text-sm">
       <IndicatorTooltip tooltip={label} label={label} className="mt-0.5 shrink-0 text-app-muted">
-        <Folder aria-hidden="true" className="size-3.5" />
+        <Folder className="size-3.5" />
       </IndicatorTooltip>
       <span className="min-w-0 font-mono [overflow-wrap:anywhere]" dir="ltr">{value}</span>
     </div>

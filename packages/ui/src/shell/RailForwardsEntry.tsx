@@ -67,7 +67,7 @@ export function RailForwardsEntry(): React.ReactElement | null {
         triggerId={TRIGGER_ID}
         triggerLabel={t("rail.forwards", { count: forwards.length })}
         triggerRef={trigger}
-        glyph={<Cable aria-hidden="true" className="size-4" />}
+        glyph={<Cable className="size-4" />}
         badge={<RailCountBadge count={forwards.length} overflowLabel={t("rail.countBadgeOverflow")} color="success" />}
         onOpenChange={() => {}}
       >

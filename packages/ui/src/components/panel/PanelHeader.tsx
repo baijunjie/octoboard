@@ -102,14 +102,14 @@ export function PanelHeader({
         {frame?.canMaximize && (
           <TitledControl title={t(frame.maximized ? "panel.restore" : "panel.maximize")}>
             <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t(frame.maximized ? "panel.restore" : "panel.maximize")} focusOnPress={false} onPress={frame.onToggleMaximized}>
-              {frame.maximized ? <Minimize2 aria-hidden="true" className="size-4" /> : <Maximize2 aria-hidden="true" className="size-4" />}
+              {frame.maximized ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
             </Button>
           </TitledControl>
         )}
         {frame && (
           <TitledControl title={t("panel.close")}>
             <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("panel.close")} focusOnPress={false} onPress={frame.onClose}>
-              <X aria-hidden="true" className="size-4" />
+              <X className="size-4" />
             </Button>
           </TitledControl>
         )}

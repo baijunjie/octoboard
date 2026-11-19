@@ -36,7 +36,7 @@ export function LayoutToggle({
       isSelected={split}
       onChange={(selected) => onLayoutChange(selected ? "split" : "unified")}
     >
-      {split ? <Columns2 aria-hidden="true" className="size-4" /> : <Rows2 aria-hidden="true" className="size-4" />}
+      {split ? <Columns2 className="size-4" /> : <Rows2 className="size-4" />}
     </SlotToggle>
   );
 }

@@ -96,7 +96,7 @@ function ForwardRow({ forward, name, handoff, onOpen, onStop }: {
             <FadeOverflow ref={address} as="span" dir="ltr" className="block font-semibold">{shownAddress(forward.localAddress)}</FadeOverflow>
             <FadeOverflow as="span" dir="auto" className="block text-xs text-app-muted">{t("forwards.remote", { port: String(forward.remotePort), name })}</FadeOverflow>
           </span>
-          <SquareArrowOutUpRight aria-hidden="true" className="-me-0.5 size-3.5 shrink-0 text-app-muted" />
+          <SquareArrowOutUpRight className="-me-0.5 size-3.5 shrink-0 text-app-muted" />
         </Button>
       </TitledControl>
       <Button size="xs" variant="danger-soft" className="shrink-0" label={t("forwards.stopNamed", { port: String(forward.remotePort) })} focusOnPress={false} data-forward-stop="" onPress={() => onStop(forward)}>

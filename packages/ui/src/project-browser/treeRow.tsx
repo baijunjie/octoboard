@@ -31,8 +31,8 @@ export function ExpandChevron({ isExpanded }: { isExpanded: boolean }): React.Re
     // The tree's default translation of Expand is replaced with the app's own word from the catalog.
     <TreeExpandButton label={isExpanded ? t("browser.tree.collapse") : t("browser.tree.expand")} className="flex size-4 shrink-0 items-center justify-center text-app-muted outline-none">
       {isExpanded
-        ? <ChevronDown aria-hidden="true" className="size-3.5" />
-        : <ChevronRight aria-hidden="true" className="size-3.5 rtl:-scale-x-100" />}
+        ? <ChevronDown className="size-3.5" />
+        : <ChevronRight className="size-3.5 rtl:-scale-x-100" />}
     </TreeExpandButton>
   );
 }
@@ -44,7 +44,7 @@ export function DirectoryRow({ name, isExpanded, link = false, nameGrows = true,
   const Icon = link ? FolderSymlink : isExpanded ? FolderOpen : Folder;
   return (
     <RowContent chevron={<ExpandChevron isExpanded={isExpanded} />}>
-      <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
+      <Icon className="size-4 shrink-0 text-app-muted" />
       <RowName name={name} grow={nameGrows} />
       {children}
     </RowContent>

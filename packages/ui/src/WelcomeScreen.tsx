@@ -99,7 +99,7 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
                         <bdi className="break-words">{providerLabel(t, providers, value)}</bdi>
                       </span>
                       <StatusBadge variant="soft" color={available ? "success" : "default"} className="inline-flex items-center gap-1">
-                        <StatusIcon aria-hidden="true" className="size-3.5 shrink-0" />
+                        <StatusIcon className="size-3.5 shrink-0" />
                         {t(available ? "welcome.toolInstalled" : unavailable ? "welcome.toolNotFound" : "welcome.toolChecking")}
                       </StatusBadge>
                     </div>

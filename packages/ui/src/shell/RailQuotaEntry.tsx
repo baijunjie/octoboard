@@ -70,7 +70,7 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
         triggerClassName="relative"
         glyph={
           <>
-            <Gauge aria-hidden="true" className={!session || !bar ? "size-4" : bar.thin ? "size-4 -translate-y-1" : "size-4 -translate-y-0.5"} />
+            <Gauge className={!session || !bar ? "size-4" : bar.thin ? "size-4 -translate-y-1" : "size-4 -translate-y-0.5"} />
             {session && bar && <RailQuotaBars bar={bar} now={now} />}
           </>
         }

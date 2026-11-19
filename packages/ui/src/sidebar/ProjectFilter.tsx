@@ -110,7 +110,7 @@ export function ProjectFilterButton({
         hasPopup={clearAction ? false : undefined}
         className="shrink-0 rounded-md text-app-muted hover:text-foreground"
       >
-        {filtering ? <FunnelX aria-hidden="true" className="size-4" /> : <Funnel aria-hidden="true" className="size-4" />}
+        {filtering ? <FunnelX className="size-4" /> : <Funnel className="size-4" />}
       </Button>
     </TitledControl>
   );
@@ -202,7 +202,7 @@ function TagPicker({
               <>
                 {/* Picked is shown by a glyph too, not by the fill alone. */}
                 {picked && (
-                  <Check aria-hidden="true" className="size-3 shrink-0" />
+                  <Check className="size-3 shrink-0" />
                 )}
                 <span dir="auto">{tag}</span>
               </>

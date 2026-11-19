@@ -119,7 +119,7 @@ export function AccountLoginButton({ agent, account, name, quota, turnedOff, onL
           onLogin(focused === document.body || button.current?.contains(focused) ? returnFocus : () => {});
         }}
       >
-        <LogIn aria-hidden="true" className="size-4" />
+        <LogIn className="size-4" />
       </Button>
     </TitledControl>
   );

@@ -85,7 +85,7 @@ export function NewSessionMenu({
       onOpened={() => setLockedForm(armedRef.current ?? (heldQuick ? "quickCreate" : "newSession"))}
       onClosed={() => setLockedForm(undefined)}
       filter={{ label: t("sidebar.filter.field"), emptyMessage: t("sidebar.filter.noMatch") }}
-      trigger={quick ? <Zap aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}
+      trigger={quick ? <Zap className="size-4" /> : <Plus className="size-4" />}
       items={sortProjects(projects, () => [], new Set(), new Set()).map((project) => {
         const reason = unavailable.has(project.id) ? { state: t("sidebar.project.openSessionQuickUnavailable") } : undefined;
         return {

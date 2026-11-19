@@ -44,9 +44,9 @@ export function WrapToggleHost(): React.ReactElement {
   return (
     <IconToggle label={t(wrap ? "viewer.wrap.off" : "viewer.wrap")} isSelected={wrap} onChange={(selected) => wordWrap.set(selected)}>
       {wrap ? (
-        <WrapText aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+        <WrapText className="size-4 rtl:-scale-x-100" />
       ) : (
-        <TextAlignStart aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+        <TextAlignStart className="size-4 rtl:-scale-x-100" />
       )}
     </IconToggle>
   );

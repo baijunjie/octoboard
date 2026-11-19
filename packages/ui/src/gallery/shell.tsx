@@ -172,7 +172,7 @@ function Gallery(): React.ReactElement {
         {GROUPS.map(({ title, icon: Icon }, index) => (
           <section key={title} aria-labelledby={`group-${index}`}>
             <h2 id={`group-${index}`}>
-              <Icon aria-hidden size={14} />
+              <Icon size={14} />
               {title}
             </h2>
             {CATEGORIES.map((category) => {

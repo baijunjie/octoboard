@@ -64,7 +64,7 @@ export function StatusMark(props: StatusMarkProps): React.ReactElement {
   const { label, tone = "danger", inline = false, text, children } = props;
   const Icon = GLYPHS[tone];
   // 14px in every form, the size an `xs` icon button gives its icon.
-  const glyph = <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${GLYPH_COLOURS[tone]}`} />;
+  const glyph = <Icon className={`size-3.5 shrink-0 ${GLYPH_COLOURS[tone]}`} />;
   if (!children && !props.detail && text) {
     return (
       <span role="img" aria-label={label} className="inline-flex items-center gap-1.5 whitespace-nowrap">

@@ -84,7 +84,7 @@ export function HostPathButtons({ host, linkHost, launchable = false, download, 
       {buttons.map(({ key, title, name, Icon, run }) => (
         <TitledControl key={key} title={title}>
           <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={name} onPress={run} focusOnPress={false}>
-            <Icon aria-hidden="true" className="size-4" />
+            <Icon className="size-4" />
           </Button>
         </TitledControl>
       ))}
@@ -99,7 +99,7 @@ function DownloadButton({ download }: { download: FileDownload }): React.ReactEl
   return (
     <TitledControl title={t("viewer.downloadAndOpen")}>
       <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("viewer.downloadAndOpen")} pending={download.progress !== undefined} onPress={download.start} focusOnPress={false}>
-        <Download aria-hidden="true" className="size-4" />
+        <Download className="size-4" />
       </Button>
     </TitledControl>
   );

@@ -138,7 +138,7 @@ function ChangeIcon({ item }: { item: ChangeItem }): React.ReactElement {
   const kind = side?.state === "present" ? side.kind : "file";
   if (kind === "file") return <FileTypeIcon path={item.path} />;
   const Icon = kind === "symlink" ? FileSymlink : FolderGit2;
-  return <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />;
+  return <Icon className="size-4 shrink-0 text-app-muted" />;
 }
 
 /** The row's status letter, which says in a tooltip what it stands for. The row's accessible name

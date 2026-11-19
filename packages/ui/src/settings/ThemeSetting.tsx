@@ -33,7 +33,7 @@ export function ThemeSetting(): React.ReactElement {
         {OPTIONS.map(({ key, label, Icon }) => (
           <TitledControl key={key} title={t(label)}>
             <ToggleButton id={key} size="sm" iconOnly label={t(label)} focusOnPress={false}>
-              <Icon aria-hidden="true" className="size-4" />
+              <Icon className="size-4" />
             </ToggleButton>
           </TitledControl>
         ))}

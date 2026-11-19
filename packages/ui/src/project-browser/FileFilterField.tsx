@@ -111,7 +111,7 @@ export function FileFilterField({ state, label, contextKey, ignoredToggle = fals
           />
           {ignoredToggle && (
             <IconToggle label={t(state.includeIgnored ? "browser.filter.excludeIgnored" : "browser.filter.includeIgnored")} isSelected={state.includeIgnored} onChange={state.onIncludeIgnoredChange}>
-              {state.includeIgnored ? <FileSearch aria-hidden="true" className="size-4" /> : <FileX aria-hidden="true" className="size-4" />}
+              {state.includeIgnored ? <FileSearch className="size-4" /> : <FileX className="size-4" />}
             </IconToggle>
           )}
         </PaneToolbar>

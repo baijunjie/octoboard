@@ -14,12 +14,12 @@ import { useListMotion } from "../components/motion/useListMotion";
 
 /** The glyph before the command of a tree that is running. */
 function PlayGlyph(): React.ReactElement {
-  return <Play aria-hidden="true" className="mt-0.75 size-3.5 shrink-0 text-success-soft-foreground" />;
+  return <Play className="mt-0.75 size-3.5 shrink-0 text-success-soft-foreground" />;
 }
 
 /** The glyph that replaces it where the tree is to be stopped. */
 export function StopGlyph(): React.ReactElement {
-  return <PlayOff aria-hidden="true" className="mt-0.75 size-3.5 shrink-0 text-danger-soft-foreground" />;
+  return <PlayOff className="mt-0.75 size-3.5 shrink-0 text-danger-soft-foreground" />;
 }
 
 /** A process tree's command in monospace, after a glyph: on one line that fades where it is cut, with
@@ -49,7 +49,7 @@ function WebLinks({ ports }: { ports: number[] }): React.ReactElement {
   const listRef = useListMotion<HTMLSpanElement>();
   return (
     <span className="flex min-w-0 items-start gap-1.5">
-      <Globe aria-hidden="true" className="mt-0.75 size-3.5 shrink-0" />
+      <Globe className="mt-0.75 size-3.5 shrink-0" />
       {/* The row gap keeps wrapped links' pointer targets 24px apart. */}
       <span ref={listRef} className="flex min-w-0 flex-wrap gap-x-3 gap-y-1">
         {ports.map((port) => (
@@ -77,7 +77,7 @@ export function ProcessTreeDetails({ tree, actions, links = false }: { tree: Pro
     <span className="flex min-w-0 flex-col gap-1 text-xs leading-5 text-app-muted">
       <span className="flex min-w-0 items-center gap-1.5">
         {cwd === null
-          ? <><FolderX aria-hidden="true" className="size-3.5 shrink-0" />{t("processes.cwdUnknown")}</>
+          ? <><FolderX className="size-3.5 shrink-0" />{t("processes.cwdUnknown")}</>
           : <MarkedPath path={cwd} />}
         {tree.cwd_missing && <StatusBadge variant="soft" color="warning">{t("processes.cwdDeleted")}</StatusBadge>}
       </span>

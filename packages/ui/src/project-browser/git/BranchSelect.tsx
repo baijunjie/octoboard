@@ -59,7 +59,7 @@ export function BranchSelect({
         </>,
       }))}
       valueContent={<>
-        {!(isLoading && name === undefined) && <GitBranch aria-hidden="true" className="size-4 shrink-0 text-app-muted" />}
+        {!(isLoading && name === undefined) && <GitBranch className="size-4 shrink-0 text-app-muted" />}
         <FadeOverflow
           as="span"
           dir={name === undefined ? undefined : "ltr"}

@@ -386,7 +386,7 @@ function SettingsDialogContent({ initialSection = SETTINGS_SECTION_IDS[0], navig
                   ref={id === shownId ? attachSelected : undefined}
                   {...(id === shownId && !sectionTakesFocus && openingFocus(true))}
                 >
-                  <Icon aria-hidden="true" className="size-4 shrink-0" />
+                  <Icon className="size-4 shrink-0" />
                   {/* A name too long for the column fades out before the count, which stays in view; the tab's own name already carries it in full. */}
                   <FadeOverflow as="span" className="min-w-0" titleWhenClipped={t(label)}>{t(label)}</FadeOverflow>
                   {searching && <span className="ms-auto flex shrink-0"><CountBadge count={countOf(id)} /></span>}

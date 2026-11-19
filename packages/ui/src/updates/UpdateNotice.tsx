@@ -94,7 +94,7 @@ export function UpdateNotice({ focusTerminal }: { focusTerminal: () => void }): 
           <div className={`flex min-h-6 items-center justify-center gap-x-3 gap-y-1 ${kind === "downloading" ? "" : "flex-wrap"}`}>
             {kind === "downloading" ? (
               <>
-                <Download aria-hidden="true" className="size-3.5 shrink-0" />
+                <Download className="size-3.5 shrink-0" />
                 {/* The bar's colours follow the strip's own foreground: its default accent fill and neutral track
                   would vanish on the accent fill, and its label would take the page's text colour. */}
                 <ProgressBar
@@ -111,7 +111,7 @@ export function UpdateNotice({ focusTerminal }: { focusTerminal: () => void }): 
             ) : (
               // Centred, and balanced when it wraps; the glyph stays with the first line, as part of the text.
               <span className="text-center text-balance">
-                {kind === "reload" ? <RefreshCw aria-hidden="true" className="me-2 inline size-3.5 align-text-bottom" /> : <Download aria-hidden="true" className="me-2 inline size-3.5 align-text-bottom" />}
+                {kind === "reload" ? <RefreshCw className="me-2 inline size-3.5 align-text-bottom" /> : <Download className="me-2 inline size-3.5 align-text-bottom" />}
                 {message}
               </span>
             )}
@@ -139,7 +139,7 @@ export function UpdateNotice({ focusTerminal }: { focusTerminal: () => void }): 
                 )}
                 <TitledControl title={t("updates.notice.dismiss")}>
                   <Button size="xs" variant="ghost" iconOnly className={BUTTON_CLASS} label={t("updates.notice.dismiss")} focusOnPress={false} onPress={store.dismissNotice}>
-                    <X aria-hidden="true" className="size-3.5" />
+                    <X className="size-3.5" />
                   </Button>
                 </TitledControl>
               </>

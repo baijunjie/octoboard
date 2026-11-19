@@ -65,7 +65,7 @@ export function FeatureView({ feature }: { feature: string }): React.ReactElemen
         <li className="preview-row waiting-row">
           <StatusIcon status="waiting_user" decorative />
           <span>{t("session.status.waitingUser")}</span>
-          <ArrowUpRight size={19} className="end-glyph" aria-hidden="true" />
+          <ArrowUpRight size={19} className="end-glyph" />
         </li>
         <li className="preview-row">
           <StatusIcon status="working" decorative />
@@ -79,11 +79,11 @@ export function FeatureView({ feature }: { feature: string }): React.ReactElemen
       }).format(146);
       content = <section className="feature-surface compact-view process-view">
         <div className="preview-line">
-          <Play size={17} className="process-running" aria-hidden="true" /><code dir="ltr">pnpm dev</code>
+          <Play size={17} className="process-running" /><code dir="ltr">pnpm dev</code>
         </div>
         <div className="preview-line process-facts"><bdi>{memory}</bdi><span>·</span><bdi>:{processPort}</bdi></div>
         <div className="preview-line">
-          <Globe size={17} aria-hidden="true" />
+          <Globe size={17} />
           <ExternalLink href={`http://localhost:${processPort}/`} dir="ltr"><code>localhost:{processPort}</code></ExternalLink>
         </div>
         <div className="preview-line process-actions">
@@ -101,7 +101,7 @@ export function FeatureView({ feature }: { feature: string }): React.ReactElemen
         <div className="preview-line">
           <AgentIcon agent="codex" className="size-5 shrink-0" />
           <strong>{t("provider.codex.openInApp")}</strong>
-          <ArrowUpRight size={19} className="end-glyph" aria-hidden="true" />
+          <ArrowUpRight size={19} className="end-glyph" />
         </div>
       </section>;
       break;

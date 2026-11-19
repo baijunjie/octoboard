@@ -81,8 +81,8 @@ export function FeedbackButton({
         <Button {...buttonProps} ref={buttonRef} iconOnly={iconOnly} label={iconOnly ? tooltipText : buttonProps.label} onPress={onPress}>
           {children}
           {feedback.done
-            ? <Check key="done" aria-hidden="true" className="size-4 motion-safe:animate-copy-icon-in" />
-            : <Icon key="idle" aria-hidden="true" className={feedback.everDone ? "size-4 motion-safe:animate-copy-icon-in" : "size-4"} />}
+            ? <Check key="done" className="size-4 motion-safe:animate-copy-icon-in" />
+            : <Icon key="idle" className={feedback.everDone ? "size-4 motion-safe:animate-copy-icon-in" : "size-4"} />}
         </Button>
       </TitledControl>
       <StatusAnnouncer text={feedback.done ? doneText : undefined} element="span" />

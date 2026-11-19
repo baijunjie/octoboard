@@ -130,7 +130,7 @@ export function TableView({ component }: ComponentProps<"table">): React.ReactEl
                         {sortable ? (
                           <BareButton onPress={() => sortBy(index)} label={name === undefined ? undefined : t("report.table.sortNamed", { column: isolate(column.label), table: isolate(name) })} className={`inline-flex items-center gap-1 rounded-sm outline-none ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus ${alignEnd[index] ? "flex-row-reverse" : ""}`}>
                             <span dir="auto" className="align-match-parent">{column.label}</span>
-                            <Arrow aria-hidden="true" className={`size-3.5 shrink-0 ${active ? "" : "text-app-muted"}`} />
+                            <Arrow className={`size-3.5 shrink-0 ${active ? "" : "text-app-muted"}`} />
                           </BareButton>
                         ) : (
                           <span dir="auto" className="align-match-parent">{column.label}</span>

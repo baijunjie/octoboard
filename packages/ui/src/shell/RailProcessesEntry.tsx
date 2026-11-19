@@ -105,7 +105,7 @@ function RunningProcesses({ counts, error, onOpenChange, onOpen }: {
         triggerId={TRIGGER_ID}
         triggerLabel={t("rail.processes", { count })}
         triggerRef={trigger}
-        glyph={<SquareActivity aria-hidden="true" className="size-4" />}
+        glyph={<SquareActivity className="size-4" />}
         badge={<RailCountBadge count={count} overflowLabel={t("rail.countBadgeOverflow")} color="success" />}
         onOpenChange={(isOpen) => {
           onOpenChange(isOpen);

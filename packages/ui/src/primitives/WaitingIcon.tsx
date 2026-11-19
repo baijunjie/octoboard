@@ -12,5 +12,5 @@ export function WaitingIcon({ size = "normal", className = "" }: {
   size?: keyof typeof SIZES;
   className?: string;
 }): React.ReactElement {
-  return <LoaderCircle aria-hidden="true" className={`${SIZES[size]} shrink-0 motion-safe:animate-spin ${className}`} />;
+  return <LoaderCircle className={`${SIZES[size]} shrink-0 motion-safe:animate-spin ${className}`} />;
 }

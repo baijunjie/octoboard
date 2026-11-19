@@ -24,8 +24,8 @@ function PackageRow({ entry, texts }: { entry: LicensedPackage; texts: readonly 
     <li className="groove-b py-2 last:border-b-0">
       <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)} className="group min-w-0">
         <summary className="flex cursor-pointer items-baseline gap-2 text-sm [&::-webkit-details-marker]:hidden">
-          <ChevronRight aria-hidden="true" className="size-4 shrink-0 translate-y-0.5 self-start text-app-muted group-open:hidden rtl:-scale-x-100" />
-          <ChevronDown aria-hidden="true" className="hidden size-4 shrink-0 translate-y-0.5 self-start text-app-muted group-open:block" />
+          <ChevronRight className="size-4 shrink-0 translate-y-0.5 self-start text-app-muted group-open:hidden rtl:-scale-x-100" />
+          <ChevronDown className="hidden size-4 shrink-0 translate-y-0.5 self-start text-app-muted group-open:block" />
           <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3">
             <span dir="ltr" className="font-medium text-foreground [overflow-wrap:anywhere]">{entry.name} {entry.version}</span>
             <span dir="ltr" className="text-app-muted">{entry.license}</span>

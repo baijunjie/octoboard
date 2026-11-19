@@ -89,7 +89,7 @@ function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; 
   return (
     <TitledControl title={label}>
       <Button ref={buttonRef} variant="ghost" focusOnPress={false} label={label} className={ICON_TRIGGER_CLASS} onPress={onPress}>
-        <Icon aria-hidden="true" className="size-4" />
+        <Icon className="size-4" />
       </Button>
     </TitledControl>
   );

@@ -24,7 +24,7 @@ export function NotificationsBell({ focusTerminal }: { focusTerminal: () => void
     <span className="contents" {...held}>
       <ChromeButton label={t("rail.notifications.enable")} onPress={() => void request()} tooltipPlacement="end"
         badge={<Badge color="accent" />}>
-        <Bell aria-hidden="true" className="size-4" />
+        <Bell className="size-4" />
       </ChromeButton>
     </span>
   );

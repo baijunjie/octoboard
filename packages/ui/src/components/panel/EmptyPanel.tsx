@@ -119,7 +119,7 @@ export function EmptyPanel({
     // A `span` rather than a `p`: inside a button only phrasing content is valid.
     const row = (
       <>
-        <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
+        <Icon className="size-4 shrink-0 text-app-muted" />
         <span id={messageId} className="min-w-0 flex-1 break-words text-app-muted">
           {message}
         </span>
@@ -167,7 +167,7 @@ export function EmptyPanel({
   return (
     <EmptyState silent={silent} className="flex flex-col items-center gap-3 px-4 py-4 text-center">
       <span className={`flex size-12 items-center justify-center rounded-full ${tone === "danger" ? "bg-danger-soft text-danger-soft-foreground" : "bg-default text-app-muted"}`}>
-        <Icon aria-hidden="true" className="size-6" />
+        <Icon className="size-6" />
       </span>
       {/* The heading carries its own size and colour: HeroUI's `.empty-state` base sets `text-sm
           text-muted` on the whole panel, so a heading left to inherit would come out at the
@@ -202,14 +202,14 @@ export function EmptyPanel({
               pending={action.isPending}
               onPress={action.onPress}
             >
-              {ActionIcon && <ActionIcon aria-hidden="true" className="size-4" />}
+              {ActionIcon && <ActionIcon className="size-4" />}
               {action.label}
             </Button>
           )}
           {!linkFirst && linkAction}
           {secondaryAction && (
             <Button size="sm" variant="secondary" focusOnPress={false} onPress={secondaryAction.onPress}>
-              {SecondaryIcon && <SecondaryIcon aria-hidden="true" className="size-4" />}
+              {SecondaryIcon && <SecondaryIcon className="size-4" />}
               {secondaryAction.label}
             </Button>
           )}

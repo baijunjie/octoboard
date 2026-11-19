@@ -27,7 +27,7 @@ export function InlinePath({ steps, size, color }: InlinePathProps): React.React
           {index > 0 && (
             <>
               <wbr />
-              <ChevronRight aria-hidden="true" data-inline-path-separator="" className="mx-px inline size-[1em] align-[-0.125em] text-app-muted rtl:-scale-x-100" />
+              <ChevronRight data-inline-path-separator="" className="mx-px inline size-[1em] align-[-0.125em] text-app-muted rtl:-scale-x-100" />
               <span className="sr-only"> &gt; </span>
             </>
           )}

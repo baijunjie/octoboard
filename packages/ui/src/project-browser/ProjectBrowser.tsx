@@ -142,7 +142,7 @@ export function ProjectBrowser({
                 />
                 <TitledControl title={t("browser.refresh")}>
                   <Button ref={refreshRef} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("browser.refresh")} focusOnPress={false} onPress={pressRefresh}>
-                    <RefreshCw aria-hidden="true" className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
+                    <RefreshCw className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
                   </Button>
                 </TitledControl>
               </div>

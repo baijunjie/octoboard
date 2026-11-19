@@ -143,9 +143,9 @@ export function ChangeSectionHeading({
     >
       {/* The chevron mirrors under right-to-left while it points along the text. */}
       {isCollapsed ? (
-        <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 rtl:-scale-x-100" />
+        <ChevronRight className="size-3.5 shrink-0 rtl:-scale-x-100" />
       ) : (
-        <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
+        <ChevronDown className="size-3.5 shrink-0" />
       )}
       {/* Grouped by commit, the count of changes is followed by the count of commits they come from,
           left out while no commit is listed (still loading, or failed) rather than reading as none. */}
@@ -177,13 +177,13 @@ export function ChangeSectionHeading({
               disabled={commitKeys.length === 0} focusOnPress={false}
               onPress={foldCommits}
             >
-              {hasOpenCommit ? <ChevronsDownUp aria-hidden="true" className="size-4" /> : <ChevronsUpDown aria-hidden="true" className="size-4" />}
+              {hasOpenCommit ? <ChevronsDownUp className="size-4" /> : <ChevronsUpDown className="size-4" />}
             </Button>
           </TitledControl>
         )}
         {byCommit && (
           <IconToggle inHeader label={t(byCommit.value ? "git.layout.allCommits" : "git.layout.byCommit")} isSelected={byCommit.value} onChange={byCommit.onChange}>
-            {byCommit.value ? <GitCommitVertical aria-hidden="true" className="size-4" /> : <Layers aria-hidden="true" className="size-4" />}
+            {byCommit.value ? <GitCommitVertical className="size-4" /> : <Layers className="size-4" />}
           </IconToggle>
         )}
         {mark}

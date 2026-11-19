@@ -10,6 +10,6 @@ const MARKS: Record<RepositoryBrand, string[]> = {
 
 /** Hosting marks are decorative: the adjacent menu label names the host. */
 export function RepositoryIcon({ brand }: { brand?: RepositoryBrand }) {
-  if (!brand) return <Globe className="size-4 shrink-0" aria-hidden="true" />;
+  if (!brand) return <Globe className="size-4 shrink-0" />;
   return <svg viewBox="0 0 24 24" className="size-4 shrink-0" fill="currentColor" fillRule="evenodd" aria-hidden="true">{MARKS[brand].map((d, index) => <path key={index} d={d} />)}</svg>;
 }

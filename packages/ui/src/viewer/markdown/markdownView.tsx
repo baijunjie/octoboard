@@ -35,7 +35,7 @@ export function MarkdownViewToggle({
       isSelected={source}
       onChange={(selected) => onViewChange(selected ? "source" : "document")}
     >
-      {source ? <CodeXml aria-hidden="true" className="size-4" /> : <FileText aria-hidden="true" className="size-4" />}
+      {source ? <CodeXml className="size-4" /> : <FileText className="size-4" />}
     </SlotToggle>
   );
 }

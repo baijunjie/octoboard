@@ -75,7 +75,7 @@ function FocusHeader({
           focusOnPress={false}
           onPress={() => handlers.onFocus(undefined)}
         >
-          <ArrowLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+          <ArrowLeft className="size-4 rtl:-scale-x-100" />
         </Button>
       </TitledControl>
       {children}
@@ -590,7 +590,7 @@ function ArchivedList({
         {archived.length > preview.length && (
           <div data-list-motion="view-all">
             <TreeRow ariaLabel={t("sidebar.archive.viewAll")} onActivate={onViewAll}>
-              <List aria-hidden="true" className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
+              <List className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
               <RowLabel>
                 <span className="text-app-muted">{t("sidebar.archive.viewAll")}</span>
               </RowLabel>

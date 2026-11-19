@@ -72,7 +72,7 @@ function AccountRow({
             </span>
             {settled && (
               <StatusBadge variant="soft" color={settled.badge} className="inline-flex items-center gap-1" overflow="wrap">
-                <settled.icon aria-hidden="true" className="size-3 shrink-0" />
+                <settled.icon className="size-3 shrink-0" />
                 {t(settled.label)}
               </StatusBadge>
             )}

@@ -160,10 +160,10 @@ export function GitBadge({
     <>
       {Glyph === undefined ? (
         status.activity === "checking"
-          ? <RefreshCw aria-hidden="true" className="size-3.5 shrink-0 motion-safe:animate-spin-slow" />
+          ? <RefreshCw className="size-3.5 shrink-0 motion-safe:animate-spin-slow" />
           : <WaitingIcon size="compact" />
       ) : (
-        Glyph && <Glyph aria-hidden="true" className="size-3.5 shrink-0" />
+        Glyph && <Glyph className="size-3.5 shrink-0" />
       )}
       {/* A branch keeps its end, the part that tells it from its siblings; a short commit id keeps its
           start, the prefix it is known by. */}
@@ -176,13 +176,13 @@ export function GitBadge({
         <span dir="ltr" className={`${failed ? "col-start-2" : "col-start-3"} flex shrink-0 items-center gap-1 whitespace-nowrap`}>
           {status.ahead > 0 && (
             <span className="inline-flex shrink-0 items-center">
-              {status.activity === "pushing" ? <ScrollingCountArrow direction="up" /> : <ArrowUp aria-hidden="true" className="size-3 shrink-0" />}
+              {status.activity === "pushing" ? <ScrollingCountArrow direction="up" /> : <ArrowUp className="size-3 shrink-0" />}
               {status.ahead.toLocaleString(language)}
             </span>
           )}
           {status.behind > 0 && (
             <span className="inline-flex shrink-0 items-center">
-              {status.activity === "pulling" ? <ScrollingCountArrow direction="down" /> : <ArrowDown aria-hidden="true" className="size-3 shrink-0" />}
+              {status.activity === "pulling" ? <ScrollingCountArrow direction="down" /> : <ArrowDown className="size-3 shrink-0" />}
               {status.behind.toLocaleString(language)}
             </span>
           )}

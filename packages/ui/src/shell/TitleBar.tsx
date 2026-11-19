@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, ChevronRight, PanelLeft, PanelLeftDashed, PanelRight, PanelRightDashed, Server } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronRight, type LucideIcon, PanelLeft, PanelLeftDashed, PanelRight, PanelRightDashed, Server } from "lucide-react";
 import React, { useSyncExternalStore } from "react";
 
 import { PANE_ID } from "../layout/paneOverlay";
@@ -72,7 +72,7 @@ function RemoteDaemonName(): React.ReactElement | null {
   if (name === undefined) return null;
   return (
     <Chip size="sm" color="default" className="me-3 min-w-0 shrink-0 gap-1.5 bg-default px-2 text-default-foreground">
-      <Server aria-hidden="true" className="size-3 shrink-0" />
+      <Server className="size-3 shrink-0" />
       <span className="sr-only">{t("titleBar.remoteDaemon", { name: isolate(name) })}</span>
       <span aria-hidden="true" className="flex max-w-40 min-w-0">
         <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={name}>
@@ -149,7 +149,7 @@ function Trail({ names, children }: { names: string[]; children?: React.ReactNod
         <span className="inline-flex items-center gap-1.5">
           {names.map((name, index) => (
             <React.Fragment key={index}>
-              {index > 0 && <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-chrome-muted rtl:-scale-x-100" />}
+              {index > 0 && <ChevronRight className="size-3.5 shrink-0 text-chrome-muted rtl:-scale-x-100" />}
               <span dir="auto" className={index === names.length - 1 ? "font-medium" : "text-chrome-muted"}>
                 {name}
               </span>
@@ -199,7 +199,7 @@ interface TitleBarProps {
   panelToggles?: ReadonlyArray<{
     kind: string;
     label: string;
-    Icon: React.ComponentType<{ "aria-hidden": "true"; className: string }>;
+    Icon: LucideIcon;
     open: boolean;
     regionId?: string;
     onPress: () => void;
@@ -267,10 +267,10 @@ export function TitleBar({
         <LeftInset />
         <div className="flex items-center gap-1 px-2">
           <ChromeButton label={t("titleBar.back")} onPress={onBack} isDisabled={!canGoBack}>
-            <ArrowLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+            <ArrowLeft className="size-4 rtl:-scale-x-100" />
           </ChromeButton>
           <ChromeButton label={t("titleBar.forward")} onPress={onForward} isDisabled={!canGoForward}>
-            <ArrowRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+            <ArrowRight className="size-4 rtl:-scale-x-100" />
           </ChromeButton>
           {hasSidebar && (
             <ChromeButton
@@ -281,9 +281,9 @@ export function TitleBar({
               onMouseHoverChange={(hovered) => (hovered ? onSidebarToggleEnter() : onSidebarToggleLeave())}
             >
               {sidebarShown ? (
-                <PanelLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+                <PanelLeft className="size-4 rtl:-scale-x-100" />
               ) : (
-                <PanelLeftDashed aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+                <PanelLeftDashed className="size-4 rtl:-scale-x-100" />
               )}
             </ChromeButton>
           )}
@@ -313,7 +313,7 @@ export function TitleBar({
                   popupId={asideAutomatic && asideRevealed ? PANE_ID.aside : undefined}
                   paneToggle={PANE_ID.aside}
                 >
-                  {(asideAutomatic ? asideRevealed : asidePinned) ? <PanelRight aria-hidden="true" className="size-4 rtl:-scale-x-100" /> : <PanelRightDashed aria-hidden="true" className="size-4 rtl:-scale-x-100" />}
+                  {(asideAutomatic ? asideRevealed : asidePinned) ? <PanelRight className="size-4 rtl:-scale-x-100" /> : <PanelRightDashed className="size-4 rtl:-scale-x-100" />}
                 </ChromeButton>
               </>
             )}
@@ -331,7 +331,7 @@ export function TitleBar({
                   paneToggle={PANE_ID.aside}
                   onMouseHoverChange={onHoverChange}
                 >
-                  <Icon aria-hidden="true" className="size-4" />
+                  <Icon className="size-4" />
                 </ChromeButton>
               </React.Fragment>
             ))}

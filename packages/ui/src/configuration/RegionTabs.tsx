@@ -96,7 +96,7 @@ function RegionTab({ region }: { region: RegionPanel }): React.ReactElement {
       {region.label}
       {region.attention && (
         <>
-          <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0 text-warning-soft-foreground" />
+          <TriangleAlert className="size-3.5 shrink-0 text-warning-soft-foreground" />
           <AnchoredTooltip tooltip={t("configuration.import.tab.attentionTip")} anchor={ref} placement="end" hovered={hovered || (focused && isFocusVisible)} immediate={focused} />
         </>
       )}

@@ -11,7 +11,7 @@ export function FieldClearButton(props: ButtonProps): React.ReactElement {
   return (
     <TitledControl title={t("common.clear")}>
       <Button {...props} data-field-clear="" iconOnly size="xs" variant="ghost" label={t("common.clear")}>
-        <X aria-hidden="true" />
+        <X />
       </Button>
     </TitledControl>
   );

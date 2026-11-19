@@ -239,13 +239,13 @@ export function ArchiveView({
         />
         {archived.length > 0 && (
           <Button size="sm" variant="danger-soft" focusOnPress={false} onPress={deleteAll} disabled={archived.some(({ session }) => session.locked)}>
-            <Trash2 aria-hidden="true" className="size-4" />
+            <Trash2 className="size-4" />
             {t("archive.deleteAll")}
           </Button>
         )}
         <TitledControl title={t("common.close")}>
           <Button ref={closeRef} iconOnly size="sm" variant="ghost" label={t("common.close")} onPress={onClose}>
-            <X aria-hidden="true" className="size-4" />
+            <X className="size-4" />
           </Button>
         </TitledControl>
       </header>
@@ -380,14 +380,14 @@ function ArchiveRow({
               {openInApp && (
                 <TitledControl title={openInAppAside ? <HeadedTooltip heading={openInApp} emphasized={false}><div>{openInAppAside}</div></HeadedTooltip> : openInApp}>
                   <Button iconOnly size="sm" variant="tertiary" label={t("sidebar.session.openInAppItem", { label: openInApp, title: isolate(sessionDisplayTitle(t, session)) })} describedBy={openInAppNoteId ?? ""} unavailable={openInAppBlock?.detail} onPress={pressOpenInApp}>
-                    <AppWindow aria-hidden="true" className="size-4" />
+                    <AppWindow className="size-4" />
                     {openInAppNoteId && <span id={openInAppNoteId} className="sr-only">{openInAppAside}</span>}
                   </Button>
                 </TitledControl>
               )}
               <TitledControl title={t("sidebar.session.reopen")}>
                 <Button iconOnly size="sm" variant="tertiary" label={t("sidebar.session.reopenItem", { title: isolate(sessionDisplayTitle(t, session)) })} describedBy="" onPress={() => onReopen(session)}>
-                  <RotateCcw aria-hidden="true" className="size-4" />
+                  <RotateCcw className="size-4" />
                 </Button>
               </TitledControl>
               <TitledControl title={t("common.delete")}>
@@ -400,7 +400,7 @@ function ArchiveRow({
                   describedBy=""
                   onPress={() => onOpenDialog({ kind: "delete-session", session })}
                 >
-                  <Trash2 aria-hidden="true" className="size-4" />
+                  <Trash2 className="size-4" />
                 </Button>
               </TitledControl>
             </div>

@@ -50,7 +50,7 @@ export function ZoomBar({
           onPress={() => onStep(-1)}
           focusOnPress={false}
         >
-          <ZoomOut aria-hidden="true" className="size-4" />
+          <ZoomOut className="size-4" />
         </Button>
       </TitledControl>
       {/* Shown, not spoken: a change made from the keyboard or the buttons is announced on its own. Wide enough for
@@ -69,7 +69,7 @@ export function ZoomBar({
           onPress={() => onStep(1)}
           focusOnPress={false}
         >
-          <ZoomIn aria-hidden="true" className="size-4" />
+          <ZoomIn className="size-4" />
         </Button>
       </TitledControl>
       {/* Its name and icon say what pressing does, as a maximize-and-restore button's do: zoomed is a range of scales,
@@ -85,7 +85,7 @@ export function ZoomBar({
           onPress={onToggleFit}
           focusOnPress={false}
         >
-          {fitted ? <Expand aria-hidden="true" className="size-4" /> : <Shrink aria-hidden="true" className="size-4" />}
+          {fitted ? <Expand className="size-4" /> : <Shrink className="size-4" />}
         </Button>
       </TitledControl>
     </div>

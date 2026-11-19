@@ -61,8 +61,8 @@ function Swatches({ meaning }: { meaning: Meaning }): React.ReactElement {
       <Swatch role="Solid and the text on it" tokens={solid.text ? [solid.fill, solid.text] : [solid.fill, "no foreground token"]} style={{ background: use(solid.fill), color: solid.text ? use(solid.text) : "white" }}>Aa</Swatch>
       <Swatch role="Soft fill" tokens={[soft.token, `(${soft.alias})`]} style={{ background: use(soft.token), color: use("--foreground") }}>Aa</Swatch>
       <Swatch role="Icon or glyph" tokens={[icon]} style={{}}>
-        <CircleAlert aria-hidden="true" className="size-6" style={{ color: use(icon) }} />
-        <Info aria-hidden="true" className="ms-2 size-6" style={{ color: use(icon) }} />
+        <CircleAlert className="size-6" style={{ color: use(icon) }} />
+        <Info className="ms-2 size-6" style={{ color: use(icon) }} />
       </Swatch>
       <Swatch role="Text in the colour" tokens={[text]} style={{ color: use(text) }}>Text Aa</Swatch>
       <Swatch role="Hairline edge" tokens={[edge(color)]} style={{ border: `1px solid ${use(edge(color))}`, color: use("--foreground") }}>Aa</Swatch>
@@ -82,9 +82,9 @@ function Mark({ color }: { color: StatusBadgeColor }): React.ReactElement | null
     case "warning":
       return <StatusMark tone="warning" label="Out of date: last read 12 minutes ago">Claude Code took too long to report its usage.</StatusMark>;
     case "default":
-      return <Info aria-hidden="true" className="size-4" style={{ color: use("--default-soft-foreground") }} />;
+      return <Info className="size-4" style={{ color: use("--default-soft-foreground") }} />;
     case "help":
-      return <Sparkles aria-hidden="true" className="size-4" style={{ color: use("--tint-help-fg") }} />;
+      return <Sparkles className="size-4" style={{ color: use("--tint-help-fg") }} />;
   }
 }
 

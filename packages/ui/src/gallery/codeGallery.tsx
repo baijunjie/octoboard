@@ -90,7 +90,7 @@ export function CodeGallery(): React.ReactElement {
                   <h3 className="text-sm font-medium">{size}: {size === "sm" ? "20px, default" : size === "md" ? "24px" : "28px"}</h3>
                   {BADGE_VARIANTS.map((variant) => (
                     <StatusBadge key={variant} size={size} color="success" variant={variant} separated={false} className="inline-flex items-center gap-1">
-                      <CircleCheck size={size === "lg" ? 16 : 12} aria-hidden="true" />
+                      <CircleCheck size={size === "lg" ? 16 : 12} />
                       Granted
                     </StatusBadge>
                   ))}

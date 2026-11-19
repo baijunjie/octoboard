@@ -89,7 +89,7 @@ function DeviceRow({ entry, state, selected, connectable, onSelect, onConnect, o
       selected={selected}
       onActivate={() => onSelect(entry.id)}
     >
-      <RowIconSlot placement="leading"><Server aria-hidden="true" className="size-4 text-app-muted" /></RowIconSlot>
+      <RowIconSlot placement="leading"><Server className="size-4 text-app-muted" /></RowIconSlot>
       <RowLabel title={entry.name} className="min-w-0 flex-1">{entry.name}</RowLabel>
       <RowControls
         reserve

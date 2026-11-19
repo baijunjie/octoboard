@@ -11,5 +11,5 @@ export function FileIcon({ entry, path }: { entry: BrowseEntry | undefined; path
     : entry.kind === "symlink"
       ? FileSymlink
       : FileQuestion;
-  return <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />;
+  return <Icon className="size-4 shrink-0 text-app-muted" />;
 }

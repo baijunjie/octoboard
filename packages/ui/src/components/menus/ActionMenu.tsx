@@ -315,7 +315,7 @@ export function ActionMenu({
               focusOnPress={false}
               className={contextOnly ? "hidden" : ICON_TRIGGER_CLASS}
             >
-              {trigger ?? <EllipsisVertical aria-hidden="true" className="size-4" />}
+              {trigger ?? <EllipsisVertical className="size-4" />}
             </MenuTrigger>
           </TitledControl>
         </BadgedControl>

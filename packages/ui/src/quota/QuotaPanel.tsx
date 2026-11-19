@@ -90,7 +90,7 @@ export function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, 
       {!(selected === undefined && (noAgents === "add" || noAgents === undefined)) && (
         <div className="groove-t flex justify-end p-2">
           <Button size="sm" variant="ghost" className="text-app-muted hover:text-foreground ui-keyboard-focus:text-foreground" focusOnPress={false} onPress={onOpenAccounts}>
-            <KeyRound aria-hidden="true" className="size-4 shrink-0" />
+            <KeyRound className="size-4 shrink-0" />
             {t("rail.quota.manage")}
           </Button>
         </div>

@@ -30,12 +30,12 @@ export function BrowserViewControls({
   return (
     <>
       <IconToggle ref={filterToggleRef} label={t(filterOpen ? "browser.filter.hide" : "browser.filter.show")} isSelected={filterOpen} expanded={filterOpen} onChange={onFilterOpenChange}>
-        {filterOpen ? <FunnelX aria-hidden="true" className="size-4" /> : <Funnel aria-hidden="true" className="size-4" />}
+        {filterOpen ? <FunnelX className="size-4" /> : <Funnel className="size-4" />}
       </IconToggle>
       {collapseAll && (
         <TitledControl title={t("browser.collapseAll")}>
           <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("browser.collapseAll")} disabled={collapseAll.disabled} focusOnPress={false} onPress={collapseAll.onPress}>
-            <ChevronsDownUp aria-hidden="true" className="size-4" />
+            <ChevronsDownUp className="size-4" />
           </Button>
         </TitledControl>
       )}
@@ -46,13 +46,13 @@ export function BrowserViewControls({
             label={foldLabel}
             disabled={foldDirectories.disabled} focusOnPress={false} onPress={foldDirectories.onPress}
           >
-            {foldDirectories.collapse ? <ChevronsDownUp aria-hidden="true" className="size-4" /> : <ChevronsUpDown aria-hidden="true" className="size-4" />}
+            {foldDirectories.collapse ? <ChevronsDownUp className="size-4" /> : <ChevronsUpDown className="size-4" />}
           </Button>
         </TitledControl>
       )}
       {layout && (
         <IconToggle label={t(layout.value === "tree" ? "git.layout.flat" : "git.layout.tree")} isSelected={layout.value === "tree"} onChange={(grouped) => layout.onChange(grouped ? "tree" : "flat")}>
-          {layout.value === "tree" ? <FolderTree aria-hidden="true" className="size-4 rtl:-scale-x-100" /> : <List aria-hidden="true" className="size-4 rtl:-scale-x-100" />}
+          {layout.value === "tree" ? <FolderTree className="size-4 rtl:-scale-x-100" /> : <List className="size-4 rtl:-scale-x-100" />}
         </IconToggle>
       )}
     </>

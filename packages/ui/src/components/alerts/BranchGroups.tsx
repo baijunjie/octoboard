@@ -40,7 +40,7 @@ function RowName({ row }: { row: BranchRow }): React.ReactElement {
   return (
     <span className="inline-flex max-w-full flex-col align-top">
       <span className="flex min-w-0 items-start gap-1">
-        <Folder aria-hidden="true" className="mt-1 size-3 shrink-0" />
+        <Folder className="mt-1 size-3 shrink-0" />
         <span className="min-w-0">{code(row.path)}</span>
       </span>
       {row.branch === null

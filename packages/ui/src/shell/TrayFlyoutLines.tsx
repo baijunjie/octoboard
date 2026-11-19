@@ -78,7 +78,7 @@ function quotaColour(items: StatusItemSubmenuItem[]): readonly number[] | undefi
 }
 
 function Chevron({ expanded }: { expanded: boolean }): React.ReactElement {
-  return expanded ? <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-app-muted" /> : <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-app-muted rtl:-scale-x-100" />;
+  return expanded ? <ChevronDown className="size-3.5 shrink-0 text-app-muted" /> : <ChevronRight className="size-3.5 shrink-0 text-app-muted rtl:-scale-x-100" />;
 }
 
 /** The accessible name of a header row of a quota submenu: its own phrase, else its parts joined as a list. */

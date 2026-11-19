@@ -27,7 +27,7 @@ export function PlainMarkedPath({
 }): React.ReactElement {
   return (
     <span className={size === "md" ? "flex min-w-0 items-center gap-2" : "flex min-w-0 items-center gap-1.5"}>
-      {React.isValidElement(Icon) ? Icon : <Icon size={size === "md" ? 16 : 14} aria-hidden className="shrink-0 text-app-muted" />}
+      {React.isValidElement(Icon) ? Icon : <Icon size={size === "md" ? 16 : 14} className="shrink-0 text-app-muted" />}
       <PathText path={path} shown={shown} className={size === "md" ? "min-w-0 flex-1 font-mono text-sm leading-5" : "min-w-0 flex-1 font-mono text-xs leading-5"} />
     </span>
   );

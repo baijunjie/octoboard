@@ -88,7 +88,7 @@ export function ConsoleAccountsField({
               if (manageRef.current) onManageAccounts(manageRef.current);
             }}
           >
-            <KeyRound aria-hidden="true" className="size-3.5" />
+            <KeyRound className="size-3.5" />
           </Button>
         </TitledControl>
       }

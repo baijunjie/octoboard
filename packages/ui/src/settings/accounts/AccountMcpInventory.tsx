@@ -39,8 +39,8 @@ export function McpInventoryAside({ state, refreshButton }: { state: McpInventor
         ? <span>{t("settings.accounts.mcp.refreshing")}</span>
         : inventory && !inventory.unavailable && <UpdatedAge at={inventory.read_at} copy={{ now: "settings.accounts.mcp.updatedNow", age: "settings.accounts.mcp.updated" }} />}
       <TitledControl title={t("settings.accounts.mcp.refresh")}>
-        <Button ref={refreshButton} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("settings.accounts.mcp.refresh")} focusOnPress={false} pending={state.reading} dimWhilePending={false} pendingIndicator={<RefreshCw aria-hidden="true" className="size-4 motion-safe:animate-spin-slow" />} onPress={state.refresh}>
-          <RefreshCw aria-hidden="true" className="size-4" />
+        <Button ref={refreshButton} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("settings.accounts.mcp.refresh")} focusOnPress={false} pending={state.reading} dimWhilePending={false} pendingIndicator={<RefreshCw className="size-4 motion-safe:animate-spin-slow" />} onPress={state.refresh}>
+          <RefreshCw className="size-4" />
         </Button>
       </TitledControl>
     </span>

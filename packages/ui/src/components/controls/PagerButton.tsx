@@ -41,7 +41,7 @@ export function PagerButton({
         onFocus={onFocus}
         onBlur={onBlur}
       >
-        <Icon aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+        <Icon className="size-4 rtl:-scale-x-100" />
       </Button>
     </TitledControl>
   );

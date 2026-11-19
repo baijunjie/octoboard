@@ -243,7 +243,7 @@ export function ShellTerminalPanel({
   const newTerminalButton = (
     <TitledControl title={t("shellTerminal.new")}>
       <Button ref={newRef} data-region-landing={terminals.length === 0 ? "" : undefined} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("shellTerminal.new")} focusOnPress={false} onPress={() => void start()}>
-        <Plus aria-hidden="true" className="size-4" />
+        <Plus className="size-4" />
       </Button>
     </TitledControl>
   );

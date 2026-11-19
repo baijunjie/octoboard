@@ -1,5 +1,5 @@
 // The components of a page that only show something: a callout, key-value pairs, a figure, code and a diff.
-import { ArrowDown, ArrowRight, ArrowUp, CircleAlert, CircleCheck, Info, TriangleAlert } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, CircleAlert, CircleCheck, Info, type LucideIcon, TriangleAlert } from "lucide-react";
 import React from "react";
 
 import { useT } from "../../i18n/react";
@@ -20,7 +20,7 @@ const CALLOUT_TONES = {
   success: { Icon: CircleCheck, box: "border-(--tint-success-edge) bg-(--tint-success-bg)", icon: "text-success-soft-foreground" },
   warning: { Icon: TriangleAlert, box: "border-(--tint-warning-edge) bg-(--tint-warning-bg)", icon: "text-warning-soft-foreground" },
   danger: { Icon: CircleAlert, box: "border-(--tint-danger-edge) bg-(--tint-danger-bg)", icon: "text-danger-soft-foreground" },
-} satisfies Record<CalloutTone, { Icon: React.ComponentType<{ className?: string; "aria-hidden"?: "true" }>; box: string; icon: string }>;
+} satisfies Record<CalloutTone, { Icon: LucideIcon; box: string; icon: string }>;
 
 const isCalloutTone = knownValues<CalloutTone>({ info: true, success: true, warning: true, danger: true });
 const isStatTrend = knownValues<StatTrend>({ up: true, down: true, flat: true });
@@ -34,7 +34,7 @@ export function CalloutView({ component }: ComponentProps<"callout">): React.Rea
   const { Tag, inner } = useChildHeadingLevel(component.title !== undefined);
   return (
     <div role="note" className={`flex gap-2.5 rounded-lg border p-3 ${box}`}>
-      <Icon aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${icon}`} />
+      <Icon className={`mt-0.5 size-4 shrink-0 ${icon}`} />
       <div className="min-w-0 flex-1">
         <span className="sr-only">{t(`report.callout.${tone}`)}</span>
         {component.title !== undefined && <Tag className="text-sm font-semibold align-match-parent" dir="auto">{component.title}</Tag>}
@@ -60,7 +60,7 @@ export function KeyValuesView({ component }: ComponentProps<"key_values">): Reac
   );
 }
 
-const TREND_ICONS: Record<StatTrend, React.ComponentType<{ className?: string; "aria-hidden"?: "true" }>> = {
+const TREND_ICONS: Record<StatTrend, LucideIcon> = {
   up: ArrowUp,
   down: ArrowDown,
   flat: ArrowRight,
@@ -87,7 +87,7 @@ export function StatView({ component }: ComponentProps<"stat">): React.ReactElem
       <span className="text-2xl font-semibold tabular-nums align-match-parent [overflow-wrap:anywhere]" dir="auto">{cellText(component.value)}</span>
       {(component.change !== undefined || trend !== undefined) && (
         <span className={`inline-flex items-center gap-1 text-sm ${SENTIMENT_CLASS[sentiment]}`}>
-          {TrendIcon && <TrendIcon aria-hidden="true" className="size-4 shrink-0" />}
+          {TrendIcon && <TrendIcon className="size-4 shrink-0" />}
           {trend && <span className="sr-only">{t(TREND_TEXT[trend])}</span>}
           {component.change !== undefined && <span dir="auto">{component.change}</span>}
         </span>

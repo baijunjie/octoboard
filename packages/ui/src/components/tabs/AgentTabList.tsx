@@ -270,7 +270,7 @@ function AgentTab({ providers, agent, tabRef, notInstalledTip, elements, onDragS
       {providerLabel(t, providers, agent)}
       {notInstalledTip && (
         <>
-          <TriangleAlert aria-hidden="true" className="-ms-1 size-3.5 shrink-0 text-warning-soft-foreground" />
+          <TriangleAlert className="-ms-1 size-3.5 shrink-0 text-warning-soft-foreground" />
           <AnchoredTooltip
             key={arrivals}
             tooltip={notInstalledTip}

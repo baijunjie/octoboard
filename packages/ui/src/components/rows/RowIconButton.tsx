@@ -51,7 +51,7 @@ export function RowIconButton({
           disabled={isDisabled}
           className={unavailable ? ROW_ICON_BUTTON_BASE_CLASS : ROW_ICON_BUTTON_CLASS}
         >
-          <Icon aria-hidden="true" className={iconClassName ? `size-4 ${iconClassName}` : "size-4"} />
+          <Icon className={iconClassName ? `size-4 ${iconClassName}` : "size-4"} />
         </Button>
       </TitledControl>
     </div>

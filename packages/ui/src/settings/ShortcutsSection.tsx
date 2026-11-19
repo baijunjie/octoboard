@@ -283,7 +283,7 @@ function ShortcutRow({
                 describedBy={[promptId, problem && problemId].filter(Boolean).join(" ")}
                 onPress={onCancel}
               >
-                <X aria-hidden="true" className="size-3.5" />
+                <X className="size-3.5" />
               </Button>
             </TitledControl>
           )}
@@ -301,7 +301,7 @@ function ShortcutRow({
                   if (onReset(id)) changeRef.current?.focus();
                 }}
               >
-                <RotateCcw aria-hidden="true" className="size-3.5" />
+                <RotateCcw className="size-3.5" />
               </Button>
             </TitledControl>
           )}
@@ -309,7 +309,7 @@ function ShortcutRow({
             as the introduction already says these keys cannot be changed. */}
           {!command.rebindable && (
             <IndicatorTooltip tooltip={t("settings.shortcuts.fixed")} label={t("settings.shortcuts.fixed")} className="inline-flex text-app-muted">
-              <LockKeyhole aria-hidden="true" className="size-3.5" />
+              <LockKeyhole className="size-3.5" />
             </IndicatorTooltip>
           )}
         </div>

@@ -16,7 +16,6 @@ export function ReconnectingIcon({
 }): React.ReactElement {
   return (
     <LoaderCircle
-      aria-hidden="true"
       className={`${SIZES[size]} shrink-0 motion-safe:animate-spin-slow ${inBanner ? "text-inherit" : "text-[var(--tint-warning-fg)]"}`}
     />
   );

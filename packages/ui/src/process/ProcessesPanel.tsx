@@ -158,7 +158,7 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
     <>
       <PanelHeader title={t("panel.processes.name")} actions={data.projectId && (
         <IconToggle ref={filterToggle} landing={!failed && !filterShown} label={t(filterShown ? "processes.sessionFilter.hide" : "processes.sessionFilter")} isSelected={filterShown} expanded={filterShown} onChange={toggleFilter}>
-          {filterShown ? <FunnelX aria-hidden="true" className="size-4" /> : <Funnel aria-hidden="true" className="size-4" />}
+          {filterShown ? <FunnelX className="size-4" /> : <Funnel className="size-4" />}
         </IconToggle>
       )} />
       {data.projectId && <ProcessSessionSelect projectId={data.projectId} value={data.sessionId} onChange={(id) => { setFilterOpen(true); data.selectSession(id); }} landing={!failed} shown={filterShown} opened={filterOpen} onEmptyBlur={() => setFilterOpen(false)} toggleRef={filterToggle} />}

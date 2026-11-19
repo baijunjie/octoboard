@@ -25,7 +25,7 @@ export function HelpTip({ label, children }: { label: string; children: React.Re
       label={label}
       trigger={({ expanded: _, popupId: __, ...wiring }) => (
         <Button {...wiring} iconOnly size="xs" variant="ghost" label={label} className={HELP_TIP_BUTTON_CLASS}>
-          <CircleHelp className="size-3.5" aria-hidden />
+          <CircleHelp className="size-3.5" />
         </Button>
       )}
     >

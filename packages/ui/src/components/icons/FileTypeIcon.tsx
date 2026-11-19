@@ -31,5 +31,5 @@ const FILE_TYPES: readonly [RegExp, LucideIcon][] = [
 export function FileTypeIcon({ path, className = "size-4 shrink-0 text-app-muted" }: { path: string; className?: string }): ReactElement {
   const name = wireBaseName(path);
   const Icon = FILE_TYPES.find(([pattern]) => pattern.test(name))?.[1] ?? File;
-  return <Icon aria-hidden="true" className={className} />;
+  return <Icon className={className} />;
 }

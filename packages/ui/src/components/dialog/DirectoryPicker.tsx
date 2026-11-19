@@ -246,7 +246,7 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
               label={t("directoryPicker.parent")}
               className={`sticky top-0 z-3 bg-overlay shadow-[0_-4px_0_0_var(--overlay)] ui-hovered:bg-default ${pinnedFocus.className}`}
             >
-              <CornerLeftUp aria-hidden="true" className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
+              <CornerLeftUp className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
               <FadeOverflow className="min-w-0 flex-1 text-app-muted" titleWhenClipped={t("directoryPicker.parent")}>{t("directoryPicker.parent")}</FadeOverflow>
             </ListBoxItem>
           )}
@@ -257,7 +257,7 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
             // label already joins the name and the badge, so the badge adds no comma of its own.
             <ListBoxItem key={entry.path} id={entry.path} textValue={entry.name} label={entry.is_git_repo ? joinPhrases(language, [entry.name, "git"]) : entry.name}>
               {/* Centred on the name's 20px line rather than on the two-line row. */}
-              <Folder aria-hidden="true" className="mt-0.5 size-4 shrink-0 self-start text-app-muted" />
+              <Folder className="mt-0.5 size-4 shrink-0 self-start text-app-muted" />
               <span className="flex min-w-0 flex-1 flex-col">
                 <FadeOverflow dir="auto" className="min-w-0 text-foreground" titleWhenClipped={entry.name}>
                   {entry.name}
