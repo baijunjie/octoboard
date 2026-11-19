@@ -87,11 +87,8 @@ checks are run in a piece of work, and that nothing bypasses them, is in `CLAUDE
 - **Rust layout is whatever `cargo fmt` produces under `rustfmt.toml`** (`max_width = 100`); the format check in
   `pnpm verify` holds it. A line rustfmt leaves past 100 because it cannot break it is not hand-wrapped; shorten it by
   changing the code, or leave it.
-- **Rust comments wrap at 100 columns and committed Markdown prose at 120; table rows and fenced blocks stay on one
-  line.** No tool enforces this for prose (`cargo fmt` never re-wraps a comment; ESLint sets no maximum line length), so
-  a reviewer does. An existing line past the limit is not a violation until a change edits its paragraph.
-- **After editing a comment or any prose, re-wrap the whole paragraph, not only the touched line;** after a rename,
-  every paragraph it changed. Measure width in characters, not bytes (`wc -c` and some `awk` count bytes; use a script
-  that decodes UTF-8).
+- **Line width is the formatters' alone.** Where no formatter sets one (comments in any language, Markdown prose), none
+  applies: a line is never wrapped or re-wrapped to fit a width, nor reported for its length, and a review does not ask
+  for it.
 - **Generated and agent-owned paths are outside lint:** `protocol.generated.ts` (written by a daemon test), `.claude/`,
   `.agents/`, `.codex/`, build output and `.worktrees/`. Do not hand-edit the generated file.
