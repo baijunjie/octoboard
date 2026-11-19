@@ -7,7 +7,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "typecheck": "astro check",
-    "test": "node --experimental-strip-types --test site.config.test.ts locales.test.ts siteTitle.test.ts redirects.test.ts webParity.test.ts src/commands.test.ts buildOutput.test.ts"
+    "test": "node --experimental-strip-types --test '*.test.ts' 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@astrojs/starlight": "~0.40.0",

@@ -21,7 +21,13 @@ interaction rules a gallery scenario shows are in [`ui-standard.md`](ui-standard
   `*TestSupport.ts(x)` / `*TestState.tsx` beside the module that uses them, `apps/daemon/src/test_support/`. They are
   not named like the test of a source file.
 - **UI tests read `packages/ui/src/fixtures/` for shared data and never gallery scenarios;** it is changed only through
-  the gallery workflow (see "The UI state gallery and its fixtures" below).
+  the gallery workflow (see "The UI state gallery and its fixtures" below). Besides the fixtures, a UI test may read a daemon
+  case table (next bullet).
+- **A rule implemented in both the daemon and the UI is pinned by one case table under `apps/daemon/testdata/`, run by a
+  test on each side** (Rust `include_str!`, vitest `readFileSync`). The table is registered in `UI_READS_DAEMON`
+  (`scripts/verify/scope.mjs`) and in `UI_READERS` and `UI_DISK_TESTS_COVERED` (`scripts/verify/quick.mjs`), and each
+  side's doc comment names the other and the table. Example: `apps/daemon/testdata/restart_impact_cases.json`, run by
+  `apps/daemon/src/coordinator/handover_check.rs` and `packages/ui/src/lifecycle/useAppExit.test.ts`.
 - **Test files are type-checked and linted but are not part of build output or published packages** (the
   `tsconfig.app.json` production check and the Vite build leave them out; ESLint covers them). Do not move a test file
   into a path the production build includes.
@@ -79,6 +85,8 @@ interaction rules a gallery scenario shows are in [`ui-standard.md`](ui-standard
   (`provider(agent).accounts().and_then(|ops| ops.quota_probe()).is_some()`), not by id; a `match` over ids ends in a
   panicking arm (`other => panic!("no fixture for {other}")`). A test of one provider's own behaviour may name that
   provider. The gallery serves only `FIXTURE_PROVIDERS`. See [`provider-neutral-core.md`](provider-neutral-core.md).
+- **A test that reads a site build asserts in terms of the deployment's origin and base path, not the production
+  defaults:** CI runs it on the deployment's own build, whose origin and base path differ.
 
 ## Time in tests
 

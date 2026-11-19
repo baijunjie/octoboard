@@ -12,6 +12,9 @@ declared and worded is in `docs/conventions/error-codes.md`; file placement is i
   `apps/daemon/PROTOCOL.md`; its handler is under `src/coordinator/`, or for a browse request in `src/browse/`, served
   through `browse::lane`.** The UI never writes a wire type by hand:
   `packages/ui/src/protocol.generated.ts` is regenerated and never edited (ESLint ignores it as test-written).
+- **The body of an HTTP route that only the daemon's own subcommands read (`POST /restart-check`,
+  `POST /revert-gate/:session`, `POST /git-ref/:session`) is defined in the module that handles it, without the `TS` and `JsonSchema` derives, and is
+  documented in `apps/daemon/PROTOCOL.md`.** The rule above covers what clients read.
 - **The committed JSON Schema (`contracts/protocol/`) and TypeScript bindings are regenerated after the Rust change**
   with `OCTOBOARD_WRITE_BINDINGS=1 pnpm test:rust -p octoboardd protocol::schema` and `... bindings`. The same tests
   fail when the files are stale.
@@ -117,7 +120,9 @@ tolerates) are in `apps/daemon/PROTOCOL.md`, "Versions and compatibility". What 
 - **A version is released once a `desktop-v*` tag is on a commit that carries it**; check the remote's tags
   (`git ls-remote --tags origin 'desktop-v[0-9]*'`), not only local ones. A prerelease tag counts.
 - **After a release, a removed, moved or renamed field or column is bridged by the raised version and its step**, never
-  by keeping the old one readable beside the new.
+  by keeping the old one readable beside the new. A renamed stored value (an enum-like string such as a language tag) is
+  bridged the same way: by the raised version's step in the daemon store and in the configuration document, while a
+  client-side cache maps the old value on read (`RETIRED_TAGS` in `packages/ui/src/i18n/language.ts`).
 - **A UI reader of a daemon output enum reads it through that value's normaliser, never the raw value.** The bindings
   type a received enum as `Received<Foo>`, open to values a newer daemon of the same generation adds, and the store
   keeps the value as sent. The normaliser is a `knownValues<Foo>` predicate (`packages/ui/src/values/knownValue.ts`)

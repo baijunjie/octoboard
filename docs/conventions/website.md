@@ -1,6 +1,7 @@
 # Website conventions
 
-The rules for the Nuxt website (`apps/web/`, `@octoboard/web`). Where a file lives, what it imports and the shared entry
+The rules for the Nuxt website (`apps/web/`, `@octoboard/web`) only; the documentation site (`apps/docs/`) follows
+`docs/conventions/docs-site.md`. Where a file lives, what it imports and the shared entry
 points are in `docs/structure/web.md`; how the website's copy and catalogs are written is in
 `docs/conventions/i18n-in-code.md`, "Website copy"; the React UI that the website embeds follows the UI docs.
 Paths below are relative to `apps/web/` unless they start with `apps/` or `packages/`.
@@ -28,6 +29,12 @@ Paths below are relative to `apps/web/` unless they start with `apps/` or `packa
   workflow items in `seo/page-outline.ts`; FAQ answer keys through `homeQuestionAnswerKey`; the privacy revision date
   through `privacyUpdatedDate` and `formatPrivacyDate`; the locale table, canonical paths and JSON-LD in
   `seo/site-seo.ts`. Not: a section list repeated in a component and again in the Markdown renderer.
+- **Links to the documentation site are built with `docsPath` from `docsPages` in `seo/site-seo.ts`**, never
+  hard-coded. A docs page the website links to is added to `docsPages`, and `test/site-seo.test.ts` checks that it
+  exists in every language.
+- **Which pages are kept out of the index (robots `noindex`, no canonical or hreflang, sitemap exclude, no Markdown
+  alternate) is defined once in `seo/site-seo.ts`** (`unindexedPageKinds`, `isIndexedPage`,
+  `unindexedSitemapExcludes`); `nuxt.config.ts` and `useSiteSeo` derive from it.
 - **Use the composable instead of the lower level it wraps**: `useSiteCopy` for text that names the product or its
   operator, `useSiteSeo` for head tags (a page may override its own fields with `useSeoMeta`), `useVisibleMotion` for
   gating an animation on visibility and reduced motion, `ProductPreview.vue` or `FeatureAppView.vue` (not

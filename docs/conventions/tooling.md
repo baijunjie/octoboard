@@ -49,6 +49,11 @@ checks are run in a piece of work, and that nothing bypasses them, is in `CLAUDE
 - **Repository scripts depend on nothing in the product code.** Reads across package boundaries are declared in
   `scripts/verify/scope.mjs`, and a script another package imports is named in the matching rule there; a script others
   only run (`heavy.mjs`) selects the verify package alone.
+- **A package that keeps its own copy of another package's logic adds a parity test** that imports or reads the source
+  and compares, and lists every module that test reads, transitive imports included, in a relation list of
+  `scripts/verify/scope.mjs` (`DOCS_READS_WEB` for `apps/docs/webParity.test.ts`). The cross-package scan in
+  `scope.test.mjs` finds only direct reads, from `.rs`, `.ts`, `.tsx`, `.mjs`, `.astro` and `.mdx` files, so a module
+  the test reaches through an import is named by hand.
 - **A new check or workspace package follows `scripts/verify/README.md`, "Changing it":** a rule in `RULES`, a step in
   `steps.mjs` with `quick.mjs` kept consistent (its tests fail otherwise), a Rust test target named in `CRATES`. A test
   that creates a temporary Git repository calls `assertRepositoryEnvironmentCleared` at module startup, and a hook

@@ -13,6 +13,10 @@ coded daemon failures and how the UI words them are in `docs/conventions/error-c
   `CATALOGS`**: labels, tooltips, accessible names, toasts, notifications and the native menu's labels. A translated
   catalog is typed `Translation<...>` with the plural categories its language needs, so a missing message or category
   fails `pnpm --filter ./packages/ui typecheck`, and `catalog.test.ts` checks placeholders and plural categories.
+- **A language is identified everywhere by its tag in `languages.ts`** (Chinese is `zh-CN` and `zh-TW`). Only the macOS
+  bundle uses Apple's script identifiers (`zh-Hans`, `zh-Hant`): `apps/desktop/scripts/native-localizations.mjs` maps
+  the tags when it generates the `.lproj` resources, and `Info.template.plist` and `tauri.macos.conf.json` (in
+  `apps/desktop/src-tauri/`) name them, held by `bundleLocalizations.test.ts` and `native-localizations.test.mjs`.
 - **The English catalog is the source.** Message keys and their placeholders are typed off it (`MessageKey`,
   `MessageParams`); a catalog is a TypeScript module `messages/<language>.ts`. A message a language lacks, and a
   language with no catalog, render in English (`FALLBACK_LANGUAGE`).

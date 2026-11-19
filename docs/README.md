@@ -396,6 +396,8 @@ Binding rules for code, one home per rule; the structure docs keep placement and
   interpolation, plurals and text direction in code, for the UI and the website.
 - [Desktop shell](conventions/desktop-shell.md) — Tauri shell code in `apps/desktop/`.
 - [Website](conventions/website.md) — Nuxt website code in `apps/web/`.
+- [Documentation site](conventions/docs-site.md) — Starlight docs code in `apps/docs/`: quoted values, UI names and
+  platform words, sidebar, snippets, links and anchors, look and feel, and the copies kept of the website's decisions.
 - [Comments](conventions/comments.md) — the project's comment rules beyond the `agent-docs` skill: what a comment may
   refer to and how `TODO` is written.
 - [Tests](conventions/tests.md) — where tests sit, what they assert, time, jsdom component tests, daemon tests, Windows
@@ -463,9 +465,8 @@ Binding rules for code, one home per rule; the structure docs keep placement and
   origin.
 - [Writing desktop shell code](memory/writing-desktop-shell-code.md) — checking every native hook after a Tauri raise,
   and checking event state by changing it while a page loads.
-- [Writing documentation pages](memory/writing-documentation-pages.md) — three rules no check enforces in
-  `apps/docs/src/content/docs/`: app labels with platform words, anchors in translated pages, and inline values as
-  `<code dir="ltr">`.
+- [Writing documentation pages](memory/writing-documentation-pages.md) — checking `#fragment` anchors against the
+  built pages under `apps/docs/dist/` after translating or retitling a heading, since no check covers them.
 - [Writing screen-reader announcements and focus moves](memory/writing-screen-reader-announcements-and-focus-moves.md) —
   which VoiceOver case rules to read before claiming a match, and what to do when none matches.
 - [Writing text into a session](memory/writing-text-into-a-session.md) — the waits the per-message bound leaves

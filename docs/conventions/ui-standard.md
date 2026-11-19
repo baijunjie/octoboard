@@ -8,6 +8,9 @@ may cite a rule here by this file's path and the heading it sits under. UI copy 
 cannot know this one's components. For example, a name referenced within copy takes an `InlineReference`, never the
 quotation marks the skill prescribes (see "References in copy use `InlineReference`"). (Source: user decision.)
 
+The documentation site (`apps/docs/`) is bound by only part of this standard, as `docs/conventions/docs-site.md` sets
+out.
+
 ## Conformance level and exceptions
 
 Style requirements follow this priority:
