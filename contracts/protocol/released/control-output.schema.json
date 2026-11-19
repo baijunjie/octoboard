@@ -4,7 +4,7 @@
   "title": "Octoboard control socket: daemon to client",
   "description": "One text frame the daemon sends on `/ws/control`. See `apps/daemon/PROTOCOL.md`.",
   "x-octoboard-protocol": {
-    "generation": 4,
+    "generation": 5,
     "channel": "control",
     "direction": "output"
   },
@@ -803,6 +803,13 @@
           "type": "boolean",
           "description": "Offers credits that reset its usage limits early."
         },
+        "native_app_scheme": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The URL scheme its desktop application registers, which is how the host is asked whether the\napplication is installed; `Some` exactly when the provider can open a conversation in it\n(`AgentProvider::native_app`)."
+        },
         "per_session_trust": {
           "type": "boolean",
           "description": "Keeps the trust its confirmation grants in a per-session home, from where Octoboard carries\nit to the user's own configuration."
@@ -815,6 +822,10 @@
           "type": "boolean",
           "description": "Can list an account's MCP servers and platform connectors (`read_account_mcp_inventory`)."
         },
+        "ends_command_groups_on_exit": {
+          "type": "boolean",
+          "description": "Ends the process groups of the commands it still has running as it exits, so a process in\nsuch a group ends with the session whatever keeps it. Each command's group is led by a\ndescendant of the process that runs the commands (the agent, or the server it runs them\nfrom, `crate::session::term::MessageTransport::command_host`), reached from the runner\nwithout another group leader in between."
+        },
         "delivery": {
           "$ref": "#/$defs/DeliveryQuirks"
         }
@@ -824,9 +835,11 @@
         "hook_script",
         "status_line",
         "reset_credits",
+        "native_app_scheme",
         "per_session_trust",
         "config_sharing",
         "mcp_inventory",
+        "ends_command_groups_on_exit",
         "delivery"
       ],
       "description": "What a provider can do that not every provider can, declared so that code and the UI branch\non it rather than on which provider it is."
@@ -2081,6 +2094,27 @@
       ],
       "description": "How a path is in conflict, as `git status` tells the stages apart."
     },
+    "ConnectionDetails": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The details as one line of text,\n`octoboard+ssh://<user>@<host>:<port>?fingerprint=…&octoboardd=…&name=…`, which the desktop\napplication reads back when it is pasted into a remote daemon's form. The host is this\ncomputer's own name, which the owner may need to correct on the other device."
+        },
+        "qr": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The QR code of `text`, one string per row of modules from the top, each character a module\nfrom the left: `1` dark, `0` light. The quiet zone around it is the client's to draw."
+        }
+      },
+      "required": [
+        "text",
+        "qr"
+      ],
+      "description": "The connection details of a daemon: what another device needs to reach it over SSH, with no\nsecret (see \"Printing the connection details\" in `docs/product/daemon-command-line.md`)."
+    },
     "ConnectorState": {
       "type": "string",
       "enum": [
@@ -2227,6 +2261,76 @@
           "description": "Anything else; carried base64-encoded in `data`."
         }
       ]
+    },
+    "ContentMatch": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The file's path relative to the project, as a wire path."
+        },
+        "line": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "The line's number, counted from 1."
+        },
+        "text": {
+          "type": "string",
+          "description": "The line's text, read as UTF-8 with replacement characters, without its line ending, and\nclipped to about 250 characters around its first match, so that the match shows."
+        },
+        "text_start": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "description": "Where `text` starts in the whole line, in UTF-16 code units: 0 unless the start of the line\nis clipped. A range's place in `text` is its offset less this."
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MatchRange"
+          },
+          "description": "Every match in the line, in order and not overlapping, as UTF-16 code unit offsets (a\nJavaScript string's indices, `end` exclusive) in the whole line, read as `text` is; one\nmay lie partly or wholly outside the clipped `text`."
+        },
+        "clipped_end": {
+          "type": "boolean",
+          "description": "Whether `text` leaves out the end of the line."
+        }
+      },
+      "required": [
+        "path",
+        "line",
+        "text",
+        "text_start",
+        "ranges",
+        "clipped_end"
+      ],
+      "description": "One line of a file that matches a content search."
+    },
+    "ContentSearchStop": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "time",
+          "description": "The search ran for its whole time budget."
+        },
+        {
+          "type": "string",
+          "const": "matches",
+          "description": "It found as many matches as one search reports."
+        },
+        {
+          "type": "string",
+          "const": "bytes_read",
+          "description": "It read as many bytes of files as one search reads."
+        },
+        {
+          "type": "string",
+          "const": "result_bytes",
+          "description": "Its matches came to as many bytes as one search sends."
+        }
+      ],
+      "description": "The bound that ended a content search before it had searched every file."
     },
     "ContentSource": {
       "oneOf": [
@@ -3757,6 +3861,17 @@
               },
               "description": "Every shell terminal the daemon holds, running or exited, oldest first. Runtime state,\nnot stored."
             },
+            "remote_access": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RemoteAccess"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Remote access to this daemon (Allow remote access), where the daemon follows the\ndesktop application on a host with a way in for the browser (the owner socket on Linux\nand macOS, a loopback port of its own on Windows); null elsewhere: a daemon that runs\non its own (the server form) serves its browser as it always does."
+            },
             "type": {
               "type": "string",
               "const": "snapshot"
@@ -3781,7 +3896,8 @@
             "home_dir",
             "host",
             "keep_awake_held",
-            "shell_terminals"
+            "shell_terminals",
+            "remote_access"
           ]
         },
         {
@@ -3857,6 +3973,23 @@
             "status"
           ],
           "description": "A check of an agent's installed CLI ended, or an update of it started, moved on or ended:\nthe agent's whole status, like every other upsert. Every agent's last one is also in a\n`snapshot`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "remote_access": {
+              "$ref": "#/$defs/RemoteAccess"
+            },
+            "type": {
+              "type": "string",
+              "const": "remote_access_updated"
+            }
+          },
+          "required": [
+            "type",
+            "remote_access"
+          ],
+          "description": "Remote access changed: the setting was turned on or off, the browser port was changed, the\nowner key was rotated, or the way in failed to open. The whole state, like every other\nupsert; it is also in a `snapshot`. Never sent by a daemon whose snapshot carries no\n`remote_access`."
         },
         {
           "type": "object",
@@ -4127,6 +4260,30 @@
             "status"
           ],
           "description": "The reply to `refresh_project_git_status`: the status the check that answers it ended with,\nas also broadcast in `project_git_status`, or `None` when that check was abandoned before\nit ended (its project removed before it ran or reran, a panic) or had not ended when the\ndaemon stopped waiting."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "outcome": {
+              "$ref": "#/$defs/PullOutcome"
+            },
+            "type": {
+              "type": "string",
+              "const": "project_branch_pulled"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "outcome"
+          ],
+          "description": "The reply to `pull_project_branch`: what the pull did. The statuses it went through are\nbroadcast as `project_git_status`; a pull that could not be done is an `error` reply\ninstead."
         },
         {
           "type": "object",
@@ -4919,6 +5076,72 @@
                 "null"
               ]
             },
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "pasted_image_saved"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "path"
+          ],
+          "description": "The reply to `save_pasted_image`: the absolute path, on the daemon host, of the file the image\nwas saved as."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "agents": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Agent"
+              }
+            },
+            "sessions_seen": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The asked `sessions` whose conversation the applications can see."
+            },
+            "sessions_unseen": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The asked `sessions` judged not to be seen, which the application may not show, though\nit is still opened. One asked about and in neither list was not judged."
+            },
+            "type": {
+              "type": "string",
+              "const": "native_apps"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "agents",
+            "sessions_seen"
+          ],
+          "description": "The reply to `probe_native_apps`: the agents whose desktop application is installed on the\ndaemon's host."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "links": {
               "type": "array",
               "items": {
@@ -5061,6 +5284,74 @@
         {
           "type": "object",
           "properties": {
+            "search": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "matches": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ContentMatch"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "project_content_matches"
+            }
+          },
+          "required": [
+            "type",
+            "search",
+            "project",
+            "matches"
+          ],
+          "description": "A batch of a content search's matches, sent as the search finds them, after the `ack` to\n`search_project_content`; `search` and `project` echo the request."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "search": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "matches": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "files": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "stopped_by": {
+              "$ref": "#/$defs/ContentSearchStop"
+            },
+            "type": {
+              "type": "string",
+              "const": "project_content_search_ended"
+            }
+          },
+          "required": [
+            "type",
+            "search",
+            "project",
+            "matches",
+            "files",
+            "complete"
+          ],
+          "description": "The last event of a content search: how many matches (`matches`, counting every match in a\nline) and files with a match (`files`) it found, and whether it searched every file it was\nto (`complete`). `stopped_by` names the bound that ended it early; an incomplete search\nwithout one could not read some file or folder."
+        },
+        {
+          "type": "object",
+          "properties": {
             "id": {
               "type": [
                 "string",
@@ -5100,6 +5391,81 @@
             "file"
           ],
           "description": "The reply to `read_project_file`; `project`, `worktree` and `path` echo the request."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            },
+            "file": {
+              "$ref": "#/$defs/FileContent"
+            },
+            "type": {
+              "type": "string",
+              "const": "path_link_file"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "path",
+            "version",
+            "file"
+          ],
+          "description": "The reply to `read_path_link`; `path` echoes the request and `version` is the live file's\nversion at the read."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "offset": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "size": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "version": {
+              "type": "string"
+            },
+            "data": {
+              "type": "string"
+            },
+            "launchable": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "file_range"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "offset",
+            "size",
+            "version",
+            "data"
+          ],
+          "description": "The reply to `read_file_range`: `data` is the base64 of the bytes read from `offset`, empty\nat or past the end of the file; `size` and `version` are the file's at this read.\n`launchable` is set only when true: the file has an executable bit. What a name says the\nsystem would run is for the client to judge by the system that opens the copy."
         },
         {
           "type": "object",
@@ -7302,6 +7668,26 @@
       ],
       "description": "Where an account's login is."
     },
+    "MatchRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "description": "A match within a [`ContentMatch`]'s line: `start` to `end` (exclusive), in UTF-16 code units of\nthe whole line."
+    },
     "McpInventoryFailure": {
       "oneOf": [
         {
@@ -7603,12 +7989,12 @@
           "$ref": "#/$defs/PathLinkKind"
         },
         "view": {
-          "description": "Where the client reads the file with `read_project_file`, for a file inside the project or\none of its worktrees, or for a directory there, its README or index file when it has one;\nabsent for anything else. Whether the viewer can show it is for the client to find out by\nreading it.",
+          "description": "Where the client reads the file with `read_project_file`, for a file inside the project or\none of its worktrees, or for a directory there, its README or index file when it has one;\nabsent for anything else, which a file reads with `read_path_link`. Whether the viewer can\nshow it is for the client to find out by reading it.",
           "$ref": "#/$defs/PathLinkView"
         },
         "viewer_only": {
           "type": "boolean",
-          "description": "Set for any file in a project, whatever its type, since the system's default application for\na file may run it, and for what the system could launch: the viewer shows it and\n`open_path_link` refuses it."
+          "description": "Set for a file the system could launch rather than show: the host never opens it, so\n`open_path_link` refuses it, and the viewer is the only place it opens from a link."
         }
       },
       "required": [
@@ -7748,6 +8134,16 @@
             "maximum": 65535
           },
           "description": "The TCP ports the tree's processes listen on, sorted."
+        },
+        "http_ports": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "description": "The ports of `ports` that answered an HTTP request on loopback, which a browser can open.\nPresent where the trees come from a listing of a session's or a project's trees\n(`list_processes`, the MCP `get_session`); absent wherever the ports were not asked."
         },
         "keepable": {
           "type": "boolean",
@@ -8107,6 +8503,75 @@
       ],
       "description": "One registered provider, as `snapshot` carries it."
     },
+    "PullOutcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "up_to_date"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "Nothing is behind the upstream after the fetch, whether or not the branch is ahead of it.\nNothing was changed."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "fast_forwarded"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "The branch had no commits of its own and now sits on its upstream."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ahead": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "behind": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "needs_merge"
+            }
+          },
+          "required": [
+            "kind",
+            "ahead",
+            "behind"
+          ],
+          "description": "The branch has commits the upstream lacks and the upstream has commits the branch lacks, and\nthe request did not allow a merge. Nothing was changed; `ahead` and `behind` are the counts\nafter the fetch, for the client to ask the person with."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "merged"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "The request allowed a merge, the branch had diverged, and the upstream was merged in with a\nmerge commit."
+        }
+      ],
+      "description": "What a `pull_project_branch` did to the project's current branch (`Event::ProjectBranchPulled`)."
+    },
     "QuotaUnavailable": {
       "type": "object",
       "properties": {
@@ -8225,6 +8690,160 @@
         "weekly_all_models"
       ],
       "description": "How the provider's own interface names its quota windows, which Octoboard's wording follows."
+    },
+    "RemoteAccess": {
+      "type": "object",
+      "properties": {
+        "allowed": {
+          "type": "boolean",
+          "description": "The Allow remote access setting, as the user left it. Off unless the user turned it on. It\nis the user's alone: no agent's settings tool reads or changes it, and no configuration\nexport carries it."
+        },
+        "state": {
+          "$ref": "#/$defs/RemoteAccessState",
+          "description": "What the daemon does with it right now."
+        },
+        "browser_port": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "On Windows, whose SSH server cannot forward to a socket, the loopback port the daemon serves\nthe browser at while remote access is on, in place of the owner socket, as the user set it\n(`set_remote_access_port`); set whatever `state` is. Null on every other system, where the\nbrowser goes through the owner socket. Like `allowed`, it is the user's alone."
+        },
+        "address": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The address a browser opens, `http://127.0.0.1:<port>/?key=<owner key>`, through the forward\nbelow; set while `state` is `serving`, null otherwise. The port is the one the forward binds\non the browser's machine, which stays the same across launches, so the address can be\nbookmarked."
+        },
+        "forward_command": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The command the browser's machine forwards the owner socket (on Windows, `browser_port`)\nwith, as `octoboardd address` prints it, the remote host left as `<server>` for the owner to\nfill in; set while `state` is `serving`, null otherwise."
+        },
+        "server_addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What another computer can reach this one by, for the owner to put in the forward's\n`<server>`, in the order Settings offers them: this computer's name (on macOS the Bonjour\n`<name>.local`, elsewhere the host name as the system reports it), then its IPv4 and then\nits IPv6 addresses, each as text that `ssh` takes after `user@` as it is. Loopback, unspecified, multicast and link-local addresses and\n`localhost` names are left out, as are deprecated, tentative and failed addresses where the\nsystem says so (Linux, Windows) and temporary IPv6 addresses on Linux (they are kept on\nmacOS and Windows). Read when the state is; set while `state` is `serving`, empty\notherwise, and empty while the computer reports none."
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RemoteAccessFailure"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why the daemon could not serve a browser though the setting is on; set while `state` is\n`failed`, null otherwise."
+        },
+        "connection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConnectionDetails"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The connection details another device's application sets itself up from to reach this\ndaemon over the computer's SSH server, as `octoboardd connection` prints them on a server;\nset while `state` is `serving`, null otherwise."
+        }
+      },
+      "required": [
+        "allowed",
+        "state",
+        "browser_port",
+        "address",
+        "forward_command",
+        "server_addresses",
+        "failure",
+        "connection"
+      ],
+      "description": "Where remote access to a daemon that follows the desktop application stands\n(`snapshot.remote_access`, `remote_access_updated`)."
+    },
+    "RemoteAccessFailure": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/RemoteAccessFailureReason"
+        },
+        "detail": {
+          "type": "string",
+          "description": "The system's own words for it, in English, with the path concerned: for the user to act on\nor to report, shown beside the client's own sentence for `reason`."
+        }
+      },
+      "required": [
+        "reason",
+        "detail"
+      ],
+      "description": "Why the way in (the owner socket, or on Windows the browser port and the owner pipe) is not\nserved though remote access is on."
+    },
+    "RemoteAccessFailureReason": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "no_ui",
+          "description": "The daemon's build embeds no UI to serve (a development build)."
+        },
+        {
+          "type": "string",
+          "const": "not_private",
+          "description": "The data directory, or a directory above it, lets another user in, so a socket there would\nnot be the daemon's alone."
+        },
+        {
+          "type": "string",
+          "const": "socket_failed",
+          "description": "The socket could not be opened (a path too long for a socket, say)."
+        },
+        {
+          "type": "string",
+          "const": "owner_key_failed",
+          "description": "The owner key could not be read or written."
+        },
+        {
+          "type": "string",
+          "const": "port_in_use",
+          "description": "On Windows, `browser_port` is already in use, by another program or another user of the\ncomputer: nothing is served until the port is changed or freed."
+        },
+        {
+          "type": "string",
+          "const": "port_failed",
+          "description": "On Windows, `browser_port` could not be listened on for another reason."
+        },
+        {
+          "type": "string",
+          "const": "pipe_failed",
+          "description": "On Windows, the named pipe that is the application's way in (the owner endpoint another\ndevice's application reaches through `octoboardd proxy`) could not be opened: another\nprogram or another user of the computer holds its name, say."
+        }
+      ],
+      "description": "The kind of failure, which a client words."
+    },
+    "RemoteAccessState": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "off",
+          "description": "The setting is off: no way in for the browser (owner socket, or on Windows browser port and\nowner pipe), no owner key."
+        },
+        {
+          "type": "string",
+          "const": "serving",
+          "description": "The way in is open (the owner socket, or on Windows the browser port and the owner pipe),\nserves the UI, and accepts the owner key."
+        },
+        {
+          "type": "string",
+          "const": "failed",
+          "description": "The setting is on, but the way in could not be opened or the owner key could not be held\n(`failure` says which): nothing is served, and turning the setting off and on again tries\nagain, as does setting the browser port again on Windows, the same port included."
+        }
+      ],
+      "description": "What a daemon that follows the application does with remote access."
     },
     "ResetCredit": {
       "type": "object",
@@ -8398,11 +9017,15 @@
           "items": {
             "$ref": "#/$defs/BackgroundTask"
           },
-          "description": "The work the agent has left running in the background while the session is `Idle`: the\nsession is then waiting for instructions and, at the same time, not finished. Never stored:\nit is filled in on the record a client receives (`AppState::wire_session`) from what the\nagent's last `Stop` listed, trimmed by completion notifications and cleared by a\n`StopFailure`, and is empty for every other status."
+          "description": "The work the agent has left running in the background while the session is `Idle`: the\nsession is then waiting for instructions and, at the same time, not finished. Never stored:\nit is filled in on the record a client receives (`AppState::wire_session`) from what the\nagent's last `Stop` listed, trimmed by completion notifications and cleared by a\n`StopFailure`, and is empty for every other status, but for a session shown `waiting_user`\nonly for a usage-limit dialog over an idle turn (`at_usage_limit`), which carries the idle\nturn's."
         },
         "switching_account": {
           "type": "boolean",
           "description": "Whether an account switch (`switch_session_account`) holds the session right now, from the\nmoment it takes its claim until it lets it go: the process is being ended, the conversation\ncopied and the process relaunched. Never stored: it is filled in on the record a client\nreceives (`AppState::wire_session`), and absent otherwise."
+        },
+        "at_usage_limit": {
+          "type": "boolean",
+          "description": "Whether the session is shown `waiting_user` only for a usage-limit dialog on its screen over\nan idle turn (an agent whose usage-limit screen shows as waiting for the user). Such a\nsession is at rest as far as a handoff or a switch of its account is concerned: nothing it\ndoes on its own follows. Never stored: it is filled in on the record a client receives\n(`AppState::wire_session`), and absent otherwise."
         },
         "paused": {
           "type": "boolean",
@@ -8958,7 +9581,7 @@
             "string",
             "null"
           ],
-          "description": "The tag of the interface language, one of the tags the interface offers; `null` until a\nclient reports one. It is the one language every client shows (each keeps a copy only to\nrender in before it has connected) and the one sessions are told to reply in, so a change\nreaches every window. Carried by a configuration export in its General section."
+          "description": "The tag of the interface language, one of the tags the interface offers; `null` until a\nclient reports one. It is the one language every client of this daemon shows (each keeps a\ncopy only to render in before it has connected) and the one sessions are told to reply in,\nso a change reaches every window connected to it. Carried by a configuration export in its General section."
         },
         "keep_awake": {
           "type": "boolean",
@@ -9561,6 +10184,11 @@
           "type": "string",
           "const": "agent_console",
           "description": "A process of the tree is attached to its agent's own console, which ends it with the\nsession whatever keeps it."
+        },
+        {
+          "type": "string",
+          "const": "agent_command_group",
+          "description": "A process of the tree is in the process group of one of its agent's running commands,\nwhich the agent ends as it exits, so the process ends with the session whatever keeps it."
         }
       ],
       "description": "Why a tree cannot be kept."
