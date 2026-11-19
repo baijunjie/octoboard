@@ -679,7 +679,12 @@ fn kept_for_next_daemon() -> PartialWrite {
 /// directly, rather than re-deriving it from a copy of this logic; the send path itself needs a
 /// `LiveSession` and a PTY, which is why it is not tested directly.
 pub(crate) fn frame_message(agent: AgentId, text: &str) -> [Input; 2] {
-    let text = shaped(text);
+    let text = guarded(
+        &stripped(text),
+        crate::adapter::provider(agent)
+            .screen()
+            .leading_slash_guard(),
+    );
     // An agent that reads a pasted piece ending in an image extension as an image loses the Enter
     // that follows (see `image_path`).
     let text = if crate::adapter::provider(agent)
@@ -694,7 +699,8 @@ pub(crate) fn frame_message(agent: AgentId, text: &str) -> [Input; 2] {
 }
 
 /// A message as the agent should read it: control and invisible characters stripped, then a
-/// leading slash guarded.
+/// leading slash guarded with a space. A paste into the terminal guards it as its provider says
+/// instead ([`frame_message`]).
 fn shaped(text: &str) -> String {
     // `text` can be model-authored (a report panel submission, a project session's report summary)
     // and is never reviewed before it is written here. Without this, a value containing the
@@ -714,12 +720,17 @@ fn shaped(text: &str) -> String {
     // They are stripped before the slash check for the same reason as the controls.
     let text = stripped(text);
 
-    // A message starting with `/` is executed as a slash command even inside a bracketed paste, so
-    // it never reaches the model; a single leading space makes it arrive as ordinary text.
+    guarded(&text, " ")
+}
+
+/// `text`, already stripped, with `guard` put before a leading slash. A message starting with `/` is
+/// executed as a slash command even inside a bracketed paste, so it never reaches the model; the
+/// guard makes it arrive as ordinary text.
+fn guarded(text: &str, guard: &str) -> String {
     if text.starts_with('/') {
-        format!(" {text}")
+        format!("{guard}{text}")
     } else {
-        text
+        text.to_string()
     }
 }
 
@@ -898,6 +909,31 @@ mod tests {
         assert_eq!(route, Route::Terminal);
         assert_eq!(live.input_writes(), before + 1);
         assert_eq!(server.offered().len(), 1);
+    }
+
+    /// A leading slash is guarded as the receiving provider says: a space for Claude Code and
+    /// Codex, and a zero-width space for Grok Build, which reads a leading space as nothing and
+    /// runs the command anyway (`testdata/grok-slash-guard.md`). Stripping comes first, so a
+    /// control character before the slash does not slip it past either guard.
+    #[test]
+    fn a_leading_slash_is_guarded_as_the_provider_says() {
+        let framed = |agent| String::from_utf8(frame_message(agent, "\u{1}/session-info")).unwrap();
+        for agent in [AgentId::CLAUDE, AgentId::CODEX] {
+            assert_eq!(
+                framed(agent),
+                "\x1b[200~ /session-info\x1b[201~\r",
+                "{agent:?}"
+            );
+        }
+        assert_eq!(
+            framed(AgentId::GROK),
+            "\x1b[200~\u{200B}/session-info\x1b[201~\r"
+        );
+        // Only a leading slash is guarded.
+        assert_eq!(
+            String::from_utf8(frame_message(AgentId::GROK, "see /session-info")).unwrap(),
+            "\x1b[200~see /session-info\x1b[201~\r"
+        );
     }
 
     #[test]

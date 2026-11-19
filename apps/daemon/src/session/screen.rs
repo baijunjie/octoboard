@@ -46,6 +46,14 @@ pub trait ScreenReader: Send + Sync {
         false
     }
 
+    /// What goes before a message's leading slash in a paste so that the provider reads it as text
+    /// rather than run it as a slash command (`crate::session::term::frame_message`): a space,
+    /// which is what Claude Code and Codex are measured to need, unless the provider says
+    /// otherwise.
+    fn leading_slash_guard(&self) -> &'static str {
+        " "
+    }
+
     /// Whether the provider, handed a paste as typed keys (`TermFacts::paste_as_keys`), tells it
     /// from typing by how fast the keys come and reads an Enter that arrives within that burst as
     /// a line break in the text, so a message's submit key is written only once the paste has been
@@ -203,6 +211,7 @@ mod tests {
         assert!(crate::session::input_box::input_box(AgentId::TEST, text).is_none());
         assert_eq!(screen.as_submitted("typed"), "typed");
         assert!(!screen.pasted_image_path_loses_enter());
+        assert_eq!(screen.leading_slash_guard(), " ");
         assert!(!screen.stash_shown(text));
         assert_eq!(screen.stash_indicator_row(text), None);
         assert!(!screen.clears_input_box_with_ctrl_u());

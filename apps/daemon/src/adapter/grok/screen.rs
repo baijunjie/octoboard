@@ -11,6 +11,10 @@ use crate::session::trust::{Press, Screen, StartSignal, HOOK_FALLBACK};
 
 pub(super) struct GrokScreen;
 
+/// U+200B ZERO WIDTH SPACE, what keeps a pasted message's leading slash as text
+/// ([`ScreenReader::leading_slash_guard`]).
+const SLASH_GUARD: &str = "\u{200B}";
+
 impl ScreenReader for GrokScreen {
     fn dialogs(&self) -> &'static [DialogPattern] {
         DIALOGS
@@ -18,6 +22,13 @@ impl ScreenReader for GrokScreen {
 
     fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
         composer(screen)
+    }
+
+    /// A zero-width space: Grok Build 1.0.89 runs a slash command pasted after a leading space
+    /// (or a line break, or a no-break space) as it does one with nothing before it, and takes the
+    /// zero-width space as text, reporting it in the prompt (`testdata/grok-slash-guard.md`).
+    fn leading_slash_guard(&self) -> &'static str {
+        SLASH_GUARD
     }
 
     fn native_stash(&self, spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> bool {
@@ -141,3 +152,36 @@ const DIALOGS: &[DialogPattern] = &[DialogPattern::all_of(
     &["Upgradetier", "Buymorecredits", "Enter:submit"],
 )
 .of_kind(DialogKind::UsageLimit)];
+
+#[cfg(test)]
+mod tests {
+    use crate::session::screen::ScreenReader;
+    use crate::terminal::snapshot::TerminalSnapshot;
+
+    /// What a 120x40 terminal shows after `bytes`, a capture of Grok's output from its launch.
+    fn replayed(bytes: &[u8]) -> String {
+        let mut screen = TerminalSnapshot::new(40, 120);
+        screen.process(bytes);
+        screen.visible_text_undimmed()
+    }
+
+    /// Grok Build offers a command for a slash pasted after a space, which the Enter then runs;
+    /// after the zero-width space it guards with, the slash stays text, with no command offered
+    /// (`testdata/grok-slash-guard.md`).
+    #[test]
+    fn grok_offers_a_command_after_a_space_but_not_after_its_guard() {
+        let offered = |screen: &str| screen.contains("/session-info Show session info");
+        let space = replayed(include_bytes!(
+            "../../../testdata/grok_slash_space_guarded.bin"
+        ));
+        assert!(offered(&space), "{space}");
+        let guarded = replayed(include_bytes!(
+            "../../../testdata/grok_slash_zwsp_guarded.bin"
+        ));
+        assert!(!offered(&guarded), "{guarded}");
+        let composer = super::GrokScreen
+            .input_box_rows(&guarded)
+            .expect("the composer is read");
+        assert_eq!(composer.join("\n").replace('\u{200B}', ""), "/session-info");
+    }
+}

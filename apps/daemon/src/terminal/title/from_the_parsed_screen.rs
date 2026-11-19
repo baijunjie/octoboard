@@ -104,7 +104,9 @@ fn a_title_before_anything_is_drawn_is_not_reported() {
             "grok_composer_draft.bin"
             | "grok_composer_restored.bin"
             | "grok_native_stashed.bin"
-            | "grok_trust_screen.bin" => std::slice::from_ref(&grok),
+            | "grok_trust_screen.bin"
+            | "grok_slash_space_guarded.bin"
+            | "grok_slash_zwsp_guarded.bin" => std::slice::from_ref(&grok),
             name if name.starts_with("conhost_claude_") => std::slice::from_ref(&host_claude),
             "claude_title_cancel.bin"
             | "claude_title_idle.bin"

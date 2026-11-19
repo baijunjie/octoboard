@@ -45,9 +45,12 @@ relaunching a session does not preserve messages held only in its running proces
    flags: their tag characters are removed, so each arrives as a plain black flag. Private-use and unassigned
    characters, and format characters outside the set, pass through. The removal applies whatever the session's agent;
    Codex and Grok Build have not been measured for such a hold.
-3. A message that would otherwise begin with `/` is written with a single leading space, so it reaches the model as
-   text instead of being run as one of the agent's own slash commands. The check is made on the text left after the
-   removals, so a removed character in front of a slash command does not keep it from being guarded.
+3. A message that would otherwise begin with `/` is written with a guard in front, so it reaches the model as text
+   instead of being run as one of the agent's own slash commands: a single leading space for Claude Code and Codex, and
+   a zero-width space (U+200B) for Grok Build, which runs a command pasted after a space, a line break or a no-break
+   space all the same (measured on 1.0.89); the agent reports the guard as part of the prompt. The check is made on the
+   text left after the removals, so a removed character in front of a slash command does not keep it from being
+   guarded.
 4. For a Claude Code session only: a line, or a part of one starting at a space right before `/` or a Windows drive path
    (`X:\`), that ends in an image extension (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) has its last word wrapped in
    backticks, so ``- /a/b.png`` arrives as ``- `/a/b.png` ``. Claude Code reads such a piece as an image to attach and,
@@ -65,7 +68,8 @@ is the prompt to continue that an account switch sends one (see "Continuing afte
 `docs/product/switching-session-accounts.md`): it is given to the relaunched agent as the prompt its launch starts
 with, since Claude Code can ask "Resume this conversation?" at a resume launched without one, and a message written
 into that dialog would be thrown away (see the screens that hold messages, below). The prompt is reshaped by the
-first three steps, and one that would then begin with `-` also gets a single leading space, so it is not read as a
+first three steps (with a single leading space as the guard, whatever the agent), and one that would then begin with
+`-` also gets a single leading space, so it is not read as a
 command-line option; one that is nothing but whitespace once reshaped is dropped, and the session resumes with no
 prompt. Such a prompt is neither queued nor checked as below. For any other session, Claude Code's included when it has
 no conversation to resume, the instruction or prompt is queued and written like any other message.

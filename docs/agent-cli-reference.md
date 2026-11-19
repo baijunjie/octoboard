@@ -3117,7 +3117,11 @@ each failing silently or destructively if ignored:
   holds for a prompt given on the command line (Claude Code 2.1.308, a fresh launch against a stub endpoint under a
   scratch `HOME`): `claude "/help me please"` runs the command and makes no model request, while `claude " /help me
   please"` reaches the model as text, so the launch prompt is guarded by the same leading space. Not run with
-  `--resume`.
+  `--resume`. Grok Build 1.0.89 is the exception for a paste: it runs ` /session-info` (and a custom command such as
+  ` /probecmd guarded words`) after a leading space, a leading line break or a leading no-break space as it does with
+  nothing in front, while after a zero-width space (U+200B) the text reaches the model and `UserPromptSubmit` reports
+  the prompt with the zero-width space in front (`testdata/grok-slash-guard.md`; scratch `GROK_HOME`, fake key, local
+  stub endpoint). Its command line was not measured.
 - A macOS PTY master accepts only about 1022 bytes before `EAGAIN` when the child is not draining, so the write is a
   non-blocking partial-write-and-retry loop in slices, never a blocking `write_all` on the daemon's event loop.
 - Nothing may be written while a modal dialog is up. The paste is discarded but the trailing `CR` confirms whatever is
