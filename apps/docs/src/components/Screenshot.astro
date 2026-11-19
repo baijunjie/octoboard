@@ -1,0 +1,35 @@
+---
+// A Features page's screenshot (`src/assets/features/<id>.png`, written by the screenshot command), shown at the size the
+// UI really has: a capture is taken at `scale` device pixels per CSS pixel (`screenshots/entries.mjs`), so it is drawn
+// at its width over that scale, never enlarged, and shrinks only when the column is narrower. A 2x capture also gets a
+// 2x `srcset` candidate, so it is crisp on high-density screens; a 1x capture has no sharper file to offer.
+import { Image } from "astro:assets";
+import { GROUPS, normalizeManifest } from "../../screenshots/entries.mjs";
+
+interface Props {
+  /** The manifest entry's id, which is the image's file name. */
+  id: string;
+  alt: string;
+}
+
+const { id, alt } = Astro.props;
+const images = import.meta.glob<{ default: ImageMetadata }>("../assets/features/*.png", { eager: true });
+const image = images[`../assets/features/${id}.png`]?.default;
+if (!image) throw new Error(`Screenshot: src/assets/features/${id}.png does not exist; capture it with the screenshots command`);
+// The group modules the screenshot command reads, by their names: only `entries.mjs` (no capture tooling) is imported.
+const modules = import.meta.glob<{ default: unknown }>(["../../screenshots/*.mjs", "!../../screenshots/{manifest,entries}.mjs"], { eager: true });
+const groups = Object.fromEntries(Object.entries(modules).map(([file, module]) => [file.replace(/^.*\/|\.mjs$/g, ""), module.default]));
+if (Object.keys(groups).sort().join() !== [...GROUPS].sort().join()) throw new Error(`Screenshot: the group modules in screenshots/ are ${Object.keys(groups).join(", ")}, not GROUPS (${GROUPS.join(", ")})`);
+const entry = normalizeManifest(groups).find((candidate) => candidate.id === id);
+if (!entry) throw new Error(`Screenshot: the manifest has no entry ${id}`);
+const width = Math.round(image.width / entry.scale);
+---
+
+<Image src={image} alt={alt} width={width} densities={entry.scale === 2 ? [1, 2] : [1]} class="screenshot" />
+
+<style>
+  .screenshot {
+    max-width: 100%;
+    height: auto;
+  }
+</style>

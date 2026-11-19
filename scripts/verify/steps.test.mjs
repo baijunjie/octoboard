@@ -7,7 +7,7 @@ const steps = (files) => checkSteps(planScope(files));
 const labels = (files) => steps(files).map((step) => step.label);
 
 test("affected consumers are combined without unrelated checks, light steps first", () => {
-  assert.deepEqual(labels(["scripts/verify/lock.mjs"]), ["identity check", "provider-neutral core", "verify lint", "verify tests", "ui lint", "ui type check", "ui tests"]);
+  assert.deepEqual(labels(["scripts/verify/lock.mjs"]), ["identity check", "provider-neutral core", "verify lint", "verify tests", "ui lint", "ui type check", "docs lint", "docs type check", "ui tests", "docs build", "docs tests"]);
   const combined = labels(["packages/ui/src/App.tsx", "apps/desktop/scripts/bundle.mjs"]);
   assert.ok(combined.includes("ui tests"));
   assert.ok(combined.includes("desktop script tests"));

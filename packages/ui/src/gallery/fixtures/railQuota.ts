@@ -65,6 +65,18 @@ const readState = railQuotaState([...claudeAccounts, ...codexAccounts], [
   quotaOf("codex", "a-codex-auto", null, [quotaWindow("session", 3, 295), quotaWindow("weekly", 9, 6 * 24 * 60)]),
 ], { defaultNames: { claude: "Studio laptop" } });
 
+/** Claude Code with three plainly named accounts, all read: the default account, Work spent and Personal nearly spent,
+ * short enough for the panel to hold without scrolling. */
+const plainState = railQuotaState(
+  [accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"), accountOf("a-personal", "claude", "Personal", "/Users/dev/.claude-personal")],
+  [
+    quotaOf("claude", null, "max", [quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60), quotaWindow("session", 18, 117)]),
+    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 100, 42), quotaWindow("weekly", 63, 2 * 24 * 60 + 5 * 60)], { fetched_at: minutesAgo(7) }),
+    quotaOf("claude", "a-personal", "pro", [quotaWindow("session", 96, 83), quotaWindow("weekly", 88, 2 * 24 * 60 + 9 * 60)], { fetched_at: minutesAgo(3) }),
+  ],
+  { installed: ["claude"], added: ["claude"] },
+);
+
 /** Every agent installed and read, but only Codex then Claude Code added, in that order: Grok Build has a reading and
  * no tab. */
 const reorderedState = railQuotaState(
@@ -320,6 +332,15 @@ export const railQuotaScenarios: Scenario[] = [
     title: "Rail usage panel, floated in by hovering",
     description: "No session is selected, so the usage button has no mini bar. The panel floats in beside it, above Settings, after the pointer rests on it, with the button marked open. Claude Code's default account, under the name the user gave it (Studio laptop), shows its session and weekly usage as one two-layer bar (the thick bar for the session, the thin one beneath it for the week, headlined \"Weekly · all models\" because Fable has its own weekly window) and Fable last; Work, with no model window, headlines its week plain \"Weekly\". Codex's tab names its short window \"5h\". Each account's name line ends with a small muted \"Updated N ago\" (the default account's says 1 minute). Work (spent, so receded with a \"Limit reached\" badge after its plan badge and a muted name, both bars empty and grey, read 7 minutes ago) follows, then an account that is nearly spent, whose clipped name fades out before its plan badge, with its \"Updated 3 minutes ago\" on the line below. Manage accounts is at the bottom. Grok Build is added but not installed, so it has no tab. Choose Phone (390px): the rail comes in with the sidebar's drawer, at the start of its card, and the panel is held to the width left beside it instead of its own, over the drawer's card and backdrop, the account names and meters fitting it.",
     state: readState,
+    steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
+  },
+  {
+    id: "rail-quota-hover-plain",
+    group: GROUP,
+    category: "normal",
+    title: "Rail usage panel, a short list of plainly named accounts",
+    description: "The usage panel floated in beside the rail, on Claude Code's tab, listing three accounts that all fit with nothing scrolled or clipped: Default, whose session and weekly usage show as one two-layer bar, Work, spent, receded behind its \"Limit reached\" badge, and Personal, nearly spent. Manage accounts is at the bottom. Unlike Rail usage panel, floated in by hovering, it has one agent tab, no clipped account name and no Fable window, so the list fits without scrolling.",
+    state: plainState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
   {

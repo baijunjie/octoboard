@@ -53,6 +53,16 @@ const portTrees = [
 // own console) lays out the same and differs only in its wording, so a test covers it.
 const unkeepableTree = processTreeOf("105:1", preview, "node scripts/export-report.mjs --watch", 20, { process_count: 2, memory_bytes: 64_000_000, keepable: false, unkeepable_reason: "agent_command_group" });
 
+// A few ordinary dev processes, each short enough for its card and its confirmation to hold whole: two servers with one
+// port each, so one link and a short facts line, and two watchers with no port.
+const plainTrees = [
+  processTreeOf("120:1", preview, "pnpm dev", 0.5, { memory_bytes: 85_000_000, ports: [5173], http_ports: [5173] }),
+  processTreeOf("121:1", preview, "pnpm storybook dev -p 6006", 0.2, { memory_bytes: 64_000_000, ports: [6006], http_ports: [6006] }),
+  processTreeOf("122:1", preview, "pnpm test --watch", 20, { process_count: 1, memory_bytes: 120_000_000 }),
+  processTreeOf("123:1", preview, "tsc --watch --noEmit", 8, { process_count: 1, memory_bytes: 96_000_000 }),
+];
+const plainDev = plainTrees[0];
+
 // Two trees are enough for the views of one button at work.
 const pair = sessionTrees.slice(0, 2);
 
@@ -140,6 +150,17 @@ export const processScenarios: Scenario[] = [
       (ui) => ui.press(ui.session(longPreview.title)),
       (ui) => ui.press(ui.t("titleBar.processes.show")),
     ],
+  },
+  {
+    id: "processes-session-plain",
+    group: GROUP,
+    category: "normal",
+    title: "Processes of a session, a few dev-server processes",
+    description: "The Processes panel beside the selected session, with the session filter on Serve the preview and four ordinary processes that each fit their card whole: a dev server and a Storybook, each with its port and a localhost link, a test watcher and a type-check watcher with no port. Every card has its working directory and one line of facts. Unlike Processes of a session, one row of each kind, there is no long command, deleted directory or unreadable command, so no card is cut.",
+    state,
+    preferences: panelPreferences,
+    processes: { trees: plainTrees },
+    steps: openSession,
   },
   {
     id: "processes-with-files-search",
@@ -323,6 +344,17 @@ export const processScenarios: Scenario[] = [
     steps: [...openSession, (ui) => ui.press(stopOf(ui, pair[0]))],
   },
   {
+    id: "processes-stop-confirmation-plain",
+    group: GROUP,
+    category: "normal",
+    title: "Stop a process, confirmation for a short command",
+    description: "The same warning confirmation as \"Stop a process, confirmation before sending\", for pnpm dev: the command is short and its facts line (memory, the one port, how long ago it started) fits whole, with none of that scenario's long Vite command, two ports or fade.",
+    state,
+    preferences: panelPreferences,
+    processes: { trees: plainTrees },
+    steps: [...openSession, (ui) => ui.press(stopOf(ui, plainDev))],
+  },
+  {
     id: "processes-keep-confirmation",
     group: GROUP,
     category: "normal",
@@ -348,12 +380,12 @@ export const processScenarios: Scenario[] = [
     id: "processes-rail-overview",
     group: GROUP,
     category: "normal",
-    title: "Running processes by console session and project, from the rail",
-    description: "The rail's Processes button carries a small green count at its outer top-right corner (top-left in right-to-left layouts) and has opened its list, a popover with a visible Processes heading above the rows. The heading and the muted description below it align with the row names. The description explains that running background processes are grouped by console session and project and that selecting an item opens its details; it wraps within the popover at narrow widths. The Console sessions group comes first, one row each with the session's title over its console and the count, a long title clipping with a fade. The Projects group follows, with one row for each project with running processes, its name over the console it belongs to, its count and a chevron at the end, including Mobile app of the other console. Both group headings use small muted text and align with the row names. Like the sidebar group headings, each appends its number of rows: 1 console session and 3 projects, rather than their process counts. The first console-session row has focus. Each row uses the small bordered green status badge for its count, and the rail badge is their sum. The rows list no process.",
+    title: "Running processes by console session and project, from the rail (opened by a touch)",
+    description: "The list is opened by a touch on the rail's Processes button, so no keyboard focus ring is drawn on it or on the first row. The rail's Processes button carries a small green count at its outer top-right corner (top-left in right-to-left layouts) and has opened its list, a popover with a visible Processes heading above the rows. The heading and the muted description below it align with the row names. The description explains that running background processes are grouped by console session and project and that selecting an item opens its details; it wraps within the popover at narrow widths. The Console sessions group comes first, one row each with the session's title over its console and the count, a long title clipping with a fade. The Projects group follows, with one row for each project with running processes, its name over the console it belongs to, its count and a chevron at the end, including Mobile app of the other console. Both group headings use small muted text and align with the row names. Like the sidebar group headings, each appends its number of rows: 1 console session and 3 projects, rather than their process counts. Each row uses the small bordered green status badge for its count, and the rail badge is their sum. The rows list no process.",
     state: railState,
     preferences: panelPreferences,
     processes: { trees: railTrees, projectProcesses: railProcesses },
-    steps: [(ui) => railButton(ui, RAIL_COUNT)],
+    steps: [(ui) => ui.touchPress(ui.t("rail.processes", { count: RAIL_COUNT }))],
   },
   {
     id: "processes-rail-console-sessions-only",

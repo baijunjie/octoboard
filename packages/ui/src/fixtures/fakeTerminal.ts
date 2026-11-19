@@ -2,7 +2,7 @@
  * The terminal sockets of the gallery. A session's terminal URL points at `FIXTURE_ORIGIN`, which
  * `installFakeTerminal` answers in the page itself, so there is no daemon and no failed network
  * request to read off the console: `output` connects and draws a sample (for a process-less session, as
- * the output its last process left), `mouse` draws that sample from a program with mouse reporting
+ * the output its last process left), `native` draws a quiet screen of the agent's own CLI, `mouse` draws that sample from a program with mouse reporting
  * on, `fullscreen` draws in the alternate screen, `cursor-selection` places a block cursor beside
  * reversed text, `paths` draws output that names files and
  * folders, `shell` draws a shell at its prompt (the Terminal panel's shells), `exited` draws the
@@ -12,7 +12,7 @@
 
 const FIXTURE_ORIGIN = "ws://gallery.invalid/";
 
-export type TerminalBehaviour = "output" | "mouse" | "fullscreen" | "cursor-selection" | "paths" | "shell" | "exited" | "refuse";
+export type TerminalBehaviour = "output" | "native" | "mouse" | "fullscreen" | "cursor-selection" | "paths" | "shell" | "exited" | "refuse";
 
 /** The URL of a fixture socket. A `shell` given the folder it was started in (`cwd`) draws a fresh prompt there, as
  * a shell started a moment ago does, instead of the sample of one that has been used. */
@@ -182,6 +182,35 @@ const sample = (cols: number) => [
   "",
 ].join("\r\n");
 
+/** A quiet screen of the agent's own CLI, as a project session shows it: the welcome box, a short exchange in which the
+ * agent reads the project's instructions, and the prompt box waiting for the next message. Nothing wraps, links or
+ * moves, so a picture of the terminal holds only the CLI itself. */
+const nativeSample = () => [
+  ...box([
+    ` ${ESC}1;38;5;208m✻${ESC}0m ${ESC}1mWelcome to Claude Code${ESC}0m`,
+    "",
+    `   ${ESC}2m/help for help, /status for your setup${ESC}0m`,
+    "",
+    `   ${ESC}2mcwd: /Users/dev/code/website${ESC}0m`,
+  ]),
+  "",
+  `${ESC}1m>${ESC}0m Summarize how this project is set up`,
+  "",
+  `${ESC}32m●${ESC}0m I'll start with the project's instructions.`,
+  "",
+  `${ESC}34m● Read${ESC}0m(CLAUDE.md)`,
+  `  ${ESC}2m⎿  Read 24 lines${ESC}0m`,
+  "",
+  `${ESC}32m●${ESC}0m The site is built with Astro and styled with Tailwind.`,
+  "  Run pnpm dev to start the preview and pnpm test to",
+  "  run the unit tests. Components live in src/components",
+  "  and each page has a matching test.",
+  "",
+  ...box([` ${ESC}1m>${ESC}0m `]),
+  `  ${ESC}2m? for shortcuts${ESC}0m`,
+  // The cursor belongs in the prompt box, after its `>`: up two rows to the prompt, to the fifth column.
+].join("\r\n") + `${ESC}2A${ESC}5G`;
+
 /** Output that names files: each kind of path a terminal turns into a link once the daemon finds it
  * (absolute, relative with a line and column, a document with a line, one in a side worktree, a
  * program the system could launch, a folder with a README, in a temp folder, inside parentheses,
@@ -286,6 +315,7 @@ const exitedSample = () => [
 /** What each behaviour draws once it connects. `refuse` never connects, so it draws nothing. */
 const SAMPLES: Record<TerminalBehaviour, (cols: number) => string> = {
   output: sample,
+  native: nativeSample,
   mouse: mouseSample,
   fullscreen: fullscreenSample,
   "cursor-selection": cursorSelectionSample,

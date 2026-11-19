@@ -305,6 +305,12 @@ const emailsState: Scenario["state"] = {
   ],
 };
 
+/** `emailsState` with every address short enough for the name column, Client's included. */
+const shortEmailsState: Scenario["state"] = {
+  ...emailsState,
+  accountQuotas: emailsState.accountQuotas!.map((quota) => (quota.email === LONG_EMAIL ? { ...quota, email: "dev@client.octoboard.example" } : quota)),
+};
+
 /** Claude Code's default account under a name the user gave it, beside Codex's and Grok Build's, which keep the
  * localized "Default". */
 const RENAMED_DEFAULT = "Studio laptop";
@@ -1301,6 +1307,17 @@ export const settingsScenarios: Scenario[] = [
     // Four rows under the three switches and the tab strip: taller than the default window, whose body would scroll.
     height: 1100,
     state: emailsState,
+    steps: openAccounts,
+  },
+  {
+    id: "settings-accounts-emails-short",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, short sign-in emails under the names",
+    description: "Claude Code's table with each signed-in account's email whole under its name, muted and smaller, on a single line: Default, Work and Client. Trial is signed out, so its row has no email line and no gap where it would be. Unlike \"Settings: accounts, sign-in emails under the names\", whose Client address is cut with a fade, every address is short, and the window is only as tall as the table needs.",
+    // The tab strip and four rows under the three switches: the default window's body would scroll.
+    height: 900,
+    state: shortEmailsState,
     steps: openAccounts,
   },
   {

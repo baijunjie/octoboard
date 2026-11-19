@@ -1,0 +1,53 @@
+---
+title: "Managed accounts"
+description: "Manage several accounts per agent side by side, so each session picks its account and changing accounts never means signing out and in."
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { accountFolders, productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+Many people hold several subscriptions at once, such as a personal one and a work one. An agent knows only one login at a time, so changing accounts means signing out and in again. {productName} manages each account as a named configuration directory, side by side, and each session simply picks the account it uses, so changing accounts no longer interrupts your work.
+
+<Screenshot id="accounts-table" alt="The “Agent accounts” section of Settings, with the Claude Code tab open: a table of accounts with their usage, login status and a “Disable” switch." />
+
+## Why it works this way
+
+- <strong>Changing accounts should not interrupt work.</strong> An agent holds one login at a time. {productName} instead lists every account of an agent under a name you choose, and a console, a project or a single session picks the account it uses. Accounts of the same agent can run side by side, each signed in as itself.
+- <strong>An account is a named folder.</strong> An agent account is a configuration directory of the agent, where it keeps its login and its conversation history.
+- <strong>{productName} never handles your credentials.</strong> Logging in runs the agent's own sign-in in the background, against the account's folder. {productName} reads the agent's sign-in record only to show the email each account is signed in with.
+- <strong>Every agent has a default account.</strong> It is the agent's own folder, the one it uses when you do nothing. You can rename it or turn it off, but not remove it or change its folder.
+- <strong>An account can be turned off.</strong> A disabled account leaves the account choices and the usage displays, and new sessions will not use it. Sessions already running on it keep running. Nothing turns it back on except you.
+- <strong>Its limits:</strong> an agent has to be installed and found on your <code dir="ltr">PATH</code> before its accounts can be used, and {productName} only adds agents installed on this computer; for one that is not, it links to the agent's own installation instructions. Removing an account does not delete its folder unless you ask for that.
+
+## How to use it
+
+<Steps>
+
+1. Open <strong>Settings › Agent accounts</strong>. Each added agent has a tab. At first, the tabs are the agents installed on this computer. If an agent you use is not there, select <strong>Add agent</strong>, then <strong>Add</strong> next to it.
+2. Select <strong>Add account</strong>, the icon button after the last tab. Pick the agent, give the account a name that is unique for that agent, and keep the suggested folder (for example <code dir="ltr">{accountFolders.claude}</code>, <code dir="ltr">{accountFolders.codex}</code> or <code dir="ltr">{accountFolders.grok}</code>) or choose another. The folder does not have to exist yet.
+3. Sign the account in. A new account shows <strong>Not logged in</strong> in the <strong>Status</strong> column, with a <strong>Log in</strong> button right after it; <strong>Log in</strong> is also in the account's actions menu. {productName} opens the authorization page in your browser for Claude Code and Codex; Grok Build opens its own page, and the dialog shows a code to confirm there. Authorize, and the dialog closes by itself. If nothing happens within 10 minutes the login times out; <strong>Cancel login</strong> ends it earlier.
+4. Check the row: the <strong>Status</strong> badge now reads <strong>Logged in</strong>, the <strong>Usage</strong> column fills with the account's usage, and its email shows under the name.
+5. Organize the accounts: drag a row by its grip, or choose <strong>Move earlier</strong> or <strong>Move later</strong> in its actions menu. The order is the one every account choice in {productName} follows. Use <strong>Disable</strong> to turn an account off, and <strong>Rename</strong> on the default account to give it a name of your own.
+
+</Steps>
+
+The default account is called <strong>Default</strong> unless you gave it a name of your own, so the screenshots on this page may show another name for it. Open an account's actions menu for <strong>Details</strong> (its plan, folder and usage), <strong>Settings</strong> (sharing and turning it off), <strong>Connectors and MCP</strong>, <strong>Edit</strong> (the name or folder of an account you added) and <strong>Remove</strong>.
+
+<Screenshot id="account-actions-menu" alt="An account's actions menu in Settings." />
+
+<Screenshot id="account-login-dialog" alt="The “Log in” dialog while it waits for the authorization in the browser." />
+
+### Removing an account
+
+Choose <strong>Remove</strong> in the account's actions menu. Consoles that used it go back to the agent's default account, projects go back to their console's, and sessions already open keep going with the folder they started from. The account's folder stays where it is. To move it to the Trash (the Recycle Bin on Windows) as well, tick the option in the confirmation; the account's archived sessions can then no longer be resumed, and the running sessions of the account have to be ended or switched first.
+
+<Aside type="note">
+Accounts, their order and which ones are disabled stay on this computer. They are carried to another computer only if you include the accounts when you export your configuration.
+</Aside>
+
+## Next
+
+- [Usage monitor](../usage-monitor/): see how much each account has left.
+- [Account continuity](../account-continuity/): move a session to another account without losing the conversation.
+- [Shared configuration](../shared-configuration/): let accounts of one agent share skills, plugins and settings.

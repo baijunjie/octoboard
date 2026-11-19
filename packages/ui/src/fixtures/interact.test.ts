@@ -467,6 +467,16 @@ it("showPanel presses the toggle as a mouse does, so the card's first focus is n
   expect(click?.detail).toBe(1);
 });
 
+it("showPanel focuses the toggle and sends the mouse events of a press, as a click does", async () => {
+  document.body.innerHTML = `<button aria-label="${format("en", "titleBar.report.show")}"></button>`;
+  const button = document.querySelector("button")!;
+  const seen: string[] = [];
+  for (const type of ["mousedown", "mouseup", "click"]) button.addEventListener(type, (event) => seen.push(`${type}:${(event as MouseEvent).detail}`));
+  await settle(createUi(document, "en").showPanel("report"));
+  expect(seen).toEqual(["mousedown:1", "mouseup:1", "click:1"]);
+  expect(document.activeElement).toBe(button);
+});
+
 it("showPanel reveals an open floating group without closing its panel", async () => {
   document.body.innerHTML = '<button aria-label="Hide files panel"></button>';
   const pressed = vi.fn();
@@ -596,4 +606,73 @@ it("waitUntil waits until the condition holds of the page, and says what never c
 it("codeDrawn fails on a frame that holds plain text", async () => {
   document.body.innerHTML = "<div role=\"region\" tabindex=\"0\" aria-label=\"src/a.ts\">plain</div>";
   await expect(settle(createUi(document, "en").codeDrawn("src/a.ts"))).rejects.toThrow(/never drew its code/);
+});
+
+// A mouse press is the whole of a real one, so react-aria sees a pointer interaction: no keyboard focus ring is drawn
+// by the focus a step moves, a press opens a popover as a click does, and a rail popover stays open under the hover.
+const MOUSE_PRESS = ["pointerover", "pointermove", "pointerdown", "mousedown", "pointerup", "mouseup", "click"];
+
+/** The events of a press on `element`, whose box is 100 by 40 at (10, 20): its centre is (60, 40). */
+function recordPress(element: HTMLElement, types = MOUSE_PRESS) {
+  element.getBoundingClientRect = () => new DOMRect(10, 20, 100, 40);
+  const seen: { type: string; detail: number; x: number; y: number; pointerType?: string }[] = [];
+  for (const type of types) {
+    element.addEventListener(type, (event) => {
+      const { detail, clientX, clientY } = event as MouseEvent;
+      seen.push({ type, detail, x: clientX, y: clientY, pointerType: (event as PointerEvent).pointerType });
+    });
+  }
+  return seen;
+}
+
+it("a mouse press sends the pointer events of a hover, the press and its mouse events in a browser's order, each mouse event with detail 1", async () => {
+  document.body.innerHTML = "<button>Save</button>";
+  const seen = recordPress(document.querySelector("button")!);
+  await settle(createUi(document, "en", undefined, undefined, { input: "mouse" }).press("Save"));
+  expect(seen.map(({ type }) => type)).toEqual(MOUSE_PRESS);
+  for (const event of seen) {
+    if (event.type.startsWith("pointer")) expect(event.pointerType, event.type).toBe("mouse");
+    else expect(event.detail, event.type).toBe(1);
+  }
+});
+
+it("every event of a mouse press carries the element's centre as its coordinates", async () => {
+  document.body.innerHTML = "<button>Save</button>";
+  const seen = recordPress(document.querySelector("button")!);
+  await settle(createUi(document, "en", undefined, undefined, { input: "mouse" }).press("Save"));
+  expect(seen.map(({ type, x, y }) => [type, x, y])).toEqual(MOUSE_PRESS.map((type) => [type, 60, 40]));
+});
+
+it("a touch press carries the element's centre too", async () => {
+  document.body.innerHTML = "<button>Save</button>";
+  const seen = recordPress(document.querySelector("button")!, ["pointerdown", "pointerup", "click"]);
+  // Nothing here opens a popover, so the step fails once the press is over.
+  await settle(expect(createUi(document, "en").touchPress("Save")).rejects.toThrow(/opened no popover/));
+  expect(seen.map(({ type, x, y }) => [type, x, y])).toEqual(["pointerdown", "pointerup", "click"].map((type) => [type, 60, 40]));
+  expect(seen.filter(({ type }) => type !== "click").every(({ pointerType }) => pointerType === "touch")).toBe(true);
+});
+
+it.each([
+  ["the control itself, when it takes focus", '<input id="before"><button id="target">Save</button>', "target", false],
+  ["the nearest focusable ancestor of a control that does not", '<input id="before"><div id="card" tabindex="-1"><span role="button" id="target">Save</span></div>', "card", false],
+  ["nothing, when no ancestor takes focus", '<input id="before"><span role="button" id="target">Save</span>', "before", false],
+  ["nothing, when the mousedown is cancelled", '<input id="before"><button id="target">Save</button>', "before", true],
+])("a mouse press focuses %s", async (_what, html, focused, prevent) => {
+  document.body.innerHTML = html;
+  document.getElementById("before")!.focus();
+  if (prevent) document.getElementById("target")!.addEventListener("mousedown", (event) => event.preventDefault());
+  await settle(createUi(document, "en", undefined, undefined, { input: "mouse" }).press("Save"));
+  expect(document.activeElement?.id).toBe(focused);
+});
+
+it.each([
+  ["by default", undefined],
+  ["when asked for as virtual", { input: "virtual" as const }],
+])("a press stays a bare click, with no pointer events and no focus change, %s", async (_when, options) => {
+  document.body.innerHTML = '<input id="before"><button id="target">Save</button>';
+  document.getElementById("before")!.focus();
+  const seen = recordPress(document.getElementById("target")!);
+  await settle(createUi(document, "en", undefined, undefined, options).press("Save"));
+  expect(seen.map(({ type, detail }) => [type, detail])).toEqual([["click", 0]]);
+  expect(document.activeElement?.id).toBe("before");
 });

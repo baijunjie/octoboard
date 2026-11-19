@@ -1,0 +1,41 @@
+---
+title: "Open in the agent's app"
+description: "Continue a stopped session's work in its agent's own app, on the computer that runs the daemon: the orchestrator hands over, and the agent's app is for working in depth."
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+{productName} is built to orchestrate agents across your projects and sessions. It doesn't try to be the best place to work with a single agent: Claude, Codex and similar apps are excellent at that, with powerful features and a rich experience, and {productName} doesn't want to duplicate them. When you feel the next task needs a more capable app, you can continue the session's work in that agent's own app. The conversation carries on there, so nothing is redone.
+
+<Screenshot id="open-in-app-menu" alt="An interrupted session's menu with “Open in Claude app” after “Hand off”, and the note that the agent's app may not see this conversation." />
+
+## Why it works this way
+
+- <strong>{productName} orchestrates, the agent's app is for working in depth.</strong> Keeping each to its job means you get both: many agents and projects in one place, and the full app when one task deserves it.
+- <strong>It's a bridge, not a copy.</strong> {productName} only asks the app to show the session's conversation: nothing is copied, the session isn't changed and nothing it runs is stopped. The session stays interrupted or archived in {productName}; if you resume or reopen it there later, the app shouldn't be writing to it at the same time.
+- <strong>Only a stopped session can be opened.</strong> The app and {productName} would both write to the conversation while the agent runs in {productName}, so the action is disabled while the session has a process, with <strong>Session running</strong> under it. Stop the session first, for example by archiving it. A session with no conversation yet has nothing to open: <strong>No conversation yet</strong>.
+- <strong>It happens on the daemon's computer.</strong> For a remote window, the app opens on the remote machine, not on the computer the window runs on. The action is offered only on a Mac or Windows PC, and only when the agent's app is installed there. Grok Build has no app, so it never shows the action.
+- <strong>The app reads the agent's default directory only.</strong> If the conversation's latest record lives in an account's own directory (an account that doesn't share the default configuration), the item carries a note, <strong>The agent's app may not see this conversation</strong>. It only warns: the action still works, but the app may show an older state, or nothing.
+
+## How to use it
+
+<Steps>
+
+1. Stop the session if it's running: open its menu and choose <strong>Archive</strong>.
+2. Open the session's menu and choose <strong>Open in Claude app</strong> or <strong>Open in Codex app</strong>, depending on its agent. On an interrupted session it sits right after <strong>Hand off</strong>; on an archived one, right after <strong>Reopen</strong>. Its shortcut is <strong>W</strong>.
+3. Or open <strong>View archive</strong> from the project's menu, choose <strong>View all</strong>, hover the session's row and press the window icon. It's the first of the row's buttons, before <strong>Reopen</strong>.
+
+</Steps>
+
+<Screenshot id="open-in-app-archive" alt="The archive view with a row's three buttons shown on hover: “Open in the agent's app” first (the window icon), then “Reopen” and “Delete”." />
+
+You know it worked when the app comes forward with the conversation. If it doesn't, an alert titled <strong>Could not open the agent's app</strong> says the app may not be installed, may not have started, or has no conversation to open. Its details give the cause, and you can try again.
+
+When the app takes over the conversation, any wait {productName} was holding to bring the session back on its own, such as a wait for an account's usage limit to reset, ends.
+
+## Next
+
+- [Agent handoff](../agent-handoff/): continue the work with a different agent inside {productName}.
+- [Context usage and fresh sessions](../fresh-session/): read an archived session's history without opening any app.

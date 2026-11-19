@@ -79,3 +79,18 @@ export const downloads = {
   "linux-aarch64": `${websiteUrl}download/linux-aarch64/`,
   releases: `${site.repositoryUrl.replace(/\/$/, "")}/releases`,
 } as const;
+
+// Context and continuity group: where a handoff writes the package the receiving session reads. Copied from the
+// daemon's `handoff_dir()` (`apps/daemon/src/paths.rs`, `data_dir().join("handoff")`).
+export const handoff = {
+  packageDir: "~/.octoboard/handoff/",
+} as const;
+
+// Accounts and usage group: the folders the Add account form suggests first for each agent. Copied from what the form
+// computes: `nextConfigDir` (`packages/ui/src/settings/accounts/agentAccounts.ts`) numbers the provider's usual
+// config directory (`providerConfigDir` in `packages/ui/src/agents/providers.ts`, the provider's `default_config_dir`).
+export const accountFolders = {
+  claude: "~/.claude-1",
+  codex: "~/.codex-1",
+  grok: "~/.grok-1",
+} as const;

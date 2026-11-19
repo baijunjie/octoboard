@@ -11,7 +11,7 @@ import type { FixtureChange, FixtureCommit, FixtureGit, Versions } from "../../f
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import { BRANCHES, FEATURE_TIP, MAIN_TIP, SAMPLE_GIT, SERVER_ON_DISK, WORKTREES, at, index, live, onFeature, onMain } from "../../fixtures/sampleGit";
 import { SAMPLE, sessionOf, snapshotState } from "../../fixtures/builders";
-import { addition, textChange, untracked } from "../../fixtures/changeFixtures";
+import { addition, deletion, textChange, untracked } from "../../fixtures/changeFixtures";
 
 const GROUP = "Project pane: Git";
 
@@ -77,6 +77,80 @@ const UNPUSHED_COMMITS: FixtureCommit[] = [
     changes: [textChange("committed", "src/search.ts", at(UPSTREAM_TIP)("c1d2e3f"), at(UNPUSHED_FIRST)("d2e3f4a"), PAGE_SIZE)],
   },
 ];
+
+/** A one-line edit of `path`, with the patch `git` writes for it. */
+const lineEdit = (path: string, before: string, after: string): Versions => ({
+  old: `${before}\n`,
+  new: `${after}\n`,
+  patch: [`diff --git a/${path} b/${path}`, "index 1a2b3c4..5d6e7f8 100644", `--- a/${path}`, `+++ b/${path}`, "@@ -1 +1 @@", `-${before}`, `+${after}`, ""].join("\n"),
+});
+
+/** `feature/ranking-experiments` with four ordinary commits since it forked from `main`, each about one thing and none
+ * a merge or an import: the plain history the docs' screenshot shows in place of the sample's. */
+const PLAIN_COMMITS = {
+  docs: FEATURE_TIP,
+  boosts: "b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0",
+  cache: "c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1",
+  cleanup: "d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2",
+};
+const RANKING_GUIDE = "# Ranking\n\nBoosts are applied after duplicates are removed.\n";
+const CACHE_MODULE = "export const cache = new Map<string, unknown>();\n";
+const OLD_NOTES = "# Old notes\nSuperseded by the architecture document.\n";
+const RANK_EDIT = lineEdit("src/ranking.ts", "export const rank = (hits) => sort(hits);", "export const rank = (hits, boost = 1) => sort(applyBoost(hits, boost));");
+const PIPELINE_EDIT = lineEdit("src/pipeline.ts", "const stages = [dedupe, rank];", "const stages = [dedupe, boost, rank];");
+const SEARCH_EDIT = lineEdit("src/search.ts", "export const search = (query) => run(query);", "export const search = (query) => cache.get(query) ?? run(query);");
+const PACKAGE_EDIT = lineEdit("package.json", '"vitest": "^2.0.0"', '"vitest": "^3.1.0"');
+
+const plainCommits = (): FixtureCommit[] => {
+  const { docs, boosts, cache, cleanup } = PLAIN_COMMITS;
+  return [
+    { commit: docs, parent: boosts, subject: "Document the ranking weights", changes: [addition("committed", "docs/ranking.md", at(docs)("9c0d1e2"), RANKING_GUIDE)] },
+    {
+      commit: boosts,
+      parent: cache,
+      subject: "Apply boosts after deduplication",
+      changes: [
+        textChange("committed", "src/pipeline.ts", at(cache)("2b3c4d5"), at(boosts)("3c4d5e6"), PIPELINE_EDIT),
+        textChange("committed", "src/ranking.ts", at(cache)("4d5e6f7"), at(boosts)("5e6f7a8"), RANK_EDIT),
+      ],
+    },
+    {
+      commit: cache,
+      parent: cleanup,
+      subject: "Cache query results",
+      changes: [
+        addition("committed", "src/cache.ts", at(cache)("6f7a8b9"), CACHE_MODULE),
+        textChange("committed", "src/search.ts", at(cleanup)("7a8b9c0"), at(cache)("8b9c0d1"), SEARCH_EDIT),
+      ],
+    },
+    {
+      commit: cleanup,
+      parent: MAIN_TIP,
+      subject: "Remove old notes, bump vitest",
+      changes: [
+        deletion("committed", "docs/old-notes.md", at(MAIN_TIP)("7c6b5a4"), OLD_NOTES),
+        textChange("committed", "package.json", at(MAIN_TIP)("9c0d1e3"), at(cleanup)("0d1e2f4"), PACKAGE_EDIT),
+      ],
+    },
+  ];
+};
+
+/** What the four commits changed together, as the Committed section lists it. */
+const plainComparison = (): FixtureChange[] => [
+  addition("committed", "docs/ranking.md", onFeature("9c0d1e2"), RANKING_GUIDE),
+  textChange("committed", "src/pipeline.ts", onMain("2b3c4d5"), onFeature("3c4d5e6"), PIPELINE_EDIT),
+  textChange("committed", "src/ranking.ts", onMain("4d5e6f7"), onFeature("5e6f7a8"), RANK_EDIT),
+  addition("committed", "src/cache.ts", onFeature("6f7a8b9"), CACHE_MODULE),
+  textChange("committed", "src/search.ts", onMain("7a8b9c0"), onFeature("8b9c0d1"), SEARCH_EDIT),
+  deletion("committed", "docs/old-notes.md", onMain("7c6b5a4"), OLD_NOTES),
+  textChange("committed", "package.json", onMain("9c0d1e3"), onFeature("0d1e2f4"), PACKAGE_EDIT),
+];
+
+const PLAIN_GIT: FixtureGit = {
+  ...SAMPLE_GIT,
+  comparisons: { ...SAMPLE_GIT.comparisons, "main..feature/ranking-experiments": plainComparison() },
+  commits: { ...SAMPLE_GIT.commits, "main..feature/ranking-experiments": { commits: plainCommits() } },
+};
 
 /** One uncommitted change in the main working copy, so that a Committed section starts within sight. */
 const MAIN_FEW_CHANGES: FixtureChange[] = [textChange("unstaged", "src/server.ts", index("5d6e7f8"), live("v2"), SERVER_ON_DISK)];
@@ -439,6 +513,17 @@ const reviewScenarios: Scenario[] = [
       "Group by commit is on: Show commits together sits at the end of the Committed heading, with Collapse all commits immediately before it. Both stay beside the heading when it pins above the scrolling list. The Committed band holds one row per commit, newest first, each with its chevron, short hash (muted monospace text, no chip), subject and change count, and its changes one level in, their content starting a chevron's width past the hash. The whole history is listed, so nothing is said under the list. Open a change to see it against its commit's parent.",
     state,
     preferences: gitMode({ byCommit: true }),
+    steps: selecting(rankingSession),
+  },
+  {
+    id: "git-changes-by-commit-plain",
+    group: GROUP,
+    category: "normal",
+    title: "A branch's commits listed one by one, ordinary history",
+    description: "Group by commit is on for a branch of four distinct commits, newest first, each with its short hash, a subject that fits the row, its change count and its files one level in: an added guide, two modified files, an added module with a modified one, and a removed note beside a modified package.json. Every change is added, modified or deleted; none is a rename, a type change or a binary. Unlike A branch's commits listed one by one, it has no merge, import or long subjects, so no row is cut.",
+    state,
+    preferences: gitMode({ byCommit: true }),
+    git: PLAIN_GIT,
     steps: selecting(rankingSession),
   },
   {

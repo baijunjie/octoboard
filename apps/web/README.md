@@ -13,8 +13,8 @@ Run these commands from the repository root:
 
 - `pnpm install` — installs workspace dependencies and prepares Nuxt's generated types.
 - `pnpm --filter @octoboard/web dev` — builds the React product preview, then starts the website development server.
-- `pnpm --filter @octoboard/web check:locales` — checks language coverage, message keys and interpolation
-  placeholders.
+- `pnpm --filter @octoboard/web check:locales` — checks language coverage, message keys, interpolation
+  placeholders and that no message contains the product name.
 - `pnpm --filter @octoboard/web typecheck` — prepares Nuxt and checks the website's TypeScript and Vue code.
 - `pnpm --filter @octoboard/web test` — runs the website's Node tests (SEO modules, download resolution, the install
   script); the checks that read the generated output are skipped until `build` has run.

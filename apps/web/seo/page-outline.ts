@@ -5,13 +5,13 @@ import { docsPages } from "./site-seo.ts";
 
 export const featureGroups = [
   { id: "feature-accounts", key: "featureAccountsTitle", icon: "terminal-window", features: [
-    "managedAccounts", "accountContinuity", "quotaScheduling", "usageMonitor", "sharedConfiguration",
+    "managedAccounts", "accountContinuity", "quotaScheduling", "usageMonitor", "startUsageWindows", "sharedConfiguration",
   ] },
   { id: "feature-context", key: "featureContextTitle", icon: "chat-circle-dots", features: [
     "freshSession", "agentHandoff", "openAgentApp",
   ] },
   { id: "feature-collaboration", key: "featureCollaborationTitle", icon: "tree-structure", features: [
-    "crossProjectWork", "nativeProjectSessions", "sessionIntervention", "processMonitoring", "reviewChanges",
+    "crossProjectWork", "nativeProjectSessions", "sessionIntervention", "processMonitoring", "keepAwake", "reviewChanges",
   ] },
 ] as const;
 

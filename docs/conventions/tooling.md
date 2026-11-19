@@ -64,6 +64,10 @@ checks are run in a piece of work, and that nothing bypasses them, is in `CLAUDE
   `steps.mjs` with `quick.mjs` kept consistent (its tests fail otherwise), a Rust test target named in `CRATES`. A test
   that creates a temporary Git repository calls `assertRepositoryEnvironmentCleared` at module startup, and a hook
   launcher uses `withoutRepositoryEnvironment` for its verification child.
+- **A script that drives the UI state gallery in a browser** (the sweep, the comparison, the docs' screenshots) **takes
+  the browser, the dev server, frame loading and the run lifecycle from `packages/ui/scripts/gallery-browser.mjs` and
+  the heavy-step slot from `scripts/verify/lock.mjs`**, instead of keeping its own copy: a copy drifts and loses the
+  handling of interrupts and failed closes.
 - **Hooks are installed by `.githooks/`** (`pre-commit` formats staged files, `commit-msg` rejects AI attribution,
   `pre-push` verifies); when to reinstall them after a hook change is in `CLAUDE.md`, "Repository checks".
 

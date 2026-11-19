@@ -1,0 +1,47 @@
+---
+title: "Prevent sleep"
+description: "Keep agents working while you are away: stop the computer from sleeping, and where the system allows it, the display from turning off or locking."
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+Agents keep working when you walk away, but a computer that goes to sleep does not. {productName} can keep the computer awake, and its display from turning off or locking, so work that needs no one at the keyboard carries on. It matters most for work an agent does while you are away that depends on a live screen, such as taking screenshots or driving a browser.
+
+<Screenshot id="prevent-sleep-setting" alt="The “General” page in Settings, with “Prevent sleep” switched on and “When to prevent sleep” set to “While sessions work”." />
+
+## Why it works this way
+
+- <strong>The agents' work should not depend on you being at the computer.</strong> With <strong>Prevent sleep</strong> on, {productName} holds off the sleep that idleness brings, so a long run is not cut short by the system's idle timer, and the screen stays on for work that needs it.
+- <strong>It is the host that is held awake.</strong> The computer is the one that runs the daemon, {productName}'s background program. When you use {productName} on one computer and the daemon on another, it is the other computer that is kept awake, not the one you sit at.
+- <strong>It is off to begin with, and you choose when.</strong> <strong>When to prevent sleep</strong> offers <strong>While sessions work</strong>, the default, and <strong>Always</strong>. <strong>While sessions work</strong> holds the computer while a session is starting, working, dormant or working in the background; a session that waits for you does not count, and once none counts the system's own settings apply again. <strong>Always</strong> holds it for as long as the daemon runs: in the desktop app, as long as the app runs, with its window shown or closed into the background.
+- <strong>What is held depends on the system.</strong>
+  - macOS: the display and the system are both kept from idle sleep, so the screen neither turns off nor locks while you are idle.
+  - Windows: the display and the system are both requested. The display part is best effort: in a session with no display, such as a service or an SSH session, only the system is held.
+  - Linux: the system is held through logind, the system's session service. {productName} also asks the desktop's screen saver service to stand down, which keeps the desktop's own screen blanking, lock and automatic suspend from acting where the desktop honours the request. That part is best effort.
+
+<Aside type="caution" title="Limits">
+- Only the sleep that idleness brings is held off. Closing a laptop's lid, or putting the computer to sleep by hand, still sleeps it.
+- The setting appears only where the host can be held awake: on macOS and Windows always, on Linux only where logind answers on the system bus. Elsewhere the rows are not shown.
+- When the host refuses the hold, nothing is held and the daemon logs the reason.
+- When {productName} quits, or the daemon stops or crashes, the hold ends with it.
+</Aside>
+
+## How to use it
+
+<Steps>
+
+1. Open <strong>Settings › General</strong> and find the <strong>Power</strong> group. If it is not there, the computer running the daemon cannot be held awake.
+2. Switch on <strong>Prevent sleep</strong>. It saves as you switch it.
+3. Under it, choose <strong>When to prevent sleep</strong>: <strong>While sessions work</strong> for holding the computer only while agents are busy, or <strong>Always</strong> for as long as the daemon runs (in the desktop app, as long as the app runs, window shown or closed).
+4. Leave your agents working and step away. To check that the hold is on, look at the menu bar icon (on Windows, the notification-area icon) in the desktop app: its eyes turn red while {productName} is keeping the computer awake.
+
+</Steps>
+
+You'll know it worked when the computer and its display stay awake while sessions work and you are idle. Switch <strong>Prevent sleep</strong> off, and the system's own settings apply again at once.
+
+## Next
+
+- [Session status and intervention](../session-intervention/): which sessions are working and which wait for you.
+- [Process monitoring](../process-monitoring/): what the sessions leave running.

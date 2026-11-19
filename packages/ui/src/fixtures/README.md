@@ -34,7 +34,7 @@ It is excluded from the production type check and from release verification, and
   `fixtureGit.ts` answers Git mode from them; `sampleGit.ts`, `sampleFiles.ts` and `viewerImages.ts` are the sample
   repository and files; `invariants.ts` holds rules over a whole repository that no single change shows
   (`objectIdCheck`), checked by a test.
-- `fakeTerminal.ts` answers terminal sockets in the page (output, mouse, full screen, cursor beside reversed text, shell,
+- `fakeTerminal.ts` answers terminal sockets in the page (output, a quiet screen of the agent's own CLI, mouse, full screen, cursor beside reversed text, shell,
   exited, refused). The cursor sample uses ANSI reverse video and positions the real terminal cursor on the next
   character; it does not create a terminal selection or emulate copying.
   `builders.ts` builds protocol records and `snapshotState` builds a store state. `interact.ts` is the step driver

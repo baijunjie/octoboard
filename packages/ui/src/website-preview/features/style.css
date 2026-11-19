@@ -5,6 +5,7 @@ html { color-scheme: dark; }
 .feature-canvas { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 4px; }
 .feature-surface { min-width: 0; width: 100%; border: 1px solid var(--separator); border-radius: 11px; background: var(--surface, #19191b); }
 .compact-view { display: grid; gap: 15px; padding: 21px; font-size: 17px; white-space: nowrap; }
+.setting-view { padding: 4px 8px; }
 .preview-list { list-style: none; padding: 0; margin: 0; }
 .preview-row, .preview-line { display: flex; align-items: center; gap: 11px; min-width: 0; white-space: nowrap; }
 .preview-row { min-height: 62px; padding: 12px 19px; font-size: 16px; }

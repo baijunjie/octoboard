@@ -1,0 +1,53 @@
+---
+title: "账户管理"
+description: "并排管理每个智能体的多个账户，每个会话直接选用账户，换账户不再需要退出再登录。"
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { accountFolders, productName } from "../../../../commands.ts";
+import Screenshot from "../../../../components/Screenshot.astro";
+
+很多人同时有好几个订阅，比如个人的和公司的。智能体一次只认一个登录，换账户就得退出再登录。{productName} 把每个账户当作一个具名的配置目录并排管理，每个会话直接选用哪个账户，不再因为换号打断工作。
+
+<Screenshot id="accounts-table" alt="设置的“智能体账户”部分，已打开 Claude Code 标签页：一张账户表，列出各账户的用量、登录状态和“停用”开关。" />
+
+## 为什么这样设计
+
+- <strong>换账户不该打断工作。</strong>智能体一次只持有一个登录。{productName} 改为按智能体分组，用你起的名字列出每个账户；控制台、项目乃至单个会话都可以各自选择使用的账户。同一智能体的多个账户可以同时运行，各自以自己的身份登录。
+- <strong>账户就是一个有名字的文件夹。</strong>智能体账户是智能体的一个配置目录，它在其中保存登录信息和对话历史。
+- <strong>{productName} 从不接触你的凭据。</strong>登录时，{productName} 在后台针对账户的文件夹运行智能体自带的登录流程。它只会读取智能体的登录记录，用来显示每个账户登录所用的邮箱。
+- <strong>每个智能体都有一个默认账户。</strong>它就是智能体自己的文件夹，在你什么都不做时使用。你可以重命名或停用它，但不能移除它，也不能更改它的文件夹。
+- <strong>账户可以停用。</strong>停用的账户不再出现在账户选项和用量显示中，新会话也不会使用它；已经在它上面运行的会话会继续运行。只有你自己才能把它重新启用。
+- <strong>局限：</strong>智能体必须已安装，并能在 <code dir="ltr">PATH</code> 中找到，其账户才能使用；{productName} 只能添加这台电脑上已安装的智能体，未安装的会链接到该智能体自己的安装说明。移除账户不会删除它的文件夹，除非你要求这样做。
+
+## 如何使用
+
+<Steps>
+
+1. 打开<strong>设置 › 智能体账户</strong>。每个已添加的智能体各有一个标签页。起初，这些标签页就是这台电脑上已安装的智能体。如果你用的智能体不在其中，选择<strong>添加智能体</strong>，再点击它旁边的<strong>添加</strong>。
+2. 选择<strong>添加账户</strong>，即最后一个标签页后面的图标按钮。选择智能体，为账户起一个在该智能体下不重复的名字，保留建议的文件夹（例如 <code dir="ltr">{accountFolders.claude}</code>、<code dir="ltr">{accountFolders.codex}</code> 或 <code dir="ltr">{accountFolders.grok}</code>），或另选一个。文件夹不必已经存在。
+3. 登录账户。新账户在<strong>状态</strong>列显示<strong>未登录</strong>，后面紧跟一个<strong>登录</strong>按钮；账户的操作菜单里也有<strong>登录</strong>。对 Claude Code 和 Codex，{productName} 会在浏览器中打开授权页面；Grok Build 则自己打开页面，对话框里会显示需要在页面上确认的代码。授权完成后，对话框会自动关闭。如果 10 分钟内没有完成，登录会超时；也可以用<strong>取消登录</strong>提前结束。
+4. 查看这一行：<strong>状态</strong>徽章现在显示<strong>已登录</strong>，<strong>用量</strong>列显示出账户的用量，名称下方也会显示它的邮箱。
+5. 整理账户：拖动一行前面的手柄，或在它的操作菜单中选择<strong>前移</strong>或<strong>后移</strong>。这个顺序也是 {productName} 中所有账户选项遵循的顺序。用<strong>停用</strong>开关停用账户；对默认账户，可以用<strong>重命名</strong>给它起你自己的名字。
+
+</Steps>
+
+默认账户叫<strong>默认</strong>，除非你给它起了自己的名字，所以本页的截图里它可能显示为别的名字。打开账户的操作菜单，可以看到<strong>详情</strong>（它的套餐、文件夹和用量）、<strong>设置</strong>（共享和停用）、<strong>连接器与 MCP</strong>、<strong>编辑</strong>（你添加的账户的名称或文件夹）和<strong>移除</strong>。
+
+<Screenshot id="account-actions-menu" alt="设置中某个账户的操作菜单。" />
+
+<Screenshot id="account-login-dialog" alt="“登录”对话框，正在等待在浏览器中完成授权。" />
+
+### 移除账户
+
+在账户的操作菜单中选择<strong>移除</strong>。使用过它的控制台会回到该智能体的默认账户，项目会回到使用它们所属控制台的账户，已经打开的会话则继续使用它们启动时的文件夹。账户的文件夹原样保留。如果还想把它移到废纸篓（Windows 上是回收站），在确认对话框里勾选相应选项；这样做之后，该账户已归档的会话就无法再恢复，并且账户上正在运行的会话必须先结束或切换走。
+
+<Aside type="note">
+账户、它们的顺序以及哪些已停用，都只保存在这台电脑上。只有在导出配置时选择包含账户，它们才会随配置带到另一台电脑。
+</Aside>
+
+## 下一步
+
+- [用量监控](../usage-monitor/)：查看每个账户还剩多少。
+- [账户连续性](../account-continuity/)：把会话切换到另一个账户，不丢对话。
+- [共享配置](../shared-configuration/)：让同一智能体的账户共享技能、插件和设置。

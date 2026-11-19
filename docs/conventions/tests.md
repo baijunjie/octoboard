@@ -12,7 +12,8 @@ interaction rules a gallery scenario shows are in [`ui-standard.md`](ui-standard
 - **A test sits beside the code it tests, under the name the code's language and package give it:** UI
   `src/<path>/<name>.ts(x)` has `<name>.test.ts(x)` next to it; Rust has a `#[cfg(test)] mod tests` in the file, or
   `<name>/tests.rs` (`<topic>_tests.rs` beside the module where one module's tests split by topic); `scripts/<name>.mjs`
-  has `scripts/<name>.test.mjs`; `apps/web` tests are the only ones in a separate root, `apps/web/test/<name>.test.ts`.
+  (the repository's or a package's, `apps/*/scripts/`, `packages/*/scripts/`) has its test beside it, and the package's
+  test command collects that directory; `apps/web` tests are the only ones in a separate root, `apps/web/test/<name>.test.ts`.
   Not: a mirrored `tests/` tree for the UI or the daemon.
 - **A test file keeps the `.test` marker in its name, and test file names are unique within a package:** two files of
   the same name shadow each other in imports and in the editor. A source file may have several test files split by topic
@@ -338,7 +339,10 @@ application tests (`packages/ui/src/fixtures/`). How to run, sweep and compare i
   `packages/ui/src/fixtures/interact.ts`, without visiting unrelated views or regression assertions.
 - **Scenarios verify the UI, not copy:** the same UI with different copy or a different form-control value gets no
   second scenario, except where it changes layout (the longest option label). Cases that can coexist on screen go in one
-  scenario; error scenarios merge only where message format, layout and the offered actions are the same.
+  scenario; error scenarios merge only where message format, layout and the offered actions are the same. The one
+  exception is a scenario a docs screenshot needs (`docs/conventions/docs-site.md`, "Screenshots"): it may repeat
+  another scenario's UI with plainer data, or without its hover or focus, and its description names what it leaves out
+  and the scenario it differs from.
 - **Viewing conditions (theme, language, width) are chosen with the gallery's controls and are not copied into
   scenarios.** A copy of a scenario made to open the drawer first, or because its layout differs at a width, earns
   nothing: write the pointer ("choose 560px to see the rows stack") in the description of the scenario that shows the

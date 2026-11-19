@@ -95,4 +95,5 @@ coded daemon failures and how the UI words them are in `docs/conventions/error-c
   keys and placeholders.
 - **A Vue component looks copy up through `useSiteCopy().t`**, which fills `{appName}` and `{operatorName}` from the
   runtime configuration; `useI18n` is for the current locale only. The product and operator names, and the identity and
-  contacts from `config/app.json`, are never literals in a catalog or a component.
+  contacts from `config/app.json`, are never literals in a catalog or a component; `check:locales` refuses a message
+  that contains the product name.

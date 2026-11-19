@@ -317,6 +317,18 @@ export const quotaGatingScenarios: Scenario[] = [
     ],
   },
   {
+    id: "sidebar-session-switch-account-quota-plain-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Switch account menu, an account at its limit, nothing hovered",
+    description: "The row's Switch account submenu lists Default (current), Work, Personal and Client, each with its compact usage bar. Work, whose session limit is reached, is greyed out and cannot be chosen, with \"Limit reached\" and when it resets under its name; Personal, nearly spent, and Client, not read yet, can be chosen. Unlike \"Switch account menu, an account at its limit\", whose Work name is clipped and shows a tooltip over the list, every name here is plain and the pointer rests on no row, so no tooltip is drawn.",
+    state: switchState(claudeQuotas),
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
+      (ui) => ui.press(ui.t("sidebar.session.switchAccount")),
+    ],
+  },
+  {
     id: "sidebar-session-switch-account-signed-out-menu",
     group: GROUP,
     category: "normal",

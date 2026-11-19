@@ -256,6 +256,16 @@ export const archiveScenarios: Scenario[] = [
     steps: [...openProjectArchive(project.name), (ui) => ui.focusControl(openInAppButton(ui, "codex", appCodex))],
   },
   {
+    id: "archive-open-in-app-row",
+    group: GROUP,
+    category: "normal",
+    title: "Archived rows, actions on hover",
+    description: "Nothing is hovered or focused, so every row shows only its dates. Hover the Claude Code row to see its three icon buttons beside the dates: Open in Claude app (the window icon, leftmost), Reopen and Delete, with no focus ring. Unlike Archived rows, Open in the agent's app, which holds focus on a button and has its tooltip open, this one shows the buttons by pointer hover alone.",
+    state: appState,
+    nativeApps: ["claude", "codex"],
+    steps: openProjectArchive(project.name),
+  },
+  {
     id: "archive-open-in-app-unavailable",
     group: GROUP,
     category: "normal",

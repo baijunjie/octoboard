@@ -361,7 +361,8 @@ class LiveChanges {
 
 // The scenario's interactions, once the app has mounted. A failed one is shown over the page as
 // well as logged, since the scenario then shows less than it says; so is an exit that does not end.
-const ui = createUi(document, language, daemon, scenario?.host ?? readHost());
+// `input=mouse` has the steps press as a mouse does, which draws no keyboard focus ring: the docs' screenshots use it.
+const ui = createUi(document, language, daemon, scenario?.host ?? readHost(), { input: params.get("input") === "mouse" ? "mouse" : "virtual" });
 // Listening before the steps, so the buttons work on a page whose steps failed; a change waits for them.
 const live = new LiveChanges(ui);
 document.addEventListener(LIVE_CHANGE_EVENT, (event) => void live.apply(String((event as CustomEvent<unknown>).detail)));

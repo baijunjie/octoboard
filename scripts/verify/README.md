@@ -67,7 +67,7 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    file nothing imports.
 5. **Slots** (`lock.mjs`). Heavy steps take a machine-wide slot shared by every worktree (first come, first served;
    consecutive heavy steps share one hold). The number of slots follows cores and memory and is overridden by
-   `OCTOBOARD_VERIFY_SLOTS`. The UI's gallery sweep takes the same lock, and so do the package scripts that run
+   `OCTOBOARD_VERIFY_SLOTS`. The UI's gallery sweep and the docs' screenshot command take the same lock, and so do the package scripts that run
    tests and Rust checks on their own (`pnpm test:rust`, `clippy:rust`, `check:windows`, and the UI's `test`,
    `test:related` and `test:app`), through `heavy.mjs`. A heavy step marks its commands as running under its hold
    (`HELD_ENV`), so those scripts run at once inside `pnpm verify` instead of waiting on the slot it holds.

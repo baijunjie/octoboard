@@ -1,0 +1,56 @@
+---
+title: "Cross-project coordination"
+description: "Hand one request to a console session, which divides it among the agents of your projects, follows their progress and brings their reports together."
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+Real requests often span several projects: a front end, a back end, the docs. Hand one request to a console session and it divides the work among the agents of each project, follows their progress and brings their reports together, so you start from one place.
+
+<Screenshot id="console-sessions-sidebar" alt="The sidebar with console sessions at the top and the project sessions they started under their projects, each with a status glyph." />
+
+## Why it works this way
+
+- <strong>One entry point for work that spans projects.</strong> You describe the request once. The console session decides which of its console's projects it belongs to, gives each project's agent its part, follows up and sums up, so you do not relay between projects yourself. A console groups projects, and one console can run several console sessions at once.
+- <strong>A console session changes no project itself.</strong> Every change to a project goes through a session it starts there, so that session loads that project's own instructions, skills and settings (see [Native project sessions](../native-project-sessions/)). A console session can still read a project, and it sees what a session changed through {productName}'s own tools rather than by running <code dir="ltr">git status</code> in the project.
+- <strong>The sessions it starts are ordinary project sessions.</strong> They appear under their projects in the sidebar, marked with a small dot in the console session's colour, and you can open any of them and type to it ([Session status and intervention](../session-intervention/)).
+- <strong>Sessions report back.</strong> A session started by a console session sends it a report saying whether the work is done, failed or needs a decision. The console session shows you the result in its own terminal and in the report panel, which can hold tables, charts and forms.
+- <strong>Sessions can pass each other information.</strong> Any session can see the other running sessions and tell them things. That is information, not an order: a session takes work only from its owner or from you, and its owner is sent a copy of what reaches it.
+
+<Aside type="caution" title="Limits">
+- A console session works on its own console's projects. For a project of another console it asks you to start a session there.
+- Everything here is done by AI agents. {productName} frames information so that it is clearly not an instruction, but whether a model acts on a message is the model's own call, which {productName} cannot enforce.
+- The agents' own permission prompts still apply: a session that needs your approval stops and waits for you.
+</Aside>
+
+## How to use it
+
+<Steps>
+
+1. In the sidebar's console sessions section, select <strong>New console session</strong>. Choose the agent and account in the <strong>Open console session</strong> dialog, then open it.
+
+   A row for the new session appears under <strong>Console sessions</strong>, with its status glyph and its agent's icon.
+2. Describe the request in the console session's terminal, in plain words. Name the projects if you know them; otherwise it works out which ones the request belongs to.
+3. Watch the work spread out. Sessions it starts appear under their projects, and while work it handed out is still running, the console session reads <strong>Child sessions working</strong>.
+4. Turn on the report panel with <strong>Show report panel</strong> in the top bar. The console session puts its summaries there. If a page has a form, fill it in and submit it once: your answer reaches the console session as one message.
+5. To work with one project directly, select its session in the sidebar and type to it. To start a session of your own beside the console session's, choose <strong>New session</strong> under a project and, in the dialog, set <strong>Report to</strong> to the console session you want it to answer to.
+
+</Steps>
+
+
+You'll know it worked when the console session's summary appears in its terminal or in the report panel, and its status goes back to a resting one after the sessions under it finish.
+
+<Screenshot id="report-interactive" alt="A console session's report panel showing a page with a question and choices for the user." />
+
+### Related settings
+
+- In the console's settings, <strong>Console session instructions</strong> adds your own instructions for the console's console sessions. They take precedence over the built-in ones, short of letting a console session change a project itself.
+- In <strong>Settings › Agent behavior</strong>, <strong>Automatically approve session requests</strong> and the other approval switches decide which requests from sessions {productName} approves without asking you. They are off to begin with.
+
+## Next
+
+- [Native project sessions](../native-project-sessions/): what a session started in a project loads.
+- [Session status and intervention](../session-intervention/): finding the session that waits for you and stepping in.
+- [Process monitoring](../process-monitoring/): the processes the sessions start.

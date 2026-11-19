@@ -1,0 +1,58 @@
+---
+title: "Session status and intervention"
+description: "See at a glance which sessions are working, waiting or at rest, get notified when one waits for you, and step in by answering or adjusting it directly in its terminal."
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+With many sessions running, the biggest cost is not knowing which one is waiting for you. {productName} makes every session's status visible at a glance and notifies you when one waits. Open it and you answer or change its instructions directly in the terminal. Orchestrating is not leaving agents alone: you can take over any session at any time.
+
+<Screenshot id="session-status-glyphs" alt="The session status glyphs side by side, each on a session row named after its status." />
+
+## Why it works this way
+
+- <strong>Status you can see, a call when it needs you, and a way in.</strong> Each session's state is shown where you already look, a session that waits for you is made easy to find and notifies you once, and the session you open is the live agent, so stepping in is typing to it.
+- <strong>The status is the agent's own, not a guess.</strong> {productName} adds hooks to each launch, so Claude Code, Codex and Grok Build report when a turn starts, when they ask for permission and when they stop. For some situations the agents report nothing, and {productName} reads their terminal instead, for example the title Codex shows while it needs you.
+- <strong>The colour says what a session asks of you.</strong> Orange means it needs you (<strong>Waiting for you</strong>, <strong>Dormant</strong>). Green means it is at its prompt and can be talked to (<strong>Paused</strong>, <strong>Done</strong>, <strong>Awaiting instructions</strong>, <strong>Child sessions working</strong>, <strong>Working in background</strong>). Blue means it is busy (<strong>Working</strong>). Grey means you cannot talk to it now (<strong>Starting</strong>, <strong>Switching account</strong>, <strong>Interrupted</strong>). <strong>Reconnecting</strong> is a slowly turning amber arc, and <strong>Status unknown</strong> is a dashed empty circle for a status this window does not know.
+- <strong>A waiting session is made findable, not only marked.</strong> Its row shows a raised hand; so does its project while the project is folded away, and so does its console's avatar on the rail. {productName} also shows a system notification once, when a session starts waiting.
+- <strong>Stepping in is typing.</strong> A session's terminal is live: keystrokes go straight to the agent, as in any terminal. You answer a permission prompt or a question where it is asked, and you adjust the instructions of a running session by typing a message to it, whether you started it or a console session did.
+- <strong>Interrupting a turn is the agent's own key.</strong> The window has no stop button; press the agent's interrupt key in the terminal. The session keeps its process and conversation and reads <strong>Paused</strong>, ready for your next message. A console session, or a session that started other sessions, can interrupt the sessions it owns in the same way. This is different from <strong>Interrupted</strong>, which means the session's process has ended; selecting such a session's row resumes it.
+
+<Aside type="caution" title="Limits">
+- A turn that ends with the agent asking a question as plain prose looks like a finished turn to all three agents, so that session reads <strong>Done</strong>, not <strong>Waiting for you</strong>.
+- Codex has no signal for a question it asks through its own ask-the-user tool; such a session reads <strong>Working</strong> unless Codex's title says it needs you.
+- <strong>Working in background</strong> is followed for Claude Code and Grok Build only.
+- A session whose process {productName} cannot reach reads <strong>Reconnecting</strong> and is not counted as waiting until it is reached again.
+- On macOS the notification banner may not appear while {productName} is the frontmost app.
+</Aside>
+
+## How to use it
+
+<Steps>
+
+1. Read the status glyph on a session's row in the sidebar. A folded project shows the glyph of its most urgent session, so you can leave projects closed. Hover over a glyph for the status in words.
+2. Find the session that waits for you. The raised hand at the bottom of the rail counts the waiting sessions; press it to select the next one, and press again to go on to the one after. You can also select a console's avatar on the rail, which carries a badge for its most urgent session.
+3. Step in. With the session selected, its terminal is in front of you: answer the question or the permission prompt, or type a new instruction.
+4. To stop a turn, press the agent's interrupt key in its terminal. The row changes to <strong>Paused</strong>.
+5. To see one project's or one console session's sessions as cards, choose <strong>Focus mode</strong> in the project's menu or the session's menu. Choose <strong>Leave focus mode</strong> to go back.
+
+</Steps>
+
+
+<Screenshot id="focus-mode-sessions" alt="“Focus mode” listing one project's sessions as cards, each with its status." />
+
+You'll know it worked when the session you answered changes from <strong>Waiting for you</strong> to <strong>Working</strong> and the rail's count goes down. After you grant a permission, the session stays <strong>Waiting for you</strong> until the command you allowed has finished.
+
+### Related settings
+
+- In <strong>Settings › Notifications</strong>, the setting for system notifications. On macOS and Windows the system's own settings manage them, and the row has a button that opens them.
+- On macOS, the menu bar icon lists the sessions that wait for you, are paused, done or awaiting instructions, and shows an orange dot while any session waits or is dormant. On Windows the notification-area icon opens a flyout with the same list.
+- <strong>Automatically approve session requests</strong> and the other switches in <strong>Settings › Agent behavior</strong> decide which requests from a session wait for your answer.
+
+## Next
+
+- [Cross-project coordination](../cross-project-work/): the sessions a console session starts report back to it.
+- [Process monitoring](../process-monitoring/): what is still running after a session stops.
+- [Prevent sleep](../keep-awake/): keep the computer awake while agents work and you are away.

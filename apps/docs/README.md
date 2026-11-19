@@ -18,6 +18,11 @@ Run these commands from the repository root:
 - `pnpm --filter @octoboard/docs typecheck` — checks the configuration, content and components (`astro check`).
 - `pnpm --filter @octoboard/docs test` — runs the package's tests; the checks that read the built site are skipped
   until `build` has run.
+- `pnpm --filter @octoboard/docs screenshots [--only <id or pattern> ...] [--url <gallery origin>]` — captures the
+  Features pages' screenshots from the UI state gallery, in English, into `src/assets/features/<id>.png` (committed).
+  What is captured is listed per feature group in `screenshots/accounts.mjs`, `context.mjs` and `collaboration.mjs`
+  (fields in `screenshots/entries.mjs`); `--list` prints the ids. It needs the UI package's Playwright and a
+  Chromium, as the gallery sweep does, and waits for the same heavy-step slot. Run it again after a UI change.
 
 ## Configuration
 

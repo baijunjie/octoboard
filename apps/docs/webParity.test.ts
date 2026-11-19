@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { LANGUAGES } from "@octoboard/ui/languages";
 import appConfig from "../../config/app.json" with { type: "json" };
 import { downloadPagePath, downloadTargets, installCommand, releasesUrl } from "../web/seo/downloads.ts";
 import { redirectPage as webRedirectPage } from "../web/seo/redirect-pages.ts";
@@ -9,9 +10,10 @@ import { docsPath, retiredLocaleCodes } from "../web/seo/site-seo.ts";
 import { docsWords } from "./siteTitle.ts";
 import { loadWithEnv } from "./moduleTestSupport.ts";
 import { RETIRED_SEGMENTS, redirectPage } from "./redirects.ts";
+import { sidebar } from "./sidebar.ts";
 
 // The docs keep their own copies of a few things the website decides (`site.config.ts`, `redirects.ts`, the install
-// command and the download addresses in `src/commands.ts`, the word for "Docs" in `siteTitle.ts`) rather than import or
+// command and the download addresses in `src/commands.ts`, the word for "Docs" in `siteTitle.ts`, the Features group's labels in `sidebar.ts`) rather than import or
 // read the website's modules and catalogs in the Astro build. These tests import or read them and compare, so a change
 // on either side fails here until the other follows.
 
@@ -77,5 +79,23 @@ test("the word for \"Docs\" in each language is the website's navigation label",
   for (const [language, word] of Object.entries(docsWords)) {
     const web = JSON.parse(readFileSync(new URL(`../web/i18n/locales/${language}.json`, import.meta.url), "utf8")) as { navDocs: string };
     assert.equal(word, web.navDocs, language);
+  }
+});
+
+test("the Features group and its three subgroups are named as the website names its feature groups, in every language", () => {
+  interface Group {
+    label: string;
+    translations: Record<string, string>;
+    items: unknown[];
+  }
+  const features = (sidebar as Group[]).find((group) => group.label === "Features");
+  assert.ok(features);
+  const [accounts, context, collaboration] = features.items as Group[];
+  for (const language of LANGUAGES) {
+    const web = JSON.parse(readFileSync(new URL(`../web/i18n/locales/${language}.json`, import.meta.url), "utf8")) as Record<string, string>;
+    assert.equal(features.translations[language], web.navFeatures, `${language}: navFeatures`);
+    assert.equal(accounts?.translations[language], web.featureAccountsTitle, `${language}: featureAccountsTitle`);
+    assert.equal(context?.translations[language], web.featureContextTitle, `${language}: featureContextTitle`);
+    assert.equal(collaboration?.translations[language], web.featureCollaborationTitle, `${language}: featureCollaborationTitle`);
   }
 });

@@ -1,0 +1,67 @@
+---
+title: "Account continuity"
+description: "When a session stops at its account's usage limit, move it to another account of the same agent with usage left and carry on, by hand or automatically."
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+Reaching a usage limit is the most common thing that interrupts work. When a session stops on a limit, you should not have to open a new session and explain the context again: {productName} moves it to another account of the same agent that still has usage left, and the conversation carries on as it was. You can switch by hand, or let {productName} do it when the limit is reached.
+
+<Screenshot id="switch-account-dialog" alt="The “Switch account” confirmation, naming the session and the account it will be switched to." />
+
+## Why it works this way
+
+- <strong>A limit should not mean starting over.</strong> A switch keeps the session and its conversation and changes only the account it runs under, so the task carries on instead of being explained again.
+- <strong>The conversation is copied, not moved.</strong> Each account keeps its own folder, and an agent finds a conversation in the folder of the account it runs under. A switch copies the session's conversation into the target account's folder and restarts the session there. The original stays in the account it came from, so a switch that fails loses nothing, and switching back needs no second copy.
+- <strong>The session restarts.</strong> The agent's process ends and starts again under the new account, which takes a few seconds. While it does, the session shows as switching and cannot be resumed or switched again. Background processes the session had running are carried over to the restart where possible; the ones the agent ends itself as it exits are not, and the session is told which.
+- <strong>A cut-off turn is continued.</strong> If the switch interrupted a turn, or the turn had stopped on the usage limit, the session is sent a message from {productName} asking it to continue the task without repeating finished work. If you had cancelled the turn, or it had finished, no such message is sent.
+- <strong>It is the same agent.</strong> A session never changes agent by a switch, so you can only switch between accounts of the session's own agent. The session reads the new account's configuration; the model, reasoning effort and compatibility choices you set explicitly stay. Settings kept only in the old account's folder do not follow, so the same conversation can come up with different defaults.
+- <strong>Some accounts are not valid targets.</strong> A session cannot be switched onto an account that has reached its limit, is not logged in or is turned off.
+- <strong>Automatic switching is opt-in.</strong> It is off to begin with because it ends a session's process and spends another account's usage without asking.
+
+## Switch an account by hand
+
+<Steps>
+
+1. In the sidebar, open the menu of the session and choose <strong>Switch account</strong>, then the account. The submenu appears only when the agent has another account that is turned on. Accounts at their limit or not logged in are listed but cannot be chosen.
+2. In the <strong>Switch account</strong> confirmation, check the session named. If other sessions in the console qualify, choose <strong>This session and its child sessions</strong> or <strong>Every session in this console</strong>; each option shows how many sessions it would switch.
+3. Select <strong>Switch</strong>. The confirmation closes and the switch runs in the background, up to four sessions at a time.
+
+</Steps>
+
+You know it worked when the session stops showing as switching and comes back carrying on with its task or at its prompt; hovering its agent icon names the new account. If a session could not be switched, one alert lists each failure and the session stays on its current account. Switching does not change the account defaults of the console or its projects, so new sessions are not affected.
+
+<Screenshot id="switch-account-menu" alt="A session's “Switch account” submenu, with an account that has reached its limit shown as unavailable." />
+
+## Switch automatically at the usage limit
+
+<Steps>
+
+1. Open <strong>Settings › Agent accounts</strong> and turn on <strong>Automatically switch accounts at the usage limit</strong>.
+2. Carry on working. When a turn stops because its account reached the plan's usage limit, {productName} switches the session to another account with usage left and the session carries on with its task. A toast tells you which account it moved to.
+
+</Steps>
+
+How the account is chosen:
+
+- It is the account a new session would get with <strong>Automatically select an account</strong> on (see [Quota scheduling](../quota-scheduling/)), leaving out the account the session is on, any account the session was switched away from for a usage limit in the last 30 minutes, and any account that is used up, not logged in, turned off or whose usage could not be read.
+- If the limit is about to reset, within 5 minutes by the last reading, {productName} waits for it instead, because a switch costs more than a few minutes. The session continues on its own account shortly after the reset.
+- If no account qualifies, nothing is switched and the session waits. See [Quota scheduling](../quota-scheduling/).
+
+Only a turn that really stopped on the usage limit triggers a switch, never an overload or a network error, and a session that is waiting for you is left alone. If a switch fails after the session's process was ended, {productName} brings the session back up on its old account, and only tells you when that fails too.
+
+### Messages held after the limit
+
+Whenever a session's turn stops on the usage limit, with automatic switching on or off, anything {productName} would write into the session, such as an instruction from the session that owns it (see [Cross-project coordination](../cross-project-work/)), would only start another turn that fails the same way. So it is queued, in order, and written once a reading shows the account has recovered, the session gets a new process, for example by moving to another account, or a turn you start yourself ends normally. A message you send yourself is not held.
+
+<Aside type="caution">
+Usage limits are read from what the agent records about the turn. For Grok Build the limit is recognized from its error text, which can change between versions of the agent; if it does, its usage limit stops being recognized.
+</Aside>
+
+## Next
+
+- [Quota scheduling](../quota-scheduling/): let the account with usage left, and a reset coming soon, take new work.
+- [Usage monitor](../usage-monitor/): see each account's remaining usage and reset times.
+- [Managed accounts](../managed-accounts/): add the accounts to switch between.

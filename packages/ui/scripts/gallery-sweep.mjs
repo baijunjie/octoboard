@@ -20,7 +20,7 @@
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { launchBrowser, loadChromium, SetupError } from "./gallery-browser.mjs";
+import { createRun, firstLine, launchBrowser, loadChromium, loadFrame, readGallery, READ_TIMEOUT_MS, SetupError, startGalleryServer, wildcard } from "./gallery-browser.mjs";
 import { parseArgs } from "node:util";
 import { acquireSlot, describeWait } from "../../../scripts/verify/lock.mjs";
 
@@ -78,22 +78,7 @@ const READY_TIMEOUT_MS = 60_000;
 /** What a page is given after it says it is ready, for whatever a step did not wait for (a lazily loaded
  * renderer, a line raised by a timer) to raise its banner line before the banner is read. */
 const SETTLE_MS = 150;
-/** How long reading a page, or the list of scenarios from one, may take. Playwright puts no limit on it. */
-const READ_TIMEOUT_MS = 30_000;
-/** How long each owned resource has to close, including after a successful sweep. */
-const CLOSE_TIMEOUT_MS = 5_000;
-
-const firstLine = (error) => String(error?.message ?? error).split("\n")[0];
 const plural = (count, noun) => `${count} ${noun}${count === 1 ? "" : "s"}`;
-
-/** `promise`, rejected if it takes longer than `ms`. */
-function within(ms, promise, what) {
-  let timer;
-  const limit = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${what} took more than ${ms / 1000}s`)), ms);
-  });
-  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
-}
 
 function parse() {
   let parsed;
@@ -143,55 +128,7 @@ function parse() {
   };
 }
 
-// ---- Playwright and the browser ------------------------------------------------------------------
-
-// ---- the dev server ------------------------------------------------------------------------------
-
-/** Starts this checkout's Vite dev server on a free port. File watching and HMR are off: nothing edits the
- * tree during a sweep, and a change landing mid-run would reload pages under it; the browser's console is
- * not echoed into this terminal, a failure being read off the page. The modules served are the dev
- * server's own, which is why the gallery is not swept from a build. */
-async function startServer() {
-  const { createServer } = await import("vite");
-  const server = await createServer({
-    root: packageDir,
-    logLevel: "error",
-    server: { port: 0, strictPort: false, open: false, watch: null, hmr: false, forwardConsole: false },
-  });
-  // Own the server before listening: a failed listen still needs its plugin resources closed.
-  running.server = server;
-  await server.listen();
-  const address = server.httpServer?.address();
-  if (!address || typeof address === "string") throw new SetupError("The dev server did not report a port");
-  return { origin: `http://localhost:${address.port}`, close: () => server.close() };
-}
-
 // ---- scenarios -----------------------------------------------------------------------------------
-
-/** The scenarios and the languages the gallery page itself knows, read off the page the way the page
- * would use them, so that neither list is copied here. */
-async function readGallery(browser, origin) {
-  const page = await browser.newPage();
-  try {
-    await page.goto(`${origin}/gallery-frame.html?scenario=`, { waitUntil: "domcontentloaded", timeout: READ_TIMEOUT_MS });
-    return await within(
-      READ_TIMEOUT_MS,
-      page.evaluate(async () => {
-        const { SCENARIOS } = await import("/src/gallery/fixtures/index.ts");
-        const { LANGUAGES } = await import("/src/i18n/languages.ts");
-        const { CATALOGS } = await import("/src/i18n/catalog.ts");
-        return {
-          scenarios: SCENARIOS.map((s) => ({ id: s.id, group: s.group, width: s.width, minWidth: s.minWidth, height: s.height, live: (s.liveChanges ?? []).map((change) => change.id) })),
-          languages: [...LANGUAGES],
-          catalogLanguages: Object.keys(CATALOGS),
-        };
-      }),
-      "reading the scenarios",
-    );
-  } finally {
-    await page.close().catch(() => {});
-  }
-}
 
 function checkLanguages(requested, known) {
   const unknown = requested.filter((language) => !known.includes(language));
@@ -209,7 +146,7 @@ function select(all, { patterns, group }) {
     }
   }
   if (patterns.length > 0) {
-    const regexps = patterns.map((p) => ({ p, re: new RegExp(`^${p.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`) }));
+    const regexps = patterns.map((p) => ({ p, re: wildcard(p) }));
     const unmatched = regexps.filter(({ re }) => !chosen.some((s) => re.test(s.id))).map(({ p }) => p);
     if (unmatched.length > 0) throw new SetupError(`No scenario matches: ${unmatched.join(", ")}${group ? ` (within the group "${group}")` : ""}`);
     chosen = chosen.filter((s) => regexps.some(({ re }) => re.test(s.id)));
@@ -258,38 +195,21 @@ async function checkArchivedReopen(page, language) {
 /** Runs one scenario in its own page of `context` and returns the failure text, or undefined if clean. */
 async function sweepOne(context, origin, scenario, language, theme, width) {
   const page = await context.newPage();
-  const problems = [];
-  page.on("pageerror", (error) => problems.push(`uncaught: ${firstLine(error)}`));
   try {
     await page.setViewportSize({ width: width ?? scenario.width ?? 1440, height: scenario.height ?? 900 });
     const query = new URLSearchParams({ scenario: scenario.id, theme, lang: language });
     // The scenario's live changes, applied after its steps and before the page is ready (the frame runs `live=`
     // first), as a viewer pressing each of its buttons would.
     if (scenario.live.length > 0) query.set("live", scenario.live.join(","));
-    await page.goto(`${origin}/gallery-frame.html?${query}`, { waitUntil: "commit" });
-    try {
-      // The page sets this on <html> once the app has mounted, the scenario's steps have run, failed or not,
-      // and its own notifications have been raised, and then after two frames or 200ms, whichever is first; the
-      // sweep reads text, not pixels, so it does not depend on the frames having been drawn.
-      await page.waitForSelector("html[data-gallery-ready]", { state: "attached", timeout: READY_TIMEOUT_MS });
-    } catch (error) {
-      // Only a timeout is a page that never became ready; a page, context or browser that went away
-      // under the wait is something else, and says so.
-      if (error?.name !== "TimeoutError") throw error;
-      problems.push(`the page never became ready within ${READY_TIMEOUT_MS / 1000}s`);
-    }
-    await page.waitForTimeout(SETTLE_MS);
-    if (scenario.id === "history-loaded" && language === "en" && width === undefined && problems.length === 0) await checkArchivedReopen(page, language);
-    const banner = await within(
-      READ_TIMEOUT_MS,
-      page.evaluate(() => Array.from(document.querySelectorAll("[data-gallery-failure] > div"), (line) => line.textContent ?? "")),
-      "reading the page",
-    ).catch((error) => {
-      problems.push(`could not read the page: ${firstLine(error)}`);
-      return [];
+    // The sweep reads text, not pixels, so it does not depend on the frames having been drawn.
+    const failures = await loadFrame(page, `${origin}/gallery-frame.html?${query}`, {
+      readyTimeoutMs: READY_TIMEOUT_MS,
+      settleMs: SETTLE_MS,
+      afterSettle: async (problems) => {
+        if (scenario.id === "history-loaded" && language === "en" && width === undefined && problems.length === 0) await checkArchivedReopen(page, language);
+      },
     });
-    const text = [...banner, ...problems];
-    return text.length > 0 ? text.join(" | ") : undefined;
+    return failures.length > 0 ? failures.join(" | ") : undefined;
   } catch (error) {
     return `the page could not be driven: ${firstLine(error)}`;
   } finally {
@@ -308,7 +228,7 @@ async function runAll(browser, origin, jobs, concurrency, onDone) {
   const worker = async () => {
     const context = await browser.newContext();
     try {
-      for (let i = next++; i < jobs.length && !running.interrupted; i = next++) {
+      for (let i = next++; i < jobs.length && !run.interrupted; i = next++) {
         const { scenario, language, theme, width } = jobs[i];
         const started = Date.now();
         const failure = await sweepOne(context, origin, scenario, language, theme, width);
@@ -331,47 +251,7 @@ const stateDir = process.env.OCTOBOARD_SWEEP_STATE_DIR;
 
 const label = (r) => `${r.language}/${r.theme}${r.width ? `/${r.width}px` : ""}  ${r.scenario.id}`;
 
-/** What is open, for the signal handlers to close; `interrupted` is set before they close it, so that
- * the pages that fail because their browser went away are not reported. */
-const running = { browser: undefined, server: undefined, interrupted: false };
-let cleanup;
-let cleanupFailed = false;
-
-/** Closing independently keeps a stuck browser from preventing the server from releasing its resources.
- * Share the promise with signal handlers so a close is never started twice. */
-function closeResources() {
-  return cleanup ??= Promise.all([
-    ["Chromium", running.browser],
-    ["Vite server", running.server],
-  ].map(async ([name, resource]) => {
-    if (!resource) return;
-    try {
-      await within(CLOSE_TIMEOUT_MS, Promise.resolve().then(() => resource.close()), `closing ${name}`);
-    } catch (error) {
-      cleanupFailed = true;
-      console.error(`Cleanup failed for ${name}: ${firstLine(error)}`);
-    }
-  }));
-}
-
-/** A failed close may leave referenced native handles. Report it before ending the process, and wait
- * for piped output to flush so a task runner receives both the sweep result and cleanup diagnostic. */
-async function exitAfterOutput(code) {
-  const flushed = Promise.all([process.stdout, process.stderr].map((stream) => new Promise((resolve) => stream.write("", resolve))));
-  await within(CLOSE_TIMEOUT_MS, flushed, "flushing output").catch(() => {});
-  process.exit(code);
-}
-
-for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-  process.on(signal, () => {
-    const code = 128 + os.constants.signals[signal];
-    if (running.interrupted) process.exit(code);
-    running.interrupted = true;
-    process.exitCode = code;
-    console.error(`\n${signal}: stopping`);
-    void closeResources().then(() => exitAfterOutput(code));
-  });
-}
+const run = createRun();
 
 async function main() {
   const options = parse();
@@ -380,10 +260,8 @@ async function main() {
   // Held until the browser and the server are closed, so the next holder does not start while they still run.
   let release = () => {};
   try {
-    if (!options.url) running.server = await startServer();
-    const origin = options.url ?? running.server.origin;
-    running.browser = await launchBrowser(chromium, options.chromium, own);
-    const browser = running.browser;
+    const origin = options.url ?? (await startGalleryServer((server) => run.own("Vite server", server))).origin;
+    const browser = run.own("Chromium", await launchBrowser(chromium, options.chromium, own));
 
     // The first load of a fresh dev server pre-bundles its dependencies, which can reload a page that is
     // already running; doing it once, alone, keeps that out of the concurrent pages.
@@ -414,7 +292,7 @@ async function main() {
     });
     return await sweepPages(browser, origin, jobs, concurrency, started);
   } finally {
-    await closeResources();
+    await run.close();
     release();
   }
 }
@@ -424,7 +302,7 @@ async function sweepPages(browser, origin, jobs, concurrency, started) {
   let done = 0;
   const interactive = process.stderr.isTTY;
   const results = await runAll(browser, origin, jobs, concurrency, (r) => {
-    if (running.interrupted) return;
+    if (run.interrupted) return;
     done++;
     if (r.failure) {
       if (interactive) process.stderr.write("\r\x1b[K");
@@ -433,7 +311,7 @@ async function sweepPages(browser, origin, jobs, concurrency, started) {
     if (interactive) process.stderr.write(`\r${done}/${jobs.length}`);
   });
   if (interactive) process.stderr.write("\r\x1b[K");
-  if (running.interrupted) return process.exitCode;
+  if (run.interrupted) return process.exitCode;
 
   // A failure seen under load is checked again alone. That is a diagnosis, not a pardon: one that
   // reproduces is a scenario that no longer runs; one that does not is a step that races an animation or
@@ -444,7 +322,7 @@ async function sweepPages(browser, origin, jobs, concurrency, started) {
   if (failed.length > 0 && concurrency > 1) {
     console.error(`Re-running ${plural(failed.length, "failure")} alone to see whether they reproduce...`);
     const again = await runAll(browser, origin, failed, 1, () => {});
-    if (running.interrupted) return process.exitCode;
+    if (run.interrupted) return process.exitCode;
     again.forEach((r, i) => {
       if (!r.failure) loadOnly.push(failed[i]);
     });
@@ -464,14 +342,11 @@ try {
   process.exitCode = await main();
 } catch (error) {
   // When interrupted, the handler is closing everything and exits with the signal's code.
-  if (!running.interrupted) {
+  if (!run.interrupted) {
     if (error instanceof SetupError) console.error(error.message);
     else console.error(error);
     process.exitCode = 2;
   }
 }
 
-if (!running.interrupted && cleanupFailed) {
-  if (!process.exitCode) process.exitCode = 2;
-  await exitAfterOutput(process.exitCode);
-}
+await run.finish();

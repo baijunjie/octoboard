@@ -503,10 +503,10 @@ const unusedState = snapshotState({
   ],
 });
 const openUnusedMenu = (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title: unusedSession.title }));
-const openSwitchAccount = (title: string) => [
+const openSwitchAccount = (title: string, account = accountsState.settings!.accounts[0].name) => [
   (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title })),
   (ui: Ui) => ui.press(ui.t("sidebar.session.switchAccount")),
-  (ui: Ui) => ui.press(accountsState.settings!.accounts[0].name),
+  (ui: Ui) => ui.press(account),
 ];
 const submitConsoleSwitch = [
   ...openSwitchAccount("Review the release checklist"),
@@ -686,6 +686,22 @@ export const dialogScenarios: Scenario[] = [
       sessions: new Map([...switchAccountState.sessions!].filter(([id]) => id === "s-switch-hub")),
     },
     steps: openSwitchAccount("Release coordinator"),
+  },
+  {
+    id: "dialog-switch-account-single-plain-name",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Switch account for one session, a short account name",
+    description: "The same confirmation as Switch account for one session, but the target account has the plain name Work in place of that scenario's long right-to-left and CJK name, so it shows whole in the account chip with no clipping.",
+    state: {
+      ...switchAccountState,
+      sessions: new Map([...switchAccountState.sessions!].filter(([id]) => id === "s-switch-hub")),
+      settings: {
+        ...switchAccountState.settings!,
+        accounts: switchAccountState.settings!.accounts.map((account) => (account.id === "a-work" ? { ...account, name: "Work" } : account)),
+      },
+    },
+    steps: openSwitchAccount("Release coordinator", "Work"),
   },
   {
     id: "dialog-switch-account-children-only",

@@ -2,11 +2,30 @@ import { existsSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 export class SetupError extends Error {}
 
-const firstLine = (error) => String(error?.message ?? error).split("\n")[0];
+export const firstLine = (error) => String(error?.message ?? error).split("\n")[0];
+
+/** A regular expression matching exactly the text `pattern` spells, where `*` stands for any text. */
+export function wildcard(pattern) {
+  return new RegExp(`^${pattern.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`);
+}
+
+const packageDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+/** How long reading a page, or the list of scenarios from one, may take. Playwright puts no limit on it. */
+export const READ_TIMEOUT_MS = 30_000;
+
+/** `promise`, rejected if it takes longer than `ms`. */
+export function within(ms, promise, what) {
+  let timer;
+  const limit = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} took more than ${ms / 1000}s`)), ms);
+  });
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+}
 
 /** Playwright's `chromium`, and whether it came from this package rather than from a directory the
  * developer named: the advice a failed launch gives depends on whose installation it was, and this is
@@ -134,3 +153,138 @@ export async function launchBrowser(chromium, executablePath, ownPlaywright, tim
   }
 }
 
+
+/** Starts this checkout's Vite dev server on a free port. File watching and HMR are off: nothing edits the
+ * tree during a sweep or a capture, and a change landing mid-run would reload pages under it; the browser's
+ * console is not echoed into this terminal, a failure being read off the page. The modules served are the dev
+ * server's own, which is why the gallery is not driven from a build. `onCreate` receives the server before
+ * it listens, so a caller that owns it can close it even when the listen fails. */
+export async function startGalleryServer(onCreate) {
+  const { createServer } = await import("vite");
+  const server = await createServer({
+    root: packageDir,
+    logLevel: "error",
+    server: { port: 0, strictPort: false, open: false, watch: null, hmr: false, forwardConsole: false },
+  });
+  onCreate?.(server);
+  await server.listen();
+  const address = server.httpServer?.address();
+  if (!address || typeof address === "string") throw new SetupError("The dev server did not report a port");
+  return { origin: `http://localhost:${address.port}`, close: () => server.close() };
+}
+
+/** The scenarios and the languages the gallery page itself knows, read off the page the way the page
+ * would use them, so that neither list is copied here. */
+export async function readGallery(browser, origin) {
+  const page = await browser.newPage();
+  try {
+    await page.goto(`${origin}/gallery-frame.html?scenario=`, { waitUntil: "domcontentloaded", timeout: READ_TIMEOUT_MS });
+    return await within(
+      READ_TIMEOUT_MS,
+      page.evaluate(async () => {
+        const { SCENARIOS } = await import("/src/gallery/fixtures/index.ts");
+        const { LANGUAGES } = await import("/src/i18n/languages.ts");
+        const { CATALOGS } = await import("/src/i18n/catalog.ts");
+        return {
+          scenarios: SCENARIOS.map((s) => ({ id: s.id, group: s.group, width: s.width, minWidth: s.minWidth, height: s.height, live: (s.liveChanges ?? []).map((change) => change.id) })),
+          languages: [...LANGUAGES],
+          catalogLanguages: Object.keys(CATALOGS),
+        };
+      }),
+      "reading the scenarios",
+    );
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+/** Loads a gallery frame in `page` and returns what is wrong with it, empty when it is clean: an uncaught error,
+ * a page that never says it is ready within `readyTimeoutMs`, and the lines of the `[data-gallery-failure]` overlay
+ * (`src/fixtures/banner.ts`), which is read even when the page signals ready. `settleMs` is what the page is given
+ * after it says so, for whatever a step did not wait for (a lazily loaded renderer, a line raised by a timer) to
+ * show. A page, context or browser that goes away under the load throws instead. `afterSettle` runs once the page
+ * has settled, before the overlay is read, and is given the problems found so far. */
+export async function loadFrame(page, url, { readyTimeoutMs, settleMs, afterSettle }) {
+  const problems = [];
+  page.on("pageerror", (error) => problems.push(`uncaught: ${firstLine(error)}`));
+  await page.goto(url, { waitUntil: "commit" });
+  try {
+    // The page sets this on <html> once the app has mounted, the scenario's steps have run, failed or not,
+    // and its own notifications have been raised, and then after two frames or 200ms, whichever is first.
+    await page.waitForSelector("html[data-gallery-ready]", { state: "attached", timeout: readyTimeoutMs });
+  } catch (error) {
+    // Only a timeout is a page that never became ready; a page, context or browser that went away
+    // under the wait is something else, and says so.
+    if (error?.name !== "TimeoutError") throw error;
+    problems.push(`the page never became ready within ${readyTimeoutMs / 1000}s`);
+  }
+  await page.waitForTimeout(settleMs);
+  await afterSettle?.(problems);
+  const banner = await within(
+    READ_TIMEOUT_MS,
+    page.evaluate(() => Array.from(document.querySelectorAll("[data-gallery-failure] > div"), (line) => line.textContent ?? "")),
+    "reading the page",
+  ).catch((error) => {
+    problems.push(`could not read the page: ${firstLine(error)}`);
+    return [];
+  });
+  return [...banner, ...problems];
+}
+
+/** How long each owned resource has to close, including after a successful run. */
+const CLOSE_TIMEOUT_MS = 5_000;
+
+/** The lifecycle of a script that starts a browser and a dev server: what it owns is closed once, whether the run
+ * ends or a signal interrupts it. `own` registers a resource (anything with `close()`), `close` closes them
+ * independently, so a stuck browser does not keep the server from releasing its resources, `interrupted` is set
+ * before they close, so that the pages that fail because their browser went away are not reported, and `finish`
+ * ends a run that closed badly. Signals end the process with 128 plus the signal's number. */
+export function createRun() {
+  const owned = [];
+  let cleanup;
+  let cleanupFailed = false;
+  const run = {
+    interrupted: false,
+    own(name, resource) {
+      owned.push([name, resource]);
+      return resource;
+    },
+    /** Shares one promise with the signal handlers, so a close is never started twice. */
+    close() {
+      return (cleanup ??= Promise.all(
+        owned.map(async ([name, resource]) => {
+          try {
+            await within(CLOSE_TIMEOUT_MS, Promise.resolve().then(() => resource.close()), `closing ${name}`);
+          } catch (error) {
+            cleanupFailed = true;
+            console.error(`Cleanup failed for ${name}: ${firstLine(error)}`);
+          }
+        }),
+      ));
+    },
+    /** A failed close may leave referenced native handles. Report it before ending the process, and wait
+     * for piped output to flush so a task runner receives both the run's result and the cleanup diagnostic. */
+    async exitAfterOutput(code) {
+      const flushed = Promise.all([process.stdout, process.stderr].map((stream) => new Promise((resolve) => stream.write("", resolve))));
+      await within(CLOSE_TIMEOUT_MS, flushed, "flushing output").catch(() => {});
+      process.exit(code);
+    },
+    /** Called once the run's own work has ended and set `process.exitCode`. */
+    async finish() {
+      if (run.interrupted || !cleanupFailed) return;
+      if (!process.exitCode) process.exitCode = 2;
+      await run.exitAfterOutput(process.exitCode);
+    },
+  };
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    process.on(signal, () => {
+      const code = 128 + os.constants.signals[signal];
+      if (run.interrupted) process.exit(code);
+      run.interrupted = true;
+      process.exitCode = code;
+      console.error(`\n${signal}: stopping`);
+      void run.close().then(() => run.exitAfterOutput(code));
+    });
+  }
+  return run;
+}

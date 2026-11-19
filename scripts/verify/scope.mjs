@@ -69,6 +69,10 @@ export const MENU_KEYS_FILE = "packages/ui/src/i18n/messages/en.ts";
 // machine-wide heavy-step lock.
 export const SWEEP_SHARED = ["scripts/verify/lock.mjs"];
 
+// What the docs' screenshot script (`apps/docs/scripts/screenshots.mjs`) imports from the UI's gallery sweep (its browser
+// and dev server helpers) and takes from `scripts/verify/` (the heavy-step lock).
+export const DOCS_RUNS_UI_GALLERY = ["packages/ui/scripts/gallery-browser.mjs", ...SWEEP_SHARED];
+
 // `protocol.generated.ts` is written by a daemon test from the Rust types (`protocol/bindings.rs`) and re-exported
 // by `protocol.ts`, through which the UI reads it. The desktop shell is not a consumer: it does not depend on the
 // daemon crate and talks to the daemon only over its WebSocket.
@@ -165,6 +169,7 @@ export const RULES = [
   // Cross-package reads. Each also selects `verify`, whose tests check that the paths named here exist.
   { match: [...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS, ...WEB_RESOLVES_UI], consumers: ["verify", "ui", "web"], why: "the website imports these modules, builds its preview from them, or resolves the package through its `exports` map" },
   { match: DOCS_IMPORTS_FROM_UI, consumers: ["verify", "ui", "docs"], why: "the docs build their locale table from the UI's language list, resolved through its `exports` map" },
+  { match: DOCS_RUNS_UI_GALLERY, consumers: ["verify", "ui", "docs"], why: "the docs' screenshot script, run by hand, imports the gallery sweep's browser and dev server helpers" },
   { match: DOCS_READS_WEB, consumers: ["verify", "web", "docs"], why: "the docs import the website's logo and wordmark, and a docs test reads the website's redirect, address and download modules and its navigation labels" },
   { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon"], why: "the wire protocol is kept in step across the daemon and the UI: the UI reads the generated types, which the daemon writes from its own, and a UI test (`daemonCodes.test.ts`) reads the daemon's code registry from `protocol/codes.rs`" },
   { match: PROTOCOL_SCHEMA, consumers: ["verify", "daemon"], why: "the protocol schema is written by a daemon test from the daemon's types, and the same test fails when it is stale; the compatibility guard reads it and its release snapshot" },

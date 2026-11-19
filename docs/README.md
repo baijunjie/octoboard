@@ -342,7 +342,8 @@ Where to start, by question:
 - [Website privacy](product/website-privacy.md) — what the privacy page discloses and the Google Analytics consent
   prompt and cookie.
 - [Documentation site](product/documentation-site.md) — the docs at `/docs/`: addresses and languages, the English
-  fallback, the retired Chinese redirects, the sidebar and what each page covers, and how the guides are written.
+  fallback, the retired Chinese redirects, the sidebar and what each page covers (the Features pages in English and
+  Simplified Chinese only), and how the guides and the Features pages are written.
 
 ## Reference
 

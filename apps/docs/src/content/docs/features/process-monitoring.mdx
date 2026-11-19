@@ -1,0 +1,55 @@
+---
+title: "Process monitoring"
+description: "See the dev servers and watchers agents start, with their memory, ports and local web links, and have them cleaned up when the session ends unless you keep them."
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { commands, productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+Agents start dev servers and watchers, and when the session ends they are often forgotten, quietly holding memory and ports. {productName} lists these processes live, with their memory, ports and local web links, and tries to clean them up when the session ends. The ones you want to leave running, you can keep.
+
+<Screenshot id="processes-of-session" alt="A session's “Processes” panel with four cards, each showing a command, its folder and its memory, and a web link on the two servers." />
+
+## Why it works this way
+
+- <strong>What an agent starts is not forgotten.</strong> Processes are tied to the session that started them, shown to you while they run, and, within the limits below, stopped when the session ends, so they do not sit on memory and ports for no reason. Keep is the exception you choose.
+- <strong>Ownership comes from how a process started, not from what it looks like.</strong> A process is an agent session's when that session's launch started it, however it started and wherever it moved since. Concretely, a process belongs to a session's launch when its chain of parents leads to the agent, when it carries the launch's tag in its environment, or when it runs in a terminal session that one of the launch's processes started. It stays the launch's after it detaches or moves. This does not depend on the agent reporting its background tasks or remembering to clean up. {productName} keeps no list of programs to spare or to stop and does not judge what a process is.
+- <strong>What a session started ends with the session.</strong> When the agent's process ends, for any reason (it exits, you archive the session, the application quits), {productName} stops the processes it attributes to that launch, except those you chose to keep. On macOS and Linux it asks them to exit and forces the survivors to end after 3 seconds. That includes a shared service the agent brought up, such as a build daemon, even if other programs have started using it since.
+- <strong>Keep is your way to spare one.</strong> A kept process no longer stops with the session. It moves to the project's own list, never stops by itself, and stays until you stop it.
+- <strong>A handoff or a restart is not an end.</strong> Switching a session's account, changing its model and handing it off carry its running processes over to the session that replaces it. Kept processes stay kept.
+- <strong>You see them where they run.</strong> The rail counts the process trees of every project and console session. A project's Processes panel lists them, with each one's command, folder, memory, listening ports and a link for each port that serves web pages.
+- <strong>Sessions outlive the app's own restart.</strong> Each session's terminal runs under a separate holder process, so a planned restart, such as the one for an update, hands the sessions over instead of ending them. An ordinary quit ends the sessions and the processes they started, except those you kept.
+
+<Aside type="caution" title="Limits">
+- Some processes cannot be kept: on a Windows host, one attached to the agent's own terminal; on macOS and Linux, one inside a command the agent is still running. Their <strong>Keep</strong> is unavailable, with the reason as its tooltip.
+- Some processes cannot be attributed: a system program whose environment macOS withholds, started in the background by a command that exits within about 2 seconds, is neither listed nor stopped.
+- Claude Code ends the background shells it started when it exits, so a server started that way does not survive a handoff or a restart; one the agent started detached does.
+- A stop can be refused: the system may deny permission for another user's process, or a process may outlive being killed. The tree stays listed and an alert says why.
+- Web links are <code dir="ltr">{commands.localhost}</code> addresses, so they open on the computer where the daemon runs. From a remote window, {productName} reaches them through a forwarded port.
+</Aside>
+
+## How to use it
+
+<Steps>
+
+1. The <strong>Processes</strong> button, with a green count, appears on the rail while any process runs. Rest the pointer on it, or press Enter, to see where they run, grouped under <strong>Console sessions</strong> and <strong>Projects</strong>.
+2. Choose a row. The right pane switches to that project's or console session's <strong>Processes</strong> panel. You can also open it with <strong>Show processes panel</strong> in the top bar.
+3. Read the cards. Under <strong>Session processes</strong> they are grouped by the session that started them; under <strong>Project processes</strong> are those that belong to no session. Choose a web link on a card to open that server in your browser. <strong>Filter by session</strong> narrows the list to one session.
+4. To end one now, hover over its card (or focus it) and choose <strong>Stop</strong>. Confirm in the <strong>Stop process</strong> dialog.
+5. To let one outlive its session, choose <strong>Keep</strong> and confirm in <strong>Keep process</strong>. It moves to <strong>Project processes</strong>. Only a project session's processes can be kept: a console session's cards offer <strong>Stop</strong> alone.
+
+</Steps>
+
+
+<Screenshot id="processes-on-rail" alt="The rail's “Processes” popover listing the running processes by console session and project." />
+
+You'll know it worked when a toast says the process was stopped or kept and its card leaves or moves lists. When an archive would leave processes running, the archive confirmation lists them and lets you uncheck the ones to keep.
+
+<Screenshot id="processes-stop-confirm" alt="The “Stop process” dialog, showing the process's command, folder and facts, with “Cancel” and “Stop” buttons." />
+
+## Next
+
+- [Session status and intervention](../session-intervention/): a session's status when its work continues in the background.
+- [Cross-project coordination](../cross-project-work/): console sessions have a Processes panel of their own.
+- [Prevent sleep](../keep-awake/): keep the computer awake while agents work and you are away.

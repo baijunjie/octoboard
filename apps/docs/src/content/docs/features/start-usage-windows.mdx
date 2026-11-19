@@ -1,0 +1,39 @@
+---
+title: "Start usage windows automatically"
+description: "Start a usage window's countdown soon after it resets, with one small request, so your next reset is not pushed later."
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+When a usage window resets, it does not start counting down until the account's next request. While you are away it stays unstarted, so the next reset is pushed later. With this turned on, soon after a window resets, {productName} sends one small request to start its countdown, so the next reset is not pushed later.
+
+<Screenshot id="start-usage-windows-help" alt="The “Agent accounts” section of Settings with the help of “Start usage windows automatically” open, explaining why a window that has reset needs a request to start counting." />
+
+## Why it works this way
+
+- <strong>A window that has reset waits for a request.</strong> The agent reports such a window with no reset time until the account makes its next request, so it shows no countdown. The longer it waits, the later its next reset comes.
+- <strong>{productName} makes that first request for you.</strong> With <strong>Start usage windows automatically</strong> on, when a reading shows a window that has reset but has not begun counting, {productName} sends one small request on that account and then reads the account again, so the countdown shows.
+- <strong>The request is as small as the agent allows.</strong> It is a one-word prompt, a single turn, with the agent's cheapest model at its lowest reasoning effort, and a short reply where the agent can cap it. Claude Code keeps no conversation and Codex writes no session files; Grok Build leaves a session record in the account's folder and sends two small requests of its own to title it.
+- <strong>It costs a little usage, and it is off by default.</strong> The request counts a little toward the account's limits. The setting applies to every agent alike.
+- <strong>Its limits:</strong> it acts after a reading of the account, which {productName} takes about every 5 minutes, so a window can start up to about one interval after it resets, and its countdown shows at a later reading. It skips accounts that are turned off, not logged in, whose latest reading failed or that have no plan quota, and never starts a model's own weekly limit. A request that fails is not retried and is not shown in the window; it is only written to {productName}'s log. A Codex account whose configuration chooses another credential store or model provider cannot be started this way.
+
+## How to use it
+
+<Steps>
+
+1. Open <strong>Settings › Agent accounts</strong>.
+2. Turn on <strong>Start usage windows automatically</strong>. The "?" after its name explains it. Turning it on looks over the readings {productName} already holds and starts every window that calls for it at once.
+3. Check that it worked: a window that showed no countdown shows "resets in …" after the next reading of the account, in the <strong>Account usage</strong> panel or the account's details (see [Usage monitor](../usage-monitor/)).
+
+</Steps>
+
+<Aside type="note">
+The setting is for the whole application and cannot be changed from a session, because it spends your usage. A configuration export that includes the accounts carries it.
+</Aside>
+
+## Next
+
+- [Usage monitor](../usage-monitor/): see each account's windows and countdowns.
+- [Quota scheduling](../quota-scheduling/): let the usage left, and the reset coming, decide which account takes new work.

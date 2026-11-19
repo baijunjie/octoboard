@@ -1,0 +1,49 @@
+---
+title: "Native project sessions"
+description: "Every session is the agent's own command-line program running in one project, so the project's instructions, skills, hooks and MCP servers apply as they always do, with nothing to configure again."
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+{productName} does not build a runtime of its own for agents. Each project session is the agent's native command-line program, and it loads that project's own instructions, skills, hooks and MCP configuration. Once the folder is trusted, what a project already has takes effect as it is, so you do not configure it again for {productName}.
+
+<Screenshot id="native-session-terminal" alt="A project session under “Website” in the sidebar, with Claude Code's own command-line screen in its terminal: it has read the project's CLAUDE.md and summarized how the project is set up." />
+
+## Why it works this way
+
+- <strong>A session is the agent's own program.</strong> {productName} starts Claude Code, Codex or Grok Build from your <code dir="ltr">PATH</code>, with the project's folder as its working directory, and shows its terminal. You type into the agent itself. {productName} is not an agent of its own.
+- <strong>Nothing of the project is replaced.</strong> The agent finds the project's instruction file, skills, hooks and permission rules the way it does outside {productName}. The project's own MCP servers keep working beside {productName}'s one. If the project defines a hook and {productName} has its own, both run.
+- <strong>{productName} writes nothing into your project or your agent's settings.</strong> It adds no instruction file, settings file or hook to a project and does not edit the agent's own configuration. What it adds to a session, such as status hooks and its own MCP server, is supplied for that launch only. The few exceptions all come from actions you choose or turn on: switching or sharing an account, and the Git actions (pull, including automatic pull, switch branch, restore and push).
+- <strong>Trust stays the agent's decision.</strong> When an agent asks whether to trust a folder, {productName} answers only after you have given it permission for that project, and the agent records the trust itself. Until the folder is trusted, the agent holds back some of the project's own configuration: Grok Build loads none of its instructions, hooks or MCP servers, and Claude Code ignores the project's own allow rules. For Grok Build, {productName} then carries the one trust entry Grok wrote across to your own trust store.
+- <strong>Each project can have its own agent, account and model.</strong> A project's settings hold its default agent and, per agent, the account, model and reasoning effort its sessions use. What a project leaves unset follows its console. Sessions in different projects run independently, each in its own folder.
+- <strong>An optional guard keeps a session in its own project.</strong> With <strong>Keep sessions to their own project</strong> on, a project session that edits files or updates a branch in another registered project is stopped and told to ask for a session of that project instead.
+
+<Aside type="caution" title="Limits of the guard">
+It is off to begin with and applies to project sessions only, not to console sessions or to your own terminal. It checks the agent's file-edit tools and changes to branches, so a file written through a shell command is caught only when it is committed. The check on file edits reaches a session only from its next launch, while the check on commits and branch updates applies to running sessions at once. It never reverts changes left uncommitted in another project. Whenever it cannot decide, it lets the action through.
+</Aside>
+
+## How to use it
+
+<Steps>
+
+1. Add your project: under a console, choose <strong>Add project</strong> and pick its folder (or a parent folder, or a Git address to clone). {productName} reads which agent the folder was used with and offers it as the project's default.
+2. To fine-tune a project, open its menu and choose <strong>Project settings</strong>. Set its default agent and, for each agent, the account, model and reasoning effort its sessions should use.
+
+   <Screenshot id="project-launch-settings" alt="The “Project settings” dialog, with the default agent and launch settings left to follow the console." />
+3. Choose <strong>New session</strong> under the project. In the <strong>Open session</strong> dialog the agent comes from your choice, else from the project, else from the console's defaults. Open it.
+4. Check that the project's setup applies: use the agent's own commands to list its skills, hooks or MCP servers. They show the project's configuration, because the session runs in the project's folder.
+5. To turn on the guard, open <strong>Settings › Agent behavior</strong> and switch on <strong>Keep sessions to their own project</strong>. The check on commits and branch updates applies at once; the check on file edits applies to sessions you launch afterwards.
+
+</Steps>
+
+You'll know it worked when the session's agent shows the project's own instructions, skills and hooks, and a project session that tries to edit another project (with the guard on) is stopped and told to ask that project's session.
+
+
+<Screenshot id="keep-to-own-project-setting" alt="The “Agent behavior” page in Settings, with the switch “Keep sessions to their own project”." />
+
+## Next
+
+- [Cross-project coordination](../cross-project-work/): one request, a session in each project.
+- [Session status and intervention](../session-intervention/): the session's terminal is yours to type into.

@@ -11,6 +11,10 @@ import { quotaOf, quotaWindow } from "../../fixtures/quotas";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import { AccountQuotaSummary, LoginStateBadge } from "../../quota/AccountQuotaSummary";
 import { Button } from "../../primitives";
+import { OptionSelect } from "../../components/form/OptionSelect";
+import { KEEP_AWAKE_WHEN_LABEL } from "../../configuration/keepAwakeWhen";
+import type { KeepAwakeWhen } from "../../protocol";
+import { SettingRow, SwitchSettingRow } from "../../settings/SettingRow";
 import { DaemonProvider } from "../../store";
 import { RenderedDiff, useRendererScope } from "../../viewer/code/codeRenderer";
 import { ready } from "./main";
@@ -55,6 +59,19 @@ export function FeatureView({ feature }: { feature: string }): React.ReactElemen
       content = <section className="feature-surface compact-view">
         <strong>Claude Code</strong>
         <AccountQuotaSummary quota={accounts[0].quota} single />
+      </section>;
+      break;
+    case "startUsageWindows":
+      content = <section className="feature-surface setting-view">
+        <SwitchSettingRow label={t("settings.startQuotaWindows.label")} description={t("settings.startQuotaWindows.description.on")} isSelected onChange={() => undefined} />
+      </section>;
+      break;
+    case "keepAwake":
+      content = <section className="feature-surface setting-view">
+        <SwitchSettingRow label={t("settings.keepAwake.label")} description={null} isSelected onChange={() => undefined} />
+        <SettingRow fill label={t("settings.keepAwake.when.label")}>
+          <OptionSelect<KeepAwakeWhen> inline label={t("settings.keepAwake.when.label")} options={[{ value: "working", label: t(KEEP_AWAKE_WHEN_LABEL.working) }]} value="working" onChange={() => undefined} />
+        </SettingRow>
       </section>;
       break;
     case "sessionIntervention":

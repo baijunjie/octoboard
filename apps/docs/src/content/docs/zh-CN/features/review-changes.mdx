@@ -1,0 +1,55 @@
+---
+title: "审阅改动"
+description: "在会话旁浏览项目文件和任意本地分支的 Git 改动，用代码改动而不是智能体的自述来判断它做得好不好。"
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { productName } from "../../../../commands.ts";
+import Screenshot from "../../../../components/Screenshot.astro";
+
+判断智能体做得好不好，最终要看代码改动，而不是它的自述。在会话旁边就能浏览项目文件和 Git 差异，不必切到别的工具。
+
+<Screenshot id="git-changes-list" alt="“更改”标签页，显示分支 feature/ranking-experiments：一处未暂存的改动，以及“已提交”下的四个提交，每个提交下列出它的文件。" />
+
+## 为什么这样设计
+
+- <strong>看改动，而不是看自述。</strong>会话旁的面板显示磁盘上和分支里实际的内容，审阅就以代码为依据。
+- <strong>在同一个窗口里审阅，不用离开会话。</strong>项目的面板不需要自己的会话：它只读取项目。在同一项目的会话之间切换时，面板保持你设置的样子，只有<strong>更改</strong>标签页会跟随会话的分支。
+- <strong>显示的是磁盘上的真实状态。</strong><strong>文件</strong>标签页实时读取项目文件夹，包括智能体已写入但还没提交的内容。<strong>更改</strong>标签页列出分支尚未提交的内容（<strong>有冲突</strong>、<strong>已暂存</strong>、<strong>未暂存</strong>和<strong>未跟踪</strong>），以及它从项目主工作副本所在分支分出来之后<strong>已提交</strong>的内容。对于那个分支本身，则列出它还没推送到远程分支的内容。
+- <strong>它跟随会话。</strong>选中项目的某个会话时，<strong>分支</strong>选择器会设为该会话负责的分支，所以你看到的就是这个会话做的改动。你也可以自己选择任何其他本地分支。
+- <strong>它是只读的，这是有意为之。</strong>面板和查看器都不能编辑、保存、暂存、提交或检出，<strong>更改</strong>标签页也不会从远程获取任何东西。审阅永远不会干扰智能体正在做的工作。改动仍由智能体和你确认过的项目 Git 操作来完成。
+- <strong>差异为方便阅读而绘制。</strong>文本改动可以按统一差异或左右并排显示，大段未改动的行默认折叠，需要时再展开。图片改动会显示<strong>更改前</strong>和<strong>更改后</strong>。Markdown 文件会以渲染后的文档打开。
+
+<Aside type="caution" title="局限">
+- 列表超过 10,000 处改动就会被截断，开启<strong>按提交分组</strong>时，一个分支只列出最新的 100 个提交；会有警告标记说明。超过 1,000,000 个字符或 10,000 行的补丁会按纯文本显示，超过 4 MiB 的文件无法在查看器里显示。
+- 远程分支按你的仓库上次获取时的样子来比较。
+- 没有任何工作树检出的分支，没有未提交的改动可显示。被 Git 忽略的文件只出现在<strong>文件</strong>标签页。
+- 不是 Git 仓库的项目没有<strong>更改</strong>可列。
+</Aside>
+
+## 如何使用
+
+<Steps>
+
+1. 打开面板。选中项目的一个会话，然后选择顶栏的<strong>显示文件面板</strong>。或者在侧边栏打开项目的菜单，选择<strong>打开面板 › 文件</strong>，这样不需要会话。
+2. 在<strong>文件</strong>标签页浏览文件夹树，选择一个文件，在查看器里阅读。筛选框可以按文件名在整个项目里查找。
+
+   <Screenshot id="files-tree" alt="“文件”标签页，显示项目的文件夹树，其中选中了一个文件。" />
+3. 选择<strong>更改</strong>标签页。<strong>分支</strong>选择器显示选中会话的分支；选择另一个分支就改为审阅它。
+4. 从<strong>有冲突</strong>一直读到<strong>已提交</strong>各个部分。用<strong>按提交分组</strong>可以把每个提交的改动放在它自己的一行下，用<strong>按文件夹分组</strong>可以把文件按文件夹排列，用筛选框可以按文件名缩小列表。
+5. 选择一处改动，在查看器里打开。在<strong>显示统一差异</strong>和<strong>显示并排差异</strong>之间切换，展开折叠的行，用<strong>上一个文件</strong>和<strong>下一个文件</strong>在列表里逐个查看。按 Esc 关闭查看器。
+6. 选择<strong>刷新</strong>可以重新读取项目。
+
+</Steps>
+
+
+<Screenshot id="git-change-diff" alt="在查看器里以差异形式打开的一处改动。" />
+
+智能体编辑过的文件的差异在会话旁边打开，并准确显示它改过的那些行，就说明成功了。
+
+<Screenshot id="files-tree-viewer" alt="在查看器里打开的、来自“文件”标签页的文件。" />
+
+## 下一步
+
+- [原生项目会话](../native-project-sessions/)：为什么会话在项目自己的文件夹里工作。
+- [跨项目协作](../cross-project-work/)：控制台会话通过同样的改动列表检查它名下的会话改了什么。

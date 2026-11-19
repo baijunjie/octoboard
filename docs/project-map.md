@@ -54,7 +54,7 @@ applies.
   with its build, install and release scripts (which also build the daemon's Linux server archive); loads the UI and starts the daemon as a sidecar.
 - [Website](structure/web.md) — `apps/web/` ([README](../apps/web/README.md)): the public Nuxt website, with the download page and the Linux install script.
 - [Documentation site](structure/docs.md) — `apps/docs/` ([README](../apps/docs/README.md)): the Starlight how-to
-  documentation (installation, remote connections) in the application's 17 languages, served under `/docs/` of the
+  documentation (installation, remote connections, one page per feature) in the application's 17 languages, served under `/docs/` of the
   website and deployed with it.
 - [Tooling](structure/tooling.md) — `scripts/`, `.githooks/`, `.github/`, `config/`, `patches/`, `eslint.config.mjs`,
   `rustfmt.toml` and the other repository configuration: verification, hooks, CI, release (macOS, Windows and Linux).

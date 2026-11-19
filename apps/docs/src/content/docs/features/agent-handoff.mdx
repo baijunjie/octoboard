@@ -1,0 +1,53 @@
+---
+title: "Agent handoff"
+description: "Hand a half-finished task to another agent through a handoff record of the task, progress and remaining work, so the new agent needn't be briefed from scratch."
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import { handoff, productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+Different agents are good at different things, and each has its own usage limits. When a task is half done and you want another agent to take it from there (a fresh point of view, the current agent's usage used up, a model that suits the next step better), {productName} gives the new agent a handoff record of the task, its progress and the remaining work, so you don't have to explain it all from the start. The new session takes the original's place and the original is archived.
+
+<Screenshot id="handoff-dialog" alt="The “Hand off session” dialog: what “Moves to the new session”, the “Hand off to” agent and account pickers, and the “Advanced” section with the model, reasoning effort and compatibility." />
+
+## Why it works this way
+
+- <strong>Change agent without starting over.</strong> Agents differ in strengths and in usage limits, and a task rarely finishes where one agent's turn ends. A handoff carries the task across, so the next agent starts from where the work stands.
+- <strong>The conversation doesn't move, the work does.</strong> The agents' conversation records can't resume one another, so the new session starts by reading a <strong>handoff package</strong>: a Markdown file {productName} builds from the original's records, with no model involved. It holds the original session's details, the branches it is responsible for and their state, the sessions it owns, its latest to-do list, the files its edits changed, and the conversation (your messages and the agent's replies, without tool output, file contents or reasoning). The new session is told to read it whole before it does anything else.
+- <strong>The package is private.</strong> It's written to <code dir="ltr">{handoff.packageDir}</code> and readable by its owner only, because a conversation can hold secrets.
+- <strong>The new session takes over the whole place.</strong> It has the same project (or console), the same name, the same owner and role, the sessions the original owned, the branches the original was responsible for, and the same pin. Processes the original started keep running and belong to the new session, except those that end when the agent's process ends, such as Claude Code's background shells. Messages that were waiting for the original follow it.
+- <strong>It only happens when you or an owner asks.</strong> {productName} never hands a session off by itself, not even when an account's usage is used up. It can switch a session to another account of the same agent, if you turn that on (see [Account continuity](../account-continuity/)); a handoff is for changing the agent.
+- <strong>It has limits.</strong> The new agent only reads a record, so it can miss what was never written down. The original's branches and worktrees are not cleaned up, since they moved. If no other agent is available, <strong>Hand off</strong> is greyed out.
+
+## How to use it
+
+<Steps>
+
+1. Wait until the session is at rest: at its prompt with nothing running in the background, done, or interrupted. A session stopped at its account's usage limit counts as at rest. An archived session has to be reopened first.
+2. Open the session's menu and choose <strong>Hand off</strong>. If it's greyed out, the line under it says why: <strong>Session busy</strong>, <strong>Child sessions working</strong> (a session under it can still report to it), <strong>Session locked</strong>, or <strong>No other agent</strong>.
+3. In the <strong>Hand off session</strong> dialog, read <strong>Moves to the new session</strong>: the branches, the sessions it owns and its place under its owner. It says so when nothing moves.
+4. Under <strong>Hand off to</strong>, pick the agent and the account. The session's own agent isn't offered, and an account whose usage is used up can't be picked. Open <strong>Advanced</strong> to set the model, the reasoning effort and the compatibility switches, which start from what a new session of that agent would use.
+5. Press <strong>Hand off</strong>.
+
+</Steps>
+
+You know it worked when the dialog closes, the new session is selected and the original is archived. If something fails after the work has moved, the alert titled <strong>Could not finish the handoff</strong> tells you which session to archive or check.
+
+A session that owns other sessions, such as a console session or a coordinator, can also hand off its own sessions. You're asked first, in a dialog titled <strong>Hand off a session?</strong>, where you can change the agent, account and settings or press <strong>Refuse</strong>. To skip the question, turn on <strong>Automatically approve handoffs</strong> in <strong>Settings › Agent behavior</strong>.
+
+## Using the other agent's setup
+
+Each agent can also load another agent's configuration, so a session after a handoff still follows the rules you wrote for the first one. These <strong>compatibility</strong> switches are <strong>Codex compatibility</strong> for Claude Code, <strong>Claude compatibility</strong> for Codex, and both for Grok Build. They're off until you choose.
+
+- When on, a launch gives the session the other agent's instructions (<code dir="ltr">CLAUDE.md</code> and rules, or <code dir="ltr">AGENTS.md</code> and rules), skills, commands or custom prompts, and MCP servers, and tells it to respect that agent's hooks and permissions. The agent follows these as instructions; {productName} doesn't check how. A resumed Grok Build session picks up only the MCP servers and skills, since it keeps the instructions it was first started with.
+- {productName} only reads the other agent's files and never writes to them. It's worked out again at every launch, so a change takes effect when a session starts, resumes or is handed off.
+- A server {productName} can't pass safely is left out, and nothing in the window says which. Codex's project configuration counts only in folders Codex trusts.
+- Grok Build has Claude Code support of its own, which is on unless its configuration turns it off, so with the switch off it may still load Claude Code's configuration.
+
+To set a switch for all of an agent's accounts, open <strong>Settings › Agent accounts</strong>, choose <strong>Settings</strong> in the agent's menu, and find the switch in the <strong>Agent settings</strong> dialog. A console, a project or a single session can hold its own value: in <strong>Advanced</strong>, the choices read <strong>Same as project</strong> and the like.
+
+## Next
+
+- [Account continuity](../account-continuity/): keep going on the same agent with another account.
+- [Context usage and fresh sessions](../fresh-session/): start the next stage in a new session of the same agent.

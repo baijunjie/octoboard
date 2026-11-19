@@ -1,0 +1,53 @@
+---
+title: "Usage monitor"
+description: "See every account's remaining usage and reset countdown in one place, refreshed automatically, without opening each agent in turn."
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+To decide which account should take the work, you first need to see them. {productName} shows every account's remaining usage and reset countdown in one place, refreshed automatically, so you do not open each agent in turn to check.
+
+<Screenshot id="rail-usage-panel" alt="The “Account usage” panel opened from the rail, with no session selected, listing an agent's accounts with their remaining usage and reset countdowns." />
+
+## Why it works this way
+
+- <strong>You need to see the accounts before you can choose one.</strong> Each agent shows its usage in its own place, so {productName} gathers every account's remaining usage and reset countdown in one view.
+- <strong>It asks the agent itself.</strong> For each account, {productName} runs the agent's own command that reports usage, in the account's folder, and shows the answer. It uses no credential of its own and contacts no service of its own.
+- <strong>Windows are named as the agent names them.</strong> Claude Code shows its five-hour window as <strong>Session</strong>, its weekly window for the whole account as <strong>Weekly</strong> (<strong>Weekly · all models</strong> when a model also has its own weekly limit), and one weekly window for each model with a limit of its own, named after the model. Codex shows <strong>5h</strong> and <strong>Weekly</strong>. Grok Build shows one credit pool, named <strong>Weekly</strong>, <strong>Monthly</strong> or <strong>Credits</strong> after its period. Each window shows what remains as a percentage, a bar, and "resets in" a countdown.
+- <strong>Readings refresh by themselves.</strong> Every account is read about every 5 minutes, again shortly after a window resets, soon after you add or log in an account, and when you open <strong>Settings › Agent accounts</strong>, the usage panel or the menu bar menu, for accounts not read recently. A failed reading is retried less and less often, up to every 40 minutes.
+- <strong>It says when it cannot be sure.</strong> Each account shows how long ago it was read. If the latest reading failed, the last good one stays, marked as out of date with the reason in a popover. An account that is not logged in is shown as such.
+- <strong>Its limits:</strong> it shows the plan and its windows only, not spend, credit balances or predictions. Readings are kept in memory and never exported, so after a restart each account starts unread until its first reading. An account that is turned off is not read, and an account on an API key, or another provider with no plan quota behind it, has no usage to show.
+
+## How to use it
+
+<Steps>
+
+1. Rest the mouse on the <strong>Account usage</strong> button, the gauge above Settings on the left rail. A panel opens with one tab per agent and the agent's accounts under it, each with its plan, its remaining usage and its countdowns. Press Enter or Space on the button to open it with the keyboard.
+2. With a session selected, the button also carries a compact indicator under the gauge, showing what remains of the windows of the account that session runs on.
+3. For the full picture of one account, open <strong>Settings › Agent accounts</strong>. The <strong>Usage</strong> column shows a compact bar for each account; choose <strong>Details</strong> in an account's actions menu for every window, including a model's own weekly limit.
+4. On macOS and Windows, the octopus icon in the menu bar or notification area shows the same indicator for the selected session, and its menu has a usage submenu for each agent.
+
+</Steps>
+
+<Screenshot id="account-details-usage" alt="The “Account details” dialog with the account's plan, folder and usage windows." />
+
+A few things to know when reading it:
+
+- An account that has used up a window shows <strong>Limit reached</strong>, and its bars turn grey. That means a five-hour, weekly or credit-pool window is used up; a model's own weekly limit alone does not count.
+- A window that has reset but has not yet started counting shows no countdown. Turn on <strong>Start usage windows automatically</strong> in <strong>Settings › Agent accounts</strong> if you want {productName} to start it.
+- A Codex account that holds usage limit resets shows how many, with a <strong>Redeem reset</strong> button.
+- The default account appears under the name you gave it, or <strong>Default</strong>.
+- Accounts that are turned off are left out of the panel, unless the selected session is running on one.
+
+<Aside type="note">
+The panel only reports. A new session can still open on an account at its limit, where it stops until the reset; what is refused is switching or handing a session off to such an account.
+</Aside>
+
+## Next
+
+- [Start usage windows automatically](../start-usage-windows/): start a window's countdown soon after it resets.
+- [Quota scheduling](../quota-scheduling/): let the readings decide which account takes new sessions.
+- [Account continuity](../account-continuity/): move a session when its account reaches the limit.
+- [Managed accounts](../managed-accounts/): add the accounts that appear here.

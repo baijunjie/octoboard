@@ -39,6 +39,9 @@ Paths below are relative to `apps/web/` unless they start with `apps/` or `packa
   operator, `useSiteSeo` for head tags (a page may override its own fields with `useSeoMeta`), `useVisibleMotion` for
   gating an animation on visibility and reduced motion, `ProductPreview.vue` or `FeatureAppView.vue` (not
   `usePreviewFrame.ts` directly) for a React preview, and `AgentMark.vue` for an agent's mark.
+- **A feature app view (`packages/ui/src/website-preview/features/`) that reuses an application message also shows
+  what that message refers to** (a row "below", a chosen option), or uses a message that points at nothing outside
+  itself: the view is a still picture, and a reference to a missing part reads as a broken one in every language.
 - **A new language comes from `@octoboard/ui/languages` through `seo/site-seo.ts`**, with its catalog and a committed
   share image; `nuxt.config.ts` throws at load when the image is missing.
 

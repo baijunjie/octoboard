@@ -23,6 +23,9 @@ import { partSelector } from "../primitives";
 const PRESSABLE =
   "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href], input[type=checkbox], input[type=radio], summary, [role=separator][tabindex]";
 
+/** What a mouse press focuses: the controls a browser focuses on a click, a disabled one excepted. */
+const FOCUSABLE = "[tabindex]:not([disabled]), button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary";
+
 /** Every status a status glyph can show: the keys of a record typed by `ShownStatusKind`, so a status added to the app
  * fails type checking here rather than leaving a hover step refusing its tooltip. */
 const SHOWN_STATUSES = Object.keys({
@@ -585,9 +588,14 @@ export async function settleMotion(doc: Document, limit: number): Promise<void> 
   }
 }
 
+/** How a step's press reaches the page: `virtual`, a bare `click()` as assistive technology sends it (the default), or `mouse`, as
+ * a person's mouse does, which leaves the focus where a click puts it and draws no keyboard focus ring. */
+export type PressInput = "virtual" | "mouse";
+
 /** The steps' driver for the page `doc`. `host` says which key is the shortcut modifier for a step that presses it (a chord, a
- * click that carries it): the machine the page runs on by default, the scenario's own host in the gallery. */
-export function createUi(doc: Document, language: Language, daemon?: Daemon, host: ModifierHost = readHost()): Ui {
+ * click that carries it): the machine the page runs on by default, the scenario's own host in the gallery. With `input: "mouse"`
+ * the presses of `press` and the steps built on it are mouse presses, for a picture that must not show a keyboard ring. */
+export function createUi(doc: Document, language: Language, daemon?: Daemon, host: ModifierHost = readHost(), options: { input?: PressInput } = {}): Ui {
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
   /** Whether the window uses the single-panel tablet layout. A document whose stylesheet does not declare the
@@ -642,7 +650,8 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     const element = await waitFor(look, missing);
     if (modifier) {
       element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0, metaKey: host.modifier === "meta", ctrlKey: host.modifier === "control" }));
-    } else element.click();
+    } else if (options.input === "mouse") pressAs(element, "mouse");
+    else element.click();
     // A submenu a click opens closes again shortly unless the pointer is on its trigger, which a
     // click never places. Put it there afterwards — before the click, the same events do not hold
     // it open — so the submenu stays to be seen or pressed, as it does for a pointer.
@@ -853,12 +862,27 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
   };
 
   /** Presses `element` as a `pointerType` pointer does: the pointer events react-aria's `usePress` reads, then the click
-   * that ends the press. The box has a size, since react-aria reads a pointer event of no size as a virtual one. */
+   * that ends the press. The box has a size, since react-aria reads a pointer event of no size as a virtual one. A mouse press
+   * is the whole of a real one: the pointer arrives over the centre of the element first (a popover trigger opens for a press
+   * only on a hovered trigger, and the press's own end must land on the element), then the mouse events and, unless `mousedown`
+   * is cancelled, the focus goes to the nearest focusable ancestor, which is the browser's own action on it (a bare `click()`
+   * moves no focus). */
   const pressAs = (element: HTMLElement, pointerType: "touch" | "mouse") => {
-    const init: PointerEventInit = { bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true, pointerType, width: 20, height: 20 };
+    const box = element.getBoundingClientRect();
+    const at = { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
+    const init: PointerEventInit = { bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true, pointerType, width: 20, height: 20, ...at };
+    if (pointerType === "mouse") {
+      for (const type of ["pointerover", "pointermove"]) element.dispatchEvent(new PointerEvent(type, init));
+    }
     element.dispatchEvent(new PointerEvent("pointerdown", init));
+    if (pointerType === "mouse") {
+      const down = new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0, detail: 1, ...at });
+      element.dispatchEvent(down);
+      if (!down.defaultPrevented) element.closest<HTMLElement>(FOCUSABLE)?.focus();
+    }
     element.dispatchEvent(new PointerEvent("pointerup", init));
-    element.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0, detail: 1 }));
+    if (pointerType === "mouse") element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, button: 0, detail: 1, ...at }));
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0, detail: 1, ...at }));
   };
   const touch = (element: HTMLElement) => pressAs(element, "touch");
 
@@ -1468,7 +1492,6 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
         // floating card gives its Close panel button keyboard-visible, and that button's tooltip drawn over the card for
         // as long as the focus stays. The pointer then moves onto the card, as it would to look at it, so the toggle does not
         // stay hovered in the picture and a floating group does not hide for the pointer having left the toggle.
-        pointAt(toggle);
         pressAs(toggle, "mouse");
         await wait(150);
         const pane = doc.querySelector<HTMLElement>("[data-pane=aside]");

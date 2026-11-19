@@ -7,12 +7,14 @@
     "build": "astro build",
     "preview": "astro preview",
     "typecheck": "astro check",
-    "test": "node --experimental-strip-types --test '*.test.ts' 'src/**/*.test.ts'"
+    "test": "node --experimental-strip-types --test '*.test.ts' 'scripts/*.test.ts' 'screenshots/*.test.ts' 'src/**/*.test.ts'",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "~0.40.0",
     "@octoboard/ui": "workspace:*",
-    "astro": "^6.4.8"
+    "astro": "^6.4.8",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",

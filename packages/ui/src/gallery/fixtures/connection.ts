@@ -237,6 +237,21 @@ export const connectionScenarios: Scenario[] = [
     steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.terminalContextMenu("bin/helper"), (ui) => ui.press(ui.t("common.openIn"))],
   },
   {
+    id: "terminal-native-session",
+    group: TERMINAL,
+    category: "normal",
+    title: "A project session's terminal, the agent's own CLI",
+    description: "The session's terminal is the agent's own command-line interface, drawn as it runs in a terminal: Claude Code's welcome box with the project folder, one exchange in which the agent reads the project's CLAUDE.md, and the empty prompt box with the shortcuts hint under it. The other terminal scenarios draw the scrolling sample output; this one is a quiet, settled CLI screen with no panel open.",
+    terminal: "native",
+    preferences: { panelStacks: { project: { open: [], shares: {} }, report: { open: [], shares: {} } } },
+    state: snapshotState({
+      consoles: [console_],
+      projects: [project],
+      sessions: [sessionOf("s-native", console_.id, project.id, "Project setup", "idle")],
+    }),
+    steps: [(ui) => ui.press(ui.session("Project setup"))],
+  },
+  {
     id: "terminal-cursor-selection",
     group: TERMINAL,
     category: "normal",

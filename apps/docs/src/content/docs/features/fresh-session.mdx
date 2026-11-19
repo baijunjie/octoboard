@@ -1,0 +1,46 @@
+---
+title: "Context usage and fresh sessions"
+description: "Watch how full an agent's context is and start a clean new session at the boundary between stages, with the earlier conversation still there to look back on."
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+As a context window fills, models tend to follow instructions less reliably, and every turn costs more. A long-running session is a poor place to begin the next stage of work. {productName} doesn't compact the context for the agent. It shows you how much of it a session uses, so you can start a clean new session at the boundary between stages. The old session's conversation stays available to look back on.
+
+<Screenshot id="context-window-card" alt="A session card in “focus mode” with the “Context window” card open: 126.5K of a 200K window, 63% used and 73.6K left, in the warning colour." />
+
+## Why it works this way
+
+- <strong>Start fresh at the boundary between stages.</strong> Each turn sends the whole conversation again, so the size of the context decides how costly it is to carry on. Seeing it lets you choose the moment to start fresh, instead of finding out when a session has grown unwieldy.
+- <strong>It shows the agent's own number.</strong> The figure is what the agent itself reports for the main conversation's latest request: Claude Code's status line figure, Codex's <code dir="ltr">/status</code> figure, the footer figure of Grok Build. {productName} doesn't estimate it while a reply is streaming, so it can lag a little behind the screen: it refreshes about once a second while the agent runs. It goes down again after a compaction, a revert or a rewind.
+- <strong>It is not a bill.</strong> The number is the size of the context, not total token usage, a price or a duration. Work done by the agent's subagents and side calls isn't counted.
+- <strong>A fresh session is a new session, nothing more.</strong> {productName} doesn't summarize or carry the conversation over for you. The earlier session keeps its record, so you can read it and tell the new session what it needs.
+- <strong>The history comes from the agent's record.</strong> It lists what you and the agent said (your messages and the agent's final reply to each turn), not tool calls, command output or the model's reasoning. If the agent's record is gone or can't be read, the history says it's unavailable. Grok Build keeps only a summary of what came before a compaction, so its history lists only the turns since.
+
+Two things can leave the badge incomplete:
+
+- <strong>No ring.</strong> The ring appears only when the agent has told {productName} the size of its context window; without it you see the number alone. With Claude Code that is the case until its first report after a launch (it comes with the session's first reply), and always when Claude Code is older than 2.0.0, when a managed policy sets the status line, or when Claude Code runs no status line at all (in a folder it hasn't been trusted with, or with <code dir="ltr">disableAllHooks</code> set).
+- <strong>No badge.</strong> While the size is unknown or zero, nothing shows: just after a session starts, and with Claude Code after a compaction, until its next request.
+
+## How to use it
+
+<Steps>
+
+1. Find the badge on the session's row in the sidebar, on its card in focus mode, or in the header of an archived session's history. It's a small grey number such as <strong>126.5K</strong>. When the window is known, a ring in front of the number shows how much is in use: accent colour up to 50%, warning colour above 50%, danger colour above 80%.
+2. Hover the badge to see the <strong>Context window</strong> card: the size against the window, a bar, the percentage used and how much is left.
+3. When a session is filling up, start the next stage in a new session: press <strong>+</strong> (<strong>New session</strong>) on the project's row, pick the agent and account in the <strong>Open session</strong> dialog, and open it. Tell the new session where the work stands.
+4. Optionally, archive the old session: open its menu and choose <strong>Archive</strong>. Archiving removes the branches and linked worktrees the session was working on, where git can do so safely, and without asking: a session at its prompt is archived at once, with a confirmation only for what git refuses to remove. So archive the old session only once the new session no longer works in its branch or worktree.
+5. To look back, select the archived session, or open <strong>View archive</strong> from the project's menu. The archived session's <strong>Session history</strong> shows the conversation in place of a terminal, with the same badge in the header. If you want to carry on in that conversation after all, press <strong>Reopen</strong>.
+
+</Steps>
+
+<Screenshot id="session-history" alt="The “Session history” of an archived session: your messages and the agent's replies, with the context badge in the header and a “Reopen” bar at the bottom." />
+
+You know it worked when the new session appears in the sidebar and its badge starts to show once the agent has answered. Reading the history writes nothing to the agent's record.
+
+## Next
+
+- [Agent handoff](../agent-handoff/): when the next stage should go to a different agent, with the work carried over.
+- [Usage monitor](../usage-monitor/): the account's usage limits, as opposed to the context size.

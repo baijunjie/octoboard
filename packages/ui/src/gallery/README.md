@@ -17,7 +17,9 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   an iframe (`gallery-frame.html`, `frame.tsx`), so the width control decides pane docking from the available space and the inclusive `tablet` breakpoint for
   real. The frame alone, sized by the browser window, is `gallery-frame.html?scenario=<id>&theme=…&lang=…` with `held=1`
   and `chrome=1` as needed, and, for a file-viewer scenario, `markdown=tailwind|github|newsprint|latex` (it stands over
-  the scenario's own `preferences.markdownStyle`).
+  the scenario's own `preferences.markdownStyle`). `input=mouse` has the steps press as a mouse does (pointer and mouse
+  events, focus on the pressed control) rather than with a bare `click()`, so nothing shows a keyboard focus ring; the
+  docs' screenshots use it, and a step that needs a virtual press (a hint popover) fails under it.
 - `frame.tsx` renders the real `App` under `AppRoot` (`src/AppRoot.tsx`, the provider tree `main.tsx` and the website
   preview share) over a fixture daemon in place of the WebSocket one, and leaves out what only a native shell does.
   `prepare.ts` sets the app's stored preferences from the URL and the scenario before the app's modules load (what may

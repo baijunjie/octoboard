@@ -144,7 +144,7 @@ export interface ConfigurationFixture {
 export interface Fixture {
   state?: Partial<State>;
   notifications?: NotificationFixture[];
-  /** How a session's terminal behaves: `output` draws scrolling sample output (default), `mouse`
+  /** How a session's terminal behaves: `output` draws scrolling sample output (default), `native` a quiet screen of the agent's own CLI, `mouse`
    * draws it from a program with mouse reporting on, `fullscreen` draws a response in the
    * alternate screen, `cursor-selection` draws reversed text beside a block cursor, `paths` draws output naming files and folders (see `pathLinks`), and
    * `refuse` never connects. It does not reach the Terminal panel's shells (`shellTerminal`). */

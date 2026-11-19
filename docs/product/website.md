@@ -55,7 +55,7 @@ The site has a homepage, a download page and a privacy page. Paths below are rel
   documentation site's Connect over SSH guide in that language (`zh` and `zh-Hant` to `zh-CN` and `zh-TW`), so links to
   the remote connections guide the site used to have keep working; they do not carry the query or fragment.
 
-All 17 languages have complete website translations, including navigation, all 13 feature cards, preview
+All 17 languages have complete website translations, including navigation, all 15 feature cards, preview
 controls, the illustrative workflow, the remote connections overview, the developer's motivation, questions and answers, the download page, privacy
 text, client error messages, and page metadata: Arabic, German, English, Spanish, French, Hindi, Indonesian, Italian,
 Japanese, Korean, Portuguese, Russian, Thai, Turkish, Vietnamese, Simplified Chinese, and Traditional
@@ -91,26 +91,33 @@ example, an overview of remote connections, the developer's motivation, local da
 platform availability, and questions. These seven sections share a numbered heading, a short label marked by a red square, and a title. Section and
 workflow-step numbers are prominent visual markers.
 
-The first numbered section presents 13 feature cards in three groups, in this order:
+The first numbered section presents 15 feature cards in three groups, in this order:
 
-- Accounts and usage (five cards): managing accounts and sign-in status; keeping a conversation while changing
-  accounts manually or automatically at a usage limit; choosing available accounts for new sessions and waiting
-  for confirmed recovery when no account can continue a limited task; checking usage and reset countdowns; and
-  sharing skills, plugins and MCP servers across accounts of one agent, with the Claude Code user-level MCP and
-  Windows Developer Mode qualifications.
-- Context and continuity (three cards): checking context usage and starting the next stage in a fresh session
-  while the earlier conversation remains available; handing work to another agent with a record of the task,
-  progress and remaining work; and opening a stopped session in the Claude or Codex app on its macOS or Windows host.
-- Agents and projects (five cards): coordinating one request across projects and their agents; running independent
-  native CLI sessions with each project's own setup; finding which sessions need attention and stepping in directly;
-  tracking agent-started processes with best-effort, time-limited cleanup for tracked processes at session end; and
-  reviewing files and Git diffs beside the session.
+- Accounts and usage (six cards): adding and organizing accounts and checking their sign-in status; switching
+  accounts of the same agent and continuing the conversation, manually or automatically at the usage limit; new
+  sessions picking an account that still has quota, and work that finds none waiting and resuming once quota
+  recovers; usage and reset countdowns together, refreshed automatically; starting a usage window's countdown when it
+  resets so the next reset does not slip later, at the cost of a little quota; and sharing skills, plugins and MCP
+  servers across accounts of the same agent, with the caveat that some agents may keep part of it separate and some
+  systems may need extra setup.
+- Context and continuity (three cards): seeing how full a session's context is, where the agent reports it, and
+  moving the next stage into a fresh session while earlier conversations stay available for review as long as their
+  record is kept; letting an agent from another provider take over from a handoff record of the task, progress and
+  remaining work; and opening a stopped session in its agent's own desktop app, where that app is available.
+- Agents and projects (six cards): giving one request to a coordinator that assigns work to each project's agents,
+  follows progress and brings their reports together; separate native CLI sessions loading each project's
+  instructions, skills, hooks and MCP configuration; seeing which sessions are working or waiting and opening one to
+  answer or adjust instructions directly; seeing agent-started processes with their memory, listening ports and local
+  web links, with Octoboard trying to stop the leftovers not chosen to be kept when a session ends; keeping the
+  computer running the agents from sleeping and its screen from turning off or locking, with support varying by
+  system; and browsing project files and Git diffs beside the session.
 
 Every card has a title, description and a focused visual, identified as illustrative sample data.
-Seven visuals show focused application details: account sign-in status, a quota reading, two session statuses,
-project configuration files, a Git diff, a single process entry with Keep and Stop, and the action to open a
-stopped Codex session. The waiting session appears before the working one, following the application's ordering.
-Six other visuals show account switching, quota
+Nine visuals show focused application details: account sign-in status, a quota reading, the Start usage windows
+automatically setting switched on, the Prevent sleep setting switched on with When to prevent sleep set to While
+sessions work, two session statuses, project configuration files, a Git diff, a single process entry with Keep and
+Stop, and the action to open a stopped Codex session. The waiting session appears before the working one, following
+the application's ordering. Six other visuals show account switching, quota
 recovery, shared account configuration, fresh and earlier sessions, agent handoff, and coordination across
 projects. The quota example shows waiting, confirmation of availability, and continuing work.
 

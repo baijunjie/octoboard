@@ -61,9 +61,9 @@ test("page paths keep the English home unprefixed and the other pages as sibling
 
 test("the feature wall groups keep distinct capabilities in reading order", () => {
   assert.deepEqual(featureGroups.map(({ features }) => features), [
-    ["managedAccounts", "accountContinuity", "quotaScheduling", "usageMonitor", "sharedConfiguration"],
+    ["managedAccounts", "accountContinuity", "quotaScheduling", "usageMonitor", "startUsageWindows", "sharedConfiguration"],
     ["freshSession", "agentHandoff", "openAgentApp"],
-    ["crossProjectWork", "nativeProjectSessions", "sessionIntervention", "processMonitoring", "reviewChanges"],
+    ["crossProjectWork", "nativeProjectSessions", "sessionIntervention", "processMonitoring", "keepAwake", "reviewChanges"],
   ]);
 });
 

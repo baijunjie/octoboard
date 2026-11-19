@@ -1,0 +1,55 @@
+---
+title: "Reviewing changes"
+description: "Browse a project's files and the Git changes of any local branch beside the session, so you judge what an agent delivered by the code, not by its own summary."
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+To judge how well an agent did, you finally have to look at the code changes, not at its own account. {productName} lets you browse the project's files and the Git diff beside the session, so you do not switch to another tool.
+
+<Screenshot id="git-changes-list" alt="The “Changes” tab for the branch feature/ranking-experiments, with one unstaged change and four commits listed under “Committed”, each with its files." />
+
+## Why it works this way
+
+- <strong>The changes, not the self-report.</strong> The panel beside the session shows what is actually on disk and in the branch, so the review rests on the code.
+- <strong>You review in the same window, without leaving the session.</strong> The project's panel needs no session of its own: it reads only the project. Moving between sessions of a project leaves the panel as you set it, except that the <strong>Changes</strong> tab follows the session's branch.
+- <strong>It shows the state on disk.</strong> The <strong>Files</strong> tab reads the project's folder live, including what an agent has written and not committed yet. The <strong>Changes</strong> tab lists what the branch has not committed (<strong>Conflicted</strong>, <strong>Staged</strong>, <strong>Unstaged</strong> and <strong>Untracked</strong>) and what it has <strong>Committed</strong> since it forked from the branch the project's own working copy has checked out. For that branch itself, it lists what it has not pushed to its remote branch.
+- <strong>It follows the session.</strong> Selecting one of the project's sessions sets the <strong>Branch</strong> selector to the branch that session is responsible for, so the changes you see are the ones that session made. You can choose any other local branch yourself.
+- <strong>It is read-only, on purpose.</strong> The panel and the viewer cannot edit, save, stage, commit or check out, and the Changes tab fetches nothing from a remote. Reviewing can never disturb the work an agent is doing. Changing things stays with the agents and with the project's Git actions you confirm.
+- <strong>Diffs are drawn for reading.</strong> A text change opens as a unified diff or side by side, with long runs of unchanged lines folded until you expand them. An image change shows <strong>Before</strong> and <strong>After</strong>. A Markdown file opens as a rendered document.
+
+<Aside type="caution" title="Limits">
+- A list is cut short beyond 10,000 changes, and with <strong>Group by commit</strong> on, only a branch's 100 newest commits are listed; a warning mark says so. A patch of more than 1,000,000 characters or 10,000 lines is shown as plain text, and a file larger than 4 MiB cannot be displayed in the viewer.
+- A remote branch is compared as your repository last fetched it.
+- A branch no worktree has checked out has no uncommitted changes to show. Files that Git ignores appear on the <strong>Files</strong> tab only.
+- A project that is not a Git repository has no <strong>Changes</strong> to list.
+</Aside>
+
+## How to use it
+
+<Steps>
+
+1. Open the panel. Select one of the project's sessions, then choose <strong>Show files panel</strong> in the top bar. Or open the project's menu in the sidebar, then choose <strong>Open panel › Files</strong>, which needs no session.
+2. On the <strong>Files</strong> tab, browse the folder tree and choose a file to read it in the viewer. The filter field finds files by name across the project.
+
+   <Screenshot id="files-tree" alt="The “Files” tab showing a project's folder tree with a file selected." />
+3. Choose the <strong>Changes</strong> tab. The <strong>Branch</strong> selector shows the selected session's branch; choose another to review it instead.
+4. Read the sections from <strong>Conflicted</strong> down to <strong>Committed</strong>. Use <strong>Group by commit</strong> to see each commit's changes under its own row, <strong>Group by folder</strong> to arrange files in folders, and the filter to narrow the list by file name.
+5. Choose a change to open it in the viewer. Switch between <strong>Show unified diff</strong> and <strong>Show split diff</strong>, expand folded lines, and use <strong>Previous file</strong> and <strong>Next file</strong> to go through the list. Press Escape to close the viewer.
+6. Choose <strong>Refresh</strong> to read the project again.
+
+</Steps>
+
+
+<Screenshot id="git-change-diff" alt="A change opened in the viewer as a diff." />
+
+You'll know it worked when the diff of the file the agent edited opens beside the session, showing exactly the lines it changed.
+
+<Screenshot id="files-tree-viewer" alt="A file opened from the “Files” tab in the viewer." />
+
+## Next
+
+- [Native project sessions](../native-project-sessions/): why a session works in the project's own folder.
+- [Cross-project coordination](../cross-project-work/): a console session checks what its sessions changed through the same changes.

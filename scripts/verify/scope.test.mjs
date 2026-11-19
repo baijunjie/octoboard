@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
-  ALL_PACKAGES, DAEMON_READS_MARKDOWN, DAEMON_READS_NATIVE, DAEMON_READS_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, MENU_KEYS_FILE, matchingRules, planScope, PROTOCOL_SCHEMA, RULES, SWEEP_SHARED, DOCS_IMPORTS_FROM_UI, DOCS_READS_WEB, UI_READS_DAEMON, UI_READS_ELSEWHERE,
+  ALL_PACKAGES, DAEMON_READS_MARKDOWN, DAEMON_READS_NATIVE, DAEMON_READS_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, MENU_KEYS_FILE, matchingRules, planScope, PROTOCOL_SCHEMA, RULES, SWEEP_SHARED, DOCS_IMPORTS_FROM_UI, DOCS_RUNS_UI_GALLERY, DOCS_READS_WEB, UI_READS_DAEMON, UI_READS_ELSEWHERE,
   UI_IMPORTS_NATIVE, UI_READS_NATIVE, VERIFY_READS_UI, WEB_IMPORTS_FROM_UI, WEB_READS_DOCS, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, WIRE_PROTOCOL,
 } from "./scope.mjs";
 
@@ -79,7 +79,7 @@ const CASES = [
   ["contracts/protocol/released/release.json", ["verify", "daemon"]],
   ["contracts/protocol/released/control-output.schema.json", ["verify", "daemon"]],
   ["packages/ui/src/platform/tauri.ts", ["verify", "ui", "native"]],
-  ["scripts/verify/lock.mjs", ["verify", "ui"]],
+  ["scripts/verify/lock.mjs", ["verify", "ui", "docs"]],
   ["packages/ui/src/i18n/languages.ts", ["verify", "ui", "web", "docs", "daemon"]],
   ["apps/daemon/src/providers/claude.rs", ["verify", "ui", "daemon"]],
   ["apps/desktop/src-tauri/Info.template.plist", ["verify", "ui", "desktop", "native"]],
@@ -114,6 +114,7 @@ const CASES = [
   ["scripts/NOTES.md", []],
   // Not UI build inputs.
   ["packages/ui/scripts/gallery-sweep.mjs", ["ui"], []],
+  ["packages/ui/scripts/gallery-browser.mjs", ["verify", "ui", "docs"], []],
   ["packages/ui/scripts/wkbench/run.mjs", ["ui"], []],
   ["packages/ui/gallery.html", ["ui"], []],
 ];
@@ -153,7 +154,7 @@ test("the menu keys select the shell only when the caller reports a change to th
 });
 
 // Every relation list, so a new one is added in one place.
-const RELATION_LISTS = [WEB_IMPORTS_FROM_UI, DOCS_IMPORTS_FROM_UI, DOCS_READS_WEB, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, SWEEP_SHARED, WIRE_PROTOCOL, PROTOCOL_SCHEMA, DAEMON_READS_MARKDOWN, DAEMON_READS_NATIVE, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI, UI_IMPORTS_NATIVE, WEB_READS_DOCS];
+const RELATION_LISTS = [WEB_IMPORTS_FROM_UI, DOCS_IMPORTS_FROM_UI, DOCS_RUNS_UI_GALLERY, DOCS_READS_WEB, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, SWEEP_SHARED, WIRE_PROTOCOL, PROTOCOL_SCHEMA, DAEMON_READS_MARKDOWN, DAEMON_READS_NATIVE, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI, UI_IMPORTS_NATIVE, WEB_READS_DOCS];
 
 test("every file named in a relation list selects verify, so these tests run when it changes", () => {
   for (const file of RELATION_LISTS.flat()) assert.ok(planScope([file]).packages.includes("verify"), file);

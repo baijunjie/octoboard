@@ -26,6 +26,14 @@ const shellState = snapshotState({ consoles: [console_], projects: [web, api], s
  * it, the pane floats in with a fade the page marks no end of, and a picture taken before it has settled catches the
  * card half drawn; a docked pane has no entrance, and the listing itself is waited on by the step that presses a row. */
 const openFiles = [(ui: Ui) => ui.press(ui.session("Fix the summary layout")), (ui: Ui) => ui.showPanel("files"), (ui: Ui) => ui.wait(400)];
+/** Presses main.ts open in the viewer and closes it again, which leaves the row selected and the focus back on the tree. It
+ * waits for the viewer's own toolbar, so the close is not pressed before the viewer is up. */
+const openAndCloseMain = [
+  (ui: Ui) => ui.press("src"),
+  (ui: Ui) => ui.press("main.ts"),
+  (ui: Ui) => ui.waitForControl(ui.t("viewer.openInFileManager")),
+  (ui: Ui) => ui.press(ui.t("common.close")),
+];
 const filterFiles: FixtureFiles = {
   ...SAMPLE_FILES,
   "src/services": { dir: true },
@@ -107,7 +115,19 @@ export const projectFilesScenarios: Scenario[] = [
         "api.config.json": { text: '{ "port": 8080 }\n' },
       },
     },
-    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
+    steps: [...openFiles, ...openAndCloseMain],
+  },
+  {
+    id: "files-tree-plain",
+    group: GROUP,
+    category: "normal",
+    title: "A project session's files, ordinary file names",
+    description: "The Files panel for a project session: folders first, then files, with src expanded and main.ts selected. The root holds only plain project files: a .gitignore, package.json and a README. Unlike \"A project session's files\", it has no files made to test natural sorting (item 2 and item 10); the viewer is opened and closed the same way.",
+    state,
+    filesByProject: {
+      [web.id]: Object.fromEntries(Object.entries(SAMPLE_FILES).filter(([path]) => !/^item \d+\.txt$/.test(path))),
+    },
+    steps: [...openFiles, ...openAndCloseMain],
   },
   {
     id: "files-folder-loading",
