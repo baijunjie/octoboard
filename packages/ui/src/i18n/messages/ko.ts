@@ -585,6 +585,8 @@ export const ko: Translation<"other"> = {
   "daemon.conversation_held_in_project": "이 대화는 이미 {project}의 세션 {session}에 있습니다.",
   "daemon.conversation_held_in_console": "이 대화는 이미 {console}의 콘솔 세션 {session}에 있습니다.",
   "daemon.conversation_outside_project": "이 대화는 이미 이 프로젝트 외부의 세션에 속해 있습니다.",
+  "daemon.conversation_not_followed": "이 {appWindow}에서 구독하지 않은 대화를 요청했습니다.",
+  "daemon.conversation_subscriptions_exceeded": "이 {appWindow}에서는 더 이상 대화를 동시에 구독할 수 없습니다.",
   "daemon.relocation_failed.summary": "대화를 {path}에 복사하지 못했습니다.",
   "daemon.relocation_failed.thread_record.summary": "대화를 {path}에 복사했지만 대상 계정의 스레드 기록을 갱신하지 못했습니다.",
   "daemon.relocation_failed.thread_record": "대화를 {path}에 복사했지만 대상 계정의 스레드 기록을 갱신하지 못했습니다: {detail}. 세션은 원래 계정에 남아 있습니다.",

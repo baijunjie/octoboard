@@ -675,6 +675,8 @@ export const en = {
   "daemon.conversation_held_in_project": "This conversation is already held by the session {session} in {project}.",
   "daemon.conversation_held_in_console": "This conversation is already held by the console session {session} in {console}.",
   "daemon.conversation_outside_project": "This conversation already belongs to a session outside this project.",
+  "daemon.conversation_not_followed": "This window asked for a conversation it is not following.",
+  "daemon.conversation_subscriptions_exceeded": "This window cannot follow any more conversations at once.",
   "daemon.relocation_failed.summary": "The conversation could not be copied into {path}.",
   "daemon.relocation_failed.thread_record.summary": "The conversation was copied into {path}, but the target account's record of the thread could not be updated.",
   "daemon.relocation_failed.thread_record":

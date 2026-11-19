@@ -584,6 +584,8 @@ export const ja: Translation<"other"> = {
   "daemon.conversation_held_in_project": "この会話は、{project} のセッション {session} にすでにあります。",
   "daemon.conversation_held_in_console": "この会話は、{console} のコンソールセッション {session} にすでにあります。",
   "daemon.conversation_outside_project": "この会話は、このプロジェクト以外のセッションにすでに属しています。",
+  "daemon.conversation_not_followed": "この{appWindow}は、フォローしていない会話を要求しました。",
+  "daemon.conversation_subscriptions_exceeded": "この{appWindow}では、これ以上同時に会話をフォローできません。",
   "daemon.relocation_failed.summary": "会話を {path} にコピーできませんでした。",
   "daemon.relocation_failed.thread_record.summary": "会話を {path} にコピーしましたが、移行先アカウントのスレッド記録を更新できませんでした。",
   "daemon.relocation_failed.thread_record": "会話を {path} にコピーしましたが、移行先アカウントのスレッド記録を更新できませんでした: {detail}。セッションは元のアカウントに残ります。",

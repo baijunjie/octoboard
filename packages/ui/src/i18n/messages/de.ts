@@ -588,6 +588,8 @@ export const de: Translation<"one" | "other"> = {
   "daemon.conversation_held_in_project": "Dieses Gespräch gehört bereits zu Sitzung {session} in {project}.",
   "daemon.conversation_held_in_console": "Dieses Gespräch gehört bereits zu Konsolensitzung {session} in {console}.",
   "daemon.conversation_outside_project": "Dieses Gespräch gehört bereits zu einer Sitzung außerhalb dieses Projekts.",
+  "daemon.conversation_not_followed": "Dieses Fenster hat ein Gespräch angefordert, dem es nicht folgt.",
+  "daemon.conversation_subscriptions_exceeded": "Dieses Fenster kann nicht noch mehr Gesprächen gleichzeitig folgen.",
   "daemon.relocation_failed.summary": "Das Gespräch konnte nicht nach {path} kopiert werden.",
   "daemon.relocation_failed.thread_record.summary": "Das Gespräch wurde nach {path} kopiert, aber der Gesprächseintrag des Zielkontos konnte nicht aktualisiert werden.",
   "daemon.relocation_failed.thread_record": "Das Gespräch wurde nach {path} kopiert, aber der Gesprächseintrag des Zielkontos konnte nicht aktualisiert werden: {detail}. Die Sitzung behält ihr bisheriges Konto.",

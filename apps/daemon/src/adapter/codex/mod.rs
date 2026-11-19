@@ -74,6 +74,7 @@ mod claude_mcp;
 mod compatibility;
 mod config;
 mod conversation;
+mod feed;
 mod hooks;
 mod login;
 mod mcp_auth;

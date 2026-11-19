@@ -2194,6 +2194,83 @@
         {
           "type": "object",
           "properties": {
+            "session": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0,
+              "description": "How many of the latest entries the first page holds; 50 when absent, at most 200."
+            },
+            "type": {
+              "type": "string",
+              "const": "subscribe_session_conversation"
+            }
+          },
+          "required": [
+            "type",
+            "session"
+          ],
+          "description": "Starts following a session's conversation on this connection: answered with\n`session_conversation_subscribed`, and the changes of it follow as events until the session\nis unsubscribed or the connection ends. Handled by the connection itself\n(`crate::coordinator::conversation_feed`), which holds the subscriptions."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "unsubscribe_session_conversation"
+            }
+          },
+          "required": [
+            "type",
+            "session"
+          ],
+          "description": "Stops following a session's conversation on this connection; answered with `ack`, also for\na session that was not followed."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "epoch": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0,
+              "description": "The `epoch` the client's entries belong to."
+            },
+            "before": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0,
+              "description": "The `seq` of the earliest entry the client holds: the page ends just before it."
+            },
+            "limit": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0,
+              "description": "How many entries the page holds at most; 50 when absent, at most 200."
+            },
+            "type": {
+              "type": "string",
+              "const": "read_session_conversation"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "epoch",
+            "before"
+          ],
+          "description": "A page of the entries before `before` of a session this connection follows, answered with\n`session_conversation`."
+        },
+        {
+          "type": "object",
+          "properties": {
             "project": {
               "type": "string"
             },

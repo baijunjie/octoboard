@@ -591,6 +591,8 @@ export const zhTW: Translation<"other"> = {
   "daemon.conversation_held_in_project": "此對話已屬於專案 {project} 中的工作階段 {session}。",
   "daemon.conversation_held_in_console": "此對話已屬於主控台 {console} 中的主控台工作階段 {session}。",
   "daemon.conversation_outside_project": "此對話已屬於本專案之外的工作階段。",
+  "daemon.conversation_not_followed": "此視窗請求了未關注的對話。",
+  "daemon.conversation_subscriptions_exceeded": "此視窗無法再同時關注更多對話。",
   "daemon.relocation_failed.summary": "無法將對話複製到 {path}。",
   "daemon.relocation_failed.thread_record.summary": "對話已複製到 {path}，但無法更新目標帳號中此工作階段執行緒的記錄。",
   "daemon.relocation_failed.thread_record": "對話已複製到 {path}，但無法更新目標帳號中此工作階段執行緒的記錄：{detail}。工作階段仍在原帳號上。",

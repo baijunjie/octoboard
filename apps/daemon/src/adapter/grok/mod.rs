@@ -96,6 +96,7 @@ pub(crate) mod accounts;
 mod adoption;
 mod compatibility_consumer;
 mod conversation;
+mod feed;
 mod home;
 mod hooks;
 mod login;

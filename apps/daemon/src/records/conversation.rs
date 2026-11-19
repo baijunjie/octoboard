@@ -142,6 +142,13 @@ pub fn for_each_line(stretches: &[Stretch], mut visit: impl FnMut(&Value)) -> st
     Ok(())
 }
 
+/// When a line dates itself, from its `timestamp` (RFC 3339), in milliseconds since the epoch.
+pub(crate) fn at_of(line: &Value) -> Option<i64> {
+    line.get("timestamp")
+        .and_then(Value::as_str)
+        .and_then(crate::time::parse_rfc3339_millis)
+}
+
 /// The text `value` holds at `key`, trimmed, when that is not nothing.
 pub(crate) fn text_of(value: &Value, key: &str) -> Option<String> {
     let text = value.get(key)?.as_str()?.trim();

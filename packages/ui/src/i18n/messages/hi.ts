@@ -572,6 +572,8 @@ export const hi: Translation<"one" | "other"> = {
   "daemon.conversation_held_in_project": "यह बातचीत {project} के सेशन {session} में पहले से है।",
   "daemon.conversation_held_in_console": "यह बातचीत {console} के कंसोल सेशन {session} में पहले से है।",
   "daemon.conversation_outside_project": "यह बातचीत पहले से इस प्रोजेक्ट के बाहर किसी सेशन की है।",
+  "daemon.conversation_not_followed": "इस विंडो ने ऐसी बातचीत माँगी जिसे वह फ़ॉलो नहीं कर रही है।",
+  "daemon.conversation_subscriptions_exceeded": "यह विंडो एक साथ और ज़्यादा बातचीत फ़ॉलो नहीं कर सकती।",
   "daemon.relocation_failed.summary": "बातचीत {path} में कॉपी नहीं हो सकी।",
   "daemon.relocation_failed.thread_record.summary": "बातचीत {path} में कॉपी हो गई, लेकिन लक्ष्य अकाउंट में थ्रेड का रिकॉर्ड अपडेट नहीं हो सका।",
   "daemon.relocation_failed.thread_record": "बातचीत {path} में कॉपी हो गई, लेकिन लक्ष्य अकाउंट में थ्रेड का रिकॉर्ड अपडेट नहीं हो सका: {detail}। सेशन अपने पुराने अकाउंट पर ही रहता है।",

@@ -21,6 +21,7 @@ use crate::providers::claude::{
 };
 use crate::records::context::{number, Context};
 use crate::records::conversation::Entry;
+use crate::records::feed::FeedReader;
 use crate::records::observed::{text, Observed};
 use crate::records::removal::Resolved;
 use crate::records::store::transcript_path_hint;
@@ -150,6 +151,10 @@ impl RecordStore for ClaudeRecords {
     /// note an interrupted turn leaves (`super::conversation::user_text`).
     fn user_text<'a>(&self, text: &'a str) -> Option<std::borrow::Cow<'a, str>> {
         super::conversation::user_text(text)
+    }
+
+    fn feed_reader(&self) -> Option<Box<dyn FeedReader>> {
+        Some(Box::<super::feed::ClaudeFeedReader>::default())
     }
 
     /// A declined prompt is watched for in the transcript; an interrupted turn in the transcript

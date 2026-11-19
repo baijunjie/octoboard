@@ -45,6 +45,7 @@ Status Protocol reports and its title without activity glyphs was measured on **
 What the three hook sections say about a `PreToolUse` deny blocking a file write was measured on 2026-11-12 and
 2026-11-13 on macOS on **Claude Code 2.1.322** (`claude -p`), **Codex 0.167.1** (`codex exec`) and **Grok Build 1.0.77**
 (`grok -p`), against scratch directories, by a probe whose `PreToolUse` hook printed a `deny` decision with a reason.
+What the Grok Build section's "When Grok writes its conversation" says was measured on **Grok Build 1.0.89**.
 All three rewrite their hook surface, their payload fields, their configuration layering and their on-disk layout on
 upgrade, so check a detail here against the installed version before relying on it.
 
@@ -584,6 +585,16 @@ cleanup against two seconds and then exits; a failsafe timer forces the exit aft
 `SessionEnd` hook has a longer timeout). Several processes sharing one configuration directory do not by themselves
 leave temporary files: each names its own, and the rename within one directory is atomic.
 
+### A rewind in the transcript
+
+Surveyed on 162 local main transcripts of 2.1.286 to 2.1.328. A transcript is a tree joined by `parentUuid` (falling
+back to `logicalParentUuid` where `parentUuid` is null, as on a `compact_boundary`), not a list: the results of parallel
+tool calls hang on side branches of it, so walking back from the file's last line does not give the conversation. A
+rewind, and a prompt submitted again after an interrupt that wrote nothing, show as a new human prompt whose `parentUuid`
+ancestry does not contain the previous human prompt; the abandoned lines stay in the file. Of 1,288 prompts after a
+transcript's first, 1,256 descended from the prompt before them and 32 did not, every one of the 32 an abandoned prompt.
+The live conversation feed's Claude Code reader drops the entries after the new prompt's parent line on such a fork.
+
 ## Codex
 
 12 hook events, payload as JSON on stdin. The binary embeds the **full JSON Schema of every hook payload**, with
@@ -875,6 +886,17 @@ meant to outlive it has to be started in a session of its own (`setsid`).
 
 Every agent also ends, as it exits, the process group of each command still running (see "Exiting ends the process
 groups of running commands" under "Across the three agents").
+
+### What a rollout records of a turn's items
+
+Surveyed on 824 local rollouts of 0.163.0 to 0.167.1. A rollout holds only `item_completed` events of a turn's items
+(`UserMessage`, `AgentMessage`, `CommandExecution`, `FileChange`, `McpToolCall`, `CollabAgentToolCall`, `Extension`,
+...): no `item_started` event and no text deltas, so nothing in it shows an item in progress. Some calls are recorded
+when the model makes them instead, as `response_item` `function_call` or `custom_tool_call` lines followed by their
+`function_call_output` or `custom_tool_call_output`: the code-mode `exec` cell, `wait` on such a cell, and the subagent
+calls `spawn_agent`, `send_message`, `wait_agent`, `followup_task`. Some of those share their id with an item of another
+type written between the call and its output: `wait_agent` with a `CollabAgentToolCall`, `sleep` with an `Extension`
+of `kind` `clock.sleep`, and `request_user_input_async` with an `AgentMessage` that repeats its questions.
 
 ## Grok Build
 
@@ -1183,6 +1205,46 @@ Measured on **Grok Build 1.0.77** with `grok inspect --json` and `grok -p` under
 - Grok reads `~/.agents/skills` (and, per its guide, the project's `.agents/skills`). It does not read
   `~/.codex/AGENTS.md`, `~/.codex/skills`, `.codex/skills` or the servers in Codex's `config.toml`. The `[compat.codex]`
   cells `skills`, `rules`, `agents`, `mcps` and `hooks` are documented as reserved and are inert; only `sessions` exists.
+
+### When Grok writes its conversation
+
+Measured on Grok Build 1.0.89, in a scratch `GROK_HOME`, `HOME` and `TMPDIR` with the agent markers stripped, a fake
+`GROK_CODE_XAI_API_KEY` and a `[model.probe]` entry whose `base_url` was a local stand-in streaming `chat_completions`
+(no account, no network). A headless `-p` run made one tool call (`sleep 6; echo done`) between two streamed texts,
+while a poller sampled the sizes and line counts of `chat_history.jsonl` and `updates.jsonl` every 50 ms, and a second
+run streamed one 9-second text with no tool call. Neither file is written as a model call streams, and neither waits
+for the turn's end:
+
+- A model call's assistant line goes into `chat_history.jsonl` when its stream ends, before its tools run, with its
+  text and all its `tool_calls` in the one line (the line appeared 21 ms after the stand-in sent the call). A tool's
+  `tool_result` line is appended when the tool ends (the command's line came in the poll that saw it finish, 6 s
+  later), and the next model call's line when its stream ends.
+- `updates.jsonl` is written at the same moments, a few tens of milliseconds after the record: an `agent_message_chunk`
+  carrying the call's whole text, then a `tool_call` for each call, whose `kind` and `status` (`Other`, `Pending`) are
+  at `params._meta.updateParams`, not in the update. Nothing in it shows text while a call streams: in the 9-second
+  stream the file did not change until the stream ended. In 180 recorded sessions (created 2026-09-29 to 2026-11-18;
+  a session does not record the version) each `promptId` and `streamStartMs` pair has exactly one chunk.
+  The `tool_call_update` that names the call's `kind` and `rawInput` and the one with `status` `completed` or `failed`
+  reached the file only when the tool ended, in the one run measured, though their `agentTimestampMs` is earlier;
+  `turn_completed` closes the turn. A user prompt is a `user_message_chunk` there, and its `timestamp` is an integer in
+  seconds, not a string.
+- So the record alone shows a tool call running (its assistant line, no result line yet), and `updates.jsonl`, written
+  after the record's line, showed nothing ahead of it in the runs measured; what it adds is a call's `failed` status:
+  a `tool_result` line is `{type, tool_call_id, content}` with no error mark, and the content of a failing `grep`,
+  `list_dir` or `read_file` opens with `Error: <path>`, which is text rather than a field. A command's content opens
+  with `exit: <code>`. Octoboard's live conversation feed reads the record and takes the failure from the updates; it
+  also keeps what the log shows ahead of the record as pending, for an order not seen here (the TUI, another version).
+- A compaction rewrites `chat_history.jsonl` but leaves `updates.jsonl` as it was: after `auto_compact_completed` the
+  log still holds the chunks and calls of the model calls the record no longer has. A turn cut off mid-turn has no
+  `turn_completed`; the next prompt's `user_message_chunk` follows it.
+- A server-side web search is a `backend_tool_call` line in the record, `{type, kind: {tool_type: "web_search", action:
+  {type, query, sources}, id, status}}`, with no `tool_result`; in the log it is a `tool_call` with `status`
+  `in_progress`, `_meta.backend: true`, the title "Web search:" (no query) and `rawInput` `{variant: "WebSearch",
+  backend: true}`, then a `tool_call_update` `completed` whose `rawOutput` carries the query. Its id is
+  `ws_<uuid>_call-<uuid>-<n>`. The record also holds `reasoning` lines with encrypted content.
+
+The probe left nothing outside its scratch directory and the scratch `GROK_HOME`: no login was touched, the stand-in
+listened on 127.0.0.1 only and was stopped afterwards.
 
 ## Across the three agents
 

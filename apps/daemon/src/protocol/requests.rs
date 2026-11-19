@@ -590,6 +590,35 @@ pub enum RequestBody {
     ReadSessionHistory {
         session: String,
     },
+    /// Starts following a session's conversation on this connection: answered with
+    /// `session_conversation_subscribed`, and the changes of it follow as events until the session
+    /// is unsubscribed or the connection ends. Handled by the connection itself
+    /// (`crate::coordinator::conversation_feed`), which holds the subscriptions.
+    SubscribeSessionConversation {
+        session: String,
+        /// How many of the latest entries the first page holds; 50 when absent, at most 200.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        limit: Option<u32>,
+    },
+    /// Stops following a session's conversation on this connection; answered with `ack`, also for
+    /// a session that was not followed.
+    UnsubscribeSessionConversation {
+        session: String,
+    },
+    /// A page of the entries before `before` of a session this connection follows, answered with
+    /// `session_conversation`.
+    ReadSessionConversation {
+        session: String,
+        /// The `epoch` the client's entries belong to.
+        epoch: u64,
+        /// The `seq` of the earliest entry the client holds: the page ends just before it.
+        before: u64,
+        /// How many entries the page holds at most; 50 when absent, at most 200.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        limit: Option<u32>,
+    },
     /// What removing `project` with its folder moved to the Trash would also remove: the linked
     /// worktrees outside the folder (every one when the folder holds the repository, those bound
     /// to the project's sessions otherwise) and, when the repository outlives the folder, the bound
@@ -1466,6 +1495,9 @@ impl RequestBody {
             | Self::HandoffSession { .. }
             | Self::InspectSessionRecords { .. }
             | Self::ReadSessionHistory { .. }
+            | Self::SubscribeSessionConversation { .. }
+            | Self::UnsubscribeSessionConversation { .. }
+            | Self::ReadSessionConversation { .. }
             | Self::InspectProjectRemoval { .. }
             | Self::InspectSessionBranches { .. }
             | Self::ListProcesses { .. }

@@ -34,6 +34,7 @@ pub(crate) mod collector;
 pub(crate) mod context;
 pub(crate) mod conversation;
 pub(crate) mod default_effort;
+pub(crate) mod feed;
 #[cfg(test)]
 pub(crate) mod fixtures;
 pub(crate) mod history;

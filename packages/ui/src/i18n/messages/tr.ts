@@ -588,6 +588,8 @@ export const tr: Translation<"one" | "other"> = {
   "daemon.conversation_held_in_project": "Bu konuşma zaten {project} projesindeki {session} oturumunda tutuluyor.",
   "daemon.conversation_held_in_console": "Bu konuşma zaten {console} konsolundaki {session} konsol oturumunda tutuluyor.",
   "daemon.conversation_outside_project": "Bu konuşma zaten bu projenin dışındaki bir oturuma ait.",
+  "daemon.conversation_not_followed": "Bu pencere, takip etmediği bir konuşmayı istedi.",
+  "daemon.conversation_subscriptions_exceeded": "Bu pencere aynı anda daha fazla konuşmayı takip edemez.",
   "daemon.relocation_failed.summary": "Konuşma {path} konumuna kopyalanamadı.",
   "daemon.relocation_failed.thread_record.summary": "Konuşma {path} konumuna kopyalandı ancak hedef hesabın konuşma kaydı güncellenemedi.",
   "daemon.relocation_failed.thread_record": "Konuşma {path} konumuna kopyalandı ancak hedef hesabın konuşma kaydı güncellenemedi: {detail}. Oturum önceki hesabında kalır.",

@@ -7,9 +7,10 @@
 //! The session directory is the record; the index names its marker inside it. Grok restores a
 //! session directory missing locally from its remote registry, so a missing one proves nothing.
 //! Its hooks report no path that names the record. How its conversation reads is
-//! [`super::conversation`], and whether a switch carries its last turn on is
-//! [`super::switch_continue`]. A turn cancelled before its first token, which its hooks never
-//! report, is watched for in the terminal title alone (`crate::session::title_interrupt`).
+//! [`super::conversation`] and, as the live feed, [`super::feed`], and whether a switch carries its
+//! last turn on is [`super::switch_continue`]. A turn cancelled before its first token, which its
+//! hooks never report, is watched for in the terminal title alone
+//! (`crate::session::title_interrupt`).
 
 use std::fs::FileType;
 use std::path::{Path, PathBuf};
@@ -21,6 +22,7 @@ use crate::hooks::RecordWatch;
 use crate::providers::grok::{GROK_CONVERSATION_FILE, GROK_SESSION_MARKER, LAYOUT};
 use crate::records::context::{number, Context};
 use crate::records::conversation::Entry;
+use crate::records::feed::FeedReader;
 use crate::records::observed::{text, Observed};
 use crate::records::store::newest_existing;
 use crate::records::RecordStore;
@@ -153,6 +155,18 @@ impl RecordStore for GrokRecords {
 
     fn entries(&self, line: &Value) -> Vec<Entry> {
         super::conversation::entries(line)
+    }
+
+    fn feed_reader(&self) -> Option<Box<dyn FeedReader>> {
+        Some(Box::new(super::feed::GrokFeedReader::default()))
+    }
+
+    /// The updates log beside the chat history. Grok writes both when a model call ends, the log a
+    /// few tens of milliseconds after the history, so in the measured runs it showed nothing ahead
+    /// of the history; it says which calls failed, which the history does not. What it shows
+    /// ahead of the history, should it ever, is pending ([`super::feed`]).
+    fn feed_companion(&self, record: &Path) -> Option<PathBuf> {
+        Some(record.with_file_name(UPDATES_LOG))
     }
 
     /// A `<pasted_content>` wrapper such as Claude Code records is taken off, should a prompt carry

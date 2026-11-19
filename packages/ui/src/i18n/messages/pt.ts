@@ -572,6 +572,8 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "daemon.conversation_held_in_project": "Esta conversa já pertence à sessão {session} em {project}.",
   "daemon.conversation_held_in_console": "Esta conversa já pertence à sessão de console {session} em {console}.",
   "daemon.conversation_outside_project": "Esta conversa já pertence a uma sessão fora deste projeto.",
+  "daemon.conversation_not_followed": "Esta janela pediu uma conversa que não está acompanhando.",
+  "daemon.conversation_subscriptions_exceeded": "Esta janela não pode acompanhar mais conversas ao mesmo tempo.",
   "daemon.relocation_failed.summary": "Não foi possível copiar a conversa para {path}.",
   "daemon.relocation_failed.thread_record.summary": "A conversa foi copiada para {path}, mas não foi possível atualizar o registro da conversa na conta de destino.",
   "daemon.relocation_failed.thread_record": "A conversa foi copiada para {path}, mas não foi possível atualizar o registro da conversa na conta de destino: {detail}. A sessão permanece na conta anterior.",

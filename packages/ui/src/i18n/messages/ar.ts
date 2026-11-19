@@ -573,6 +573,8 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "daemon.conversation_held_in_project": "تحتفظ الجلسة {session} في {project} بهذه المحادثة بالفعل.",
   "daemon.conversation_held_in_console": "تحتفظ جلسة وحدة التحكم {session} في {console} بهذه المحادثة بالفعل.",
   "daemon.conversation_outside_project": "تنتمي هذه المحادثة بالفعل إلى جلسة خارج هذا المشروع.",
+  "daemon.conversation_not_followed": "طلبت هذه النافذة محادثة لا تتابعها.",
+  "daemon.conversation_subscriptions_exceeded": "لا يمكن لهذه النافذة متابعة المزيد من المحادثات في وقت واحد.",
   "daemon.relocation_failed.summary": "تعذر نسخ المحادثة إلى {path}.",
   "daemon.relocation_failed.thread_record.summary": "نُسخت المحادثة إلى {path}، لكن تعذر تحديث سجل المحادثة في الحساب الهدف.",
   "daemon.relocation_failed.thread_record": "نُسخت المحادثة إلى {path}، لكن تعذر تحديث سجل المحادثة في الحساب الهدف: {detail}. تبقى الجلسة على حسابها السابق.",

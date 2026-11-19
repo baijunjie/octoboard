@@ -46,6 +46,7 @@ pub(crate) mod accounts;
 mod compatibility;
 mod compatibility_consumer;
 mod conversation;
+mod feed;
 mod hooks;
 mod login;
 mod mcp_inventory;

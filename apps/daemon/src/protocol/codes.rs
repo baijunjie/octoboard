@@ -71,6 +71,13 @@ pub mod error_code {
     /// wire id, unlike every other code's `agent`, its label) and the `operation`, one of
     /// `sign_in`, `kick`, `reset_credit`, `config_sharing` and `cli_update`.
     pub const PROVIDER_UNSUPPORTED: Code = Code("provider_unsupported");
+    /// A page of a session's conversation was asked for on a connection that does not follow the
+    /// session (`subscribe_session_conversation` first). `params` names the `session`.
+    pub const CONVERSATION_NOT_FOLLOWED: Code = Code("conversation_not_followed");
+    /// A connection already follows as many sessions' conversations as it may (16). `params` has
+    /// the `session` asked for.
+    pub const CONVERSATION_SUBSCRIPTIONS_EXCEEDED: Code =
+        Code("conversation_subscriptions_exceeded");
     /// A launch was asked for while one was already running or already starting for that session.
     /// The client's own double click is the ordinary cause, so it is shown as nothing at all.
     pub const SESSION_ALREADY_RUNNING: Code = Code("session_already_running");

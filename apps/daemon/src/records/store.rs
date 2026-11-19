@@ -17,6 +17,7 @@ use crate::hooks::RecordWatch;
 use crate::protocol::Session;
 use crate::records::context::{Context, Figure};
 use crate::records::conversation::Entry;
+use crate::records::feed::FeedReader;
 use crate::records::locate::{modified, newest, Branch, Locator};
 use crate::records::observed::Observed;
 use crate::records::Stretch;
@@ -276,6 +277,22 @@ pub trait RecordStore: Send + Sync {
     /// as the user's that starts no turn. By default the text as it is.
     fn user_text<'a>(&self, text: &'a str) -> Option<Cow<'a, str>> {
         Some(Cow::Borrowed(text))
+    }
+
+    // -- Live conversation feed -------------------------------------------------------------------
+
+    /// The reader the live conversation feed reads this provider's record with
+    /// (`crate::records::feed`), made for one pass over a conversation from its start. `None` (the
+    /// default) reads the common entries [`Self::entries`] gives, which are none by default.
+    fn feed_reader(&self) -> Option<Box<dyn FeedReader>> {
+        None
+    }
+
+    /// The file beside `record` (the conversation file the feed follows) in which the agent shows
+    /// what it is still producing before the record holds it, read by the feed reader's
+    /// `companion_line`. `None` by default: nothing is shown before the record holds it.
+    fn feed_companion(&self, _record: &Path) -> Option<PathBuf> {
+        None
     }
 
     // -- Watching ---------------------------------------------------------------------------------

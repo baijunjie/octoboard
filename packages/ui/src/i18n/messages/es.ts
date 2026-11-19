@@ -573,6 +573,8 @@ export const es: Translation<"one" | "many" | "other"> = {
   "daemon.conversation_held_in_project": "Esta conversación ya pertenece a la sesión {session} de {project}.",
   "daemon.conversation_held_in_console": "Esta conversación ya pertenece a la sesión de consola {session} de {console}.",
   "daemon.conversation_outside_project": "Esta conversación ya pertenece a una sesión fuera de este proyecto.",
+  "daemon.conversation_not_followed": "Esta ventana pidió una conversación que no está siguiendo.",
+  "daemon.conversation_subscriptions_exceeded": "Esta ventana no puede seguir más conversaciones a la vez.",
   "daemon.relocation_failed.summary": "No se pudo copiar la conversación en {path}.",
   "daemon.relocation_failed.thread_record.summary": "Se copió la conversación en {path}, pero no se pudo actualizar el registro del hilo en la cuenta de destino.",
   "daemon.relocation_failed.thread_record": "Se copió la conversación en {path}, pero no se pudo actualizar el registro del hilo en la cuenta de destino: {detail}. La sesión conserva su cuenta anterior.",

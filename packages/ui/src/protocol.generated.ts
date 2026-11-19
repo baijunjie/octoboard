@@ -1302,6 +1302,47 @@ export type ContentSource = {
 };
 
 /**
+ * One entry of a session's conversation, as the feed publishes it.
+ */
+export type ConversationEntry = {
+  /**
+   * The entry's position in the conversation under the current `epoch`, counted from 0. An
+   * update names the entry it replaces by it.
+   */
+  seq: number,
+  /**
+   * The turn it belongs to, counted from 1: a `user` or `octoboard` entry opens a turn, and
+   * what follows it shares its number. Entries before the first such entry are turn 0.
+   */
+  turn: number,
+  /**
+   * When the record dated it, in milliseconds since the Unix epoch.
+   */
+  at?: number,
+} & ({
+  "kind": "user",
+  text: string,
+}
+  | {
+  "kind": "octoboard",
+  text: string,
+}
+  | {
+  "kind": "assistant",
+  text: string,
+}
+  | {
+  "kind": "tool_call"
+} & ToolCallEntry | {
+  "kind": "todos",
+  items: Array<TodoItem>,
+}
+  | {
+  "kind": "compaction",
+  summary?: string,
+});
+
+/**
  * Where a conversation is held, as `locate_conversation_to_resume` reports it.
  */
 export type ConversationLocation = {
@@ -1856,6 +1897,54 @@ export type Event = {
   session: string,
   messages: Array<HistoryMessage>,
   unavailable?: boolean,
+}
+| {
+  "type": "session_conversation_subscribed",
+  id: string | null,
+  session: string,
+  epoch: number,
+  entries: Array<ConversationEntry>,
+  has_earlier: boolean,
+  pending: Array<PendingEntry>,
+}
+| {
+  "type": "session_conversation",
+  id: string | null,
+  session: string,
+  epoch: number,
+  entries: Array<ConversationEntry>,
+  has_earlier: boolean,
+}
+| {
+  "type": "session_conversation_changed",
+  session: string,
+  epoch: number,
+  /**
+   * Entries added after the last one the client holds, in order.
+   */
+  appended?: Array<ConversationEntry>,
+  /**
+   * Entries the client holds that changed (a tool call's result arrived), each whole and
+   * named by its `seq`.
+   */
+  updated?: Array<ConversationEntry>,
+  /**
+   * The entries the agent is still producing, whole; absent when they did not change, and
+   * empty when there are none now.
+   */
+  pending?: Array<PendingEntry>,
+}
+| {
+  "type": "session_conversation_replaced",
+  session: string,
+  epoch: number,
+  entries: Array<ConversationEntry>,
+  has_earlier: boolean,
+  pending: Array<PendingEntry>,
+}
+| {
+  "type": "session_conversation_ended",
+  session: string,
 }
 | {
   "type": "session_records_inspected",
@@ -3389,6 +3478,42 @@ export type PathLinkView = {
 };
 
 /**
+ * An entry the agent is still producing, shown after the conversation's entries until the
+ * record holds it; it has no position yet.
+ */
+export type PendingEntry = {
+  /**
+   * The turn it belongs to, as for a [`ConversationEntry`].
+   */
+  turn: number,
+  /**
+   * When the record dated it, in milliseconds since the Unix epoch.
+   */
+  at?: number,
+} & ({
+  "kind": "user",
+  text: string,
+}
+  | {
+  "kind": "octoboard",
+  text: string,
+}
+  | {
+  "kind": "assistant",
+  text: string,
+}
+  | {
+  "kind": "tool_call"
+} & ToolCallEntry | {
+  "kind": "todos",
+  items: Array<TodoItem>,
+}
+  | {
+  "kind": "compaction",
+  summary?: string,
+});
+
+/**
  * One value for each registered provider: a map keyed by [`AgentId`] that always holds an entry
  * for every one of them, serialised as `{"<provider id>": …, …}` in the registry's order. Reading
  * one, a key left out is the default value and a key naming no registered provider is ignored.
@@ -4325,6 +4450,34 @@ export type Request = {
   session: string,
 }
   | {
+  "type": "subscribe_session_conversation",
+  session: string,
+  /**
+   * How many of the latest entries the first page holds; 50 when absent, at most 200.
+   */
+  limit?: number,
+}
+  | {
+  "type": "unsubscribe_session_conversation",
+  session: string,
+}
+  | {
+  "type": "read_session_conversation",
+  session: string,
+  /**
+   * The `epoch` the client's entries belong to.
+   */
+  epoch: number,
+  /**
+   * The `seq` of the earliest entry the client holds: the page ends just before it.
+   */
+  before: number,
+  /**
+   * How many entries the page holds at most; 50 when absent, at most 200.
+   */
+  limit?: number,
+}
+  | {
   "type": "inspect_project_removal",
   project: string,
 }
@@ -5236,6 +5389,34 @@ export type RequestBody = {
 | {
   "type": "read_session_history",
   session: string,
+}
+| {
+  "type": "subscribe_session_conversation",
+  session: string,
+  /**
+   * How many of the latest entries the first page holds; 50 when absent, at most 200.
+   */
+  limit?: number,
+}
+| {
+  "type": "unsubscribe_session_conversation",
+  session: string,
+}
+| {
+  "type": "read_session_conversation",
+  session: string,
+  /**
+   * The `epoch` the client's entries belong to.
+   */
+  epoch: number,
+  /**
+   * The `seq` of the earliest entry the client holds: the page ends just before it.
+   */
+  before: number,
+  /**
+   * How many entries the page holds at most; 50 when absent, at most 200.
+   */
+  limit?: number,
 }
 | {
   "type": "inspect_project_removal",
@@ -6572,6 +6753,75 @@ export type TermEvent = {
  * it until a client reports. It is not stored: a later launch sends its own.
  */
 export type TerminalAppearance = "light" | "dark";
+
+/**
+ * One item of a todo list.
+ */
+export type TodoItem = {
+  text: string,
+  /**
+   * The agent's own word: `pending`, `in_progress`, `completed` or `cancelled`.
+   */
+  status: string,
+};
+
+/**
+ * A tool call and, once the record says so, how it ended.
+ */
+export type ToolCallEntry = {
+  /**
+   * The agent's own id of the call.
+   */
+  call_id: string,
+  /**
+   * The tool's name as the agent calls it.
+   */
+  name: string,
+  category: Received<ToolCategory>,
+  /**
+   * One line saying what the call does: the command it runs, the file it reads or edits, what
+   * it searches for.
+   */
+  title?: string,
+  /**
+   * The call's input as the agent wrote it, with each string longer than 16 KiB cut.
+   */
+  input: unknown,
+  /**
+   * Whether a string of `input` was cut.
+   */
+  input_truncated?: boolean,
+  /**
+   * The files the call changed, each as the agent spells it: not checked, and possibly relative
+   * to the session's working directory. Empty for a call that changed none.
+   */
+  paths: Array<string>,
+  status: Received<ToolStatus>,
+  /**
+   * What the call gave back, its first and last 8 KiB when it is longer.
+   */
+  output?: string,
+  /**
+   * Whether `output` was cut.
+   */
+  output_truncated?: boolean,
+  /**
+   * The exit code of a command.
+   */
+  exit_code?: number,
+};
+
+/**
+ * What kind of thing a tool call does, whichever agent made it. A value a client does not know
+ * reads as `other`.
+ */
+export type ToolCategory = "command" | "file_edit" | "file_read" | "search" | "web" | "mcp" | "subagent" | "other";
+
+/**
+ * Where a tool call stands. A value a client does not know reads as `running`: a later daemon of
+ * the same generation may add a state in which the call has not ended (waiting for approval).
+ */
+export type ToolStatus = "running" | "completed" | "failed" | "declined";
 
 /**
  * Why a tree cannot be kept.

@@ -573,6 +573,8 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "daemon.conversation_held_in_project": "Этот разговор уже находится в сеансе {session} проекта {project}.",
   "daemon.conversation_held_in_console": "Этот разговор уже находится в сеансе консоли {session} в {console}.",
   "daemon.conversation_outside_project": "Этот разговор уже принадлежит сеансу за пределами этого проекта.",
+  "daemon.conversation_not_followed": "Это окно запросило разговор, который оно не отслеживает.",
+  "daemon.conversation_subscriptions_exceeded": "В этом окне нельзя отслеживать больше разговоров одновременно.",
   "daemon.relocation_failed.summary": "Не удалось скопировать разговор в {path}.",
   "daemon.relocation_failed.thread_record.summary": "Разговор скопирован в {path}, но обновить запись потока в целевой учётной записи не удалось.",
   "daemon.relocation_failed.thread_record": "Разговор скопирован в {path}, но обновить запись потока в целевой учётной записи не удалось: {detail}. Сеанс остаётся на прежней учётной записи.",

@@ -13,8 +13,11 @@ use tokio::sync::{broadcast, mpsc};
 
 use crate::browse::budget;
 use crate::browse::lane::{Frame, Lane};
+use crate::coordinator::conversation_feed;
 use crate::coordinator::Followup;
-use crate::protocol::{BrowseRequest, Event, Request, RequestBody, BROWSE_REQUEST_TYPES};
+use crate::protocol::{
+    BrowseRequest, Event, Request, RequestBody, BROWSE_REQUEST_TYPES, CONVERSATION_REQUEST_TYPES,
+};
 use crate::server::access::Admission;
 use crate::session::pasted_image::upload::Uploads;
 use crate::state::{AppState, Stamp};
@@ -89,6 +92,9 @@ async fn handle_control(
         WRITE_DEADLINE,
         heartbeat.interval,
     ));
+
+    // The conversations this connection follows live with it: dropped, they are unsubscribed.
+    let conversations = conversation_feed::Connection::start(state.clone(), outbound.clone());
 
     // Subscribed before anything is collected, so that a broadcast between collecting the state and
     // listening for changes is not lost. A repeat is harmless: the records are whole and the
@@ -183,6 +189,17 @@ async fn handle_control(
                     }
                     None => {}
                 }
+                match conversation_request(&text, kind.as_deref()) {
+                    Some(Ok(request)) => {
+                        conversations.submit(request.id, request.body).await;
+                        continue;
+                    }
+                    Some(Err(detail)) => {
+                        let _ = outbound.send(Event::unreadable_request(&detail)).await;
+                        continue;
+                    }
+                    None => {}
+                }
                 match upload_request(&text, kind.as_deref()) {
                     Some(UploadFrame::Serve(request)) => {
                         serve_upload(&state, &uploads, &outbound, *request).await;
@@ -223,6 +240,7 @@ async fn handle_control(
     }
 
     forwarder.abort();
+    drop(conversations);
     lane.close();
     drop(lane);
     drop(outbound);
@@ -319,6 +337,15 @@ fn browse_request(text: &str, kind: Option<&str>) -> Option<Result<BrowseRequest
         return None;
     }
     Some(serde_json::from_str::<BrowseRequest>(text).map_err(|err| err.to_string()))
+}
+
+/// The frame as a conversation request, when its `type` (`kind`) is one, as [`browse_request`]
+/// does for a browse one.
+fn conversation_request(text: &str, kind: Option<&str>) -> Option<Result<Request, String>> {
+    if !CONVERSATION_REQUEST_TYPES.contains(&kind?) {
+        return None;
+    }
+    Some(serde_json::from_str::<Request>(text).map_err(|err| err.to_string()))
 }
 
 async fn submit_browse(state: &Arc<AppState>, lane: &Arc<Lane>, request: BrowseRequest) {
@@ -695,6 +722,50 @@ mod tests {
         ) -> std::task::Poll<Result<(), Self::Error>> {
             std::task::Poll::Ready(Ok(()))
         }
+    }
+
+    /// A frame as the connection's loop reads it for a conversation request.
+    fn conversation_frame(text: &str) -> Option<Result<Request, String>> {
+        conversation_request(text, frame_type(text).as_deref())
+    }
+
+    /// The three conversation requests are served by the connection itself, so they are picked out
+    /// of the frames by their type; everything else, including a frame that is no request at all,
+    /// goes the usual way, and a conversation request that does not read is answered as unreadable.
+    #[test]
+    fn conversation_requests_are_picked_out_of_the_frames_by_type() {
+        let picked = conversation_frame(
+            r#"{"type":"subscribe_session_conversation","id":"a","session":"s","limit":5}"#,
+        );
+        let Some(Ok(request)) = picked else {
+            panic!("a conversation request");
+        };
+        assert_eq!(request.id.as_deref(), Some("a"));
+        assert!(matches!(
+            request.body,
+            crate::protocol::RequestBody::SubscribeSessionConversation { limit: Some(5), .. }
+        ));
+        for frame in [
+            r#"{"type":"unsubscribe_session_conversation","session":"s"}"#,
+            r#"{"type":"read_session_conversation","session":"s","epoch":1,"before":2}"#,
+        ] {
+            assert!(matches!(conversation_frame(frame), Some(Ok(_))), "{frame}");
+        }
+        for frame in [
+            r#"{"type":"read_session_history","session":"s"}"#,
+            r#"{"type":"list_project_dir"}"#,
+            r#"{"session":"s"}"#,
+            r#"{"type":5}"#,
+            "not json",
+            "",
+        ] {
+            assert!(conversation_frame(frame).is_none(), "{frame}");
+        }
+        // Of a conversation type but not a readable request: reported, not passed on.
+        assert!(matches!(
+            conversation_frame(r#"{"type":"read_session_conversation","session":"s"}"#),
+            Some(Err(_))
+        ));
     }
 
     #[tokio::test]

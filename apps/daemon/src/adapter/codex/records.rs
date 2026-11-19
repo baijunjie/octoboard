@@ -27,6 +27,7 @@ use crate::providers::codex::{
 };
 use crate::records::context::{number, Context, Figure};
 use crate::records::conversation::Entry;
+use crate::records::feed::FeedReader;
 use crate::records::locate::{records_dir, walk_records, Step};
 use crate::records::observed::{text, Observed};
 use crate::records::removal::Resolved;
@@ -334,6 +335,11 @@ impl RecordStore for CodexRecords {
 
     fn entries(&self, line: &Value) -> Vec<Entry> {
         super::conversation::entries(line)
+    }
+
+    /// The common entries, and the tool calls the rollout holds.
+    fn feed_reader(&self) -> Option<Box<dyn FeedReader>> {
+        Some(Box::new(super::feed::CodexFeedReader::default()))
     }
 
     /// A progress note the model wrote on the way, which is not its answer.

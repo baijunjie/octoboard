@@ -1,0 +1,62 @@
+{"type":"system","content":"Invented system prompt."}
+{"type":"user","content":[{"type":"text","text":"<user_info>\nOS Version: macos\nShell: /bin/zsh\nWorkspace Path: /work/app\n</user_info>"}],"synthetic_reason":"compaction_meta"}
+{"type":"user","content":[{"type":"text","text":"<user_query>\nInvented request 1.\n</user_query>"}]}
+{"type":"user","content":[{"type":"text","text":"This session is being continued from a previous conversation that ran out of context. Invented summary of the earlier work."}],"synthetic_reason":"compaction_meta"}
+{"type":"user","content":[{"type":"text","text":"<system-reminder>\nInvented reminder.\n</system-reminder>"}],"synthetic_reason":"system_reminder"}
+{"type":"user","content":[{"type":"text","text":"<system-reminder>\nInvented reminder.\n</system-reminder>"}],"synthetic_reason":"system_reminder"}
+{"type":"reasoning","id":"rs_3460db34-5424-3e55-aa00-d49ab2c45c25","summary":[{"type":"summary_text","text":"invented"}],"encrypted_content":"AAAA","status":"completed"}
+{"type":"assistant","content":"Invented reply 1.","tool_calls":[{"id":"call-9a734751-5ab1-5da4-dcc1-aad55078f213-0","name":"run_terminal_command","arguments":"{\"command\":\"invented-4447\",\"description\":\"invented\"}"}],"model_id":"grok-4.7-build","model_fingerprint":"fp_2044e4afd21ec04c","reasoning_effort":"high"}
+{"type":"tool_result","tool_call_id":"call-9a734751-5ab1-5da4-dcc1-aad55078f213-0","content":"exit: 0\ninvented output\n"}
+{"type":"user","content":[{"type":"text","text":"<system-reminder>\nInvented reminder.\n</system-reminder>"}],"synthetic_reason":"system_reminder"}
+{"type":"reasoning","id":"rs_b1dd5112-d4e3-11ea-bb24-be96d2cfaa7e","summary":[{"type":"summary_text","text":"invented"}],"encrypted_content":"AAAA","status":"completed"}
+{"type":"assistant","content":"Invented reply 2.","tool_calls":[{"id":"call-2342f3cb-6bbf-386b-d12c-213301afe581-1","name":"read_file","arguments":"{\"target_file\":\"src/d308.rs\",\"limit\":40}"},{"id":"call-4794e5fa-9bee-391e-f29d-718272aaf306-2","name":"read_file","arguments":"{\"target_file\":\"src/d308.rs\",\"offset\":170}"}],"model_id":"grok-4.7-build","model_fingerprint":"fp_2044e4afd21ec04c","reasoning_effort":"high"}
+{"type":"tool_result","tool_call_id":"call-4794e5fa-9bee-391e-f29d-718272aaf306-2","content":"1→invented line\n2→invented line\n"}
+{"type":"tool_result","tool_call_id":"call-2342f3cb-6bbf-386b-d12c-213301afe581-1","content":"1→invented line\n2→invented line\n"}
+{"type":"reasoning","id":"rs_60bcad66-8d21-81b1-8453-1c3aa0c698e1","summary":[{"type":"summary_text","text":"invented"}],"encrypted_content":"AAAA","status":"completed"}
+{"type":"assistant","content":"","tool_calls":[{"id":"call-1375d1d3-3649-52bd-8354-2c88f37825c1-3","name":"run_terminal_command","arguments":"{\"command\":\"invented-421e\",\"description\":\"invented\"}"}],"model_id":"grok-4.7-build","model_fingerprint":"fp_2044e4afd21ec04c","reasoning_effort":"high"}
+{"type":"tool_result","tool_call_id":"call-1375d1d3-3649-52bd-8354-2c88f37825c1-3","content":"exit: 0\ninvented output\n"}
+{"type":"reasoning","id":"rs_32a1900d-41f9-1c03-be3b-6785f1ec3531","summary":[{"type":"summary_text","text":"invented"}],"encrypted_content":"AAAA","status":"completed"}
+{"type":"assistant","content":"","tool_calls":[{"id":"call-05f2d50d-0767-0e5c-e725-a408e735b23b-4","name":"run_terminal_command","arguments":"{\"command\":\"invented-9fa7\",\"description\":\"invented\"}"}],"model_id":"grok-4.7-build","model_fingerprint":"fp_2044e4afd21ec04c","reasoning_effort":"high"}
+{"type":"tool_result","tool_call_id":"call-05f2d50d-0767-0e5c-e725-a408e735b23b-4","content":"exit: 0\ninvented output\n"}
+{"type":"reasoning","id":"rs_ba294448-25ca-3f5d-8796-91a1da4747aa","summary":[{"type":"summary_text","text":"invented"}],"encrypted_content":"AAAA","status":"completed"}
+{"type":"assistant","content":"","tool_calls":[{"id":"call-8a402bc5-0738-4880-dee4-d8ab5410296a-5","name":"search_replace","arguments":"{\"file_path\":\"src/d308.rs\",\"old_string\":\"invented\",\"new_string\":\"invented\"}"},{"id":"call-4c000bf7-0738-4880-fbc1-a0df7908330a-6","name":"search_tool","arguments":"{\"query\":\"invented\",\"limit\":3}"}],"model_id":"grok-4.7-build","model_fingerprint":"fp_2044e4afd21ec04c","reasoning_effort":"high"}
+{"type":"tool_result","tool_call_id":"call-4c000bf7-0738-4880-fbc1-a0df7908330a-6","content":"Invented result."}
+{"type":"tool_result","tool_call_id":"call-8a402bc5-0738-4880-dee4-d8ab5410296a-5","content":"Invented result."}
+{"type":"reasoning","id":"rs_2153a058-10bf-9787-c808-d3a24e1eb48c","summary":[{"type":"summary_text","text":"invented"}],"encrypted_content":"AAAA","status":"completed"}
+{"type":"assistant","content":"","tool_calls":[{"id":"call-5ad38adb-3c71-68be-f2b8-323b3b52b3b2-7","name":"use_tool","arguments":"{\"tool_name\":\"docs__search\",\"tool_input\":{\"status\":\"done\",\"open_items\":[],\"owner_items\":[\"invented\",\"invented\"],\"summary\":\"invented\"}}"}],"model_id":"grok-4.7-build","model_fingerprint":"fp_2044e4afd21ec04c","reasoning_effort":"high"}
+{"type":"tool_result","tool_call_id":"call-5ad38adb-3c71-68be-f2b8-323b3b52b3b2-7","content":"Invented result."}
+{"type":"system","content":"Invented system prompt."}
+{"type":"user","content":[{"type":"text","text":"<user_info>\nOS Version: macos\nShell: /bin/zsh\nWorkspace Path: /work/app\n</user_info>"}]}
+{"type":"user","content":[{"type":"text","text":"<system-reminder>\nInvented reminder.\n</system-reminder>"}],"synthetic_reason":"system_reminder"}
+{"type":"user","content":[{"type":"text","text":"<system-reminder>\nInvented reminder.\n</system-reminder>"}],"synthetic_reason":"system_reminder"}
+{"type":"user","content":[{"type":"text","text":"<user_query>\nInvented request 2.\n</user_query>"}],"prompt_index":0}
+{"type":"reasoning","id":"rs_8e229b95-305e-405b-9764-35ee3f2a1015","summary":[{"type":"summary_text","text":"invented"}],"encrypted_content":"AAAA","status":"completed"}
+{"type":"assistant","content":"Invented reply 7.","tool_calls":[{"id":"call-9ca20733-5ae0-45a3-4b69-cdb45c535107-0","name":"run_terminal_command","arguments":"{\"command\":\"invented-c32f\",\"description\":\"invented\"}"}],"model_id":"grok-4.7-build","model_fingerprint":"fp_2044e4afd21ec04c","reasoning_effort":"medium"}
+{"type":"tool_result","tool_call_id":"call-9ca20733-5ae0-45a3-4b69-cdb45c535107-0","content":"Invented result."}
+{"type":"system","content":"Invented system prompt."}
+{"type":"user","content":[{"type":"text","text":"<user_info>\nOS Version: macos\nShell: /bin/zsh\nWorkspace Path: /work/app\n</user_info>"}]}
+{"type":"user","content":[{"type":"text","text":"<system-reminder>\nInvented reminder.\n</system-reminder>"}],"synthetic_reason":"system_reminder"}
+{"type":"user","content":[{"type":"text","text":"<system-reminder>\nInvented reminder.\n</system-reminder>"}],"synthetic_reason":"system_reminder"}
+{"type":"user","content":[{"type":"text","text":"<user_query>\nInvented request 3.\n</user_query>"}],"prompt_index":0}
+{"type":"reasoning","id":"rs_d7551225-7164-9611-b105-0cbebf696ebd","summary":[{"type":"summary_text","text":"invented"}],"encrypted_content":"AAAA","status":"completed"}
+{"type":"assistant","content":"Invented reply 8.","tool_calls":[{"id":"call-0231a81a-ff25-4001-e047-7ed1577ccc46-0","name":"read_file","arguments":"{\"target_file\":\"src/1aa3.rs\"}"}],"model_id":"grok-4.7-build","model_fingerprint":"fp_2044e4afd21ec04c","reasoning_effort":"high"}
+{"type":"tool_result","tool_call_id":"call-0231a81a-ff25-4001-e047-7ed1577ccc46-0","content":"1→invented line\n2→invented line\n"}
+{"type":"reasoning","id":"rs_14f17374-3ba3-58ad-bb0a-da33a3e05bee","summary":[{"type":"summary_text","text":"invented"}],"encrypted_content":"AAAA","status":"completed"}
+{"type":"assistant","content":"","tool_calls":[{"id":"call-605efd1c-a5a8-53ca-97d2-545a65d4d241-1","name":"search_replace","arguments":"{\"file_path\":\"src/1aa3.rs\",\"old_string\":\"invented\",\"new_string\":\"invented\"}"}],"model_id":"grok-4.7-build","model_fingerprint":"fp_2044e4afd21ec04c","reasoning_effort":"high"}
+{"type":"tool_result","tool_call_id":"call-605efd1c-a5a8-53ca-97d2-545a65d4d241-1","content":"Invented result."}
+{"type":"reasoning","id":"rs_a6ba04da-1ca8-2d68-9624-e21bedb2da95","summary":[{"type":"summary_text","text":"invented"}],"encrypted_content":"AAAA","status":"completed"}
+{"type":"assistant","content":"Invented reply 9.","tool_calls":[{"id":"call-e0d33d07-5b42-0bd3-acba-96e0a8206c73-2","name":"search_replace","arguments":"{\"file_path\":\"src/1aa3.rs\",\"old_string\":\"invented\",\"new_string\":\"invented\"}"}],"model_id":"grok-4.7-build","model_fingerprint":"fp_2044e4afd21ec04c","reasoning_effort":"high"}
+{"type":"tool_result","tool_call_id":"call-e0d33d07-5b42-0bd3-acba-96e0a8206c73-2","content":"Invented result."}
+{"type":"reasoning","id":"rs_c5ca73dc-143f-0c5b-c352-8a7cc2ad5d1f","summary":[{"type":"summary_text","text":"invented"}],"encrypted_content":"AAAA","status":"completed"}
+{"type":"assistant","content":"Invented reply 10.","model_id":"grok-4.7-build","model_fingerprint":"fp_2044e4afd21ec04c","reasoning_effort":"high"}
+{"type":"user","content":[{"type":"text","text":"<system-reminder>\nInvented reminder.\n</system-reminder>"}],"synthetic_reason":"task_completed","prompt_index":8}
+{"type":"reasoning","id":"rs_a070d033-5e17-41da-8517-48cb1ab20400","summary":[],"encrypted_content":"AAAA","status":"completed"}
+{"type":"assistant","content":"","tool_calls":[{"id":"call-771584e0-42a3-4201-11a5-6752076ddd9b-172","name":"get_command_or_subagent_output","arguments":"{\"task_ids\":[\"57c5fc8c-8a3e-7963-5d22-165f549d6fd5\"],\"timeout_ms\":480000}"},{"id":"call-121465b7-24b9-4201-67a5-0780587abc1f-173","name":"todo_write","arguments":"{\"todos\":[{\"id\":\"nav\",\"content\":\"invented\",\"status\":\"completed\"},{\"id\":\"dddedbc\",\"content\":\"invented\",\"status\":\"completed\"},{\"id\":\"diff\",\"content\":\"invented\",\"status\":\"completed\"},{\"id\":\"dcdfef\",\"content\":\"invented\",\"status\":\"completed\"},{\"id\":\"ebcbbd\",\"content\":\"invented\",\"status\":\"in_progress\"}],\"merge\":true}"}],"model_id":"grok-4.7-build","model_fingerprint":"fp_2044e4afd21ec04c","reasoning_effort":"medium"}
+{"type":"tool_result","tool_call_id":"call-121465b7-24b9-4201-67a5-0780587abc1f-173","content":"Invented result."}
+{"type":"tool_result","tool_call_id":"call-771584e0-42a3-4201-11a5-6752076ddd9b-172","content":"Invented result."}
+{"type":"reasoning","id":"rs_4b1efa45-840a-9454-9299-07d652356633","summary":[{"type":"summary_text","text":"invented"}],"encrypted_content":"AAAA","status":"completed"}
+{"type":"assistant","content":"","tool_calls":[{"id":"call-f3556545-a340-101c-511d-0ba9cca86c82-177","name":"run_terminal_command","arguments":"{\"command\":\"invented-b943\",\"description\":\"invented\"}"},{"id":"call-a7111951-d723-442a-331a-3af8cda42c50-178","name":"todo_write","arguments":"{\"todos\":[{\"id\":\"ebcbbd\",\"content\":\"invented\",\"status\":\"completed\"}],\"merge\":true}"}],"model_id":"grok-4.7-build","model_fingerprint":"fp_2044e4afd21ec04c","reasoning_effort":"medium"}
+{"type":"tool_result","tool_call_id":"call-a7111951-d723-442a-331a-3af8cda42c50-178","content":"Invented result."}
+{"type":"tool_result","tool_call_id":"call-f3556545-a340-101c-511d-0ba9cca86c82-177","content":"exit: 0\ninvented output\n"}
+{"type":"user","content":[{"type":"text","text":"<user_query>\nInvented request 4.\n</user_query>"}],"prompt_index":0}
+{"type":"backend_tool_call","kind":{"tool_type":"web_search","action":{"type":"search","query":"invented query","sources":[{"type":"url","url":"https://example.com/0"},{"type":"url","url":"https://example.com/1"},{"type":"url","url":"https://example.com/2"},{"type":"url","url":"https://example.com/3"},{"type":"url","url":"https://example.com/4"}]},"id":"ws_bc52ab33-bdc1-9703-da0a-47459d937d0f_call-43b50cdd-7503-8b33-d8a5-c438a2a46028-1","status":"completed"}}

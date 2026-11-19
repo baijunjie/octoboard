@@ -604,6 +604,8 @@ export const zhCN: Translation<"other"> = {
   "daemon.conversation_held_in_project": "此对话已属于项目 {project} 中的会话 {session}。",
   "daemon.conversation_held_in_console": "此对话已属于控制台 {console} 中的控制台会话 {session}。",
   "daemon.conversation_outside_project": "此对话已属于本项目之外的会话。",
+  "daemon.conversation_not_followed": "此窗口请求了未关注的对话。",
+  "daemon.conversation_subscriptions_exceeded": "此窗口无法再同时关注更多对话。",
   "daemon.relocation_failed.summary": "无法将对话复制到 {path}。",
   "daemon.relocation_failed.thread_record.summary": "对话已复制到 {path}，但无法更新目标账户中该会话线程的记录。",
   "daemon.relocation_failed.thread_record": "对话已复制到 {path}，但无法更新目标账户中该会话线程的记录：{detail}。会话仍在原账户上。",

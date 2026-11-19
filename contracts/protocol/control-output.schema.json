@@ -2407,6 +2407,144 @@
       ],
       "description": "What a file body was actually read from, so a reply identifies the content it carries."
     },
+    "ConversationBody": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "user"
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "description": "What the user typed (a slash command as typed, `/name args`)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "octoboard"
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "description": "A message Octoboard wrote into the session: a brief, a parent session's instruction, a\nreport, shared information, a notice."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "assistant"
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "description": "Text the agent wrote: a progress note on the way or its answer."
+        },
+        {
+          "$ref": "#/$defs/ToolCallEntry",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "tool_call"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "A tool the agent called."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TodoItem"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "todos"
+            }
+          },
+          "required": [
+            "kind",
+            "items"
+          ],
+          "description": "The agent's todo list as it stands after this entry, whole."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "compaction"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "The agent compacted its context here, with the summary it wrote when the record keeps one."
+        }
+      ],
+      "description": "The kind of an entry and its own fields. A client ignores an entry whose `kind` it does not\nknow: later daemons of the same generation may add kinds."
+    },
+    "ConversationEntry": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "The entry's position in the conversation under the current `epoch`, counted from 0. An\nupdate names the entry it replaces by it."
+        },
+        "turn": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "description": "The turn it belongs to, counted from 1: a `user` or `octoboard` entry opens a turn, and\nwhat follows it shares its number. Entries before the first such entry are turn 0."
+        },
+        "at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When the record dated it, in milliseconds since the Unix epoch."
+        }
+      },
+      "required": [
+        "seq",
+        "turn"
+      ],
+      "allOf": [
+        {
+          "$ref": "#/$defs/ConversationBody"
+        }
+      ],
+      "description": "One entry of a session's conversation, as the feed publishes it."
+    },
     "ConversationLocation": {
       "oneOf": [
         {
@@ -3514,6 +3652,197 @@
             "session",
             "messages"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "session": {
+              "type": "string"
+            },
+            "epoch": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConversationEntry"
+              }
+            },
+            "has_earlier": {
+              "type": "boolean"
+            },
+            "pending": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PendingEntry"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "session_conversation_subscribed"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "session",
+            "epoch",
+            "entries",
+            "has_earlier",
+            "pending"
+          ],
+          "description": "The answer to `subscribe_session_conversation`: the latest page of the conversation, and the\nentries the agent is still producing."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "session": {
+              "type": "string"
+            },
+            "epoch": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConversationEntry"
+              }
+            },
+            "has_earlier": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "session_conversation"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "session",
+            "epoch",
+            "entries",
+            "has_earlier"
+          ],
+          "description": "The answer to `read_session_conversation`: the page before the one the client holds."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "epoch": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "appended": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConversationEntry"
+              },
+              "description": "Entries added after the last one the client holds, in order."
+            },
+            "updated": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConversationEntry"
+              },
+              "description": "Entries the client holds that changed (a tool call's result arrived), each whole and\nnamed by its `seq`."
+            },
+            "pending": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PendingEntry"
+              },
+              "description": "The entries the agent is still producing, whole; absent when they did not change, and\nempty when there are none now."
+            },
+            "type": {
+              "type": "string",
+              "const": "session_conversation_changed"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "epoch"
+          ],
+          "description": "What changed in a conversation the connection follows. Sent only to the connections that\nsubscribed to the session, never broadcast."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "epoch": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConversationEntry"
+              }
+            },
+            "has_earlier": {
+              "type": "boolean"
+            },
+            "pending": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PendingEntry"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "session_conversation_replaced"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "epoch",
+            "entries",
+            "has_earlier",
+            "pending"
+          ],
+          "description": "The conversation as the connection follows it was rewritten (the agent went back to an\nearlier point, compacted, or the record was replaced): the client drops what it holds of\nthe session and takes this as the latest page. Sent as `session_conversation_changed` is."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "session_conversation_ended"
+            }
+          },
+          "required": [
+            "type",
+            "session"
+          ],
+          "description": "The daemon stopped following a conversation this connection follows: the session was\ndeleted, or the daemon failed while reading it. A read error is no end: it is tried again\nat the next look, or, after a first read that failed part-way, once the file has changed.\nThe subscription is gone, nothing more will be sent for the session, and the client may\nsubscribe again. Sent as `session_conversation_changed` is, but never for the connection's\nown `unsubscribe_session_conversation`."
         },
         {
           "type": "object",
@@ -8092,6 +8421,31 @@
       ],
       "description": "A file in the project, as `read_project_file` names it: the file a path link names, or the one\na directory link shows."
     },
+    "PendingEntry": {
+      "type": "object",
+      "properties": {
+        "turn": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "description": "The turn it belongs to, as for a [`ConversationEntry`]."
+        },
+        "at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When the record dated it, in milliseconds since the Unix epoch."
+        }
+      },
+      "required": [
+        "turn"
+      ],
+      "allOf": [
+        {
+          "$ref": "#/$defs/ConversationBody"
+        }
+      ],
+      "description": "An entry the agent is still producing, shown after the conversation's entries until the\nrecord holds it; it has no position yet."
+    },
     "PlatformConnector": {
       "type": "object",
       "properties": {
@@ -10241,6 +10595,154 @@
         "label"
       ],
       "description": "One column of a [`DataTable`]."
+    },
+    "TodoItem": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "description": "The agent's own word: `pending`, `in_progress`, `completed` or `cancelled`."
+        }
+      },
+      "required": [
+        "text",
+        "status"
+      ],
+      "description": "One item of a todo list."
+    },
+    "ToolCallEntry": {
+      "type": "object",
+      "properties": {
+        "call_id": {
+          "type": "string",
+          "description": "The agent's own id of the call."
+        },
+        "name": {
+          "type": "string",
+          "description": "The tool's name as the agent calls it."
+        },
+        "category": {
+          "$ref": "#/$defs/ToolCategory"
+        },
+        "title": {
+          "type": "string",
+          "description": "One line saying what the call does: the command it runs, the file it reads or edits, what\nit searches for."
+        },
+        "input": {
+          "description": "The call's input as the agent wrote it, with each string longer than 16 KiB cut."
+        },
+        "input_truncated": {
+          "type": "boolean",
+          "description": "Whether a string of `input` was cut."
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The files the call changed, each as the agent spells it: not checked, and possibly relative\nto the session's working directory. Empty for a call that changed none."
+        },
+        "status": {
+          "$ref": "#/$defs/ToolStatus"
+        },
+        "output": {
+          "type": "string",
+          "description": "What the call gave back, its first and last 8 KiB when it is longer."
+        },
+        "output_truncated": {
+          "type": "boolean",
+          "description": "Whether `output` was cut."
+        },
+        "exit_code": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The exit code of a command."
+        }
+      },
+      "required": [
+        "call_id",
+        "name",
+        "category",
+        "input",
+        "paths",
+        "status"
+      ],
+      "description": "A tool call and, once the record says so, how it ended."
+    },
+    "ToolCategory": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "other"
+          ]
+        },
+        {
+          "type": "string",
+          "const": "command",
+          "description": "Runs a shell command."
+        },
+        {
+          "type": "string",
+          "const": "file_edit",
+          "description": "Writes or edits files."
+        },
+        {
+          "type": "string",
+          "const": "file_read",
+          "description": "Reads a file or views an image."
+        },
+        {
+          "type": "string",
+          "const": "search",
+          "description": "Searches file names or contents."
+        },
+        {
+          "type": "string",
+          "const": "web",
+          "description": "Fetches or searches the web."
+        },
+        {
+          "type": "string",
+          "const": "mcp",
+          "description": "Calls a tool of an MCP server."
+        },
+        {
+          "type": "string",
+          "const": "subagent",
+          "description": "Starts or talks to a subagent."
+        }
+      ],
+      "description": "What kind of thing a tool call does, whichever agent made it. A value a client does not know\nreads as `other`."
+    },
+    "ToolStatus": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "completed"
+          ]
+        },
+        {
+          "type": "string",
+          "const": "running",
+          "description": "Called, with no result recorded yet."
+        },
+        {
+          "type": "string",
+          "const": "failed",
+          "description": "It ended in an error."
+        },
+        {
+          "type": "string",
+          "const": "declined",
+          "description": "It was not allowed to run: the user declined it, or a permission rule did."
+        }
+      ],
+      "description": "Where a tool call stands. A value a client does not know reads as `running`: a later daemon of\nthe same generation may add a state in which the call has not ended (waiting for approval)."
     },
     "UnkeepableReason": {
       "oneOf": [

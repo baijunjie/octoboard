@@ -45,6 +45,7 @@ impl AppState {
         self.forget_handoff_package(id);
         self.forget_request_hand(id);
         self.forget_ended_turn(id);
+        self.conversation_feeds.forget(id);
     }
 
     /// Drops what is held for a session whose process has left.

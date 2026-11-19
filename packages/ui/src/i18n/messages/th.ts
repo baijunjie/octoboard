@@ -583,6 +583,8 @@ export const th: Translation<"other"> = {
   "daemon.conversation_held_in_project": "การสนทนานี้อยู่กับเซสชัน {session} ใน {project} แล้ว",
   "daemon.conversation_held_in_console": "การสนทนานี้อยู่กับเซสชันคอนโซล {session} ใน {console} แล้ว",
   "daemon.conversation_outside_project": "การสนทนานี้เป็นของเซสชันนอกโปรเจ็กต์นี้แล้ว",
+  "daemon.conversation_not_followed": "หน้าต่างนี้ขอการสนทนาที่ไม่ได้ติดตามอยู่",
+  "daemon.conversation_subscriptions_exceeded": "หน้าต่างนี้ติดตามการสนทนาพร้อมกันเพิ่มอีกไม่ได้",
   "daemon.relocation_failed.summary": "คัดลอกการสนทนาไปยัง {path} ไม่ได้",
   "daemon.relocation_failed.thread_record.summary": "คัดลอกการสนทนาไปยัง {path} แล้ว แต่อัปเดตระเบียนเธรดในบัญชีปลายทางไม่ได้",
   "daemon.relocation_failed.thread_record": "คัดลอกการสนทนาไปยัง {path} แล้ว แต่อัปเดตระเบียนเธรดในบัญชีปลายทางไม่ได้: {detail} เซสชันยังอยู่ในบัญชีเดิม",

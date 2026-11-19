@@ -573,6 +573,8 @@ export const id: Translation<"other"> = {
   "daemon.conversation_held_in_project": "Percakapan ini sudah dipegang sesi {session} di {project}.",
   "daemon.conversation_held_in_console": "Percakapan ini sudah dipegang sesi konsol {session} di {console}.",
   "daemon.conversation_outside_project": "Percakapan ini sudah dimiliki sesi di luar proyek ini.",
+  "daemon.conversation_not_followed": "Jendela ini meminta percakapan yang tidak diikutinya.",
+  "daemon.conversation_subscriptions_exceeded": "Jendela ini tidak dapat mengikuti lebih banyak percakapan sekaligus.",
   "daemon.relocation_failed.summary": "Percakapan tidak dapat disalin ke {path}.",
   "daemon.relocation_failed.thread_record.summary": "Percakapan disalin ke {path}, tetapi catatan utas di akun tujuan tidak dapat diperbarui.",
   "daemon.relocation_failed.thread_record": "Percakapan disalin ke {path}, tetapi catatan utas di akun tujuan tidak dapat diperbarui: {detail}. Sesi tetap menggunakan akun sebelumnya.",

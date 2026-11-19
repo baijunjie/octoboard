@@ -33,6 +33,9 @@ Where to start, by question:
 - [Session titles](product/session-titles.md) — created names, displayed names and how a title follows the agent's.
 - [Session context size](product/session-context.md) — how the context size is measured, refreshed and shown as a chip.
 - [Session history](product/session-history.md) — the read-only history shown for an archived session.
+- [Live conversation feed](product/live-conversation-feed.md) — what a client following one session's conversation
+  receives: entry kinds, tool calls, pages, live changes and pending entries, replacement and end, limits, and what each
+  agent supplies.
 - [Archiving and resuming sessions](product/archiving-and-resuming-sessions.md) — how archiving or an interruption ends
   a session's process and how an interrupted or archived session comes back.
 - [Background processes](product/background-processes.md) — processes started by agents, automatic cleanup, keeping

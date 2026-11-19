@@ -77,7 +77,13 @@ pub(super) fn entries(line: &Value) -> Vec<Entry> {
 
 fn grok_call(call: &Value) -> Option<Entry> {
     let arguments: Value = serde_json::from_str(call.get("arguments")?.as_str()?).ok()?;
-    match call.get("name")?.as_str()? {
+    call_entry(call.get("name")?.as_str()?, &arguments)
+}
+
+/// What the call of tool `name` with `arguments` says about the conversation: a todo list, or the
+/// file it changed.
+pub(super) fn call_entry(name: &str, arguments: &Value) -> Option<Entry> {
+    match name {
         "todo_write" => Some(Entry::Todos {
             items: todos(arguments.get("todos")?, Some("id"), "content").collect(),
             merge: arguments
@@ -85,7 +91,77 @@ fn grok_call(call: &Value) -> Option<Entry> {
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
         }),
-        "search_replace" | "write" => Some(Entry::Changed(vec![text_of(&arguments, "file_path")?])),
+        "search_replace" | "write" => Some(Entry::Changed(vec![text_of(arguments, "file_path")?])),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn a_prompt_is_the_users_text_without_what_grok_added() {
+        let line = json!({"type": "user", "content": [
+            {"type": "text", "text": "<user_info>os</user_info>"},
+            {"type": "text", "text": " <user_query>\n fix it \n</user_query> "},
+            {"type": "text", "text": "and more"}]});
+        assert_eq!(
+            entries(&line),
+            [Entry::User("fix it\n\nand more".to_owned())]
+        );
+        let synthetic = json!({"type": "user", "synthetic_reason": "project_rules",
+            "content": [{"type": "text", "text": "rules"}]});
+        assert!(entries(&synthetic).is_empty());
+    }
+
+    /// Only the compaction line that holds the summary is one; the one beside it that restates the
+    /// rules is not.
+    #[test]
+    fn a_compaction_summary_is_told_from_the_rules_it_restates() {
+        let line = |text: &str| {
+            json!({"type": "user", "synthetic_reason": "compaction_meta",
+                   "content": [{"type": "text", "text": text}]})
+        };
+        let summary = format!("{COMPACTION_SUMMARY}: it did x");
+        assert_eq!(entries(&line(&summary)), [Entry::Summary(summary)]);
+        assert!(entries(&line("Rules and environment")).is_empty());
+    }
+
+    #[test]
+    fn a_todo_call_and_a_file_change_are_what_a_call_says_of_the_conversation() {
+        let merged = call_entry(
+            "todo_write",
+            &json!({"merge": true, "todos": [{"id": "1", "content": "a", "status": "pending"}]}),
+        );
+        let Some(Entry::Todos { items, merge }) = merged else {
+            panic!("todos");
+        };
+        assert!(merge);
+        assert_eq!(items[0].id.as_deref(), Some("1"));
+        let replaced = call_entry("todo_write", &json!({"todos": []}));
+        assert!(matches!(replaced, Some(Entry::Todos { merge: false, .. })));
+        assert_eq!(
+            call_entry("write", &json!({"file_path": "a.rs"})),
+            Some(Entry::Changed(vec!["a.rs".to_owned()]))
+        );
+        assert_eq!(call_entry("read_file", &json!({"target_file": "a"})), None);
+        assert_eq!(call_entry("todo_write", &json!({})), None);
+    }
+
+    #[test]
+    fn an_assistant_line_is_its_text_and_the_calls_that_say_something() {
+        let line = json!({"type": "assistant", "content": "Working.", "tool_calls": [
+            {"id": "t", "name": "write", "arguments": "{\"file_path\": \"b.rs\"}"},
+            {"id": "u", "name": "write", "arguments": "{"}]});
+        assert_eq!(
+            entries(&line),
+            [
+                Entry::Assistant("Working.".to_owned()),
+                Entry::Changed(vec!["b.rs".to_owned()])
+            ]
+        );
     }
 }

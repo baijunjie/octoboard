@@ -20,6 +20,7 @@ use super::configuration::{
     ImportedAccounts, ImportedConsole, InspectedAccounts, InspectedConsole, InspectedSettings,
     SettingsSection,
 };
+use super::conversation::{ConversationEntry, PendingEntry};
 use super::daemon_update::DaemonUpdateStatus;
 use super::errors::{params, Params};
 use super::fields::is_true;
@@ -79,6 +80,63 @@ pub enum Event {
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         #[cfg_attr(test, ts(optional = nullable))]
         unavailable: bool,
+    },
+    /// The answer to `subscribe_session_conversation`: the latest page of the conversation, and the
+    /// entries the agent is still producing.
+    SessionConversationSubscribed {
+        id: Option<String>,
+        session: String,
+        epoch: u64,
+        entries: Vec<ConversationEntry>,
+        has_earlier: bool,
+        pending: Vec<PendingEntry>,
+    },
+    /// The answer to `read_session_conversation`: the page before the one the client holds.
+    SessionConversation {
+        id: Option<String>,
+        session: String,
+        epoch: u64,
+        entries: Vec<ConversationEntry>,
+        has_earlier: bool,
+    },
+    /// What changed in a conversation the connection follows. Sent only to the connections that
+    /// subscribed to the session, never broadcast.
+    SessionConversationChanged {
+        session: String,
+        epoch: u64,
+        /// Entries added after the last one the client holds, in order.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[cfg_attr(test, ts(optional = nullable))]
+        appended: Vec<ConversationEntry>,
+        /// Entries the client holds that changed (a tool call's result arrived), each whole and
+        /// named by its `seq`.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[cfg_attr(test, ts(optional = nullable))]
+        updated: Vec<ConversationEntry>,
+        /// The entries the agent is still producing, whole; absent when they did not change, and
+        /// empty when there are none now.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        pending: Option<Vec<PendingEntry>>,
+    },
+    /// The conversation as the connection follows it was rewritten (the agent went back to an
+    /// earlier point, compacted, or the record was replaced): the client drops what it holds of
+    /// the session and takes this as the latest page. Sent as `session_conversation_changed` is.
+    SessionConversationReplaced {
+        session: String,
+        epoch: u64,
+        entries: Vec<ConversationEntry>,
+        has_earlier: bool,
+        pending: Vec<PendingEntry>,
+    },
+    /// The daemon stopped following a conversation this connection follows: the session was
+    /// deleted, or the daemon failed while reading it. A read error is no end: it is tried again
+    /// at the next look, or, after a first read that failed part-way, once the file has changed.
+    /// The subscription is gone, nothing more will be sent for the session, and the client may
+    /// subscribe again. Sent as `session_conversation_changed` is, but never for the connection's
+    /// own `unsubscribe_session_conversation`.
+    SessionConversationEnded {
+        session: String,
     },
     SessionRecordsInspected {
         id: Option<String>,

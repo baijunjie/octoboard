@@ -572,6 +572,8 @@ export const vi: Translation<"other"> = {
   "daemon.conversation_held_in_project": "Hội thoại này đã do phiên {session} trong {project} giữ.",
   "daemon.conversation_held_in_console": "Hội thoại này đã do phiên bảng điều khiển {session} trong {console} giữ.",
   "daemon.conversation_outside_project": "Hội thoại này đã thuộc về một phiên ngoài dự án này.",
+  "daemon.conversation_not_followed": "Cửa sổ này yêu cầu một hội thoại mà nó không theo dõi.",
+  "daemon.conversation_subscriptions_exceeded": "Cửa sổ này không thể theo dõi thêm hội thoại nào cùng lúc.",
   "daemon.relocation_failed.summary": "Không sao chép được hội thoại vào {path}.",
   "daemon.relocation_failed.thread_record.summary": "Đã sao chép hội thoại vào {path} nhưng không cập nhật được bản ghi luồng của tài khoản đích.",
   "daemon.relocation_failed.thread_record": "Đã sao chép hội thoại vào {path} nhưng không cập nhật được bản ghi luồng của tài khoản đích: {detail}. Phiên vẫn ở tài khoản cũ.",

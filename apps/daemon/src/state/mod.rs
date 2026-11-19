@@ -49,6 +49,7 @@ mod background;
 mod background_store;
 pub(crate) mod bindings;
 mod claims;
+mod conversation_feeds;
 mod field_versions;
 mod forget;
 mod git_status;
@@ -83,6 +84,7 @@ pub(crate) use auto_switch::AutoSwitchHooks;
 pub(crate) use background::EMPTY_TASKS_DELAY;
 pub(crate) use claims::session_archived;
 pub use claims::{ClaimKind, LaunchClaim};
+pub use conversation_feeds::{ConversationFeeds, FeedChannel};
 pub(crate) use field_versions::SETTINGS_FIELDS;
 pub use field_versions::{FieldVersions, RecordKey, Stamp};
 pub(crate) use git_status::blank_git_status;
@@ -227,6 +229,8 @@ pub struct AppState {
     /// run no hooks and so never report sending anything.
     pub send_wait: Mutex<Option<Duration>>,
     pub record_hints: crate::records::Hints,
+    /// The conversations connections follow, held while one does.
+    pub conversation_feeds: ConversationFeeds,
     /// The context window each Claude Code session's status line last reported.
     pub context_windows: crate::records::context::ReportedWindows,
     /// The repositories' refs under watch, so a commit made outside the daemon is re-read
@@ -463,6 +467,7 @@ impl AppState {
             host_tools: Default::default(),
             send_wait: Mutex::new(Some(SEND_WAIT)),
             record_hints: Default::default(),
+            conversation_feeds: Default::default(),
             context_windows: Default::default(),
             git_watch: Default::default(),
             ref_moves: Default::default(),

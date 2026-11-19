@@ -6,7 +6,9 @@ terminal; the way back to the session's terminal is reopening it. The terminal i
 the floating bar that offers Reopen in "Resuming on selection, and the card", both in
 `docs/product/session-terminal-interrupted-and-archived-sessions.md`; reopening is in "Archiving, interruption and
 resuming" in `docs/product/archiving-and-resuming-sessions.md`. Sessions read the same record, of any session, with
-`read_session_history` (see "Reading a session's history" in `docs/product/what-every-session-reads.md`).
+`read_session_history` (see "Reading a session's history" in `docs/product/what-every-session-reads.md`). A client
+following a session's conversation as it happens reads the same record through the live conversation feed instead
+(see `docs/product/live-conversation-feed.md`).
 
 ## When the history is shown
 

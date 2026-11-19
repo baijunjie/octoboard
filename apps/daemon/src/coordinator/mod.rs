@@ -54,6 +54,7 @@ pub mod bindings;
 mod checked_write_tests;
 pub mod console_workdir;
 pub mod consoles;
+pub mod conversation_feed;
 pub mod exit_watch;
 pub mod handoff;
 pub mod handover_check;
@@ -803,6 +804,14 @@ async fn handle_inner(
                 unavailable: messages.is_none(),
                 messages: messages.unwrap_or_default(),
             }))
+        }
+
+        // These hold a connection's subscriptions, so the connection serves them
+        // (`conversation_feed::Connection`); one that reaches here came by another way in.
+        RequestBody::SubscribeSessionConversation { .. }
+        | RequestBody::UnsubscribeSessionConversation { .. }
+        | RequestBody::ReadSessionConversation { .. } => {
+            anyhow::bail!("conversation requests are served on the control connection")
         }
 
         RequestBody::InspectSessionBranches {

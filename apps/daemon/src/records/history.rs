@@ -14,15 +14,13 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use serde_json::Value;
 
 use crate::adapter::provider;
 use crate::messaging::{sharing, texts};
 use crate::protocol::{Account, AgentId, HistoryMessage, HistorySpeaker, Session};
-use crate::records::conversation::{for_each_line, Entry};
+use crate::records::conversation::{at_of, for_each_line, Entry};
 use crate::records::{history_branch, Branch, Hints, Locator};
 use crate::state::AppState;
-use crate::time;
 
 /// How the messages Octoboard writes into a session begin, by what wrote them. The notices are
 /// worded at several places and all begin alike.
@@ -45,7 +43,7 @@ const OCTOBOARD_OPENINGS: [&str; 14] = [
 
 /// Whether `text` is a message Octoboard wrote into a session. The branches prompt begins like
 /// something a user could type, so it is told by the fixed phrase after the title too.
-fn from_octoboard(text: &str) -> bool {
+pub(crate) fn from_octoboard(text: &str) -> bool {
     OCTOBOARD_OPENINGS
         .iter()
         .any(|opening| text.starts_with(opening))
@@ -110,10 +108,7 @@ fn read(
         }
     };
     for_each_line(stretches, |line| {
-        let at = line
-            .get("timestamp")
-            .and_then(Value::as_str)
-            .and_then(time::parse_rfc3339_millis);
+        let at = at_of(line);
         if store.hidden_from_history(line) {
             return;
         }

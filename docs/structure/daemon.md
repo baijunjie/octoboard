@@ -182,8 +182,10 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   socket, and on Windows the browser port and the owner pipe: the launch key or the owner key, and the embedded UI);
   `control.rs` the control socket (it serves what belongs to one connection itself, in frame order, not through the
   coordinator: the pasted-image upload requests, with the connection's own `session::pasted_image::upload::Uploads`,
-  and the browse reads with `browse::lane::Lane`, `read_reply_part` and a request's `part_bytes` included; the
-  coordinator's arms for those forms only refuse), `terminal.rs` the terminal socket (a per-connection `Registration` settles the
+  the browse reads with `browse::lane::Lane`, `read_reply_part` and a request's `part_bytes` included, and the three
+  conversation requests, handed to the connection's own worker in `coordinator/conversation_feed.rs`; all are picked
+  out by their `type` before the ordinary request path, and the coordinator's arms for those forms only refuse),
+  `terminal.rs` the terminal socket (a per-connection `Registration` settles the
   attach's precedence at its deadline in a task of its own and lets the client go however the connection ends; for a
   held terminal, a call that may resize it runs on a blocking thread), `callbacks.rs` the hook, git-ref, revert-gate,
   context-window and MCP routes, `access.rs` the Host/Origin/key guard, one `Access` per listener (the rules are
@@ -215,7 +217,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   snapshot of the last release in `contracts/protocol/released/` (`release.json` and that release's schema files),
   unless `GENERATION` is raised. `mod.rs` holds the record, the check and the test on the real files, `norm.rs` reads a
   schema node as the values it accepts, `compare.rs` compares two of them by direction, and `release:version` refreshes
-  the snapshot ([`apps/desktop/scripts/`](../../apps/desktop/scripts/README.md)). `page_content/` is a report page's
+  the snapshot ([`apps/desktop/scripts/`](../../apps/desktop/scripts/README.md)). `conversation.rs` the wire types of the live conversation feed (its entries, tool calls and
+  page limits, and `CONVERSATION_REQUEST_TYPES`, the requests a connection serves itself). `page_content/` is a report page's
   content: the `Component` tree a session pushes with `show_page` and the `Submission` a form on it comes back with.
   `kinds.rs` holds every kind with the JSON Schema `show_page` enforces and `page_guide` hands out, `check.rs` is the
   validator that reads those schemas and names the failing path (and kind), `rules.rs` the cross-checks a schema cannot
@@ -258,7 +261,11 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   of request text fields; the requests that edit settings, a console, a project or an account carry `base_versions` and
   run through `settings::update_settings_checked`, `consoles::update_console_checked`,
   `projects::update_project_checked` and `accounts::update_account_requested`, which check under
-  `AppState::checked_write`), plus `console_workdir.rs` (a console's working directory: the canonical
+  `AppState::checked_write`), plus `conversation_feed.rs` (following a session's conversation from a control connection: a `Connection`, the worker
+  that serves one connection's `subscribe_session_conversation`, `read_session_conversation` and
+  `unsubscribe_session_conversation` in order and forwards the feed's events to it, and in `conversation_feed/follow.rs`
+  the task per followed session that polls the conversation's files, finds them again when they move and rebuilds or
+  replaces the feed; `mod.rs`'s dispatcher refuses these three, which the connection serves), `console_workdir.rs` (a console's working directory: the canonical
   `octoboard-instructions.md` content exposed under each provider's declared instruction filename by a link, import or
   copy, and its removal), `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`), `adopt.rs` (at
   start, matches the terminals the holders kept running with the store: a session's is adopted into a rebuilt
@@ -333,14 +340,18 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   work each session's agent said it left running (`background.rs`) with its copy in the data directory that survives a
   daemon restart (`background_store.rs`, `paths::background_tasks_path`), sharing status, git
   status, requests, availability, hooks to the automatic account switch, whether the host is held awake
-  (`keep_awake.rs`), forgetting a record, the adoption gate a holder's relayed requests wait on, the sessions claimed
+  (`keep_awake.rs`), forgetting a record (which also drops the session's followed conversation), the adoption gate a holder's relayed requests wait on, the sessions claimed
   for a holder that cannot be linked to (`unlinked.rs`), the stop asked for, its escalation and the refusals of a
   planned restart (`stop.rs`), the barrier a planned stop raises against changes to terminals (`handover_barrier.rs`:
   `AppState::admit_change` and the admission it returns), what the application says over stdin before it quits, which
   tells a quit from a crash (`application_note.rs`), the screens a planned stop saved, written and loaded with the
   versioned file and consumed per holder once the adoption is committed or a gone holder's preview is written
   (`restart_screens.rs`), and `field_versions.rs`, the version of each field of the settings, consoles, projects and
-  accounts a form edits, with the lock of checked writes; `field_versions/paths.rs` lists the versioned paths), plus
+  accounts a form edits, with the lock of checked writes; `field_versions/paths.rs` lists the versioned paths),
+  `conversation_feeds.rs` (`ConversationFeeds`, `AppState::conversation_feeds`: one `FeedChannel` per session a
+  connection follows, holding its entries, epoch and broadcast of changes, made for the first subscriber and dropped
+  with the last or when the session is forgotten; the task that fills it is `coordinator/conversation_feed/follow.rs`),
+  plus
   `bindings.rs` (the read-only walks over which session is bound to which) and `refusals.rs` (the locked and archived
   refusals every operation on a session shares).
 - `src/agents/` — what the daemon knows about each agent CLI apart from launching it: availability (`availability.rs`;
@@ -708,7 +719,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   for); `ProviderSettings` and `SettingValue` are the values in effect, and the provider reads its own from
   `LaunchSpec.settings`. A `ProviderCode` is a code only that provider raises, named `provider.<id>.<code>` and declared
   as a `pub const` of its file; `claude.rs`, `codex.rs` and `grok.rs` are one descriptor each, and `test_provider.rs` is
-  the provider only the tests register (its behavior is `src/adapter/test_provider.rs`); `layout.rs` is the
+  the provider only the tests register (its behavior, with a `TestRecords` store that declares a feed reader and
+  companion, is `src/adapter/test_provider.rs`); `layout.rs` is the
   `AgentLayout` struct (where an agent keeps its files) and its lookup; each provider's own `LAYOUT` and the file-name
   constants only its logic uses are in its file. It is a layer of its own below `protocol`, so every layer can read a
   descriptor; `protocol/providers.rs` serves them to clients as `ProviderInfo` in `snapshot`.
@@ -732,7 +744,12 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   switch of accounts carries and what travels with it, `switch_continue.rs` whether a relaunched session is sent a
   prompt to carry on (its text is `messaging/texts.rs`), whether its last turn stopped on the usage limit, and
   `wait_for_usage_limit`, the wait for the record to say so, used by the automatic account switch and by `messaging/usage_limit.rs`; then the one collector that persists what the records show,
-  conversation and history reading, and `watch/` (the poll mechanism every record watch runs on, and `back_at_prompt`,
+  conversation and history reading, `feed/` (the live conversation feed read from the records: `mod.rs` the `FeedReader`
+  trait each provider implements to read its lines as `protocol::ConversationEntry`s (`RecordStore::feed_reader`, `reader_for`),
+  `FeedOut`, the entries as they stand with what every provider shares (user or Octoboard's message, turn count, todo
+  list, tool results matched to their calls, cutting what is too long), and paging; `follow.rs` the `Follower` that reads a
+  conversation's earlier stretches whole once and its head and companion file (`RecordStore::feed_companion`) again as
+  they grow; holds no knowledge of an agent's formats), and `watch/` (the poll mechanism every record watch runs on, and `back_at_prompt`,
   putting a session back at its prompt after a watch finding); every pass over a
   record goes through `line_file.rs`.
 - `src/adapter/` — the behavior of each provider behind one trait, `AgentProvider` (its descriptor, the launch plan,
@@ -750,7 +767,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `compatibility_sources_of`)), registered by `adapter::provider(agent)` and implemented by `ClaudeProvider`,
   `CodexProvider` and `GrokProvider` in `claude/`, `codex/` and `grok/` (each provider's `hooks.rs` there is its
   `HookInterpreter`, and `records.rs` its `RecordStore`, with `conversation.rs` and `switch_continue.rs` its readings of
-  a conversation and of how its last turn ended, and `screen.rs` its `ScreenReader`; `claude/stash.rs` is Claude Code's
+  a conversation and of how its last turn ended, `feed.rs` its `FeedReader` for the live conversation feed (Grok's
+  companion file is its `updates.jsonl`; its fixtures are `testdata/feed_*.jsonl`), and `screen.rs` its `ScreenReader`; `claude/stash.rs` is Claude Code's
   stash keybinding gate; `claude/compatibility.rs` and `codex/compatibility.rs` (each with `compatibility.md`, the
   instruction text) are Claude Code's and Codex's `CompatibilitySource`; `claude/compatibility_consumer.rs` and
   `grok/compatibility_consumer.rs` are Claude Code and Grok Build taking a source's servers, skills and prompts into
@@ -936,6 +954,10 @@ them is `docs/README.md`, "Coding conventions".
   `set_provider_setting`), the configuration document, the MCP `get_settings` tool and the UI's provider settings read
   the declaration (the rule: `docs/conventions/provider-neutral-core.md`, "Daemon"). A switch that declares
   `compatibility_with` is also held per console, project and session, validated and shown from the same declaration.
+- A new provider's live conversation feed: a `FeedReader` in `src/adapter/<id>/feed.rs`, returned by its `RecordStore::feed_reader` (and
+  `feed_companion` when the agent writes what it is still producing to a file beside the record); the generic code in
+  `src/records/feed/`, `src/state/conversation_feeds.rs` and `src/coordinator/conversation_feed.rs` never branches on the
+  agent. A new kind of entry is a type in `src/protocol/conversation.rs`.
 - A new MCP tool: the catalogue in `src/session_tools/catalogue/`, its dispatch in `src/mcp/dispatch.rs` and the tool in
   a file of `src/mcp/tools/` (the rules: `docs/conventions/protocol-and-contracts.md`, "MCP tools and the MCP
   contract").
@@ -1043,6 +1065,7 @@ helper list; the rules for using them, including the ones that go beyond "use it
 | Resolve the user's shell environment and binaries | `src/env_shell/` (`resolve_binary`; `capture_failed` words the refusal of a request that needed the environment and could not take it) |
 | How a provider's CLI is installed and updated; the installed and latest version of a CLI, and its update | `AgentProvider::cli_packaging` (`CliPackaging`, `src/adapter/mod.rs`), read only by `src/agents/cli/` |
 | Read a page a session pushed, or a form's submission, against the page's kinds | `PageContent::parse` and `PageContent::check_submission` (`src/protocol/page_content/mod.rs`); a refusal is a `PageContentError` naming the path and the kind's schema |
+| Read a session's conversation as feed entries, or follow it live | `RecordStore::feed_reader` and `FeedReader` (`src/records/feed/mod.rs`) for what one provider's lines mean; `ConversationFeeds::join` (`src/state/conversation_feeds.rs`) for the entries a following connection reads; a connection reaches both only through `coordinator::conversation_feed::Connection` |
 | Name a failure or notice on the wire | `Code` in `src/protocol/codes.rs`; failure to `error` reply through `src/protocol/errors.rs` |
 
 The wire contract is held by five checks: `protocol::bindings` (the generated TypeScript must match the Rust types),

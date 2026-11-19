@@ -26,6 +26,12 @@ pub const JSON_FILE_LIMIT: u64 = 8 * 1024 * 1024;
 /// than this is not a supported record: it is skipped, never held whole in memory.
 pub const LINE_LIMIT: usize = 8 * 1024 * 1024;
 
+/// The signature of the file at `path` as it is now.
+pub fn signature(path: &Path) -> std::io::Result<Signature> {
+    let metadata = std::fs::metadata(path)?;
+    Ok((metadata.len(), metadata.modified().ok()))
+}
+
 #[derive(Default)]
 pub struct LineFile {
     identity: Option<Identity>,
@@ -47,9 +53,8 @@ impl LineFile {
     /// Compares the file with how it was left. A changed file stays unsettled, to be read again,
     /// until [`Self::read`] or [`Self::settle`] succeeds.
     pub fn check(&mut self, path: &Path) -> std::io::Result<Change> {
-        let metadata = std::fs::metadata(path)?;
+        let signature = signature(path)?;
         let identity = fs::identity(path, Links::Follow)?;
-        let signature = (metadata.len(), metadata.modified().ok());
         let replaced = self.identity.is_some_and(|previous| previous != identity);
         if replaced {
             *self = Self::default();
@@ -60,7 +65,7 @@ impl LineFile {
         }
         self.pending = Some(signature);
         // A file no longer than what was read, yet changed, was rewritten.
-        let rewritten = metadata.len() <= self.offset;
+        let rewritten = signature.0 <= self.offset;
         if rewritten {
             self.offset = 0;
         }

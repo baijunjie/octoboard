@@ -109,6 +109,22 @@ impl CodedError {
         )
     }
 
+    pub fn conversation_not_followed(session: &str) -> anyhow::Error {
+        Self::raised(
+            error_code::CONVERSATION_NOT_FOLLOWED,
+            format!("the conversation of session {session} is not followed on this connection"),
+            &[("session", session)],
+        )
+    }
+
+    pub fn conversation_subscriptions_exceeded(session: &str, limit: usize) -> anyhow::Error {
+        Self::raised(
+            error_code::CONVERSATION_SUBSCRIPTIONS_EXCEEDED,
+            format!("a connection follows at most {limit} conversations"),
+            &[("session", session), ("limit", &limit.to_string())],
+        )
+    }
+
     pub fn unknown_account(id: &str) -> anyhow::Error {
         Self::raised(
             error_code::UNKNOWN_ACCOUNT,
