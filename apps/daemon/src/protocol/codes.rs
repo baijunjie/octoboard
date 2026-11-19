@@ -166,6 +166,12 @@ pub mod error_code {
     /// No shell terminal has that id. `params` names it as `shell_terminal`.
     pub const UNKNOWN_SHELL_TERMINAL: Code = Code("unknown_shell_terminal");
     pub const UNKNOWN_PAGE: Code = Code("unknown_page");
+    /// No scheduled task has that id. `params` names it as `task`.
+    pub const UNKNOWN_SCHEDULED_TASK: Code = Code("unknown_scheduled_task");
+    /// A one-off schedule (`Schedule::Once`) set, when a scheduled task is created or its schedule
+    /// changed, to a time that is not in the future. `params` names it as `run_at`, in
+    /// milliseconds since the epoch.
+    pub const SCHEDULED_TIME_PASSED: Code = Code("scheduled_time_passed");
     /// A request names two fields that exclude each other. `params` names them as `first` and
     /// `second`, as on the wire.
     pub const CONFLICTING_FIELDS: Code = Code("conflicting_fields");

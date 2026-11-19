@@ -2,7 +2,7 @@ import { createStore, type StoreApi } from "zustand";
 
 import type { ConnectionState } from "../daemon-client";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
-import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus, type Console, type DaemonUpdateStatus, type GitStatus, type Host, type HostInfo, type Page, type Project, type ProviderInfo, type RemoteAccess, type Session, type Settings, type ShellTerminal } from "../protocol";
+import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus, type Console, type DaemonUpdateStatus, type GitStatus, type Host, type HostInfo, type Page, type Project, type ProviderInfo, type RemoteAccess, type ScheduledTask, type ScheduledTaskRun, type Session, type Settings, type ShellTerminal } from "../protocol";
 import type { SessionRequest } from "./sessionRequests";
 
 /** A page's submission at one of its revisions, as `Page` and `page_submission` carry it. */
@@ -52,6 +52,20 @@ export interface State {
    * `page_submission` for a page of one is remembered (`earlySubmissions`) while one for a session this window never
    * lists is not. Cleared on a `snapshot`, which re-lists, and with the session. */
   pagesListing: ReadonlySet<string>;
+  /** The daemon's scheduled tasks, keyed by id, oldest first as `scheduled_tasks_listed` names them and then as created;
+   * `undefined` until this window has listed them. They are left out of `snapshot` (see `list_scheduled_tasks` in
+   * apps/daemon/PROTOCOL.md), so a window lists them once connected and again after every snapshot
+   * (`scheduledTasks/useScheduledTasksSync.ts`), and follows `scheduled_task_upserted` and `scheduled_task_deleted`
+   * in between. A deleted console or project takes its tasks with it, which the daemon does not announce. */
+  scheduledTasks?: Map<string, ScheduledTask>;
+  /** The IANA name of the time zone the daemon reads schedules in, as the last `scheduled_tasks_listed` named it;
+   * `null` when the daemon's zone has none, `undefined` until the tasks have been listed. */
+  scheduledTasksZone?: string | null;
+  /** The kept runs of the scheduled tasks this window has listed the runs of (`list_scheduled_task_runs`), by task id,
+   * most recent first. A task's runs are listed while the page shows it, and again after every snapshot
+   * (`scheduledTasks/useScheduledTaskRuns.ts`); `scheduled_task_run_added` adds to a listed task's in between, and
+   * a task leaves with its runs. */
+  scheduledTaskRuns: Map<string, ScheduledTaskRun[]>;
   /** Bumped on every `snapshot`. A snapshot arrives on the same socket for a lag recovery, not
    * just a fresh connection (see the `page_list` row under "Daemon to client" in
    * `apps/daemon/PROTOCOL.md`), so `connectionState` alone does not change — a consumer that needs to
@@ -166,6 +180,7 @@ const initialState: State = {
   deletedPages: new Map(),
   earlySubmissions: new Map(),
   pagesListing: new Set(),
+  scheduledTaskRuns: new Map(),
   snapshotEpoch: 0,
   trustPrompts: [],
   trustedDirectories: [],

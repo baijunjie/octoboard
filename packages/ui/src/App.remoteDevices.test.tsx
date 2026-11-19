@@ -10,7 +10,7 @@ import { framesAsTimers, settleFrames } from "./components/dialog/dialogTestSupp
 import { App } from "./App";
 import { forgetStoredBrowsersOtherThan, setProjectBrowserMode } from "./project-browser/browserPreferences";
 import { PREFERENCE_KEYS } from "./preferences/preferenceKeys";
-import type { State } from "./store";
+import { applyDaemonEvent, type State } from "./store";
 import { fakeDaemon, mountApp, pressElement, railConsole, regionOfFocus, row, stubWindow } from "./appTestSupport";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 import { remoteDevicePreference } from "./remoteDaemons/remoteDevicePreference";
@@ -59,7 +59,6 @@ beforeEach(() => {
   saved = [KEYED];
   listRead.mockReset().mockImplementation(async () => saved);
   changeListeners.clear();
-  remoteDevicePreference.set(undefined);
   handOver = undefined;
   askForPage = undefined;
   connect.mockReset().mockResolvedValue({ outcome: "opened" });
@@ -423,19 +422,101 @@ it("selects the device a hand-over is for, and shows its question over the page"
   expect(modal()!.textContent).toContain("No daemon is running on");
 });
 
-it("drops what was changed and not saved, and a new device's form, when the page is left", async () => {
+const asking = () => document.body.querySelector<HTMLElement>('[role="alertdialog"]');
+const answer = (name: string) => pressElement([...asking()!.querySelectorAll<HTMLElement>("button")].find((one) => one.textContent === name));
+const addDevice = () => pressElement(document.querySelector("[data-region=sidebar] [aria-label='Add remote daemon']") as HTMLElement);
+
+it("asks before what was changed and not saved is dropped when the page is left, and keeps the page and the form on Keep editing", async () => {
   await mountDesktop();
   await showPage();
   await setValue(field("User"), "ops");
   await leavePage();
+  expect(asking()).not.toBeNull();
+  expect(page()).not.toBeNull();
+  await answer("Keep editing");
+  expect(asking()).toBeNull();
+  expect(page()).not.toBeNull();
+  expect(field("User").value).toBe("ops");
+});
+
+it("leaves the page and drops the form, and a new device's form with it, once Discard is answered", async () => {
+  await mountDesktop();
+  await showPage();
+  await setValue(field("User"), "ops");
+  await leavePage();
+  await answer("Discard");
+  expect(page()).toBeNull();
+  expect(isCurrent(railConsole(main.name))).toBe(true);
   await showPage();
   expect(field("User").value).toBe("deploy");
 
-  await pressElement(document.querySelector("[data-region=sidebar] [aria-label='Add remote daemon']") as HTMLElement);
-  expect(heading()).toBe("Add remote daemon");
+  await addDevice();
+  await setValue(field("Host"), "box");
   await leavePage();
+  await answer("Discard");
   await showPage();
   expect(heading()).toBe("Keyed");
+});
+
+it("asks for Back too, and records nothing for a move that was declined", async () => {
+  await mountDesktop();
+  await showPage();
+  await setValue(field("User"), "ops");
+  await pressBack();
+  expect(asking()).not.toBeNull();
+  expect(page()).not.toBeNull();
+  await answer("Keep editing");
+  expect(page()).not.toBeNull();
+  expect((topBarButton("Forward") as HTMLButtonElement).disabled).toBe(true);
+  await pressBack();
+  await answer("Discard");
+  expect(page()).toBeNull();
+  expect((topBarButton("Forward") as HTMLButtonElement).disabled).toBe(false);
+});
+
+it("asks nothing for the page's own button, or for a page with nothing changed", async () => {
+  await mountDesktop();
+  await showPage();
+  await setValue(field("User"), "ops");
+  await showPage();
+  expect(asking()).toBeNull();
+  expect(page()).not.toBeNull();
+  await pressElement(document.querySelector("[data-region=sidebar] [aria-label='Add remote daemon']") as HTMLElement);
+  await answer("Discard");
+  await leavePage();
+  expect(asking()).toBeNull();
+  expect(page()).toBeNull();
+});
+
+it("keeps the page, with its form, when the session it was opened over is deleted", async () => {
+  const daemon = await mountDesktop();
+  await showPage();
+  await setValue(field("User"), "ops");
+  await act(async () => applyDaemonEvent(daemon.store, { type: "session_deleted", session: fix.id }));
+  expect(page()).not.toBeNull();
+  expect(field("User").value).toBe("ops");
+  expect(asking()).toBeNull();
+  // The page is anchored to what is current now: the user's own leave still asks, then leaves.
+  await leavePage();
+  await answer("Discard");
+  expect(page()).toBeNull();
+});
+
+it("leaves the page when the session under it is deleted and nothing was changed, as it always did", async () => {
+  const daemon = await mountDesktop();
+  await showPage();
+  await act(async () => applyDaemonEvent(daemon.store, { type: "session_deleted", session: fix.id }));
+  expect(page()).toBeNull();
+});
+
+it("keeps a page opened without the daemon, with a form holding changes, when the daemon can be used", async () => {
+  const daemon = mountOffline({ connectionState: "connecting" });
+  await showPage();
+  await setValue(field("User"), "ops");
+  await act(async () => daemon.store.setState(ONLINE()));
+  expect(page()).not.toBeNull();
+  expect(field("User").value).toBe("ops");
+  expect(asking()).toBeNull();
 });
 
 it("leaves the page for a console's avatar even while a new device's form is open", async () => {

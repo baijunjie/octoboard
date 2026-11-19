@@ -8,7 +8,7 @@ import { FieldErrorMessage } from "../../components/form/FieldErrorMessage";
 import { LabelledGroup } from "../../components/form/LabelledGroup";
 import { OptionSelect } from "../../components/form/OptionSelect";
 import { useCurrentLanguage, useT } from "../../i18n/react";
-import { Checkbox, Description, Input, Label, Radio, RadioGroup, Slider, Switch, TextArea, TextField } from "../../primitives";
+import { Checkbox, DatePicker, DatePickerInput, Description, Input, Label, Radio, RadioGroup, Slider, Switch, TextArea, TextField, TimeField, TimeInput } from "../../primitives";
 import type { Component } from "../../protocol";
 import { usePageForm } from "./PageFormContext";
 import { issueText } from "./issueText";
@@ -35,11 +35,9 @@ function textValue(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-/** A single-line field: text, a number typed as text, or a date, a time or a date and time the system's own control
- * picks. */
-function LineField({ component, type, inputMode }: {
-  component: Of<"text" | "number" | "date" | "time" | "datetime">;
-  type?: "date" | "time" | "datetime-local";
+/** A single-line field: text, or a number typed as text. */
+function LineField({ component, inputMode }: {
+  component: Of<"text" | "number">;
   inputMode?: "decimal";
 }): React.ReactElement {
   const form = usePageForm();
@@ -54,15 +52,47 @@ function LineField({ component, type, inputMode }: {
         readOnly={form.locked}
         locked={form.locked}
         invalid={error !== undefined}
-        type={type}
         inputMode={inputMode}
         onBlur={() => form.checkPattern(component.name)}
       >
         <Label dir="auto" className={ALIGN}>{component.label}</Label>
-        <Input data-1p-ignore required={component.required} dir={type === undefined && component.type === "text" ? "auto" : undefined} placeholder={placeholder} />
+        <Input data-1p-ignore required={component.required} dir={component.type === "text" ? "auto" : undefined} placeholder={placeholder} />
         {component.description && <Description dir="auto" className={ALIGN}>{component.description}</Description>}
         <FieldErrorMessage>{error}</FieldErrorMessage>
       </TextField>
+    </Field>
+  );
+}
+
+/** A date, a time or a date and time, entered in the application's own segmented fields (a date and a date and time with
+ * a calendar to pick the day) and held as the text the system's controls hold: `YYYY-MM-DD`, `HH:MM` or
+ * `YYYY-MM-DDTHH:MM`, and empty while the field is empty or only partly filled. */
+function TemporalField({ component }: { component: Of<"date" | "time" | "datetime"> }): React.ReactElement {
+  const form = usePageForm();
+  const error = useIssueText(component);
+  const value = textValue(form.values[component.name]) || null;
+  const common = {
+    fullWidth: true,
+    value,
+    onChange: (next: string | null) => form.setValue(component.name, next ?? ""),
+    readOnly: form.locked,
+    locked: form.locked,
+    invalid: error !== undefined,
+    required: component.required,
+  };
+  const parts = (input: React.ReactNode) => (
+    <>
+      <Label dir="auto" className={ALIGN}>{component.label}</Label>
+      {input}
+      {component.description && <Description dir="auto" className={ALIGN}>{component.description}</Description>}
+      <FieldErrorMessage>{error}</FieldErrorMessage>
+    </>
+  );
+  return (
+    <Field component={component}>
+      {component.type === "time"
+        ? <TimeField {...common}>{parts(<TimeInput />)}</TimeField>
+        : <DatePicker {...common} granularity={component.type === "date" ? "day" : "minute"} min={component.min} max={component.max}>{parts(<DatePickerInput />)}</DatePicker>}
     </Field>
   );
 }
@@ -76,15 +106,15 @@ export function NumberFieldView({ component }: { component: Of<"number"> }): Rea
 }
 
 export function DateFieldView({ component }: { component: Of<"date"> }): React.ReactElement {
-  return <LineField component={component} type="date" />;
+  return <TemporalField component={component} />;
 }
 
 export function TimeFieldView({ component }: { component: Of<"time"> }): React.ReactElement {
-  return <LineField component={component} type="time" />;
+  return <TemporalField component={component} />;
 }
 
 export function DatetimeFieldView({ component }: { component: Of<"datetime"> }): React.ReactElement {
-  return <LineField component={component} type="datetime-local" />;
+  return <TemporalField component={component} />;
 }
 
 export function TextareaFieldView({ component }: { component: Of<"textarea"> }): React.ReactElement {

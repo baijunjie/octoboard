@@ -6,7 +6,8 @@ Removing an account the user owns, with **Remove** in its actions menu in Settin
 Removing an account clears the reference of every console that refers to it, putting each back on the agent's default
 account, and puts every project that refers to it back to inheriting its console's reference (see "The project's
 account, model and reasoning effort" in `docs/product/projects.md`); a project on the agent's default account is left
-as it is. Removing an account ends a login running for it, and any sign-in to or sign-out of one of its MCP servers
+as it is. A scheduled task that names the account is put back to inheriting its target's account (see "When what a
+task names goes away" in `docs/product/scheduled-tasks.md`). Removing an account ends a login running for it, and any sign-in to or sign-out of one of its MCP servers
 (see "Signing an account in to and out of an MCP server" in `docs/product/account-mcp-servers-and-connectors.md`).
 **The account's config directory and everything in it are
 left as they are**, unless the user chooses to move the directory to the Trash as well (see "Moving the account

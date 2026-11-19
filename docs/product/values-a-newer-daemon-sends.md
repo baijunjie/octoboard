@@ -41,6 +41,9 @@ blank, the entry keeping the rest of its content:
   way the window does not know starts left out until the user chooses a way.
 - **A branch or worktree** of an unknown kind or state in the cleanup of an archive or a deletion is not named back to
   the daemon, which then leaves it as it is.
+- **A scheduled task** whose schedule is of an unknown kind shows no schedule, and its form leaves the schedule as it
+  is until a known kind is picked; a run's unknown trigger is left blank, and an unknown outcome shows nothing of what
+  came of the run (see "Values a newer daemon sends" in `docs/product/scheduled-tasks-page.md`).
 
 ## Settings holding an unknown value
 

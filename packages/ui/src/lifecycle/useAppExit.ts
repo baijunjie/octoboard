@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
+import type { UnsavedChangesGuard } from "../components/dialog/unsavedChangesGuard";
 import { useLatest } from "../components/hooks/useLatest";
 import type { CodedError } from "../errors/codedError";
 import { isDaemonRefusal } from "../errors/codes";
+import { isReloading } from "../platform/reloadPage";
 import { usePlatform } from "../platform/react";
 import type { Session, ShellTerminal } from "../protocol";
 import { isLive, sessionIsWorking } from "../sessions/sessionStatus";
@@ -138,6 +140,10 @@ export function confirmationAsks(confirmation: RestartConfirmation): boolean {
 }
 
 interface UseAppExitOptions {
+  /** The window's guard of changes not saved: a quit or a restart asks about them first, once the heartbeat has told the
+   * shell the window is alive and before it asks about sessions, bringing the window forward to show the question; a
+   * browser tab closed or reloaded while any are held gets the browser's own warning. */
+  unsaved?: UnsavedChangesGuard;
   /** Current sessions, read fresh each time a quit is requested rather than once at mount — omit
    * entirely where there is no daemon connection to ask about them at all (the startup screens),
    * which skips the confirmation step unconditionally. */
@@ -190,10 +196,12 @@ export interface UseAppExitResult {
   requestRestart: (holderFloor: string | null, targetVersion: string | null) => Promise<void>;
   /** Asks for a quit from a control of the window's own, as the shell's quit gestures do, confirmation included. */
   requestQuit: () => Promise<void>;
-  /** Restarts the application at once, asking nothing: for a window whose daemon is gone or cannot be talked to, which
+  /** Restarts the application at once, asking nothing about what it would interrupt (changes not saved are asked about, as
+   * for any quit): for a window whose daemon is gone or cannot be talked to, which
    * has nothing to say about what a restart would interrupt, and whose sessions the shell's planned stop leaves to their
    * holders all the same. Nothing where there is no shell to relaunch. Resolves to whether the restart is under way:
-   * false where there is no shell, or where the shell refused it, which raises an alert saying so. */
+   * false where there is no shell, where the question about changes not saved is open (what Discard goes on with is not
+   * reported), or where the shell refused it, which raises an alert saying so. */
   restartNow: () => Promise<boolean>;
 }
 
@@ -204,14 +212,15 @@ export interface UseAppExitResult {
  * — Cmd+Q, the app menu, the menu bar icon's Quit, the Dock icon's own Quit — that the Rust side cannot itself ask the
  * user about; the window's close button is one too unless the user has chosen to run in the background, in which case
  * it hides the window; on macOS a system logout, restart or shutdown is handled by the shell itself and never asks),
- * asking for confirmation when a session or a busy shell terminal holds the quit up (see `quitHolders`; bringing the
+ * asking about changes not saved first (`unsaved`) and then for confirmation when a session or a busy shell terminal holds
+ * the quit up (see `quitHolders`; bringing the
  * window to the front to do so), and the `begin_quit`-`shutdown`-`confirm_quit` sequence that actually ends the process (or,
  * for a restart the UI asks for itself, the `planned_stop`-then-`confirm_quit` one that relaunches it). With
  * `getSessions` and `requestShutdown` omitted it quits straight away, which is what a screen with no daemon behind it
  * needs.
  */
 export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
-  const { exit, nativeWindow } = usePlatform();
+  const { kind, exit, nativeWindow } = usePlatform();
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [exitHolders, setExitHolders] = useState<QuitHolders>({ sessions: false, terminals: false });
   const [exitInterrupted, setExitInterrupted] = useState<Session[]>([]);
@@ -266,17 +275,11 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     return restartConfirmation(answer, getSessions?.() ?? [], getShellTerminals?.() ?? []);
   };
 
-  const request = async (restart: boolean, holderFloor: string | null = null, targetVersion: string | null = null): Promise<void> => {
-    if (!exit && !(restart && optionsRef.current.restartDaemon)) return;
+  /** What a gesture does once nothing it would lose is unasked: asks about the sessions and shell terminals the quit or
+   * restart would end, or goes ahead. */
+  const confirmOrGoAhead = async (restart: boolean, holderFloor: string | null, targetVersion: string | null): Promise<void> => {
     const requestId = ++requestCount.current;
     restartTarget.current = targetVersion;
-    // Re-invoking `frontend_exit_heartbeat` here, on every quit gesture this webview actually
-    // receives (not only when the user cancels the dialog), is what clears the Rust side's
-    // `FORCE_QUIT_WINDOW` debounce: it is itself proof this webview is alive and answering, so
-    // the next gesture should wait for it rather than treat this one as a wedge. A wedged webview
-    // never reaches this line at all, so the debounce stays armed and the escape hatch in
-    // `should_let_quit_through` (`apps/desktop/src-tauri/src/exit.rs`) still fires for it.
-    await exit?.heartbeat().catch(() => {});
     // A restart always asks the daemon what it would interrupt, whatever a quit would ask about: an incompatible
     // holder ends an idle session as much as a busy one.
     const { holders, sessions, detail, keepsRest } = restart && optionsRef.current.getSessions
@@ -306,10 +309,33 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     await doQuit(restart);
   };
 
+  const request = async (restart: boolean, holderFloor: string | null = null, targetVersion: string | null = null): Promise<void> => {
+    if (!exit && !(restart && optionsRef.current.restartDaemon)) return;
+    // Re-invoking `frontend_exit_heartbeat` here, on every quit gesture this webview actually
+    // receives (not only when the user cancels the dialog), is what clears the Rust side's
+    // `FORCE_QUIT_WINDOW` debounce: it is itself proof this webview is alive and answering, so
+    // the next gesture should wait for it rather than treat this one as a wedge. A wedged webview
+    // never reaches this line at all, so the debounce stays armed and the escape hatch in
+    // `should_let_quit_through` (`apps/desktop/src-tauri/src/exit.rs`) still fires for it.
+    await exit?.heartbeat().catch(() => {});
+    // Changes not saved are asked about next, before the sessions: what the user answers there decides whether this
+    // gesture goes on at all. The gesture's promise settles when it has gone on (or, asked, once the question is up),
+    // since what goes on after Discard has nobody left to report to.
+    const { unsaved } = optionsRef.current;
+    if (!unsaved) return confirmOrGoAhead(restart, holderFloor, targetVersion);
+    let going: Promise<void> | undefined;
+    const outcome = unsaved.run(() => {
+      going = confirmOrGoAhead(restart, holderFloor, targetVersion);
+    });
+    // A quit from outside the window leaves it wherever it was, where the question would go unseen.
+    if (outcome === "asked") await nativeWindow?.bringToFront().catch(() => {});
+    await going;
+  };
+
   const requestRestart = (holderFloor: string | null, targetVersion: string | null) => request(true, holderFloor, targetVersion);
   const requestQuit = () => request(false);
   // No planned stop from the page: its daemon is gone or not talked to, and the shell makes the planned stop itself.
-  const restartNow = async (): Promise<boolean> => {
+  const restartWithoutAsking = async (): Promise<boolean> => {
     if (!exit) return false;
     requestCount.current++;
     quittingRef.current = true;
@@ -321,6 +347,20 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
       reportExitFailure(true, err);
       return false;
     }
+  };
+  // It asks about changes not saved first, as `request` does; asked, it is not under way, and what Discard goes on with
+  // reports its own failure.
+  const restartNow = async (): Promise<boolean> => {
+    const { unsaved } = optionsRef.current;
+    if (!exit || !unsaved) return restartWithoutAsking();
+    let going: Promise<boolean> | undefined;
+    const outcome = unsaved.run(() => {
+      going = restartWithoutAsking();
+    });
+    // A restart from outside the window's own controls (the daemon-exit notice) may be raised over a window hidden in the
+    // background, where the question would go unseen.
+    if (outcome === "asked") await nativeWindow?.bringToFront().catch(() => {});
+    return (await going) ?? false;
   };
 
   const confirmExit = async (): Promise<void> => {
@@ -349,6 +389,21 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     // Registration happens once; `request`/`doQuit` read live state through `optionsRef`.
     [],
   );
+
+  // A browser tab closed or reloaded while changes are not saved gets the browser's own warning; the shell's own reload and
+  // a window it closes cannot be asked about. A reload the page started itself (after a daemon restart) is not asked
+  // about: it is the page that is about to be replaced by its own.
+  const { unsaved } = options;
+  useEffect(() => {
+    if (!unsaved || kind !== "browser") return;
+    const warn = (event: BeforeUnloadEvent) => {
+      if (isReloading() || !unsaved.isDirty()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved, kind]);
 
   const closeExitConfirm = (): void => {
     // Nothing to tell the Rust side here: `request` above already pinged the debounce-clearing

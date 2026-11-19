@@ -180,6 +180,28 @@ const decision: PageContent = {
   ],
 };
 
+/** The page the submitted-page scenario shows: `decision` with the three temporal fields among its inputs, so their locked
+ * look is shown beside the text, choice and toggle controls', and the choice buttons still last. */
+const decided: PageContent = {
+  ...decision,
+  body: [
+    ...decision.body.slice(0, 5),
+    { type: "date", name: "freeze", label: "Code freeze" },
+    { type: "time", name: "window", label: "Daily window" },
+    { type: "datetime", name: "launch", label: "Launch" },
+    ...decision.body.slice(5),
+  ],
+};
+
+/** A page with one date field that has an earliest and a latest day, which the calendar greys everything outside. */
+const delivery: PageContent = {
+  title: "When should the build go out?",
+  body: [
+    { type: "date", name: "delivery", label: "Delivery day", default: "2026-12-15", min: "2026-12-08", max: "2026-12-23" },
+    { type: "submit" },
+  ],
+};
+
 const inlineSketch = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" width="240" height="90" viewBox="0 0 240 90"><rect width="240" height="90" rx="8" fill="#4f7cff"/><circle cx="45" cy="45" r="24" fill="#ffd166"/><rect x="90" y="30" width="120" height="12" rx="6" fill="#fff"/><rect x="90" y="54" width="80" height="12" rx="6" fill="#fff" fill-opacity=".7"/></svg>')}`;
 
 /** Markdown that tries to reach beyond the page: none of it does. */
@@ -210,12 +232,20 @@ const formPages = snapshotState({
     [everyHub.id]: [pageOf("pf-all", everyHub.id, everyComponent, 10)],
     [invalidHub.id]: [pageOf("pf-invalid", invalidHub.id, invalidForm, 10)],
     [decisionHub.id]: [pageOf("pf-decision", decisionHub.id, decision, 10)],
-    [decidedHub.id]: [pageOf("pf-decided", decidedHub.id, decision, 60, {
-      version: "1.4.0", channel: "beta", platforms: ["macos", "windows"], notes: "Mention the new report forms.", notify: true, decision: "ship",
+    [decidedHub.id]: [pageOf("pf-decided", decidedHub.id, decided, 60, {
+      version: "1.4.0", channel: "beta", platforms: ["macos", "windows"], notes: "Mention the new report forms.", freeze: "2026-11-20", window: "09:30", launch: "2026-11-27T10:00", notify: true, decision: "ship",
     })],
     [earlierHub.id]: [pageOf("pf-earlier", earlierHub.id, decision, 60 * 5), pageOf("pf-later", earlierHub.id, summary("Release 1.4.0 shipped"), 20)],
     [untrustedHub.id]: [pageOf("pf-untrusted", untrustedHub.id, untrustedMarkdown, 10)],
   },
+});
+
+const deliveryHub = formHub("s-form-delivery", "Delivery day", "pink");
+const deliveryPage = snapshotState({
+  consoles: [console_],
+  projects: [project],
+  sessions: [deliveryHub],
+  pages: { [deliveryHub.id]: [pageOf("pf-delivery", deliveryHub.id, delivery, 10)] },
 });
 
 /** Selects the console session and brings its Report into view. */
@@ -321,6 +351,15 @@ export const reportScenarios: Scenario[] = [
     steps: [openForm(everyHub.title)],
   },
   {
+    id: "report-date-calendar",
+    group: GROUP,
+    category: "normal",
+    title: "Date field with its calendar open",
+    description: "The calendar button of Delivery day was pressed, and its popover opens on the floating surface over the page on December 2026, the month of the chosen day, 15, marked as selected. The page asks for a day from the 8th to the 23rd: the days before and after are greyed out and struck through and cannot be picked, though the field itself takes a day typed outside the range, and both month arrows are disabled since the whole range lies in this month. The arrows show no tooltip while disabled; the calendar button's own tooltip is seen after Escape closes the calendar and the pointer rests on the button.",
+    state: deliveryPage,
+    steps: [openForm(deliveryHub.title), (ui) => ui.press(ui.t("calendar.open"))],
+  },
+  {
     id: "report-markdown-untrusted",
     group: GROUP,
     category: "normal",
@@ -344,7 +383,7 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Submitted page",
-    description: "The page was submitted earlier, so its controls have the read-only look: text fields, text areas and selects keep a plain 1px border with no fill or shadow and their text at full strength, still selectable. A Submitted badge sits in the panel header after the page's time, with the pressed choice, Ship it, marked and the other unavailable.",
+    description: "The page was submitted earlier, so its controls have the read-only look: text fields and text areas keep a plain 1px border with no fill or shadow and their text at full strength, still selectable; so do the date, time and date and time fields, with their segments readable but not editable and the calendar buttons of the date and the date and time ones unavailable, their glyph undimmed, like a select's chevron. A Submitted badge sits in the panel header after the page's time, with the pressed choice, Ship it, marked and the other unavailable (the page is taller than the panel at the default height: scroll to the Decision at its end).",
     state: formPages,
     steps: [openForm(decidedHub.title)],
   },
@@ -494,8 +533,8 @@ export const reportScenarios: Scenario[] = [
       (ui) => ui.type("Too short"),
       (ui) => ui.focus("Retries"),
       (ui) => ui.type("7"),
-      (ui) => ui.focus("Code freeze"),
-      (ui) => ui.type("2026-11-20"),
+      // A segmented field, filled by the kind of each segment, whatever order the language puts them in.
+      (ui) => ui.fillDateTime("Code freeze", "2026-11-20"),
       (ui) => ui.press("macOS"),
       (ui) => ui.pressInPanel("report", ui.t("report.submit")),
     ],

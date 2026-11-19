@@ -34,6 +34,19 @@ export function useChoiceGroups(): ChoiceGroup[] {
   return choiceGroups(accounts, agentAvailability, addedAgents, providers, (agent) => defaultAccountName(t, defaultNames, agent), { quotas, now }, sharing, disabledDefaults, accountOrder);
 }
 
+/** Where a launch choice's pickers start: an agent and account, and the model, effort and compatibility switches, each
+ * absent to follow the parent. */
+export type LaunchPreset = { choice: AccountChoice } & LaunchOverrides;
+
+function presetAccounts(preset: LaunchPreset | undefined): Partial<Record<Agent, string | null>> {
+  return preset ? { [preset.choice.agent]: preset.choice.account } : {};
+}
+
+function presetLaunchSettings(preset: LaunchPreset | undefined): Partial<Record<Agent, LaunchOverrides>> {
+  if (!preset || (preset.model === undefined && preset.effort === undefined && preset.compatibility === undefined)) return {};
+  return { [preset.choice.agent]: { ...(preset.model !== undefined && { model: preset.model }), ...(preset.effort !== undefined && { effort: preset.effort }), ...(preset.compatibility !== undefined && { compatibility: preset.compatibility }) } };
+}
+
 /**
  * What a dialog that starts a session of some agent asks for: the agent and its account, which
  * open on what a new session of the project (or, without one, the console) would use and which the
@@ -64,7 +77,7 @@ export function useChoiceGroups(): ChoiceGroup[] {
  * longer among that agent's accounts, and nothing has been picked since: the dialog then shows the
  * pickers empty rather than a fallback the user never chose.
  */
-export function useLaunchChoice(parentConsole: Console, project: Project | undefined, exclude?: Agent, forced?: AccountChoice, preset?: { choice: AccountChoice } & LaunchOverrides, projectSession?: boolean, refuseUsedUp = false) {
+export function useLaunchChoice(parentConsole: Console, project: Project | undefined, exclude?: Agent, forced?: AccountChoice, preset?: LaunchPreset, projectSession?: boolean, refuseUsedUp = false) {
   const t = useT();
   const isProjectSession = projectSession ?? (project !== undefined);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
@@ -75,12 +88,8 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
   const now = useNow();
   const [pickedAgent, setPickedAgentValue] = useState<Agent | undefined>(preset?.choice.agent);
   const [touched, setTouched] = useState(false);
-  const [pickedAccounts, setPickedAccounts] = useState<Partial<Record<Agent, string | null>>>(preset ? { [preset.choice.agent]: preset.choice.account } : {});
-  const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, LaunchOverrides>>>(
-    preset && (preset.model !== undefined || preset.effort !== undefined || preset.compatibility !== undefined)
-      ? { [preset.choice.agent]: { ...(preset.model !== undefined && { model: preset.model }), ...(preset.effort !== undefined && { effort: preset.effort }), ...(preset.compatibility !== undefined && { compatibility: preset.compatibility }) } }
-      : {},
-  );
+  const [pickedAccounts, setPickedAccounts] = useState<Partial<Record<Agent, string | null>>>(() => presetAccounts(preset));
+  const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, LaunchOverrides>>>(() => presetLaunchSettings(preset));
 
   const allGroups = useChoiceGroups().filter((group) => group.agent !== exclude);
   const groups = allGroups.map((group) => ({
@@ -127,6 +136,14 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
 
   return {
     choice,
+    /** Drops every pick and change, the pickers starting again from `next` (absent, from what the parent resolves to),
+     * for a form whose Revert goes back to what it holds saved. */
+    reset: (next?: LaunchPreset) => {
+      setPickedAgentValue(next?.choice.agent);
+      setTouched(false);
+      setPickedAccounts(presetAccounts(next));
+      setLaunchSettings(presetLaunchSettings(next));
+    },
     /** No agent that may be picked. */
     blocked,
     /** The preset's agent or account can no longer be picked, and the user has not picked since. */

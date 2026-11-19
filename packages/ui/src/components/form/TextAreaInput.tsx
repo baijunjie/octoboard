@@ -20,6 +20,7 @@ export function TextAreaInput({
   rows = 6,
   errorMessage,
   characterLimit,
+  onBlur,
 }: {
   label: string;
   value: string;
@@ -30,10 +31,12 @@ export function TextAreaInput({
   rows?: number;
   errorMessage?: string;
   characterLimit?: number;
+  /** Called as the field loses focus. */
+  onBlur?: () => void;
 }): React.ReactElement {
   const invalid = !!errorMessage;
   return (
-    <TextField fullWidth variant="secondary" value={value} onChange={onChange} disabled={isDisabled} invalid={invalid}>
+    <TextField fullWidth variant="secondary" value={value} onChange={onChange} onBlur={onBlur} disabled={isDisabled} invalid={invalid}>
       <Label>{label}</Label>
       <TextArea rows={rows} placeholder={placeholder} />
       <TextFieldDescription value={value} characterLimit={characterLimit} description={description} />

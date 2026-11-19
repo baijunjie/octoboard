@@ -379,7 +379,10 @@ it("reports the window's share of the badge and raises a notification through th
   await platform.badge!.set(0);
   expect(invoke).toHaveBeenLastCalledWith("set_badge_count", { count: 0 });
   await platform.notifications!.notify({ title: "Waiting", body: "Fix the build" });
-  expect(invoke).toHaveBeenLastCalledWith("show_notification", { title: "Waiting", body: "Fix the build" });
+  expect(invoke).toHaveBeenLastCalledWith("show_notification", { title: "Waiting", body: "Fix the build", target: null });
+  // A target goes with it, which the shell hands back when the notification is chosen.
+  await platform.notifications!.notify({ title: "Failed", body: "Morning report", target: "scheduled-task:t-1" });
+  expect(invoke).toHaveBeenLastCalledWith("show_notification", { title: "Failed", body: "Morning report", target: "scheduled-task:t-1" });
 });
 
 it("listens to the shell's events on its own window, so what is sent to another window does not reach it", async () => {
@@ -390,6 +393,17 @@ it("listens to the shell's events on its own window, so what is sent to another 
   listeners.get("settings-requested")!({ payload: undefined });
   expect(handler).toHaveBeenCalledOnce();
   undo();
+});
+
+it("hands the target the shell reports for a chosen notification to the listener, until it stops listening", async () => {
+  const chosen = vi.fn();
+  const stop = tauriPlatform().notifications!.onChosen!(chosen);
+  await afterQueuedWork();
+  listeners.get("notification-chosen")!({ payload: "scheduled-task:t-1" });
+  expect(chosen).toHaveBeenCalledExactlyOnceWith("scheduled-task:t-1");
+  stop();
+  await afterQueuedWork();
+  expect(listeners.has("notification-chosen")).toBe(false);
 });
 
 describe("what each kind of window of the application has", () => {
@@ -461,7 +475,7 @@ it("raises each notification through the shell, whatever platform the window is 
   invoke.mockResolvedValue(undefined);
   reportHost(WINDOWS_HOST);
   await tauriPlatform().notifications!.notify({ title: "Waiting", body: "Fix the build" });
-  expect(invoke).toHaveBeenLastCalledWith("show_notification", { title: "Waiting", body: "Fix the build" });
+  expect(invoke).toHaveBeenLastCalledWith("show_notification", { title: "Waiting", body: "Fix the build", target: null });
 });
 
 it("lets a failed notification reach the caller", async () => {

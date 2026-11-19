@@ -21,7 +21,7 @@ function useSpaceUsedUp(element: React.RefObject<HTMLElement | null>): boolean {
 }
 
 /**
- * What stands between the Remote devices button and the rail's bottom group, two items of the rail's stack: the
+ * What stands between the group of pages (Scheduled tasks, Remote devices) and the rail's bottom group, two items of the rail's stack: the
  * free space that pushes the group down (`RailSpacer`), and under it a separator that is drawn only once the free space
  * is used up, so the button and the group do not touch without a seam. The separator is an item whether or not it is
  * drawn, so drawing it changes no height and cannot turn the free space it is measured against back into some.

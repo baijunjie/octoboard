@@ -515,7 +515,8 @@ field opens with focus on its submit button instead. That holds however it was o
 assistive technology's press) as much as by the keyboard or the mouse, and for a dialog opened over another one. A field that appears later, after a tab or a choice has changed
 what the form holds, does not take focus, so it never pulls it off the control the user is on.
 
-Report page fields draw no required mark: a required field is `aria-required` only, and the radio group's wrapper hides HeroUI's mark. (Source: user decision.)
+Report page fields draw no required mark: a required field is `aria-required` only, and the wrappers hide HeroUI's mark
+(the radio group's, and `packages/ui/src/primitives/DatePicker.css` for a time or date field). (Source: user decision.)
 
 ### Reaching a control with Tab
 
@@ -764,8 +765,8 @@ drawer is closed the rail is `inert` and not a stop, and focus inside it when th
 browser can drop it to `<body>` (a layout effect, since a swipe closes the drawer from a touch listener React does not
 flush before paint).
 
-The Remote devices page is the region `devices`, after the sidebar; while it shows, the session UI under it (the
-terminal, the archive view, the panels) is not a stop. While the local daemon cannot be used, the framed status screen
+A page of the window is a region of its own, after the sidebar — the Remote devices page `devices`, the Scheduled tasks
+page `tasks`; while one shows, the session UI under it (the terminal, the archive view, the panels) is not a stop. While the local daemon cannot be used, the framed status screen
 in the content panel is the `welcome` stop, so F6 reaches its buttons (Restart, Report issue) as it reaches the welcome
 screen's.
 
@@ -834,18 +835,18 @@ either form, rather than leaving it up under the modal. Closing a processes pane
 its button after React's commit, so react-aria sees the move and the ring follows the last input; a row's press instead
 lands focus in the Processes panel it opens.
 
-The rail's Remote devices button is an ordinary rail button: any press opens the Remote devices page, and pressing it
-while the page shows does nothing (it opens, it does not toggle). Its tooltip carries its counted name, as the waiting
-count's does. While the page shows it is drawn with the current console's tile fills and carries `aria-current`, and no
-console avatar does.
+The rail's page buttons, Scheduled tasks and Remote devices, are ordinary rail buttons: any press opens the button's
+page, and pressing it while that page shows does nothing (it opens, it does not toggle). Its tooltip carries its counted
+name, as the waiting count's does. While its page shows it is drawn with the current console's tile fills and carries
+`aria-current`, and no console avatar does.
 
 ### The rail is one stack of equal items
 
-The rail lays out one column of 32 px items — a console avatar's tile, New console, the Remote devices button, the
-bottom group's buttons — with a single 8 px gap between every pair of neighbours and no padding of a group adding to it.
+The rail lays out one column of 32 px items — a console avatar's tile, New console, the page buttons (Scheduled tasks,
+Remote devices), the bottom group's buttons — with a single 8 px gap between every pair of neighbours and no padding of a group adding to it.
 A separator is an item of its own in that stack, so the space above and below its line is that same gap, never a
 group's padding. A count badge floats over its item's corner and takes no room. A separator that only applies while two
-groups meet (the one under the Remote devices button, drawn once the free space between it and the bottom group is
+groups meet (the one under the page buttons, drawn once the free space between them and the bottom group is
 used up) keeps its slot whether drawn or not, so drawing it never changes the space it is measured against. While the
 local daemon cannot be used the rail holds the Remote devices button alone.
 
@@ -1113,6 +1114,17 @@ the dialog is busy, as Cancel is disabled too; when busy ends, the move to Cance
 control, which gets focus back unless the user pressed or tabbed in the meantime, and focus found on `<body>` with that
 control gone or disabled goes to the pending button, or the dialog); a dialog that opens with its submit refused puts
 its autofocus on Cancel instead of the disabled button.
+
+### Leaving a form that holds unsaved changes
+
+A form with a Save of its own that stays on screen while the user works elsewhere in the window (a page form) declares
+its unsaved changes to the window's guard (`useUnsavedChanges`), and every action that would replace the form runs
+through that guard (`useLeaveGuard`), never around it: with changes held it asks once, in the destructive confirmation
+**Discard changes** (**Keep editing**, **Discard**), and carries the action out only on **Discard**. **Revert** and
+**Cancel** are the discard itself and never ask, a leave pressed while a save is in flight does nothing, and a change
+the user did not make (the record under the form changed or removed elsewhere, the connection dropping) never asks and
+never drops the draft. What asks and what does not is in `docs/product/leaving-a-form-with-unsaved-changes.md`.
+(Source: user decision.)
 
 ### Focus scrolled to the edge of a scroller that fades there
 
@@ -2421,10 +2433,11 @@ element inside an `aria-hidden` subtree keeps its tab stop and loses its name.
 ### Landmarks
 
 The content panel always holds exactly one `main`, whichever of its views is on screen — the terminal pane, the
-welcome screen that replaces the three panes while there is no console, the Remote devices page, or, while the local
-daemon cannot be used, its status screen. The terminal pane and the Remote devices page render the one shared element,
-`ContentMain` (`packages/ui/src/components/panel/ContentMain.tsx`), which owns the docked sidebar's edge shadow and the
-positioning both rely on, so the two cannot drift apart. While the Remote devices page shows, the session UI stays
+welcome screen that replaces the three panes while there is no console, a page of the window (Remote devices,
+Scheduled tasks), or, while the local daemon cannot be used, its status screen. The terminal pane and the pages render
+the one shared element, `ContentMain` (`packages/ui/src/components/panel/ContentMain.tsx`), which owns the docked
+sidebar's edge shadow and the positioning they rely on, so they cannot drift apart. While a page shows, the session UI
+stays
 mounted under `display: none` so its terminals keep their state, and its own `main` stays in the document though hidden
 from assistive technology (by the user's decision); while the local daemon cannot be used the session UI is not mounted
 at all. A view that is a region rather than the
@@ -2639,12 +2652,21 @@ secondary variant.
 ### Locked report page controls
 
 The controls of a report page that cannot be edited — a history page, a submitted one, one whose submission is out —
-have a read-only look: a value to read rather than a control to use. Text fields, text areas and selects are drawn with
-a plain 1px border, a transparent fill, no shadow and text at full strength, all three alike, and a slider is drawn at
-full strength instead of dimmed; a text field's value stays selectable. The wrapper components draw the look from a
-`locked` prop (`TextField`, `Select` and `OptionSelect`, `Slider`), so no page code reaches into HeroUI's classes.
+have a read-only look: a value to read rather than a control to use. Text fields, text areas, selects and time and date
+fields are drawn with a plain 1px border, a transparent fill, no shadow and text at full strength, all alike, and a
+slider is drawn at full strength instead of dimmed; a text field's value stays selectable, and a date field's calendar
+button stays undimmed, as a select's chevron does, and opens nothing. The wrapper components draw the look from a
+`locked` prop (`TextField`, `Select` and `OptionSelect`, `TimeField`, `DatePicker`, `Slider`), so no page code reaches
+into HeroUI's classes.
 Checkboxes, radios and switches have no separate read-only look: HeroUI draws them undimmed already, and they simply
 take no press.
+
+### Dates and times are the application's own fields
+
+A date or a time is entered in the application's segmented fields (`TimeField`, `DatePicker`, through `TimeOfDayInput`
+and `DateTimeInput` in a form), never in the browser's native picker (`<input type="date">`, `time`,
+`datetime-local`), whose look and behaviour differ by platform and cannot be styled. The segments' own format
+placeholders are the field's placeholder. (Source: user decision.)
 
 ### Select options share one component
 
@@ -2869,9 +2891,9 @@ alone, such as copying the value it shows (the Changes view's branch name), is t
 as a toggle beside a field, its filled `default` toggle (by the user's decision). The field and each control beside it
 are 8 pixels apart (`--field-row-gap`), the gap between two fields in a row, never the 4-pixel gap of a row's icons. A
 single-line field is 36 pixels tall, 40 below 768 pixels (`sm`, which the project sets to 768), where HeroUI grows a
-field's text to 16 pixels so a phone does not zoom into it; HeroUI's search field keeps 36 at every width, so
-`packages/ui/src/primitives/Field.css` sizes its group by its input as a text field is, in the components layer so a
-caller's own height (a menu's filter row) still wins. The rule lives in two places and no call site restates it:
+field's text to 16 pixels so a phone does not zoom into it; HeroUI's search, number, time and date fields keep 36 at
+every width, so `packages/ui/src/primitives/Field.css` sizes their groups by their inputs as a text field is, in the
+components layer so a caller's own height (a menu's filter row) still wins. The rule lives in two places and no call site restates it:
 `FieldRow` (`packages/ui/src/components/form/FieldRow.tsx`) lays out the row and its gap (`labelled` for a select whose
 label stands beside it, whose label and trigger take the row's first two columns), and `TextInput`'s `trailing` is drawn
 in one; the wrapper `Button`'s `besideField`, which `ToggleButton` shares and `IconToggle` and `PasteButton` pass on,

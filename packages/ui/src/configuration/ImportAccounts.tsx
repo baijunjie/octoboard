@@ -16,7 +16,7 @@ import { useProviders } from "../store";
 import { knownValues } from "../values/knownValue";
 import { useHostPaths } from "../components/hooks/useHostPaths";
 import { AgentCardSections, AgentSettingsCard, type CurrentAgentSettings, useAgentSettingLines } from "./AgentSettingsCard";
-import { useFailureNode } from "./failureText";
+import { useFailureNode } from "../components/alerts/failureNode";
 import { accountChoicesFor, agentImported, cardAgents, directoryProblem, hasForeignDirectoryProblem, hasNameProblem, withAccountRow, withAgentImported, type DirectoryProblem, type AccountReviewState, type AccountRowState } from "./importPlan";
 import { FlatCard } from "../components/card/FlatCard";
 import { choiceHeader, DirectoryChoiceField, DirectoryLine, ItemName, ReviewRow, type Shown, type StatusEntry, ToneLine } from "./importParts";

@@ -334,10 +334,14 @@ function tauriNotifications(host: HostFacts): NotificationCapability {
       }
       return permissionRequest;
     },
-    async notify({ title, body }) {
-      // Through the shell, which marks the notification with this window, so a click on it brings this window forward.
+    async notify({ title, body, target }) {
+      // Through the shell, which marks the notification with this window, so a click on it brings this window forward,
+      // and hands back the target it carries (`notification-chosen`).
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("show_notification", { title, body });
+      await invoke("show_notification", { title, body, target: target ?? null });
+    },
+    onChosen(listener) {
+      return listenTo<string>("notification-chosen", listener);
     },
     ...(host.notificationSettings === "system-pane" && {
       async openSystemSettings() {

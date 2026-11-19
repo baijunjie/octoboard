@@ -219,7 +219,8 @@ which go only to the connections that follow the session (see "Following a sessi
   generated TypeScript such a field reads `?: T | null`, and in the schema it is left out of `required` and allows
   `null`. A client generator for another language has to tell a missing key from `null` (Swift's `Codable`, for one,
   does not by default).
-- In a create, an absent field takes the default. An absent boolean is false.
+- In a create, an absent field takes the default. An absent boolean is false, unless the field's own row says it
+  defaults to true (`detect_default_agent`, `include_paths`, `apply_consoles`, `apply_clone_dir`, `enabled`).
 - Instants are milliseconds since the epoch.
 
 ### Naming
@@ -432,6 +433,13 @@ The terminal socket has no heartbeat of its own.
 | `release_session` | `session` | Makes a project session independent from its parent, whoever it is, and broadcasts `session_upserted`: `bound_to` is cleared and the session is an ordinary independent project coordinator, the user's own. A project coordinator keeps the sessions bound to it, and branches stay with their session. Allowed whether the session is running or not, and refused for a console session, an independent session, and a session, or the parent it is bound to, that is being started, resumed, handed off, switched to another account or having its parent changed. The refusals are `console_session_never_bound`, `session_not_bound`, `session_binding_changed` (the binding moved between the check and the write), `session_changing` and `session_owner_changing`; an id that names no session is `unknown_session`. A running session is told in a message, queued while it cannot take one, that it has no parent and which tools it has; one with no process is told when it next starts, ahead of any instruction of that launch, as the notice every change of parent leaves for a session that was not running (see `release_session` under the MCP tools). The former parent is told in a message, queued while it cannot take one, that the user released the session, so it can no longer instruct, drive or archive it (it can still tell it something with the MCP tool `inform_session`) and should treat any work it handed the session as left with the user; a parent with no process is not told, and a later attempt by it to drive the session is refused as not its own |
 | `bind_session` | `session`, `owner` | Binds an independent, unarchived project session to a parent at the user's request and broadcasts `session_upserted`: a running console session of its console, or a running project coordinator of its project other than itself, a project parent only while the session has no sessions of its own, archived ones included. Bound to a console session it stays a coordinator; bound to a project coordinator it becomes a worker and its report panel pages are withdrawn. Refused, with nothing changed, as `console_session_never_bound`, `session_archived`, `session_already_bound`, `owner_cannot_own`, `session_changing` or `session_owner_changing`; an id that names no session is `unknown_session`. It is answered once the binding is written; the session, when running, and then its new parent are told afterwards in messages, queued while one cannot take one; the new parent's message is sent only while the session is still bound to it, looked at right before it is written, queued or kept (after any wait on a claim on the parent too), and is dropped, neither written nor kept, should the session have been released or bound to another parent meanwhile; a session with no process is told when it next starts, ahead of any instruction of that launch, as the notice every change of parent leaves for a session that was not running. A notice that fails does not undo the binding |
 | `list_pages` | `session` | A session's report panel pages, oldest first. Answered with `page_list` on the asking socket. `session` is the session that pushed the pages, a console session or a project session; one that names no session is refused with `unknown_session` |
+| `list_scheduled_tasks` | — | Every scheduled task, oldest first. Answered with `scheduled_tasks_listed` on the asking socket. See "Scheduled tasks" |
+| `create_scheduled_task` | `console_id`, `project_id?`, `launch?`, `prompt`, `schedule`, `enabled?` | Creates a scheduled task, enabled unless `enabled` is false (absent is true), with its next run computed from now (none for a task created disabled), and answers `scheduled_task_saved`; every client is sent `scheduled_task_upserted`. Refused, with nothing stored, as "Scheduled tasks" sets out |
+| `update_scheduled_task` | `task`, `console_id?`, `project_id?`, `launch?`, `prompt?`, `schedule?` | Changes a scheduled task and answers `scheduled_task_saved`; every client is sent `scheduled_task_upserted`. A field left out is left alone; `launch` replaces the task's launch settings whole; `project_id` is tri-state: absent leaves the project alone, `null` makes it a console task, a value makes it a task of that project, checked against the resulting console; `console_id` moves the task to that console, keeping its project only when `project_id` is absent and the project belongs to the new console (else `unknown_project`). The whole result is checked as `create_scheduled_task` checks a new task, except that a one-off time is refused as passed only when `schedule` is given. The edit never changes whether the task is enabled. The next run is left as it is when `schedule` is unchanged (an occurrence already due is neither dropped nor given twice) and computed again from now when it is changed (none while the task is disabled); it is decided from the task as it is when the edit lands. Refused, with nothing changed, with `unknown_scheduled_task` and as "Scheduled tasks" sets out |
+| `set_scheduled_task_enabled` | `task`, `enabled` | Turns a scheduled task on or off and answers `scheduled_task_saved`; every client is sent `scheduled_task_upserted`. Turning it off clears `next_run_at`; turning it on computes it from now, and turning on a task that is already on leaves it alone. Refused with `unknown_scheduled_task` |
+| `delete_scheduled_task` | `task` | Deletes a scheduled task; answered with `ack`, and every client is sent `scheduled_task_deleted`. Refused with `unknown_scheduled_task` |
+| `run_scheduled_task` | `task` | Runs a scheduled task once now, whatever its schedule and whether it is enabled, leaving its schedule alone; answered with `ack` once the task is found, and the run is announced with `scheduled_task_run_added` once its launch has settled. Refused with `unknown_scheduled_task`, and with `daemon_shutting_down` once the daemon has begun to stop. See "Scheduled tasks" |
+| `list_scheduled_task_runs` | `task` | The task's kept runs, most recent first. Answered with `scheduled_task_runs_listed` on the asking socket. Refused with `unknown_scheduled_task` |
 | `submit_page` | `page`, `data` | A report panel form submission; `data` is an object of the submitted fields: one key per input field and, for the submitter pressed, its `name`, each value a string, a number, a boolean or an array of strings (a multiple choice, in its options' order). Each key must name an input field or submitter of the page, and the values are not checked beyond their shape (the client has checked them; a hidden field is left out); anything else is refused with `unreadable_request`. Written into the session that pushed the page, found from the page itself, as a user message naming the page, one `key: value` line per field in the order sent with an array joined by `, `; held rather than refused while that session is `waiting_user`, since the session is not the one who has to answer that prompt. Refused with `unreadable_request` when the page has no submitter, and so no form; refused when `page` is not its session's newest page — history pages are read-only — and, as an unknown page, when its session has the worker role and so no tool to read the submission (its pages are withdrawn when it becomes one, below). **A page takes one submission**: the daemon marks the page submitted (stored as `Page.submission`) in one step that also checks that it is the newest and not yet submitted, broadcasts `page_submission` with the submission, and only then delivers the message, so that of several submissions racing for a page, from one window or from several, exactly one is delivered and the others are refused with `page_already_submitted`. Each change of the mark raises `Page.submission_revision` in the same store write and is broadcast with the revision the store gave it. A delivery that certainly failed (the session is not running, the daemon is stopping, or the message was refused, as `send_message` is with `message_refused` when a Codex session's own queue refuses it) takes that mark off again — only that one, named by its revision, so a late clearing never takes off a later mark — and broadcasts `page_submission` with a `null` `submission`, and the error is returned, so the form can be submitted again. One whose acceptance is unconfirmed (`message_acceptance_unconfirmed`, when a Codex session's queue did not confirm taking it, or the writing task did not come back) keeps the mark: the message may already be there, and the error is returned |
 | `list_memories` | `console?`, `project?` | The index of a memory (see `save_memory` under "MCP tools" for an entry's fields): every entry without its `content`, the most recently updated first; exactly one of `console` and `project` names the memory: a console's, or the project's place's (its `host_id` and stored `path`, shared by every project there, of any console); neither is refused with `field_required` (`field` `console`), both with `unreadable_request`, an unknown one with `unknown_console` or `unknown_project`. Answered with `memory_list` on the asking socket |
 | `read_memory` | `console?`, `project?`, `memory` | One entry of a memory, `content` included, by its id (`memory`); the memory is named as for `list_memories`. Answered with `memory_content`; refused with `unknown_memory` when the memory has no entry of that id |
@@ -571,6 +579,12 @@ The terminal socket has no heartbeat of its own.
 | `memory_saved` | `entry` — the whole entry (`MemoryEntry`: `scope`, `id`, `summary`, `content`, `local`, `created_at`, `updated_at`, `updated_by`, `version`): it was created or updated by a session's `save_memory` tool or a client's `save_memory`. A place's entry concerns every project at that place, whatever its console. Broadcast in the order the writes were made, deletions included |
 | `memories_deleted` | `scope`, `memories` — the ids of the entries of that memory deleted by a session's `delete_memory` tool, or a client's `delete_memory`, `delete_memories`, `delete_orphaned_memory`, `delete_orphaned_memories` or a `delete_project` with `delete_memory`; never empty |
 | `orphaned_memory_list` | `id`, `places` — the places whose memory no project is at any more, each `{ host_id, path, entries, updated_at }` (`entries` at least one, `updated_at` its latest entry's), the most recently updated first: the reply to `list_orphaned_memories`, and broadcast with no `id` whenever it may have changed (a project removed, alone or with its console, a project added at a place with memory, a place's memory deleted, the memory left behind deleted) |
+| `scheduled_tasks_listed` | `id`, `tasks`, `time_zone` — the reply to `list_scheduled_tasks`: every `ScheduledTask`, oldest first, and the IANA name of the time zone schedules are read in, the daemon machine's own local zone as it is when the list is sent (`Europe/Berlin`), or `null` whenever that zone has no IANA name (one given as a POSIX rule, or the fallback that behaves as UTC when the machine's zone cannot be determined); schedules are then read in that zone as the daemon resolved it. A client shows and enters a schedule's times in the named zone. Scheduled tasks are not in `snapshot`; a client that shows them asks again after every `snapshot`, as the report panel does for its pages |
+| `scheduled_task_saved` | `id`, `task` — the reply to `create_scheduled_task`, `update_scheduled_task` and `set_scheduled_task_enabled`: the `ScheduledTask` as stored, which `scheduled_task_upserted` also brings every client |
+| `scheduled_task_upserted` | `task` — the whole `ScheduledTask`, created or changed |
+| `scheduled_task_deleted` | `task` — the id of a scheduled task `delete_scheduled_task` deleted. The tasks of a deleted console or project go with it and are not announced one by one: a client drops a console's tasks on `console_deleted` and a project's on `project_deleted` |
+| `scheduled_task_runs_listed` | `id`, `task`, `runs` — the reply to `list_scheduled_task_runs`: the task's kept `ScheduledTaskRun`s, most recent first |
+| `scheduled_task_run_added` | `run` — a `ScheduledTaskRun` just recorded, started or failed; every client is also sent the task's `scheduled_task_upserted` with its new `last_run_at`. A client raises the system notification of a failed run from this |
 | `ack` | `id` |
 | `daemon_update_check` | `id`, `started`, `last_check_at` — reply to `check_daemon_update`: whether it started a check (`started`) and, when it did, the `last_check.at` of the status as it started (null for none), so that the check's end is the status whose `last_check.at` is another (or `phase` `installed`, when an update installed meanwhile is learned of instead); null when nothing started |
 | `daemon_update_started` | `id`, `started_at` — reply to `update_daemon`: the `install.started_at` of the download it started, by which a client tells that install's end from another's |
@@ -629,6 +643,8 @@ A client also branches on some codes, instead of only showing them:
 | `store_write_failed` | `cause`, `detail` | SQLite could not read or write Octoboard's own database (`octoboard.db` in the data folder), for a cause the user can fix; any request that reads or writes a record can be answered with it. `cause`: `access` (the data folder or the file is read-only, or access is denied), `disk_full` (no room to grow the file) or `other` (the file could not be opened, which a disk too full for SQLite's journal also causes; any `SQLITE_IOERR`, the system failing a read, write, sync or lock of the file; or the file moved or deleted while open, `SQLITE_READONLY_DBMOVED`); a client treats a cause it does not know as `other`. `detail` is SQLite's own text, which names no operating-system error. Failures of the agents' own databases are never this code |
 | `internal_error` | `detail` | Any other failure |
 | `unknown_console` / `unknown_project` / `unknown_session` / `unknown_page` / `unknown_shell_terminal` | `console` / `project` / `session` / `page` / `shell_terminal` | The record is not there |
+| `unknown_scheduled_task` | `task` | No scheduled task has that id |
+| `scheduled_time_passed` | `run_at` | A one-off schedule's time (in milliseconds since the epoch) is not in the future, in `create_scheduled_task`, or in `update_scheduled_task` when it gives `schedule` |
 | `field_required` | `field` | A request lacks a field its kind needs, named as on the wire |
 | `field_too_long` | `field`, `limit` | A project name or description exceeds its character limit after trimming; `limit` is the decimal character count |
 | `conflicting_fields` | `first`, `second` | A request names two fields that exclude each other, as on the wire |
@@ -3343,6 +3359,115 @@ same way:
 
 A clone, and the probe's own clone, run in the daemon's own working directory, as they name every path they work on.
 
+### Scheduled tasks
+
+A scheduled task is a session Octoboard starts on a schedule, handed `prompt` as its opening task: a console session of
+`console_id` when `project_id` is null, else a project session of that project. This daemon stores the tasks and
+computes when each next runs, runs each when it comes due and keeps a record of its recent runs; the requests above
+list, create, change, turn on and off, delete and run them, and list their runs. Deleting a
+console or a project deletes its tasks with it.
+
+A `ScheduledTask` is `{id, console_id, project_id, launch, prompt, schedule, enabled, created_at, updated_at,
+next_run_at, last_run_at, run_sessions}`. `next_run_at` is when the task next runs on its schedule, null for a
+manual-only task, a one-off whose time has passed or a disabled task; `last_run_at` is when it last ran, null until it
+first does; both are instants in milliseconds.
+
+`updated_at` is stamped at every stored change of the task's definition (console, project, launch, prompt, schedule) or
+of `enabled`, the clearing of a deleted account from the task included, and is strictly greater than the task's previous
+value, whatever the daemon's clock does: of two versions of one task, the one with the greater `updated_at` is the
+later. The scheduler's moves of `next_run_at` and a recorded run's `last_run_at` leave it alone, and so does a request
+that changes nothing (`set_scheduled_task_enabled` to the state the task is in), which answers with the task as it is.
+A new task's `updated_at` equals its `created_at`.
+
+`run_sessions` is the ids of the sessions the task's kept runs started (those whose outcome is `started`), most recent
+run first, each once, leaving out a session the daemon no longer holds or that is archived. It is not stored: it is read
+from the runs and the sessions each time a task is sent (`scheduled_tasks_listed`, `scheduled_task_saved`,
+`scheduled_task_upserted`), and recording a run broadcasts `scheduled_task_upserted` (its `last_run_at` changes), so a
+session a run has started is never missing from the task sent after it. A session archived or deleted later may stay
+listed until the task is next sent, so a client that uses the list ignores a session it does not hold. A client can
+tell which tasks are running now from it and the sessions' statuses. An older client ignores the field.
+
+`launch` is the session's launch settings, `{title?, agent?, account?, model?, effort?, compatibility, bound_to?}`, each
+with the rule `open_session` gives the field of the same name: an absent `title` names the session by default; an absent
+`agent` resolves the agent at each run; `account`, `model` and `effort` are tri-state (absent inherits from the project,
+else the console, at each run; `null` chooses the default account, or leaves the model or effort to the agent; a value
+pins it; deleting the account a task's `account` names clears it, so the task inherits again, and broadcasts
+`scheduled_task_upserted` for each task changed); `compatibility` holds the switches the session holds its own value for
+(absent in a request holds none); `bound_to` is the console session a project task's session reports to, absent for
+none, and dropped for a console task.
+
+`schedule` is read in the local time zone of the daemon's machine, which `scheduled_tasks_listed` names (`time_zone`),
+a tagged object by `kind`:
+
+| `kind` | Fields | Runs |
+|---|---|---|
+| `once` | `run_at` | Once, at the instant `run_at` (milliseconds since the epoch) |
+| `hourly` | `minute` (0 to 59) | Every hour at that minute past it, in every real hour across a daylight saving change |
+| `daily` | `time` | Every day at `time`, `{hour, minute}` (0 to 23, 0 to 59) |
+| `weekdays` | `time` | Monday to Friday at `time` |
+| `weekly` | `time`, `days` | On each of `days` (`monday` … `sunday`, not empty; stored sorted, each once) at `time` |
+| `monthly` | `day` (1 to 31), `time` | On day `day` of every month at `time`; a month without that day runs on its last day, so 31 is the last day of every month |
+| `manual` | — | Only when run by hand |
+
+A wall-clock time a daylight saving change skips runs as far past the change (02:30 on a night that jumps from 02:00 to
+03:00 runs at 03:30); one it repeats runs at its first occurrence.
+
+`create_scheduled_task` and `update_scheduled_task` trim `prompt` and `launch.title` and refuse, with nothing stored:
+
+- a blank `prompt` with `field_required` (`field`: `prompt`), and a `weekly` schedule with no day with `field_required`
+  (`field`: `days`);
+- an hour, minute or day of the month out of range with `unreadable_request`;
+- a `once` time that is not in the future with `scheduled_time_passed` (by `update_scheduled_task` only when it gives
+  `schedule`, so a one-off that has run can still be edited);
+- an unknown `console_id` with `unknown_console`, and a `project_id` that names no project of that console with
+  `unknown_project`;
+- a `bound_to` that names no console session of the task's console that the daemon holds (a project session, a session
+  of another console or an id with no session) with `unknown_session`; its status is not checked, since whether it can
+  take a session is decided when the task runs;
+- the launch settings as `open_session` refuses them before it records a session (the agent not available or not added,
+  `unknown_account`, `account_disabled`, `invalid_launch_setting`, a compatibility switch the agent does not declare
+  with `unreadable_request`, and the rest of its refusals), except that an account whose quota is used up or that is
+  not logged in is not refused: that is decided when the task runs. A model or effort is stored normalised as a session
+  records it.
+
+**Running a task.** A run starts the task's session as `open_session` opens one, in the task's console or project with
+its launch settings, handing `prompt` as the opening task so the session comes up working, and waits until the launch
+has settled; then it records the run. A run is refused by whatever refuses `open_session`, with these differences:
+
+- the account is checked as a new session's is, whether the task names one or inherits it from its project or console:
+  one that is turned off, used up or not logged in gives way, while automatic account selection is on, to the account
+  the daemon picks for a new session that names none; with the setting off, or when that pick is not usable either, the
+  run fails with the account's refusal (`account_disabled`, `account_quota_exhausted`, `account_not_signed_in`). An
+  unattended run on an unusable account is recorded as failed rather than started to die;
+- a `bound_to` console session that cannot take sessions at that moment (archived, deleted or still starting) leaves the
+  session independent, and the run says so.
+
+A refusal or a launch failure is recorded as a failed run, never sent as an `error`. The session is started as one a
+user opens (`origin` `user`).
+
+**When tasks run.** The daemon runs each enabled task whose `next_run_at` has come, and moves `next_run_at` to the
+schedule's next occurrence after now (null for a one-off, which runs once) before the session is started, announcing
+the task with `scheduled_task_upserted`; a run that comes due while the previous run's session is still at work starts
+another session. A disabled task does not run on its schedule. At the daemon's start, each enabled task whose
+`next_run_at` passed while it was not running is caught up once: its most recent missed occurrence runs, as a
+`catch_up`, when it is no more than 24 hours old, else nothing runs; either way `next_run_at` moves past now, so several
+missed occurrences never make more than one run. An occurrence a running daemon reaches more than two minutes late (the
+machine was asleep) is caught up the same way. A scheduled or catch-up run the daemon's stop refuses is not
+recorded, and the task keeps the occurrence for the next daemon to catch up; a Run now refused after its `ack` is
+recorded as failed with `daemon_shutting_down`.
+
+A `ScheduledTaskRun` is `{id, task_id, ran_at, due_at, trigger, outcome}`. `ran_at` is when the session was started, or
+failed to be; `due_at` is the occurrence the run stands for (a catch-up's is the missed one), null for a run now.
+`trigger` is `scheduled`, `catch_up` or `run_now`. `outcome` is tagged by `kind`:
+
+- `started`: `session`, the session started (which may since have been deleted), and `started_independent`, true when
+  the task's `bound_to` console session could not take sessions (archived, deleted or still starting), so the session
+  reports to none;
+- `failed`: `code`, `params` and `message`, as an `error` reply would carry the refusal or launch failure (`message` is
+  its English account with the raw detail). A code may be one a later daemon added.
+
+The last 50 runs of each task are kept; deleting the task deletes them.
+
 ### Shell terminals
 
 A shell terminal is a plain shell the daemon runs for a project, beside its agent sessions, with no agent behind it
@@ -5654,8 +5779,8 @@ says what the operation does.
    - `probe_X`, `detect_X`, `locate_X`: look something up outside the store.
 3. **Fields.** What a request acts on is `console`, `project` or `session`; placement under another record is
    `console_id` or `project_id`. No request field is named `id`, which is the request's own correlation id. Instants are
-   `*_at`, in milliseconds since the epoch. An absent boolean is false; an absent optional field leaves the value alone
-   in an update and takes the default in a create.
+   `*_at`, in milliseconds since the epoch. An absent boolean is false unless the field's own row says it defaults to
+   true; an absent optional field leaves the value alone in an update and takes the default in a create.
 4. **Replies** are named in the past tense or as the noun of what they carry (`session_opened`, `processes_listed`,
    `dir_listing`).
 

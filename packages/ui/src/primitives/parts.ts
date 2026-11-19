@@ -10,6 +10,14 @@ export const partSelector = {
   menuPopover: "[data-slot=dropdown-popover]",
   /** The visible name of a menu or list item (a `Label` inside it). */
   itemLabel: "[data-slot=label]",
+  /** The visible name of a field (its `Label`). */
+  fieldLabel: "[data-slot=label]",
+  /** The root of a time field or a date picker (`TimeField`, `DatePicker`): what holds its label, segments and note. */
+  temporalField: "[data-slot=time-field], [data-slot=date-picker]",
+  /** A segment of a temporal field that holds no value yet and shows its placeholder; `segmentSelector` is one by type. */
+  blankSegment: "[role=spinbutton][data-placeholder=true]",
+  /** The popover of a `DatePicker` with its calendar, while it is open. */
+  calendarPopover: "[data-slot=date-picker-popover]",
   /** The button of a `Select` that opens its options (`SelectTrigger`). */
   selectTrigger: "[data-slot=select-trigger]",
   /** The clear button of a `Select` (`SelectClearButton`). */
@@ -43,3 +51,6 @@ export const partSelector = {
   scrollShadow: ".scroll-shadow",
 } as const;
 
+/** The segment of a temporal field that holds `type` (`hour`, `minute`, `dayPeriod`, `year`...), or any segment with
+ * no `type`. */
+export const segmentSelector = (type?: string): string => (type === undefined ? "[role=spinbutton][data-type]" : `[role=spinbutton][data-type=${type}]`);

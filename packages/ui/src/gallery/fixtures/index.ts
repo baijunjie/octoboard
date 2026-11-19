@@ -27,6 +27,7 @@ import { railQuotaScenarios } from "./railQuota";
 import { remoteAccessScenarios } from "./remoteAccess";
 import { remoteDaemonsScenarios } from "./remoteDaemons";
 import { remoteWindowScenarios } from "./remoteWindow";
+import { scheduledTasksScenarios } from "./scheduledTasks";
 import { trayFlyoutScenarios } from "./trayFlyout";
 import { reportScenarios, reportVisualScenarios } from "./report";
 import { reportChartScenarios } from "./reportCharts";
@@ -87,6 +88,7 @@ export const SCENARIOS: Scenario[] = [
   ...viewerScenarios,
   ...layoutScenarios,
   ...railQuotaScenarios,
+  ...scheduledTasksScenarios,
   ...remoteDaemonsScenarios,
   ...remoteWindowScenarios,
   ...trayFlyoutScenarios,

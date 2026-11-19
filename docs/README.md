@@ -322,6 +322,16 @@ Where to start, by question:
   removing and connecting saved remote daemons: opening and leaving it and its place in Back/Forward, the device list
   in the sidebar, the settings form and its Paste button, questions and failures handed to it, and using it while the
   local daemon cannot be used.
+- [Scheduled tasks](product/scheduled-tasks.md) — having Octoboard start a session at a set time: what a task holds,
+  the schedule kinds and the daemon machine's time zone, due runs, the single catch-up after a missed run, Run now, the
+  account fallback, run records, the failed-run notification, what saving checks, and what deleting a console, project
+  or account does to tasks.
+- [The Scheduled tasks page](product/scheduled-tasks-page.md) — the page for listing, adding, editing, running and
+  deleting scheduled tasks: the rail button and its running count, the task list in the sidebar, the header, the
+  settings form and how it follows a task changed elsewhere, Run history, and its empty and failed states.
+- [Leaving a form with unsaved changes](product/leaving-a-form-with-unsaved-changes.md) — the Discard changes question
+  asked before a page form (Remote devices, Scheduled tasks) that holds unsaved changes is left: what asks, what does
+  not, changes nobody asked for, and what cannot ask.
 - [Links and files in a remote window](product/links-and-files-in-a-remote-window.md) — how a remote window forwards
   the remote machine's loopback addresses to this computer, the Forwarded ports button on its rail, and the copies
   Download and open keeps of remote files.

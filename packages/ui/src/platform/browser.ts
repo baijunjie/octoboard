@@ -98,6 +98,7 @@ async function readClipboardImage(): Promise<Blob | undefined> {
 }
 
 function webNotifications(): NonNullable<PlatformAdapter["notifications"]> {
+  const chosenListeners = new Set<(target: string) => void>();
   return {
     // Never asks: a browser ignores or denies a request made without a user gesture, and Chrome
     // would ask again for every newly waiting session while the answer is undecided.
@@ -113,8 +114,18 @@ function webNotifications(): NonNullable<PlatformAdapter["notifications"]> {
         await Notification.requestPermission().catch(() => {});
       },
     },
-    async notify({ title, body }) {
-      new Notification(title, { body });
+    async notify({ title, body, target }) {
+      const notification = new Notification(title, { body });
+      if (target === undefined) return;
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+        for (const listener of chosenListeners) listener(target);
+      };
+    },
+    onChosen(listener) {
+      chosenListeners.add(listener);
+      return () => void chosenListeners.delete(listener);
     },
   };
 }

@@ -4,8 +4,9 @@ use super::{Result, StoreError};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
 use super::rows::{agent_from_row, enum_to_text};
+use super::scheduled_tasks::scheduled_task_in;
 use super::Store;
-use crate::protocol::{error_code, Account, CodedError};
+use crate::protocol::{error_code, Account, CodedError, ScheduledTask};
 use crate::time::now_millis;
 
 /// What turning an account's sharing on recorded when it started; see
@@ -193,13 +194,14 @@ impl Store {
         read_accounts(&self.lock())
     }
 
-    /// Removes the account, after clearing it from every console and project that refers to it —
-    /// which puts each console back on its agent's default account and each project back to
-    /// inheriting its console's — in the same locked transaction, so no reader ever sees one still
-    /// pointing at an id the `accounts` table no longer has. A project that pins the default
-    /// account refers to no id, so it is left alone. A provider row left holding nothing is
-    /// removed.
-    pub fn delete_account(&self, id: &str) -> Result<()> {
+    /// Removes the account, after clearing it from every console, project and scheduled task that
+    /// refers to it — which puts each console back on its agent's default account and each project
+    /// and task back to inheriting from its target — in the same locked transaction, so no reader
+    /// ever sees one still pointing at an id the `accounts` table no longer has. A project or task
+    /// that pins the default account refers to no id, so it is left alone. A provider row left
+    /// holding nothing is removed. Returns the scheduled tasks it changed, as they now are, each with
+    /// `updated_at` stamped past its previous value.
+    pub fn delete_account(&self, id: &str) -> Result<Vec<ScheduledTask>> {
         let mut conn = self.lock();
         let tx = conn.transaction()?;
         tx.execute(
@@ -215,9 +217,29 @@ impl Store {
              WHERE account_id IS NULL AND account_default = 0 AND model IS NULL AND effort IS NULL",
             [],
         )?;
+        let task_ids = {
+            let mut stmt = tx.prepare(
+                "SELECT id FROM scheduled_tasks WHERE account_set = 1 AND account_id = ?1
+                 ORDER BY created_at, id",
+            )?;
+            let ids = stmt
+                .query_map(params![id], |row| row.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            ids
+        };
+        tx.execute(
+            "UPDATE scheduled_tasks
+             SET account_id = NULL, account_set = 0, updated_at = MAX(?2, updated_at + 1)
+             WHERE account_set = 1 AND account_id = ?1",
+            params![id, now_millis()],
+        )?;
+        let mut changed = Vec::new();
+        for task_id in &task_ids {
+            changed.extend(scheduled_task_in(&tx, task_id)?);
+        }
         tx.execute("DELETE FROM accounts WHERE id = ?1", params![id])?;
         tx.commit()?;
-        Ok(())
+        Ok(changed)
     }
 }
 
@@ -375,6 +397,92 @@ mod tests {
             untouched.accounts[AgentId::CLAUDE].as_deref(),
             Some("claude-other")
         );
+    }
+
+    /// Removing an account puts the scheduled tasks that name it back to inheriting their
+    /// target's account, in the same step, and returns just those, as they now are; a task that
+    /// pins the default account, one that inherits and one naming another account are untouched.
+    #[test]
+    fn deleting_an_account_clears_it_from_the_scheduled_tasks_that_name_it() {
+        use crate::protocol::{Schedule, ScheduledTaskLaunch};
+
+        let path = temp_db("delete-account-tasks");
+        let store = Store::open(&path).expect("store");
+        for id in ["claude-acct", "claude-other"] {
+            store
+                .insert_account(&account(id, AgentId::CLAUDE, &format!("/home/u/.{id}")))
+                .expect("account");
+        }
+        store
+            .insert_console(&console(None, None, None))
+            .expect("insert");
+        let task = |id: &str, created_at: i64, account: Option<Option<&str>>| ScheduledTask {
+            id: id.to_string(),
+            console_id: "console-1".to_string(),
+            project_id: None,
+            launch: ScheduledTaskLaunch {
+                agent: Some(AgentId::CLAUDE),
+                account: account.map(|account| account.map(str::to_string)),
+                title: Some(format!("title of {id}")),
+                ..Default::default()
+            },
+            prompt: "Run".to_string(),
+            schedule: Schedule::Manual,
+            enabled: true,
+            created_at,
+            updated_at: created_at,
+            next_run_at: None,
+            last_run_at: None,
+            run_sessions: vec![],
+        };
+        let tasks = [
+            task("b-names", 2, Some(Some("claude-acct"))),
+            task("a-names", 2, Some(Some("claude-acct"))),
+            task("pinned-default", 3, Some(None)),
+            task("inherits", 4, None),
+            task("names-other", 5, Some(Some("claude-other"))),
+        ];
+        for task in &tasks {
+            store.insert_scheduled_task(task).expect("task");
+        }
+
+        let changed = store.delete_account("claude-acct").expect("deleted");
+
+        let inheriting = |id: &str| {
+            let mut cleared = tasks.iter().find(|task| task.id == id).unwrap().clone();
+            cleared.launch.account = None;
+            cleared
+        };
+        let stamped = |mut task: ScheduledTask, previous: i64| {
+            assert!(task.updated_at > previous, "the clearing is stamped");
+            task.updated_at = previous;
+            task
+        };
+        let changed: Vec<ScheduledTask> = changed
+            .into_iter()
+            .map(|task| {
+                let previous = tasks.iter().find(|t| t.id == task.id).unwrap().updated_at;
+                stamped(task, previous)
+            })
+            .collect();
+        assert_eq!(changed, [inheriting("a-names"), inheriting("b-names")]);
+        for task in &changed {
+            let stored = store.require_scheduled_task(&task.id).unwrap();
+            assert!(stored.updated_at > task.updated_at);
+            assert_eq!(
+                ScheduledTask {
+                    updated_at: task.updated_at,
+                    ..stored
+                },
+                *task
+            );
+        }
+        for id in ["pinned-default", "inherits", "names-other"] {
+            let original = tasks.iter().find(|task| task.id == id).unwrap();
+            assert_eq!(store.require_scheduled_task(id).unwrap(), *original);
+        }
+        assert!(store.get_account("claude-acct").unwrap().is_none());
+        assert_eq!(store.delete_account("claude-other").unwrap().len(), 1);
     }
 
     /// A removal that fails part-way leaves the references it had already cleared as they were.

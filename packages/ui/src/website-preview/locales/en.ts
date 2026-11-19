@@ -62,6 +62,17 @@ export const previewCopy = {
   next: "Next step",
   promotionContinuation:
     "Continue checking the order flow across projects and collecting integration results. Update the discount checks once the rule is confirmed.",
+  scheduledTasks: {
+    orderChecksTitle: "Nightly order API checks",
+    orderChecksPrompt:
+      "Run the order validation and pricing test suites and report any failure with the change that caused it.",
+    progressTitle: "Morning promotion progress report",
+    progressPrompt:
+      "Summarise yesterday's work across the eight promotion projects and push the summary as a report page.",
+    redemptionTitle: "Weekly redemption audit",
+    redemptionPrompt:
+      "Compare the week's redemption records with its orders and list any code that was redeemed twice.",
+  },
   terminals: {
     "preview-coordinator": {
       prompt: "Add meal deal promotion features to our ordering and store systems.",

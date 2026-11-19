@@ -21,9 +21,10 @@ offering the one thing there is to do, and the top bar carries no sidebar toggle
 `docs/product/welcome-screen.md`). Everything this doc says of the three panes is what the window looks like once a
 console exists.
 
-**In the main window of the desktop application, the Remote devices page** takes the place of a console's sessions
-while it shows: the sidebar lists the saved remote daemons, the selected one's settings stand in the terminal's place,
-and there is no right pane (see `docs/product/remote-devices-page.md`).
+**The pages of the window** take the place of a console's sessions while one shows, one at a time: the sidebar lists
+the page's items, the selected one stands in the terminal's place, and there is no right pane. Every window of a daemon
+has the **Scheduled tasks page** (see `docs/product/scheduled-tasks-page.md`); the main window of the desktop application
+also has the **Remote devices page** (see `docs/product/remote-devices-page.md`).
 
 Above **768 px**, each side docks only when the panes actually shown leave the terminal its **400 px** minimum. The
 sidebar has priority; a right pane that cannot fit floats as a group. Each side keeps its own docking preference through
@@ -170,7 +171,7 @@ a UI that failed, which has no such sentence otherwise, that sentence — that t
 report it at — comes first on the surface, above the stack trace.
 
 **Restart**, on the screen for a daemon that could not start and, in the desktop application, on the screen for a
-daemon of another version, restarts Octoboard at once, asking nothing (see "Restarting from a daemon failure" in `docs/product/application-lifecycle.md`). None of the five screens has
+daemon of another version, restarts Octoboard at once, asking nothing about what is running (see "Restarting from a daemon failure" in `docs/product/application-lifecycle.md`). None of the five screens has
 a **Quit** button: the window still quits through `Cmd+Q`, the application menu's Quit, the menu bar icon's quit entry
 (the notification-area icon's on Windows) and, where closing the window quits, its close button (see "Quitting" in
 `docs/product/application-lifecycle.md`). As
@@ -239,9 +240,9 @@ It runs, left to right:
 
 - **Back** and **Forward**, which move through the places the window has shown (see
   `docs/product/navigation-history.md`); each is disabled while there is nowhere to go in its direction.
-- The sidebar toggle ("Show sessions" / "Hide sessions", or on the Remote devices page "Show remote devices" / "Hide
-  remote devices"), there only while there is a sidebar — so not while the window shows the welcome screen (see
-  `docs/product/welcome-screen.md`).
+- The sidebar toggle ("Show sessions" / "Hide sessions", on the Remote devices page "Show remote devices" / "Hide
+  remote devices", and on the Scheduled tasks page "Show scheduled tasks" / "Hide scheduled tasks"), there only while
+  there is a sidebar — so not while the window shows the welcome screen (see `docs/product/welcome-screen.md`).
 - **In a remote window** (see `docs/product/remote-daemons.md`), the **remote daemon's name**, in a chip with a server
   glyph, filled as the bar's controls are, and set apart from the breadcrumb, since it names the machine rather than a
   level of the path. Assistive technology reads it as the daemon on that name. It keeps its width while the breadcrumb
@@ -267,9 +268,10 @@ It runs, left to right:
   `docs/product/archive-view.md`) the breadcrumb shows where that is instead, with no status icon: *console › project ›
   Archived sessions*, *console › console session › Archived bound sessions*, or *console › Archived console sessions*.
   On the Remote devices page it is *Remote devices › device name*, or *Remote devices* alone (see "What the page
-  shows" in `docs/product/remote-devices-page.md`).
+  shows" in `docs/product/remote-devices-page.md`); on the Scheduled tasks page *Scheduled tasks › task name*, or
+  *Scheduled tasks* alone (see "What the page shows" in `docs/product/scheduled-tasks-page.md`).
 - At the **end of the bar**, the **panel toggles**: one per kind of panel the right pane's owner has, there only while
-  the right pane has an owner (see "What the right pane shows" below) and not on the Remote devices page, each showing
+  the right pane has an owner (see "What the right pane shows" below) and not on a page of the window, each showing
   or hiding its panel and so the right pane (see "The panel toggles in the top bar" in
   `docs/product/right-pane-panels.md`). The end is the reading direction's, so under a right-to-left language it is at
   the window's left (see `docs/product/right-to-left-layout.md`).
@@ -299,7 +301,7 @@ included, opens from the rail's Settings button and from its shortcut (see "Open
 ### The sidebar toggle and the panel toggles
 
 **Each toggle is there only while what it controls exists**: the sidebar toggle while there is a console for the
-sidebar to show (see `docs/product/welcome-screen.md`) or the Remote devices page's list of devices, the panel toggles
+sidebar to show (see `docs/product/welcome-screen.md`) or a page's list in it, the panel toggles
 while the right pane has an owner (see "What the right pane shows" below). A toggle with nothing to control is left out
 rather than shown disabled. The right pane has its own docking toggle beside its panel toggles (see
 `docs/product/right-pane-panels.md`).
@@ -334,16 +336,21 @@ without taking room. Its two ends hold:
   in `docs/product/pane-docking.md`). When there are more consoles than fit, the avatars scroll, with no scrollbar
   drawn — so the fade at the column's edge is the only sign there are more (see "The edge that hides content fades"
   in `docs/product/scrolling-surfaces.md`); New console stays below them.
-- **Under the consoles, in the main window of the desktop application, the Remote devices button**, after a
-  separator: a server glyph with the number of remote connections held — in a remote window or for the browser — in a
-  badge placed as the waiting count's, shown only while at least one is (99+ beyond 99). Pressing it opens the Remote
-  devices page; while the page shows, the button is marked as the current item and no console's avatar is (see
-  "Opening and leaving the page" in `docs/product/remote-devices-page.md`). Nothing here disconnects one. A remote
-  window, and a browser, have no such button. While the local daemon cannot be used, it is the only item on the main
-  window's rail (see "Without the local daemon" in `docs/product/remote-devices-page.md`). The free space of the rail
-  lies between this button and the bottom group; in a window too short to leave any, a separator is drawn under the
-  button too, so that it does not run into the bottom group, and the consoles give way while the button and the bottom
-  group stay.
+- **Under the consoles, after a separator, the buttons of the window's pages**, each opening its page; while a page
+  shows, its button is marked as the current item and no console's avatar is:
+  - **Scheduled tasks**, in every window, a clock with the number of scheduled tasks running in a green badge placed as
+    the waiting count's, shown only while at least one is (99+ beyond 99) (see "Opening and leaving the page" in
+    `docs/product/scheduled-tasks-page.md`);
+  - **Remote devices**, in the main window of the desktop application only, a server glyph with the number of remote
+    connections held — in a remote window or for the browser — in a badge placed as the waiting count's, shown only
+    while at least one is (99+ beyond 99) (see "Opening and leaving the page" in
+    `docs/product/remote-devices-page.md`). Nothing here disconnects one. While the local daemon cannot be used, it is
+    the only item on the main window's rail, with no Scheduled tasks button above it (see "Without the local daemon" in
+    `docs/product/remote-devices-page.md`).
+
+  The free space of the rail lies between these buttons and the bottom group; in a window too short to leave any, a
+  separator is drawn under the last of them too, so that they do not run into the bottom group, and the consoles give
+  way while these buttons and the bottom group stay.
 - **At the bottom**, top to bottom: - the **waiting count**, a raised hand with the number of sessions waiting for
   the user in a badge at the button's top right, its top left under a right-to-left language (see
   `docs/product/right-to-left-layout.md`), shown only while at least one is (99+ beyond 99); pressing it goes to the
@@ -368,8 +375,8 @@ Above 768 px the rail is the same at every width; while the sidebar floats it st
 it, does not dim it, and leaves it usable while it is open. **At 768 px and below, while there is a console, the rail is
 not in the row**: it comes in only as part of the open sidebar overlay's card, and is out of reach while the sidebar
 overlay is closed (see "At 768 px and below: the rail comes in with the sidebar" in `docs/product/sidebar-drawer.md`).
-The same holds while the Remote devices page shows, whose sidebar the rail comes in with. With no console, and the page
-not shown, it stays in the row at every width.
+The same holds while a page of the window shows, whose sidebar the rail comes in with. With no console, and no page
+shown, it stays in the row at every width.
 
 ### Pressing the chrome's controls
 
@@ -380,8 +387,9 @@ Pressing any of them leaves keyboard focus where it was, so after a mouse press 
 keystrokes. Account usage, Processes and Forwarded ports pressed from the keyboard are the exception: each moves focus
 into the panel or popover it opens (see "Opening the panel" in `docs/product/account-quota-panel.md`, "Opening and
 closing the popover" in `docs/product/processes-on-the-rail.md` and "Forwarded ports on the rail" in
-`docs/product/links-and-files-in-a-remote-window.md`). So does Remote devices, which moves focus into the page it opens,
-from the mouse too (see "Keyboard and assistive technology" in `docs/product/remote-devices-page.md`). Turn on
+`docs/product/links-and-files-in-a-remote-window.md`). So do Scheduled tasks and Remote devices, each moving focus into
+the page it opens, from the mouse too (see "Keyboard and assistive technology" in
+`docs/product/scheduled-tasks-page.md` and in `docs/product/remote-devices-page.md`). Turn on
 notifications pressed from the keyboard keeps focus on itself while the browser's prompt is up, so no keystrokes reach
 the session meanwhile; once the browser answers and the bell goes away, focus moves to the terminal, or to the top bar's
 first enabled control when the terminal cannot take it.

@@ -15,7 +15,9 @@ use crate::adapter;
 use crate::agents::availability;
 use crate::hostfs;
 use crate::hostfs::dir_key;
-use crate::protocol::{error_code, Account, AgentId, Availability, CodedError, Console, Project};
+use crate::protocol::{
+    error_code, Account, AgentId, Availability, CodedError, Console, Event, Project,
+};
 use crate::state::{broadcast_settings, AppState, RecordKey};
 use crate::store::ReorderOutcome;
 
@@ -457,7 +459,7 @@ fn delete_account(state: &Arc<AppState>, id: &str) -> Result<()> {
         .filter(|project| project_references_account(project, id))
         .map(|project| project.id)
         .collect();
-    state.store.delete_account(id)?;
+    let cleared_tasks = state.store.delete_account(id)?;
     state.account_quotas.forget_account(state, id);
     state.publish_account_sharing();
     let _ = state
@@ -469,6 +471,9 @@ fn delete_account(state: &Arc<AppState>, id: &str) -> Result<()> {
     }
     for project_id in affected_projects {
         state.publish_project(&project_id)?;
+    }
+    for task in cleared_tasks {
+        state.broadcast(Event::ScheduledTaskUpserted { task });
     }
     broadcast_settings(state)?;
     Ok(())

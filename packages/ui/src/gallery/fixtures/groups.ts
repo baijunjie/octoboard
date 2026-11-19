@@ -1,5 +1,6 @@
 import {
   Archive,
+  Clock,
   Cpu,
   Download,
   FileCog,
@@ -49,6 +50,7 @@ export const GROUPS = [
   { title: "Configuration", icon: FileCog },
   { title: "Settings", icon: Settings },
   { title: "Updates", icon: Download },
+  { title: "Scheduled tasks", icon: Clock },
   { title: "Remote devices", icon: Server },
   { title: "Window layout", icon: PanelsTopLeft },
   { title: "Notification-area flyout", icon: PanelBottom },

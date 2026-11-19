@@ -10,7 +10,7 @@ export function RemoteDevicesTestHost({ capability, children }: { capability: Re
   const list = useRemoteDaemons(capability);
   if (!capability) return <>{children}</>;
   return (
-    <RemoteDevicesProvider capability={capability} list={list} selectedId={list.entries[0]?.id} shown={false} onShow={() => {}} onSelect={() => {}} onAdd={() => {}}>
+    <RemoteDevicesProvider capability={capability} list={list} selectedId={list.entries[0]?.id} adding={false} onShow={() => {}} onAttention={() => {}} onSelect={() => {}} onAdd={() => {}} onCancelAdd={() => {}}>
       {children}
     </RemoteDevicesProvider>
   );

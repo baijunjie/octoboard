@@ -45,10 +45,12 @@ function mount({
   alive = () => true,
   settle = (location) => location,
   platform = { kind: "browser", host: BROWSER_HOST },
+  confirm,
 }: {
   alive?: (location: Location) => boolean;
   settle?: (location: Location) => Location;
   platform?: PlatformAdapter;
+  confirm?: (move: () => void) => void;
 } = {}): Harness {
   const harness = { focusTerminal: vi.fn<() => void>() } as unknown as Harness;
   function Host() {
@@ -70,6 +72,7 @@ function mount({
         setFocus(settled.focus);
       },
       focusTerminal: harness.focusTerminal,
+      confirm,
     });
     return (
       <button type="button" data-testid="back" disabled={!harness.navigation.canGoBack} onClick={harness.navigation.back}>
@@ -247,6 +250,50 @@ describe("useNavigationHistory", () => {
       press(true);
       expect(h.shown().session).toBe("a");
     });
+  });
+});
+
+describe("confirm", () => {
+  it("makes no move and records nothing until the move it was handed is run, and then moves as if it had been made at once", () => {
+    const waiting: (() => void)[] = [];
+    const h = mount({ confirm: (move) => void waiting.push(move) });
+    visitAll(h, "a", "b");
+    act(() => h.navigation.back());
+    expect(waiting).toHaveLength(1);
+    expect(h.shown().session).toBe("b");
+    expect(h.navigation.canGoForward).toBe(false);
+    act(() => waiting[0]());
+    expect(h.shown().session).toBe("a");
+    expect(h.navigation.canGoForward).toBe(true);
+  });
+
+  it("leaves the history as it was when the move is never run, a declined one", () => {
+    const h = mount({ confirm: () => {} });
+    visitAll(h, "a", "b");
+    act(() => h.navigation.back());
+    act(() => h.navigation.forward());
+    expect(h.shown().session).toBe("b");
+    expect(h.navigation.canGoBack).toBe(true);
+    expect(h.navigation.canGoForward).toBe(false);
+  });
+
+  it("does not ask for a move that has nowhere to go", () => {
+    const confirm = vi.fn();
+    const h = mount({ confirm });
+    act(() => h.navigation.back());
+    act(() => h.navigation.forward());
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("runs the move from the history as it stands when it is confirmed", () => {
+    const waiting: (() => void)[] = [];
+    const h = mount({ confirm: (move) => void waiting.push(move) });
+    visitAll(h, "a", "b");
+    act(() => h.navigation.back());
+    // What was visited meanwhile is a place the move now goes back from.
+    act(() => h.visit("c"));
+    act(() => waiting[0]());
+    expect(h.shown().session).toBe("b");
   });
 });
 

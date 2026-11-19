@@ -1,6 +1,8 @@
 // Queries and input helpers over the document body, shared by the dialog test files.
 import { act } from "react";
 
+import { partSelector, segmentSelector } from "../primitives";
+
 export const buttons = () => Array.from(document.body.querySelectorAll<HTMLButtonElement>("button"));
 export const optionElements = () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]'));
 export const click = (el: Element | null | undefined) => act(async () => (el as HTMLElement | undefined)?.click());
@@ -41,3 +43,24 @@ export const pickerNamed = (name: string) => buttons().find((button) =>
   withoutIsolates(button.getAttribute("aria-label")) === name ||
   button.getAttribute("aria-labelledby")?.split(" ").some((id) => withoutIsolates(document.getElementById(id)?.textContent) === name),
 )!;
+
+/** The segment of a date or time field under `scope` that holds `part` (`hour`, `minute`, `dayPeriod`, `year`...). */
+export const segmentOf = (scope: ParentNode, part: string) => scope.querySelector<HTMLElement>(segmentSelector(part))!;
+
+/** Types `text` into a date or time segment the way the platform does: focus on it, then one cancelable `beforeinput`
+ * per character, which is what react-aria's segment takes digits from. */
+export function typeSegment(segment: HTMLElement, text: string): void {
+  act(() => segment.focus());
+  for (const char of text) {
+    act(() => void segment.dispatchEvent(new InputEvent("beforeinput", { data: char, inputType: "insertText", bubbles: true, cancelable: true })));
+  }
+}
+
+/** Clears a date or time segment with Backspace, as a keyboard does: each press takes off its last digit, until the
+ * segment shows its placeholder (one more press would move to the segment before it). */
+export function clearSegment(segment: HTMLElement): void {
+  act(() => segment.focus());
+  for (let presses = 0; presses < 4 && !segment.matches(partSelector.blankSegment); presses += 1) {
+    act(() => void segment.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })));
+  }
+}

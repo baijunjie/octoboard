@@ -105,6 +105,23 @@ it("scrollPanel fails where no panel of that name has a vertical scroller", asyn
   await settle(done);
 });
 
+it("scrollRegion scrolls the scroll region its title names, without moving focus", async () => {
+  document.body.innerHTML = "<h2 id=\"title\">Weekly review</h2><div role=\"region\" tabindex=\"0\" aria-labelledby=\"title\"></div>";
+  const region = document.querySelector<HTMLElement>("[role=region]")!;
+  const scrolled: ScrollToOptions[] = [];
+  region.scrollTo = ((options: ScrollToOptions) => { scrolled.push(options); }) as typeof region.scrollTo;
+  const done = createUi(document, "en").scrollRegion("Weekly review", 100_000);
+  await settle(done);
+  expect(scrolled).toEqual([{ top: 100_000, behavior: "instant" }]);
+  expect(document.activeElement).not.toBe(region);
+});
+
+it("scrollRegion fails where no region has the name", async () => {
+  document.body.innerHTML = "<h2 id=\"title\">Weekly review</h2><div tabindex=\"-1\" aria-labelledby=\"title\"></div>";
+  const done = expect(createUi(document, "en").scrollRegion("Weekly review", 100)).rejects.toThrow(/No scroll region named/);
+  await settle(done);
+});
+
 it("press takes the control inside a band of the same name, not the band", async () => {
   document.body.innerHTML = "<div role=\"row\" id=\"band\"><button id=\"fold\">Staged15</button></div>";
   const pressed: string[] = [];

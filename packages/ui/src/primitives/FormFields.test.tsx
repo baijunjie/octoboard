@@ -216,6 +216,41 @@ it("names a number field and shows only its value, with no unit or description",
   expect(container.querySelector('[data-slot="number-field-group"]')!.hasAttribute("data-suffixed")).toBe(false);
 });
 
+it("draws a number field's label above it and a description under it where asked, naming the input by them", () => {
+  const { container } = mount(
+    <NumberField label="Day of month" visibleLabel description="A short month runs on its last day." value={5} onChange={() => {}} min={1} max={31} incrementLabel="Bigger" decrementLabel="Smaller" />,
+  );
+  const label = container.querySelector("[data-slot=label]")!;
+  const group = container.querySelector("[data-slot=number-field-group]")!;
+  const description = container.querySelector("[data-slot=description]")!;
+  const input = container.querySelector("input")!;
+  expect(label.textContent).toBe("Day of month");
+  expect(label.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(group.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(input.hasAttribute("aria-label")).toBe(false);
+  expect(input.getAttribute("aria-labelledby")).toContain(label.id);
+  expect(description.textContent).toBe("A short month runs on its last day.");
+  expect(input.getAttribute("aria-describedby")).toContain(description.id);
+});
+
+it("links a number field to its description only while one is drawn", () => {
+  const field = (description?: string) => (
+    <NumberField label="Day of month" visibleLabel description={description} value={5} onChange={() => {}} min={1} max={31} incrementLabel="Bigger" decrementLabel="Smaller" />
+  );
+  const { container, render } = mount(field("A short month runs on its last day."));
+  const description = container.querySelector("[data-slot=description]")!;
+  expect(container.querySelector("input")!.getAttribute("aria-describedby")).toContain(description.id);
+  render(field());
+  expect(container.querySelector("[data-slot=description]")).toBeNull();
+  // No attribute is left naming an element that is gone.
+  const withoutNote = container.querySelector("input")!;
+  for (const id of (withoutNote.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean)) expect(document.getElementById(id), id).not.toBeNull();
+  render(field("Back again."));
+  const again = container.querySelector("[data-slot=description]")!;
+  expect(again.textContent).toBe("Back again.");
+  expect(container.querySelector("input")!.getAttribute("aria-describedby")).toContain(again.id);
+});
+
 it("steps a number field by its buttons and arrow keys, and disables a button at its bound", () => {
   const onChange = vi.fn();
   const { container } = mount(<NumberFieldHarness initial={9} onChange={onChange} />);

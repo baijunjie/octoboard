@@ -55,6 +55,14 @@ export const previewCopy: typeof english = {
   next: "下一步",
   promotionContinuation:
     "继续检查跨项目订单流程并汇总联调结果，规则确认后再更新优惠检查。",
+  scheduledTasks: {
+    orderChecksTitle: "每晚订单 API 检查",
+    orderChecksPrompt: "运行订单校验与计价的测试套件，报告每个失败及导致它的改动。",
+    progressTitle: "促销进度晨报",
+    progressPrompt: "汇总昨天八个促销项目的工作，并将摘要作为报告页推送。",
+    redemptionTitle: "每周核销审计",
+    redemptionPrompt: "将本周的核销记录与订单逐一核对，列出被重复核销的核销码。",
+  },
   terminals: {
     "preview-coordinator": {
       prompt: "为点餐与门店系统开发套餐促销功能。",

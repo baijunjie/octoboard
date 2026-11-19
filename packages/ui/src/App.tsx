@@ -1,5 +1,5 @@
 import { AttendedStatusAnnouncer } from "./components/announce/AttendedStatusAnnouncer";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { ArchiveLayer } from "./archive/ArchiveLayer";
 import { forgetProjectsOtherThan } from "./project-browser/browserState";
@@ -20,6 +20,7 @@ import { Scrim } from "./shell/Scrim";
 import { BareTitleBar, TitleBar } from "./shell/TitleBar";
 import { Toasts } from "./shell/Toasts";
 import { useFirstConsoleHandoff } from "./shell/useFirstConsoleHandoff";
+import { UnsavedChangesProvider, useUnsavedChangesGuard } from "./components/dialog/UnsavedChanges";
 import { useStableHandler } from "./components/hooks/useLatest";
 import { focusAfterLoss, setFocusAfterModalLoss } from "./components/focus/modalFocus";
 import type { DialogRequest } from "./dialogs/dialogRequest";
@@ -30,7 +31,7 @@ import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
 import { raiseError } from "./components/alerts/raiseError";
 import { CodedError } from "./errors/codedError";
 import { useT } from "./i18n/react";
-import type { Console, Project } from "./protocol";
+import type { Console, Project, Session } from "./protocol";
 import { usePlatform } from "./platform/react";
 import { RemoteDevicePage } from "./remoteDaemons/RemoteDevicePage";
 import { RemoteDevicesProvider } from "./remoteDaemons/RemoteDevices";
@@ -39,6 +40,12 @@ import { remoteDaemonsOffered } from "./remoteDaemons/remoteDaemonsOffered";
 import { liveOwner, ownerKey, type AsideOwner } from "./layout/asideOwner";
 import { columnSpan, isDockEasing } from "./layout/paneDockMotion";
 import { useRemoteDevicesPage } from "./app/useRemoteDevicesPage";
+import { useScheduledTasksPage } from "./app/useScheduledTasksPage";
+import { ScheduledTaskPage } from "./scheduledTasks/ScheduledTaskPage";
+import { ScheduledTasksProvider } from "./scheduledTasks/ScheduledTasks";
+import { ScheduledTasksSidebar } from "./scheduledTasks/ScheduledTasksSidebar";
+import { taskName } from "./scheduledTasks/taskName";
+import { useScheduledRunNotifications } from "./scheduledTasks/useScheduledRunNotifications";
 import { useRegionCycle } from "./layout/useRegionCycle";
 import { ExitConfirmDialog } from "./lifecycle/ExitConfirmDialog";
 import { useAppExit } from "./lifecycle/useAppExit";
@@ -130,6 +137,9 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   const { terminalRef, welcomeRef, agentAreaRef, focusTerminal, handOffToTerminal } = useTerminalFocus();
   const { selectedSessionId, selectedSession, setSelectedSessionId } = useSelectedSession();
   const [dialogRequest, setDialogRequest] = useState<DialogRequest>();
+  // What stands before every way of leaving a page form that holds changes not saved (`components/dialog/UnsavedChanges`),
+  // made before the page hooks, which keep their page while a form is held.
+  const unsaved = useUnsavedChangesGuard();
   const { linkedFile, viewLinkedFile, setLinkedFile, closeLinkedFile } = useLinkedFile({ focusTerminal });
 
   const consoleList = Array.from(consoles.values());
@@ -162,8 +172,46 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     consoleId: currentConsole?.id,
     sessionId: selectedSession?.id,
     offline,
+    held: unsaved.dirty,
   });
   const devicesShown = devices.shown;
+  // The Scheduled tasks page, in every window of a daemon while that daemon can be used (`useScheduledTasksPage`): it
+  // takes the content area's place as the Remote devices page does, the sidebar listing the tasks. One page shows at a
+  // time, so opening either leaves the other.
+  const tasks = useScheduledTasksPage({ available: !offline, consoleId: currentConsole?.id, sessionId: selectedSession?.id, held: unsaved.dirty });
+  const tasksShown = tasks.shown;
+  const pageShown = devicesShown || tasksShown;
+  // A way of leaving what the content area shows that keeps the page where it is (the other page, Back and Forward, a
+  // notification's task) goes through `leaveForm`, which asks first while a form holds changes not saved. One that puts
+  // a session or a console on screen goes through `leavePage`, which also leaves the page itself: a page stays on
+  // for a change nobody asked for (`held`), so a confirmed leave has to end it.
+  const leaveForm = unsaved.run;
+  const leavePage = useStableHandler((go: () => void) =>
+    unsaved.run(() => {
+      if (devicesShown) devices.leave();
+      if (tasksShown) tasks.leave();
+      go();
+    }),
+  );
+  const showDevices = useStableHandler(() => {
+    if (devicesShown) return;
+    leaveForm(() => {
+      tasks.leave();
+      devices.show();
+    });
+  });
+  const showTasks = useStableHandler(() => {
+    if (tasksShown) return;
+    leaveForm(() => {
+      devices.leave();
+      tasks.show();
+    });
+  });
+  // A connection's question or failure, or what the shell handed over, shows the page only where that replaces no form
+  // with changes not saved: its dialog opens over the window all the same.
+  const showDevicesUnasked = useStableHandler(() => {
+    if (!unsaved.guard.isDirty()) showDevices();
+  });
   const {
     noConsoles,
     noSidebar,
@@ -215,10 +263,30 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     selectedSession,
     selectedSessionId,
     focusTerminal,
-    sidebarWithoutConsole: devicesShown,
+    sidebarWithoutConsole: pageShown,
+  });
+  // A run's session chosen on the page (`openRunSession`) is given the focus once the page is gone: `focusTerminal` would
+  // otherwise find it still mounted.
+  const terminalFocusPending = useRef(false);
+  useLayoutEffect(() => {
+    if (tasksShown || !terminalFocusPending.current) return;
+    terminalFocusPending.current = false;
+    focusTerminal();
+  }, [tasksShown]);
+  const chooseTask = useStableHandler((id: string) => {
+    tasks.select(id);
+    if (panes.sidebarOpen) panes.closeSidebar();
+  });
+  const addTask = useStableHandler(() => {
+    tasks.startAdd();
+    if (panes.sidebarOpen) panes.closeSidebar();
+  });
+  const addDevice = useStableHandler(() => {
+    devices.startAdd();
+    if (panes.sidebarOpen) panes.closeSidebar();
   });
   const chooseDevice = useStableHandler((id: string) => {
-    devices.remember(id);
+    devices.select(id);
     // A drawer (a narrow window) has done what it was opened for, as it has for a session.
     if (panes.sidebarOpen) panes.closeSidebar();
   });
@@ -263,14 +331,15 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
       topbar: true,
       rail: !railAway,
       devices: devicesShown,
-      welcome: noConsoles && !devicesShown,
+      tasks: tasksShown,
+      welcome: noConsoles && !pageShown,
       sidebar: !noSidebar && panes.sidebarShown,
-      archive: archiveOpen && !agentAreaInert && !devicesShown,
-      terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen && !agentAreaInert && !devicesShown,
+      archive: archiveOpen && !agentAreaInert && !pageShown,
+      terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen && !agentAreaInert && !pageShown,
       banner: connectionState === "reconnecting" || connectionState === "closed",
       update: updateNoticeShown,
     },
-    panels: devicesShown ? {} : shownPanelRegions(asideOverlay && !panes.asidePeek.active ? undefined : ownerStack, ownerKind),
+    panels: pageShown ? {} : shownPanelRegions(asideOverlay && !panes.asidePeek.active ? undefined : ownerStack, ownerKind),
     focusTerminal,
   });
 
@@ -303,6 +372,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     asideOwner,
     setAsideOwner,
     setArchiveScopeByUser,
+    leavePage,
   });
   // A removed project's browser state has nothing left to apply to. `projects` is empty while `offline`, so pruning then
   // would wipe every project's persisted state.
@@ -327,16 +397,26 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   }, [offline]);
 
   useWaitingNotifications(hosts !== undefined);
+  // A failed run of a scheduled task notifies; choosing the notification opens the page on that task.
+  useScheduledRunNotifications((taskId) => {
+    if (tasksShown && !tasks.adding && tasks.task === taskId) return;
+    leaveForm(() => {
+      devices.leave();
+      tasks.show();
+      chooseTask(taskId);
+    });
+  });
   const updatesLabel = useUpdateMenuLabel();
   useStatusItemMenu({
     updatesLabel,
     selectedSessionId,
     currentConsoleId: sidebarView.currentConsole?.id,
     ready: hosts !== undefined,
-    onSessionChosen: (session) => {
-      selectSession(session);
-      focusTerminal();
-    },
+    onSessionChosen: (session) =>
+      leavePage(() => {
+        selectSession(session);
+        focusTerminal();
+      }),
   });
 
   // The exit flow's frontend owner: it registers with the shell on mount, which is what makes the
@@ -362,6 +442,8 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
       }
       await reloadAfterRestart.restart(targetVersion, () => request({ type: "restart_daemon" }));
     },
+    // A quit, or a restart for an update, asks about changes not saved first, as every other way of leaving does.
+    unsaved: unsaved.guard,
     getSessions: () => (reachable() ? allSessions() : []),
     getShellTerminals: () => (reachable() ? Array.from(store.getState().shellTerminals.values()) : []),
     requestShutdown: () => request({ type: "shutdown" }),
@@ -382,7 +464,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   // own launches (a resume, a quick create) go through it and render it at this level.
   const { confirmLaunch, confirmation: launchConfirmation } = useConfirmIncompleteLaunch();
 
-  const ownModalOpen = questionPending || exit.exitConfirmOpen || launchConfirmation !== undefined;
+  const ownModalOpen = questionPending || exit.exitConfirmOpen || launchConfirmation !== undefined || unsaved.asking;
   const otherModalOpen = dialogRequest !== undefined || ownModalOpen;
   // Settings opened from a control of the open drawer (the rail's, on a phone) hands focus back to it
   // as it closes, as any dialog opened there does (`focusDrawerTrigger`).
@@ -427,6 +509,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     consoleList,
     projectList,
     selectedSessionId,
+    leavePage,
   });
 
   const quickCreateSession = useQuickCreateSession(showOpenedSession, sidebarView.currentConsole?.id, confirmLaunch);
@@ -440,6 +523,10 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     setDialogRequest,
     switchConsole,
   });
+  // A question raised from the narrow window's drawer hands focus back to the control that was pressed there, as a
+  // dialog opened from it does.
+  const focusPressedDrawerControl = useStableHandler(() => void focusDrawerTrigger());
+  useEffect(() => unsaved.guard.setBeforeAsk(focusPressedDrawerControl), [unsaved.guard, focusPressedDrawerControl]);
   const openSettingsFromDrawer = () => {
     // Focus already in the drawer (Settings opened by a key) is where the dialog hands it back to.
     settingsFromDrawer.current = focusDrawerTrigger() || (panes.sidebarOpen && !!document.activeElement?.closest(DRAWER_CONTROLS));
@@ -491,14 +578,14 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     sidebarShown: panes.sidebarShown,
     selectSession,
     focusTerminal,
-    suspended: devicesShown,
+    suspended: pageShown,
   });
 
   // Nothing is recorded while the page shows and the list of devices is not read yet, which would name a device that is
   // not the one it settles on. Without the daemon the status it shows is the first place there is to go back to, so it
   // is recorded from the start, as a place that is gone once the daemon can be used.
   const { canGoBack, canGoForward, stableBack, stableForward, stableCommitPreview } = useAppNavigation({
-    ready: !(devicesShown && !devices.list.entriesRead),
+    ready: !(devicesShown && !devices.list.entriesRead) && !(tasksShown && !tasks.tasks),
     offline,
     focus: sidebarView.focus,
     setFocus: sidebarView.setFocus,
@@ -517,6 +604,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     projects,
     asideOwner,
     setAsideOwner,
+    confirm: leaveForm,
     holdForPress: followUp.holdForPress,
     releasePress: followUp.releasePress,
     previewing,
@@ -525,6 +613,9 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     devices: devicesShown ? (devices.device ?? "") : undefined,
     deviceIds: new Set(devices.list.entries.map((entry) => entry.id)),
     setDevices: devices.follow,
+    tasks: tasksShown ? (tasks.task ?? "") : undefined,
+    taskIds: tasks.tasks && new Set(tasks.tasks.map((task) => task.id)),
+    setTasks: tasks.follow,
   });
 
   const { stableArchiveSession } = useArchiveSession({
@@ -639,7 +730,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   // shows, the devices'.
   const sidebar = (
     <>
-      <Scrim open={panes.sidebarOpen} label={t(devicesShown ? "app.closeDevices" : "app.closeSessions")} onClose={panes.closeSidebar} />
+      <Scrim open={panes.sidebarOpen} label={t(devicesShown ? "app.closeDevices" : tasksShown ? "app.closeScheduledTasks" : "app.closeSessions")} onClose={panes.closeSidebar} />
       <Sidebar
         projects={projectList}
         selectedSessionId={selectedSessionId}
@@ -673,8 +764,14 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
         open={panes.sidebarOpen || (!asideFloats && panes.sidebarPeek.active)}
         drawerAway={isNarrow && !panes.sidebarOpen && !panes.sidebarPeek.active}
         peek={isNarrow || !panes.sidebarDocked ? panes.sidebarPeek : undefined}
-        onPeekPress={devicesShown ? undefined : stableCommitPreview}
-        devices={devicesShown ? { label: t("remoteDevices.label"), content: <RemoteDevicesSidebar /> } : undefined}
+        onPeekPress={pageShown ? undefined : stableCommitPreview}
+        page={
+          devicesShown
+            ? { label: t("remoteDevices.label"), content: <RemoteDevicesSidebar /> }
+            : tasksShown
+              ? { label: t("scheduledTasks.label"), content: <ScheduledTasksSidebar /> }
+              : undefined
+        }
         onColumnPhase={setSidebarColumnPhase}
         sidebarWidth={sidebarWidth}
       />
@@ -689,6 +786,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
       <Toasts focusTerminal={focusTerminal} />
       <TitleBar
         devicesShown={devicesShown}
+        tasksShown={tasksShown}
         sidebarShown={panes.sidebarShown}
         sidebarRevealOnly={isNarrow && !asideFloats}
         hasSidebar={!noSidebar}
@@ -697,13 +795,13 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
         onToggleSidebar={stableToggleSidebar}
         onSidebarToggleEnter={panes.sidebarPeek.reveal}
         onSidebarToggleLeave={panes.sidebarPeek.leave}
-        asideSpan={asideDocked && !devicesShown ? asideWidth.width : 0}
+        asideSpan={asideDocked && !pageShown ? asideWidth.width : 0}
         asidePinned={asidePinned}
         onToggleAsideDocked={ownerKind && !asideFloats ? toggleAsideDocked : undefined}
         asideAutomatic={!asideDockable}
         asideRevealed={panes.asidePeek.active}
         onAsideHoverChange={stableHoverAside}
-        panelToggles={ownerKind && !devicesShown ? availableKinds.map((kind) => {
+        panelToggles={ownerKind && !pageShown ? availableKinds.map((kind) => {
           const entry = PANEL_ENTRIES[kind];
           const open = openPanels.includes(kind) && (!asideOverlay || panes.asidePeek.active);
           return {
@@ -725,13 +823,15 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
         viewTrail={
           devicesShown
             ? [t("remoteDevices.label"), ...(devices.device !== undefined && !devices.adding ? [devices.list.entries.find((entry) => entry.id === devices.device)!.name] : [])]
-            : archiveOpen && archiveConsole
-              ? archiveProject
-                ? [archiveConsole.name, archiveProject.name, t("archive.heading.project")]
-                : archiveBoundTo
-                  ? [archiveConsole.name, sessionDisplayTitle(t, archiveBoundTo), t("archive.heading.boundSessions")]
-                  : [archiveConsole.name, t("archive.heading.consoleSessions")]
-              : undefined
+            : tasksShown
+              ? [t("scheduledTasks.label"), ...(tasks.task !== undefined && !tasks.adding ? [taskName(tasks.tasks!.find((task) => task.id === tasks.task)!)] : [])]
+              : archiveOpen && archiveConsole
+                ? archiveProject
+                  ? [archiveConsole.name, archiveProject.name, t("archive.heading.project")]
+                  : archiveBoundTo
+                    ? [archiveConsole.name, sessionDisplayTitle(t, archiveBoundTo), t("archive.heading.boundSessions")]
+                    : [archiveConsole.name, t("archive.heading.consoleSessions")]
+                : undefined
         }
       />
       <div className="flex min-h-0 flex-1">
@@ -741,17 +841,16 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
           selectedSessionId={selectedSessionId}
           consoles={consoleList}
           currentConsoleId={sidebarView.currentConsole?.id}
-          onSelectConsole={(id) => {
-            devices.leave();
-            stableSwitchConsole(id);
-          }}
+          onSelectConsole={stableSwitchConsole}
           // The sidebar lists the devices while the page shows, so a console's avatar has no sessions to float in.
-          onConsoleEnter={devicesShown ? noop : panes.sidebarPeek.hoverConsole}
-          onConsoleLeave={devicesShown ? noop : panes.sidebarPeek.leaveConsole}
+          onConsoleEnter={pageShown ? noop : panes.sidebarPeek.hoverConsole}
+          onConsoleLeave={pageShown ? noop : panes.sidebarPeek.leaveConsole}
           onRailHoverChange={(hovered) => hovered ? panes.sidebarPeek.hoverRail() : panes.sidebarPeek.leaveRail()}
-          hoverOpensSidebar={panes.sidebarPeek.peekable && !devicesShown}
+          hoverOpensSidebar={panes.sidebarPeek.peekable && !pageShown}
           remoteDevicesShown={devicesShown}
-          onOpenRemoteDevices={devices.show}
+          onOpenRemoteDevices={showDevices}
+          scheduledTasksShown={tasksShown}
+          onOpenScheduledTasks={showTasks}
           offline={offline}
           onOpenDialog={stableOpenDialog}
           onSelectSession={stableSelectFromSidebar}
@@ -773,7 +872,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
             <div data-region="welcome" className="flex min-h-0 min-w-0 flex-1 flex-col">
               <StartupFramed.Provider value>{status}</StartupFramed.Provider>
             </div>
-          ) : shownConsole === undefined && !devicesShown ? (
+          ) : shownConsole === undefined && !pageShown ? (
             <WelcomeScreen ref={welcomeRef} onOpenDialog={openDialog} />
           ) : (
             <>
@@ -786,13 +885,13 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
               />
               {/* A panel floating over the agent terminal is dismissed by a press beside it, as the
                   drawer is; the top bar, with the panel's own toggle, stays out of it. */}
-              <HiddenWhile hidden={devicesShown}>
+              <HiddenWhile hidden={pageShown}>
                 <Scrim open={floatingShown} label={t("panel.close")} onClose={floating.close} clearOfRail={false} />
               </HiddenWhile>
               {sidebar}
               {/* Without the daemon there is no session UI at all, only the devices' sidebar and the page. */}
               {!offline && (
-                <HiddenWhile hidden={devicesShown}>
+                <HiddenWhile hidden={pageShown}>
                   {/* Floating panes leave the agent area its full width; horizontal overflow remains a
                   guard while the docked sidebar's column is changing width. The scroll container's
                   own shadow reaches the sidebar without being clipped by its overflow. */}
@@ -829,7 +928,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
                         } : undefined}
                       />
                       <TerminalPane
-                        exposed={!agentAreaInert && !devicesShown}
+                        exposed={!agentAreaInert && !pageShown}
                         ref={terminalRef}
                         resizing={isDockEasing(sidebarColumnPhase)}
                         onViewFile={viewLinkedFile}
@@ -896,6 +995,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
             </>
           )}
           {devicesShown && <RemoteDevicePage drawerOpen={panes.sidebarOpen} />}
+          {tasksShown && <ScheduledTaskPage consoleId={currentConsole?.id} drawerOpen={panes.sidebarOpen} onNewConsole={() => openDialog({ kind: "new-console" })} />}
         </ContentPanel>
       </div>
       {/* Without the daemon none of this has anything to work on. */}
@@ -943,16 +1043,46 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
       {!offline && <ExitConfirmDialog exit={exit} />}
     </div>
   );
-  return devicesOffered ? (
-    <RemoteDevicesProvider capability={platform.remoteDaemons!} list={devices.list} selectedId={devices.device} shown={devicesShown} onShow={devices.show} onSelect={chooseDevice} onAdd={() => panes.sidebarOpen && panes.closeSidebar()} onAddingChange={devices.setAdding}>
+  // A session a scheduled task's run started, chosen on the page: shown as one chosen from elsewhere in the window is,
+  // leaving the page even when it is the session the page shows over.
+  const openRunSession = (session: Session) =>
+    leavePage(() => {
+      selectSession(session);
+      // The terminal takes focus once the page is gone: now, `focusTerminal` would find the page still mounted.
+      terminalFocusPending.current = true;
+    });
+  const withTasks = (
+    <ScheduledTasksProvider
+      tasks={tasks.tasks}
+      listing={tasks.listing}
+      selectedId={tasks.task}
+      adding={tasks.adding}
+      onSelect={chooseTask}
+      onAdd={addTask}
+      onCancelAdd={tasks.cancelAdd}
+      onOpenSession={openRunSession}
+    >
       {screen}
-    </RemoteDevicesProvider>
-  ) : (
-    screen
+    </ScheduledTasksProvider>
+  );
+  // The question stands outside every `!offline` gate: the Remote devices page works without the daemon.
+  return (
+    <>
+      <UnsavedChangesProvider guard={unsaved.guard}>
+        {devicesOffered ? (
+          <RemoteDevicesProvider capability={platform.remoteDaemons!} list={devices.list} selectedId={devices.device} adding={devices.adding} onShow={showDevices} onAttention={showDevicesUnasked} onSelect={chooseDevice} onAdd={addDevice} onCancelAdd={devices.cancelAdd}>
+            {withTasks}
+          </RemoteDevicesProvider>
+        ) : (
+          withTasks
+        )}
+      </UnsavedChangesProvider>
+      {unsaved.confirmation}
+    </>
   );
 }
 
-/** What stays mounted while the Remote devices page takes its place: out of the layout, the document's outline and the
+/** What stays mounted while the Remote devices or Scheduled tasks page takes its place: out of the layout, the document's outline and the
  * focus order (`display: none`), as the terminals and the panes keep their state, and as part of the content panel's
  * row (`display: contents`) otherwise. */
 function HiddenWhile({ hidden, children }: { hidden: boolean; children: React.ReactNode }): React.ReactElement {

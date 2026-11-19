@@ -174,10 +174,10 @@ as switches of that agent, dropping any other without refusing the document, and
 
 ### What is not configuration and never travels
 
-Sessions and their records, the pages sessions pushed to the report panel, the conversations the agents keep, folder
-trust — a project's trust permission and the trusted folders alike — and a project's memory, which belongs to its place
-on one machine (see "Project memory" in `docs/product/memory.md`), are the state of one machine rather than
-configuration, and are in no document. No console, project or account carries its stored id. Nothing to log an account
+Sessions and their records, the pages sessions pushed to the report panel, the conversations the agents keep, scheduled
+tasks and their runs (see `docs/product/scheduled-tasks.md`), folder trust — a project's trust permission and the
+trusted folders alike — and a project's memory, which belongs to its place on one machine (see "Project memory" in
+`docs/product/memory.md`), are the state of one machine rather than configuration, and are in no document. No console, project or account carries its stored id. Nothing to log an account
 in with — credentials, login state — is in any document, so every account an import creates starts not logged in; nor
 is the default account's directory. The added agents, the accounts and their order, the turned-off choices and the
 default accounts' names travel only in the accounts region (see "The accounts" above). Account quota readings are not

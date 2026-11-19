@@ -15,7 +15,9 @@ messages". What code must do to meet it:
 
 - **A core code is a `pub const NAME: Code = Code("code")` in `apps/daemon/src/protocol/codes.rs`**, in the module of
   its kind (`error_code`, `notice_code`, `models_unavailable_code`, `quota_unavailable_code`, `login_failure_code`).
-  Every wire `code` field is a `Code`, made only there. A new reading of a situation is a new code, never a changed one.
+  Every wire `code` field is a `Code`, made only there; a code a record stores and reads back (a scheduled task run's
+  failure) is a `String` written from a `Code`'s `as_str()`, since a `Code` cannot be rebuilt from storage. A new
+  reading of a situation is a new code, never a changed one.
 - **A failure becomes an `error` reply only through `src/protocol/errors.rs`**, and is raised as a `CodedError`.
 - **Translatable words are never baked into params.**
 - **The param that carries the situation of a code covering several is named `cause`**, never `reason`, `reason_code` or

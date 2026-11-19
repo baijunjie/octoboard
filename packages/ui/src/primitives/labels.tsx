@@ -9,6 +9,8 @@ export interface PrimitiveLabels {
   /** The generic name of the popover a tap opens in place of a tooltip, where no better name fits (a `Tooltip`'s touch
    * popover). */
   tooltip: string;
+  /** The calendar of a `DatePicker`: its button that opens it, and its buttons to the previous and the next month. */
+  calendar: { open: string; previous: string; next: string };
 }
 
 const PrimitiveLabelsContext = createContext<PrimitiveLabels | undefined>(undefined);

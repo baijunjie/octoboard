@@ -17,8 +17,9 @@ order:
    cannot be used, the daemon's state shown in the content panel (see "Without the local daemon" in
    `docs/product/remote-devices-page.md`);
 4. the sidebar;
-5. the Remote devices page's content area, only while the page shows, when the archive view, the terminal and the right
-   pane's panels are not stops (see `docs/product/remote-devices-page.md`);
+5. the content area of the page of the window that shows, the Remote devices page or the Scheduled tasks page, only
+   while it shows, when the archive view, the terminal and the right pane's panels are not stops (see
+   `docs/product/remote-devices-page.md` and `docs/product/scheduled-tasks-page.md`);
 6. the archive view, only while it is open (see "The archive view" in `docs/product/archive-view.md`);
 7. the terminal;
 8. the right pane's panels, each a region of its own, in stacking order, except that a maximized panel comes first among
@@ -62,7 +63,7 @@ Where focus lands in each region:
 | Top bar | its first enabled control |
 | Rail | the current console's avatar, or the rail's first control when there is no console |
 | Welcome screen | its New console button; the daemon's state shown in its place, its first control, such as Restart or Report issue |
-| Remote devices page | its first control |
+| Remote devices page, Scheduled tasks page | its first control |
 | Sidebar | the selected session's row, or the sidebar's first control when that row is not on screen |
 | Archive view | its first control |
 | Terminal | the terminal, so typing reaches the agent; instead its cover while the session's process cannot be reached (see "While the session's process cannot be reached" in `docs/product/session-terminal-reconnecting-and-loading.md`), or the button its area offers in the terminal's place while there is one — its cover's Reconnect, or its empty state's Add project, New session or New console session (see "Reconnecting" in `docs/product/session-terminal-reconnecting-and-loading.md` and "A console with nothing in it" in `docs/product/session-terminal-with-no-session-selected.md`); for an archived session, its history in the terminal's place (see "Keyboard focus" in `docs/product/session-history.md`) |

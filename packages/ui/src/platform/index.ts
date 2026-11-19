@@ -149,7 +149,12 @@ export interface NotificationCapability {
     status(): NotificationPermissionStatus;
     request(): Promise<void>;
   };
-  notify(notification: { title: string; body: string }): Promise<void>;
+  /** Shows a notification. `target` is what choosing it should open, as the window spells it; a click on one that
+   * carries a target brings the window forward and hands the target to the `onChosen` listeners. */
+  notify(notification: { title: string; body: string; target?: string }): Promise<void>;
+  /** Calls `listener` with the target of each notification of this window's the user chooses (clicks), until the
+   * returned unsubscribe is called. Absent where a click on a notification cannot be heard. */
+  onChosen?(listener: (target: string) => void): () => void;
   /** Opens the app's own pane in the system's notification settings. Present only where the system
    * manages the app's notifications and the app keeps no switch of its own (the macOS app), so the
    * UI links there instead. Rejects when the system did not open the pane. */

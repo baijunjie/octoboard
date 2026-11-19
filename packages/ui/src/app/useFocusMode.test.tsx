@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Focus } from "lucide-react";
 
@@ -31,15 +31,18 @@ const independent = sessionOf("independent", console_.id, project.id, "Independe
 const direct = sessionOf("direct", console_.id, project.id, "Direct", "idle", { bound_to: hub.id });
 const nested = sessionOf("nested", console_.id, project.id, "Nested", "idle", { bound_to: coordinator.id });
 
-function mount(selected: Session = nested, { desktopApp = false }: { desktopApp?: boolean } = {}) {
-  const daemon = testDaemon({ state: { consoles: new Map([[console_.id, console_]]), projects: new Map([[project.id, project]]), sessions: new Map([hub, coordinator, independent, direct, nested].map((session) => [session.id, session])) } });
+const otherHub = sessionOf("other-hub", console_.id, undefined, "Other hub", "idle");
+
+function mount(selected: Session = nested, { desktopApp = false, suspended = false, inFocus }: { desktopApp?: boolean; suspended?: boolean; inFocus?: FocusTarget } = {}) {
+  const daemon = testDaemon({ state: { consoles: new Map([[console_.id, console_]]), projects: new Map([[project.id, project]]), sessions: new Map([hub, coordinator, independent, direct, nested, ...(inFocus ? [otherHub] : [])].map((session) => [session.id, session])) } });
   const focused = vi.fn();
+  const selectSession = vi.fn();
   const selectConsole = vi.fn();
   const handlers = { onFocus: focused, onOpenDialog: vi.fn(), onSetLocked: vi.fn(), onSetPinned: vi.fn() } as unknown as SidebarHandlers;
   function View() {
-    const [focus, setFocus] = useState<FocusTarget>();
+    const [focus, setFocus] = useState<FocusTarget | undefined>(inFocus);
     const applyFocus = (next: FocusTarget | undefined) => { focused(next); setFocus(next); };
-    useFocusMode({ focus, setFocus: applyFocus, selectConsole, currentConsoleId: console_.id, selectedSession: selected, sidebarShown: true, selectSession: vi.fn(), focusTerminal: vi.fn() });
+    useFocusMode({ focus, setFocus: applyFocus, selectConsole, currentConsoleId: console_.id, selectedSession: selected, sidebarShown: true, selectSession, focusTerminal: vi.fn(), suspended });
     return <FocusModeContext value={focus !== undefined}>
       <input aria-label="Terminal" />
       {[selected, ...(selected.id === independent.id ? [] : [independent])].map((session) => <SessionRow key={session.id} session={session} selected={session.id === selected.id} handlers={{ ...handlers, onFocus: applyFocus }} />)}
@@ -58,7 +61,7 @@ function mount(selected: Session = nested, { desktopApp = false }: { desktopApp?
     act(() => { target.dispatchEvent(event); });
     return event;
   };
-  return { host, daemon, focused, selectConsole, open, press, terminal };
+  return { host, daemon, focused, selectConsole, selectSession, open, press, terminal };
 }
 
 const focusItem = (menu: Element) => [...menu.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.querySelector(partSelector.itemLabel)?.textContent === "Focus mode");
@@ -190,4 +193,27 @@ it("suppresses the command in other menus, dialogs, composition and repeated pre
   press(menu);
   dialog.remove();
   expect(focused).not.toHaveBeenCalled();
+});
+
+// ⌃Tab moves along the switch strip of the console session in focus mode, in the desktop app, and stays out of the way
+// while a page shows in place of the sessions (`suspended`): focus mode has no context there, and with a question open
+// over the page the switch would send focus behind its dialog.
+describe("⌃Tab along the switch strip", () => {
+  const ctrlTab = () => {
+    const event = new KeyboardEvent("keydown", { key: "Tab", code: "Tab", ctrlKey: true, bubbles: true, cancelable: true });
+    act(() => void document.dispatchEvent(event));
+    return event;
+  };
+
+  it("switches to the next console session while focus mode is on one", () => {
+    const { selectSession } = mount(hub, { desktopApp: true, inFocus: { consoleSession: hub } });
+    expect(ctrlTab().defaultPrevented).toBe(true);
+    expect(selectSession).toHaveBeenCalledOnce();
+  });
+
+  it("does nothing while a page shows in place of the sessions", () => {
+    const { selectSession } = mount(hub, { desktopApp: true, suspended: true, inFocus: { consoleSession: hub } });
+    expect(ctrlTab().defaultPrevented).toBe(false);
+    expect(selectSession).not.toHaveBeenCalled();
+  });
 });

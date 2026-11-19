@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { focusOpenDialog } from "../components/focus/modalFocus";
-import { focusRegion, regionElements, type Region } from "../components/focus/regionFocus";
+import { focusRegion, regionElements, TASKS_REGION, type Region } from "../components/focus/regionFocus";
 import { MODAL_OPEN } from "../components/focus/selectors";
 import { useLatest } from "../components/hooks/useLatest";
 import { setKeyboardModality } from "../primitives";
 
 /** The window's regions in visual order, each an element (or several) marked `data-region`. The
- * Remote devices page, which takes the terminal's place while it shows, comes after the sidebar. The
+ * Remote devices and Scheduled tasks pages, which take the terminal's place while one shows, come after the sidebar. The
  * panels of the right pane, each a stop of its own, come after the terminal: the caller names
  * them in `panels`, in order. The toast stack comes last and is a
  * stop only while a toast is on screen; unlike the others it is not for the caller to say: the stack
  * is in the DOM while it holds a toast, and one that is closing (kept mounted for its exit animation,
  * `partSelector.liveToast` leaves it out) is not a landing place. */
-const BEFORE_PANELS = ["topbar", "rail", "welcome", "sidebar", "devices", "archive", "terminal"] as const;
+const BEFORE_PANELS = ["topbar", "rail", "welcome", "sidebar", "devices", TASKS_REGION, "archive", "terminal"] as const;
 const AFTER_PANELS = ["update", "banner", "toast"] as const;
 type FixedRegion = (typeof BEFORE_PANELS)[number] | (typeof AFTER_PANELS)[number];
 type ShownRegion = Exclude<FixedRegion, "toast">;

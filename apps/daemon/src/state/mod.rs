@@ -283,6 +283,9 @@ pub struct AppState {
     /// The daemon's own update: what it found, what it downloaded and installed
     /// (`crate::self_update`). Held in memory only.
     pub daemon_update: crate::self_update::DaemonUpdates,
+    /// What wakes the scheduler of the scheduled tasks when one changes
+    /// (`crate::coordinator::scheduled_tasks::scheduler`). Held in memory only.
+    pub scheduler_wake: crate::coordinator::scheduled_tasks::scheduler::SchedulerWake,
     /// The accounts a `delete_account` that moves the directory to the Trash is running for, each
     /// with the number of such removals; see [`AppState::begin_account_removal`]. Held in memory
     /// only. A plain mutex, never held across an `.await`.
@@ -505,6 +508,7 @@ impl AppState {
             account_logins: Default::default(),
             agent_clis: Default::default(),
             daemon_update: Default::default(),
+            scheduler_wake: Default::default(),
             accounts_being_removed: Default::default(),
             account_sharing: Default::default(),
             sharing_status: Default::default(),

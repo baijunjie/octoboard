@@ -2461,6 +2461,41 @@ export type Event = {
   | {
   "state": "not_attempted"
 }) | {
+  "type": "scheduled_tasks_listed",
+  id: string | null,
+  tasks: Array<ScheduledTask>,
+  /**
+   * The IANA name of the time zone schedules are read in, the daemon machine's own local
+   * zone (`Europe/Berlin`), as it is when the list is sent; null when that zone has no IANA
+   * name (one given as a POSIX rule). A daily, weekdays, weekly or monthly schedule's time of
+   * day is a wall-clock time in this zone.
+   */
+  time_zone: string | null,
+}
+| {
+  "type": "scheduled_task_saved",
+  id: string | null,
+  task: ScheduledTask,
+}
+| {
+  "type": "scheduled_task_upserted",
+  task: ScheduledTask,
+}
+| {
+  "type": "scheduled_task_deleted",
+  task: string,
+}
+| {
+  "type": "scheduled_task_runs_listed",
+  id: string | null,
+  task: string,
+  runs: Array<ScheduledTaskRun>,
+}
+| {
+  "type": "scheduled_task_run_added",
+  run: ScheduledTaskRun,
+}
+| {
   "type": "page_list",
   id: string | null,
   session_id: string,
@@ -5434,6 +5469,62 @@ export type Request = {
   branch: string,
 }
   | {
+  "type": "list_scheduled_tasks"
+}
+  | {
+  "type": "create_scheduled_task",
+  console_id: string,
+  /**
+   * Absent makes a task that starts a console session of `console_id`; a project must be
+   * one of that console's.
+   */
+  project_id?: string,
+  /**
+   * Absent is every launch setting left to its default.
+   */
+  launch?: ScheduledTaskLaunch,
+  prompt: string,
+  schedule: Schedule,
+  /**
+   * Absent is true. A task created with false has no next run until it is turned on.
+   */
+  enabled?: boolean,
+}
+  | {
+  "type": "update_scheduled_task",
+  task: string,
+  /**
+   * Present moves the task to that console; its project stays only when `project_id` is
+   * absent and the project belongs to the new console, else `unknown_project`.
+   */
+  console_id?: string,
+  /**
+   * Absent leaves the project alone; an explicit `null` makes a console task; a value makes
+   * a task of that project, which must belong to the resulting console.
+   */
+  project_id?: string | null,
+  launch?: ScheduledTaskLaunch,
+  prompt?: string,
+  schedule?: Schedule,
+}
+  | {
+  "type": "set_scheduled_task_enabled",
+  task: string,
+  enabled: boolean,
+}
+  | {
+  "type": "delete_scheduled_task",
+  task: string,
+}
+  | {
+  "type": "run_scheduled_task",
+  task: string,
+}
+  | {
+  "type": "list_scheduled_task_runs",
+  task: string,
+}
+  | {
   "type": "restore_project_changes",
   project: string,
 }
@@ -6528,6 +6619,62 @@ export type RequestBody = {
   branch: string,
 }
 | {
+  "type": "list_scheduled_tasks"
+}
+| {
+  "type": "create_scheduled_task",
+  console_id: string,
+  /**
+   * Absent makes a task that starts a console session of `console_id`; a project must be
+   * one of that console's.
+   */
+  project_id?: string,
+  /**
+   * Absent is every launch setting left to its default.
+   */
+  launch?: ScheduledTaskLaunch,
+  prompt: string,
+  schedule: Schedule,
+  /**
+   * Absent is true. A task created with false has no next run until it is turned on.
+   */
+  enabled?: boolean,
+}
+| {
+  "type": "update_scheduled_task",
+  task: string,
+  /**
+   * Present moves the task to that console; its project stays only when `project_id` is
+   * absent and the project belongs to the new console, else `unknown_project`.
+   */
+  console_id?: string,
+  /**
+   * Absent leaves the project alone; an explicit `null` makes a console task; a value makes
+   * a task of that project, which must belong to the resulting console.
+   */
+  project_id?: string | null,
+  launch?: ScheduledTaskLaunch,
+  prompt?: string,
+  schedule?: Schedule,
+}
+| {
+  "type": "set_scheduled_task_enabled",
+  task: string,
+  enabled: boolean,
+}
+| {
+  "type": "delete_scheduled_task",
+  task: string,
+}
+| {
+  "type": "run_scheduled_task",
+  task: string,
+}
+| {
+  "type": "list_scheduled_task_runs",
+  task: string,
+}
+| {
   "type": "restore_project_changes",
   project: string,
 }
@@ -6593,6 +6740,167 @@ export type ResetCredits = {
 };
 
 export type Role = "coordinator" | "worker";
+
+/**
+ * When a scheduled task runs, in the local time zone of the daemon's machine.
+ */
+export type Schedule = {
+  "kind": "once",
+  run_at: number,
+}
+| {
+  "kind": "hourly",
+  minute: number,
+}
+| {
+  "kind": "daily",
+  time: TimeOfDay,
+}
+| {
+  "kind": "weekdays",
+  time: TimeOfDay,
+}
+| {
+  "kind": "weekly",
+  time: TimeOfDay,
+  days: Array<Received<Weekday>>,
+}
+| {
+  "kind": "monthly",
+  day: number,
+  time: TimeOfDay,
+}
+| {
+  "kind": "manual"
+};
+
+/**
+ * What came of a run.
+ */
+export type ScheduledRunOutcome = {
+  "kind": "started",
+  session: string,
+  started_independent: boolean,
+}
+| {
+  "kind": "failed",
+  code: string,
+  params: {
+    [key in string]: string
+  },
+  message: string,
+};
+
+/**
+ * What started a run.
+ */
+export type ScheduledRunTrigger = "scheduled" | "catch_up" | "run_now";
+
+/**
+ * A scheduled task as the daemon stores it. A console session of `console_id` is started when
+ * `project_id` is null, else a project session of that project.
+ */
+export type ScheduledTask = {
+  id: string,
+  console_id: string,
+  project_id: string | null,
+  /**
+   * What the session is started with, as the session dialog's New conversation offers it.
+   */
+  launch: ScheduledTaskLaunch,
+  /**
+   * The opening task the started session is handed; never blank.
+   */
+  prompt: string,
+  schedule: Schedule,
+  /**
+   * A disabled task does not run on its schedule.
+   */
+  enabled: boolean,
+  created_at: number,
+  updated_at: number,
+  /**
+   * When the task next runs on its schedule; null for a manual-only task, a one-off whose time
+   * has passed, or a disabled task.
+   */
+  next_run_at: number | null,
+  /**
+   * When the task last ran; null until it first does.
+   */
+  last_run_at: number | null,
+  /**
+   * The sessions its kept runs started (runs whose outcome is `started`), most recent run first,
+   * each once, leaving out a session the daemon no longer holds or that is archived. Not
+   * stored: read from the runs and the sessions each time the task is sent, so every
+   * `scheduled_task_upserted` that follows a recorded run carries the session that run started.
+   * A session archived or deleted after the task was sent may still be listed until the task is
+   * next sent.
+   */
+  run_sessions: Array<string>,
+};
+
+/**
+ * The launch settings of a scheduled task's session, with the rules `open_session` gives the same
+ * fields: each is checked as `open_session` checks it when the task is saved, and read again at
+ * every run.
+ */
+export type ScheduledTaskLaunch = {
+  /**
+   * The started session's title; absent or blank names it as `open_session` does by default.
+   */
+  title?: string,
+  /**
+   * Absent takes the project's default agent, else the console's, at each run.
+   */
+  agent?: Agent,
+  /**
+   * The account, by id. Absent leaves the choice to the project's reference, else the
+   * console's, at each run; an explicit `null` chooses the default account.
+   */
+  account?: string | null,
+  /**
+   * Absent inherits the project's (or console's) setting at each run; an explicit `null`
+   * leaves the choice to the agent; a value pins the model.
+   */
+  model?: string | null,
+  /**
+   * The reasoning effort, with the rule of `model`.
+   */
+  effort?: string | null,
+  /**
+   * The compatibility switches the session holds its own value for, by setting id; one left
+   * out follows the project's, else the console's, else the agent's value. Absent in a request
+   * holds none.
+   */
+  compatibility: {
+    [key in string]: boolean
+  },
+  /**
+   * The console session a project task's session reports to; absent for none. Ignored for a
+   * console task.
+   */
+  bound_to?: string,
+};
+
+/**
+ * One run of a scheduled task: what started it and what came of it. The daemon keeps the last
+ * [`SCHEDULED_TASK_RUNS_KEPT`] of each task, and drops them with the task.
+ */
+export type ScheduledTaskRun = {
+  id: string,
+  task_id: string,
+  /**
+   * When the run started its session, or failed to.
+   */
+  ran_at: number,
+  /**
+   * The occurrence of the schedule the run stands for; null for `run_now`. A catch-up's is the
+   * missed occurrence it makes up for, earlier than `ran_at`.
+   */
+  due_at: number | null,
+  trigger: Received<ScheduledRunTrigger>,
+  outcome: ScheduledRunOutcome,
+};
 
 export type Session = {
   id: string,
@@ -7441,6 +7749,14 @@ export type TermEvent = {
 export type TerminalAppearance = "light" | "dark";
 
 /**
+ * A wall-clock time of day: `hour` 0 to 23, `minute` 0 to 59.
+ */
+export type TimeOfDay = {
+  hour: number,
+  minute: number,
+};
+
+/**
  * One item of a todo list.
  */
 export type TodoItem = {
@@ -7557,6 +7873,8 @@ export type VisibleWhen = {
   field: string,
   equals: VisibleEquals,
 };
+
+export type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 
 export type WorktreeInfo = {
   id: string,

@@ -4,7 +4,7 @@ import { expect, it, vi } from "vitest";
 
 import type { PageContent } from "../../protocol";
 import { BROWSER_HOST } from "../../test/hosts";
-import { click, type } from "../../test/dom";
+import { click, clearSegment, segmentOf, type, typeSegment } from "../../test/dom";
 import { LAZY_IMPORT_TIMEOUT_MS, settleLazyImport } from "../../test/lazyImport";
 import { renderPage } from "./pageTestSupport";
 
@@ -31,6 +31,7 @@ const outlineIs = (host: ParentNode, expected: string[]) => vi.waitFor(async () 
   await settleLazyImport();
   expect(outline(host)).toEqual(expected);
 }, { timeout: LAZY_IMPORT_TIMEOUT_MS });
+const slot = (host: ParentNode, name: string) => host.querySelector<HTMLElement>(`[data-page-field="${name}"]`)!;
 const field_error = (host: ParentNode, name: string) => host.querySelector(`[data-page-field="${name}"] [role=alert]`)?.textContent;
 
 const EVERY_KIND: PageContent = {
@@ -68,13 +69,21 @@ it("draws every kind of component with the application's own controls and no lig
   expect(field(host, "Story").tagName).toBe("TEXTAREA");
   expect((field(host, "Story") as HTMLTextAreaElement).rows).toBe(3);
   expect(field(host, "Count").getAttribute("inputmode")).toBe("decimal");
-  expect(field(host, "Day").type).toBe("date");
-  expect(field(host, "At").type).toBe("time");
-  expect(field(host, "When").type).toBe("datetime-local");
+  // The date and time fields are the application's own segments, never the browser's picker.
+  // (React Aria keeps an inert, hidden input of the field's type for form validation: out of every form and out of the tab order.)
+  for (const hidden of host.querySelectorAll<HTMLInputElement>("input[type=date], input[type=time], input[type=datetime-local]")) {
+    expect(hidden.tabIndex).toBe(-1);
+    expect(hidden.getAttribute("form")).toBe("");
+  }
+  expect(slot(host, "day").querySelectorAll("[role=spinbutton]")).toHaveLength(3);
+  expect(slot(host, "at").querySelectorAll("[role=spinbutton]")).toHaveLength(3);
+  expect(slot(host, "when").querySelectorAll("[role=spinbutton]")).toHaveLength(6);
+  expect(slot(host, "day").querySelector("button")).not.toBeNull();
+  expect(slot(host, "at").querySelector("button")).toBeNull();
   expect(host.querySelector('[role="radiogroup"]')?.textContent).toContain("Small");
   expect((host.querySelector('input[type=radio][value="s"]') as HTMLInputElement).checked).toBe(true);
   expect(host.querySelector('[data-page-field="color"] button')?.textContent).toContain("Choose an option");
-  expect(host.querySelector('[role="group"]')?.textContent).toContain("Alpha");
+  expect(host.querySelector('[data-page-field=tags] [role="group"]')?.textContent).toContain("Alpha");
   expect(checkbox(host, "Beta").checked).toBe(true);
   expect(checkbox(host, "Alpha").checked).toBe(false);
   expect(host.querySelector('[role="switch"]')?.getAttribute("aria-label")).toBe("Urgent");
@@ -244,6 +253,144 @@ it("draws a locked text field, textarea and select as a value to read: a plain b
   }
 });
 
+const WHEN: PageContent["body"] = [
+  { type: "date", name: "day", label: "Day", default: "2026-11-20" },
+  { type: "time", name: "at", label: "At", default: "07:05" },
+  { type: "datetime", name: "when", label: "When", default: "2026-11-20T21:30" },
+  { type: "submit" },
+];
+const segmentTexts = (scope: ParentNode) => [...scope.querySelectorAll("[role=spinbutton]")].map((segment) => segment.textContent).join(" ");
+
+it("holds a date, a time and a date and time as YYYY-MM-DD, HH:MM and YYYY-MM-DDTHH:MM, from the page's defaults to what is submitted", async () => {
+  const { host, onSubmit } = await render({ body: WHEN });
+  expect(segmentTexts(slot(host, "day"))).toBe("11 20 2026");
+  expect(segmentTexts(slot(host, "at"))).toBe("7 05 AM");
+  expect(segmentTexts(slot(host, "when"))).toBe("11 20 2026 9 30 PM");
+  await click(button(host, "Submit"));
+  expect(onSubmit).toHaveBeenLastCalledWith({ day: "2026-11-20", at: "07:05", when: "2026-11-20T21:30" });
+  typeSegment(segmentOf(slot(host, "day"), "day"), "3");
+  typeSegment(segmentOf(slot(host, "at"), "hour"), "11");
+  typeSegment(segmentOf(slot(host, "when"), "month"), "12");
+  await click(button(host, "Submit"));
+  expect(onSubmit).toHaveBeenLastCalledWith({ day: "2026-11-03", at: "11:05", when: "2026-12-20T21:30" });
+});
+
+it("sends a date, a time and a date and time left empty as nothing, and a half-filled one as empty once focus leaves it", async () => {
+  const { host, onSubmit } = await render({ body: [...WHEN.slice(0, 3).map((component) => ({ ...component, default: undefined })), { type: "submit" }] as PageContent["body"] });
+  await click(button(host, "Submit"));
+  expect(onSubmit).toHaveBeenLastCalledWith({});
+  const day = slot(host, "day");
+  typeSegment(segmentOf(day, "month"), "12");
+  typeSegment(segmentOf(day, "day"), "3");
+  await act(async () => void segmentOf(day, "year").focus());
+  await act(async () => void segmentOf(day, "year").blur());
+  await click(button(host, "Submit"));
+  expect(onSubmit).toHaveBeenLastCalledWith({});
+  const at = slot(host, "at");
+  typeSegment(segmentOf(at, "hour"), "9");
+  typeSegment(segmentOf(at, "minute"), "15");
+  clearSegment(segmentOf(at, "minute"));
+  await act(async () => void segmentOf(at, "minute").blur());
+  await click(button(host, "Submit"));
+  expect(onSubmit).toHaveBeenLastCalledWith({});
+});
+
+it("refuses a submit with a required date, time or date and time left empty, or outside its min and max, and focuses its first segment", async () => {
+  const { host, onSubmit } = await render({
+    body: [
+      { type: "date", name: "day", label: "Day", required: true },
+      { type: "time", name: "at", label: "At", min: "09:00", max: "17:00", default: "18:30" },
+      { type: "datetime", name: "when", label: "When", max: "2026-11-20T10:00", default: "2026-11-21T10:00" },
+      { type: "submit" },
+    ],
+  });
+  await click(button(host, "Submit"));
+  expect(onSubmit).not.toHaveBeenCalled();
+  expect(field_error(host, "day")).toBe("Enter a value.");
+  expect(field_error(host, "at")).toBeDefined();
+  expect(field_error(host, "when")).toBeDefined();
+  expect(slot(host, "day").querySelector("[role=spinbutton]")?.getAttribute("aria-required")).toBe("true");
+  expect(document.activeElement).toBe(slot(host, "day").querySelector("[role=spinbutton]"));
+  typeSegment(segmentOf(slot(host, "day"), "month"), "12");
+  typeSegment(segmentOf(slot(host, "day"), "day"), "3");
+  typeSegment(segmentOf(slot(host, "day"), "year"), "2026");
+  expect(field_error(host, "day")).toBeUndefined();
+});
+
+it("shows a date and time field's description and label, and takes the day from the calendar its button opens", async () => {
+  const { host, onSubmit } = await render({ body: [{ type: "datetime", name: "when", label: "When", description: "Local time", default: "2026-11-20T21:30" }, { type: "submit" }] });
+  expect(host.textContent).toContain("Local time");
+  expect(slot(host, "when").querySelector("[data-slot=label]")?.textContent).toBe("When");
+  await click(slot(host, "when").querySelector("button"));
+  const cell = [...document.body.querySelectorAll<HTMLElement>("[role=gridcell] [role=button]")].find((candidate) => candidate.textContent === "5")!;
+  await click(cell);
+  await click(button(host, "Submit"));
+  expect(onSubmit).toHaveBeenLastCalledWith({ when: "2026-11-05T21:30" });
+});
+
+it("submits on Enter in a segment of a date, time or date and time field", async () => {
+  const { host, onSubmit } = await render({ body: WHEN });
+  await act(async () => void segmentOf(slot(host, "at"), "hour").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })));
+  expect(onSubmit).toHaveBeenCalledExactlyOnceWith({ day: "2026-11-20", at: "07:05", when: "2026-11-20T21:30" });
+});
+
+it("submits nothing of a required time field with a segment cleared when Enter is pressed in a segment, and shows its required error instead", async () => {
+  const { host, onSubmit } = await render({ body: [{ type: "time", name: "at", label: "At", required: true, default: "10:30" }, { type: "submit" }] });
+  const at = slot(host, "at");
+  clearSegment(segmentOf(at, "minute"));
+  await act(async () => void segmentOf(at, "minute").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })));
+  expect(onSubmit).not.toHaveBeenCalled();
+  expect(field_error(host, "at")).toBe("Enter a value.");
+});
+
+it("draws a locked date, time and date and time field as a value to read, with no edit and no calendar", async () => {
+  const { host, onSubmit } = await render({ body: WHEN }, { history: true });
+  for (const name of ["day", "at", "when"]) {
+    const group = slot(host, name).querySelector("[data-slot=date-input-group], [role=group]")!;
+    expect(group.className).toContain("border-separator");
+    expect(group.className).toContain("bg-transparent");
+    expect(slot(host, name).querySelector("[role=spinbutton]")?.getAttribute("aria-readonly")).toBe("true");
+  }
+  expect(slot(host, "day").querySelector("button")?.disabled).toBe(true);
+  typeSegment(segmentOf(slot(host, "at"), "hour"), "11");
+  expect(segmentTexts(slot(host, "at"))).toBe("7 05 AM");
+  expect(onSubmit).not.toHaveBeenCalled();
+});
+
+const dayCell = (label: string) => [...document.body.querySelectorAll<HTMLElement>("[role=gridcell] [role=button]")].find((candidate) => candidate.textContent === label)!;
+
+it("greys out the calendar's days outside a date field's min and max, and a datetime field's only when the whole day is out", async () => {
+  const { host } = await render({
+    body: [
+      { type: "date", name: "day", label: "Day", default: "2026-11-15", min: "2026-11-10", max: "2026-11-20" },
+      { type: "datetime", name: "when", label: "When", default: "2026-11-15T10:00", min: "2026-11-10T12:00", max: "2026-11-20T09:00" },
+    ],
+  });
+  await click(slot(host, "day").querySelector("button"));
+  expect(dayCell("9").getAttribute("aria-disabled")).toBe("true");
+  expect(dayCell("10").getAttribute("aria-disabled")).toBeNull();
+  expect(dayCell("20").getAttribute("aria-disabled")).toBeNull();
+  expect(dayCell("21").getAttribute("aria-disabled")).toBe("true");
+  await act(async () => void document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  await click(slot(host, "when").querySelector("button"));
+  expect(dayCell("9").getAttribute("aria-disabled")).toBe("true");
+  expect(dayCell("10").getAttribute("aria-disabled")).toBeNull();
+  expect(dayCell("20").getAttribute("aria-disabled")).toBeNull();
+  expect(dayCell("21").getAttribute("aria-disabled")).toBe("true");
+});
+
+it("still holds a typed out-of-range date and refuses it on submit with the form's own message, marking nothing invalid before", async () => {
+  const { host, onSubmit } = await render({ body: [{ type: "date", name: "day", label: "Day", default: "2026-11-15", max: "2026-11-20" }, { type: "submit" }] });
+  const day = slot(host, "day");
+  typeSegment(segmentOf(day, "day"), "25");
+  expect(day.querySelector("[aria-invalid=true], [data-invalid=true]")).toBeNull();
+  expect(field_error(host, "day")).toBeUndefined();
+  await click(button(host, "Submit"));
+  expect(onSubmit).not.toHaveBeenCalled();
+  expect(field_error(host, "day")).toContain("20");
+  expect(day.querySelectorAll("[role=alert]")).toHaveLength(1);
+});
+
 const MARKDOWN_PAGE = (text: string): PageContent => ({ body: [{ type: "markdown", text }] });
 
 it("does not render raw HTML in a Markdown block: it is shown as the text it was written as", async () => {
@@ -300,8 +447,12 @@ it("marks a required text field, textarea and radio group as required for assist
       { type: "textarea", name: "b", label: "B", required: true },
       { type: "number", name: "c", label: "C" },
       { type: "radio", name: "d", label: "D", required: true, options: [{ value: "x" }] },
+      { type: "date", name: "e", label: "E", required: true },
+      { type: "time", name: "f", label: "F", required: true },
+      { type: "datetime", name: "g", label: "G", required: true },
     ],
   });
+  for (const name of ["e", "f", "g"]) expect(slot(host, name).querySelector("[role=spinbutton]")?.getAttribute("aria-required")).toBe("true");
   expect(field(host, "A").getAttribute("aria-required")).toBe("true");
   expect(field(host, "B").getAttribute("aria-required")).toBe("true");
   expect(field(host, "C").hasAttribute("aria-required")).toBe(false);

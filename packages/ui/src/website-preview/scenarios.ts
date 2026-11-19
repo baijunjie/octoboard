@@ -16,6 +16,7 @@ import {
   snapshotState,
 } from "../fixtures/builders";
 import { previewRepositories } from "./repositories";
+import { previewScheduledTasks } from "./scheduledTasks";
 import { previewCopy as english } from "./locales/en";
 import { previewCopy as chinese } from "./locales/zh-CN";
 import { createIdleScript, createTerminalScript } from "./terminals";
@@ -269,6 +270,12 @@ export function createPreviewScenario(
       projectBrowsers: Object.fromEntries(projects.map((project) => [project.id, { mode: "files", layouts: { changes: "tree" } } as const])),
     },
     configuration: { unavailable: true },
+    scheduledTasks: previewScheduledTasks(copy, Date.now(), {
+      console: workspace.id,
+      coordinator: coordinator.id,
+      server: projects[3].id,
+      merchant: projects[1].id,
+    }),
     steps: [
       async (ui) => {
         // Match the application's CSS breakpoint: the standalone demo also runs on phones, where

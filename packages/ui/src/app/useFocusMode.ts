@@ -13,7 +13,8 @@ import { useDaemonStore } from "../store";
 
 /**
  * The sidebar's focus mode from the keyboard: one key enters the selected session's context, another leaves focus
- * mode (`enterFocusMode` and `exitFocusMode`), and ⌃Tab moves along a console session's switch strip. `stableFocus` sets the focus mode for the sidebar's rows.
+ * mode (`enterFocusMode` and `exitFocusMode`), and ⌃Tab moves along a console session's switch strip; none of them
+ * while a page shows in place of the sessions (`suspended`). `stableFocus` sets the focus mode for the sidebar's rows.
  */
 export function useFocusMode({
   focus,
@@ -35,7 +36,7 @@ export function useFocusMode({
   sidebarShown: boolean;
   selectSession: (session: Session, options?: { enterFocus?: boolean; resume?: boolean }) => void;
   focusTerminal: () => void;
-  /** The Remote devices page shows in place of the sessions, so there is no session context to enter focus mode on. */
+  /** A page (Remote devices, Scheduled tasks) shows in place of the sessions, so there is no session context to enter focus mode on or switch within. */
   suspended?: boolean;
 }) {
   const selectedTarget = useDaemonStore(useShallow((s) => selectedSessionFocusTarget(selectedSession, s.projects, s.sessions)));
@@ -76,7 +77,7 @@ export function useFocusMode({
   useSwitchShortcut({
     focus,
     strip: switchableConsoleSessions,
-    shown: sidebarShown,
+    shown: sidebarShown && !suspended,
     onSwitch: switchConsoleSessionByKey,
   });
   const stableFocus = useStableHandler(setFocus);

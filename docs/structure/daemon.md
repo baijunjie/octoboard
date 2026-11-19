@@ -10,7 +10,7 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
 
 Stack (`apps/daemon/Cargo.toml`): tokio, axum 0.7 (HTTP and WebSocket), rusqlite with bundled SQLite, `portable-pty` and
 `alacritty_terminal` (PTYs and the parsed screen), `rmcp` (the MCP server), clap (CLI modes), `notify` (repository ref
-watching), ripgrep's libraries `ignore`, `globset` and `grep-*` (the project content search in `src/browse/content_search/`), `ureq` (the daemon's only outbound HTTP client, which reads the npm registry in `src/agents/cli/latest.rs` and the server form's release manifest and archive in `src/self_update/fetch.rs`),
+watching), `jiff` (a scheduled task's next run in the machine's local time zone, `src/coordinator/scheduled_tasks/next_run.rs`), ripgrep's libraries `ignore`, `globset` and `grep-*` (the project content search in `src/browse/content_search/`), `ureq` (the daemon's only outbound HTTP client, which reads the npm registry in `src/agents/cli/latest.rs` and the server form's release manifest and archive in `src/self_update/fetch.rs`),
 serde. The crate is a member of the root Cargo workspace beside the desktop shell's Tauri crate.
 
 ## Entry points
@@ -291,7 +291,14 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   for `POST /restart-check`), `archive_cleanup.rs` (a daemon task) and `resume_on_start.rs` (a
   daemon task: at start, resumes the interrupted sessions when the `resume_sessions_on_start` setting is on, through the
   same path as resuming an interrupted session; the store lists them, `Store::list_interrupted_sessions`, and the
-  adopted ones are not among them, as they never stopped) and `remote_access.rs` (`RemoteAccess`,
+  adopted ones are not among them, as they never stopped), `scheduled_tasks.rs` with `scheduled_tasks/` (the
+  requests of the scheduled tasks, whose launch settings are checked through `open.rs`'s `check_saved_open`, a task
+  being refused for what would refuse the session it opens; `next_run.rs` the pure function from a schedule, an
+  instant and a time zone to the next run, and the zone itself, `local_zone`; `runs.rs` one run: it opens the session
+  through the same path as `open_session` and records the run, for the scheduler and for `run_scheduled_task`;
+  `scheduler.rs` the scheduler, a daemon task that `main.rs` spawns after the start-up resume and reconciliation, which
+  catches up at start what was missed and then runs each enabled task as it comes due, woken early by
+  `AppState::scheduler_wake` when a task changes) and `remote_access.rs` (`RemoteAccess`,
   `AppState::remote_access`: Allow remote access and, on Windows, the browser port beside it, offered only in a daemon
   that follows the application; applying them opens or closes the browser's way in, the owner socket or on Windows the
   browser port with the owner pipe, holds or refuses the owner key and closes what it admitted, writes the owner
@@ -341,7 +348,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   schema for the migration tests once there is one), `rows.rs`, one file per table family (`settings.rs` the application
   settings, `memory.rs` the entries of each console's memory and of each place's (a host and a directory), `provider_settings.rs` the user's explicit choices of each provider's settings and the value in effect of
   every one, `held_terminals.rs` which holder runs each session's launch and each shell terminal, and the names users
-  gave shell terminals), and `failure.rs`, the store's own `Result` and `StoreError`, which codes the SQLite failures to read or
+  gave shell terminals, `scheduled_tasks.rs` the scheduled tasks and the last runs kept of each), and `failure.rs`, the store's own `Result` and `StoreError`, which codes the SQLite failures to read or
   write Octoboard's database the user can fix (read-only data folder, full disk, a file that cannot be opened or read)
   as `store_write_failed`.
 - `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (running sessions, claims, status,
@@ -1073,6 +1080,7 @@ helper list; the rules for using them, including the ones that go beyond "use it
 | Whether a delivery error may still have reached the agent's own queue | `acceptance_uncertain` (`src/messaging/delivery.rs`; the coded error `message_acceptance_unconfirmed`) |
 | Codex's thread state database (its location, repointing rows, carrying or forgetting threads) | `src/adapter/codex/threads.rs` (through `ThreadRegistry`, `src/accounts/thread_registry.rs`) |
 | The executable a launch's helpers (hook, MCP server, status line) run | `self_update::helpers::helper_exe` (`src/self_update/helpers.rs`), used by `coordinator::launch`: the holder's copy of the build under a holder, else a copy of the running build rather than the daemon's own path, which an update replaces |
+| Open a session on someone's behalf rather than from a request (a scheduled run) | the opening path of `open_session`: `resolve_open_with` and `open_session_with` (`src/coordinator/open.rs`), with `AccountGate` (`src/coordinator/accounts.rs`) choosing which account states refuse; settings saved to be opened later are checked by `check_saved_open` (the account's quota and sign-in are then judged when the session opens). A scheduled task's next run is `scheduled_tasks::next_run` in `scheduled_tasks::local_zone()` (`src/coordinator/scheduled_tasks/next_run.rs`) |
 | Look up a known record or fail with its `unknown_*` error | `Store::require_project`, `require_console`, `require_account`, `require_session` |
 | Whether an agent is on the added list (every agent is while the list is undecided) | `Store::agent_is_added` (`src/store/agents.rs`); refusing a request for an agent that is not: `refuse_unless_agent_added` (opening a session) and `refuse_unless_agent_added_to` (any other purpose), `src/accounts/choice/refusals.rs` |
 | Clean a project's or an agent's tag list before storing it | `normalise_tags` (`src/coordinator/validate.rs`) |

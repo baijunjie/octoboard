@@ -3830,6 +3830,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "ignore",
+ "jiff",
  "libc",
  "minisign-verify",
  "notify",

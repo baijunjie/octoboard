@@ -7,7 +7,7 @@ import { useRegionCycle } from "./useRegionCycle";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const SHOWN = { topbar: true, rail: false, devices: false, welcome: false, sidebar: false, archive: false, terminal: false, banner: false, update: false };
+const SHOWN = { topbar: true, rail: false, devices: false, tasks: false, welcome: false, sidebar: false, archive: false, terminal: false, banner: false, update: false };
 
 function Cycle({ panel, landing = false }: { panel: boolean; landing?: boolean }) {
   useRegionCycle({ shown: SHOWN, panels: { "panel-files": panel }, focusTerminal: () => {} });

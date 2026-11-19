@@ -150,6 +150,25 @@ describe("isLive", () => {
     expect(isLive(location, withDevices)).toBe(expected);
   });
 
+  const withTasks = { ...data, tasks: new Set(["t1"]) };
+  it.each<[string, Location, boolean]>([
+    ["a task on the Scheduled tasks page", { console: "c-1", tasks: "t1" }, true],
+    ["a deleted task on the Scheduled tasks page", { console: "c-1", tasks: "t-gone" }, false],
+    ["the page with no task", { console: "c-1", tasks: "" }, true],
+  ])("%s", (_, location, expected) => {
+    expect(isLive(location, withTasks)).toBe(expected);
+  });
+
+  it("tells the Scheduled tasks page, and each task on it, from the Remote devices page and the page it is shown over", () => {
+    const base: Location = { console: "c-1", session: "a" };
+    let history = push(EMPTY_HISTORY, base);
+    history = push(history, { ...base, tasks: "t1" });
+    history = push(history, { ...base, tasks: "t2" });
+    history = push(history, { ...base, devices: "t2" });
+    expect(history.entries).toHaveLength(4);
+    expect(push(history, { ...base, devices: "t2" })).toBe(history);
+  });
+
   it("takes a device for live where the saved devices are not known", () => {
     expect(isLive({ console: "c-1", devices: "d-anything" }, data)).toBe(true);
   });

@@ -10,11 +10,10 @@ import type { Console } from "../protocol";
 import { statusLabel } from "../sessions/sessionLabel";
 import { consoleMenu, type ConsoleMenuHandlers } from "../sidebar/menus";
 import type { OpenSettings } from "../settings/settingsLauncher";
-import { remoteDaemonsOffered } from "../remoteDaemons/remoteDaemonsOffered";
-import { usePlatform } from "../platform/react";
 import { RailRemoteDevices, REMOTE_DEVICES_BUTTON_ID } from "./RailRemoteDevices";
+import { RailScheduledTasks } from "./RailScheduledTasks";
 import { RailRemoteGap } from "./RailRemoteGap";
-import { RailSeparator, RailSpacer } from "./RailSeparator";
+import { RailSeparator } from "./RailSeparator";
 import { RailQuotaEntry } from "./RailQuotaEntry";
 import { RailProcessesEntry } from "./RailProcessesEntry";
 import { RailUpdateEntry } from "./RailUpdateEntry";
@@ -162,6 +161,10 @@ interface RailProps extends ConsoleMenuHandlers {
    * tile does; `onOpenRemoteDevices` shows it. */
   remoteDevicesShown: boolean;
   onOpenRemoteDevices: () => void;
+  /** The Scheduled tasks page shows, which the Scheduled tasks button is then drawn as current for, as the Remote
+   * devices button is; `onOpenScheduledTasks` shows it. */
+  scheduledTasksShown?: boolean;
+  onOpenScheduledTasks: () => void;
   waitingCount: number;
   onNextWaiting: () => void;
   /** Shows the Processes panel that owns a tree the global process list names; false when that project or session is gone. */
@@ -206,6 +209,8 @@ export function Rail({
   hoverOpensSidebar,
   remoteDevicesShown,
   onOpenRemoteDevices,
+  scheduledTasksShown = false,
+  onOpenScheduledTasks,
   onOpenDialog,
   onSelectSession,
   onOpenArchive,
@@ -220,7 +225,6 @@ export function Rail({
   offline = false,
 }: RailProps): React.ReactElement {
   const t = useT();
-  const remoteDevices = remoteDaemonsOffered(usePlatform());
   const consolesRef = useListMotion<HTMLDivElement>({ descendants: true });
 
   return (
@@ -254,7 +258,7 @@ export function Rail({
                 <ConsoleTile
                   key={c.id}
                   console={c}
-                  current={c.id === currentConsoleId && !remoteDevicesShown}
+                  current={c.id === currentConsoleId && !remoteDevicesShown && !scheduledTasksShown}
                   onSelect={() => onSelectConsole(c.id)}
                   hoverOpensSidebar={hoverOpensSidebar}
                   onHoverChange={(hovered) => (hovered ? onConsoleEnter(c.id) : onConsoleLeave())}
@@ -268,11 +272,12 @@ export function Rail({
               </ChromeButton>
             </div>
           </div>
-          {/* Where the button is, a separator above it, and the gap pushes the bottom group down and draws a
-          separator once it is used up. */}
-          {remoteDevices && <RailSeparator />}
+          {/* The group of pages, a separator above it, and the gap pushes the bottom group down and draws a separator
+          once it is used up. */}
+          <RailSeparator />
+          <RailScheduledTasks shown={scheduledTasksShown} onPress={onOpenScheduledTasks} />
           <RailRemoteDevices shown={remoteDevicesShown} onPress={onOpenRemoteDevices} />
-          {remoteDevices ? <RailRemoteGap /> : <RailSpacer />}
+          <RailRemoteGap />
           {waitingCount > 0 && (
             <ChromeButton label={t("rail.waiting", { count: waitingCount })} onPress={onNextWaiting} tooltipPlacement="end"
               badge={<RailCountBadge count={waitingCount} overflowLabel={t("rail.waitingBadgeOverflow")} color="warning" />}>

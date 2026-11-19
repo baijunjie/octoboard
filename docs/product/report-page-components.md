@@ -183,7 +183,7 @@ the page gives one, except the drop-down's, which has a default of its own.
 | `text` | `default`, `placeholder`, `pattern`, `min_length`, `max_length` | a single-line field | a string |
 | `textarea` | as `text` without `pattern`, plus `rows` (1 to 40, 4 when left out) | a multi-line field | a string |
 | `number` | `default`, `min`, `max`, `step` | a single-line field; a comma stands in for the decimal point when the value has no point | a number |
-| `date`, `time`, `datetime` | `default`, `min`, `max`, as `YYYY-MM-DD`, `HH:MM` and `YYYY-MM-DDTHH:MM` (local) | the system's own date and time controls | a string in that form |
+| `date`, `time`, `datetime` | `default`, `min`, `max`, as `YYYY-MM-DD`, `HH:MM` and `YYYY-MM-DDTHH:MM` (local) | the application's own date and time fields (see "Date and time fields" below) | a string in that form |
 | `radio` | `options` (`[{ value, label? }]`, values unique; the label is the value when left out), `default` | a group of radio buttons | the chosen value |
 | `select` | as `radio`, plus `placeholder` (a localized "choose an option" when left out) | a drop-down | the chosen value |
 | `checkboxes` | `options`, `default` (a list of values), `min_selected`, `max_selected`; `required` means at least one | a group of checkboxes | an array of the chosen values, in the options' order |
@@ -195,7 +195,29 @@ session" in `docs/product/report-panel.md`.
 
 **Locked fields.** While a page cannot be edited — a history page, a submitted page, or one whose submission is under
 way — its fields are drawn as values to read rather than controls to use: text at full strength, a text field's value
-still selectable, and nothing that takes a press.
+still selectable, and nothing that takes a press; a date field's calendar does not open.
+
+### Date and time fields
+
+The application draws its own date and time fields; the system's or browser's own pickers never appear, in a report
+page or anywhere else in the window (the Scheduled tasks form uses the same fields, see "The form" in
+`docs/product/scheduled-tasks-page.md`).
+
+- **The field is a row of segments** — day, month and year, hour and minute — typed into or stepped with the arrow
+  keys, in the order, with the separators and the 12- or 24-hour clock of the UI's language rather than the browser's.
+- **A `date` or `datetime` field has a calendar button** at its end, opening a calendar to pick the day from; picking
+  one keeps the time already entered and closes the calendar. A `time` field has none.
+- **Its value is the text the wire carries** (`YYYY-MM-DD`, `HH:MM`, `YYYY-MM-DDTHH:MM`), and empty while the field is
+  empty. A field only partly filled holds the empty value once focus leaves it or Enter is pressed in it, so a required
+  one is then reported as empty.
+- **`min` and `max` grey out the calendar's days outside them** and stop its month navigation at them; a `datetime`'s
+  day is greyed only when the whole of it is out of range. Typing in the segments is not limited by them: a value typed
+  out of range is held, and refused when the form is checked (see "Checking a form before it is sent" below).
+- **Enter in any segment** presses the page's first shown `submit` button, as in any single-line field (see
+  "Submitters" below).
+
+**Known limit**: in a report column narrower than about 228 px, a long localized date and time does not fit inside its
+field, which then scrolls.
 
 ## Submitters
 

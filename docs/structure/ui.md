@@ -127,18 +127,18 @@ their cascade order does not depend on which screen opened first.
   browse requests, the shared slot names and the lanes every browse request goes through), the lane primitive
   (`lane.ts`), and how a failed browse request is treated and worded (`failure.ts`).
 - `src/store/` — the Zustand store of the connection and the state derived from daemon events (state, reducer, actions,
-  session requests, the notification bus in `notifications.ts`, `contentSearchListeners.ts`: the events of a running Find in files search, which `Daemon.onContentSearch` hands to its listener outside the store and reducer, the installed desktop applications of the agents (`nativeApps.ts`: `State.nativeApps`, `nativeAppsUnseen`, `useNativeAppsRefresh`), `memoryListeners.ts` (the changes to Octoboard's memory, which `Daemon.onMemoryChange` hands to its listeners: memory is not held in the store state, what shows it lists it itself), connection, React bindings, session-group hooks),
+  session requests, the notification bus in `notifications.ts`, `scheduledTasks` / `scheduledTaskRuns` / `scheduledTasksZone` of the state, the daemon's scheduled tasks, their kept runs and the time zone it reads schedules in, which `scheduledTasks/` lists and the change events keep up to date, `contentSearchListeners.ts`: the events of a running Find in files search, which `Daemon.onContentSearch` hands to its listener outside the store and reducer, the installed desktop applications of the agents (`nativeApps.ts`: `State.nativeApps`, `nativeAppsUnseen`, `useNativeAppsRefresh`), `memoryListeners.ts` (the changes to Octoboard's memory, which `Daemon.onMemoryChange` hands to its listeners: memory is not held in the store state, what shows it lists it itself), connection, React bindings, session-group hooks),
   re-exported by `index.ts`; `settingsWrite.ts` is the checked settings writer (`createSettingsWriter`) that
   `useSettingsWrite` and the daemon's update store share.
 
 ### Leaf layer and window shell
 
-- `src/components/` — shared building blocks by kind: `alerts/` (error alerts and the error queue, with the failure of opening a file in the default application, `defaultApplicationFailure.tsx`, and `acknowledgementViewOf` in `acknowledgementView.ts`, the failure-modal view of an error for a dialog a refusal has ended), `card/` (`FlatCard`, the flat card of a dialog: header, band, and rows or blocks set apart by inset hairlines), `dialog/` (the
-  `Dialog` frame and toolkit), `form/`, `controls/` (including `CopyBox`, a block's box with its copy button, `CopyCommand`, a command line with its copy button, and `FeedbackButton`, the done-state icon button that `CopyButton` and `PasteButton` are built on), `menus/`, `hint/` (including `PopoverHint`, the floating popover an
+- `src/components/` — shared building blocks by kind: `alerts/` (error alerts and the error queue, with the failure of opening a file in the default application, `defaultApplicationFailure.tsx`, and `acknowledgementViewOf` in `acknowledgementView.ts`, the failure-modal view of an error for a dialog a refusal has ended, and `failureNode.ts`, `useFailureNode`, the text of a failure the daemon reported inside a result), `card/` (`FlatCard`, the flat card of a dialog: header, band, and rows or blocks set apart by inset hairlines, and `FormCard`, the raised card a page form's controls sit on), `dialog/` (the
+  `Dialog` frame and toolkit, and the unsaved-changes guard, `unsavedChangesGuard.ts` with `UnsavedChanges.tsx`), `form/` (the field components, including the time and date-time inputs `TimeOfDayInput.tsx` and `DateTimeInput.tsx`, and `useValidationMarks.ts`, a page form's field marks), `controls/` (including `CopyBox`, a block's box with its copy button, `CopyCommand`, a command line with its copy button, and `FeedbackButton`, the done-state icon button that `CopyButton` and `PasteButton` are built on), `menus/`, `hint/` (including `PopoverHint`, the floating popover an
   interactive hint opens, in `hintPopover.tsx`, `HelpTip`, the "?" that carries an explanation in a `PopoverHint`, `HeadedTooltip`, the heading, divider and body content shared by the rail and the archive view, and `ValueTooltipText`, the text of a tooltip that is a value in full; the
-  tooltip itself is `Tooltip` in `src/primitives/`), `text/`, `status/`, `icons/`, `tabs/`, `qr/` (`QrCode`, a QR code drawn from the modules the daemon encodes), `motion/`, `scroll/` (the faded scroller, `ScrollBox`, a box that scrolls sideways, and the sticky section
+  tooltip itself is `Tooltip` in `src/primitives/`), `text/` (including `InlineSessionLink`, a session's title as a link in a sentence), `status/`, `icons/`, `tabs/`, `qr/` (`QrCode`, a QR code drawn from the modules the daemon encodes), `motion/`, `scroll/` (the faded scroller, `ScrollBox`, a box that scrolls sideways, and the sticky section
   heading), `focus/`, `announce/`, `panel/` (including `ContentMain`, the content area's one `<main>`), `host/` (the host actions on a path: copying it, opening it in the default application, `openPathInDefaultApplication`, and revealing it in the file manager, `revealPathTarget`, and opening a session in its agent's desktop application, `useOpenSessionInApp`, which asks the `confirm` callback it is given for a session that is not archived instead of sending the request), `rows/` (the tree row, its icon and mark buttons, the
-  hover-actions class), `hooks/` (breakpoints, `createLauncher`, `retryableLazy`, lazy readiness for capture hosts,
+  hover-actions class), `hooks/` (breakpoints, `useConnectionSnapshot`, the snapshot gate of the open connection, `createLauncher`, `retryableLazy`, lazy readiness for capture hosts,
   polling, window focus (`windowFocus.ts`), the latest-request hook,
   `useLatest` and `useRenderLatest`, `useSerialPush` over `createSerialQueue` (`serialQueue.ts`), `useCheckedEdit` (the
   checked-write side of a form dialog), `settle`, a `try`/`finally` helper kept outside components because the React
@@ -150,22 +150,23 @@ their cascade order does not depend on which screen opened first.
   host), `IncompatibleDaemonScreen` (the whole window while the connection state is `incompatible`), `KeyRefusedScreen` (the whole
   window while it is `keyRefused`, and, as its keyless variant, `main.tsx`'s screen for a browser page opened with no key),
   `RailRemoteDevices` (the rail's Remote devices button, which opens the Remote devices page, under the
-  consoles, in the desktop application's own window only; `Rail` offers it alone, with no consoles, while the local daemon cannot be used), `RailForwardsEntry` (a remote window's rail button for the
+  consoles, in the desktop application's own window only; `Rail` offers it alone, with no consoles, while the local daemon cannot be used), `RailScheduledTasks` (the rail's Scheduled tasks button, directly above Remote devices where there is one: it opens the Scheduled tasks page, in every window of a daemon, with a badge counting the tasks running), `RailForwardsEntry` (a remote window's rail button for the
   ports forwarded to its daemon's machine, built on `RailPanelEntry`), `RailRemoteGap` and `RailSeparator` (the free space and
   the separator between the remote button and the rail's bottom group, and the separator and spacer items they are made of), and the page of the window that has no daemon: `TrayFlyout` with
   `TrayFlyoutLines.tsx` and `TrayFlyout.css` (the Windows notification-area flyout, drawing the model the shell sends).
 - `src/app/` — the hooks `App.tsx` is composed of, one concern each (dialog routing, in `useDialogRouting.ts`, which
   also holds a dialog that arrives from the daemon until no modal or alert is open (`openDialogWhenFree`), console switching, session
   selection and actions, focus mode, Find in files' window shortcut (`useFindInFilesShortcut.ts`), archive view, pane layout and widths, project panels, jumps from the global process
-  list to a Processes panel, announcements, and `useRemoteDevicesPage.ts`: whether the Remote devices page shows, which
-  device it shows, and what leaves it).
+  list to a Processes panel, announcements, `useRemoteDevicesPage.ts` and `useScheduledTasksPage.ts`: whether each of the two pages shows, which item it shows,
+  and what leaves it, both on `useAnchoredPage.ts`, which holds what the two share: a page of its own beside the
+  sessions, anchored to the console and session current when it opened, with the item last chosen kept per daemon).
 
 ### Feature directories
 
 - `src/layout/` — pane layout: panel kinds and widths, the resize handle, the sidebar drawer, swipes below `phone`.
 - `src/shortcuts/` — the central registry of keyboard shortcuts and its persisted overrides.
-- `src/navigation/` — Back and Forward through the locations the content area has shown, the Remote devices page (`devices`) and the offline window's status (`offline`) among them.
-- `src/lifecycle/` — hooks and parts tying the UI to the platform: exit flow (`useAppExit.ts`, which also
+- `src/navigation/` — Back and Forward through the locations the content area has shown, the Remote devices page (`devices`), the Scheduled tasks page (`tasks`) and the offline window's status (`offline`) among them; a move can be put behind a confirmation (`confirm`), which is how the unsaved-changes guard asks before one.
+- `src/lifecycle/` — hooks and parts tying the UI to the platform: exit flow (`useAppExit.ts`, which asks through the unsaved-changes guard before quitting or restarting and also
   restarts a daemon that updated itself where there is no shell to relaunch, `exitFailure.tsx` the alerts of a failed
   exit or restart, the refusal of a daemon restart coming from `src/updates/restartFailure.tsx`, its confirmation `ExitConfirmDialog.tsx`), notifications, native menu, native window theme, the two settings the desktop
   shell holds in its own file, run in background and menu bar icon visibility (`shellSettings.ts`: the store behind both
@@ -178,8 +179,7 @@ their cascade order does not depend on which screen opened first.
   mounted around the whole `App` so the rail button, the sidebar and the page share it: the connect hook, the shell's
   hand-over queue and page request, the add state and the Remove confirmation), `RemoteDevicesSidebar.tsx` (the
   device list in the docked sidebar's place), `RemoteDevicePage.tsx` (the selected device's header and form, or the Add
-  form, or the empty state, in `ContentMain`), `RemoteDaemonForm.tsx` and `FormCard.tsx` (the editable entry form and its
-  raised cards), `remoteDevicePreference.ts` (the device last viewed, per daemon) and `remoteDevicesTestSupport.tsx`
+  form, or the empty state, in `ContentMain`), `RemoteDaemonForm.tsx` (the editable entry form, on `FormCard` of `components/card/`), `remoteDevicePreference.ts` (the device last viewed, per daemon) and `remoteDevicesTestSupport.tsx`
   (test host for what reads `useRemoteDevices`); and `useRemoteDaemons.ts` (the shell's
   saved entries and which are connected, read again as the shell says they changed), `useRemoteDaemonConnect.tsx` (one
   connection in progress and every question or failure of it: password, host key, version mismatch, in the window that asked),
@@ -188,6 +188,18 @@ their cascade order does not depend on which screen opened first.
   `connectionDetails.ts` (reading the
   `octoboard+ssh://` line that fills the form), `connectionState.ts`, `port.ts`, and `remoteDaemonsOffered.ts` (the rail has
   the group only in the application's own window). No secret is held here: the shell never returns one to a page.
+- `src/scheduledTasks/` — the Scheduled tasks page, on every window of a daemon, over the daemon's scheduled tasks
+  (`ScheduledTasks.tsx`: `ScheduledTasksProvider` and `useScheduledTasks`, mounted around the whole `App` like the
+  Remote devices provider, so the rail button, the sidebar and the page share it; `ScheduledTasksSidebar.tsx` the task
+  list in the docked sidebar's place; `ScheduledTaskPage.tsx` the selected task's header with its Settings and Run
+  history tabs, or the new task's form, or the empty states; `ScheduledTaskForm.tsx` the form; `ScheduledTaskRuns.tsx`
+  the run history; `scheduleText.ts` a schedule in words, the kinds the form offers and the countdown; `taskFields.ts`
+  the mapping between a task's wire fields and the form's, `taskDraft.ts` the form's draft model and what a save
+  changes, `useTaskDraft.ts` and `useTaskLaunch.ts` its state, `useTarget.ts`, `useTaskZone.ts` and `taskName.ts` what a
+  task is shown as; `useScheduledTasksSync.ts`, `useScheduledTaskRuns.ts` and `useSnapshotListing.ts` listing the tasks
+  and a task's runs after every snapshot; `useRunningTaskCount.ts` the rail's badge; `useScheduledRunNotifications.ts`
+  the system notification of a failed run, whose choosing opens the page on that task; `scheduledTaskPreference.ts` the
+  task last viewed, per daemon).
 - `src/statusItem/` — the menu-bar menu: its builder, quota submenus, icons and the hook that pushes it to the platform.
 - `src/sidebar/` — one console's sessions and projects: `Sidebar` picks the view over `SidebarFrame`, `ConsoleView` and
   `FocusView` list them with `ProjectNode` and `SessionRow` (their pin and lock buttons in `MarkButtons.tsx`, the row's
@@ -365,6 +377,11 @@ is `docs/README.md`, "Coding conventions".
 - A settings control that saves a field the daemon versions, and a dialog that edits a console, a project or an account,
   write through `useSettingsWrite` and `useCheckedEdit` (`docs/conventions/protocol-and-contracts.md`, "The envelope and
   field conventions"); a field a form edits has its path in the daemon's versioned paths (see the daemon structure doc).
+- A page of its own beside the sessions (Remote devices, Scheduled tasks): a hook in `app/` on `useAnchoredPage`, a
+  feature directory whose provider is mounted around `App`, its sidebar and page in the content area's place, a rail
+  button in `shell/`, a location in `navigation/history.ts` and, if it takes the keyboard region the terminal has, a
+  region name beside `TASKS_REGION`. A form on such a page declares its unsaved changes to the guard, and every way out
+  of the page goes through it (see "Shared entry points").
 - A user-facing string goes through `i18n/` (the rules: `docs/conventions/i18n-in-code.md`).
 - A new daemon error code needs its record in `errors/codes.ts` in the same change; a code only one provider raises has
   its record and wording in that provider's presentation module instead (`docs/conventions/error-codes.md`, "The UI's
@@ -436,7 +453,7 @@ are the helper list; the rules that go beyond "use helper X" are in `docs/conven
 | A faked daemon request that fails with a daemon code | `daemonError` (`src/test/daemonError.ts`): a `CodedError` whose message is the catalog's sentence for its code and params, as the store words it |
 | Agent availability for a store in a test or a fixture | `availabilityOf(providers, states)` (`src/fixtures/fixtureProviders.ts`), which gives every served agent an entry, `not_determined` unless `states` names another, as the daemon sends one entry per agent |
 | A test that depends on time (a fake clock, a timer, a frame, a wait on the real clock, a lazily imported chunk) | `src/test/clock.ts` (`fakeTimers`, whose one teardown drains pending timers and restores the real clock; `fakeTimersKeepingFrames`, `runOutTimers`, `runPendingTimers`, `afterQueuedWork`, `flushPromises`, `waitOnRealClock`) and `settleLazyImport` (`src/test/lazyImport.ts`). Time helpers tied to one area sit beside it: `settleFrames`, `framesAsTimers`, `framesHeld` and `withModality` (`src/components/dialog/dialogTestSupport.ts`), `press`, `tooltipsCooledDown` and `mountForTooltip` (`src/components/hint/tooltipTestSupport.ts`), `firstWriteDelayPassed` (`src/components/announce/statusAnnouncerTestSupport.ts`), `SUBMENU_HOVER_DELAY_MS`, and `openBy`, `filterField`, `typeInFilter`, `pressInFilter` and `holdExitAnimations` for a menu's opening and its filter field (`src/components/menus/menuTestSupport.ts`), `PAST_ANY_RETRY_MS` (`src/terminal/reconnectTestSupport.ts`), and `settle` and `settleInAct` for gallery steps (`src/fixtures/clockTestSupport.ts`) |
-| State a test leaves behind for the next one (the error-alert queue, the window preferences held in module memory) | `src/test/setup.ts` empties the alert queue after every jsdom test and shims `getClientRects` (no rects for a disconnected element, one that is or sits in `hidden` or `display: none`, a rect otherwise, as `useListMotion` reads none as a list not rendered); `stubWindow`'s teardown in `src/appTestSupport.tsx` calls `resetAppPreferences` (panel stacks, closed Report panels, the selected console, sidebar and aside visibility), which `localStorage.clear()` alone does not reset |
+| State a test leaves behind for the next one (the error-alert queue, the window preferences held in module memory) | `src/test/setup.ts` empties the alert queue after every jsdom test and shims `getClientRects` (no rects for a disconnected element, one that is or sits in `hidden` or `display: none`, a rect otherwise, as `useListMotion` reads none as a list not rendered); `stubWindow`'s teardown in `src/appTestSupport.tsx` calls `resetAppPreferences` (panel stacks, closed Report panels, the selected console, the chosen item of the Remote devices and Scheduled tasks pages, sidebar and aside visibility), which `localStorage.clear()` alone does not reset |
 | A plain on/off application setting in Settings | `DaemonSwitchSetting` (`src/settings/DaemonSwitchSetting.tsx`) over the list in `src/configuration/booleanSettings.ts` |
 | A checked write of application settings from a control (the switches, the choice of when to prevent sleep, the Git section) | `useSettingsWrite` (`src/settings/useSettingsWrite.ts`): sends `update_settings` based on the versions the store holds of the paths it changes, and drops a press while the store still holds a path at the version this window last wrote it from; code that is not a component writes through `createSettingsWriter` (`src/store/settingsWrite.ts`), which it wraps |
 | The checked-write side of a form dialog for a console, a project or an account | `useCheckedEdit` (`src/components/hooks/useCheckedEdit.ts`) over `baseVersions` and `writeConflict` (`src/errors/writeConflict.ts`): the `base_versions` of the fields the user changed, and putting a field the store moved past back to its current value, announced through `ChangedElsewhereAnnouncer` when the user had edited it |
@@ -485,4 +502,12 @@ are the helper list; the rules that go beyond "use helper X" are in `docs/conven
 | Hand focus back to an agent tab's actions button | `tabActionsTrigger` (`src/components/tabs/AgentTabList.tsx`) |
 | Read the store | the barrel `src/store/index.ts` (`useDaemon`, `useDaemonStore`, `useDaemonStoreEqual`, session hooks) |
 | The provider tree around `App` in a new host of the app | `AppRoot` (`src/AppRoot.tsx`), as `main.tsx`, the gallery frame and the website preview use it |
+| A form that holds changes not saved yet, and an action that leaves it (another item, the rail, Back and Forward, a session or console opened, quitting) | `useUnsavedChanges` (`src/components/dialog/UnsavedChanges.tsx`) in the form to declare it, and `useLeaveGuard` around the action that leaves, both over the window's `unsavedChangesGuard` (`src/components/dialog/unsavedChangesGuard.ts`), which asks once, "Discard changes", and runs the action on Discard; `useNavigationHistory`'s `confirm` and `useAppExit` take it for Back and Forward and for quitting. Only the two page forms use it; modal form dialogs are not guarded |
+| Which fields of a page form show their message (edited and left, or after a Save pressed on something invalid) | `useValidationMarks` and `useFocusFirstInvalid` (`src/components/form/useValidationMarks.ts`) |
+| A time of day, a date or a date and time in a form | `TimeOfDayInput` and `DateTimeInput` (`src/components/form/`) over `TimeField`, `DatePicker` and `SegmentedInput` (`src/primitives/`; the values are plain `HH:MM`, `YYYY-MM-DD` and `YYYY-MM-DDTHH:MM` strings, `dateText.ts` the conversions). The browser's native date and time pickers are not used: `TextField` takes only the types text and password |
+| The card a page form's controls sit on | `FormCard` (`src/components/card/FormCard.tsx`) |
+| The text of a failure the daemon reported inside a result (as a run's failed start) | `useFailureNode` (`src/components/alerts/failureNode.ts`) |
+| A session's title as a link in a sentence | `InlineSessionLink` (`src/components/text/InlineSessionLink.tsx`) |
+| Wait for the open connection's snapshot before reading what it lists | `useConnectionSnapshot` (`src/components/hooks/useConnectionSnapshot.ts`), as `useInterfaceLanguage` and the scheduled tasks' listing do |
+| The F6 region of the Scheduled tasks page | `TASKS_REGION` (`src/components/focus/regionFocus.ts`), which `data-region` carries and `useRegionCycle` and `useTerminalFocus` read |
 | Data for the gallery, the website preview and application tests | `src/fixtures/` (builders, `snapshotState`, `createFixtureDaemon`) |

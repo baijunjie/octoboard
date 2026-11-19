@@ -2,7 +2,7 @@ import { NumberField as HeroNumberField } from "@heroui/react";
 import React from "react";
 
 import { useDisabled } from "./busy";
-import type { FieldVariant } from "./Field";
+import { Description, Label, type FieldVariant } from "./Field";
 
 /** HeroUI's number field: an input for a number with a decrement and an increment button either side
  * of it. `onChange` is told of each number the input commits (on blur or Enter, and by the buttons and the arrow keys):
@@ -13,8 +13,10 @@ import type { FieldVariant } from "./Field";
  * HeroUI's group has no place for a suffix. `label` is the accessible name, for a field with no visible `Label`. The buttons are no tab stops, the arrow keys
  * doing what they do, and carry a name each (`incrementLabel`, `decrementLabel`) written as a whole phrase, which the
  * library would otherwise build from `label` in English only; they have no tooltip, their glyphs being the
- * convention for a stepper. `inputRef` is the input, for a caller that moves focus to it. */
-export function NumberField({ value, onChange, min, max, step, label, incrementLabel, decrementLabel, inputRef, variant, className }: {
+ * convention for a stepper. `inputRef` is the input, for a caller that moves focus to it. With `visibleLabel` the
+ * label is drawn over the field, in the gap fields have, and `description` is drawn under it; a field in a row with
+ * other fields then lines up with them. */
+export function NumberField({ value, onChange, min, max, step, label, incrementLabel, decrementLabel, inputRef, variant, className, visibleLabel, description }: {
   value: number;
   onChange: (value: number) => void;
   min: number;
@@ -26,7 +28,13 @@ export function NumberField({ value, onChange, min, max, step, label, incrementL
   inputRef?: React.Ref<HTMLInputElement>;
   variant?: FieldVariant;
   className?: string;
+  visibleLabel?: boolean;
+  description?: React.ReactNode;
 }): React.ReactElement {
+  // React Aria links the input to the note's id and drops the link only when its own `description` prop changes, whatever
+  // the note's element does, so a note that comes and goes would leave the input naming an element that is gone. The
+  // prop is react-aria's and not in the typings of the component that passes it on, hence the spread.
+  const noteProps = description ? { description: true } : {};
   return (
     <HeroNumberField
       value={value}
@@ -35,18 +43,21 @@ export function NumberField({ value, onChange, min, max, step, label, incrementL
       minValue={min}
       maxValue={max}
       step={step}
-      aria-label={label}
+      aria-label={visibleLabel ? undefined : label}
+      {...noteProps}
       incrementAriaLabel={incrementLabel}
       decrementAriaLabel={decrementLabel}
       isDisabled={useDisabled()}
       variant={variant}
       className={className}
     >
+      {visibleLabel && <Label>{label}</Label>}
       <HeroNumberField.Group>
         <HeroNumberField.DecrementButton />
         <HeroNumberField.Input ref={inputRef} className="text-center" />
         <HeroNumberField.IncrementButton />
       </HeroNumberField.Group>
+      {description && <Description>{description}</Description>}
     </HeroNumberField>
   );
 }

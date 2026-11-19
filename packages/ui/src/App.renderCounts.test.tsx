@@ -15,8 +15,8 @@ import { byLabel, fakeDaemon, row, stubWindow } from "./appTestSupport";
 import { consoleOf, gitStatusOf, markdownContent, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import { PlatformProvider } from "./platform/react";
-import type { Event, ClientRequestBody } from "./protocol";
-import { applyDaemonEvent, DaemonProvider, type Daemon } from "./store";
+import type { Event, ClientRequestBody, ScheduledTask } from "./protocol";
+import { applyDaemonEvent, DaemonProvider, type Daemon, type State } from "./store";
 import { ThemeProvider } from "./preferences/theme";
 import { BROWSER_HOST } from "./test/hosts";
 
@@ -93,12 +93,12 @@ const elsewhere = sessionOf("s-elsewhere", second.id, undefined, "Triage", "idle
 /** The window at the docked width over the fixtures, on the fake clock from before it mounts, so that every timer
  * the window arms runs where the test settles it. Motion is reduced: jsdom has no Web Animations API for the
  * sidebar's view change. */
-function mountApp() {
+function mountApp(extra: Partial<State> = {}, answer?: (body: ClientRequestBody) => Promise<Event> | undefined) {
   renders.clear();
   fakeTimers({ now: Date.UTC(2026, 9, 28, 12) });
   stubWindow();
-  const daemon: Daemon = fakeDaemon(snapshotState({ consoles: [main, second], projects: [site, api], sessions: [fix, plan, old, elsewhere] }), (body: ClientRequestBody) =>
-    body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : defaultDaemonReply(body));
+  const daemon: Daemon = fakeDaemon({ ...snapshotState({ consoles: [main, second], projects: [site, api], sessions: [fix, plan, old, elsewhere] }), ...extra }, (body: ClientRequestBody) =>
+    answer?.(body) ?? (body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : defaultDaemonReply(body)));
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() => root.render(<PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}><ThemeProvider><DaemonProvider value={daemon}><App /></DaemonProvider></ThemeProvider></PlatformProvider>));
@@ -192,4 +192,75 @@ it("renders App and its children no more often than the baseline over a scripted
   for (const component of ["App", ...CHILDREN] as const) expect(renders.get(component) ?? 0, `${component} rendered`).toBeGreaterThan(0);
   // The sequence went where it was meant to: the second console's own session is the one now listed.
   expect(row(elsewhere.title)).toBeDefined();
+});
+
+// The guard of changes not saved (`components/dialog/UnsavedChanges`) is read by `App`, which renders when a form first
+// holds changes and when it holds none again, never for each edit in between.
+it("renders App when a form comes to hold changes and when they go, and not for every keystroke after the first", async () => {
+  const task: ScheduledTask = {
+    id: "t-report",
+    console_id: main.id,
+    project_id: null,
+    launch: { title: "Morning report", compatibility: {} },
+    prompt: "Summarise yesterday's commits",
+    schedule: { kind: "daily", time: { hour: 9, minute: 0 } },
+    enabled: true,
+    created_at: 1,
+    updated_at: 1,
+    next_run_at: null,
+    last_run_at: null,
+    run_sessions: [],
+  };
+  mountApp({ scheduledTasks: new Map([[task.id, task]]), scheduledTaskRuns: new Map([[task.id, []]]) });
+  await rendersOf(() => found(byLabel("Scheduled tasks")).click());
+  const prompt = () => found(document.querySelector<HTMLTextAreaElement>("[data-region=tasks] textarea"));
+  const edit = (value: string) => () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(prompt(), value);
+    prompt().dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  expect((await rendersOf(edit("first edit"))).App).toBe(1);
+  expect((await rendersOf(edit("a second edit"))).App).toBe(0);
+  expect((await rendersOf(edit("a third edit"))).App).toBe(0);
+  const revert = Array.from(document.querySelectorAll<HTMLElement>("[data-region=tasks] button")).find((button) => button.textContent === "Revert");
+  expect((await rendersOf(() => found(revert).click())).App).toBe(1);
+});
+
+// A save in flight keeps the form held, so the guard's `dirty` does not flip when it starts: `App` does not render for it.
+// It renders when the save ends only for the task the daemon sent (which App lists) and for the form holding no changes
+// any more, not for the `saving` flag turning back.
+it("does not render App when a save starts, and renders it no more than twice when the save ends with the form clean", async () => {
+  const task: ScheduledTask = {
+    id: "t-report",
+    console_id: main.id,
+    project_id: null,
+    launch: { title: "Morning report", compatibility: {} },
+    prompt: "Summarise yesterday's commits",
+    schedule: { kind: "daily", time: { hour: 9, minute: 0 } },
+    enabled: true,
+    created_at: 1,
+    updated_at: 1,
+    next_run_at: null,
+    last_run_at: null,
+    run_sessions: [],
+  };
+  let answerSave!: () => void;
+  const daemon = mountApp({ scheduledTasks: new Map([[task.id, task]]), scheduledTaskRuns: new Map([[task.id, []]]) }, (body) => {
+    if (body.type !== "update_scheduled_task") return undefined;
+    return new Promise<Event>((resolve) => {
+      answerSave = () => resolve({ type: "scheduled_task_saved", id: null, task: { ...task, prompt: "Edited" } });
+    });
+  });
+  await rendersOf(() => found(byLabel("Scheduled tasks")).click());
+  const prompt = found(document.querySelector<HTMLTextAreaElement>("[data-region=tasks] textarea"));
+  await rendersOf(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(prompt, "Edited");
+    prompt.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const save = Array.from(document.querySelectorAll<HTMLElement>("[data-region=tasks] button")).find((button) => button.textContent === "Save");
+  expect((await rendersOf(() => found(save).click())).App).toBe(0);
+  expect((await rendersOf(() => {
+    // The daemon broadcasts the save before it replies.
+    applyDaemonEvent(daemon.store, { type: "scheduled_task_upserted", task: { ...task, prompt: "Edited" } });
+    answerSave();
+  })).App).toBeLessThanOrEqual(2);
 });

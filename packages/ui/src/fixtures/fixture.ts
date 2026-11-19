@@ -3,7 +3,7 @@ import type { Translate } from "../i18n/catalog";
 import type { ReplyOf } from "../requests";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
-import type { AccountMcpInventory, AccountTrashOutcome, McpServerAuthOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MemoryEntry, ImportFailure, ImportItem, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, PullOutcome, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordPresence, UnstoppedReason } from "../protocol";
+import type { AccountMcpInventory, AccountTrashOutcome, McpServerAuthOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MemoryEntry, ImportFailure, ImportItem, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, PullOutcome, QuotaUnavailable, ResetCreditOutcome, ScheduledTask, ScheduledTaskRun, SessionBranchItem, SessionRecordPresence, UnstoppedReason } from "../protocol";
 import type { MessageParams } from "../errors/codedError";
 import type { PathLinkRefusedCause } from "../errors/causes";
 import type { State } from "../store";
@@ -12,6 +12,23 @@ import type { FixtureGit } from "./changeFixtures";
 import type { TerminalBehaviour } from "./fakeTerminal";
 import type { ContentSearchStaging } from "./fixtureContentSearch";
 import type { FixtureError, FixtureFile, FixtureFiles } from "./sampleFiles";
+
+/** The daemon's scheduled tasks: what a window lists, and what the requests that create, change, run and delete them go
+ * on from. */
+export interface ScheduledTasksFixture {
+  /** Oldest first, as the daemon lists them. A task's console, and its project if it has one, are the scenario's. */
+  tasks: ScheduledTask[];
+  /** The kept runs of a task, most recent first, by task id; a task left out has none. */
+  runs?: Record<string, ScheduledTaskRun[]>;
+  /** The IANA name of the time zone the daemon reads schedules in. `null`, the default, is a daemon whose zone has no
+   * name, so the page uses the window's own and names none. */
+  zone?: string | null;
+  /** What `list_scheduled_tasks` answers instead of the tasks, a refusal of the daemon: the page has nothing to list. */
+  listError?: FixtureError;
+  /** What `list_scheduled_task_runs` answers instead of the runs of any task, a refusal of the daemon: the run history
+   * has nothing to list. */
+  runsError?: FixtureError;
+}
 
 /** Feedback the scenario raises once the app is mounted, by the route the real feedback takes to the stack: a
  * broadcast of the daemon, a failure an action raised itself, or a notice the UI words itself. Errors enter the
@@ -273,6 +290,9 @@ export interface Fixture {
    * so an archive or deletion shows no section about them; `"pending"` is an inspection that is never
    * answered, so Confirm stays pending; an error is an inspection the daemon fails. */
   sessionBranches?: SessionBranchItem[] | "pending" | FixtureError;
+  /** The scheduled tasks the daemon holds, which the window lists once connected (`list_scheduled_tasks`; they are not in
+   * the snapshot). Without it the daemon holds none. */
+  scheduledTasks?: ScheduledTasksFixture;
   /** The process ledger behind the Processes panel and the archive confirmation's processes. Without it
    * no session has a process. */
   processes?: ProcessesFixture;

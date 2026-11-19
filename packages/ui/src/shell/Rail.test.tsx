@@ -54,6 +54,7 @@ function avatarOf(statuses: Case[], hoverOpensSidebar = false, otherSessions: Se
           hoverOpensSidebar={hoverOpensSidebar}
           remoteDevicesShown={false}
           onOpenRemoteDevices={() => {}}
+          onOpenScheduledTasks={() => {}}
           onOpenDialog={() => {}}
           onSelectSession={() => {}}
           onOpenArchive={() => {}}
@@ -226,6 +227,7 @@ async function railWithRemoteDaemons(connected: RemoteDaemonStatus[]): Promise<H
               hoverOpensSidebar={false}
               remoteDevicesShown={false}
               onOpenRemoteDevices={() => {}}
+              onOpenScheduledTasks={() => {}}
               onOpenDialog={() => {}}
               onSelectSession={() => {}}
               onOpenArchive={() => {}}
@@ -248,7 +250,7 @@ async function railWithRemoteDaemons(connected: RemoteDaemonStatus[]): Promise<H
 
 const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
 
-it("puts the Remote devices button below the consoles and above the settings, behind a groove", async () => {
+it("puts the Remote devices button below the consoles and above the settings, under Scheduled tasks behind a groove", async () => {
   fakeTimers();
   const container = await railWithRemoteDaemons([{ id: "staging", state: "connected", via: "window" }]);
   const remote = container.querySelector<HTMLElement>("button[aria-label^='Remote devices']")!;
@@ -259,10 +261,13 @@ it("puts the Remote devices button below the consoles and above the settings, be
   expect(consoleAvatar.compareDocumentPosition(remote) & FOLLOWING).toBeTruthy();
   expect(newConsole.compareDocumentPosition(remote) & FOLLOWING).toBeTruthy();
   expect(remote.compareDocumentPosition(settings) & FOLLOWING).toBeTruthy();
-  // The groove above the button is an item of the rail's stack of its own, not its group's padding.
+  // Scheduled tasks stands directly above it, and the groove above the two is an item of the rail's stack of its own,
+  // not their group's padding.
   const nav = remote.closest("nav")!;
   const items = [...nav.children];
-  const above = items[items.findIndex((item) => item.contains(remote)) - 1];
+  const tasks = items[items.findIndex((item) => item.contains(remote)) - 1];
+  expect(tasks.getAttribute("aria-label") ?? tasks.querySelector("button")?.getAttribute("aria-label")).toBe("Scheduled tasks");
+  const above = items[items.indexOf(tasks) - 1];
   expect(above.classList.contains("groove-t")).toBe(true);
   expect(above.textContent).toBe("");
   // One button for every connection held, which its name counts.
@@ -270,7 +275,7 @@ it("puts the Remote devices button below the consoles and above the settings, be
   expect(container.querySelectorAll("button[aria-label*='Staging']").length).toBe(0);
 });
 
-it("puts the gap that draws a groove above the bottom group between it and the button, only where the button is", async () => {
+it("puts the gap that draws a groove above the bottom group between it and the group of pages, in every window", async () => {
   fakeTimers();
   const container = await railWithRemoteDaemons([]);
   const gap = container.querySelector("[data-rail-gap]");
@@ -283,9 +288,10 @@ it("puts the gap that draws a groove above the bottom group between it and the b
   const groove = container.querySelector("[data-rail-groove]")!;
   expect(gap!.nextElementSibling).toBe(groove);
   expect(groove.parentElement).toBe(gap!.parentElement);
+  // A browser has no Remote devices, and the gap goes under Scheduled tasks.
   const browser = avatarOf(["idle"]).closest("nav")!;
-  expect(browser.querySelector("[data-rail-gap]")).toBeNull();
-  expect(browser.querySelector("[data-rail-groove]")).toBeNull();
+  const tasks = browser.querySelector("button[aria-label='Scheduled tasks']")!;
+  expect(tasks.compareDocumentPosition(browser.querySelector("[data-rail-gap]")!) & FOLLOWING).toBeTruthy();
 });
 
 it("keeps every item of the rail directly in its one stack, with no group wrapper adding space of its own", async () => {
@@ -333,6 +339,7 @@ it("puts the Forwarded ports button of a remote window above the settings, only 
             hoverOpensSidebar={false}
             remoteDevicesShown={false}
             onOpenRemoteDevices={() => {}}
+            onOpenScheduledTasks={() => {}}
             onOpenDialog={() => {}}
             onSelectSession={() => {}}
             onOpenArchive={() => {}}
@@ -375,6 +382,7 @@ it.each([true, false])("offers Memory in a console avatar's context menu only wh
           hoverOpensSidebar={false}
           remoteDevicesShown={false}
           onOpenRemoteDevices={() => {}}
+          onOpenScheduledTasks={() => {}}
           onOpenDialog={() => {}}
           onSelectSession={() => {}}
           onOpenArchive={() => {}}

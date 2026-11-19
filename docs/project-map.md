@@ -11,7 +11,7 @@ Everything revolves around one daemon; every client reaches it only through the 
 
 | End | Stack |
 |---|---|
-| Daemon | Rust (edition 2021, toolchain pinned in `rust-toolchain.toml`), tokio, axum (HTTP and WebSocket), SQLite through rusqlite, `portable-pty` and `alacritty_terminal`, `rmcp` for the MCP server, clap |
+| Daemon | Rust (edition 2021, toolchain pinned in `rust-toolchain.toml`), tokio, axum (HTTP and WebSocket), SQLite through rusqlite, `portable-pty` and `alacritty_terminal`, `rmcp` for the MCP server, clap, `jiff` (time zones, for scheduled tasks) |
 | UI | TypeScript, React 19 with the React Compiler, HeroUI 3 (react-aria), Tailwind 4, Zustand, xterm.js, Vite 8, Vitest |
 | Desktop shell | Tauri 2 (Rust crate plus npm scripts), macOS and Windows |
 | Website | Nuxt 4 (Vue 3, Nuxt i18n, sitemap), generated as static files for GitHub Pages; serves a POSIX `install.sh` |

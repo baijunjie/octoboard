@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 import { refocusIfLost } from "../components/focus/refocusIfLost";
+import { useStableHandler } from "../components/hooks/useLatest";
 import { onWindowFocusLoss } from "../components/hooks/windowFocus";
 import type { HostFacts } from "../platform/host";
 import { usePlatform } from "../platform/react";
@@ -19,6 +20,8 @@ function shortcutDirection(event: KeyboardEvent, host: HostFacts): -1 | 1 | unde
   if (matchesCommand("back", event, host)) return -1;
   return matchesCommand("forward", event, host) ? 1 : undefined;
 }
+
+const runAtOnce = (move: () => void): void => move();
 
 export interface Navigation {
   canGoBack: boolean;
@@ -61,6 +64,10 @@ export interface Navigation {
  *
  * The keys for Back and Forward (⌘[ and ⌘] unless rebound) work where those commands exist, the macOS application
  * (`commandExists`, `useWindowShortcut`).
+ *
+ * A move that has somewhere to go goes through `confirm` first, which runs it at once or, while the window holds changes
+ * that are not saved, after the user has answered the question about them: a move declined is simply not made, and
+ * nothing is recorded.
  */
 export function useNavigationHistory({
   location,
@@ -68,12 +75,15 @@ export function useNavigationHistory({
   isLive,
   apply,
   focusTerminal,
+  confirm = runAtOnce,
 }: {
   location: Location;
   ready: boolean;
   isLive: (location: Location, sessions: Map<string, Session>) => boolean;
   apply: (location: Location) => void;
   focusTerminal: () => void;
+  /** Runs a move that leaves the page as it is, after asking where the window needs to. */
+  confirm?: (move: () => void) => void;
 }): Navigation {
   const platform = usePlatform();
   const { host } = platform;
@@ -106,7 +116,9 @@ export function useNavigationHistory({
     });
   });
 
-  const move = (direction: -1 | 1, byKey = false) => {
+  // What runs once the move is confirmed, from the latest render: the history it moves through may have changed while the
+  // question was open.
+  const perform = useStableHandler((direction: -1 | 1, byKey: boolean) => {
     const target = go(history, direction, (target) => isLive(target, store.getState().sessions));
     if (!target) return;
     if (byKey) setKeyboardModality();
@@ -116,6 +128,10 @@ export function useNavigationHistory({
       apply(target.location);
     });
     refocusIfLost(focusTerminal);
+  });
+  const move = (direction: -1 | 1, byKey = false) => {
+    if (!go(history, direction, (target) => isLive(target, store.getState().sessions))) return;
+    confirm(() => perform(direction, byKey));
   };
 
   const endJoin = useRef<(() => void) | undefined>(undefined);

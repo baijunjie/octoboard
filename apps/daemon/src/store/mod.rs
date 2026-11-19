@@ -43,6 +43,7 @@ mod pages;
 mod projects;
 mod provider_settings;
 mod rows;
+mod scheduled_tasks;
 mod schema;
 mod session_links;
 mod sessions;
@@ -65,6 +66,7 @@ pub use failure::{Result, StoreError};
 pub use held_terminals::{HeldKind, HeldTerminalRecord};
 pub use memory::MemorySave;
 pub use pages::PageMark;
+pub use scheduled_tasks::ScheduledTaskEdit;
 pub use sessions::{cuts_turn_short, RecordUpdate};
 
 /// The single local host record every project and session points at. There is no other host yet,

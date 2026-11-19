@@ -5,7 +5,8 @@ import type { ArchiveScope } from "../sidebar/types";
 /** What the content area shows, in the terms the UI already keeps it in: the current console, the
  * selected session, the focus mode as `resolveFocus`'s key (`project:<id>` or
  * `consoleSession:<id>`), the archive view's scope while it is open, and, while the Remote devices page
- * takes the content area's place, `devices`: the id of the device it shows, empty while none is saved. `offline` marks
+ * takes the content area's place, `devices`: the id of the device it shows, empty while none is saved, and likewise,
+ * while the Scheduled tasks page does, `tasks`: the id of the task it shows, empty while there is none. `offline` marks
  * a location of the window while the local daemon cannot be used (the status it shows, the page over it), which is
  * gone once the daemon can. */
 export interface Location {
@@ -14,6 +15,7 @@ export interface Location {
   focus?: string;
   archive?: ArchiveScope;
   devices?: string;
+  tasks?: string;
   offline?: boolean;
 }
 
@@ -35,7 +37,7 @@ export function archiveKey(scope: ArchiveScope): string {
 
 export function locationKey(location: Location): string {
   const { archive } = location;
-  return JSON.stringify([location.console, location.session, location.focus, archive && archiveKey(archive), location.devices, location.offline]);
+  return JSON.stringify([location.console, location.session, location.focus, archive && archiveKey(archive), location.devices, location.offline, location.tasks]);
 }
 
 /** Records a location the user navigated to. The same location as the current one is not recorded
@@ -93,11 +95,12 @@ export function go(
  * session leaves such a focus mode). Card visibility does not change project membership. */
 export function isLive(
   location: Location,
-  data: { consoles: Map<string, Console>; projects: Map<string, Project>; sessions: Map<string, Session>; devices?: ReadonlySet<string>; offline?: boolean },
+  data: { consoles: Map<string, Console>; projects: Map<string, Project>; sessions: Map<string, Session>; devices?: ReadonlySet<string>; tasks?: ReadonlySet<string>; offline?: boolean },
 ): boolean {
   const { consoles, projects, sessions, devices } = data;
   if (location.offline && !data.offline) return false;
   if (location.devices && devices && !devices.has(location.devices)) return false;
+  if (location.tasks && data.tasks && !data.tasks.has(location.tasks)) return false;
   const { archive } = location;
   if (location.console !== undefined && !consoles.has(location.console)) return false;
   if (location.session !== undefined && !sessions.has(location.session)) return false;

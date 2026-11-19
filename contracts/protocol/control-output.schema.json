@@ -5404,6 +5404,147 @@
                 "null"
               ]
             },
+            "tasks": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ScheduledTask"
+              }
+            },
+            "time_zone": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The IANA name of the time zone schedules are read in, the daemon machine's own local\nzone (`Europe/Berlin`), as it is when the list is sent; null when that zone has no IANA\nname (one given as a POSIX rule). A daily, weekdays, weekly or monthly schedule's time of\nday is a wall-clock time in this zone."
+            },
+            "type": {
+              "type": "string",
+              "const": "scheduled_tasks_listed"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "tasks",
+            "time_zone"
+          ],
+          "description": "The reply to `list_scheduled_tasks`: every scheduled task, oldest first. Scheduled tasks are\nnot in `snapshot`; a client that shows them asks again after every `snapshot`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "task": {
+              "$ref": "#/$defs/ScheduledTask"
+            },
+            "type": {
+              "type": "string",
+              "const": "scheduled_task_saved"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "task"
+          ],
+          "description": "The reply to `create_scheduled_task`, `update_scheduled_task` and\n`set_scheduled_task_enabled`: the task as stored. Every client is also sent\n`scheduled_task_upserted`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "$ref": "#/$defs/ScheduledTask"
+            },
+            "type": {
+              "type": "string",
+              "const": "scheduled_task_upserted"
+            }
+          },
+          "required": [
+            "type",
+            "task"
+          ],
+          "description": "A scheduled task was created or changed: the whole record."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "scheduled_task_deleted"
+            }
+          },
+          "required": [
+            "type",
+            "task"
+          ],
+          "description": "A scheduled task was deleted, by id. The tasks of a deleted console or project go with it\nand are not announced one by one: a client drops them on `console_deleted` and\n`project_deleted`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "task": {
+              "type": "string"
+            },
+            "runs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ScheduledTaskRun"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "scheduled_task_runs_listed"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "task",
+            "runs"
+          ],
+          "description": "The reply to `list_scheduled_task_runs`: the task's kept runs, most recent first."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "run": {
+              "$ref": "#/$defs/ScheduledTaskRun"
+            },
+            "type": {
+              "type": "string",
+              "const": "scheduled_task_run_added"
+            }
+          },
+          "required": [
+            "type",
+            "run"
+          ],
+          "description": "A run of a scheduled task was recorded, started or failed. The task's own\n`scheduled_task_upserted`, with its new `last_run_at`, is sent with it. A client raises the\nsystem notification of a failed run from this."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "session_id": {
               "type": "string"
             },
@@ -10067,6 +10208,384 @@
         "worker"
       ]
     },
+    "Schedule": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "run_at": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "kind": {
+              "type": "string",
+              "const": "once"
+            }
+          },
+          "required": [
+            "kind",
+            "run_at"
+          ],
+          "description": "Once, at the instant `run_at`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "minute": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "kind": {
+              "type": "string",
+              "const": "hourly"
+            }
+          },
+          "required": [
+            "kind",
+            "minute"
+          ],
+          "description": "Every hour, at `minute` past it (0 to 59)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "kind": {
+              "type": "string",
+              "const": "daily"
+            }
+          },
+          "required": [
+            "kind",
+            "time"
+          ],
+          "description": "Every day, at `time`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "kind": {
+              "type": "string",
+              "const": "weekdays"
+            }
+          },
+          "required": [
+            "kind",
+            "time"
+          ],
+          "description": "Monday to Friday, at `time`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "days": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Weekday"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "weekly"
+            }
+          },
+          "required": [
+            "kind",
+            "time",
+            "days"
+          ],
+          "description": "On each of `days`, at `time`; `days` is not empty."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "day": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "kind": {
+              "type": "string",
+              "const": "monthly"
+            }
+          },
+          "required": [
+            "kind",
+            "day",
+            "time"
+          ],
+          "description": "On day `day` of every month (1 to 31), at `time`. A month without that day runs on its last\nday, so 31 is the last day of every month."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "manual"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "Only when run by hand."
+        }
+      ],
+      "description": "When a scheduled task runs, in the local time zone of the daemon's machine."
+    },
+    "ScheduledRunOutcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "started_independent": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "started"
+            }
+          },
+          "required": [
+            "kind",
+            "session",
+            "started_independent"
+          ],
+          "description": "The session `session` was started and handed the prompt. `started_independent` is true\nwhen the task names a console session to report to that could not take sessions by then\n(archived, deleted or still starting), so the session was started reporting to none."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "message": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "failed"
+            }
+          },
+          "required": [
+            "kind",
+            "code",
+            "params",
+            "message"
+          ],
+          "description": "No session was started: the refusal or launch failure, as an `error` reply would carry it\n(`code`, `params`, and `message`, its English account with the raw detail)."
+        }
+      ],
+      "description": "What came of a run."
+    },
+    "ScheduledRunTrigger": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "scheduled",
+          "description": "The schedule came due while the daemon was running."
+        },
+        {
+          "type": "string",
+          "const": "catch_up",
+          "description": "An occurrence missed while the daemon was not running (or the machine was asleep), made up\nonce."
+        },
+        {
+          "type": "string",
+          "const": "run_now",
+          "description": "`run_scheduled_task`."
+        }
+      ],
+      "description": "What started a run."
+    },
+    "ScheduledTask": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "console_id": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "launch": {
+          "$ref": "#/$defs/ScheduledTaskLaunch",
+          "description": "What the session is started with, as the session dialog's New conversation offers it."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "The opening task the started session is handed; never blank."
+        },
+        "schedule": {
+          "$ref": "#/$defs/Schedule"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "A disabled task does not run on its schedule."
+        },
+        "created_at": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "updated_at": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "next_run_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "description": "When the task next runs on its schedule; null for a manual-only task, a one-off whose time\nhas passed, or a disabled task."
+        },
+        "last_run_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "description": "When the task last ran; null until it first does."
+        },
+        "run_sessions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The sessions its kept runs started (runs whose outcome is `started`), most recent run first,\neach once, leaving out a session the daemon no longer holds or that is archived. Not\nstored: read from the runs and the sessions each time the task is sent, so every\n`scheduled_task_upserted` that follows a recorded run carries the session that run started.\nA session archived or deleted after the task was sent may still be listed until the task is\nnext sent."
+        }
+      },
+      "required": [
+        "id",
+        "console_id",
+        "project_id",
+        "launch",
+        "prompt",
+        "schedule",
+        "enabled",
+        "created_at",
+        "updated_at",
+        "next_run_at",
+        "last_run_at",
+        "run_sessions"
+      ],
+      "description": "A scheduled task as the daemon stores it. A console session of `console_id` is started when\n`project_id` is null, else a project session of that project."
+    },
+    "ScheduledTaskLaunch": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The started session's title; absent or blank names it as `open_session` does by default."
+        },
+        "agent": {
+          "description": "Absent takes the project's default agent, else the console's, at each run.",
+          "$ref": "#/$defs/Agent"
+        },
+        "account": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The account, by id. Absent leaves the choice to the project's reference, else the\nconsole's, at each run; an explicit `null` chooses the default account."
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Absent inherits the project's (or console's) setting at each run; an explicit `null`\nleaves the choice to the agent; a value pins the model."
+        },
+        "effort": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The reasoning effort, with the rule of `model`."
+        },
+        "compatibility": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "The compatibility switches the session holds its own value for, by setting id; one left\nout follows the project's, else the console's, else the agent's value. Absent in a request\nholds none."
+        },
+        "bound_to": {
+          "type": "string",
+          "description": "The console session a project task's session reports to; absent for none. Ignored for a\nconsole task."
+        }
+      },
+      "required": [
+        "compatibility"
+      ],
+      "description": "The launch settings of a scheduled task's session, with the rules `open_session` gives the same\nfields: each is checked as `open_session` checks it when the task is saved, and read again at\nevery run."
+    },
+    "ScheduledTaskRun": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "ran_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When the run started its session, or failed to."
+        },
+        "due_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "description": "The occurrence of the schedule the run stands for; null for `run_now`. A catch-up's is the\nmissed occurrence it makes up for, earlier than `ran_at`."
+        },
+        "trigger": {
+          "$ref": "#/$defs/ScheduledRunTrigger"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ScheduledRunOutcome"
+        }
+      },
+      "required": [
+        "id",
+        "task_id",
+        "ran_at",
+        "due_at",
+        "trigger",
+        "outcome"
+      ],
+      "description": "One run of a scheduled task: what started it and what came of it. The daemon keeps the last\n[`SCHEDULED_TASK_RUNS_KEPT`] of each task, and drops them with the task."
+    },
     "Session": {
       "type": "object",
       "properties": {
@@ -11305,6 +11824,28 @@
       ],
       "description": "One column of a [`DataTable`]."
     },
+    "TimeOfDay": {
+      "type": "object",
+      "properties": {
+        "hour": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "minute": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        }
+      },
+      "required": [
+        "hour",
+        "minute"
+      ],
+      "description": "A wall-clock time of day: `hour` 0 to 23, `minute` 0 to 59."
+    },
     "TodoItem": {
       "type": "object",
       "properties": {
@@ -11556,6 +12097,18 @@
         "equals"
       ],
       "description": "Shows its component only while the input field named `field` holds `equals`: a multiple\nchoice while its selection contains it, a toggle while it is that boolean."
+    },
+    "Weekday": {
+      "type": "string",
+      "enum": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ]
     },
     "WorktreeInfo": {
       "type": "object",

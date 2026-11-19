@@ -17,3 +17,9 @@ export function FieldErrorMessage({ children }: { children: React.ReactNode }): 
     </FieldError>
   );
 }
+
+/** Whether `errorMessage`, the prop a field takes for what is wrong with it, says anything: a field is invalid while
+ * it does. */
+export function hasErrorMessage(errorMessage: React.ReactNode): boolean {
+  return errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "";
+}

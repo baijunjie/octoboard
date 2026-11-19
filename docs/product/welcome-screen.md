@@ -63,22 +63,23 @@ remain reachable. On narrow windows, the action row and tool row contents wrap r
 - **No sidebar and no right pane.** Neither is rendered: there is no console for the sidebar to show (see
   `docs/product/sidebar.md`) and nothing to own the right pane (see "What the right pane shows" in
   `docs/product/window-layout.md`). So there is no sidebar to float in on hover either, no sidebar overlay to open, and
-  no panel to float in. In the main window of the desktop application the Remote devices page can still be opened from
-  the rail; while it shows, it takes the welcome screen's place, with its list of devices in the sidebar (see
-  `docs/product/remote-devices-page.md`).
+  no panel to float in. The Scheduled tasks page, and in the main window of the desktop application the Remote devices
+  page, can still be opened from the rail; while one shows, it takes the welcome screen's place, with its list in the
+  sidebar (see `docs/product/scheduled-tasks-page.md` and `docs/product/remote-devices-page.md`).
 - **No terminal.** None of the terminal's empty states appears here: the panel asking for a session to be selected, or
   the panel offering **Add project**, **New session** or **New console session** for the current scope (see "With no
   session selected" and "A console with nothing in it" in `docs/product/session-terminal-with-no-session-selected.md`).
 - **No toggle in the top bar**: there is no sidebar for the sidebar toggle to control, and the panel toggles, at the
   bar's end, are there only while the right pane has an owner (see "The sidebar toggle and the panel toggles" in
-  `docs/product/window-layout.md`). The top bar keeps **Back** and **Forward**, and **both are disabled** unless the
-  Remote devices page was visited while there was no console: every other place the window remembers either names a
+  `docs/product/window-layout.md`). The top bar keeps **Back** and **Forward**, and **both are disabled** unless a
+  page of the window was visited while there was no console: every other place the window remembers either names a
   console that no longer exists or is this same empty state, so each is passed over (see "Moving back and forward" in
   `docs/product/navigation-history.md`). There is no breadcrumb, no session being
   selected.
 - **On the rail, no waiting count and no Processes** — no session is waiting, and with no console there is no project or
   console session whose process trees are counted. The rail is otherwise unchanged: the console list, empty here, then
-  New console, in the main window of the desktop application the Remote devices button, and at the bottom Turn on
+  New console, Scheduled tasks, in the main window of the desktop application the Remote devices button, and at the
+  bottom Turn on
   notifications (only in a browser whose answer to notifications is still undecided), Account usage and Settings (see
   "The rail" in `docs/product/window-layout.md`). It stays in the row at every width, at 768 px and below too, where
   with a console it comes in only with the floating sidebar (see "At 768 px and below: the rail comes in with the

@@ -76,6 +76,10 @@ zstd = { version = "0.13", default-features = false }
 # session's private app server, also what the tests that drive the control socket end to end connect
 # with; the version axum's own server side already resolves, with only the client handshake added.
 tokio-tungstenite = { version = "=0.24.0", default-features = false, features = ["connect"] }
+# Computes a scheduled task's next run in the local time zone of the daemon's machine, daylight
+# saving changes included (`coordinator::scheduled_tasks::next_run`); the version the lockfile already
+# resolves for other dependencies, whose time zone database comes from the system (bundled on Windows).
+jiff = "0.2"
 # Watches each repository's refs for a commit made outside the daemon (`crate::project_git::watch`).
 notify = "8.2"
 # Reads the latest published version of an agent CLI from the npm registry (`crate::agents::cli`), the

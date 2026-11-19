@@ -18,6 +18,7 @@ use super::git_workflow::{
     GitWorkflowOverride, GitWorkflowOverrideChanges, GitWorkflowSettingsChanges,
 };
 use super::records::{ConsoleSessionColour, ProjectAccount, ProjectSource};
+use super::scheduled_tasks::{Schedule, ScheduledTaskLaunch};
 use super::session_branches::SessionBranchTarget;
 use super::settings::KeepAwakeWhen;
 use crate::providers::SettingValue;
@@ -1654,6 +1655,70 @@ pub enum RequestBody {
         project: String,
         branch: String,
     },
+    /// Every scheduled task. Answered with `scheduled_tasks_listed`.
+    ListScheduledTasks,
+    /// Creates a scheduled task and answers `scheduled_task_saved`. See "Scheduled tasks" in
+    /// `apps/daemon/PROTOCOL.md` for what is refused.
+    CreateScheduledTask {
+        console_id: String,
+        /// Absent makes a task that starts a console session of `console_id`; a project must be
+        /// one of that console's.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        project_id: Option<String>,
+        /// Absent is every launch setting left to its default.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        launch: Option<ScheduledTaskLaunch>,
+        prompt: String,
+        schedule: Schedule,
+        /// Absent is true. A task created with false has no next run until it is turned on.
+        #[serde(default = "default_true")]
+        #[cfg_attr(test, ts(optional = nullable))]
+        enabled: bool,
+    },
+    /// Changes a scheduled task and answers `scheduled_task_saved`. A field left out is left
+    /// alone; `launch` replaces the task's launch settings whole.
+    UpdateScheduledTask {
+        task: String,
+        /// Present moves the task to that console; its project stays only when `project_id` is
+        /// absent and the project belongs to the new console, else `unknown_project`.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        console_id: Option<String>,
+        /// Absent leaves the project alone; an explicit `null` makes a console task; a value makes
+        /// a task of that project, which must belong to the resulting console.
+        #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
+        project_id: Option<Option<String>>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        launch: Option<ScheduledTaskLaunch>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        prompt: Option<String>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        schedule: Option<Schedule>,
+    },
+    /// Turns a scheduled task on or off and answers `scheduled_task_saved`.
+    SetScheduledTaskEnabled {
+        task: String,
+        enabled: bool,
+    },
+    DeleteScheduledTask {
+        task: String,
+    },
+    /// Runs a scheduled task once now, whatever its schedule and whether it is enabled, and
+    /// answers `ack` once the task is found; the run itself is announced with
+    /// `scheduled_task_run_added` once its launch has settled.
+    RunScheduledTask {
+        task: String,
+    },
+    /// A scheduled task's kept runs. Answered with `scheduled_task_runs_listed`.
+    ListScheduledTaskRuns {
+        task: String,
+    },
     /// Discards this project's staged and unstaged tracked changes against HEAD, including
     /// staged additions. Untracked files, ignored files and submodules are preserved. Requires
     /// client confirmation. Answered with `ack` after Git exits; commits and branch stay put.
@@ -1707,6 +1772,13 @@ impl RequestBody {
             | Self::ImportConfiguration { .. }
             | Self::OpenSession { .. }
             | Self::ResumeSession { .. }
+            | Self::ListScheduledTasks
+            | Self::CreateScheduledTask { .. }
+            | Self::UpdateScheduledTask { .. }
+            | Self::SetScheduledTaskEnabled { .. }
+            | Self::DeleteScheduledTask { .. }
+            | Self::RunScheduledTask { .. }
+            | Self::ListScheduledTaskRuns { .. }
             | Self::ArchiveSession { .. }
             | Self::SwitchSessionAccount { .. }
             | Self::SetSessionModel { .. }

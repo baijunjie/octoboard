@@ -1,10 +1,8 @@
-import { useEffect, useState } from "react";
-
-import { useStableHandler } from "../components/hooks/useLatest";
 import type { Location } from "../navigation/history";
 import type { RemoteDaemonsCapability } from "../platform";
 import { remoteDevicePreference } from "../remoteDaemons/remoteDevicePreference";
 import { useRemoteDaemons } from "../remoteDaemons/useRemoteDaemons";
+import { useAnchoredPage } from "./useAnchoredPage";
 
 /**
  * Whether the Remote devices page shows, and the device it shows, for the application's own window (`capability`
@@ -20,55 +18,50 @@ import { useRemoteDaemons } from "../remoteDaemons/useRemoteDaemons";
  * The page is also keyed on whether the local daemon can be used (`offline`). A page opened while it could not be is
  * gone once it can. A page opened while it could stays, re-anchored to what is current then, whenever the daemon
  * becomes unusable or usable again, since remote work does not depend on it; the form on it is kept.
+ *
+ * While a form on the page holds changes that are not saved (`held`) the page also stays, re-anchored, whenever what
+ * it was anchored to changes without the user asking (the session under it deleted, the daemon becoming usable): such
+ * a change never takes the form away. A page the user leaves asks first, and a confirmed leave calls `leave` or
+ * `follow` itself, so `held` never brings a left page back.
+ *
+ * The anchoring, the choice kept per daemon and whether a new device's form is open (`adding`) are
+ * `useAnchoredPage`'s; this hook adds the terms of the daemon being usable or not.
  */
-export function useRemoteDevicesPage({ capability, consoleId, sessionId, offline }: {
+export function useRemoteDevicesPage({ capability, consoleId, sessionId, offline, held }: {
   capability: RemoteDaemonsCapability | undefined;
   /** The current console and the selected session, which the page shows over. */
   consoleId: string | undefined;
   sessionId: string | undefined;
   /** The local daemon cannot be used, so there are no consoles and sessions to show over. */
   offline: boolean;
+  /** A form on the page holds changes that are not saved. */
+  held: boolean;
 }) {
   const list = useRemoteDaemons(capability);
-  const [page, setPage] = useState<{ console: string | undefined; session: string | undefined; offline: boolean; openedOffline: boolean }>();
-  const [chosen, setChosen] = useState(() => remoteDevicePreference.get());
-  // A new device's form is open in the content area, which the top bar's trail does not name a device for.
-  const [adding, setAdding] = useState(false);
   // A page opened while the daemon was usable stays when that changes (remote work does not depend on it), taking the
-  // anchor of what is current then; one opened while it was not is gone once it can be used.
-  const reanchors = page !== undefined && !page.openedOffline && page.offline !== offline;
-  const shown =
-    capability !== undefined &&
-    page !== undefined &&
-    (reanchors || (page.offline === offline && page.console === consoleId && page.session === sessionId));
-  const device = (list.entries.find((entry) => entry.id === chosen) ?? list.entries[0])?.id;
-  useEffect(() => {
-    if (!page) return;
-    if (!shown) setPage(undefined);
-    else if (reanchors) setPage({ console: consoleId, session: sessionId, offline, openedOffline: false });
+  // anchor of what is current then; one opened while it was not is gone once it can be used, unless a form on it holds
+  // changes, which then stays as an ordinary page.
+  const page = useAnchoredPage({
+    consoleId,
+    sessionId,
+    held,
+    available: capability !== undefined,
+    preference: remoteDevicePreference,
+    stamp: (reanchoring) => ({ offline, openedOffline: reanchoring ? false : offline }),
+    matches: (anchor) => anchor.offline === offline,
+    moves: (anchor) => !anchor.openedOffline && anchor.offline !== offline,
   });
-  const remember = (id: string) => {
-    setChosen(id);
-    remoteDevicePreference.set(id);
-  };
+  const device = (list.entries.find((entry) => entry.id === page.chosen) ?? list.entries[0])?.id;
   return {
     list,
-    shown,
+    shown: page.shown,
     device,
-    adding,
-    setAdding,
-    remember,
-    /** Shows the page over what is current now. */
-    show: useStableHandler(() => setPage((current) => (shown ? current : { console: consoleId, session: sessionId, offline, openedOffline: offline }))),
-    leave: () => setPage(undefined),
-    /** Sets whether the page shows, and the device it shows, to what a history entry says. */
-    follow: (target: Location) => {
-      if (target.devices === undefined) {
-        setPage(undefined);
-        return;
-      }
-      setPage({ console: target.console, session: target.session, offline, openedOffline: offline });
-      if (target.devices) remember(target.devices);
-    },
+    adding: page.adding,
+    startAdd: page.startAdd,
+    cancelAdd: page.cancelAdd,
+    select: page.select,
+    show: page.show,
+    leave: page.leave,
+    follow: (target: Location) => page.follow(target, target.devices),
   };
 }

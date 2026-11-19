@@ -42,6 +42,13 @@ type Exemption = {
  */
 const EXEMPTIONS: Exemption[] = [
   {
+    surface: "primitives/DatePicker.css: a date or time field's segments",
+    reason:
+      "The field's own text, one line that scrolls sideways only, and only where a long localized date does not fit a narrow field: what a text input does with a value longer than itself, which draws no fade either.",
+    seen: true,
+    site: { file: "primitives/DatePicker.css", text: "overflow-x: auto" },
+  },
+  {
     surface: "viewer/image/ZoomableImage.tsx: a zoomed image's scroller",
     reason:
       "A pan surface over the image itself: a fade would dim the image's own edges, the very pixels a zoomed-in reader is looking at, and the scrollbars and the image running off the view already say there is more. It is a focusable region while it overflows, so the keyboard still reaches it.",

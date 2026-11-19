@@ -414,6 +414,8 @@ const CORE_CODES = {
   unknown_console: { origin: "daemon", recovery: "refresh", recordIds: ["console"], nameParams: ["console"] },
   unknown_memory: { origin: "daemon", recovery: "none" },
   unknown_page: { origin: "daemon", recovery: "refresh", recordIds: ["page"], nameParams: ["page"] },
+  unknown_scheduled_task: { origin: "daemon", recovery: "refresh" },
+  scheduled_time_passed: { origin: "daemon", recovery: "none" },
   unknown_project: { origin: "daemon", recovery: "refresh", recordIds: ["project"], nameParams: ["project"] },
   unknown_session: { origin: "daemon", recovery: "session", recordIds: ["session"], nameParams: ["session"] },
   unknown_shell_terminal: { origin: "daemon", recovery: "refresh", recordIds: ["shell_terminal"], nameParams: ["shell_terminal"] },

@@ -72,6 +72,13 @@ default account: Claude Code on the Max plan and Codex on the Plus plan, each wi
 weekly window, and Grok Build on SuperGrok with a weekly credit pool. Their reset times count from when the preview
 loaded, so no visit finds a reset already past. These readings are demonstration data.
 
+The rail's Scheduled tasks button opens the Scheduled tasks page on three sample tasks (see
+`docs/product/scheduled-tasks-page.md`): nightly checks of Restaurant order API every day at 2:00, a progress report
+in the console every weekday at 8:30, and a weekly redemption audit of Store management console every Friday at 16:00,
+each in the visitor's own time zone and with its last run at the latest of those moments before the preview loaded.
+The nightly checks have four runs in their history: two nights that started a session, a night whose account was not
+logged in, and an earlier Run now whose session no longer exists. These tasks and runs are demonstration data.
+
 The homepage embeds a complete desktop viewport scaled to fit its available width. The preview reserves its final
 responsive height while loading, keeping section-link destinations stable as it initializes. The application fills the
 embedded viewport, with the sample-data explanation in a caption below it. Once ready, the embedded

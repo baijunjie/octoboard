@@ -20,6 +20,7 @@ export function testDaemon({ state, request = () => Promise.reject(new Error("no
     onImportProgress: () => () => {},
     onContentSearch: () => () => {},
     onMemoryChange: () => () => {},
+    onScheduledTaskRun: () => () => {},
     dismissTrustPrompt: () => {},
     reconnect: () => {},
     terminalUrl: () => "",
@@ -34,6 +35,7 @@ const EMPTY_REPLIES: { [K in RequestType]?: ReplyOf<K> } = {
   inspect_session_records: { type: "session_records_inspected", id: null, presence: "unknown" },
   inspect_project_removal: { type: "project_removal_inspected", id: null, items: [], processes: [] },
   list_orphaned_memories: { type: "orphaned_memory_list", id: null, places: [] },
+  list_scheduled_tasks: { type: "scheduled_tasks_listed", id: null, tasks: [], time_zone: null },
 };
 
 function emptyDaemonReply(body: ClientRequestBody): ReplyOf<RequestType> | undefined {

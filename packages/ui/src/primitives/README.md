@@ -59,7 +59,8 @@ such a part itself (a tag drawn outside a tag group, a group's error message), t
   the page leaves out), `menuOfTrigger` (the open menu a trigger's button labels), `disabledGroupProps` (marks a group
   of controls disabled for its `Label`'s dimming), `hasKeyboardFocus` (reads the props of `useFocusVisibleProps`,
   whose type is `FocusVisibleProps`), `toastStateAttributes` for a mutation observer and the part selectors that carry a
-  state in `partSelector` (`liveToast`, `liveTooltip`, `disabledControl`).
+  state in `partSelector` (`liveToast`, `liveTooltip`, `disabledControl`, `blankSegment`); the segments of a date or
+  time field are found with `segmentSelector` and the field with `partSelector.temporalField`.
 - **State is styled through the layer's variants.** `style.css` defines `ui-keyboard-focus`, `ui-pressed`, `ui-hovered`,
   `ui-selected`, `ui-disabled`, `ui-empty`, `ui-exiting` and `ui-inert` (prefixed so they do not clash with Tailwind's
   own `disabled:`, `empty:` and `inert:`), each matching the attribute the library sets, and they compose as any variant

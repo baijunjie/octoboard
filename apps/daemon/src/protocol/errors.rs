@@ -101,6 +101,14 @@ impl CodedError {
         )
     }
 
+    pub fn unknown_scheduled_task(id: &str) -> anyhow::Error {
+        Self::raised(
+            error_code::UNKNOWN_SCHEDULED_TASK,
+            format!("unknown scheduled task {id}"),
+            &[("task", id)],
+        )
+    }
+
     pub fn unknown_session(id: &str) -> anyhow::Error {
         Self::raised(
             error_code::UNKNOWN_SESSION,

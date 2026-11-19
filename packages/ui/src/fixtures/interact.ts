@@ -1,3 +1,5 @@
+import { CalendarDate, createCalendar, DateFormatter, toCalendar, type CalendarIdentifier } from "@internationalized/date";
+
 import { FIXTURE_AGENTS } from "./fixtureProviders";
 import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../git/gitStatusLabel";
 import { translatorFor, type MessageArgs, type MessageKey } from "../i18n/catalog";
@@ -16,7 +18,7 @@ import type { TerminalElement } from "../terminal/terminalTextView";
 import { readHost } from "../platform/host";
 import { renderedCodeRange } from "../viewer/code/rendererDom";
 import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
-import { partSelector } from "../primitives";
+import { partSelector, segmentSelector } from "../primitives";
 
 /** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, a tag
  * in a tag group is a `role="row"`, and a checkbox or radio is its (visually hidden) input: pressing
@@ -72,7 +74,7 @@ function nameOf(element: Element): string {
     const labelledBy = element.getAttribute("aria-labelledby");
     label = element.labels?.[0]?.textContent || (labelledBy ? element.ownerDocument.getElementById(labelledBy)?.textContent : undefined) || undefined;
   }
-  return withoutIsolates(element.getAttribute("aria-label") ?? label ?? element.textContent ?? "").trim();
+  return withoutFormatting(element.getAttribute("aria-label") ?? label ?? element.textContent ?? "").trim();
 }
 
 /** The text of `node` as assistive technology reads it: what sits in an `aria-hidden` subtree is left out,
@@ -84,10 +86,11 @@ function accessibleText(node: Node): string {
   return Array.from(node.childNodes, accessibleText).join("");
 }
 
-/** A name without its bidi isolate characters (U+2066 to U+2069). The app puts them round a value
- * substituted into a sentence, and they are invisible, so a step names a control without them. */
-function withoutIsolates(text: string): string {
-  return text.replace(/[\u2066-\u2069]/g, "");
+/** A text without its invisible formatting characters (Unicode category Cf: the bidi isolates U+2066 to U+2069 that the app
+ * puts round a value substituted into a sentence, the direction marks a localized date carries). They are invisible, so a
+ * step names a control, and reads a segment, without them. */
+function withoutFormatting(text: string): string {
+  return text.replace(/\p{Cf}/gu, "");
 }
 
 /** What a tooltip says in words: its text without the key caps (`kbd`) of a shortcut it shows beside its label, which
@@ -95,7 +98,7 @@ function withoutIsolates(text: string): string {
 function tooltipWords(tooltip: Element): string {
   const copy = tooltip.cloneNode(true) as Element;
   copy.querySelectorAll("kbd").forEach((cap) => cap.remove());
-  return withoutIsolates(copy.textContent ?? "").trim();
+  return withoutFormatting(copy.textContent ?? "").trim();
 }
 
 /** The text of a session agent mark's tooltip that has no list: the agent's name, then the account as
@@ -120,10 +123,10 @@ function agentDetailsText(t: Ui["t"], agent: string, details: AgentDetails): str
  * `dd`. A tooltip with no list reads as its whole text, which no expectation matches. */
 function shownAgentDetails(tooltip: Element | null): string {
   const list = tooltip?.querySelector("dl");
-  if (!tooltip || !list) return withoutIsolates(tooltip?.textContent ?? "").trim();
+  if (!tooltip || !list) return withoutFormatting(tooltip?.textContent ?? "").trim();
   const agent = list.parentElement?.firstElementChild?.textContent ?? "";
   const rows = Array.from(list.querySelectorAll("dt"), (term) => `${term.textContent}: ${term.nextElementSibling?.textContent ?? ""}`);
-  return withoutIsolates([agent, ...rows].join(" | ")).trim();
+  return withoutFormatting([agent, ...rows].join(" | ")).trim();
 }
 
 /** The values a session agent mark's list tooltip shows. */
@@ -134,8 +137,42 @@ export type AgentDetails = { account?: string; model: string; effort: string };
 function labelledNameOf(doc: Document, element: Element): string | undefined {
   const label = element.getAttribute("aria-labelledby");
   const name = label ? doc.getElementById(label)?.textContent : element.getAttribute("aria-label");
-  return name == null ? undefined : withoutIsolates(name).trim();
+  return name == null ? undefined : withoutFormatting(name).trim();
 }
+
+/** What a date, time or date and time field's segments are typed, from `YYYY-MM-DD`, `HH:MM` or `YYYY-MM-DDTHH:MM`: the
+ * digits each of the date's segments takes, in the calendar the language writes it in, and the time's hour (of 24, which
+ * a field with a day period segment shows as 12 hours) and minute. A segment is typed as a number without padding,
+ * since a leading zero would only be one more key to press. */
+function temporalParts(value: string, language: Language): { date: Record<string, string>; hour?: number; minute?: number } {
+  const [datePart, timePart] = value.includes("T") ? value.split("T") : /^\d{4}-/.test(value) ? [value, undefined] : [undefined, value];
+  const date = datePart === undefined ? undefined : /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart);
+  const time = timePart === undefined ? undefined : /^(\d{2}):(\d{2})$/.exec(timePart);
+  if ((datePart !== undefined && !date) || (timePart !== undefined && !time)) throw new Error(`${value} is not YYYY-MM-DD, HH:MM or YYYY-MM-DDTHH:MM`);
+  const parts: { date: Record<string, string>; hour?: number; minute?: number } = { date: {} };
+  if (date) {
+    // The field counts years in the language's own calendar.
+    const own = toCalendar(new CalendarDate(Number(date[1]), Number(date[2]), Number(date[3])), createCalendar(new DateFormatter(language).resolvedOptions().calendar as CalendarIdentifier));
+    parts.date = { month: String(own.month), day: String(own.day), year: String(own.year) };
+  }
+  if (time) Object.assign(parts, { hour: Number(time[1]), minute: Number(time[2]) });
+  return parts;
+}
+
+/** The language's own AM or PM, as a day period segment shows it. */
+function dayPeriodWord(language: Language, pm: boolean): string {
+  const at = new Date();
+  at.setHours(pm ? 12 : 0);
+  return withoutFormatting(new Intl.DateTimeFormat(language, { hour: "numeric", hour12: true }).formatToParts(at).find((part) => part.type === "dayPeriod")?.value ?? "");
+}
+
+/** The first letter of the language's AM or PM, which is what a day period segment is typed. */
+function dayPeriodLetter(language: Language, pm: boolean): string {
+  return Array.from(dayPeriodWord(language, pm))[0] ?? "";
+}
+
+/** The kinds of segment a date or time field holds, to name the one a failed step found blank. */
+const SEGMENT_TYPES = ["era", "year", "month", "day", "hour", "minute", "second", "dayPeriod"];
 
 /** An exact name or a test of the name. There is no pattern: a pattern is written in one human
  * language and matches nothing in the others, and a name that is not copy (a branch, a file) is a
@@ -196,6 +233,9 @@ export type UiRegion = "rail" | "update";
 export interface Ui {
   /** The catalog's message in the window's language, without bidi isolates, for naming a control. */
   t: <K extends MessageKey>(key: K, ...args: MessageArgs<K>) => string;
+  /** The language the window is in, for a name the window formats instead of taking from the catalog (a weekday from
+   * `Intl`, which a step has no message to name). */
+  language: Language;
   /** The sidebar row of the session titled exactly `title` (so "Hub" is not "Hub 2"), not its
    * actions menu — a console session's row included, since it is an ordinary session row. */
   session: (title: string) => Matcher;
@@ -310,6 +350,10 @@ export interface Ui {
    * the end is clamped, and content that fits is left where it is, so a window wide or tall enough to hold the
    * section needs no other handling. */
   scrollPanel: (name: Matcher, top: number) => Promise<void>;
+  /** Scrolls the scroll region named `name` (as `tabToRegion` finds it) to a settled offset without moving keyboard
+   * focus, for a page that scrolls as a whole, the scheduled task's, whose region is named by the task. An offset past
+   * the end is clamped, and content that fits is left where it is. */
+  scrollRegion: (name: Matcher, top: number) => Promise<void>;
   /** Moves the pointer onto the indicator inside the first control named `host`, waiting for the
    * control to appear, and leaves it there, for the tooltip that shows only while the pointer is
    * on it. It returns once the app's tooltip delay has passed and the tooltip is up. The indicator
@@ -506,6 +550,13 @@ export interface Ui {
   hoverField: (label: string, tooltip: string) => Promise<void>;
   /** Types `text` into the focused field, waiting for a field to take focus, and replaces what it holds. */
   type: (text: string) => Promise<void>;
+  /** Sets the date, time or date and time field named `label` (its visible label, or the `aria-label` of its group) to
+   * `value`, as `YYYY-MM-DD`, `HH:MM` or `YYYY-MM-DDTHH:MM`, waiting for the field to appear. A segmented field is not a
+   * text field: each of its segments is filled by what it holds (year, month, day, hour, minute), however the window's
+   * language orders them, and a 12-hour language's day period is chosen from its own AM and PM, so one step reads the
+   * same in every language. The year is entered in the calendar the language writes (Buddhist for Thai). Fails when a
+   * segment is left blank afterwards, which is a value the field refused. */
+  fillDateTime: (label: string, value: string) => Promise<void>;
   /** Waits for `ms`, for an animation to settle. */
   wait: (ms: number) => Promise<void>;
   /** Drops the control connection with its automatic attempts already spent — the banner's Retry
@@ -627,11 +678,15 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
    * so a control that is merely slow to render is not met by a drawer opened for a same-named one inside it. */
   let inClosedDrawer = false;
 
+  /** The names the sidebar toggle goes by, as the page shown names what the sidebar lists: sessions, or the tasks or devices
+   * of the pages that take its place. */
+  const sidebarToggleNames = (kind: "show" | "hide"): string[] => [t(`titleBar.sidebar.${kind}`), t(`titleBar.scheduledTasks.${kind}`), t(`titleBar.devices.${kind}`)];
+
   /** Presses the sidebar toggle that opens the drawer, if the window has it closed. */
   const openDrawer = async (): Promise<void> => {
     inClosedDrawer = false;
-    const show = t("titleBar.sidebar.show");
-    await clickWhenFound(() => find(show), `The drawer holds a control to press, but nothing is named ${show} to bring it in`);
+    const show = sidebarToggleNames("show");
+    await clickWhenFound(() => find((name) => show.includes(name)), `The drawer holds a control to press, but nothing is named ${show.join(" or ")} to bring it in`);
     // The drawer slides in over the 240ms of its transition; a pointer put on a control still moving opens no tooltip.
     await wait(DRAWER_SETTLE_MS);
   };
@@ -678,9 +733,18 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
   const findTextField = (label: string): HTMLInputElement | HTMLTextAreaElement | undefined =>
     Array.from(doc.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")).find((input) =>
       [input.getAttribute("aria-label"), input.labels?.[0] ? accessibleText(input.labels[0]) : null].some(
-        (name) => name != null && withoutIsolates(name).trim() === label,
+        (name) => name != null && withoutFormatting(name).trim() === label,
       ),
     );
+
+  /** The date or time field named `label` (the element round its label and segments), by its visible label or the
+   * `aria-label` of the group holding its segments. */
+  const findTemporalField = (label: string): HTMLElement | undefined =>
+    Array.from(doc.querySelectorAll<HTMLElement>(partSelector.temporalField)).find((field) => {
+      const shown = field.querySelector(partSelector.fieldLabel);
+      const named = shown ? accessibleText(shown) : field.querySelector("[role=group][aria-label]")?.getAttribute("aria-label");
+      return named != null && withoutFormatting(named).trim() === label;
+    });
 
   const findAll = (matcher: Matcher, root: ParentNode = doc): HTMLElement[] => {
     inClosedDrawer = false;
@@ -839,7 +903,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
 
   /** What a tooltip said, for a step's error: the quoted text, or `none` for no tooltip. */
   const quoted = (tooltip: Element | null): string => {
-    const text = withoutIsolates(tooltip?.textContent ?? "").trim();
+    const text = withoutFormatting(tooltip?.textContent ?? "").trim();
     return text ? `"${text}"` : "none";
   };
 
@@ -848,7 +912,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
   const expectAnchoredTooltip = async (owner: string, tooltip: string): Promise<void> => {
     await tooltipWhere(
       "[data-anchored-tooltip]",
-      (shown) => withoutIsolates(shown.textContent ?? "").trim() === tooltip,
+      (shown) => withoutFormatting(shown.textContent ?? "").trim() === tooltip,
       (last) => `${owner} has no tooltip "${tooltip}": its anchored tooltip is ${quoted(last)}`,
     );
   };
@@ -924,10 +988,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
     );
 
   const translate = translatorFor(language);
-  const t: Ui["t"] = (key, ...args) => withoutIsolates(translate(key, ...args));
+  const t: Ui["t"] = (key, ...args) => withoutFormatting(translate(key, ...args));
 
   return {
     t,
+    language,
     // A session row's name begins with its whole title, so "Hub" does not also match "Hub 2"; the
     // title comes before the agent and the status in every catalog, which `catalog.test.ts` holds.
     session: (title) => {
@@ -1040,7 +1105,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
       await waitFor(() => (look(doc) ? true : undefined), `Never came: ${what}`);
     },
     async waitForText(text) {
-      await waitFor(() => (withoutIsolates(doc.body.textContent ?? "").includes(text) ? true : undefined), `The page never showed ${JSON.stringify(text)}`);
+      await waitFor(() => (withoutFormatting(doc.body.textContent ?? "").includes(text) ? true : undefined), `The page never showed ${JSON.stringify(text)}`);
     },
     async codeDrawn(matcher) {
       await waitFor(() => {
@@ -1054,6 +1119,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
         `No collection named ${String(matcher)} to scroll`,
       );
       collection.scrollTo({ top, behavior: "instant" });
+      await wait(300);
+    },
+    async scrollRegion(matcher, top) {
+      const region = await waitFor(() => findRegion(matcher), `No scroll region named ${String(matcher)} to scroll`);
+      region.scrollTo({ top, behavior: "instant" });
       await wait(300);
     },
     async scrollPanel(matcher, top) {
@@ -1080,6 +1150,46 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
       Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(field, text);
       field.dispatchEvent(new Event("input", { bubbles: true }));
       await wait(150);
+    },
+    async fillDateTime(label, value) {
+      const field = await waitFor(() => findTemporalField(label), `No date or time field labelled ${label}`);
+      const entered = temporalParts(value, language);
+      const segmentOf = (type: string) => field.querySelector<HTMLElement>(segmentSelector(type));
+      const fill = async (type: string, text: string) => {
+        const segment = segmentOf(type);
+        if (!segment) throw new Error(`The field labelled ${label} has no ${type} segment to fill with ${text}`);
+        segment.focus();
+        // What the platform fires for a typed character: react-aria's segment reads its digits from `beforeinput`.
+        for (const char of text) {
+          segment.dispatchEvent(new InputEvent("beforeinput", { data: char, inputType: "insertText", bubbles: true, cancelable: true }));
+        }
+        await wait(30);
+      };
+      for (const [type, text] of Object.entries(entered.date)) await fill(type, text);
+      if (entered.hour !== undefined && entered.minute !== undefined) {
+        // A field with a day period segment shows a 12-hour clock, on which noon and midnight read 12: the day period,
+        // typed last as the first letter of the language's own AM or PM (which is what its segment matches), tells them apart.
+        const twelveHour = segmentOf("dayPeriod") !== null;
+        await fill("hour", String(twelveHour ? entered.hour % 12 || 12 : entered.hour));
+        await fill("minute", String(entered.minute));
+        if (twelveHour) await fill("dayPeriod", dayPeriodLetter(language, entered.hour >= 12));
+      }
+      await wait(150);
+      const blank = field.querySelector(partSelector.blankSegment);
+      if (blank) {
+        const type = SEGMENT_TYPES.find((one) => blank.matches(segmentSelector(one))) ?? "unknown";
+        throw new Error(`The field labelled ${label} was left with its ${type} segment blank after filling it with ${value}`);
+      }
+      // The first letter picks the first of AM and PM that starts with it, so a language whose two words share it
+      // (Korean 오전 and 오후, as some engines write them) would silently enter AM: the day period shown must be the asked one.
+      const period = segmentOf("dayPeriod");
+      if (period && entered.hour !== undefined) {
+        const expected = dayPeriodWord(language, entered.hour >= 12);
+        const shown = withoutFormatting(period.textContent ?? "").trim();
+        if (shown !== expected) {
+          throw new Error(`The field labelled ${label} shows ${shown} as its day period after filling it with ${value}, not ${expected}: typing the first letter of ${expected} did not choose it`);
+        }
+      }
     },
     async focus(label) {
       (await waitFor(() => findTextField(label), `No text field labelled ${label}`)).focus();
@@ -1135,7 +1245,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
       }, `No session titled ${title} in a dialog's callout list with an agent icon to hover`);
       await tooltipWhere(
         "[role=tooltip]",
-        (shown) => withoutIsolates(shown.textContent ?? "").trim() === tooltip,
+        (shown) => withoutFormatting(shown.textContent ?? "").trim() === tooltip,
         (last) => `The agent icon of ${title} has no tooltip "${tooltip}": its last tooltip is ${quoted(last)}`,
       );
     },
@@ -1206,7 +1316,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
         if (!label) return undefined;
         if (line === undefined) return label.firstElementChild as HTMLElement | null;
         const reading = Array.from(label.querySelectorAll<HTMLElement>("*")).filter((element) =>
-          matches(line, withoutIsolates(element.textContent ?? "").trim()),
+          matches(line, withoutFormatting(element.textContent ?? "").trim()),
         );
         return reading.find((element) => !reading.some((other) => other !== element && element.contains(other)));
       }, `Nothing to hover in the label of the menu item matching ${String(item)}${line === undefined ? "" : ` that reads ${String(line)}`}`);
@@ -1238,7 +1348,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
       await hover(
         () =>
           Array.from(find(row)?.querySelectorAll<HTMLElement>("[role=img]") ?? []).find((element) =>
-            withoutIsolates(element.getAttribute("aria-label") ?? "").includes(withoutIsolates(heading)),
+            withoutFormatting(element.getAttribute("aria-label") ?? "").includes(withoutFormatting(heading)),
           ),
         `No session card or row matching ${String(row)} with a context size to hover`,
       );
@@ -1246,7 +1356,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
       const title = t("session.context.title");
       await tooltipWhere(
         "[role=tooltip]",
-        (shown) => withoutIsolates(shown.textContent ?? "").includes(withoutIsolates(title)),
+        (shown) => withoutFormatting(shown.textContent ?? "").includes(withoutFormatting(title)),
         (last) => `The context size of ${String(row)} did not open its tooltip, which holds ${title}: ${last?.textContent ? last.textContent : "no tooltip"} is up`,
       );
     },
@@ -1257,10 +1367,10 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
       );
       // Each phrase is the words around its time, in the language's order: before it, after it, or both.
       const [created, archivedAt] = [t("session.meta.created", { time: "\0" }), t("session.meta.archived", { time: "\0" })].map((phrase) => {
-        const [before, after] = withoutIsolates(phrase).split("\0");
+        const [before, after] = withoutFormatting(phrase).split("\0");
         return { before: before.trim(), after: after.trim() };
       });
-      const linesOf = (tooltip: Element | null): string[] => Array.from(tooltip?.querySelectorAll("span") ?? [], (line) => withoutIsolates(line.textContent ?? "").trim());
+      const linesOf = (tooltip: Element | null): string[] => Array.from(tooltip?.querySelectorAll("span") ?? [], (line) => withoutFormatting(line.textContent ?? "").trim());
       const expected = archived ? [archivedAt, created] : [created];
       await tooltipWhere(
         "[role=tooltip]",
@@ -1352,14 +1462,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
       // The heading's name carries the tooltip's words as its detail (`viewer.titleWithDetail`), since the drawn chip is
       // hidden from assistive technology: a tooltip the heading does not repeat is some other tooltip's.
       const inHeading = (text: string): boolean => {
-        const [before, after] = withoutIsolates(t("viewer.titleWithDetail", { title: "\0", detail: text })).split("\0");
+        const [before, after] = withoutFormatting(t("viewer.titleWithDetail", { title: "\0", detail: text })).split("\0");
         const heading = (dialog && labelledNameOf(doc, dialog)) ?? "";
         return heading.includes(before.trim()) && heading.includes(after.trim());
       };
       await tooltipWhere(
         "[role=tooltip]",
         (shown) => {
-          const text = withoutIsolates(shown.textContent ?? "").trim();
+          const text = withoutFormatting(shown.textContent ?? "").trim();
           return text !== "" && inHeading(text);
         },
         (last) => `The title's ${word} chip opened no tooltip that its heading repeats as the detail of its name: its last tooltip is ${quoted(last)}`,
@@ -1394,7 +1504,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
           } else {
             const found = find(row);
             if (!found) return undefined;
-            if (!nameOf(found).includes(withoutIsolates(sentence))) {
+            if (!nameOf(found).includes(withoutFormatting(sentence))) {
               throw new Error(`The row matching ${String(row)} does not name the badge's sentence "${sentence}": its name is "${nameOf(found)}"`);
             }
             // A row holds more than one tooltip trigger (the badge, then the status marker of a
@@ -1415,10 +1525,10 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
         row === undefined ? `No git badge named "${sentence}" in the sidebar` : `No sidebar row matching ${String(row)} with a git badge to hover`,
       );
       // The tooltip shows the sentence as rich content, its references drawn as chips, so it holds no isolates.
-      const spoken = withoutIsolates(sentence);
+      const spoken = withoutFormatting(sentence);
       await tooltipWhere(
         "[role=tooltip]",
-        (shown) => withoutIsolates(shown.textContent ?? "").trim() === spoken,
+        (shown) => withoutFormatting(shown.textContent ?? "").trim() === spoken,
         (last) => `The git badge's tooltip is not its sentence "${spoken}": the last tooltip is ${quoted(last)}`,
       );
     },
@@ -1514,10 +1624,10 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
     },
     async closeDrawer() {
       if (!sidebarFloats()) return;
-      const [show, hide] = [t("titleBar.sidebar.show"), t("titleBar.sidebar.hide")];
-      const toggle = await waitFor(() => find((name) => name === show || name === hide), `Nothing is named ${show} or ${hide} to close the drawer with`);
+      const [show, hide] = [sidebarToggleNames("show"), sidebarToggleNames("hide")];
+      const toggle = await waitFor(() => find((name) => show.includes(name) || hide.includes(name)), `Nothing is named ${[...show, ...hide].join(" or ")} to close the drawer with`);
       if (mobile()) {
-        if (nameOf(toggle) === hide) await clickWhenFound(() => toggle, "");
+        if (hide.includes(nameOf(toggle))) await clickWhenFound(() => toggle, "");
       } else if (toggle.getAttribute("aria-expanded") === "true") {
         toggle.focus();
         await this.key("Escape");

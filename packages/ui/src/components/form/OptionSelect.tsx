@@ -1,7 +1,7 @@
 import React, { useId, useRef } from "react";
 
 import { useT } from "../../i18n/react";
-import { FieldErrorMessage } from "./FieldErrorMessage";
+import { FieldErrorMessage, hasErrorMessage } from "./FieldErrorMessage";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { FieldClearButton } from "../controls/FieldClearButton";
 import { useHandoffAfterRemoval } from "../focus/HandoffOnUnmount";
@@ -209,7 +209,7 @@ export function OptionSelect<T extends string>({
   const current = options.find((option) => option.value === value);
   const badge = current ? current.badge : isLoading ? undefined : placeholderBadge;
   const badgeInLabel = current ? current.badgeInLabel : true;
-  const invalid = isInvalid === true || (errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "");
+  const invalid = isInvalid === true || hasErrorMessage(errorMessage);
   const textProps = textDir === undefined ? {} : { dir: textDir, className: "align-match-parent" };
   const hasReason = options.some((option) => option.reason);
   const virtual = virtualized && !hasReason;

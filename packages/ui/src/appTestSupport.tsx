@@ -13,6 +13,8 @@ import { closedReportsPreference, stacksPreference } from "./panels/usePanelStac
 import { visibility } from "./layout/panelVisibility";
 import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
+import { remoteDevicePreference } from "./remoteDaemons/remoteDevicePreference";
+import { scheduledTaskPreference } from "./scheduledTasks/scheduledTaskPreference";
 import type { Event, ClientRequestBody } from "./protocol";
 import { applyDaemonEvent, DaemonHostAnnouncement, DaemonProvider, type Daemon, type State } from "./store";
 import { ThemeProvider } from "./preferences/theme";
@@ -27,6 +29,8 @@ export function resetAppPreferences(): void {
     stacksPreference.set({ project: defaultStack("project"), report: defaultStack("report") });
     closedReportsPreference.set([]);
     consolePreference.set(undefined);
+    remoteDevicePreference.set(undefined);
+    scheduledTaskPreference.set(undefined);
     visibility.sidebar.set(true);
     visibility.aside.set(true);
   });

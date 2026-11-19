@@ -165,6 +165,8 @@ function Trail({ names, children }: { names: string[]; children?: React.ReactNod
 interface TitleBarProps {
   /** The sidebar lists the devices of the Remote devices page, which its toggle is named for. */
   devicesShown?: boolean;
+  /** The sidebar lists the tasks of the Scheduled tasks page, which its toggle is named for. */
+  tasksShown?: boolean;
   /** Whether the sidebar is currently shown, docked or as an open drawer; a hidden sidebar that is
    * only floating in on hover (from its toggle or a console's avatar on the rail) does not count, since pressing
    * the toggle docks it. */
@@ -231,6 +233,7 @@ const toggleId = (kind: string) => `panel-toggle-${kind}`;
  */
 export function TitleBar({
   devicesShown = false,
+  tasksShown = false,
   sidebarShown,
   sidebarRevealOnly,
   hasSidebar,
@@ -274,7 +277,7 @@ export function TitleBar({
           </ChromeButton>
           {hasSidebar && (
             <ChromeButton
-              label={devicesShown ? t(sidebarShown && !sidebarRevealOnly ? "titleBar.devices.hide" : "titleBar.devices.show") : t(sidebarShown && !sidebarRevealOnly ? "titleBar.sidebar.hide" : "titleBar.sidebar.show")}
+              label={devicesShown ? t(sidebarShown && !sidebarRevealOnly ? "titleBar.devices.hide" : "titleBar.devices.show") : tasksShown ? t(sidebarShown && !sidebarRevealOnly ? "titleBar.scheduledTasks.hide" : "titleBar.scheduledTasks.show") : t(sidebarShown && !sidebarRevealOnly ? "titleBar.sidebar.hide" : "titleBar.sidebar.show")}
               onPress={onToggleSidebar}
               expanded={sidebarShown}
               controls={PANE_ID.sidebar}

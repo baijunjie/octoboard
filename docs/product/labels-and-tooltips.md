@@ -93,7 +93,9 @@ application buttons and the Keyboard shortcuts section's Cancel and Reset button
 - the rail's buttons — each console's avatar, whose tooltip lists the same session status counts as its accessible name
   (see "The console switcher" in `docs/product/console-switcher.md`), New
   console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes to the next
-  one, Turn on notifications, Settings, and the main window's Remote devices button, whose tooltip adds how many remote
+  one, Turn on notifications, Settings, the Scheduled tasks button, whose tooltip adds how many scheduled tasks are
+  running while any is (see "Opening and leaving the page" in `docs/product/scheduled-tasks-page.md`), and the main
+  window's Remote devices button, whose tooltip adds how many remote
   daemons are connected while any is (see "Opening and leaving the page" in `docs/product/remote-devices-page.md`) (the
   rail's Account usage, Processes and Forwarded ports buttons have none, as said below this list);
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in

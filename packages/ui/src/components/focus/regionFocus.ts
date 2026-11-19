@@ -5,6 +5,10 @@ import { partSelector } from "../../primitives";
 /** A window region, named by its `data-region`. */
 export type Region = string;
 
+/** The region of the Scheduled tasks page: it takes the terminal's place in the `F6` cycle while it shows, and what focus
+ * meant for the terminal goes to it. */
+export const TASKS_REGION = "tasks";
+
 /** Focuses where F6 lands in `root`, a region's element: the control it marks `data-region-landing`,
  * else its first control a keyboard can reach; says whether focus is there now. */
 export function focusLanding(root: Element): boolean {

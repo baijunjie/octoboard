@@ -42,6 +42,7 @@ use super::records::{
     SessionKind, SessionStatus, ShellTerminal,
 };
 use super::remote_access::RemoteAccess;
+use super::scheduled_tasks::{ScheduledTask, ScheduledTaskRun};
 use super::session_branches::SessionBranchItem;
 use super::settings::Settings;
 
@@ -569,6 +570,46 @@ pub enum Event {
         #[serde(flatten)]
         #[cfg_attr(test, schemars(with = "super::schema::Flattened<ImportItemState>"))]
         state: ImportItemState,
+    },
+    /// The reply to `list_scheduled_tasks`: every scheduled task, oldest first. Scheduled tasks are
+    /// not in `snapshot`; a client that shows them asks again after every `snapshot`.
+    ScheduledTasksListed {
+        id: Option<String>,
+        tasks: Vec<ScheduledTask>,
+        /// The IANA name of the time zone schedules are read in, the daemon machine's own local
+        /// zone (`Europe/Berlin`), as it is when the list is sent; null when that zone has no IANA
+        /// name (one given as a POSIX rule). A daily, weekdays, weekly or monthly schedule's time of
+        /// day is a wall-clock time in this zone.
+        time_zone: Option<String>,
+    },
+    /// The reply to `create_scheduled_task`, `update_scheduled_task` and
+    /// `set_scheduled_task_enabled`: the task as stored. Every client is also sent
+    /// `scheduled_task_upserted`.
+    ScheduledTaskSaved {
+        id: Option<String>,
+        task: ScheduledTask,
+    },
+    /// A scheduled task was created or changed: the whole record.
+    ScheduledTaskUpserted {
+        task: ScheduledTask,
+    },
+    /// A scheduled task was deleted, by id. The tasks of a deleted console or project go with it
+    /// and are not announced one by one: a client drops them on `console_deleted` and
+    /// `project_deleted`.
+    ScheduledTaskDeleted {
+        task: String,
+    },
+    /// The reply to `list_scheduled_task_runs`: the task's kept runs, most recent first.
+    ScheduledTaskRunsListed {
+        id: Option<String>,
+        task: String,
+        runs: Vec<ScheduledTaskRun>,
+    },
+    /// A run of a scheduled task was recorded, started or failed. The task's own
+    /// `scheduled_task_upserted`, with its new `last_run_at`, is sent with it. A client raises the
+    /// system notification of a failed run from this.
+    ScheduledTaskRunAdded {
+        run: ScheduledTaskRun,
     },
     /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries its whole
     /// component tree, and only the session the user is looking at needs its pages, so the

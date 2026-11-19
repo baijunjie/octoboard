@@ -3,6 +3,7 @@ import React, { act } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { UnsavedChangesProvider, useUnsavedChangesGuard } from "../components/dialog/UnsavedChanges";
 import { closeOpenTooltip, enter, openTooltip } from "../components/hint/tooltipTestSupport";
 import { ActionableError } from "../errors/actionableError";
 import { setLanguage } from "../i18n/language";
@@ -52,12 +53,12 @@ beforeEach(() => {
   connect.mockReset().mockResolvedValue({ outcome: "opened" });
   handOver = undefined;
   onShow.mockClear();
-  onAddingChange.mockClear();
+  onAttention.mockClear();
   onSelect.mockClear();
 });
 
 const onShow = vi.fn();
-const onAddingChange = vi.fn();
+const onAttention = vi.fn();
 const onSelect = vi.fn();
 let askForPage: (() => void) | undefined;
 let handOver: ((items: RemoteDaemonHandedOutcome[]) => void) | undefined;
@@ -89,16 +90,25 @@ const DESKTOP: PlatformAdapter = {
   },
 };
 
-/** The window's part of the page: the list it reads, the device it selects, and whether the page shows. */
+/** The window's part of the page: the list it reads, the device it selects, whether a new device's form is open, whether
+ * the page shows (a page that is not shown ends the form, as the window's does), and the guard of changes not saved. */
 function Harness({ capability, shown = true }: { capability: NonNullable<PlatformAdapter["remoteDaemons"]>; shown?: boolean }) {
   const list = useRemoteDaemons(capability);
+  const unsaved = useUnsavedChangesGuard();
   const [chosen, setChosen] = React.useState<string>();
+  const [adding, setAdding] = React.useState(false);
+  React.useEffect(() => {
+    if (!shown) setAdding(false);
+  }, [shown]);
   const selectedId = (list.entries.find((entry) => entry.id === chosen) ?? list.entries[0])?.id;
   return (
-    <RemoteDevicesProvider capability={capability} list={list} selectedId={selectedId} shown={shown} onShow={onShow} onSelect={(id) => { onSelect(id); setChosen(id); }} onAdd={() => {}} onAddingChange={onAddingChange}>
-      <RemoteDevicesSidebar />
-      {shown && <RemoteDevicePage />}
-    </RemoteDevicesProvider>
+    <UnsavedChangesProvider guard={unsaved.guard}>
+      <RemoteDevicesProvider capability={capability} list={list} selectedId={selectedId} adding={adding} onShow={onShow} onAttention={onAttention} onSelect={(id) => { onSelect(id); setChosen(id); setAdding(false); }} onAdd={() => setAdding(true)} onCancelAdd={() => setAdding(false)}>
+        <RemoteDevicesSidebar />
+        {shown && <RemoteDevicePage />}
+      </RemoteDevicesProvider>
+      {unsaved.confirmation}
+    </UnsavedChangesProvider>
   );
 }
 
@@ -566,33 +576,34 @@ it("draws neither the list nor the empty state until the list has been read", as
 });
 
 
-it("asks for the page to be shown when the shell asks for it, and when it hands something over", async () => {
+it("asks for the page to be shown when the shell asks for it, and draws attention to it when it hands something over", async () => {
   await mount();
   await act(async () => askForPage!());
   expect(onShow).toHaveBeenCalledTimes(1);
   await act(async () => handOver!([{ id: "staging", outcome: { outcome: "no_daemon" } }]));
   // Once for the hand-over, and once for the question it raises.
-  expect(onShow.mock.calls.length).toBeGreaterThan(1);
+  expect(onAttention.mock.calls.length).toBeGreaterThan(1);
+  expect(onShow).toHaveBeenCalledTimes(1);
 });
 
 
-it("asks for the page back when a connection started on the page ends in a question or a failure, and not when it opens", async () => {
+it("draws attention to the page when a connection started on the page ends in a question or a failure, and not when it opens", async () => {
   list.mockResolvedValue([KEYED]);
   const container = await mount();
   await pressTile(container, "Keyed");
-  expect(onShow).not.toHaveBeenCalled();
+  expect(onAttention).not.toHaveBeenCalled();
   connect.mockResolvedValueOnce({ outcome: "no_daemon" });
   await pressTile(container, "Keyed");
-  expect(onShow).toHaveBeenCalledTimes(1);
+  expect(onAttention).toHaveBeenCalledTimes(1);
   await press(modal()!, "Cancel");
-  onShow.mockClear();
+  onAttention.mockClear();
   connect.mockResolvedValueOnce({ outcome: "auth_failed", detail: "denied" });
   await pressTile(container, "Keyed");
-  expect(onShow).toHaveBeenCalledTimes(1);
-  onShow.mockClear();
+  expect(onAttention).toHaveBeenCalledTimes(1);
+  onAttention.mockClear();
   connect.mockResolvedValueOnce({ outcome: "opened_in_browser" });
   await pressTile(container, "Keyed");
-  expect(onShow).not.toHaveBeenCalled();
+  expect(onAttention).not.toHaveBeenCalled();
 });
 
 
@@ -826,35 +837,101 @@ it("saves a change to the shown device without changing what is shown", async ()
   expect(heading(container)).toBe("Staging");
 });
 
-it("drops what was changed and not saved without asking when another device is chosen, and when Add is started", async () => {
+const asking = () => document.body.querySelector<HTMLElement>('[role="alertdialog"]');
+const answerQuestion = (name: string) => act(async () => buttonNamed(asking()!, name)!.click());
+
+it("asks before what was changed and not saved is dropped when another device is chosen or Add is started, and keeps it on Keep editing", async () => {
   list.mockResolvedValue([KEYED, STAGING]);
   const container = await mount();
   await type(field("User"), "ops");
   await act(async () => rowNamed(container, "Staging").click());
-  expect(modal()).toBeUndefined();
-  expect(field("User").value).toBe("deploy");
+  expect(asking()!.textContent).toContain("The changes in this form have not been saved. They will be lost.");
+  expect(heading(container)).toBe("Keyed");
+  await answerQuestion("Keep editing");
+  expect(asking()).toBeNull();
+  expect(field("User").value).toBe("ops");
+  expect(onSelect).not.toHaveBeenCalled();
+  await addFromSidebar(container);
+  expect(asking()).not.toBeNull();
+  await answerQuestion("Keep editing");
+  expect(heading(container)).toBe("Keyed");
+  expect(field("User").value).toBe("ops");
+});
+
+it("shows the other device once Discard is answered, and the new device's blank form for Add", async () => {
+  list.mockResolvedValue([KEYED, STAGING]);
+  const container = await mount();
   await type(field("User"), "ops");
-  await act(async () => rowNamed(container, "Keyed").click());
-  expect(modal()).toBeUndefined();
+  await act(async () => rowNamed(container, "Staging").click());
+  await answerQuestion("Discard");
+  expect(asking()).toBeNull();
+  expect(heading(container)).toBe("Staging");
   expect(field("User").value).toBe("deploy");
   expect(save).not.toHaveBeenCalled();
 
   await type(field("User"), "ops");
   await addFromSidebar(container);
-  await press(container, "Cancel");
-  expect(field("User").value).toBe("deploy");
+  await answerQuestion("Discard");
+  expect(heading(container)).toBe("Add remote daemon");
+  expect(field("Host").value).toBe("");
 });
 
-it("selects the device a hand-over is for, over the one shown and over a form being filled in, and shows its question", async () => {
+it("asks nothing for Revert, Cancel, an untouched form, the device already shown or a new form's Add pressed again", async () => {
+  list.mockResolvedValue([KEYED, STAGING]);
+  const container = await mount();
+  await act(async () => rowNamed(container, "Staging").click());
+  expect(asking()).toBeNull();
+  await act(async () => rowNamed(container, "Keyed").click());
+  expect(asking()).toBeNull();
+  await type(field("User"), "ops");
+  await act(async () => rowNamed(container, "Keyed").click());
+  expect(asking()).toBeNull();
+  await press(container, "Revert");
+  expect(field("User").value).toBe("deploy");
+
+  await addFromSidebar(container);
+  await type(field("Host"), "box");
+  await addFromSidebar(container);
+  expect(asking()).toBeNull();
+  await press(container, "Cancel");
+  expect(asking()).toBeNull();
+  expect(heading(container)).toBe("Keyed");
+});
+
+it("does nothing for another device chosen while a save is in flight", async () => {
+  list.mockResolvedValue([KEYED, STAGING]);
+  save.mockImplementationOnce(() => new Promise(() => {}));
+  const container = await mount();
+  await type(field("User"), "ops");
+  await press(container, "Save");
+  await act(async () => rowNamed(container, "Staging").click());
+  expect(asking()).toBeNull();
+  expect(heading(container)).toBe("Keyed");
+});
+
+it("selects the device a hand-over is for, over the one shown and over a new form nothing was typed in, and shows its question", async () => {
   list.mockResolvedValue([STAGING, KEYED]);
   const container = await mount();
   expect(heading(container)).toBe("Staging");
   await addFromSidebar(container);
-  await type(field("Host"), "box");
   await act(async () => handOver!([{ id: "keyed", outcome: { outcome: "no_daemon" } }]));
   expect(heading(container)).toBe("Keyed");
   expect(container.querySelector("form")!.querySelector("input[type=radio]")).not.toBeNull();
   expect(modal()!.textContent).toContain("No daemon is running on");
+});
+
+it("shows a hand-over's question over a form with changes not saved, without selecting its device or discarding the form", async () => {
+  list.mockResolvedValue([STAGING, KEYED]);
+  const container = await mount();
+  await addFromSidebar(container);
+  await type(field("Host"), "box");
+  await act(async () => handOver!([{ id: "keyed", outcome: { outcome: "no_daemon" } }]));
+  expect(onSelect).not.toHaveBeenCalled();
+  expect(heading(container)).toBe("Add remote daemon");
+  expect(modal()!.textContent).toContain("No daemon is running on");
+  expect(modal()!.textContent).not.toContain("have not been saved");
+  await act(async () => buttonNamed(modal()!, "Cancel")!.click());
+  expect(field("Host").value).toBe("box");
 });
 
 it("selects nothing for a hand-over of a device that is no longer saved", async () => {
@@ -863,24 +940,6 @@ it("selects nothing for a hand-over of a device that is no longer saved", async 
   await act(async () => handOver!([{ id: "gone", outcome: { outcome: "no_daemon" } }]));
   expect(heading(container)).toBe("Staging");
   expect(modal()).toBeUndefined();
-});
-
-it("tells whenever a new device's form opens and closes, for what names the page elsewhere", async () => {
-  list.mockResolvedValue([KEYED, STAGING]);
-  const container = await mount();
-  expect(onAddingChange.mock.calls.at(-1)).toEqual([false]);
-  await addFromSidebar(container);
-  expect(onAddingChange.mock.calls.at(-1)).toEqual([true]);
-  await press(container, "Cancel");
-  expect(onAddingChange.mock.calls.at(-1)).toEqual([false]);
-  await addFromSidebar(container);
-  await act(async () => rowNamed(container, "Staging").click());
-  expect(onAddingChange.mock.calls.at(-1)).toEqual([false]);
-  await addFromSidebar(container);
-  await type(field("Host"), "box");
-  await type(field("User"), "me");
-  await press(container, "Save");
-  expect(onAddingChange.mock.calls.at(-1)).toEqual([false]);
 });
 
 /** Answers the next read of the list when `answer` is called, in place of the list at once. */
@@ -911,30 +970,20 @@ it("selects a device that was added only once the list holds it, and selects not
   expect(heading(container)).toBe("box.example.com");
 });
 
-it("selects nothing for a device added when the form was cancelled before the list answered", async () => {
+it("keeps a new device's form as it is while its save is in flight, cancelling and choosing another device doing nothing, and selects the new device once the list holds it", async () => {
   list.mockResolvedValue([STAGING, KEYED]);
   const container = await mount();
-  await act(async () => rowNamed(container, "Keyed").click());
-  onSelect.mockClear();
   await filledNew(container);
   const answer = holdNextListRead();
   await press(container, "Save");
-  await press(container, "Cancel");
-  await act(async () => answer([STAGING, KEYED, CREATED]));
+  expect(buttonNamed(container, "Cancel")!.disabled).toBe(true);
+  await act(async () => rowNamed(container, "Keyed").click());
+  expect(asking()).toBeNull();
   expect(onSelect).not.toHaveBeenCalled();
-  expect(heading(container)).toBe("Keyed");
-});
-
-it("selects nothing for a device added when another device was chosen before the list answered", async () => {
-  list.mockResolvedValue([STAGING, KEYED]);
-  const container = await mount();
-  await filledNew(container);
-  const answer = holdNextListRead();
-  await press(container, "Save");
-  await act(async () => rowNamed(container, "Keyed").click());
+  expect(heading(container)).toBe("Add remote daemon");
   await act(async () => answer([STAGING, KEYED, CREATED]));
-  expect(onSelect.mock.calls).toEqual([["keyed"]]);
-  expect(heading(container)).toBe("Keyed");
+  expect(onSelect.mock.calls).toEqual([["new"]]);
+  expect(heading(container)).toBe("box.example.com");
 });
 
 it("selects nothing for a device added when the page was left before the list answered", async () => {

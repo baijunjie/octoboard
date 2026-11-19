@@ -23,7 +23,7 @@ interface Announcement {
  * or role. A plain compact row accepts it too.
  *
  * `tone="danger"` is the shape of a failure that is the whole state of what the panel fills (a pane
- * whose subject could not be loaded): a danger glyph, the heading saying what could not be loaded,
+ * whose subject could not be loaded; a compact row takes only the danger glyph of it): a danger glyph, the heading saying what could not be loaded,
  * the line under it, `remedy` (the one main thing to do) as a second line, then `details` (further
  * explanation in the application's own words, then raw text) on a surface of its own under them, and
  * the recovery `action` in the centred row, with the optional `linkAction` (a step to take outside the
@@ -115,10 +115,12 @@ export function EmptyPanel({
   const actionId = useId();
   const announcement = useAlertAnnouncement(announce, announceKey, announceDelayMs);
   if (compact) {
+    // A failure that is the whole state of what the row stands in for takes the danger glyph, as the full panel's does.
+    const glyphColour = tone === "danger" ? "text-danger-soft-foreground" : "text-app-muted";
     // A `span` rather than a `p`: inside a button only phrasing content is valid.
     const row = (
       <>
-        <Icon className="size-4 shrink-0 text-app-muted" />
+        <Icon className={`size-4 shrink-0 ${glyphColour}`} />
         <span id={messageId} className="min-w-0 flex-1 break-words text-app-muted">
           {message}
         </span>

@@ -21,7 +21,7 @@ interface SidebarProps extends SidebarHandlers {
   selectedSessionId?: string;
   /** The console the sidebar shows: the current one, or while the hidden sidebar floats in, the one
    * whose avatar the pointer is on. The caller resolves it to an existing one; with none (no console at all) the
-   * sidebar is only for the page of devices (`devices`). */
+   * sidebar is only for a page of the window (`page`). */
   shownConsole: Console | undefined;
   /** The project or console session in focus mode, if any; it belongs to `shownConsole`. */
   focus?: FocusTarget;
@@ -47,9 +47,10 @@ interface SidebarProps extends SidebarHandlers {
   /** The docked-mode width and its setters; `App` owns it (`app/usePaneWidths.ts`) so it can also
    * be read from outside the sidebar. */
   sidebarWidth: PaneWidth;
-  /** What the sidebar lists in place of the console while the Remote devices page shows: the devices, named by `label`.
+  /** What the sidebar lists in place of the console while a page of the window shows (the Remote devices page's devices,
+   * the Scheduled tasks page's tasks), named by `label`.
    * The sidebar stays mounted, so what it holds of the console (its folds and filters) is there when the page is left. */
-  devices?: { label: string; content: React.ReactNode };
+  page?: { label: string; content: React.ReactNode };
 }
 
 /** The sidebar: one console at a time, the current one picked on the rail, or the one a hover on the rail previews (see
@@ -67,7 +68,7 @@ export function Sidebar({
   onPeekPress,
   onColumnPhase,
   sidebarWidth,
-  devices,
+  page,
   visibleProjectPanels,
   onSelectSession,
   onSwitchConsoleSession,
@@ -179,8 +180,8 @@ export function Sidebar({
     });
 
   let content: React.ReactNode;
-  if (devices) {
-    content = devices.content;
+  if (page) {
+    content = page.content;
   } else if (!shownConsole) {
     content = null;
   } else if (focus && "project" in focus) {
@@ -247,15 +248,15 @@ export function Sidebar({
 
   return (
     <SidebarFrame
-      shownConsoleId={devices || !shownConsole ? DEVICES_VIEW_KEY : shownConsole.id}
-      focus={devices ? undefined : focus}
+      shownConsoleId={page || !shownConsole ? DEVICES_VIEW_KEY : shownConsole.id}
+      focus={page ? undefined : focus}
       open={open}
       drawerAway={drawerAway}
       peek={peek}
       onPeekPress={onPeekPress}
       onColumnPhase={onColumnPhase}
       sidebarWidth={sidebarWidth}
-      label={devices?.label}
+      label={page?.label}
     >
       {content}
     </SidebarFrame>

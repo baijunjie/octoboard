@@ -22,12 +22,24 @@ It is excluded from the production type check and from release verification, and
   links and the reads of a linked file, whole and in parts; Find in files' `search_project_content`, which searches the
   project's text files as the daemon does through `fixtureContentSearch.ts`, streaming its events to the listener of
   the search; it is in `FILE_REQUESTS` like the other reads, so a page that routes those to a daemon per project, as
-  the website preview does, sends it there too and listens for its events on every daemon), `fixtureProcesses.ts` (the process ledger) and `fixtureLifecycle.ts` (what a restart into an update would not
-  carry over). A request no module answers is acknowledged. A new reply goes
+  the website preview does, sends it there too and listens for its events on every daemon), `fixtureProcesses.ts` (the process ledger), `fixtureLifecycle.ts` (what a restart into an update would not
+  carry over) and `fixtureScheduledTasks.ts` (the daemon's scheduled tasks and their runs, which a scenario gives as
+  `scheduledTasks` and the requests change: the window learns of them from the replies and broadcasts as from a daemon;
+  a run started by Run now is acknowledged at once and recorded afterwards, opening its session through the sessions
+  module's `open_session`, so a refusal there is a failed run; the next run is computed without the daylight saving
+  rules; the launch settings are taken as given, not checked as `open_session` checks them; deleting an account clears
+  it from the tasks that named it. Where it differs from the daemon: a run whose account is turned off or not signed in
+  fails, since automatic account selection is not modelled (neither is it for a new session), and a run on an account
+  whose quota is used up starts, since `open_session` does not refuse a new session for it. A scenario's
+  `scheduledTasks.listError` and `runsError` make the two listings fail). A request no module answers is acknowledged. A new reply goes
   into the module of its domain, not into `fixtureDaemon.ts`. `BROWSE_REQUESTS` is the set of requests that read a
   project's folder (`GIT_REQUESTS` of `fixtureGit.ts` and `FILE_REQUESTS` of `fixtureFiles.ts`, each typed against the
   replies it has), which the website preview routes to the repository a project belongs to; a new browse request is
   routed correctly once it is in one of those two lists.
+- `scheduledTaskBuilders.ts` builds the task and run records of a scenario's `scheduledTasks`: a task's next run is the
+  one the fixture computes for its schedule (`scheduledTaskNextRun.ts`, which imports nothing of the store, so the gallery's
+  scenario files can reach it without loading the module that reads the stored language ahead of the page's own
+  preparation), unless the scenario names one.
 - `changeFixtures.ts` is the vocabulary of repository fixtures: one factory per kind of change, whose parameters carry
   exactly what the real reply for that kind needs, so an unanswerable change cannot be written. Where a reply cannot be
   filled faithfully the fixture daemon refuses it with `FixtureUnfillableError` (`banner.ts`'s `refuseUnfillable`)

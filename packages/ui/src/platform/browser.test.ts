@@ -171,3 +171,71 @@ describe("the host facts", () => {
     expect(browserPlatform().host.terms).toEqual({ trash: "trash", settings: "systemSettings", menuBarIcon: "menuBar" });
   });
 });
+
+describe("the notification capability", () => {
+  /** The notifications a stand-in `Notification` was asked to show, with the click and close of each. */
+  function stubNotification(permission: NotificationPermission) {
+    const shown: { title: string; body?: string; onclick: (() => void) | null; close: ReturnType<typeof vi.fn> }[] = [];
+    class FakeNotification {
+      static permission = permission;
+      onclick: (() => void) | null = null;
+      close = vi.fn();
+      constructor(
+        public title: string,
+        options?: NotificationOptions,
+      ) {
+        this.body = options?.body;
+        shown.push(this);
+      }
+      body?: string;
+    }
+    vi.stubGlobal("Notification", FakeNotification);
+    return shown;
+  }
+
+  it("has none where the browser has no notifications", () => {
+    vi.stubGlobal("Notification", undefined);
+    expect(browserPlatform().notifications).toBeUndefined();
+  });
+
+  it("shows a notification with its title and body, and hands nothing back when it is clicked", async () => {
+    const shown = stubNotification("granted");
+    await browserPlatform().notifications!.notify({ title: "Waiting", body: "Fix the build" });
+    expect(shown).toHaveLength(1);
+    expect(shown[0]).toMatchObject({ title: "Waiting", body: "Fix the build", onclick: null });
+  });
+
+  it("hands the target of a notification that is clicked to each listener, brings the window forward and closes it", async () => {
+    const shown = stubNotification("granted");
+    const focus = vi.spyOn(window, "focus").mockImplementation(() => {});
+    const { notify, onChosen } = browserPlatform().notifications!;
+    const first = vi.fn();
+    const second = vi.fn();
+    onChosen!(first);
+    const stop = onChosen!(second);
+    await notify({ title: "Failed", body: "Morning report", target: "scheduled-task:t-1" });
+    shown[0]!.onclick!();
+    expect(first).toHaveBeenCalledWith("scheduled-task:t-1");
+    expect(second).toHaveBeenCalledWith("scheduled-task:t-1");
+    expect(focus).toHaveBeenCalledOnce();
+    expect(shown[0]!.close).toHaveBeenCalledOnce();
+
+    stop();
+    shown[0]!.onclick!();
+    expect(first).toHaveBeenCalledTimes(2);
+    expect(second).toHaveBeenCalledOnce();
+  });
+
+  it("is allowed to notify only while the permission is granted, and never asks for it itself", async () => {
+    stubNotification("denied");
+    const { ensurePermission, permissionPrompt } = browserPlatform().notifications!;
+    expect(await ensurePermission()).toBe(false);
+    expect(permissionPrompt!.status()).toBe("denied");
+    stubNotification("granted");
+    expect(await browserPlatform().notifications!.ensurePermission()).toBe(true);
+    stubNotification("default");
+    const undecided = browserPlatform().notifications!;
+    expect(await undecided.ensurePermission()).toBe(false);
+    expect(undecided.permissionPrompt!.status()).toBe("undecided");
+  });
+});

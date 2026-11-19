@@ -16,7 +16,7 @@ import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { AccountFallback, ImportFailure } from "../protocol";
 import type { PlainMessageKey } from "../i18n/catalog";
-import { useFailureNode } from "./failureText";
+import { useFailureNode } from "../components/alerts/failureNode";
 import { type DirectoryProblem } from "./importPlan";
 import type { ClientSettingValue } from "./clientSettings";
 import type { SettingValue } from "./importValues";

@@ -13,6 +13,9 @@ import { nextWaitingSession, waitingSessionsInTreeOrder } from "../sessions/wait
  * archived one, a chip of a console session's switch strip, the next waiting session, and a session this window just
  * opened. The terminal, the aside's owner and the sidebar's console and focus mode follow it, and an open archive view
  * gives way. The stable members are for the sidebar's, the rail's and the archive's rows.
+ *
+ * Each of them is a way of leaving a page with a form that holds changes not saved, so each goes through `leavePage`
+ * whole, which asks first where it must and leaves the page itself; what runs after the answer is the latest render's.
  */
 export function useSessionActions({
   focus,
@@ -31,6 +34,7 @@ export function useSessionActions({
   consoleList,
   projectList,
   selectedSessionId,
+  leavePage,
 }: {
   /** The sidebar's focus mode. */
   focus: FocusTarget | undefined;
@@ -51,20 +55,24 @@ export function useSessionActions({
   consoleList: Console[];
   projectList: Project[];
   selectedSessionId: string | undefined;
+  /** Runs `go` as a way of leaving the page that shows, after the question about changes not saved where there are any
+   * (`App`'s `leavePage`). */
+  leavePage: (go: () => void) => void;
 }) {
   const { store } = useDaemon();
 
   /** Puts a session this window just opened on screen; it is in the console the sidebar shows
    * (a dialog holds the window still, and a quick create does not call this once the console has
    * changed under it), so only the archive view, were it open, has to give way. */
-  const showOpenedSession = (sessionId: string) => {
+  const showOpenedNow = useStableHandler((sessionId: string) => {
     setSelectionByUser(sessionId);
     // The reply that names the session has already been applied to the store by the time this runs.
     setOwnerByUser(ownerForSession(store.getState().sessions.get(sessionId)));
     setArchiveScopeByUser(undefined);
-  };
+  });
+  const showOpenedSession = (sessionId: string) => leavePage(() => showOpenedNow(sessionId));
 
-  const selectSession = (session: Session, { enterFocus = false, resume = true } = {}) => {
+  const showSession = useStableHandler((session: Session, { enterFocus = false, resume = true } = {}) => {
     setSelectionByUser(session.id);
     // A console session brings its report into the aside, a project session its project's browser.
     setOwnerByUser(ownerForSession(session));
@@ -85,12 +93,14 @@ export function useSessionActions({
     // One an account switch holds reads interrupted while its process is down, and the switch relaunches it.
     const switching = holdsAccountSwitch(store.getState().sessions.get(session.id) ?? session, store.getState().queuedAccountSwitches);
     if (resume && session.status === "interrupted" && !switching) void resumeSession(session.id);
-  };
+  });
+  const selectSession = (session: Session, options?: { enterFocus?: boolean; resume?: boolean }) => leavePage(() => showSession(session, options));
 
-  const reopenSession = (session: Session) => {
-    selectSession(session);
-    if (session.status === "archived") void resumeSession(session.id);
-  };
+  const reopenSession = (session: Session) =>
+    leavePage(() => {
+      showSession(session);
+      if (session.status === "archived") void resumeSession(session.id);
+    });
 
   // Pressing a chip is a selection like pressing the session's row, which also enters its focus mode.
   const switchConsoleSession = (session: Session) => selectSession(session, { enterFocus: true });
@@ -100,9 +110,11 @@ export function useSessionActions({
     const sessions = Array.from(state.sessions.values());
     const next = nextWaitingSession(waitingSessionsInTreeOrder(consoleList, projectList, sessions, indexSessions(state.sessions).delegatingIds, state.queuedAccountSwitches, sessionOrderPreference.get()), selectedSessionId);
     if (!next) return;
-    selectSession(next);
-    // Picked from the rail inside the open drawer, it closes it as a pick in the sidebar does.
-    if (asideFloats && sidebarOpen) closeSidebar();
+    leavePage(() => {
+      showSession(next);
+      // Picked from the rail inside the open drawer, it closes it as a pick in the sidebar does.
+      if (asideFloats && sidebarOpen) closeSidebar();
+    });
   };
 
   // Handed to the sidebar's and the rail's rows and the archive view's rows, which are then rendered
@@ -112,10 +124,12 @@ export function useSessionActions({
   // On a phone the drawer covers most of the terminal: picking a session in it closes it, so the
   // session's terminal is what shows (focused, except after a tap: `interactionIsTouch`). A wider
   // window leaves it open, beside the terminal.
-  const stableSelectFromSidebar = useStableHandler((session: Session) => {
-    selectSession(session);
-    if (asideFloats && sidebarOpen) closeSidebar();
-  });
+  const stableSelectFromSidebar = useStableHandler((session: Session) =>
+    leavePage(() => {
+      showSession(session);
+      if (asideFloats && sidebarOpen) closeSidebar();
+    }),
+  );
   const stableSwitchConsoleSession = useStableHandler(switchConsoleSession);
   const stableReopenSession = useStableHandler(reopenSession);
   const stableNextWaiting = useStableHandler(selectNextWaiting);

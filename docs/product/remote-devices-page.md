@@ -11,7 +11,8 @@ such page. What a remote daemon is, what is saved of one and what connecting to 
 
 The page is opened by:
 
-- the rail's **Remote devices** button, under the consoles (see "The rail" in `docs/product/window-layout.md`). The
+- the rail's **Remote devices** button, under the Scheduled tasks button (see "The rail" in
+  `docs/product/window-layout.md`). The
   button only opens the page: pressed while the page shows, it does nothing. While the page shows, the button is drawn
   as the current console's tile is and tells assistive technology it is the current item, and no console's avatar is
   marked current. Its tooltip, and its name, are Remote devices, followed while any connection is held by how many
@@ -24,7 +25,8 @@ The page is opened by:
 
 **The page is left by going to another place of the window**: choosing a console's avatar on the rail, or anything that
 changes the current console or the selected session — a session chosen from a notification, the menu bar icon's menu
-or the waiting count — or Back and Forward to a place without the page. `Escape` does not leave it. What the window
+or the waiting count — Back and Forward to a place without the page, or the Scheduled tasks button, whose page then
+shows instead (see `docs/product/scheduled-tasks-page.md`). `Escape` does not leave it. What the window
 showed before is kept as it was while the page shows — the terminals go on with their state, the sidebar keeps its
 console's folds and filters — and is there again once the page is left.
 
@@ -35,9 +37,8 @@ is passed over.
 **Which device the page shows when it opens**: the one last chosen on it, remembered across launches, while it is still
 saved, else the first saved one.
 
-**What was changed on the form and not saved is dropped without asking** when another device is chosen, when Add
-remote daemon is started, when the page is left, and when a question or failure handed to the page selects another
-device. A new device's form being filled in is dropped the same way.
+**Leaving the page, choosing another device or starting Add remote daemon while the form holds changes not saved asks
+first**, and a change the user did not make keeps the form (see `docs/product/leaving-a-form-with-unsaved-changes.md`).
 
 ## What the page shows
 
@@ -87,7 +88,7 @@ is closed. The page then shows the first saved device, or, with none left, the e
 **Add remote daemon** — the sidebar header's **+**, the empty row or the empty state's button — shows a blank form in
 the content area, headed **Add remote daemon**, with focus in its first field. Its **Save** saves the new device and
 then shows it, once the list holds it. **Cancel** returns to the device shown before, or to the empty state. Leaving
-the page drops the form.
+the page drops the form, asking first once anything in it was changed.
 
 ### With none saved
 
@@ -148,13 +149,15 @@ own, in front, and the page stays as it was.
 What the connection asks or reports — a password, a host key to confirm, a failure — is a dialog over the main window
 (see "What a connection asks or reports" in `docs/product/remote-daemons.md`). A connection started from the page goes
 on when the page is left, or when the main window's page is loaded again; where it then has something to ask or report,
-the page comes back to show it.
+the page comes back to show it, unless a page's form holds changes not saved, when the dialog opens over the window as
+it is.
 
 ## What is handed to the page
 
 A question or a failure of a connection made from a menu's item for a saved daemon (see "Where remote daemons are
 reached from" in `docs/product/remote-daemons.md`) is handed to the page: the main window is shown and focused, and
-the page shows it, selecting its device. What is handed over waits until the saved remote daemons have been read, no
+the page shows it, selecting its device — except while a page's form holds changes not saved, when its dialog opens over
+the window with the page, and the device it shows, left as they are. What is handed over waits until the saved remote daemons have been read, no
 connection from the page is under way and none of the page's dialogs is open, and is then shown one at a time, in the
 order it came; only the latest one of each saved daemon is kept. One for a daemon no longer saved is dropped, and so is
 a question for a daemon that has been connected since; a failure is still shown.
@@ -177,7 +180,8 @@ consoles, sessions and everything else it last read, with the connection banner 
 - **The page shows only when asked for**, by the Remote devices button, the menus' Remote Devices item or a question or
   failure handed to it; the brief connecting at launch never shows it.
 - **Back from the page returns to the daemon's state**, whichever of those states it is.
-- **A page opened while the local daemon could not be used is left once it can**, and the window shows its consoles.
+- **A page opened while the local daemon could not be used is left once it can**, and the window shows its consoles,
+  unless its form holds changes not saved: the page then stays, as one opened while the daemon could be used.
 - **A page opened while the local daemon could be used stays** when the daemon becomes unusable, and again when it
   becomes usable, with the form as it was.
 

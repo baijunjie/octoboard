@@ -621,13 +621,15 @@ fn settle_started(state: &Arc<AppState>, session: &Session, has_task: bool) -> R
 pub async fn check_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<AgentId> {
     Ok(check_open_with(state, request, AccountGate::NewSession)
         .await?
-        .0)
+        .agent)
 }
 
 /// [`check_open`] for a handoff's receiving session, which moves an existing conversation and so
 /// is refused an account whose plan quota is used up as well.
 pub async fn check_handoff_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<AgentId> {
-    Ok(check_open_with(state, request, AccountGate::Full).await?.0)
+    Ok(check_open_with(state, request, AccountGate::Full)
+        .await?
+        .agent)
 }
 
 /// [`check_open`] for a handoff whose opening waits on the user's choice of account, which is not
@@ -639,16 +641,35 @@ pub async fn check_handoff_open_asking(
 ) -> Result<Option<String>> {
     Ok(check_open_with(state, request, AccountGate::DisabledOnly)
         .await?
-        .1)
+        .account_id)
 }
 
-/// The checks of [`check_open`], refusing the account's states that `gate` names; returns the agent
-/// and the account the session would open on.
+/// [`check_open`] for launch settings saved to be opened later (a scheduled task), which is not
+/// refused for an account whose quota is used up or that is not logged in: that is a matter of the
+/// moment it is opened. Returns the model and effort override as a session opened now would record
+/// them.
+pub(super) async fn check_saved_open(
+    state: &Arc<AppState>,
+    request: &OpenRequest,
+) -> Result<CheckedOpen> {
+    check_open_with(state, request, AccountGate::DisabledOnly).await
+}
+
+/// What [`check_open_with`] settled for the session `request` would open.
+pub(super) struct CheckedOpen {
+    pub(super) agent: AgentId,
+    pub(super) account_id: Option<String>,
+    /// The model and effort override as the session would record them.
+    pub(super) model: Option<Option<String>>,
+    pub(super) effort: Option<Option<String>>,
+}
+
+/// The checks of [`check_open`], refusing the account's states that `gate` names.
 async fn check_open_with(
     state: &Arc<AppState>,
     request: &OpenRequest,
     gate: AccountGate,
-) -> Result<(AgentId, Option<String>)> {
+) -> Result<CheckedOpen> {
     let ResolvedOpen {
         project,
         console,
@@ -657,7 +678,7 @@ async fn check_open_with(
         ..
     } = resolve_open_with(state, request, gate)?;
     check_compatibility(agent, &request.compatibility)?;
-    check_launch_settings(
+    let (model, effort) = check_launch_settings(
         state,
         agent,
         account_id.clone(),
@@ -668,7 +689,12 @@ async fn check_open_with(
         SettingsChecked::All,
     )
     .await?;
-    Ok((agent, account_id))
+    Ok(CheckedOpen {
+        agent,
+        account_id,
+        model,
+        effort,
+    })
 }
 
 #[cfg(test)]

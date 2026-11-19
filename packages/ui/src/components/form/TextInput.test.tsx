@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { accessibleName } from "../dialog/dialogTestSupport";
 import { TextInput } from "./TextInput";
@@ -60,5 +60,26 @@ it("names a field with a rich label by its plain label alone, and points its vis
   expect(accessibleName(input)).toBe("Directory for Notes");
   expect(label.querySelector("[aria-hidden=true]")!.textContent).toBe("Directory");
   expect(label.htmlFor).toBe(input.id);
+  act(() => root.unmount());
+});
+
+it("tells its form the field was left, and then shows the trimmed value", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  const left = vi.fn();
+  const Form = () => {
+    const [value, setValue] = useState("");
+    return <TextInput label="Name" value={value} onChange={setValue} onBlur={left} />;
+  };
+  act(() => root.render(<Form />));
+  const field = container.querySelector("input")!;
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, "  my site ");
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(left).not.toHaveBeenCalled();
+  act(() => field.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+  expect(left).toHaveBeenCalledOnce();
+  expect(field.value).toBe("my site");
   act(() => root.unmount());
 });

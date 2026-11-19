@@ -17,7 +17,8 @@ use rusqlite::Connection;
 /// [`MIGRATIONS`], and the released version's schema is kept as `schema/v{N}.sql` and listed in the
 /// test-only `PAST_SCHEMAS`, for the test that migrates a database built from each and compares the
 /// result with a fresh one. A version is released once a `desktop-v*` tag is on a commit that carries
-/// it; prerelease tags count.
+/// it; prerelease tags count. The number is also stated in docs/product/files-octoboard-owns.md's
+/// "The database's schema version" section.
 pub(super) const SCHEMA_VERSION: i64 = 6;
 
 /// The `application_id` of an Octoboard database, "OCTB" in ASCII, written into the file's header
@@ -80,7 +81,8 @@ pub(super) const MIGRATIONS: &[&str] = &[
      UPDATE settings SET interface_language = 'zh-CN' WHERE interface_language = 'zh-Hans';
      UPDATE settings SET interface_language = 'zh-TW' WHERE interface_language = 'zh-Hant';",
     // 5 to 6: Octoboard's memory, the entries a console's console sessions and a place's project
-    // sessions keep, and the setting that turns it on (see `SCHEMA`).
+    // sessions keep, and the setting that turns it on; and the scheduled tasks with the records of
+    // their runs (see `SCHEMA`).
     "ALTER TABLE settings ADD COLUMN memory_enabled INTEGER NOT NULL DEFAULT 0;
      CREATE TABLE memories (
          console_id         TEXT NOT NULL DEFAULT '',
@@ -108,7 +110,45 @@ pub(super) const MIGRATIONS: &[&str] = &[
      BEGIN
          DELETE FROM memories WHERE console_id = OLD.id;
          DELETE FROM memory_ids WHERE console_id = OLD.id;
-     END;",
+     END;
+     CREATE TABLE scheduled_tasks (
+         id            TEXT PRIMARY KEY,
+         console_id    TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
+         project_id    TEXT REFERENCES projects(id) ON DELETE CASCADE,
+         title         TEXT,
+         agent         TEXT,
+         account_id    TEXT,
+         account_set   INTEGER NOT NULL DEFAULT 0,
+         model         TEXT,
+         model_set     INTEGER NOT NULL DEFAULT 0,
+         effort        TEXT,
+         effort_set    INTEGER NOT NULL DEFAULT 0,
+         compatibility TEXT,
+         bound_to      TEXT,
+         prompt        TEXT NOT NULL,
+         schedule      TEXT NOT NULL,
+         enabled       INTEGER NOT NULL DEFAULT 1,
+         created_at    INTEGER NOT NULL,
+         updated_at    INTEGER NOT NULL,
+         next_run_at   INTEGER,
+         last_run_at   INTEGER
+     );
+     CREATE INDEX scheduled_tasks_console_id ON scheduled_tasks (console_id);
+     CREATE INDEX scheduled_tasks_project_id ON scheduled_tasks (project_id);
+     CREATE TABLE scheduled_task_runs (
+         seq                 INTEGER PRIMARY KEY AUTOINCREMENT,
+         id                  TEXT NOT NULL UNIQUE,
+         task_id             TEXT NOT NULL REFERENCES scheduled_tasks(id) ON DELETE CASCADE,
+         ran_at              INTEGER NOT NULL,
+         due_at              INTEGER,
+         trigger             TEXT NOT NULL,
+         session_id          TEXT,
+         started_independent INTEGER NOT NULL DEFAULT 0,
+         failure_code        TEXT,
+         failure_params      TEXT,
+         failure_message     TEXT
+     );
+     CREATE INDEX scheduled_task_runs_task_id ON scheduled_task_runs (task_id, seq);",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -478,6 +518,65 @@ BEGIN
     DELETE FROM memories WHERE console_id = OLD.id;
     DELETE FROM memory_ids WHERE console_id = OLD.id;
 END;
+-- A scheduled task: a session Octoboard starts on a schedule with `prompt` as its opening task
+-- (see `Store::insert_scheduled_task`). `console_id` and `project_id` say what it starts: a console
+-- session of the console when `project_id` is NULL, else a project session of that project; deleting
+-- either takes its tasks. The launch settings are as `open_session` takes them: `title` NULL names
+-- the session by default, `agent` NULL resolves the agent at each run, and each `*_set` flag says
+-- whether the value beside it is chosen (a NULL value then choosing the default account or the
+-- agent's own default) or inherited (flag clear). `compatibility` is as in `console_launches`.
+-- `bound_to` is the console session a project task's session reports to, NULL for none; no
+-- `REFERENCES`, as a session that is gone by run time leaves the session independent. No
+-- `REFERENCES` on `account_id` either: `Store::delete_account` clears it from the tasks that name
+-- it (`account_set` back to 0, so the task inherits again), in the same locked step as the
+-- account's removal, and an insert or edit refuses an account that is no longer there. `schedule`
+-- is the `Schedule` as its wire JSON. `next_run_at` and `last_run_at` are instants in
+-- milliseconds, NULL for none.
+CREATE TABLE scheduled_tasks (
+    id            TEXT PRIMARY KEY,
+    console_id    TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
+    project_id    TEXT REFERENCES projects(id) ON DELETE CASCADE,
+    title         TEXT,
+    agent         TEXT,
+    account_id    TEXT,
+    account_set   INTEGER NOT NULL DEFAULT 0,
+    model         TEXT,
+    model_set     INTEGER NOT NULL DEFAULT 0,
+    effort        TEXT,
+    effort_set    INTEGER NOT NULL DEFAULT 0,
+    compatibility TEXT,
+    bound_to      TEXT,
+    prompt        TEXT NOT NULL,
+    schedule      TEXT NOT NULL,
+    enabled       INTEGER NOT NULL DEFAULT 1,
+    created_at    INTEGER NOT NULL,
+    updated_at    INTEGER NOT NULL,
+    next_run_at   INTEGER,
+    last_run_at   INTEGER
+);
+CREATE INDEX scheduled_tasks_console_id ON scheduled_tasks (console_id);
+CREATE INDEX scheduled_tasks_project_id ON scheduled_tasks (project_id);
+-- A run of a scheduled task (see `Store::record_scheduled_task_run`), the last
+-- `SCHEDULED_TASK_RUNS_KEPT` of each task kept; deleting the task takes them. `seq` orders the runs
+-- of a task as they were recorded. `trigger` is the `ScheduledRunTrigger` wire name, `due_at` the
+-- occurrence it stands for (NULL for a run now). A started run holds its session in `session_id`
+-- (no `REFERENCES`: the session may be deleted while the record is kept) and whether it started
+-- independent; a failed one holds the coded failure in the `failure_*` columns, `failure_params`
+-- as a JSON object.
+CREATE TABLE scheduled_task_runs (
+    seq                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    id                  TEXT NOT NULL UNIQUE,
+    task_id             TEXT NOT NULL REFERENCES scheduled_tasks(id) ON DELETE CASCADE,
+    ran_at              INTEGER NOT NULL,
+    due_at              INTEGER,
+    trigger             TEXT NOT NULL,
+    session_id          TEXT,
+    started_independent INTEGER NOT NULL DEFAULT 0,
+    failure_code        TEXT,
+    failure_params      TEXT,
+    failure_message     TEXT
+);
+CREATE INDEX scheduled_task_runs_task_id ON scheduled_task_runs (task_id, seq);
 -- The name the user gave a shell terminal, by its id, which a daemon that puts the terminal back
 -- from its holder shows again. Forgotten with the terminal. See `Store::shell_terminal_title`.
 CREATE TABLE shell_terminal_titles (
@@ -1123,6 +1222,48 @@ mod tests {
                 "created_at"
             ]
         );
+    }
+
+    /// Migrating a version 5 database keeps its consoles and gives it the scheduled tasks, none
+    /// yet, which a console's task can then be stored in.
+    #[test]
+    fn migrating_a_version_5_database_adds_the_scheduled_tasks() {
+        let path = temp_db("migrate-scheduled-v5");
+        {
+            let conn = Connection::open(&path).expect("version 5 database");
+            conn.execute_batch(PAST_SCHEMAS[4])
+                .expect("version 5 schema");
+            conn.pragma_update(None, "user_version", 5)
+                .expect("version");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
+            conn.execute_batch(
+                "INSERT INTO consoles (id, name, workdir, default_agent, created_at)
+                 VALUES ('console-1', 'Console', '/tmp/console-1', 'claude', 1);",
+            )
+            .expect("a console");
+        }
+
+        let store = Store::open(&path).expect("migrated");
+        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+        assert!(store.get_console("console-1").unwrap().is_some());
+        assert!(store.list_scheduled_tasks().unwrap().is_empty());
+        let task = crate::protocol::ScheduledTask {
+            id: "task-1".to_string(),
+            console_id: "console-1".to_string(),
+            project_id: None,
+            launch: Default::default(),
+            prompt: "Run".to_string(),
+            schedule: crate::protocol::Schedule::Manual,
+            enabled: true,
+            created_at: 1,
+            updated_at: 1,
+            next_run_at: None,
+            last_run_at: None,
+            run_sessions: vec![],
+        };
+        store.insert_scheduled_task(&task).unwrap();
+        assert_eq!(store.list_scheduled_tasks().unwrap(), [task]);
     }
 
     /// Migrating a version 4 database keeps the language its daemon held, which is still the one

@@ -1,0 +1,32 @@
+/* HeroUI's date picker sheet sets its popover's month buttons' chevrons to no rotation, which drops the mirroring its
+   calendar sheet gives them under a right-to-left language and leaves the previous button pointing away from the
+   previous month ("An icon mirrors only when its meaning is a direction", docs/conventions/ui-standard.md, "Text
+   direction"). */
+.date-picker__popover .calendar__nav-button-icon:where([dir="rtl"] *) {
+  rotate: 180deg;
+}
+
+/* A required time or date field is marked for assistive technology only (`aria-required` on its segments, which HeroUI
+   sets from `isRequired`): HeroUI also draws an asterisk after the label of a field marked `data-required`, and the
+   application draws no mark on a required field. */
+:is([data-slot="time-field"], [data-slot="date-picker"])[data-required="true"] > .label::after {
+  content: none;
+}
+
+/* HeroUI dims a disabled time or date field twice: the whole group by `--disabled-opacity`, and then each of its
+   segments (and its calendar button) again. A text field or a select dims once, so the segments and the button of a
+   disabled group keep full strength inside the group's own dimming and the field reads as dim as the ones beside it. */
+.date-input-group[data-disabled="true"] .date-input-group__segment[data-disabled="true"],
+.date-input-group[data-disabled="true"] .date-picker__trigger {
+  opacity: 1;
+}
+
+/* The segments' container is as wide as its content, which in a narrow field and a long localized date (Korean "2026.11.27.
+   오전 10:00") runs past the group and under the calendar button. It shrinks to the room the group leaves and scrolls
+   sideways inside it instead, with no bar, as HeroUI's own `date-input-group__input-container` does. */
+.date-input-group__input {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: clip;
+  scrollbar-width: none;
+}

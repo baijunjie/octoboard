@@ -2,12 +2,14 @@ import React, { useEffect, useId, useRef, useState } from "react";
 
 import { PasteButton } from "../components/controls/PasteButton";
 import { useDialogAction } from "../components/dialog/dialogHooks";
+import { useUnsavedChanges } from "../components/dialog/UnsavedChanges";
 import { TextInput } from "../components/form/TextInput";
+import { useFocusFirstInvalid, useValidationMarks } from "../components/form/useValidationMarks";
 import { InlineReference } from "../i18n/InlineReference";
 import { Message, useT } from "../i18n/react";
 import type { RemoteDaemonAuth, RemoteDaemonEntry, RemoteDaemonEntryInput } from "../platform";
 import { Button, Radio, RadioGroup } from "../primitives";
-import { FormCard } from "./FormCard";
+import { FormCard } from "../components/card/FormCard";
 import { parseConnectionDetails } from "./connectionDetails";
 import { DEFAULT_SSH_PORT, parsePort } from "./port";
 
@@ -72,7 +74,9 @@ function differs(key: keyof Fields, left: Fields, right: Fields): boolean {
  * draft of the fields the user changed, over what `entry` holds, so a field the user has not touched follows the saved
  * entry (the shell pins the host key itself, and the path of `octoboardd` is saved from a question), and a field whose
  * draft the saved entry comes to equal follows it again. Save is available while the draft would save something other
- * than the entry holds; Revert drops the draft (Cancel, for a new entry, leaves it: `onCancel`). A field says what is
+ * than the entry holds; Revert drops the draft (Cancel, for a new entry, leaves it: `onCancel`); neither asks, each being the
+ * user's own discard. While the draft would save something, the form is held by the window's guard
+ * (`useUnsavedChanges`), so leaving the page by any other way asks first. A field says what is
  * wrong with it once it was edited and left, never merely because another control changed; a Save pressed with
  * something invalid saves nothing, says it of every invalid field and moves focus to the first. A blank name is saved
  * as the host. Connection details `octoboardd connection` printed on the server, pasted into the first field, fill the
@@ -97,24 +101,15 @@ export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }:
   const [details, setDetails] = useState("");
   // The fields that were edited and then left, which say what is wrong with them; and a Save pressed on a form that was
   // not valid, which says it of every field. Nothing says it of a field merely because another control changed.
-  const [left, setLeft] = useState<ReadonlySet<string>>(new Set());
-  const [edited, setEdited] = useState<ReadonlySet<string>>(new Set());
-  const [attempted, setAttempted] = useState(false);
+  const marks = useValidationMarks();
   const formRef = useRef<HTMLFormElement>(null);
-  const [focusInvalid, setFocusInvalid] = useState(0);
+  useFocusFirstInvalid(formRef, marks.attempts);
   const { busy, run } = useDialogAction(undefined, t("remoteDaemons.form.saveFailedTitle"));
   const fields: Fields = { ...saved, ...draft };
   const change = (patch: Partial<Fields>) => {
     setDraft((current) => ({ ...current, ...patch }));
-    setEdited((current) => new Set([...current, ...Object.keys(patch)]));
+    marks.edit(Object.keys(patch));
   };
-  const leave = (field: string) => {
-    if (edited.has(field)) setLeft((current) => new Set([...current, field]));
-  };
-  // A Save that found something wrong moves focus to the first invalid field, once it has been marked.
-  useEffect(() => {
-    if (focusInvalid > 0) formRef.current?.querySelector<HTMLElement>("[aria-invalid=true]")?.focus();
-  }, [focusInvalid]);
   // A field whose saved value changed to what its draft holds (the draft was saved, or the shell made the same change)
   // follows the entry again. A field whose saved value did not change keeps its draft, whatever else made the entry a
   // new object (an unrelated reload), so what is being typed is never overwritten.
@@ -138,12 +133,11 @@ export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }:
   const detailsInvalid = !!details.trim() && !parseConnectionDetails(details);
   const detailsError = detailsInvalid ? t("remoteDaemons.form.details.invalid", { command: CONNECTION_COMMAND }) : undefined;
   const valid = !detailsError && !hostError && !portError && !userError && !keyPathError;
-  const showError = (field: string, message: string | undefined) => (attempted || left.has(field) ? message : undefined);
   const example = (value: string) => t("common.example", { example: value });
 
   const changeDetails = (text: string) => {
     setDetails(text);
-    setEdited((current) => new Set([...current, "details"]));
+    marks.edit(["details"]);
     const parsed = parseConnectionDetails(text);
     if (!parsed) return;
     change({
@@ -160,9 +154,7 @@ export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }:
   // What was edited and left, or attempted, belongs to the draft: it goes with it, and with what a save has made of it.
   const forgetMarks = () => {
     setDetails("");
-    setEdited(new Set());
-    setLeft(new Set());
-    setAttempted(false);
+    marks.forget();
   };
   const revert = () => {
     setDraft({});
@@ -171,14 +163,13 @@ export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }:
   // A pasted text is as good as an edited and left field: what is not connection details says so at once.
   const pasteDetails = (text: string) => {
     changeDetails(text.trim());
-    setLeft((current) => new Set([...current, "details"]));
+    marks.markLeft("details");
   };
 
   const submit = () => {
     if (!dirty || busy) return;
     if (!valid || portNumber === undefined) {
-      setAttempted(true);
-      setFocusInvalid((count) => count + 1);
+      marks.attempt();
       return;
     }
     void run(async () => {
@@ -197,6 +188,9 @@ export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }:
     });
   };
 
+  // Held by the window's guard while it has changes that are not saved, so that leaving the page asks first.
+  useUnsavedChanges({ unsaved: dirty, saving: busy, discard: revert });
+
   return (
     <form
       ref={formRef}
@@ -214,9 +208,9 @@ export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }:
           placeholder={example(EXAMPLES.details)}
           description={<Message id="remoteDaemons.form.details.description" params={{ command: <InlineReference monospace>{CONNECTION_COMMAND}</InlineReference> }} />}
           dir="ltr"
-          errorMessage={showError("details", detailsError) && <Message id="remoteDaemons.form.details.invalid" params={{ command: <InlineReference monospace>{CONNECTION_COMMAND}</InlineReference> }} />}
+          errorMessage={marks.shown("details", detailsError) && <Message id="remoteDaemons.form.details.invalid" params={{ command: <InlineReference monospace>{CONNECTION_COMMAND}</InlineReference> }} />}
           autoFocus={autoFocus}
-          onBlur={() => leave("details")}
+          onBlur={() => marks.leave("details")}
           trailing={<PasteButton variant="secondary" besideField focusOnPress={false} failedText={t("remoteDaemons.form.details.pasteFailedTitle")} onPaste={pasteDetails} />}
         />
         <TextInput label={t("remoteDaemons.form.name")} value={fields.name} onChange={(name) => change({ name })} placeholder={t("remoteDaemons.form.name.placeholder")} />
@@ -224,13 +218,13 @@ export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }:
             not; the row mirrors in right-to-left like any row of controls, the fields' own text staying left to right. */}
         <div className="flex flex-col gap-5 @md:flex-row">
           <div className="min-w-0 @md:w-40 @md:shrink-0">
-            <TextInput label={t("remoteDaemons.form.user")} value={fields.user} onChange={(user) => change({ user })} placeholder={example(EXAMPLES.user)} dir="ltr" errorMessage={showError("user", userError)} onBlur={() => leave("user")} />
+            <TextInput label={t("remoteDaemons.form.user")} value={fields.user} onChange={(user) => change({ user })} placeholder={example(EXAMPLES.user)} dir="ltr" errorMessage={marks.shown("user", userError)} onBlur={() => marks.leave("user")} />
           </div>
           <div className="min-w-0 flex-1">
-            <TextInput label={t("remoteDaemons.form.host")} value={fields.host} onChange={(host) => change({ host })} placeholder={example(EXAMPLES.host)} dir="ltr" errorMessage={showError("host", hostError)} onBlur={() => leave("host")} />
+            <TextInput label={t("remoteDaemons.form.host")} value={fields.host} onChange={(host) => change({ host })} placeholder={example(EXAMPLES.host)} dir="ltr" errorMessage={marks.shown("host", hostError)} onBlur={() => marks.leave("host")} />
           </div>
           <div className="@md:w-28 @md:shrink-0">
-            <TextInput label={t("remoteDaemons.form.port")} value={fields.port} onChange={(port) => change({ port })} placeholder={example(EXAMPLES.port)} dir="ltr" errorMessage={showError("port", portError)} onBlur={() => leave("port")} />
+            <TextInput label={t("remoteDaemons.form.port")} value={fields.port} onChange={(port) => change({ port })} placeholder={example(EXAMPLES.port)} dir="ltr" errorMessage={marks.shown("port", portError)} onBlur={() => marks.leave("port")} />
           </div>
         </div>
       </FormCard>
@@ -250,7 +244,7 @@ export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }:
             placeholder={example(EXAMPLES.keyPath)}
             description={<Message id="remoteDaemons.form.keyPath.description" params={{ tilde: <InlineReference monospace>~</InlineReference> }} />}
             dir="ltr"
-            errorMessage={showError("keyPath", keyPathError)} onBlur={() => leave("keyPath")}
+            errorMessage={marks.shown("keyPath", keyPathError)} onBlur={() => marks.leave("keyPath")}
           />
         )}
       </FormCard>
@@ -285,7 +279,7 @@ export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }:
           {t("common.save")}
         </Button>
         {onCancel ? (
-          <Button type="button" size="sm" variant="secondary" focusOnPress={false} onPress={onCancel}>{t("common.cancel")}</Button>
+          <Button type="button" size="sm" variant="secondary" focusOnPress={false} disabled={busy} onPress={onCancel}>{t("common.cancel")}</Button>
         ) : (
           <Button type="button" size="sm" variant="secondary" focusOnPress={false} disabled={!dirty || busy} onPress={revert}>{t("remoteDaemons.form.revert")}</Button>
         )}

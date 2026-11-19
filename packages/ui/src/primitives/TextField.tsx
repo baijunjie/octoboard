@@ -42,9 +42,8 @@ export function TextField({ value, onChange, onBlur, label, describedBy, disable
   /** Draws the input as a value to read (`LOCKED_FIELD_CLASS`), for a field that is `readOnly` because the form it is in
    * is locked rather than because the field never takes an edit. */
   locked?: boolean;
-  /** What the input takes, where it is not plain text: a date, a time or a local date and time pick by the system's own
-   * control. */
-  type?: "text" | "password" | "date" | "time" | "datetime-local";
+  /** What the input takes, where it is not plain text. */
+  type?: "text" | "password";
   /** The keyboard a touch device offers: `decimal` for a number typed as text. */
   inputMode?: "decimal";
 }): React.ReactElement {

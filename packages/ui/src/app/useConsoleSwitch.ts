@@ -15,7 +15,8 @@ import { useDaemon } from "../store";
  * previewing sidebar, once the press is over (`followUp`). A selection or an owner the user sets
  * meanwhile goes through `setSelectionByUser` and `setOwnerByUser`, which settle what the press holds.
  * `ready` is whether the first snapshot has arrived: before it, an owner the store does not hold yet
- * is not gone.
+ * is not gone. Making a console current is a way of leaving a page with a form that holds changes not saved, so it goes
+ * through `leavePage` whole (the console already current included, the rail's avatar of it leaving the page).
  */
 export function useConsoleSwitch({
   ready,
@@ -28,6 +29,7 @@ export function useConsoleSwitch({
   asideOwner,
   setAsideOwner,
   setArchiveScopeByUser,
+  leavePage,
 }: {
   ready: boolean;
   projects: ReadonlyMap<string, Project>;
@@ -42,6 +44,9 @@ export function useConsoleSwitch({
   setAsideOwner: (owner: AsideOwner | undefined) => void;
   /** Changes what the archive view shows or closes it, as a move the user made (`useArchiveView`). */
   setArchiveScopeByUser: (scope: ArchiveScope | undefined) => void;
+  /** Runs `go` as a way of leaving the page that shows, after the question about changes not saved where there are any
+   * (`App`'s `leavePage`). */
+  leavePage: (go: () => void) => void;
 }) {
   const { store } = useDaemon();
   // An owner that is gone leaves no aside, and is not brought back by anything that appears later.
@@ -84,12 +89,13 @@ export function useConsoleSwitch({
   };
   /** Makes a console current by a press on the rail, or a console this window created: the terminal
    * and the aside go with it, and an open archive view gives way. */
-  const switchConsole = (consoleId: string) => {
+  const switchNow = useStableHandler((consoleId: string) => {
     if (consoleId === currentConsoleId) return;
     selectConsole(consoleId);
     setArchiveScopeByUser(undefined);
     showLastSession(consoleId, { selection: true, owner: true });
-  };
+  });
+  const switchConsole = (consoleId: string) => leavePage(() => switchNow(consoleId));
   const stableSwitchConsole = useStableHandler(switchConsole);
   return { followUp, setOwnerByUser, setSelectionByUser, switchConsole, stableSwitchConsole };
 }

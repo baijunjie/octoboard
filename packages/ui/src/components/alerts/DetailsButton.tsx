@@ -14,7 +14,8 @@ export const DETAILS_POPOVER = "[data-details-popover]";
  * closes and gives focus back from. It holds the further explanation in the application's own words, then
  * the raw text that was not written for the reader; the sentence saying what happened and the main remedy
  * are never behind it. The button takes the Alert's status colour (`AlertButton`), and the popover's text
- * keeps the muted small style of the Alert it belongs to. */
+ * keeps the muted small style of the Alert it belongs to. It is as wide as its text asks, up to 24rem and never wider
+ * than the window less the popover's 12px of collision padding on each side. */
 export function DetailsButton({ children }: { children: React.ReactNode }): React.ReactElement {
   const t = useT();
   const label = t("error.details");
@@ -25,7 +26,7 @@ export function DetailsButton({ children }: { children: React.ReactNode }): Reac
       <PopoverContent
         placement="bottom end"
         label={label}
-        className="control-fills max-w-96"
+        className="control-fills max-w-[min(24rem,calc(100vw-1.5rem))]"
         dialogClassName="flex flex-col gap-2 p-3 text-sm text-app-muted [overflow-wrap:anywhere]"
         data-details-popover=""
         {...owner}

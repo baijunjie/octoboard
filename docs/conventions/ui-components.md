@@ -192,7 +192,9 @@ use `InlineReference`").
   alone: a free-text area and the tags input.
 - **A message about one field's value shows under that field as `TextInput`'s `errorMessage`, from the first submit
   on**, computed each render and passed through `useSubmitValidation` (`shown`, `attempt`); gate the submit on what
-  `attempt` answers. A failure after the submit passed, a daemon refusal included, opens the error alert instead.
+  `attempt` answers. A failure after the submit passed, a daemon refusal included, opens the error alert instead. A
+  page form (Remote devices, Scheduled tasks) stays open while the user works through it, so its message also shows
+  once its field was edited and left.
 - **A field marked invalid by hand keeps `validationBehavior="aria"` and renders its message through
   `FieldErrorMessage`** (`role="alert"` on its own element inside `FieldError`; never `role` on `FieldError`, which
   react-aria drops). `native` validation locks the dialog out of submitting. A `SearchField` takes that message through
@@ -202,6 +204,13 @@ use `InlineReference`").
   changed, with their `base_versions`.** Two clients changing different fields then do not conflict; a field the store
   moved past is put back to the current value and, if the user had edited it, announced through
   `ChangedElsewhereAnnouncer`.
+- **A form over a record that changes under it, and that has no `useCheckedEdit`, keeps the user's edits over a base**,
+  as the scheduled task form does (`scheduledTasks/taskDraft.ts`): the base is the stored record overlaid with what this
+  form's unsettled save sent; an edit equal to the base is not an edit; a refused save puts its parts back as edits; a
+  save is settled when the stored record's version is at or past its reply's, so the record carries a version that
+  grows with every stored change. Not: deciding what is an edit by comparing the draft with the record's previous and
+  new values, or by flags for a save in flight. The model is a pure function, tested over the orders a reply, its
+  broadcast and the user's edits can arrive in.
 - **An option's note may follow its own state and the options above it, never an option below.** Narrow the earlier
   option instead; hiding or disabling an option because of one above is fine.
 - **An input's placeholder follows `docs/conventions/ui-standard.md`, "Input placeholders"**, which beats the

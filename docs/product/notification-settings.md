@@ -2,8 +2,9 @@
 
 Settings' **Notifications** section (see "Notifications" in `docs/product/settings.md`): whether Octoboard may show a
 system notification when a session starts waiting for the user (see "The raised hand" in
-`docs/product/session-statuses.md`), together with the rail's **Turn on notifications** button, which asks a browser the
-same thing.
+`docs/product/session-statuses.md`) and when a scheduled task's run fails to start its session (see "The notification
+of a failed run" in `docs/product/scheduled-tasks.md`), together with the rail's **Turn on notifications** button, which
+asks a browser the same thing.
 
 ## What the Notifications row shows
 

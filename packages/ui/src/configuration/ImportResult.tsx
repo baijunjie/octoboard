@@ -11,7 +11,7 @@ import type { Agent, DirectoryChoiceKind, ImportedAccounts, ImportFailure } from
 import type { Overrides } from "../shortcuts/store";
 import { AgentCardSections, AgentSettingsCard, useAgentSettingLines } from "./AgentSettingsCard";
 import type { ClientSettingValue } from "./clientSettings";
-import { useFailureNode } from "./failureText";
+import { useFailureNode } from "../components/alerts/failureNode";
 import { accountsOutcomeOf, cardAgents, outcomeOf } from "./importPlan";
 import { FlatCard } from "../components/card/FlatCard";
 import { CompositeLine, EmptyLine, NamedValue, SettingLine, ToneLine } from "./importParts";

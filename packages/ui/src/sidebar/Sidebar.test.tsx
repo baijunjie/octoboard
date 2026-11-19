@@ -327,6 +327,7 @@ function mountPeeking() {
         hoverOpensSidebar
         remoteDevicesShown={false}
         onOpenRemoteDevices={() => {}}
+        onOpenScheduledTasks={() => {}}
         onOpenDialog={vi.fn()}
         onSelectSession={vi.fn()}
         onOpenArchive={vi.fn()}
@@ -489,7 +490,7 @@ it("switches focused console sessions immediately and fades up when switching co
   expect(currentName()).toBe(`${isolate("Hub 2")}, Done`);
   expect(animate).not.toHaveBeenCalled();
 
-  render({ focus, devices: { label: "Remote devices", content: <div /> } });
+  render({ focus, page: { label: "Remote devices", content: <div /> } });
   expect(container.querySelector("nav")?.getAttribute("aria-label")).toBe("Remote devices");
   expectEntryFrom("translateX(calc(-1 * var(--view-shift)))");
   render({ focus });

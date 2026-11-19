@@ -1,6 +1,6 @@
 import { useRef } from "react";
 
-import { focusLanding, focusLandingWithoutText, focusTopBar } from "../components/focus/regionFocus";
+import { focusLanding, focusLandingWithoutText, focusTopBar, TASKS_REGION } from "../components/focus/regionFocus";
 import type { TerminalPaneHandle } from "../terminal/TerminalPane";
 import { interactionIsTouch } from "../input/lastInput";
 import type { WelcomeScreenHandle } from "../WelcomeScreen";
@@ -29,8 +29,9 @@ export function useTerminalFocus() {
   // so focus still never falls to `<body>` from what is going away.
   const focusTerminal = () => {
     const touch = interactionIsTouch();
-    // The Remote devices page, while it shows, takes the place of the terminal and of what focus meant for it goes to.
-    const devicesPage = document.querySelector<HTMLElement>("[data-region=devices]");
+    // The Remote devices or Scheduled tasks page, while it shows, takes the place of the terminal and of what focus meant
+    // for it goes to.
+    const devicesPage = document.querySelector<HTMLElement>(`[data-region=devices], [data-region=${TASKS_REGION}]`);
     if (devicesPage && (touch ? focusLandingWithoutText : focusLanding)(devicesPage)) return;
     const areaInert = agentAreaRef.current?.hasAttribute("inert");
     const covering = areaInert ? document.querySelector("[data-panel-maximized], [data-floating-panel] [data-panel-card]") : null;

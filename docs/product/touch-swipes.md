@@ -53,8 +53,9 @@ them.
 
 A swipe opens and closes these as their toggles do, so the sidebar overlay and a floating panel are still never on
 screen together. With no console (the welcome screen, see `docs/product/welcome-screen.md`) there is neither a sidebar
-overlay nor a right pane, so no swipe does anything, unless the Remote devices page shows, whose sidebar overlay swipes
-open and close as a console's does (see `docs/product/remote-devices-page.md`).
+overlay nor a right pane, so no swipe does anything, unless a page of the window shows, whose sidebar overlay swipes
+open and close as a console's does (see `docs/product/scheduled-tasks-page.md` and
+`docs/product/remote-devices-page.md`).
 
 ## Keyboard focus after a swipe
 

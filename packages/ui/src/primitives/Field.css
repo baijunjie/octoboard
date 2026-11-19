@@ -16,12 +16,15 @@
   }
 }
 
-/* A search field is as tall as a text field beside it. HeroUI fixes the search field's group at 36px, while its
-   input takes its height from its text: 36px from 768px (the project's `sm`) up, and 40px below, where the text grows to 16px so a phone
-   does not zoom into it. Sized by its input the same way, the group matches at every width. In the components layer,
-   after HeroUI's rule, so a caller's own height utility (a menu's filter row) still wins. */
+/* A search, number, time or date field is as tall as a text field or a select beside it. HeroUI fixes these fields'
+   groups at 36px, while their inputs take their height from their text: 36px from 768px (the project's `sm`) up, and
+   40px below, where the text grows to 16px so a phone does not zoom into it. Sized by its input the same way, the group
+   matches at every width. In the components layer, after HeroUI's rule, so a caller's own height utility (a menu's
+   filter row) still wins. */
 @layer components {
-  .search-field__group {
+  .search-field__group,
+  .number-field__group,
+  .date-input-group {
     height: auto;
   }
 }

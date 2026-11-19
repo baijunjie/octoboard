@@ -297,8 +297,12 @@ menu and no `Cmd+Q`: it is
 quit through the notification-area icon's quit entry, or by closing the window while keeping it running in the
 background is off. The difference is the escape hatch in "Quitting when the window has stopped responding" below, which
 the close gestures have no part in. The system logging out, restarting or shutting down is not one of these quits and
-never asks (see "When the system ends the session" below). Nothing below asks while the window shows a daemon of
-another version (see "A daemon of another version" above).
+never asks (see "When the system ends the session" below).
+
+**While a page form of the main window holds changes not saved, a quit first asks whether to discard them**, before
+anything below, bringing the window forward to ask; Keep editing ends the quit there (see
+`docs/product/leaving-a-form-with-unsaved-changes.md`). Nothing below asks while the window shows a daemon of another
+version (see "A daemon of another version" above).
 
 - **While any session is *starting*, *working*, *waiting for the user*, *dormant* or *working in background*, quitting
   asks for confirmation.** One working in background counts because the quit would also end the work it left running
@@ -417,6 +421,8 @@ over to the new version**, which takes them over running, with their screens exa
 screen can reproduce them (see "The screen of a terminal handed over" in `docs/product/process-holders.md`). No session
 is interrupted, no preview is frozen, and nothing a session started is stopped.
 
+- **Changes not saved come first.** While a page form holds changes not saved, a restart first asks whether to discard
+  them, as a quit does (see "Quitting" above); Keep editing ends the restart there, the update staying installed.
 - **What it would not carry over.** Before every restart, the window asks the daemon which running sessions and shell
   terminals the new version would not take over, giving it the update's holder floor and the update's version (see
   "Where updates come from" in `docs/product/in-app-updates.md`): the new version takes over the process holders whose
@@ -487,8 +493,10 @@ that could not start (see "One Octoboard at a time" above), the error alert that
 "Starting up" above) and the screen for a daemon of another version (see "A daemon of another version" above). Each
 takes the restart above, except that:
 
-- **It restarts at once and asks nothing.** There is no daemon the window can ask what the restart would not carry over
-  — it is gone, or is not talked to — so there is no such check and no confirmation, whatever is running.
+- **It restarts at once and asks nothing about what is running.** There is no daemon the window can ask what the
+  restart would not carry over — it is gone, or is not talked to — so there is no such check and no confirmation,
+  whatever is running. Changes not saved in a page form are still asked about first, the window brought forward to ask
+  (see `docs/product/leaving-a-form-with-unsaved-changes.md`).
 - **The window asks no daemon for a planned stop.** The application stops a daemon still running itself, as above, with
   the planned-stop request it sends directly after 2 seconds, so that daemon leaves its sessions and shell terminals
   running in their process holders; a daemon that exited has already left them there. The new launch's daemon takes

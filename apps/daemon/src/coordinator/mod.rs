@@ -23,6 +23,8 @@
 //! - [`accounts`], [`settings`]: the accounts and the agent list, and the settings.
 //! - [`processes`]: the process trees a client lists, stops or keeps, and an archive's
 //!   confirmation lists.
+//! - [`scheduled_tasks`]: the scheduled tasks a client lists, creates, changes, turns on and off,
+//!   deletes and runs now, with each one's next run and runs; the scheduler that runs them when due.
 //! - [`messages`], [`pages`]: the user's own message into a session; the report panel's page list
 //!   and form submission, withdrawing a new worker's pages and the sweep of stray ones at start-up.
 //! - [`memory`]: a console's and a place's memory, its entry rules and the requests on it, which
@@ -76,6 +78,7 @@ pub mod remote_access;
 pub mod restart;
 pub mod resume;
 pub mod resume_on_start;
+pub mod scheduled_tasks;
 pub mod settings;
 #[cfg(test)]
 mod test_support;
@@ -132,6 +135,11 @@ use projects::{
     update_project_checked, AddProjectRequest, NewProjectSettings, ProjectChanges,
 };
 use resume::{locate_conversation, resume_session};
+use scheduled_tasks::{
+    create_scheduled_task, delete_scheduled_task, list_scheduled_task_runs, list_scheduled_tasks,
+    run_scheduled_task, set_scheduled_task_enabled, update_scheduled_task, NewScheduledTask,
+    ScheduledTaskChanges,
+};
 use settings::{set_provider_setting, update_settings_checked, SettingsChanges};
 use validate::{absolute_path, required_text};
 
@@ -1081,6 +1089,72 @@ async fn handle_inner(
         RequestBody::DeleteOrphanedMemories => {
             memory::requests::delete_all_orphaned(state)?;
             Ok(None)
+        }
+
+        RequestBody::ListScheduledTasks => list_scheduled_tasks(state, request_id),
+
+        RequestBody::CreateScheduledTask {
+            console_id,
+            project_id,
+            launch,
+            prompt,
+            schedule,
+            enabled,
+        } => {
+            create_scheduled_task(
+                state,
+                request_id,
+                NewScheduledTask {
+                    console_id,
+                    project_id,
+                    launch,
+                    prompt,
+                    schedule,
+                    enabled,
+                },
+            )
+            .await
+        }
+
+        RequestBody::UpdateScheduledTask {
+            task,
+            console_id,
+            project_id,
+            launch,
+            prompt,
+            schedule,
+        } => {
+            update_scheduled_task(
+                state,
+                request_id,
+                &task,
+                ScheduledTaskChanges {
+                    console_id,
+                    project_id,
+                    launch,
+                    prompt,
+                    schedule,
+                },
+            )
+            .await
+        }
+
+        RequestBody::SetScheduledTaskEnabled { task, enabled } => {
+            set_scheduled_task_enabled(state, request_id, &task, enabled)
+        }
+
+        RequestBody::DeleteScheduledTask { task } => {
+            delete_scheduled_task(state, &task)?;
+            Ok(None)
+        }
+
+        RequestBody::RunScheduledTask { task } => {
+            run_scheduled_task(state, &task)?;
+            Ok(None)
+        }
+
+        RequestBody::ListScheduledTaskRuns { task } => {
+            list_scheduled_task_runs(state, request_id, &task)
         }
 
         RequestBody::SubmitPage {

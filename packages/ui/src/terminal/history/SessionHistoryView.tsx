@@ -6,7 +6,7 @@ import { retryableLazy } from "../../components/hooks/retryableLazy";
 import { useHasPainted } from "../../components/motion/useHasPainted";
 import { EmptyPanel } from "../../components/panel/EmptyPanel";
 import { LoadingState } from "../../components/panel/LoadingState";
-import { FadeOverflow } from "../../components/text/FadeOverflow";
+import { InlineSessionLink } from "../../components/text/InlineSessionLink";
 import { PaneFailure } from "../../components/alerts/PaneFailure";
 import { PaneTitle } from "../../components/panel/PaneTitle";
 import { ArchivedSessionMetadata, SessionContextLabel } from "../../components/status/SessionMetadata";
@@ -17,7 +17,6 @@ import { isolate } from "../../i18n/isolate";
 import { Message as CatalogMessage, useCurrentLanguage, useT } from "../../i18n/react";
 import { usePlatform } from "../../platform/react";
 import type { HistoryMessage, Session } from "../../protocol";
-import { sessionDisplayTitle } from "../../sessions/sessionLabel";
 import { useSession } from "../../store";
 import { useOctoboardTheme } from "../../preferences/theme";
 import { RendererBoundary } from "../../viewer/code/codeRenderer";
@@ -148,32 +147,15 @@ function OwnerLine({
   onSelectSession?: (session: Session) => void;
   restoreFocus: () => void;
 }): React.ReactElement | null {
-  const t = useT();
-  const focus = useFocusVisibleProps();
   const held = useFocusHandoff(restoreFocus);
   const owner = useSession(ownerId);
   if (!owner || !onSelectSession) return null;
-  const title = sessionDisplayTitle(t, owner);
   return (
     <p onFocus={held.onFocus} onBlur={held.onBlur} className="flex min-w-0 whitespace-pre text-xs text-app-muted">
       <CatalogMessage
         id="history.owner"
         params={{
-          owner: (
-            // Not HeroUI's Button: an inline link inside a sentence, whose text flows with the line and
-            // fades in its own label; the Button imposes its own height, padding, press-shrink and
-            // hover fill.
-            <button
-              type="button"
-              {...focus}
-              onClick={() => onSelectSession(owner)}
-              className="min-w-0 cursor-pointer rounded-sm text-(--tint-accent-fg) underline underline-offset-2 outline-none ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus"
-            >
-              <FadeOverflow as="span" className="block min-w-0" dir="auto" titleWhenClipped={title}>
-                {title}
-              </FadeOverflow>
-            </button>
-          ),
+          owner: <InlineSessionLink session={owner} onOpen={onSelectSession} />,
         }}
       />
     </p>

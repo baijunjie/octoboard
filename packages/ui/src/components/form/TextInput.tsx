@@ -1,7 +1,7 @@
 import React from "react";
 
 import { useTrimmedField } from "./useTrimmedField";
-import { FieldErrorMessage } from "./FieldErrorMessage";
+import { FieldErrorMessage, hasErrorMessage } from "./FieldErrorMessage";
 import { FieldRow } from "./FieldRow";
 import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
 import { Input, Label, TextField } from "../../primitives";
@@ -60,7 +60,7 @@ export function TextInput({
 }): React.ReactElement {
   const trimmed = useTrimmedField(value, onChange);
   const field = { ...trimmed, onBlur: () => { trimmed.onBlur(); onBlur?.(); } };
-  const invalid = errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "";
+  const invalid = hasErrorMessage(errorMessage);
   // Dialog fields hold application metadata, so 1Password must not offer identity or login fills.
   // With an adornment the direction is the input group's, so the affix stays on the input's side whatever the UI's
   // direction.

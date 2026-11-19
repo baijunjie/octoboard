@@ -19,6 +19,7 @@ import { createLifecycleReplies } from "./fixtureLifecycle";
 import { createMemoryReplies } from "./fixtureMemory";
 import { createProcessLedger, createProcessReplies } from "./fixtureProcesses";
 import { createProjectReplies } from "./fixtureProjects";
+import { createScheduledTaskReplies, createScheduledTaskRunListeners } from "./fixtureScheduledTasks";
 import { createSessionReplies } from "./fixtureSessions";
 import { createSettingsReplies, keepProviderSettingsInEffect } from "./fixtureSettings";
 
@@ -102,8 +103,10 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
   const memory = createMemoryReplies(context, memoryListeners.deliver);
   const guards = createAccountGuards(context);
   const ledger = createProcessLedger(context);
+  const sessionReplies = createSessionReplies(context, guards, ledger);
+  const scheduledRuns = createScheduledTaskRunListeners();
   const replies = mergeHandlers(
-    createSessionReplies(context, guards, ledger),
+    sessionReplies,
     createConsoleReplies(context),
     createAccountReplies(context),
     createAgentCliReplies(context),
@@ -113,6 +116,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     createProcessReplies(context, ledger),
     createLifecycleReplies(context),
     memory.replies,
+    createScheduledTaskReplies(context, sessionReplies.open_session!, scheduledRuns.deliver),
   );
 
   return {
@@ -151,6 +155,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     onImportProgress: importProgress.subscribe,
     onContentSearch: contentSearches.subscribe,
     onMemoryChange: memoryListeners.subscribe,
+    onScheduledTaskRun: scheduledRuns.subscribe,
     dismissTrustPrompt: (session) =>
       store.setState((state) => ({ trustPrompts: state.trustPrompts.filter((p) => p.session !== session) })),
     reconnect: () => {},

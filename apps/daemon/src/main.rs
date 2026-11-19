@@ -526,6 +526,9 @@ async fn run_daemon(
     // a holder that could not be linked to may run a session no record places: then both wait
     // until it is linked to or gone.
     coordinator::unlinked::start_resume_and_reconcile(&state);
+    // After the adoption above, so a catch-up launch does not race the start-up; it ends with
+    // either kind of stop, leaving what comes due then to the next daemon.
+    coordinator::scheduled_tasks::scheduler::spawn(&state);
     // Probed once before the server starts answering, on a blocking thread (it may wait on the
     // host's bus, which the probe itself bounds), so that a snapshot only reads the answer kept.
     let _ = tokio::task::spawn_blocking(platform::sleep::available).await;

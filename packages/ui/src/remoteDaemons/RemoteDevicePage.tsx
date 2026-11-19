@@ -14,7 +14,7 @@ import { ringForAutomaticFocus } from "../input/lastInput";
 import { Button } from "../primitives";
 import { SettingRow } from "../settings/SettingRow";
 import { CONNECTION_STATE_WORDS, connectionState } from "./connectionState";
-import { FormCard } from "./FormCard";
+import { FormCard } from "../components/card/FormCard";
 import { RemoteDaemonForm } from "./RemoteDaemonForm";
 import { useRemoteDevices } from "./RemoteDevices";
 
@@ -23,7 +23,8 @@ import { useRemoteDevices } from "./RemoteDevices";
  * with its name, how it is connected, where it connects to and Connect (Open once it is connected), and Remove, the one
  * destructive action, in a row of its own at the bottom; or a new device's blank form, titled Add remote daemon; or,
  * with none saved, the empty state alone, centred. Nothing but the frame is drawn until the list has been read.
- * Switching to another device drops what was changed and not saved, without asking. A connected daemon opens in a
+ * Switching to another device asks first when the form holds changes not saved (`useUnsavedChanges`), and drops them once
+ * the user discards. A connected daemon opens in a
  * window of its own and this page stays as it is. Opening the page moves focus into it, once the list is read and no
  * dialog or drawer is in front.
  */

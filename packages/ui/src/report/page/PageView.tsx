@@ -16,10 +16,11 @@ import {
 } from "./formModel";
 
 /** Where Enter, pressed in a single-line field, submits: the fields a form's implicit submission is for. */
-const SUBMITTING_FIELDS = "input:is(:not([type]), [type=text], [type=date], [type=time], [type=datetime-local])";
+const SUBMITTING_FIELDS = "input:is(:not([type]), [type=text]), [role=spinbutton]";
 
-/** What a failed submit puts focus on in a field: its control (a select's trigger is a button). */
-const CONTROLS = "input:not([type=hidden]), textarea, button";
+/** What a failed submit puts focus on in a field: its control (a select's trigger is a button, a date or time field's
+ * first control is its first segment). */
+const CONTROLS = "input:not([type=hidden]), textarea, button, [role=spinbutton]";
 
 /**
  * One page's content as a form. The values the user edits are held by the owner, which passes them as `draft` (the
@@ -143,7 +144,8 @@ export function PageView({ content, submission, history, pending, pressed, draft
         ref={formRef}
         noValidate
         onSubmit={(event) => event.preventDefault()}
-        onKeyDown={(event) => {
+        // In the capture phase, which a date or time segment's own Enter handling (it stops the key) never reaches past.
+        onKeyDownCapture={(event) => {
           if (event.key !== "Enter" || event.nativeEvent.isComposing || !(event.target instanceof HTMLElement) || !event.target.matches(SUBMITTING_FIELDS)) return;
           // As a browser's form does: Enter in a field presses the form's first submit button.
           const submit = [...walkComponents(content.body)].find((component) => component.type === "submit" && isShown(component));

@@ -4250,6 +4250,164 @@
         {
           "type": "object",
           "properties": {
+            "type": {
+              "type": "string",
+              "const": "list_scheduled_tasks"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "Every scheduled task. Answered with `scheduled_tasks_listed`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "console_id": {
+              "type": "string"
+            },
+            "project_id": {
+              "type": "string",
+              "description": "Absent makes a task that starts a console session of `console_id`; a project must be\none of that console's."
+            },
+            "launch": {
+              "$ref": "#/$defs/ScheduledTaskLaunch",
+              "description": "Absent is every launch setting left to its default."
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "schedule": {
+              "$ref": "#/$defs/Schedule"
+            },
+            "enabled": {
+              "type": "boolean",
+              "description": "Absent is true. A task created with false has no next run until it is turned on."
+            },
+            "type": {
+              "type": "string",
+              "const": "create_scheduled_task"
+            }
+          },
+          "required": [
+            "type",
+            "console_id",
+            "prompt",
+            "schedule"
+          ],
+          "description": "Creates a scheduled task and answers `scheduled_task_saved`. See \"Scheduled tasks\" in\n`apps/daemon/PROTOCOL.md` for what is refused."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string"
+            },
+            "console_id": {
+              "type": "string",
+              "description": "Present moves the task to that console; its project stays only when `project_id` is\nabsent and the project belongs to the new console, else `unknown_project`."
+            },
+            "project_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Absent leaves the project alone; an explicit `null` makes a console task; a value makes\na task of that project, which must belong to the resulting console."
+            },
+            "launch": {
+              "$ref": "#/$defs/ScheduledTaskLaunch"
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "schedule": {
+              "$ref": "#/$defs/Schedule"
+            },
+            "type": {
+              "type": "string",
+              "const": "update_scheduled_task"
+            }
+          },
+          "required": [
+            "type",
+            "task"
+          ],
+          "description": "Changes a scheduled task and answers `scheduled_task_saved`. A field left out is left\nalone; `launch` replaces the task's launch settings whole."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "set_scheduled_task_enabled"
+            }
+          },
+          "required": [
+            "type",
+            "task",
+            "enabled"
+          ],
+          "description": "Turns a scheduled task on or off and answers `scheduled_task_saved`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "delete_scheduled_task"
+            }
+          },
+          "required": [
+            "type",
+            "task"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "run_scheduled_task"
+            }
+          },
+          "required": [
+            "type",
+            "task"
+          ],
+          "description": "Runs a scheduled task once now, whatever its schedule and whether it is enabled, and\nanswers `ack` once the task is found; the run itself is announced with\n`scheduled_task_run_added` once its launch has settled."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "list_scheduled_task_runs"
+            }
+          },
+          "required": [
+            "type",
+            "task"
+          ],
+          "description": "A scheduled task's kept runs. Answered with `scheduled_task_runs_listed`."
+        },
+        {
+          "type": "object",
+          "properties": {
             "project": {
               "type": "string"
             },
@@ -4330,6 +4488,190 @@
           "description": "Asks which running sessions and shell terminals a planned stop followed by a daemon that\nadopts holders from `holder_floor` up to `target_version` (the next daemon's own, both\ninclusive) would not carry over, so that they would end up interrupted or closed.\n`holder_floor` is the oldest holder version the next daemon adopts; either is `null` when\nthe caller does not know it, which counts every one and answers `known: false`. Answered\nwith `handover_check`; never refused."
         }
       ]
+    },
+    "Schedule": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "run_at": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "kind": {
+              "type": "string",
+              "const": "once"
+            }
+          },
+          "required": [
+            "kind",
+            "run_at"
+          ],
+          "description": "Once, at the instant `run_at`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "minute": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "kind": {
+              "type": "string",
+              "const": "hourly"
+            }
+          },
+          "required": [
+            "kind",
+            "minute"
+          ],
+          "description": "Every hour, at `minute` past it (0 to 59)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "kind": {
+              "type": "string",
+              "const": "daily"
+            }
+          },
+          "required": [
+            "kind",
+            "time"
+          ],
+          "description": "Every day, at `time`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "kind": {
+              "type": "string",
+              "const": "weekdays"
+            }
+          },
+          "required": [
+            "kind",
+            "time"
+          ],
+          "description": "Monday to Friday, at `time`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "days": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Weekday"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "weekly"
+            }
+          },
+          "required": [
+            "kind",
+            "time",
+            "days"
+          ],
+          "description": "On each of `days`, at `time`; `days` is not empty."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "day": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "kind": {
+              "type": "string",
+              "const": "monthly"
+            }
+          },
+          "required": [
+            "kind",
+            "day",
+            "time"
+          ],
+          "description": "On day `day` of every month (1 to 31), at `time`. A month without that day runs on its last\nday, so 31 is the last day of every month."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "manual"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "Only when run by hand."
+        }
+      ],
+      "description": "When a scheduled task runs, in the local time zone of the daemon's machine."
+    },
+    "ScheduledTaskLaunch": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The started session's title; absent or blank names it as `open_session` does by default."
+        },
+        "agent": {
+          "description": "Absent takes the project's default agent, else the console's, at each run.",
+          "$ref": "#/$defs/Agent"
+        },
+        "account": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The account, by id. Absent leaves the choice to the project's reference, else the\nconsole's, at each run; an explicit `null` chooses the default account."
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Absent inherits the project's (or console's) setting at each run; an explicit `null`\nleaves the choice to the agent; a value pins the model."
+        },
+        "effort": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The reasoning effort, with the rule of `model`."
+        },
+        "compatibility": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "The compatibility switches the session holds its own value for, by setting id; one left\nout follows the project's, else the console's, else the agent's value. Absent in a request\nholds none."
+        },
+        "bound_to": {
+          "type": "string",
+          "description": "The console session a project task's session reports to; absent for none. Ignored for a\nconsole task."
+        }
+      },
+      "description": "The launch settings of a scheduled task's session, with the rules `open_session` gives the same\nfields: each is checked as `open_session` checks it when the task is saved, and read again at\nevery run."
     },
     "SessionBranchKind": {
       "type": "string",
@@ -4534,6 +4876,40 @@
         "dark"
       ],
       "description": "The appearance a client has resolved for its window, sent with a launch so Grok's theme matches\nthe terminal that will show it and so that terminal answers its program's colour queries with\nit until a client reports. It is not stored: a later launch sends its own."
+    },
+    "TimeOfDay": {
+      "type": "object",
+      "properties": {
+        "hour": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "minute": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        }
+      },
+      "required": [
+        "hour",
+        "minute"
+      ],
+      "description": "A wall-clock time of day: `hour` 0 to 23, `minute` 0 to 59."
+    },
+    "Weekday": {
+      "type": "string",
+      "enum": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ]
     }
   }
 }

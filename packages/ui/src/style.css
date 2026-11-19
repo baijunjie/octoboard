@@ -71,6 +71,12 @@
 @import "@heroui/styles/components/textfield.css" layer(components);
 @import "@heroui/styles/components/search-field.css" layer(components);
 @import "@heroui/styles/components/textarea.css" layer(components);
+@import "@heroui/styles/components/calendar.css" layer(components);
+@import "@heroui/styles/components/calendar-year-picker.css" layer(components);
+@import "@heroui/styles/components/date-field.css" layer(components);
+@import "@heroui/styles/components/time-field.css" layer(components);
+@import "@heroui/styles/components/date-input-group.css" layer(components);
+@import "@heroui/styles/components/date-picker.css" layer(components);
 @import "@heroui/styles/components/card.css" layer(components);
 @import "@heroui/styles/components/separator.css" layer(components);
 @import "@heroui/styles/components/surface.css" layer(components);
@@ -95,6 +101,7 @@
 @import "./terminal/history/sessionHistory.css";
 
 @import "./primitives/Field.css";
+@import "./primitives/DatePicker.css";
 @import "./primitives/Badge.css";
 
 @import "./terminal/TerminalSurface.css";
@@ -213,6 +220,16 @@ html {
   border-bottom: var(--hairline-width) solid var(--panel-hairline);
 }
 
+/* The same hairline on the top edge and on the inline-start edge (the side that follows the reading direction), for a
+   divider between stacked or side-by-side parts of a flat card. */
+@utility hairline-t {
+  border-top: var(--hairline-width) solid var(--panel-hairline);
+}
+
+@utility hairline-s {
+  border-inline-start: var(--hairline-width) solid var(--panel-hairline);
+}
+
 /* The edge of a panel card (the floating pane, a drawer): a hairline outline, `--hairline-width`
    wide. It is a shadow, which takes no layout space unlike a border, so the card is exactly its
    box and its headers line up with the docked ones (`--pane-header-height-floating`). It carries
@@ -326,7 +343,7 @@ html {
    the floating fills, while the project pane's keeps the panel's. `--surface` follows `--overlay` for a toast and a
    terminal bar, which HeroUI draws on `--surface`, and for a veil or a key cap drawn from it inside a floating
    surface. */
-:is(.dark, [data-theme="dark"]) :is(.modal__dialog, .alert-dialog__dialog, .dropdown__popover, .select__popover, .combo-box__popover, .popover, .tooltip, .toast, .floating-surface) {
+:is(.dark, [data-theme="dark"]) :is(.modal__dialog, .alert-dialog__dialog, .dropdown__popover, .select__popover, .combo-box__popover, .date-picker__popover, .popover, .tooltip, .toast, .floating-surface) {
   --overlay: var(--floating);
   --surface: var(--floating);
   --surface-secondary: var(--floating-secondary);

@@ -7,7 +7,7 @@ import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
 import { daemonRefusedKey, daemonWsUrl, isLocalDaemon, type DaemonAddress } from "../daemon";
 import { currentLanguage, t } from "../i18n/language";
-import type { Event, ClientRequestBody } from "../protocol";
+import type { Event, ClientRequestBody, ScheduledTaskRun } from "../protocol";
 import { createContentSearchListeners, isContentSearchEvent, type ContentSearchEvent } from "./contentSearchListeners";
 import { createImportProgressListeners, type ImportProgressEvent } from "./importProgressListeners";
 import { createMemoryListeners, isMemoryChangeEvent, type MemoryChangeEvent } from "./memoryListeners";
@@ -48,6 +48,9 @@ export interface Daemon {
    * with memory no project is at, from now on, in the order the daemon wrote them, until the returned unsubscribe is called. Memory is not in the store: what shows it lists it with `list_memories`, again
    * after every `snapshot`, and keeps it by these. */
   onMemoryChange: (listener: (event: MemoryChangeEvent) => void) => () => void;
+  /** Calls `listener` with each run of a scheduled task the daemon records from now on (`scheduled_task_run_added`,
+   * which every window is sent), after the store has taken it, until the returned unsubscribe is called. */
+  onScheduledTaskRun: (listener: (run: ScheduledTaskRun) => void) => () => void;
   /** Drops a trust prompt from the queue, whether it was answered or declined — declining leaves the
    * confirmation for the user in the terminal, and the daemon asks again for it only after a
    * `snapshot`. */
@@ -93,6 +96,7 @@ export function createDaemon(
   const contentSearches = createContentSearchListeners();
   const memoryListeners = createMemoryListeners();
   const notificationListeners = new Set<(notification: WindowNotification) => void>();
+  const runListeners = new Set<(run: ScheduledTaskRun) => void>();
   const pendingNotifications: WindowNotification[] = [];
   const notify = (notification: WindowNotification) => {
     if (!notificationListeners.size) pendingNotifications.push(notification);
@@ -118,6 +122,10 @@ export function createDaemon(
     }
     if (isMemoryChangeEvent(event)) {
       memoryListeners.deliver(event);
+      return;
+    }
+    if (event.type === "scheduled_task_run_added") {
+      runListeners.forEach((listener) => listener(event.run));
       return;
     }
     if (event.type === "session_notice" && ownTrustNotices.claim(event)) return;
@@ -166,6 +174,10 @@ export function createDaemon(
     onImportProgress: importProgress.subscribe,
     onContentSearch: contentSearches.subscribe,
     onMemoryChange: memoryListeners.subscribe,
+    onScheduledTaskRun: (listener) => {
+      runListeners.add(listener);
+      return () => void runListeners.delete(listener);
+    },
     dismissTrustPrompt: (session) => dispatch({ kind: "dismiss_trust_prompt", session }),
     reconnect: () => client.reconnect(),
     terminalUrl: (session) => daemonWsUrl(address, `/ws/term/${session}`),
@@ -190,6 +202,7 @@ export function createInertDaemon(): Daemon {
     onImportProgress: () => () => {},
     onContentSearch: () => () => {},
     onMemoryChange: () => () => {},
+    onScheduledTaskRun: () => () => {},
     dismissTrustPrompt: () => {},
     reconnect: () => {},
     terminalUrl: () => "",

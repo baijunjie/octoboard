@@ -12,6 +12,8 @@ A place is what the window shows, taken together:
 - the selected session, or none;
 - the focus mode the sidebar is in, if any (see `docs/product/focus-mode.md`);
 - the archive view and what it is for, while it is open (see "The archive view" in `docs/product/archive-view.md`);
+- the Scheduled tasks page and the task it shows, while it shows (see "Opening and leaving the page" in
+  `docs/product/scheduled-tasks-page.md`);
 - in the main window of the desktop application, the Remote devices page and the device it shows, while it shows (see
   "Opening and leaving the page" in `docs/product/remote-devices-page.md`).
 
@@ -20,9 +22,9 @@ gives the right pane what selecting the session moved to would, or leaves it as 
 (see "What the right pane shows" in `docs/product/window-layout.md`).
 
 **Every change of any of these is a visit**, whatever made it: a sidebar row, a console avatar on the rail, entering or
-leaving focus mode, a chip in a focus mode, the archive view opening or closing, the Remote devices page opening or
-another device chosen on it, the waiting count, the menu bar icon's menu, a session this window opened being selected,
-a keyboard shortcut. A change that leaves the window where it already
+leaving focus mode, a chip in a focus mode, the archive view opening or closing, a page of the window opening or
+another device or task chosen on it, the notification of a failed scheduled run, the waiting count, the menu bar icon's
+menu, a session this window opened being selected, a keyboard shortcut. A change that leaves the window where it already
 was is not recorded again.
 
 **Switching console is one visit**: the new current console together with the session it shows, the one last
@@ -47,10 +49,13 @@ and every client has its own. It holds the **100** most recent places; older one
 
 - **Back** goes to the place visited before the one on screen, **Forward** to the one after it. Neither records a visit
   of its own.
+- **A move that would leave a page form holding changes not saved asks first**, by its button or its shortcut alike; a
+  move declined is not made, and nothing is recorded (see `docs/product/leaving-a-form-with-unsaved-changes.md`).
 - A **visit after going back** drops every place that was ahead, as a browser does: Forward then has nowhere to go.
 - **A place that cannot be shown any more is passed over**: one whose console, session, project or console session has
   since been deleted, whose focus mode no longer exists (a console session archived, a project removed), or whose focus
-  mode does not list its session, and one whose Remote devices page shows a device no longer saved. So is a place
+  mode does not list its session, one whose Remote devices page shows a device no longer saved, and one whose
+  Scheduled tasks page shows a task that no longer exists. So is a place
   identical to the one on screen. Each button is **disabled** while every
   place in its direction is passed over or there is none.
 - **Moving shows the place as it was, without acting on it**: going back to an interrupted session shows it without

@@ -2,7 +2,7 @@ import type { ConnectionState } from "../daemon-client";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { accountKey, loginIsActive } from "../accounts/accountRecords";
 import { sameValue } from "../values/sameValue";
-import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type Event, type Page, type Project, type ShellTerminal } from "../protocol";
+import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type Event, type Page, type Project, type ScheduledTask, type ScheduledTaskRun, type ShellTerminal } from "../protocol";
 import { CODE } from "../errors/codes";
 import type { PageSubmission, State, TrustPrompt } from "./state";
 import { sessionRequestOf, withRequest } from "./sessionRequests";
@@ -31,6 +31,28 @@ function keepSame<T>(previous: Map<string, T>, records: T[], idOf: (record: T) =
       return [id, held !== undefined && sameValue(held, record) ? held : record];
     }),
   );
+}
+
+/** The scheduled tasks without those `gone` matches, and the runs without theirs. */
+function tasksWithout(state: State, gone: (task: ScheduledTask) => boolean): Pick<State, "scheduledTasks" | "scheduledTaskRuns"> {
+  const scheduledTasks = withoutTasks(state.scheduledTasks, gone);
+  return { scheduledTasks, scheduledTaskRuns: runsOfTasks(state.scheduledTaskRuns, scheduledTasks) };
+}
+
+/** `tasks` without those `gone` matches (a deleted console's or project's, which the daemon's database takes with it
+ * unannounced); `tasks` itself when none does, or while none has been listed. */
+function withoutTasks(tasks: Map<string, ScheduledTask> | undefined, gone: (task: ScheduledTask) => boolean): Map<string, ScheduledTask> | undefined {
+  if (!tasks || ![...tasks.values()].some(gone)) return tasks;
+  return new Map([...tasks].filter(([, task]) => !gone(task)));
+}
+
+/** The most runs of a task the daemon keeps (`SCHEDULED_TASK_RUNS_KEPT`), past which an added run pushes out the oldest. */
+const RUNS_KEPT = 50;
+
+/** `runs` of only the tasks `tasks` still holds; `runs` itself when none is gone, or while no task has been listed. */
+function runsOfTasks(runs: Map<string, ScheduledTaskRun[]>, tasks: Map<string, ScheduledTask> | undefined): Map<string, ScheduledTaskRun[]> {
+  if (!tasks || [...runs.keys()].every((id) => tasks.has(id))) return runs;
+  return new Map([...runs].filter(([id]) => tasks.has(id)));
 }
 
 /** The CLI updates this window asked for (`cliUpdatesStartedHere`) that a snapshot leaves open: one the status shows
@@ -250,7 +272,14 @@ export function reducer(state: State, action: Action): State {
           const gitStatuses = new Map(
             Array.from(state.gitStatuses).filter(([projectId]) => projects.has(projectId)),
           );
-          return { ...withoutSessions(state, removed), consoles, projects, gitStatuses, shellTerminals: withoutRemovedProjectTerminals(state.shellTerminals, projects) };
+          return {
+            ...withoutSessions(state, removed),
+            consoles,
+            projects,
+            gitStatuses,
+            shellTerminals: withoutRemovedProjectTerminals(state.shellTerminals, projects),
+            ...tasksWithout(state, (task) => task.console_id === event.console),
+          };
         }
         case "session_opened": {
           // A title or status broadcast can arrive before this launch-time reply. Keep the
@@ -281,7 +310,55 @@ export function reducer(state: State, action: Action): State {
           // The daemon sends no event for this; see `gitStatuses` above.
           const gitStatuses = new Map(state.gitStatuses);
           gitStatuses.delete(event.project);
-          return { ...withoutSessions(state, removed), projects, gitStatuses, shellTerminals: withoutRemovedProjectTerminals(state.shellTerminals, projects) };
+          return {
+            ...withoutSessions(state, removed),
+            projects,
+            gitStatuses,
+            shellTerminals: withoutRemovedProjectTerminals(state.shellTerminals, projects),
+            ...tasksWithout(state, (task) => task.project_id === event.project),
+          };
+        }
+        case "scheduled_tasks_listed": {
+          // The whole list, which replaces what is held; records that did not change keep their identity.
+          const scheduledTasks = keepSame(state.scheduledTasks ?? new Map(), event.tasks, (task) => task.id);
+          return { ...state, scheduledTasks, scheduledTasksZone: event.time_zone, scheduledTaskRuns: runsOfTasks(state.scheduledTaskRuns, scheduledTasks) };
+        }
+        case "scheduled_task_saved":
+        case "scheduled_task_upserted": {
+          // A save's reply and its broadcast both carry the task, but the daemon broadcasts before it replies and the two
+          // are not ordered on the socket: the reply only seeds a task this window lacks, never overwrites a held one, which
+          // may already be newer (another window's edit, a run recorded). Before the first listing nothing is held: the
+          // listing that follows on the same ordered socket includes the change, and a map of one task would be taken for
+          // the daemon's whole list.
+          if (!state.scheduledTasks) return state;
+          const held = state.scheduledTasks.get(event.task.id);
+          if (event.type === "scheduled_task_saved" ? held !== undefined : sameValue(held, event.task)) return state;
+          const scheduledTasks = new Map(state.scheduledTasks);
+          scheduledTasks.set(event.task.id, event.task);
+          return { ...state, scheduledTasks };
+        }
+        case "scheduled_task_deleted": {
+          if (!state.scheduledTasks?.has(event.task)) return state;
+          const scheduledTasks = new Map(state.scheduledTasks);
+          scheduledTasks.delete(event.task);
+          return { ...state, scheduledTasks, scheduledTaskRuns: runsOfTasks(state.scheduledTaskRuns, scheduledTasks) };
+        }
+        case "scheduled_task_runs_listed": {
+          // The whole list, which replaces what is held; not for a task this window knows to be gone.
+          if (state.scheduledTasks && !state.scheduledTasks.has(event.task)) return state;
+          if (sameValue(state.scheduledTaskRuns.get(event.task), event.runs)) return state;
+          const scheduledTaskRuns = new Map(state.scheduledTaskRuns);
+          scheduledTaskRuns.set(event.task, event.runs);
+          return { ...state, scheduledTaskRuns };
+        }
+        case "scheduled_task_run_added": {
+          // Only to a task whose runs are listed: the listing of another brings this run with it. A run already held (the
+          // listing answered after it was recorded) is not added twice.
+          const held = state.scheduledTasks && state.scheduledTaskRuns.get(event.run.task_id);
+          if (!held || held.some((run) => run.id === event.run.id)) return state;
+          const scheduledTaskRuns = new Map(state.scheduledTaskRuns);
+          scheduledTaskRuns.set(event.run.task_id, [event.run, ...held].slice(0, RUNS_KEPT));
+          return { ...state, scheduledTaskRuns };
         }
         case "session_upserted": {
           // A session's status broadcasts repeat what the store holds as often as they change it.
