@@ -775,9 +775,12 @@ jobs:
   # The website links each platform's newest download, read from the manifests when it is generated, so it is generated
   # again now that they announce this version. A job of its own, so that only it holds the right to start a workflow and
   # its failure shows apart from the publishing: the release stays published, and the website's workflow is started by
-  # hand.
+  # hand. `publish` runs after jobs a release always skips (the other Windows route's), and a job whose `if` calls no
+  # status function is skipped whenever any job it depends on, however indirectly, was skipped, so this one's condition
+  # starts with `!cancelled()`.
   website:
     needs: publish
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

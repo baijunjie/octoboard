@@ -32,6 +32,12 @@ checks are run in a piece of work, and that nothing bypasses them, is in `CLAUDE
   the `PATH` at every start (it reads no zip and takes the `D:` of an absolute path for a remote host), and adding a
   directory with `$GITHUB_PATH` does not get ahead of it. `scripts/fetch-conpty.mjs` does this;
   `apps/desktop/scripts/update-archive.mjs` is its macOS counterpart and names `/usr/bin/tar`.
+- **A workflow job that must still run when a job it depends on, directly or through other jobs, was skipped** (an
+  unselected platform's, the Windows signing route not taken) **states its own `if`, starting with `!cancelled()` and
+  checking the `needs.<job>.result` of each job it relies on**: without a status function in its `if`, GitHub adds
+  `success()`, which is false once any job it depends on, however indirectly, was skipped. `release.yml`'s `sign`,
+  `publish` and `website` follow it; a job meant to be skipped along with its dependency, such as the later jobs of the
+  SignPath chain, needs no `if`.
 - **A build that embeds the UI (`embedded-ui`) must not have `VITE_DAEMON_KEY` or `VITE_DAEMON_PORT` set;** the daemon's
   `build.rs` refuses it, because those values would put the key in a file the daemon serves.
 - UI-only commands (`pnpm compiler:bailouts`, `pnpm bench:wkwebview`) and the lint rules the React Compiler adds are
