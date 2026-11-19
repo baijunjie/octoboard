@@ -107,7 +107,7 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Update notice, installed, waiting for a restart",
-    description: "An installed update the page did not start waits for a restart, with Restart now and Later in the bottom strip. The rail's entry is now a restart icon with the installed version in its tooltip.",
+    description: "An installed update the page did not start waits for a restart, with Restart now and Later in the bottom strip. The rail's entry is now a power icon with the installed version in its tooltip.",
     state: browserQuiet(daemonInstalled),
     steps: [openSession],
   },

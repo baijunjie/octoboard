@@ -162,8 +162,8 @@ an indeterminate ring otherwise. The button keeps its normal opacity, cannot sta
 remains reachable on mouse hover and keyboard focus, naming the version and the percentage when known. With reduced
 motion enabled the indeterminate ring does not rotate.
 
-Once an update is installed and still waits for a restart, the button becomes **Restart now**, with a restart icon and
-the installed version in its tooltip where known. It remains after **Later** hides the notice or defers the restart;
+Once an update is installed and still waits for a restart, the button becomes **Restart now**, with a power symbol icon
+and the installed version in its tooltip where known. It remains after **Later** hides the notice or defers the restart;
 pressing it goes through the same restart check. Without an available or installed update there is no button. A
 browser whose daemon now runs a different version of the page shows its reload notice instead, with no rail upgrade
 entry. The server form's manual installation case is in "What the browser shows" in

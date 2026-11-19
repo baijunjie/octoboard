@@ -157,6 +157,10 @@ A menu entry that opens a settings dialog takes lucide's `Settings2` icon (the s
 settings, an account's Settings and an agent's Settings alike, so one icon means "this opens settings" in every menu.
 The gear (`Settings`) stays for the rail's Settings button, which opens the Settings window itself and is no menu
 entry.
+
+Restarting Octoboard to apply an installed update takes lucide's `Power` icon, as the rail's update entry draws it once
+the update waits for a restart: the circular arrows of `RefreshCw` read as refreshing, so they stay for re-fetching data
+and for reloading the page. (Source: user decision.)
 `StatusBadge` takes a semantic colour —
 `default` (neutral), `accent`, `success`, `warning`, `danger` or `help` (the project's purple, for help and hints) — and
 one of two variants:

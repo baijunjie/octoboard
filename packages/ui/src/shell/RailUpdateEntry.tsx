@@ -1,4 +1,4 @@
-import { CircleArrowUp, RefreshCw } from "lucide-react";
+import { CircleArrowUp, Power } from "lucide-react";
 import React, { useId, useRef, useState } from "react";
 
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
@@ -71,7 +71,7 @@ export function RailUpdateEntry({ focusTerminal, onOpenSettingsAt }: {
             else void store.install();
           }}
         >
-          {installed ? <RefreshCw aria-hidden="true" className="size-4" /> : <CircleArrowUp aria-hidden="true" className="size-4" />}
+          {installed ? <Power aria-hidden="true" className="size-4" /> : <CircleArrowUp aria-hidden="true" className="size-4" />}
         </Button>
       </TitledControl>
       {downloading && <span id={progressDescription} className="sr-only">{message}{percentText && ` ${percentText}`}</span>}
