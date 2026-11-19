@@ -2,10 +2,10 @@
 
 Settings that apply to every account of one agent, the default account included, rather than to a single account: the
 agent's tags, and the settings each agent's provider declares for itself — how Claude Code, Codex and Grok Build handle
-permission requests, whether Codex and Grok Build load Claude Code's configuration, and whether Claude Code and Grok
-Build load Codex's. Each is set in a row of the
-agent's **Agent settings** dialog, opened from the Settings entry of the agent's menu in Settings' **Agent accounts**
-section (see "The agent settings dialog" in `docs/product/agent-accounts.md`).
+permission requests, whether Codex and Grok Build load Claude Code's configuration, whether Claude Code and Grok
+Build load Codex's, and whether Claude Code's sessions are asked to keep their shell commands simple. Each is set in a
+row of the agent's **Agent settings** dialog, opened from the Settings entry of the agent's menu in Settings' **Agent
+accounts** section (see "The agent settings dialog" in `docs/product/agent-accounts.md`).
 
 ## Agent tags
 
@@ -18,9 +18,8 @@ dropped and one matching another of the agent's tags ignoring case is dropped, t
 
 They are set in the **Tags** row, the first row of every agent's settings dialog, above the rows of the agent's
 provider settings (see "Provider settings" below). A "?" help tip beside the row's name explains that tags
-describe the tasks the agent is suited for and give other sessions a reference when choosing an agent. The row keeps
-a line saying that it applies to every account of the agent and, under them across the row's full width, the same
-Tags field as a project's
+describe the tasks the agent is suited for and give other sessions a reference when choosing an agent. Under the
+row's name, across the row's full width, is the same Tags field as a project's
 (see "Editing a project" in `docs/product/projects.md`), its picked tags looking and behaving as there (see "Picked
 tags" in `docs/product/project-tags.md`). The field has no visible label of its own; its accessible name is "Tags for"
 and the agent. Its empty text input says the agent has no tags while none is picked, and invites adding a tag once one
@@ -61,6 +60,7 @@ for the sessions they cover, by a console, a project or a session, whose value w
 |---|---|---|---|---|---|
 | Claude Code | **Permission approval** (see "Approval modes" below) | `approval_mode` | Choice of `auto`, `manual`, `accept_edits`, `plan` or `bypass` | Yes | No |
 | Claude Code | **Codex compatibility** (see "Codex compatibility" below) | `codex_compatibility` | Switch, off until chosen | Yes | Yes |
+| Claude Code | **Simple shell commands** (see "Simple shell commands" below) | `simple_shell_commands` | Switch, off until chosen | Yes | Yes |
 | Codex | **Permission approval** (see "Approval modes" below) | `approval_reviewer` | Choice of `user`, `auto_review` or `full_access` | Yes | No |
 | Codex | **Claude compatibility** (see "Claude compatibility" below) | `claude_compatibility` | Switch, off until chosen | Yes | Yes |
 | Grok Build | **Permission approval** (see "Approval modes" below) | `approval_mode` | Choice of `ask`, `auto` or `always_approve` | Yes | No |
@@ -83,13 +83,14 @@ restart; every window is given the **value in effect** of every setting of every
 default, a choice setting's choice or else none. A stored choice the setting no longer takes is read as no choice.
 
 The agent's settings dialog has one row per setting, in the order the provider declares them, under the Tags row:
-Claude Code's shows Permission approval then Codex compatibility; Codex's shows Permission approval then Claude
-compatibility; Grok Build's shows Permission approval, Claude compatibility, then Codex compatibility. A setting the
+Claude Code's shows Permission approval, Codex compatibility, then Simple shell commands; Codex's shows Permission
+approval then Claude compatibility; Grok Build's shows Permission approval, Claude compatibility, then Codex compatibility. A setting the
 window has no wording for is not shown; a choice the window has no name for is offered by its value in words (a value
-`read_only` as "Read only"). Each row holds the setting's name with a "?" help tip saying what it does, a line saying
-that it applies to every account of the agent, and, at the row's end, a selector for a choice or a switch for a switch,
-named for the setting and the agent ("Permission approval for Codex"). A choice is saved when selected, its choices
-unavailable while the save is unanswered; a switch is saved when turned, unavailable while the save is unanswered — it
+`read_only` as "Read only"). Each row holds only the setting's name with a "?" help tip saying what it does and, at
+the row's end, a selector for a choice or a switch for a switch, named for the setting and the agent ("Permission
+approval for Codex"); no row carries a line of its own saying that it applies to every account of the agent, which the
+dialog says once for all its rows (see "The agent settings dialog" in `docs/product/agent-accounts.md`). A choice is
+saved when selected, its choices unavailable while the save is unanswered; a switch is saved when turned, unavailable while the save is unanswered — it
 looks disabled but stays focusable — and keeps its position when the save fails. The switch always shows the value in
 effect. A failed save is shown in an error alert titled for the setting ("Could not save the permission approval",
 "Could not save Claude compatibility").
@@ -257,3 +258,33 @@ Like Claude compatibility, a console session may read the agent-level value in e
 `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a configuration export that
 includes the accounts carries the explicit choices (see "The agent account settings an export carries" in
 `docs/product/settings-in-a-configuration.md`).
+
+## Simple shell commands
+
+Whether Claude Code's sessions are asked to keep their shell commands simple enough for Claude Code's own permission
+check to read. Claude Code stops to ask the user to approve a shell command it cannot fully read — one with a heredoc,
+or a chain such as `cd … && …` — since it cannot check every part of it against the permission rules, so a session can
+sit waiting for that approval. It is the **Simple shell commands** row of Claude Code's settings dialog, a provider
+setting of the switch kind (see "Provider settings" above): the last row, under the Codex compatibility row. Codex's
+and Grok Build's dialogs have no such setting.
+
+Its help tip ("About simple shell commands") says what the setting does whatever the switch's position: it keeps
+Claude Code's sessions from stopping to wait for the user's approval when they run shell commands, Claude Code asking
+for approval of a command it cannot fully read, such as one with a heredoc; when on, sessions are asked to keep their
+commands simple, for example by saving a script to a file and running it; Octoboard passes this in when a session
+starts or resumes, so a change takes effect then. A failed save is shown in an error alert titled "Could not save
+simple shell commands".
+
+**Until the user chooses**, it is **off**, and Octoboard passes nothing for it. While it is on, every launch of a
+session of any Claude Code account, a resume included, adds one instruction to the role description Octoboard passes
+Claude Code (see "How each agent is given the injection" in `docs/product/per-agent-launch-specifics.md`): keep Bash
+commands simple enough for Claude Code's permission check to read — write scripts and multi-line content to a file with
+the Write tool instead of a heredoc, run them by absolute path, and avoid `cd … &&` chains. It is an instruction to the
+session and nothing else: the launch is otherwise the same, no permission rule or approval mode changes, and a command
+Claude Code cannot read still asks for approval.
+
+It is not a compatibility switch, so no console, project or session holds a value of its own for it: the agent-level
+value is the only one. Like the compatibility switches, a console session may read the value in effect but not change
+it (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a
+configuration export that includes the accounts carries the explicit choice (see "The agent account settings an export
+carries" in `docs/product/settings-in-a-configuration.md`).

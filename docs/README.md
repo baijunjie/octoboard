@@ -104,7 +104,8 @@ Where to start, by question:
 - [Agent CLI versions and updates](product/agent-cli-updates.md) — when an agent CLI's installed and latest versions
   are checked, how its install method and update command are told, and how an update the user starts runs and ends.
 - [Per-agent settings](product/per-agent-settings.md) — settings that apply to every account of one agent: the settings
-  each provider declares (permission approval modes, Claude and Codex compatibility) and agent tags.
+  each provider declares (permission approval modes, Claude and Codex compatibility, simple shell commands) and agent
+  tags.
 - [Removing an account](product/removing-accounts.md) — what removing an account clears, its confirmation, and the option
   to move the account directory to the Trash.
 - [Logging an account in](product/logging-accounts-in.md) — the login dialog and how each agent signs in.

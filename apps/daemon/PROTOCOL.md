@@ -1308,6 +1308,10 @@ The declared settings are:
   shown to agents: whether the provider's sessions load Codex's instructions (AGENTS.md and rules), skills, custom
   prompts and MCP servers, and follow its hooks. For Grok Build the custom prompts are left to the instructions (see
   below).
+- `claude` `simple_shell_commands`, a switch with `compatibility_with` null, off until chosen, exported and shown to
+  agents. While on, every launch and resume appends one line to the `--append-system-prompt` role text, after the
+  Codex-compatibility instructions when those are present, asking Claude to keep Bash commands simple enough for Claude
+  Code's permission check to read, so that sessions stop less often for approval.
 
 A provider that declares `compatibility_source` offers its MCP servers and its instructions to the providers made
 compatible with it, through an interface of its own (`CompatibilitySource` in `src/adapter/mod.rs`; Claude Code's is

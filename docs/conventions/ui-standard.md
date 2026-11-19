@@ -1407,17 +1407,13 @@ need, or the extra line one item in a set of like items carries, moves there; ev
 text, a status among them; a warning, an error or a note takes its mark or Alert (see "On the screen: an Alert when it
 matters, a mark at its point otherwise"), never a "?".
 
-The permission-approval explanation in Settings' Agent accounts section is an exception: the explanation of how
-requests are handled, when the choice takes effect and Codex's possible extra token cost sits in a `HelpTip` beside
-the Permission approval label of the agent's own setting row, in the agent's settings dialog (the Settings entry of its
-tab's menu); the row's visible description
-says only that the choice applies to every account of the agent.
-
-So are the compatibility rows in the same dialog — Claude compatibility (Codex and Grok Build) and Codex compatibility
-(Claude Code and Grok Build): what the agent's sessions load and follow when it is on or off, how Octoboard brings it
-about for that agent, and when a change takes effect sit in a `HelpTip` beside the row's label; the visible
-description says only that the switch applies to every account of the agent. That line states the scope, not the
-switch's state, so it stays the same whichever way the switch is set.
+The provider-setting rows of an agent's settings dialog (the Settings entry of its tab's menu) are an exception:
+each row is its label, a `HelpTip` beside it and its control, with no visible description of its own. What the
+setting does sits in the tip — for Permission approval, how requests are handled, when the choice takes effect and
+Codex's possible extra token cost; for a switch such as Claude compatibility, Codex compatibility or Simple shell
+commands, what the agent's sessions do when it is on or off, how Octoboard brings it about and when a change takes
+effect. That every setting in the dialog applies to every account of the agent is said once, in a muted line under
+the agent's icon and name, not under each row.
 
 So is the share-default-config explanation in an owned account's settings dialog: what sharing links, and that idle
 sessions are ended and resumed by a change, sit in a `HelpTip` beside the row's visible label, under which a one-line

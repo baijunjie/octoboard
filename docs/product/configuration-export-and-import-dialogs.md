@@ -223,7 +223,7 @@ each part only where the file has it:
 - a line saying that the default account will be disabled, or enabled, where the import would turn it off or back on;
   one the file leaves as this machine has it is not mentioned;
 - the agent's **provider settings** (see "Provider settings" in `docs/product/per-agent-settings.md`), a line for each
-  setting — today **Permission approval**, **Claude compatibility** and **Codex compatibility** — for which the file carries a choice that this
+  setting — today **Permission approval**, **Claude compatibility**, **Codex compatibility** and **Simple shell commands** — for which the file carries a choice that this
   machine's agent declares as carried and that the setting takes, named as the agent's tab names it, or, where the
   window has no wording for it, by the setting's id in words (an id `sandbox_mode` as "Sandbox mode"). Badged **Set to
   the file's**, it gives the file's value with, in brackets, the value this machine has now: a switch **On** or

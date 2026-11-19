@@ -29,7 +29,6 @@ it.each(["Claude Code", "Codex", "Grok Build"] as const)("puts the Tags row firs
   const { container, section } = await mountAgentSettings(name);
   const input = tagsInput(container, name);
   expect(input).not.toBeNull();
-  expect(container.textContent).toContain(`Applies to every ${isolate(name)} account`);
   const following = (other: Element | null) => other === null || (input.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
   expect(following(container.querySelector('[aria-label^="Permission approval"]'))).toBe(true);
   expect(following(container.querySelector('input[role="switch"]'))).toBe(true);

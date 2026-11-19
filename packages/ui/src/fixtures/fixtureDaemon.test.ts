@@ -867,11 +867,11 @@ describe("the fixture daemon's deletion of archived sessions", () => {
 });
 
 
-/** Every provider's every setting in effect: every compatibility switch off, no permission approval chosen, except what
- * `compatibility` and the approvals say. */
-function providerSettings(compatibility: { codex?: boolean; grok?: boolean } = {}, claude: { approval_mode?: string } = {}, codex: { approval_reviewer?: string } = {}, grok: { approval_mode?: string } = {}): Settings["provider_settings"] {
+/** Every provider's every setting in effect: every compatibility switch and Claude Code's simple shell commands off, no
+ * permission approval chosen, except what `compatibility`, the approvals and `claude` say. */
+function providerSettings(compatibility: { codex?: boolean; grok?: boolean } = {}, claude: { approval_mode?: string; simple_shell_commands?: boolean } = {}, codex: { approval_reviewer?: string } = {}, grok: { approval_mode?: string } = {}): Settings["provider_settings"] {
   return {
-    claude: { approval_mode: claude.approval_mode ?? null, codex_compatibility: false },
+    claude: { approval_mode: claude.approval_mode ?? null, codex_compatibility: false, simple_shell_commands: claude.simple_shell_commands ?? false },
     codex: { approval_reviewer: codex.approval_reviewer ?? null, claude_compatibility: compatibility.codex ?? false },
     grok: { approval_mode: grok.approval_mode ?? null, claude_compatibility: compatibility.grok ?? false, codex_compatibility: false },
   };
@@ -971,6 +971,13 @@ describe("the fixture daemon's settings and trusted folders", () => {
     await expect(daemon.request({ type: "set_provider_setting", agent: "codex", setting: "claude_compatibility", value: "on" })).rejects.toMatchObject({ code: "unreadable_request" });
     await expect(daemon.request({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: "sometimes" })).rejects.toMatchObject({ code: "unreadable_request" });
     expect(await exported()).toEqual({ claude: { approval_mode: "manual" }, grok: { claude_compatibility: true } });
+    // Claude Code's simple shell commands is a switch of its own: exported once chosen, and refused for another agent or as a choice.
+    await daemon.request({ type: "set_provider_setting", agent: "claude", setting: "simple_shell_commands", value: true });
+    expect(await exported()).toEqual({ claude: { approval_mode: "manual", simple_shell_commands: true }, grok: { claude_compatibility: true } });
+    await expect(daemon.request({ type: "set_provider_setting", agent: "codex", setting: "simple_shell_commands", value: true })).rejects.toMatchObject({ code: "unreadable_request" });
+    await expect(daemon.request({ type: "set_provider_setting", agent: "claude", setting: "simple_shell_commands", value: "on" })).rejects.toMatchObject({ code: "unreadable_request" });
+    expect(await exported()).toEqual({ claude: { approval_mode: "manual", simple_shell_commands: true }, grok: { claude_compatibility: true } });
+    await daemon.request({ type: "set_provider_setting", agent: "claude", setting: "simple_shell_commands", value: null });
     // A refusal of the rest of an `update_settings` leaves the choices as they were.
     await expect(daemon.request({ type: "update_settings", default_clone_dir: "relative/dir" })).rejects.toMatchObject({ code: "path_not_absolute" });
     expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ grok: true }, { approval_mode: "manual" }));

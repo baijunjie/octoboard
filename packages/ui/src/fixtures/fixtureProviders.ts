@@ -44,6 +44,7 @@ const SETTINGS: Record<Agent, SettingDescriptor[]> = {
   claude: [
     { id: "approval_mode", kind: { type: "choice", choices: [{ value: "auto", confirm: false }, { value: "manual", confirm: false }, { value: "accept_edits", confirm: false }, { value: "plan", confirm: false }, { value: "bypass", confirm: true }] }, exported: true, shown_to_agents: false, compatibility_with: null },
     compatibilitySwitch("codex_compatibility", "codex", { type: "switch", default: "off" }),
+    { id: "simple_shell_commands", kind: { type: "switch", default: "off" }, exported: true, shown_to_agents: true, compatibility_with: null },
   ],
   codex: [
     { id: "approval_reviewer", kind: { type: "choice", choices: [{ value: "user", confirm: false }, { value: "auto_review", confirm: false }, { value: "full_access", confirm: true }] }, exported: true, shown_to_agents: false, compatibility_with: null },

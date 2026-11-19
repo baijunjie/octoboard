@@ -660,12 +660,12 @@ async fn the_agent_account_settings_are_read_only_to_agents() {
         .unwrap();
     assert_eq!(before["auto_select_account"], false);
     assert_eq!(before["agent_tags"], json!({ "codex": ["review"] }));
-    // Every provider's switches are shown with the value in effect; the approval settings and a
-    // provider with nothing to show are not.
+    // Every provider's switches are shown with the value in effect, Claude Code's simple shell
+    // commands among them; the approval settings and a provider with nothing to show are not.
     assert_eq!(
         before["provider_settings"],
         json!({
-            "claude": { "codex_compatibility": false },
+            "claude": { "codex_compatibility": false, "simple_shell_commands": false },
             "codex": { "claude_compatibility": false },
             "grok": { "claude_compatibility": false, "codex_compatibility": false },
         })
@@ -696,6 +696,26 @@ async fn the_agent_account_settings_are_read_only_to_agents() {
         before["provider_settings"]
     );
     assert!(!with_approvals.to_string().contains("approval"));
+    // The simple shell commands switch is shown with the value in effect once the user turns it on.
+    state
+        .store
+        .set_provider_setting(
+            AgentId::CLAUDE,
+            "simple_shell_commands",
+            Some(&crate::providers::SettingValue::Switch(true)),
+        )
+        .unwrap();
+    let with_simple_shell = call(&state, "a", "get_settings", &Map::new())
+        .await
+        .unwrap();
+    assert_eq!(
+        with_simple_shell["provider_settings"],
+        json!({
+            "claude": { "codex_compatibility": false, "simple_shell_commands": true },
+            "codex": { "claude_compatibility": false },
+            "grok": { "claude_compatibility": false, "codex_compatibility": false },
+        })
+    );
 
     let updated = call(
         &state,
@@ -703,7 +723,10 @@ async fn the_agent_account_settings_are_read_only_to_agents() {
         "update_settings",
         &arguments(json!({
             "auto_select_account": true,
-            "provider_settings": { "codex": { "claude_compatibility": true } },
+            "provider_settings": {
+                "codex": { "claude_compatibility": true },
+                "claude": { "simple_shell_commands": false },
+            },
             "claude_compatibility": { "codex": true, "grok": false },
             "agent_tags": { "codex": [], "grok": ["research"] },
             "default_clone_dir": crate::test_support::host_path("/tmp/clones"),
@@ -719,7 +742,16 @@ async fn the_agent_account_settings_are_read_only_to_agents() {
         updated["auto_select_account"],
         before["auto_select_account"]
     );
-    assert_eq!(updated["provider_settings"], before["provider_settings"]);
+    // Agents read the switches but never write them.
+    assert_eq!(
+        updated["provider_settings"],
+        with_simple_shell["provider_settings"]
+    );
+    assert!(state
+        .store
+        .provider_settings_of(AgentId::CLAUDE)
+        .unwrap()
+        .switch("simple_shell_commands"));
     assert_eq!(updated["agent_tags"], before["agent_tags"]);
     assert!(!state.store.auto_select_account().unwrap());
     assert_eq!(state.store.agent_tags().unwrap()["codex"], ["review"]);

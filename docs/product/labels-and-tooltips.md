@@ -226,10 +226,14 @@ Every other helping description stays visible, even one that only needs reading 
 field or a setting row, the note at the foot of a form, a section's lead paragraph, status and warnings, and the
 consequences and timing of an action.
 
-The permission-approval explanation in Settings' Agent accounts section is an exception: its handling, timing and
-Codex's possible extra token cost sit in a help tip beside the name of an agent's **Permission approval** row, whose
-visible line says only that it applies to every account of the agent (see "Approval modes" in
-`docs/product/per-agent-settings.md`). So, in part, is the **Share default configuration** row: what is shared and never
+The rows of an agent's settings dialog in Settings' Agent accounts section are an exception: each provider-setting
+row is its name, a help tip beside it and its control, with no visible line of its own. What the setting does sits in
+the tip — for **Permission approval**, its handling, timing and Codex's possible extra token cost; for a switch such as
+**Claude compatibility**, **Codex compatibility** or **Simple shell commands**, what the agent's sessions do when it is
+on or off, how Octoboard brings it about and when a change takes effect — and that every setting in the dialog applies
+to every account of the agent is said once, under the agent's name at the top of the dialog (see "Provider settings" in
+`docs/product/per-agent-settings.md` and "The agent settings dialog" in `docs/product/agent-accounts.md`). So, in part,
+is the **Share default configuration** row: what is shared and never
 shared, what turning sharing off does to conversations and the idle sessions a change would end sit in the help tip
 beside the row's name, while the row's line says what turning the switch on does, or what is the case while it is on,
 and why the switch cannot be turned now stays under that line (see "Sharing the default configuration" in

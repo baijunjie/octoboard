@@ -153,4 +153,38 @@ mod tests {
             assert_eq!(setting["compatibility_with"], "codex");
         }
     }
+
+    /// Claude Code's simple shell commands switch follows Codex compatibility: off until chosen,
+    /// exported with the configuration, shown to agents (it is no permission setting), and not a compatibility switch, so no
+    /// launch level can override it.
+    #[test]
+    fn claude_serves_the_simple_shell_commands_switch_after_codex_compatibility() {
+        let claude = serde_json::to_value(&registered_providers()[0]).unwrap();
+        let settings = claude["settings"].as_array().unwrap();
+        let ids: Vec<_> = settings
+            .iter()
+            .map(|setting| setting["id"].as_str().unwrap())
+            .collect();
+        let at = ids.iter().position(|id| *id == "simple_shell_commands");
+        assert_eq!(
+            at,
+            ids.iter()
+                .position(|id| *id == "codex_compatibility")
+                .map(|at| at + 1)
+        );
+        let setting = &settings[at.unwrap()];
+        assert_eq!(
+            setting["kind"],
+            serde_json::json!({"type": "switch", "default": "off"})
+        );
+        assert_eq!(setting["exported"], true);
+        assert_eq!(setting["shown_to_agents"], true);
+        assert!(setting["compatibility_with"].is_null());
+        let descriptor = AgentId::CLAUDE.descriptor();
+        assert!(!descriptor.is_overridable("simple_shell_commands"));
+        assert!(descriptor
+            .setting("simple_shell_commands")
+            .unwrap()
+            .accepts(&crate::providers::SettingValue::Switch(true)));
+    }
 }

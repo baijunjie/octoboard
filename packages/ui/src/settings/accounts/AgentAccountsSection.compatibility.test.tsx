@@ -28,7 +28,6 @@ describe.each(CASES)("the $label row of $name ($setting)", ({ name, agent, setti
     const input = compatSwitch(container, label)!;
     expect(input.checked).toBe(false);
     expect(input.getAttribute("aria-label")).toBe(`${label} for \u2068${name}\u2069`);
-    expect(container.textContent).toContain(`Applies to every \u2068${name}\u2069 account`);
     expect(container.querySelectorAll(`button[aria-label="About ${label}"]`)).toHaveLength(1);
     expect(section.querySelector('[role="tabpanel"]')!.textContent).not.toContain(label);
   });

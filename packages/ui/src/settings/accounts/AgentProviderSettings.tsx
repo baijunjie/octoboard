@@ -1,12 +1,11 @@
 import React, { useState } from "react";
 
-import { idWords, providerLabel, servedProvider, switchValue } from "../../agents/providers";
+import { idWords, servedProvider, switchValue } from "../../agents/providers";
 import { alertAppDataFailure } from "../../components/alerts/raiseError";
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
 import { OptionSelect, type Option } from "../../components/form/OptionSelect";
 import { appDataRecovery } from "../../errors/errorRecovery";
 import { InlineReference } from "../../i18n/InlineReference";
-import { isolate } from "../../i18n/isolate";
 import { Message, useT } from "../../i18n/react";
 import type { Agent, SettingDescriptor, SettingKind } from "../../protocol";
 import { useDaemon, useDaemonStore, useProviders } from "../../store";
@@ -21,7 +20,6 @@ type Choice = Extract<SettingKind, { type: "choice" }>["choices"][number];
  * as it was. */
 function ChoiceSetting({ agent, descriptor, choices }: { agent: Agent; descriptor: SettingDescriptor; choices: Choice[] }): React.ReactElement | null {
   const t = useT();
-  const providers = useProviders();
   const { request } = useDaemon();
   const copy = useSettingCopy(agent, descriptor.id);
   const stored = useDaemonStore((s) => s.settings.provider_settings[agent]?.[descriptor.id]);
@@ -53,7 +51,6 @@ function ChoiceSetting({ agent, descriptor, choices }: { agent: Agent; descripto
       fill
       label={heading}
       help={<SettingHelp copy={copy} />}
-      description={t("settings.accounts.setting.description", { agent: isolate(providerLabel(t, providers, agent)) })}
     >
       <div className="w-64 max-w-full">
         <OptionSelect<string>
@@ -91,8 +88,6 @@ function ChoiceSetting({ agent, descriptor, choices }: { agent: Agent; descripto
  * default); a provider with no entry reads on unless the schema's default is off. */
 function SwitchSetting({ agent, descriptor }: { agent: Agent; descriptor: SettingDescriptor }): React.ReactElement | null {
   const { request } = useDaemon();
-  const t = useT();
-  const providers = useProviders();
   const copy = useSettingCopy(agent, descriptor.id);
   const stored = useDaemonStore((s) => s.settings.provider_settings[agent]?.[descriptor.id]);
   const [busy, setBusy] = useState(false);
@@ -108,7 +103,6 @@ function SwitchSetting({ agent, descriptor }: { agent: Agent; descriptor: Settin
     <SettingRow
       label={heading}
       help={<SettingHelp copy={copy} />}
-      description={t("settings.accounts.setting.description", { agent: isolate(providerLabel(t, providers, agent)) })}
       compact
     >
       <SettingSwitch
@@ -122,7 +116,8 @@ function SwitchSetting({ agent, descriptor }: { agent: Agent; descriptor: Settin
 }
 
 /** An agent's provider settings, one row for each the daemon serves for it (`ProviderInfo.settings`), in the agent's
- * settings dialog: each applies to every account of the agent (see `docs/product/per-agent-settings.md`).
+ * settings dialog: each applies to every account of the agent, which the dialog says once above its rows (see
+ * `docs/product/per-agent-settings.md`).
  * A setting the provider's presentation module has no words for is not shown, nor is one of a kind this build does not
  * know. */
 export function AgentProviderSettings({ agent }: { agent: Agent }): React.ReactElement {

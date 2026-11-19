@@ -400,6 +400,34 @@ async fn the_claude_approval_mode_applies_to_every_claude_account_and_only_to_cl
     );
 }
 
+/// Claude Code's own switch is accepted for Claude Code alone, and clearing it puts it back off.
+#[tokio::test]
+async fn claude_simple_shell_commands_is_set_for_claude_alone_and_cleared_to_off() {
+    let (state, _dir) = crate::test_support::app_state("claude-simple-shell-commands");
+    let on = |agent| {
+        state
+            .store
+            .provider_settings_of(agent)
+            .unwrap()
+            .switch("simple_shell_commands")
+    };
+    assert!(!on(AgentId::CLAUDE));
+    set(
+        &state,
+        AgentId::CLAUDE,
+        "simple_shell_commands",
+        Some(SettingValue::Switch(true)),
+    )
+    .await
+    .unwrap();
+    assert!(on(AgentId::CLAUDE));
+    assert!(!on(AgentId::CODEX));
+    set(&state, AgentId::CLAUDE, "simple_shell_commands", None)
+        .await
+        .unwrap();
+    assert!(!on(AgentId::CLAUDE));
+}
+
 /// A request for a setting the provider does not declare, a value of the other kind or a choice it
 /// does not offer is refused as unreadable, and changes nothing.
 #[tokio::test]
@@ -421,6 +449,12 @@ async fn a_provider_setting_request_is_refused_unless_the_provider_declares_it_a
             Some(SettingValue::Switch(true)),
         ),
         (AgentId::CODEX, "claude_compatibility", choice("on")),
+        (AgentId::CLAUDE, "simple_shell_commands", choice("on")),
+        (
+            AgentId::CODEX,
+            "simple_shell_commands",
+            Some(SettingValue::Switch(true)),
+        ),
     ] {
         let error = set(&state, agent, setting, value.clone())
             .await

@@ -62,7 +62,6 @@ it("says the permission approval once, as a row in the agent's settings dialog w
   framesAsTimers("pointer");
   const { container: panel, section: container } = await mountAgentSettings("Codex");
   expect(panel.textContent?.match(/Permission approval/g)).toHaveLength(1);
-  expect(panel.textContent).toContain("Applies to every \u2068Codex\u2069 account");
   expect(panel.querySelectorAll('button[aria-label="About permission approval"]')).toHaveLength(1);
   expect(container.querySelector('[role="tabpanel"]')!.textContent).not.toContain("Permission approval");
   await act(async () => buttonNamed(panel, t("common.close"))!.click());

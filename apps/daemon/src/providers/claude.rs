@@ -171,6 +171,17 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
             shown_to_agents: true,
             compatibility_with: Some("codex"),
         },
+        SettingDescriptor {
+            id: "simple_shell_commands",
+            kind: SettingKind::Switch {
+                default: SwitchDefault::Off,
+            },
+            // Only adds a line to the session's system prompt: it travels, and as no permission
+            // setting, agents may read it.
+            exported: true,
+            shown_to_agents: true,
+            compatibility_with: None,
+        },
     ],
     codes: &[WORKSPACE_UNTRUSTED],
 };

@@ -124,6 +124,14 @@ const STATUS_LINE_SINCE: AgentVersion = (2, 0, 0);
 /// The file in the session's scratch directory that holds the `--settings` JSON, owner-only.
 const SETTINGS_FILE: &str = "claude-settings.json";
 
+/// Appended to the role text while the `simple_shell_commands` switch is on. Claude Code asks the
+/// user to approve a Bash command its parser cannot fully read (a heredoc, a compound `cd … &&`),
+/// since it cannot check every part of it against the permission rules; commands kept simple pass
+/// without asking.
+const SIMPLE_SHELL_COMMANDS_HINT: &str = "Keep Bash commands simple enough for Claude Code's \
+permission check to read: write scripts and multi-line content to a file with the Write tool \
+instead of a heredoc, run them by absolute path, and avoid `cd … &&` chains.";
+
 pub struct ClaudeProvider;
 
 impl ClaudeProvider {
@@ -508,6 +516,10 @@ impl AgentProvider for ClaudeProvider {
         if let Some(source) = source {
             role.push_str("\n\n");
             role.push_str(&source.instructions(AgentId::CLAUDE.label(), spec.shell_env));
+        }
+        if spec.settings.switch("simple_shell_commands") {
+            role.push_str("\n\n");
+            role.push_str(SIMPLE_SHELL_COMMANDS_HINT);
         }
         args.push("--append-system-prompt".to_string());
         args.push(role);
@@ -1296,6 +1308,77 @@ mod tests {
                 &fixture.spec().role_options(),
             )
         );
+    }
+
+    /// The role text a launch passes with `--append-system-prompt`.
+    fn appended_prompt(plan: &crate::adapter::LaunchPlan) -> String {
+        value_after(&plan.args, "--append-system-prompt").expect("--append-system-prompt is passed")
+    }
+
+    /// With the `simple_shell_commands` switch on, the hint follows the role text after a blank
+    /// line, on a fresh launch and a resume alike; off, or never chosen, the role text is as it
+    /// was.
+    #[test]
+    fn the_simple_shell_commands_hint_follows_the_role_text_when_the_switch_is_on() {
+        let fixture = spec_fixture();
+        let role = session_tools::role::role_description(
+            fixture.kind,
+            fixture.owner.as_ref(),
+            AgentId::CLAUDE,
+            &fixture.spec().role_options(),
+        );
+        assert!(!SIMPLE_SHELL_COMMANDS_HINT.trim().is_empty());
+        let cases = [(None, false), (Some(false), false), (Some(true), true)];
+        for (switch, hinted) in cases {
+            let settings = ProviderSettings::new(switch.map(|on| {
+                (
+                    "simple_shell_commands".to_string(),
+                    Some(SettingValue::Switch(on)),
+                )
+            }));
+            for resume in [None, Some("conversation-1")] {
+                let mut spec = fixture.spec();
+                spec.settings = &settings;
+                spec.resume_agent_session_id = resume;
+                let prompt = appended_prompt(&ClaudeProvider.plan(&spec).expect("plan"));
+                let expected = if hinted {
+                    format!("{role}\n\n{SIMPLE_SHELL_COMMANDS_HINT}")
+                } else {
+                    role.clone()
+                };
+                assert_eq!(prompt, expected, "{switch:?} {resume:?}");
+            }
+        }
+    }
+
+    /// The hint comes after the Codex-compatibility instructions when those are present, and the
+    /// switch changes nothing else of the launch.
+    #[test]
+    fn the_simple_shell_commands_hint_comes_after_the_codex_compatibility_instructions() {
+        let mut fixture = codex_world();
+        let without = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        fixture.settings = ProviderSettings::new([(
+            "simple_shell_commands".to_string(),
+            Some(SettingValue::Switch(true)),
+        )]);
+        let with = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        let base = appended_prompt(&without);
+        assert!(base.contains("# Codex compatibility"));
+        assert_eq!(
+            appended_prompt(&with),
+            format!("{base}\n\n{SIMPLE_SHELL_COMMANDS_HINT}")
+        );
+        let strip = |plan: &crate::adapter::LaunchPlan| {
+            let at = plan
+                .args
+                .iter()
+                .position(|arg| arg == "--append-system-prompt")
+                .unwrap();
+            let mut args = plan.args.clone();
+            args.remove(at + 1);
+            args
+        };
+        assert_eq!(strip(&with), strip(&without));
     }
 
     /// A scratch home holding Codex's configuration: a server of each transport, a name Claude

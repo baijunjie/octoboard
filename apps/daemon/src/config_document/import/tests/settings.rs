@@ -516,6 +516,12 @@ async fn provider_settings_round_trip_with_the_accounts_approval_settings_includ
     );
     set(
         &source,
+        AgentId::CLAUDE,
+        "simple_shell_commands",
+        SettingValue::Switch(true),
+    );
+    set(
+        &source,
         AgentId::GROK,
         "approval_mode",
         SettingValue::Choice("always_approve".into()),
@@ -530,7 +536,7 @@ async fn provider_settings_round_trip_with_the_accounts_approval_settings_includ
         full["accounts"]["agent_settings"]["provider_settings"],
         serde_json::json!({
             "codex": { "claude_compatibility": false, "approval_reviewer": "auto_review" },
-            "claude": { "approval_mode": "bypass" },
+            "claude": { "approval_mode": "bypass", "simple_shell_commands": true },
             "grok": { "approval_mode": "always_approve" },
         })
     );
@@ -695,6 +701,11 @@ async fn provider_settings_round_trip_with_the_accounts_approval_settings_includ
             .choice("approval_mode"),
         Some("always_approve")
     );
+    assert!(target
+        .store
+        .provider_settings_of(AgentId::CLAUDE)
+        .unwrap()
+        .switch("simple_shell_commands"));
 }
 
 /// The tags of every agent travel with the accounts, removed agents' included, and an import

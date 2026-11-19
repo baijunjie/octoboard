@@ -144,7 +144,6 @@ export function AgentTagsSetting({ agent }: { agent: Agent }): React.ReactElemen
     <SettingRow
       label={t("settings.accounts.tags.heading")}
       help={<HelpTip label={t("settings.accounts.tags.helpLabel")}>{t("settings.accounts.tags.helpText")}</HelpTip>}
-      description={t("settings.accounts.setting.description", { agent: name })}
       below={
         <TagsInput
           hideLabel
