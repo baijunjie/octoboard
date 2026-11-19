@@ -6,6 +6,7 @@ import vue from "eslint-plugin-vue";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import uiLayers from "./packages/ui/eslint.layers.mjs";
+import lucide from "./scripts/eslint/lucide-aria-hidden.mjs";
 
 const javascript = ["**/*.{js,mjs,cjs}"];
 const typescript = ["**/*.{ts,tsx,mts,cts}", "**/*.vue"];
@@ -81,6 +82,8 @@ export default defineConfig(
     },
   },
   ...uiLayers,
+  // A lucide-react icon carries `aria-hidden` itself (see "Accessible names" in docs/conventions/ui-standard.md).
+  { files: ["packages/ui/**/*.{ts,tsx}"], plugins: { lucide }, rules: { "lucide/lucide-aria-hidden": "error" } },
   {
     files: source,
     plugins: { "@stylistic": stylistic },

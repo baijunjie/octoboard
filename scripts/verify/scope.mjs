@@ -120,7 +120,7 @@ export const RULES = [
 
   // Cargo features unify across workspace members, so a manifest of either crate changes how both build.
   { match: ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rustfmt.toml", ".cargo/", /\/Cargo\.toml$/], consumers: RUST_PACKAGES, why: "the Cargo workspace, its feature set and toolchain are shared by both crates" },
-  { match: ["pnpm-lock.yaml", "pnpm-workspace.yaml", "patches/", "eslint.config.mjs", "packages/ui/eslint.layers.mjs"], consumers: JS_PACKAGES, why: "dependency versions and the lint rules apply to every JavaScript package; the UI's layering blocks are spread into the root lint configuration" },
+  { match: ["pnpm-lock.yaml", "pnpm-workspace.yaml", "patches/", "eslint.config.mjs", "packages/ui/eslint.layers.mjs", "scripts/eslint/"], consumers: JS_PACKAGES, why: "dependency versions and the lint rules apply to every JavaScript package; the UI's layering blocks are spread into the root lint configuration, and the local rules in `scripts/eslint/` are loaded by it as plugins" },
   { match: ["package.json"], consumers: ALL_PACKAGES, why: "holds the scripts of every package, including `test:rust`, and the shared dev dependencies" },
   { match: ["scripts/lib/git.mjs"], consumers: ["verify", "ui", "desktop"], why: "imported by `scripts/verify.mjs`, `scripts/hooks/*.mjs`, `scripts/verify/tree.mjs` and `scripts/lib/env.mjs` (so by the UI's `vite.config.ts` too), and by the desktop release publishing script" },
   { match: ["scripts/lib/env.mjs", "scripts/lib/env.d.mts"], consumers: ["verify", "ui", "desktop"], why: "imported by `scripts/verify/lock.mjs`, `packages/ui/vite.config.ts` (its declaration types that import) and the desktop release scripts" },

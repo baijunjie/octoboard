@@ -42,6 +42,7 @@ const CASES = [
   ["patches/a.patch", JS],
   ["eslint.config.mjs", JS],
   ["packages/ui/eslint.layers.mjs", JS],
+  ["scripts/eslint/lucide-aria-hidden.mjs", JS],
   ["package.json", ALL_PACKAGES],
   ["config/holder-floor.txt", ["verify", "desktop", "daemon"]],
   ["scripts/lib/env.mjs", ["verify", "ui", "desktop"], ["ui"]],

@@ -90,5 +90,12 @@ checks are run in a piece of work, and that nothing bypasses them, is in `CLAUDE
 - **Line width is the formatters' alone.** Where no formatter sets one (comments in any language, Markdown prose), none
   applies: a line is never wrapped or re-wrapped to fit a width, nor reported for its length, and a review does not ask
   for it.
+- **A local ESLint rule lives in `scripts/eslint/<rule>.mjs`, with its `node:test` file beside it** (ESLint's
+  `RuleTester` bridged to `node:test`), and is loaded as a plugin by `eslint.config.mjs`; `scripts/eslint/` is matched by
+  the lint-configuration rule in `scripts/verify/scope.mjs`. Its plugin declares `meta.name` and a `meta.version` taken
+  from the file's own content hash: ESLint's cache tells plugins apart only by those, so a rule edit would otherwise
+  leave cached lint results standing.
+- **A local rule's autofix only removes or rewrites what it has proved changes no behavior.** Where that cannot be
+  proved from the syntax, the rule reports without a fix (or offers a suggestion, `hasSuggestions`), or stays silent.
 - **Generated and agent-owned paths are outside lint:** `protocol.generated.ts` (written by a daemon test), `.claude/`,
   `.agents/`, `.codex/`, build output and `.worktrees/`. Do not hand-edit the generated file.
