@@ -491,6 +491,19 @@ pub trait AgentProvider: Send + Sync {
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan>;
 
+    /// Work the agent's own CLI does before the session's terminal starts, run with the resolved
+    /// `binary` in the launch's `environment` (the shell snapshot with the plan's entries): freeing
+    /// a conversation being resumed from a process of the agent's that holds it and would make
+    /// the resume fail. Best effort: what it cannot do it logs, and the launch goes on. A provider
+    /// with nothing to do before a launch does nothing.
+    fn before_launch(
+        &self,
+        _spec: &LaunchSpec<'_>,
+        _binary: &ResolvedBinary,
+        _environment: &HashMap<String, String>,
+    ) {
+    }
+
     /// Rebuilds, for the daemon that adopts `launch`, what its plan and its server gave the
     /// session: the `carried_trust` and `after_exit` from the `adoption` its plan recorded, and
     /// the transport to the server found with its terminal. A provider whose plan records nothing
@@ -1082,5 +1095,24 @@ pub mod tests {
         ] {
             assert_eq!(super::version_from_output(text), version, "{text:?}");
         }
+    }
+
+    /// A provider that does not override `before_launch` (the test provider) runs nothing before a
+    /// launch, even given a resume of a high version.
+    #[test]
+    fn the_default_before_launch_runs_nothing() {
+        let fixture = spec_fixture();
+        let dir = crate::test_support::ScratchDir::new("adapter-before-launch");
+        let environment = crate::test_support::fake_agent(
+            &dir,
+            "agent",
+            &format!("echo ran >> '{}'", dir.join("ran").display()),
+        );
+        let binary = crate::platform::shell::resolve_binary("agent", &environment).expect("fake");
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = Some("conversation");
+        spec.agent_version = Some((9, 9, 9));
+        super::provider(crate::protocol::AgentId::TEST).before_launch(&spec, &binary, &environment);
+        assert!(!dir.join("ran").exists(), "the CLI ran");
     }
 }

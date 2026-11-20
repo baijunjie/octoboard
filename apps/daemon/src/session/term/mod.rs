@@ -252,6 +252,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
 
     let mut environment = shell_env.clone();
     environment.extend(plan.env.iter().cloned());
+    adapter.before_launch(&spec, &binary, &environment);
     if kind == SessionKind::Project {
         environment.extend(session_git_hooks::session_env(
             &shell_env,

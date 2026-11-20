@@ -122,6 +122,18 @@ by its conversation's session ID, with `request_resume_session` (see
   left as it was. Its error alert is an actionable failure too, whose next step is to check that Codex runs in the
   login shell and can read its account directory, then reopen the session, and if it still fails, delete it and start
   a new one.
+- **A Claude Code conversation held by a background session is freed first.** Claude Code can run a conversation as a
+  background session (`claude --bg`, or `claude --bg --resume <id>`), under the conversation's own id, which outlives
+  the terminal that started it, and it refuses to resume a conversation held that way. So every launch that resumes a
+  Claude Code conversation — a resume or reopen, a resume at start, `resume_session`, a new session opened on a found
+  conversation, and the relaunches for a model change, an account switch or a change of the account's sharing — first
+  stops the background session holding that conversation, under the account it launches on, then resumes as usual.
+  Stopping keeps the conversation but ends whatever that background session was running, without asking and with no
+  notice in the app; the daemon's log records it. It is best effort: if the background sessions cannot be listed or
+  stopped, the launch goes on and meets Claude Code's refusal, and the session does not come back. It runs only with
+  Claude Code 2.1.329 or later; with an older version, or one whose version is unknown, it is skipped. Continuing a
+  conversation from Claude Code's agents view forks it under a new id, which never holds the original, so it is not
+  involved. A launch that resumes no conversation runs none of this.
 - **Reopening a session whose owner is archived reopens its archived owners first, level by level from the topmost
   down**, then the session itself, so what the session reports reaches a running owner: a session bound to an archived
   coordinator whose console session is archived too brings back the console session, then the coordinator

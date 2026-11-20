@@ -753,6 +753,10 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   putting a session back at its prompt after a watch finding); every pass over a
   record goes through `line_file.rs`.
 - `src/adapter/` — the behavior of each provider behind one trait, `AgentProvider` (its descriptor, the launch plan,
+  the work its own CLI does before the terminal starts (`before_launch()`, default nothing; `session::term::launch`
+  calls it once the plan's environment is layered on the shell snapshot, and Claude Code's
+  `claude/background_sessions.rs` stops, through `account_cli`, the background session holding a conversation being
+  resumed; its fixtures are `testdata/claude_agents_*.json`, described in `testdata/claude-agents-captures.md`),
   refusing an account that cannot be launched, the installed version, reading the titles it shows, its hook interpreter,
   its record store, its screen reader, its accounts (`accounts()`, `AccountOps`), its model catalogue (`catalogue()`,
   `ModelCatalogue`), how its CLI is installed and updated (`cli_packaging()`, `CliPackaging`, defined in `mod.rs`, read
@@ -1024,7 +1028,7 @@ helper list; the rules for using them, including the ones that go beyond "use it
 | What a provider offers one made compatible with it (MCP servers, skills, prompts, instructions) | `CompatibilitySource` (`src/adapter/mod.rs`), reached through `LaunchSpec::compatibility_source` (the sources are set by `adapter::compatibility_sources_of`); Claude Code's is `src/adapter/claude/compatibility.rs`, Codex's `src/adapter/codex/compatibility.rs` |
 | A consumer's use of a compatibility source (translating its MCP servers, keeping secrets off argv, linking skills and prompts) | `src/adapter/compatibility_offer.rs`; each consumer's own part is its `compatibility_consumer.rs` |
 | A value for every provider (a setting per provider, a model and effort per provider) | `protocol::PerAgent<T>` (`src/protocol/agents.rs`), indexed by `AgentId` and serialised in registry order |
-| A provider's behavior (launch plan, installed version, titles, terminal screens and dialogs, accounts, model catalogue, status line) | `adapter::provider(agent)` giving the `AgentProvider` (`src/adapter/mod.rs`); its accounts through `AccountOps` (`src/accounts/ops.rs`), its models through `ModelCatalogue` (`src/agents/models.rs`) |
+| A provider's behavior (launch plan, work before the terminal starts, installed version, titles, terminal screens and dialogs, accounts, model catalogue, status line) | `adapter::provider(agent)` giving the `AgentProvider` (`src/adapter/mod.rs`); its accounts through `AccountOps` (`src/accounts/ops.rs`), its models through `ModelCatalogue` (`src/agents/models.rs`) |
 | Open a session's conversation in its agent's desktop application | `coordinator::native_app::open_session_in_app` (`src/coordinator/native_app.rs`) checks the session and the host; what each agent's application is asked is `AgentProvider::native_app` giving a `NativeApp` (`src/adapter/mod.rs`), which an agent declares through `Capabilities::native_app_scheme` (`src/providers/mod.rs`), and a refusal is `adapter::native_app_unavailable`; whether the application is installed comes from `platform::open::native_app`, the URL is opened by `host_open::native_app::open_url` |
 | Call CoreFoundation on macOS | `src/platform/cf.rs` (`Object`, `string`, `url`), not a second set of declarations |
 | Whether a session may be handed off now | `refuse_unless_it_can_be_handed_off` and `child_can_still_send` (`src/coordinator/handoff.rs`); the `handoff_session` request and the MCP tool of the same name (`src/mcp/tools/handoff.rs`) both go through it |

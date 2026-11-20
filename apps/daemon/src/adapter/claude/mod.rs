@@ -43,6 +43,7 @@
 //! the flags, and then this one never runs and the session reports no window.
 
 pub(crate) mod accounts;
+mod background_sessions;
 mod compatibility;
 mod compatibility_consumer;
 mod conversation;
@@ -62,6 +63,7 @@ mod status_line;
 pub(crate) mod switch_continue;
 pub(crate) mod transcript_watch;
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::Context;
@@ -73,7 +75,7 @@ use super::{
     LaunchPlan, LaunchSpec, NamedTitle, COMMAND_HOOK_TIMEOUT_SECS, HTTP_HOOK_TIMEOUT_SECS,
 };
 use crate::hostfs::replace::{replace_beside, Permissions};
-use crate::platform::shell::{self, Arg, Stderr};
+use crate::platform::shell::{self, Arg, ResolvedBinary, Stderr};
 use crate::protocol::AgentId;
 use crate::providers::{claude, ProviderDescriptor};
 use crate::session::screen::ScreenReader;
@@ -577,6 +579,25 @@ impl AgentProvider for ClaudeProvider {
             notice: untrusted_workspace_notice(spec, pinned),
             ..LaunchPlan::default()
         })
+    }
+
+    /// Stops the background session that holds a conversation being resumed (see
+    /// `background_sessions`).
+    fn before_launch(
+        &self,
+        spec: &LaunchSpec<'_>,
+        binary: &ResolvedBinary,
+        environment: &HashMap<String, String>,
+    ) {
+        let Some(conversation) = spec.resume_agent_session_id else {
+            return;
+        };
+        if spec
+            .agent_version
+            .is_some_and(|v| v >= background_sessions::BACKGROUND_SESSIONS_SINCE)
+        {
+            background_sessions::stop_holders(binary, environment, conversation);
+        }
     }
 }
 
@@ -1626,5 +1647,38 @@ command = "x"
                 );
             },
         );
+    }
+
+    /// The CLI is asked about background sessions only on a resume of a Claude Code that has the
+    /// subcommands: a fresh launch, an older one and one of unknown version run no CLI at all.
+    #[test]
+    fn before_launch_stops_the_background_session_holding_a_resumed_conversation_only_where_it_can_be(
+    ) {
+        use background_sessions::tests::{
+            FakeClaude, HELD_CONVERSATION, HOLDER_ID, HOLDING_CAPTURE,
+        };
+        let fixture = spec_fixture();
+        let since = background_sessions::BACKGROUND_SESSIONS_SINCE;
+        let just_below = (since.0, since.1, since.2 - 1);
+        for (resume, version, stops) in [
+            (Some(HELD_CONVERSATION), Some(since), true),
+            (Some(HELD_CONVERSATION), Some((since.0 + 1, 0, 0)), true),
+            (Some(HELD_CONVERSATION), Some(just_below), false),
+            (Some(HELD_CONVERSATION), None, false),
+            (None, Some(since), false),
+            (None, None, false),
+        ] {
+            let claude = FakeClaude::new(HOLDING_CAPTURE, 0, 0);
+            let mut spec = fixture.spec();
+            spec.resume_agent_session_id = resume;
+            spec.agent_version = version;
+            ClaudeProvider.before_launch(&spec, &claude.binary(), claude.environment());
+            let expected: Vec<String> = if stops {
+                vec!["agents --json".to_string(), format!("stop {HOLDER_ID}")]
+            } else {
+                Vec::new()
+            };
+            assert_eq!(claude.calls(), expected, "{resume:?} {version:?}");
+        }
     }
 }

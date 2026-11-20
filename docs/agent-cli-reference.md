@@ -565,6 +565,28 @@ starts a transient `claude daemon`, and shows "New sessions: …", "0 awaiting i
 `CLAUDE_CODE_DISABLE_AGENT_VIEW=1` (setting `disableAgentView`) removes the agents view and its hint and leaves the
 subagent view.
 
+### Background sessions and resuming
+
+Measured on 2.1.329, in a PTY with a real account. A background session (`claude --bg`) runs a conversation under a
+process of its own and outlives the terminal that started it; `claude --bg --resume <id>` continues an existing
+conversation that way **under the same id**, whereas ← into the agents view forks it under a new one (above), leaving
+the original free. While a background session holds a conversation, a bare `claude --resume <id>` attaches to it
+("Opening the background session (<short id>)…"), but a resume with further flags (`--append-system-prompt`, as every
+Octoboard launch passes) prints "That session is running in the background (<short id>). Run `claude attach <short
+id>` to open it, or `claude stop <short id>` first to resume it here. Add --fork-session to branch off a copy instead."
+and exits 1.
+
+- `claude agents --json` lists the account's sessions (it follows `CLAUDE_CONFIG_DIR`; another directory lists none),
+  as a JSON array answered in about 0.15 s. A background entry has `kind: "background"`, a short `id` (the first eight
+  characters of the conversation id), `sessionId`, `state`, `status`, and a `pid` while it runs, including idle after
+  its turn (`state: "done"`, `status: "idle"`); a stopped one stays listed without `pid`. An interactive entry has
+  `kind: "interactive"`, a `pid` and **no `id`**. `--all` adds completed background sessions. With
+  `CLAUDE_CODE_DISABLE_AGENT_VIEW=1` it exits 1 at once ("'claude agents --json' is disabled by …"). Captures are in
+  `apps/daemon/testdata/claude-agents-captures.md`.
+- `claude stop <short id>` stops a background session, keeping its conversation, and exits 0 (also for one already
+  stopped); it does not accept the full conversation id, and an unknown id exits 1 ("No session matching …"). After
+  the stop, the flagged resume succeeds.
+
 ### Keys that interrupt a turn
 
 Measured on 2.1.310, in a PTY with a real account. One Esc stops a turn, about 160 ms after it while the model writes;
