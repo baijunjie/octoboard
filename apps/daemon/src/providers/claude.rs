@@ -2,9 +2,9 @@
 
 use super::layout::AgentLayout;
 use super::{
-    AgentId, Capabilities, DeliveryQuirks, DetectionMarkers, ModelDisplay, ProviderCode,
-    ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming, SessionWindowName, SettingChoice,
-    SettingDescriptor, SettingKind, SwitchDefault,
+    AgentId, Capabilities, DeliveryQuirks, DetectionMarkers, InteractionKinds, ModelDisplay,
+    ProviderCode, ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming, SessionWindowName,
+    SettingChoice, SettingDescriptor, SettingKind, SwitchDefault,
 };
 
 /// Claude Code is not yet trusted with the session's directory, so the project's own `allow`
@@ -111,6 +111,9 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
             holds_report_for_completion_notice: true,
             resume_instruction_as_launch_prompt: true,
         },
+        interactions: InteractionKinds::ALL,
+        message_images: true,
+        slash_commands: true,
     },
     quota_windows: QuotaWindowNaming {
         kinds: &[

@@ -127,6 +127,8 @@ pub(super) enum InputRoute {
 
 #[derive(Default)]
 pub(super) struct InputSwap {
+    /// What the input box showed just before the composer request in flight wrote its first paste.
+    box_before: Option<String>,
     phase: Option<RecoveryPhase>,
     /// Since when a phase has stood without a break, the input held for it, or since a message last
     /// went in past it ([`LiveSession::input_swap_held_too_long`]).
@@ -207,6 +209,16 @@ impl Drop for Transaction<'_> {
 impl LiveSession {
     pub(crate) fn enable_native_stash(&self, enabled: bool) {
         self.native_stash.store(enabled, Ordering::Release);
+    }
+
+    /// Whether a stash was left unconfirmed and the stash key is held back for it.
+    #[cfg(test)]
+    pub(crate) fn stash_unsettled(&self) -> bool {
+        self.swap
+            .lock()
+            .expect("input swap lock poisoned")
+            .stash_unsettled_at
+            .is_some()
     }
 
     /// Holds the stash key back until the agent reports a prompt sent after now
@@ -479,6 +491,21 @@ impl LiveSession {
         prompt: &str,
         past_grace: bool,
     ) -> Result<(), PartialWrite> {
+        self.write_message_input_finishing(id, message, prompt, past_grace, None)
+    }
+
+    /// [`Self::write_message_input_as`] for a message whose first paste is `message` and the rest
+    /// `finish` writes, once the paste is in and within the same draft-preservation step: where the
+    /// draft is stashed around the message, the agent restores it only after the whole message has
+    /// been submitted, so the restore is waited for after `finish`.
+    pub(crate) fn write_message_input_finishing(
+        &self,
+        id: &str,
+        message: &[Input],
+        prompt: &str,
+        past_grace: bool,
+        finish: super::Finish<'_>,
+    ) -> Result<(), PartialWrite> {
         struct Writing<'a>(&'a LiveSession);
         impl Drop for Writing<'_> {
             fn drop(&mut self) {
@@ -487,7 +514,7 @@ impl LiveSession {
         }
         *self.writing.lock().expect("writing lock poisoned") = Some(id.to_string());
         let _writing = Writing(self);
-        self.write_message_input(message, prompt, past_grace)
+        self.write_message_input_with(message, prompt, past_grace, finish)
     }
 
     /// `Ok` means the entire payload reached the CLI, even when restoration is still pending.
@@ -498,14 +525,25 @@ impl LiveSession {
     /// stash can be used; where it cannot, the message waits for the box to empty during the
     /// draft's grace, and past it has the box cleared first (`Self::write_after_clearing`), or,
     /// where the box cannot be cleared, waits a bounded time and then goes in as the box stands.
+    #[cfg(test)]
     pub(crate) fn write_message_input(
         &self,
         message: &[Input],
         prompt: &str,
         past_grace: bool,
     ) -> Result<(), PartialWrite> {
+        self.write_message_input_with(message, prompt, past_grace, None)
+    }
+
+    fn write_message_input_with(
+        &self,
+        message: &[Input],
+        prompt: &str,
+        past_grace: bool,
+        finish: super::Finish<'_>,
+    ) -> Result<(), PartialWrite> {
         if !self.checks_composer {
-            return self.write_empty_message_input(message, prompt, past_grace);
+            return self.write_empty_message_input(message, prompt, past_grace, finish);
         }
         // A message left unsent that has waited its while for the user to send it, or a hold on the
         // input (a partly written message, typing not yet replayed) that has lasted as long and
@@ -525,11 +563,14 @@ impl LiveSession {
                     unsent,
                     read_before: None,
                 },
+                finish,
             );
         }
         match self.settled_composer().as_deref() {
             // Nothing to stash or clear: the write's own checks hold the message where they must.
-            Some("") | None => return self.write_empty_message_input(message, prompt, past_grace),
+            Some("") | None => {
+                return self.write_empty_message_input(message, prompt, past_grace, finish)
+            }
             Some(_) => {}
         }
         // A box read while a frame is still being drawn can show a draft that is not there, as at
@@ -580,8 +621,10 @@ impl LiveSession {
             }
         };
         match way {
-            Way::AsItIs => return self.write_empty_message_input(message, prompt, past_grace),
-            Way::Clear => return self.write_after_clearing(message, prompt),
+            Way::AsItIs => {
+                return self.write_empty_message_input(message, prompt, past_grace, finish)
+            }
+            Way::Clear => return self.write_after_clearing(message, prompt, finish),
             Way::Stash => {}
         }
         let transaction = Transaction(self);
@@ -601,17 +644,26 @@ impl LiveSession {
             self.release_input_protection();
             drop(transaction);
             if past_grace {
-                return self.write_after_clearing(message, prompt);
+                return self.write_after_clearing(message, prompt, finish);
             }
             return Err(blocked(
                 "the agent did not confirm stashing the draft; the message waits",
             ));
         }
         self.set_swap_phase(RecoveryPhase::Stashed);
-        let result = self.write_swap_payload_or_hold(message, prompt);
+        let result = self.write_swap_payload_or_hold(message, prompt, finish);
         if !self.settle_stashed_payload(&result) {
             return result;
         }
+        // A plain message shares one window with the stash key, so that a slow save cannot buy
+        // another. A composer request's rest, which waits on the agent between its pastes, can
+        // use the window up before the restore is waited for: that wait starts from the end of
+        // the payload.
+        let deadline = if finish.is_some() {
+            swap_now() + swap_settle()
+        } else {
+            deadline
+        };
         if self.wait_for_swap(true, deadline) {
             self.note_draft_restored();
             if !self.finish_input_swap() {
@@ -620,10 +672,55 @@ impl LiveSession {
         } else {
             self.report_input_recovery(notice_code::DRAFT_RESTORE_UNCONFIRMED, "The agent did not confirm restoring the draft in time. Retained keyboard input will be replayed into its current input; a written message will not be sent again.");
             self.note_stash_unsettled();
+            // Read before the protection is released, which replays the user's held keys into the
+            // box, and off a whole frame: only a box showing the message itself says it was not
+            // sent, not the draft the agent may yet put back.
+            let held = result.is_ok()
+                && finish.is_some_and(|tail| self.box_shows_the_message(tail.images));
             self.release_input_protection();
+            if held {
+                drop(transaction);
+                return Err(super::paste_apart::not_submitted(
+                    finish.map_or(0, |tail| tail.bytes),
+                ));
+            }
         }
         drop(transaction);
         result
+    }
+
+    /// Whether the box, read off a whole frame, shows the message Octoboard wrote last, with
+    /// `images` attached, rather than the user's draft: the placeholders this write added to what
+    /// the box held before it, and nothing but the message's own text beside them.
+    pub(crate) fn box_shows_the_message(&self, images: usize) -> bool {
+        self.wait_for_whole_frame();
+        let (composer, whole, _) = self.read_box();
+        let Some(text) = composer
+            .filter(|text| !text.is_empty())
+            .filter(|_| whole.is_some())
+        else {
+            return false;
+        };
+        let screen = crate::adapter::provider(self.agent).screen();
+        let before = self
+            .swap
+            .lock()
+            .expect("input swap lock poisoned")
+            .box_before
+            .as_deref()
+            .map_or(0, |before| screen.image_placeholders(before));
+        if screen.image_placeholders(&text) != before + images {
+            return false;
+        }
+        let beside = screen.without_image_placeholders(&text);
+        let beside = beside.trim();
+        let draft = self.draft.lock().expect("draft lock poisoned");
+        if beside.is_empty() {
+            return images > 0;
+        }
+        draft.message_text().is_some_and(|message| {
+            !message.is_empty() && self.holds_only_the_message(beside, Some(message))
+        })
     }
 
     /// Notes in the typing record that the agent put the stashed draft back in the box: the user's
@@ -652,6 +749,19 @@ impl LiveSession {
                 self.set_swap_phase(RecoveryPhase::Submitted);
                 return false;
             }
+            // A command the agent would have run as another, cleared from the box again: nothing
+            // of it is left, so the stash is restored with a key as for a payload refused whole;
+            // one left in the box waits, as an unsent message does, for the prompt that restores.
+            Err(error)
+                if error
+                    .error
+                    .get_ref()
+                    .and_then(|error| error.downcast_ref::<super::term::CommandNotRecognised>())
+                    .is_some_and(|refused| refused.cleared) =>
+            {
+                self.set_swap_phase(RecoveryPhase::RestoreRequested);
+                let _ = self.swap_key();
+            }
             Err(error) if error.written > 0 => return false,
             Err(_) => {
                 // Only this confirmed owned stash may be restored with a key, and a dialog may
@@ -663,9 +773,14 @@ impl LiveSession {
         true
     }
 
-    fn write_swap_payload(&self, message: &[Input], prompt: &str) -> Result<(), PartialWrite> {
+    fn write_swap_payload(
+        &self,
+        message: &[Input],
+        prompt: &str,
+        finish: super::Finish<'_>,
+    ) -> Result<(), PartialWrite> {
         let (now, rest) = super::paste_apart::split(message, self.submits_paste_apart());
-        {
+        let saw = {
             let input = self.pty.lock_input();
             if self.is_frozen() || self.poll_exit() || !self.takes_automatic_keys() {
                 return Err(blocked(
@@ -673,15 +788,33 @@ impl LiveSession {
                 ));
             }
             let mut draft = self.draft.lock().expect("draft lock poisoned");
-            draft.submission(None, prompt.to_string());
+            if finish.is_none_or(|tail| tail.records_prompt) {
+                draft.submission(None, prompt.to_string());
+            }
+            let box_before = finish.map(|_| self.input_box(&self.screen_text_undimmed()));
             self.input_writes.fetch_add(1, Ordering::AcqRel);
             self.pty.write_input_locked(&input, now)?;
             draft.message_written(Instant::now(), prompt);
             self.end_unclearable_wait();
+            box_before.map(|box_before| super::Written {
+                writes: self.input_writes.load(Ordering::Acquire),
+                box_before,
+                stashed: true,
+            })
+        };
+        if let Some(saw) = &saw {
+            self.swap
+                .lock()
+                .expect("input swap lock poisoned")
+                .box_before = saw.box_before.clone();
         }
         // Not required to show the message alone: only Codex submits a paste apart, and it has no
         // stash.
-        self.submit_rest(now, rest, false)
+        self.submit_rest(now, rest, false)?;
+        match (finish, saw) {
+            (Some(tail), Some(saw)) => (tail.then)(saw),
+            _ => Ok(()),
+        }
     }
 
     /// [`Self::write_swap_payload`], which after writing only part of the message leaves the input
@@ -690,27 +823,31 @@ impl LiveSession {
         &self,
         message: &[Input],
         prompt: &str,
+        finish: super::Finish<'_>,
     ) -> Result<(), PartialWrite> {
-        self.write_swap_payload(message, prompt).map_err(|partial| {
-            // A message written in full and left in the box is no fragment: nothing is missing
-            // from it for what comes next to join.
-            if partial.written == 0
-                || partial
-                    .error
-                    .get_ref()
-                    .is_some_and(|error| error.is::<super::NotSubmitted>())
-            {
-                return partial;
-            }
-            self.mark_input_fragmented(prompt);
-            PartialWrite {
-                written: partial.written,
-                error: io::Error::new(
-                    partial.error.kind(),
-                    HeldFragment(partial.error.to_string()),
-                ),
-            }
-        })
+        self.write_swap_payload(message, prompt, finish)
+            .map_err(|partial| {
+                // A message written in full and left in the box is no fragment: nothing is missing
+                // from it for what comes next to join.
+                // Nor is a command refused because the agent would have run another one: it was
+                // cleared again, or left whole in the box.
+                if partial.written == 0
+                    || partial.error.get_ref().is_some_and(|error| {
+                        error.is::<super::NotSubmitted>()
+                            || error.is::<super::term::CommandNotRecognised>()
+                    })
+                {
+                    return partial;
+                }
+                self.mark_input_fragmented(prompt);
+                PartialWrite {
+                    written: partial.written,
+                    error: io::Error::new(
+                        partial.error.kind(),
+                        HeldFragment(partial.error.to_string()),
+                    ),
+                }
+            })
     }
 
     fn mark_input_fragmented(&self, prompt: &str) {
@@ -1077,7 +1214,9 @@ mod tests {
         super::super::input_box_clear::PRESS_OVERRIDE
             .with(|shown| shown.set(Some(Duration::from_millis(50))));
         let framed = crate::session::term::frame_message(AgentId::CLAUDE, "second");
-        let error = live.write_after_clearing(&framed, "second").unwrap_err();
+        let error = live
+            .write_after_clearing(&framed, "second", None)
+            .unwrap_err();
         super::super::input_box_clear::PRESS_OVERRIDE.with(|shown| shown.set(None));
         assert!(
             !error.error.to_string().contains("only the message"),
@@ -2002,10 +2141,15 @@ mod tests {
             .unwrap();
         assert!(!live.allows_automatic_input());
         assert!(live
-            .write_empty_message_input(&[Input::Text("peer".into()), Input::Enter], "peer", true)
+            .write_empty_message_input(
+                &[Input::Text("peer".into()), Input::Enter],
+                "peer",
+                true,
+                None
+            )
             .is_err());
         assert!(live
-            .write_swap_payload(&[Input::Text("peer".into()), Input::Enter], "peer")
+            .write_swap_payload(&[Input::Text("peer".into()), Input::Enter], "peer", None)
             .is_err());
         assert!(live.swap_key().is_err());
         live.set_swap_phase(RecoveryPhase::Submitted);

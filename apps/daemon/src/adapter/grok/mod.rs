@@ -99,6 +99,7 @@ mod conversation;
 mod feed;
 mod home;
 mod hooks;
+mod interaction;
 mod login;
 mod mcp_inventory;
 pub(crate) mod models;
@@ -115,6 +116,8 @@ mod writeback;
 mod compatibility_tests;
 #[cfg(test)]
 mod home_tests;
+#[cfg(test)]
+mod interaction_tests;
 #[cfg(test)]
 mod sandbox_tests;
 #[cfg(test)]
@@ -169,6 +172,10 @@ impl AgentProvider for GrokProvider {
 
     fn hooks(&self) -> &'static dyn crate::hooks::HookInterpreter {
         &hooks::GrokHooks
+    }
+
+    fn interactions(&self) -> Option<&'static dyn crate::session::interaction::InteractionReader> {
+        Some(&interaction::GrokInteractions)
     }
 
     fn has_status_integration(&self) -> bool {

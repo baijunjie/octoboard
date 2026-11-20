@@ -1065,6 +1065,7 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Option<Session>> {
         prompt_on_launch: false,
         screen_inexact: false,
         holder_link: None,
+        interaction: None,
         default_effort: None,
         role: enum_from_row::<Role>(row, 19)?,
         has_conversation: row.get(10)?,

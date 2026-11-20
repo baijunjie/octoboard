@@ -498,7 +498,9 @@ async fn a_message_left_alone_in_the_box_holds_the_next_only_for_a_while() {
     live.settle_input();
     let second = crate::session::term::frame_message(AgentId::CLAUDE, "second");
     for _ in 0..3 {
-        let error = live.write_after_clearing(&second, "second").unwrap_err();
+        let error = live
+            .write_after_clearing(&second, "second", None)
+            .unwrap_err();
         assert_eq!(error.written, 0);
     }
     assert!(
@@ -508,7 +510,7 @@ async fn a_message_left_alone_in_the_box_holds_the_next_only_for_a_while() {
     assert!(!fixture.keys().windows(6).any(|window| window == b"second"));
 
     age_unclearable_wait(&live, "second");
-    live.write_after_clearing(&second, "second").unwrap();
+    live.write_after_clearing(&second, "second", None).unwrap();
     let keys = fixture.keys();
     assert!(
         !keys.contains(&CTRL_U),
@@ -596,7 +598,9 @@ async fn past_the_wait_a_dialog_still_holds_the_message() {
         b"\x1b[2J\x1b[HResume this conversation?\r\nEnter to confirm \xc2\xb7 Esc to dismiss\r\n",
     );
     for _ in 0..2 {
-        let error = live.write_after_clearing(&framed, "peer").unwrap_err();
+        let error = live
+            .write_after_clearing(&framed, "peer", None)
+            .unwrap_err();
         assert_eq!(error.written, 0);
     }
     assert_eq!(
@@ -608,7 +612,7 @@ async fn past_the_wait_a_dialog_still_holds_the_message() {
 
     live.on_output(&draw(AgentId::CLAUDE, &["draft"]));
     live.settle_input();
-    live.write_after_clearing(&framed, "peer").unwrap();
+    live.write_after_clearing(&framed, "peer", None).unwrap();
     assert!(fixture.keys().windows(4).any(|window| window == b"peer"));
     assert_eq!(sent_with_draft(&mut events).len(), 1);
 }
@@ -651,7 +655,9 @@ async fn the_message_written_last_is_never_cleared_as_a_draft() {
     live.on_output(&draw(AgentId::CLAUDE, &["peer"]));
     live.settle_input();
     let second = crate::session::term::frame_message(AgentId::CLAUDE, "second");
-    let error = live.write_after_clearing(&second, "second").unwrap_err();
+    let error = live
+        .write_after_clearing(&second, "second", None)
+        .unwrap_err();
     assert_eq!(error.written, 0);
     assert!(
         error.error.to_string().contains("only the message"),
@@ -729,7 +735,9 @@ async fn a_draft_no_key_can_clear_holds_the_message_only_for_a_while() {
     let framed = crate::session::term::frame_message(AgentId::TEST, "peer");
     let before = live.input_writes();
     for _ in 0..2 {
-        let error = live.write_after_clearing(&framed, "peer").unwrap_err();
+        let error = live
+            .write_after_clearing(&framed, "peer", None)
+            .unwrap_err();
         assert_eq!(error.written, 0);
     }
     assert_eq!(
@@ -739,7 +747,7 @@ async fn a_draft_no_key_can_clear_holds_the_message_only_for_a_while() {
     );
 
     age_unclearable_wait(&live, "peer");
-    live.write_after_clearing(&framed, "peer").unwrap();
+    live.write_after_clearing(&framed, "peer", None).unwrap();
     let keys = fixture.keys();
     assert!(!keys.contains(&CTRL_U), "{keys:?}");
     assert!(keys.windows(4).any(|window| window == b"peer"), "{keys:?}");
@@ -942,7 +950,7 @@ async fn text_typed_after_the_message_written_last_is_cleared_as_a_draft() {
     live.settle_input();
     let screen = answer_presses(live.clone(), vec![draw(AgentId::CLAUDE, &[])]);
     let second = crate::session::term::frame_message(AgentId::CLAUDE, "second");
-    live.write_after_clearing(&second, "second").unwrap();
+    live.write_after_clearing(&second, "second", None).unwrap();
     screen.join().unwrap();
     let keys = fixture.keys();
     assert_eq!(
@@ -975,7 +983,9 @@ async fn the_placeholder_of_the_message_written_last_is_never_cleared_as_a_draft
     live.on_output(&draw(AgentId::CLAUDE, &["[Pasted text #1 +24 lines]"]));
     live.settle_input();
     let second = crate::session::term::frame_message(AgentId::CLAUDE, "second");
-    let error = live.write_after_clearing(&second, "second").unwrap_err();
+    let error = live
+        .write_after_clearing(&second, "second", None)
+        .unwrap_err();
     assert_eq!(error.written, 0);
     let keys = fixture.keys();
     assert!(!keys.contains(&CTRL_U), "{keys:?}");
@@ -995,7 +1005,7 @@ async fn the_write_after_a_clear_refuses_once_anything_else_has_written() {
     live.write_terminal_input(b"x").unwrap();
     let framed = crate::session::term::frame_message(AgentId::CLAUDE, "peer");
     let error = live
-        .write_message_into_box(&framed, "peer", true, BoxIs::Cleared(cleared_at))
+        .write_message_into_box(&framed, "peer", true, BoxIs::Cleared(cleared_at), None)
         .unwrap_err();
     assert_eq!(error.written, 0);
     assert_eq!(error.error.kind(), std::io::ErrorKind::WouldBlock);
@@ -1010,7 +1020,7 @@ async fn the_write_after_a_clear_refuses_once_anything_else_has_written() {
     live.on_output(&draw(AgentId::CLAUDE, &[]));
     live.settle_input();
     let now = live.input_writes();
-    live.write_message_into_box(&framed, "peer", true, BoxIs::Cleared(now))
+    live.write_message_into_box(&framed, "peer", true, BoxIs::Cleared(now), None)
         .unwrap();
     assert!(!live.draft.lock().unwrap().holds());
     let keys = fixture.keys();
@@ -1111,7 +1121,7 @@ async fn messages_of_the_same_text_wait_apart() {
     // Through `write_after_clearing`, as a box no key clears takes it, under each identity.
     let attempt = |id: &str| {
         *live.writing.lock().unwrap() = Some(id.to_string());
-        let result = live.write_after_clearing(&framed, "peer");
+        let result = live.write_after_clearing(&framed, "peer", None);
         *live.writing.lock().unwrap() = None;
         result
     };
@@ -1258,16 +1268,18 @@ async fn the_wait_is_thirty_seconds_from_the_first_attempt_that_found_the_draft(
     live.settle_input();
     let framed = crate::session::term::frame_message(AgentId::TEST, "peer");
     let before = live.input_writes();
-    assert!(live.write_after_clearing(&framed, "peer").is_err());
+    assert!(live.write_after_clearing(&framed, "peer", None).is_err());
     backdate_wait(&live, "peer", super::UNCLEARABLE_DRAFT_WAIT / 2);
     for _ in 0..2 {
-        let error = live.write_after_clearing(&framed, "peer").unwrap_err();
+        let error = live
+            .write_after_clearing(&framed, "peer", None)
+            .unwrap_err();
         assert_eq!(error.written, 0);
     }
     assert_eq!(live.input_writes(), before, "half the wait has passed");
 
     backdate_wait(&live, "peer", super::UNCLEARABLE_DRAFT_WAIT / 2);
-    live.write_after_clearing(&framed, "peer").unwrap();
+    live.write_after_clearing(&framed, "peer", None).unwrap();
     assert_eq!(live.input_writes(), before + 1);
 }
 
@@ -1375,6 +1387,7 @@ async fn a_box_seen_empty_at_the_bound_is_written_into_with_no_notice() {
                 unsent: false,
                 read_before,
             },
+            None,
         )
         .unwrap();
         let keys = fixture.keys();
@@ -1400,7 +1413,7 @@ async fn at_the_bound_the_message_still_waits_for_what_a_write_must_not_cross() 
     live.write_terminal_input(b"\x1b[").unwrap();
     let framed = crate::session::term::frame_message(AgentId::CLAUDE, "peer");
     let error = live
-        .write_message_into_box(&framed, "peer", true, unclearable)
+        .write_message_into_box(&framed, "peer", true, unclearable, None)
         .unwrap_err();
     assert_eq!(error.written, 0);
     assert_eq!(error.error.kind(), std::io::ErrorKind::WouldBlock);
@@ -1415,7 +1428,7 @@ async fn at_the_bound_the_message_still_waits_for_what_a_write_must_not_cross() 
     live.pty.freeze_output();
     let before = live.input_writes();
     let error = live
-        .write_message_into_box(&framed, "peer", true, unclearable)
+        .write_message_into_box(&framed, "peer", true, unclearable, None)
         .unwrap_err();
     assert_eq!(error.written, 0);
     assert_eq!(live.input_writes(), before);
@@ -1430,7 +1443,7 @@ async fn at_the_bound_the_message_still_waits_for_what_a_write_must_not_cross() 
     let framed = crate::session::term::frame_message(AgentId::CODEX, "peer");
     let before = live.input_writes();
     let error = live
-        .write_message_into_box(&framed, "peer", true, unclearable)
+        .write_message_into_box(&framed, "peer", true, unclearable, None)
         .unwrap_err();
     assert_eq!(error.written, 0);
     assert_eq!(live.input_writes(), before);
@@ -1870,7 +1883,7 @@ async fn a_forced_write_waits_on_a_hidden_box_after_a_history_key() {
     live.settle_input();
     let framed = crate::session::term::frame_message(AgentId::CLAUDE, "peer");
     assert_eq!(
-        live.write_after_clearing(&framed, "peer")
+        live.write_after_clearing(&framed, "peer", None)
             .unwrap_err()
             .written,
         0
@@ -1878,7 +1891,7 @@ async fn a_forced_write_waits_on_a_hidden_box_after_a_history_key() {
     age_unclearable_wait(&live, "peer");
     for _ in 0..2 {
         assert_eq!(
-            live.write_after_clearing(&framed, "peer")
+            live.write_after_clearing(&framed, "peer", None)
                 .unwrap_err()
                 .written,
             0
@@ -1979,6 +1992,7 @@ async fn a_forced_write_into_a_box_seen_empty_is_an_ordinary_write() {
             unsent: false,
             read_before: None,
         },
+        None,
     )
     .unwrap();
     assert!(fixture.keys().windows(4).any(|window| window == b"peer"));
@@ -2110,6 +2124,7 @@ async fn a_forced_write_after_presses_that_emptied_the_box_reports_the_draft_cle
             unsent: false,
             read_before: Some("the draft"),
         },
+        None,
     )
     .unwrap();
     assert!(fixture.keys().windows(4).any(|window| window == b"peer"));

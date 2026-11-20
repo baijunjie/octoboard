@@ -272,6 +272,50 @@ fn queues_text_for_the_user_thread_and_ignores_the_ephemeral_title_thread() {
     assert_eq!(transport.shared.thread().as_deref(), Some("main"));
 }
 
+/// A message with images is queued as `localImage` items ahead of its text; with no text there is
+/// no text item. Codex reads the files when the message is queued (0.167.1).
+#[test]
+fn a_message_with_images_is_queued_as_local_image_items_ahead_of_its_text() {
+    let images = vec!["/s/pasted/a.png".to_string(), "/s/pasted/b.jpg".to_string()];
+    for (text, items) in [
+        (
+            "look",
+            json!([
+                {"type":"localImage","path":"/s/pasted/a.png"},
+                {"type":"localImage","path":"/s/pasted/b.jpg"},
+                {"type":"text","text":"look","text_elements":[]},
+            ]),
+        ),
+        (
+            "",
+            json!([
+                {"type":"localImage","path":"/s/pasted/a.png"},
+                {"type":"localImage","path":"/s/pasted/b.jpg"},
+            ]),
+        ),
+    ] {
+        let (transport, listener, token) = loopback();
+        transport.shared.identify("main");
+        let server = serve(listener, token, idle_main);
+        assert_eq!(
+            transport
+                .send_with_images(text, &images, "launch:7")
+                .unwrap(),
+            Sent::Queued
+        );
+        drop(transport);
+        let requests = server.join().unwrap();
+        let add = requests
+            .iter()
+            .find(|(method, _)| method == "thread/queue/add")
+            .unwrap();
+        assert_eq!(
+            add.1,
+            json!({"threadId":"main","clientUserMessageId":"launch:7","input":items})
+        );
+    }
+}
+
 /// Whether a start Codex refused leaves the message to run is read off Codex's queue, not the
 /// refusal's words: gone from the queue, or queued behind a running turn, it runs; queued with
 /// nothing running, it may never run, and is uncertain.

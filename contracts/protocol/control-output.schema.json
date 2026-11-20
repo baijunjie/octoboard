@@ -850,6 +850,18 @@
         },
         "delivery": {
           "$ref": "#/$defs/DeliveryQuirks"
+        },
+        "interactions": {
+          "$ref": "#/$defs/InteractionKinds",
+          "description": "Which of the prompts its agent shows while a session waits on the user Octoboard publishes\nand answers (`Session.interaction`, `answer_interaction`;\n`AgentProvider::interactions`)."
+        },
+        "message_images": {
+          "type": "boolean",
+          "description": "Takes images attached to a message (`send_message`'s `images`)."
+        },
+        "slash_commands": {
+          "type": "boolean",
+          "description": "Runs a slash command sent as one (`send_command`)."
         }
       },
       "required": [
@@ -862,7 +874,10 @@
         "config_sharing",
         "mcp_inventory",
         "ends_command_groups_on_exit",
-        "delivery"
+        "delivery",
+        "interactions",
+        "message_images",
+        "slash_commands"
       ],
       "description": "What a provider can do that not every provider can, declared so that code and the UI branch\non it rather than on which provider it is."
     },
@@ -1068,6 +1083,37 @@
       ],
       "description": "One side of a change in a change listing. See \"Changes and comparisons\" in\n`apps/daemon/PROTOCOL.md`."
     },
+    "ChoiceEffect": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "other"
+          ]
+        },
+        {
+          "type": "string",
+          "const": "allow",
+          "description": "Lets this call run."
+        },
+        {
+          "type": "string",
+          "const": "allow_remember",
+          "description": "Lets this call run and records a rule that lets calls like it run without asking."
+        },
+        {
+          "type": "string",
+          "const": "deny",
+          "description": "Refuses this call."
+        },
+        {
+          "type": "string",
+          "const": "deny_remember",
+          "description": "Refuses this call and records a rule that refuses calls like it without asking."
+        }
+      ],
+      "description": "What choosing an answer does. A value a client does not know reads as `other`."
+    },
     "ChoiceOption": {
       "type": "object",
       "properties": {
@@ -1082,6 +1128,16 @@
         "value"
       ],
       "description": "One option of a choice: the `value` that is submitted, shown as `label` where there is one."
+    },
+    "ChoiceText": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "optional",
+          "description": "The choice may carry text for the agent, or none."
+        }
+      ],
+      "description": "How text goes with a choice. A value a client does not know reads as `optional`."
     },
     "CliInstallMethod": {
       "oneOf": [
@@ -6618,6 +6674,21 @@
       ],
       "description": "A file body. Exactly one of `text` and `data` is set, by `kind`."
     },
+    "FreeText": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "instead",
+          "description": "In place of the options: an answer has either selected options or text."
+        },
+        {
+          "type": "string",
+          "const": "with",
+          "description": "Beside them: an answer may have both."
+        }
+      ],
+      "description": "How a written answer goes with a question's options. A client that does not know the value\noffers no written answer."
+    },
     "GitActivity": {
       "type": "string",
       "enum": [
@@ -7915,6 +7986,57 @@
       ],
       "description": "The application settings a document carries, beside the value this machine has now, so a client\ncan show what applying them would change. A key the document does not carry is reported as this\nmachine's value, so its line reads as no change."
     },
+    "InteractionKinds": {
+      "type": "object",
+      "properties": {
+        "permission": {
+          "type": "boolean",
+          "description": "Tool permission prompts."
+        },
+        "question": {
+          "type": "boolean",
+          "description": "Questions from the agent's own ask-the-user tool."
+        }
+      },
+      "required": [
+        "permission",
+        "question"
+      ],
+      "description": "The kinds of prompt a provider's sessions publish and answer."
+    },
+    "InteractionPrompt": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/PermissionPrompt",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "permission"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "The agent asks whether it may use a tool."
+        },
+        {
+          "$ref": "#/$defs/QuestionPrompt",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "question"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "The agent's own ask-the-user tool puts one or more questions."
+        }
+      ],
+      "description": "What the prompt asks, by its `kind`. A client shows the terminal for a `kind` it does not\nknow: later daemons of the same generation may add kinds."
+    },
     "KeepAwakeWhen": {
       "oneOf": [
         {
@@ -8520,6 +8642,95 @@
       ],
       "description": "An entry the agent is still producing, shown after the conversation's entries until the\nrecord holds it; it has no position yet."
     },
+    "PendingInteraction": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "This sighting of the prompt, new each time the daemon recognises one: an answer names it,\nso that it cannot land on the prompt after."
+        },
+        "call_id": {
+          "type": "string",
+          "description": "The tool call the prompt belongs to, as the conversation feed's `tool_call.call_id` names\nit, where the agent says."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "allOf": [
+        {
+          "$ref": "#/$defs/InteractionPrompt"
+        }
+      ],
+      "description": "A prompt the session's agent is showing the user, recognised from its hooks and its screen\ntogether, which a client can answer with `answer_interaction`."
+    },
+    "PermissionChoice": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "What `answer_interaction`'s `choice` names it by."
+        },
+        "label": {
+          "type": "string",
+          "description": "Its label as the agent shows it."
+        },
+        "effect": {
+          "$ref": "#/$defs/ChoiceEffect"
+        },
+        "text": {
+          "description": "Whether text for the agent may go with it (`answer_interaction`'s `text`): absent where\nnone can.",
+          "$ref": "#/$defs/ChoiceText"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "effect"
+      ],
+      "description": "One answer a permission prompt offers."
+    },
+    "PermissionPrompt": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "The tool's name as the agent calls it."
+        },
+        "category": {
+          "description": "What kind of tool it is, as the conversation feed classes it.",
+          "$ref": "#/$defs/ToolCategory"
+        },
+        "title": {
+          "type": "string",
+          "description": "One line saying what the call would do: the command, the file, the address, the server and\ntool."
+        },
+        "detail": {
+          "type": "string",
+          "description": "The agent's own explanation of the call, where it gives one."
+        },
+        "input": {
+          "description": "The call's input as the agent wrote it, each string cut at [`INTERACTION_TEXT_LIMIT`]."
+        },
+        "input_truncated": {
+          "type": "boolean",
+          "description": "Whether a string of `input` was cut."
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PermissionChoice"
+          },
+          "description": "The answers offered, in the order the agent shows them. Only those the daemon can tell the\neffect of are listed; the others are left to the terminal."
+        }
+      },
+      "required": [
+        "tool",
+        "input",
+        "choices"
+      ],
+      "description": "A tool permission prompt."
+    },
     "PlatformConnector": {
       "type": "object",
       "properties": {
@@ -9064,6 +9275,73 @@
       ],
       "description": "What a `pull_project_branch` did to the project's current branch (`Event::ProjectBranchPulled`)."
     },
+    "Question": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "header": {
+          "type": "string",
+          "description": "A short label the agent gives the question."
+        },
+        "multi_select": {
+          "type": "boolean",
+          "description": "Whether more than one option may be chosen."
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestionOption"
+          }
+        },
+        "free_text": {
+          "description": "Whether the user may write an answer of their own, and how it goes with the options: absent\nwhere they may not.",
+          "$ref": "#/$defs/FreeText"
+        }
+      },
+      "required": [
+        "text",
+        "multi_select",
+        "options"
+      ],
+      "description": "One question."
+    },
+    "QuestionOption": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "description": "One option of a question."
+    },
+    "QuestionPrompt": {
+      "type": "object",
+      "properties": {
+        "questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Question"
+          }
+        },
+        "dismissible": {
+          "type": "boolean",
+          "description": "Whether the questions can be declined without an answer (`answer_interaction`'s\n`dismiss`)."
+        }
+      },
+      "required": [
+        "questions",
+        "dismissible"
+      ],
+      "description": "Questions from the agent's own ask-the-user tool, answered together."
+    },
     "QuotaUnavailable": {
       "type": "object",
       "properties": {
@@ -9534,6 +9812,10 @@
         "holder_link": {
           "description": "Whether the holder that runs the session's process can be reached: `pending` while it runs\nbut cannot be linked to, and absent while it can, or no holder runs the process. While\npending, the process goes on and the session stays claimed: it is neither interrupted nor\nresumed, and what is asked of its process fails. Never stored: it is filled in on the\nrecord a client receives (`AppState::wire_session`).",
           "$ref": "#/$defs/HolderLink"
+        },
+        "interaction": {
+          "description": "What the session's agent is asking the user, while the session is shown waiting on them\nand the daemon has recognised the prompt from the agent's hooks and its screen together;\nanswered with `answer_interaction`. Absent otherwise, the prompt then answered in the\nterminal. Never stored: it is filled in on the record a client receives\n(`AppState::wire_session`).",
+          "$ref": "#/$defs/PendingInteraction"
         },
         "has_conversation": {
           "type": "boolean",

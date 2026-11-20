@@ -122,7 +122,7 @@ pub(crate) async fn handoff_session_with(
 
     let moved = move_place(state, &original, &receiving, &hold).await?;
     // Archive clears kept messages, so take them before it runs without starting the successor.
-    let forwarded = take_forwarded(state, &original.id);
+    let forwarded = take_forwarded(state, &original.id, &receiving.id);
     // What the original's process started is carried over to the receiving session when the
     // archive ends that process, rather than stopped with it.
     let carried = state.live_session(&original.id).map(|live| {
@@ -547,11 +547,19 @@ async fn targets_of(
     .unwrap_or_default()
 }
 
-/// Takes the original's queued and kept messages before its archive can drop them.
-fn take_forwarded(state: &Arc<AppState>, original: &str) -> Vec<String> {
+/// Takes the original's queued and kept messages before its archive can drop them, to be forwarded
+/// to the session `receiving`.
+fn take_forwarded(state: &Arc<AppState>, original: &str, receiving: &str) -> Vec<String> {
     // The queue in order, then what is kept and was not queued: a kept message is in both once the
     // session has been resumed and not yet written to.
-    let queued = state.take_queued_with_rows(original);
+    let (queued, shaped) = state.take_queued_counting_shaped(original);
+    // A message with images or a slash command cannot be written to the receiving session as text.
+    state.tell_held_dropped(
+        receiving,
+        shaped,
+        false,
+        Some(crate::messaging::write_queue::HELD_SHAPED),
+    );
     let in_queue: Vec<i64> = queued.iter().filter_map(|(_, row)| *row).collect();
     let mut texts: Vec<String> = queued.into_iter().map(|(text, _)| text).collect();
     match state.store.kept_messages(original) {

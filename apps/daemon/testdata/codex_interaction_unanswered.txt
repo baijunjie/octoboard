@@ -1,0 +1,39 @@
+› ASK1 plan mode
+    note: Green please, pasted
+          second line
+
+• DONE 19: got tool output: "{"answers":{"color":{"answers":["None of the above","user_note: Green please,
+  pasted\nsecond line"]}}}"
+
+  Worked for 28s • 01:14
+
+
+› ASK3 three questions
+
+
+• Questions 3/3 answered
+  • Which color should the probe use?
+    answer: Blue
+  • Which size should the probe use?
+    answer: Small (Recommended)
+  • What should the probe be called?
+    answer: Probe (Recommended)
+    note: typed note
+
+• DONE 21: got tool output: "{"answers":{"size":{"answers":["Small (Recommended)"]},"color":{"answers":["Blue"]},"name":
+  {"answers":["Probe (Recommended)","user_note: typed note"]}}}"
+
+  Worked for 32s • 01:14
+
+
+› ASK3 skip test
+
+
+
+  Submit with unanswered questions?
+  2 unanswered questions
+
+  › 1. Proceed  Submit with 2 unanswered questions
+    2. Go back  Return to the first unanswered question
+
+  Press enter to confirm or esc to go back

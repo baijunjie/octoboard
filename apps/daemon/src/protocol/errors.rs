@@ -175,6 +175,13 @@ pub enum ProviderOperation {
     CliUpdate,
     /// Signing an account in to or out of an MCP server through the agent's own command.
     McpSignIn,
+    /// Answering the prompts its agent shows while a session waits on the user
+    /// (`answer_interaction`).
+    Interactions,
+    /// Images attached to a message (`send_message`'s `images`).
+    MessageImages,
+    /// A slash command sent as one (`send_command`).
+    SlashCommands,
 }
 
 impl ProviderOperation {
@@ -187,6 +194,9 @@ impl ProviderOperation {
             ProviderOperation::ConfigSharing => "config_sharing",
             ProviderOperation::CliUpdate => "cli_update",
             ProviderOperation::McpSignIn => "mcp_sign_in",
+            ProviderOperation::Interactions => "interactions",
+            ProviderOperation::MessageImages => "message_images",
+            ProviderOperation::SlashCommands => "slash_commands",
         }
     }
 
@@ -198,6 +208,9 @@ impl ProviderOperation {
             ProviderOperation::ConfigSharing => "sharing the default account's configuration",
             ProviderOperation::CliUpdate => "an update of its CLI",
             ProviderOperation::McpSignIn => "signing in to an MCP server",
+            ProviderOperation::Interactions => "answering its prompts outside the terminal",
+            ProviderOperation::MessageImages => "images attached to a message",
+            ProviderOperation::SlashCommands => "slash commands sent as commands",
         }
     }
 }

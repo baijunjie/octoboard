@@ -459,6 +459,13 @@ pub trait AgentProvider: Send + Sync {
         &NoScreen
     }
 
+    /// How the prompts its agent shows while a session waits on the user are read and answered
+    /// (`crate::session::interaction`), for the kinds its descriptor declares
+    /// (`Capabilities::interactions`); `None` publishes and answers nothing.
+    fn interactions(&self) -> Option<&'static dyn crate::session::interaction::InteractionReader> {
+        None
+    }
+
     /// What the provider's accounts can be asked beyond launching: their quota, the email they
     /// sign in with, signing in and the configuration they share. `None` for a provider whose
     /// accounts are none of that.

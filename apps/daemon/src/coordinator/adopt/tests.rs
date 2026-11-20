@@ -1541,9 +1541,14 @@ async fn an_adopted_codex_session_accepts_messages_after_its_startup_title_is_re
             !interrupted.interrupted,
             "the stand-in shows no active turn"
         );
-        crate::coordinator::messages::send_message(&state, "s1", "hello again".to_string())
-            .await
-            .expect("the adopted session is past its startup screens");
+        crate::coordinator::messages::send_message(
+            &state,
+            "s1",
+            "hello again".to_string(),
+            Vec::new(),
+        )
+        .await
+        .expect("the adopted session is past its startup screens");
 
         let requests = left.requests.lock().unwrap().clone();
         let (_, added) = requests
@@ -1598,6 +1603,7 @@ async fn an_adopted_codex_session_without_its_own_startup_title_still_refuses_me
             &state,
             "s1",
             "do not type this".to_string(),
+            Vec::new(),
         )
         .await
         .expect_err("the current terminal has not shown Codex's startup signal");
@@ -1657,9 +1663,13 @@ async fn an_adopted_idle_claude_session_takes_messages_and_one_at_its_trust_scre
         }
         assert_eq!(live.trust.holds_writes(), held, "{label}");
 
-        let sent =
-            crate::coordinator::messages::send_message(&state, "s1", "hello again".to_string())
-                .await;
+        let sent = crate::coordinator::messages::send_message(
+            &state,
+            "s1",
+            "hello again".to_string(),
+            Vec::new(),
+        )
+        .await;
         let trust_pending = sent.as_ref().err().is_some_and(|err| {
             err.downcast_ref::<crate::protocol::CodedError>()
                 .is_some_and(|coded| {

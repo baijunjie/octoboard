@@ -85,7 +85,7 @@ export interface CodeRecord extends MessageFacets {
 }
 
 /** The operations `provider_unsupported` is worded under, as its variants. */
-const UNSUPPORTED_OPERATIONS: Record<string, MessageFacets> = { sign_in: {}, kick: {}, reset_credit: {}, config_sharing: {}, cli_update: {}, mcp_sign_in: {} };
+const UNSUPPORTED_OPERATIONS: Record<string, MessageFacets> = { sign_in: {}, kick: {}, reset_credit: {}, config_sharing: {}, cli_update: {}, mcp_sign_in: {}, interactions: {}, message_images: {}, slash_commands: {} };
 
 /** The variant of a message about a directory the daemon cannot read or reach, on a host that is not a Mac: the
  * per-volume file access prompts its own wording explains are macOS's, and elsewhere the daemon reads with the
@@ -141,6 +141,7 @@ const CORE_CODES = {
   // download page is the way to it.
   binary_not_found: { origin: "daemon", recovery: "tool", codeParams: ["binary", "pathVar"], uiParams: { pathVar: "PATH", git: "Git" }, variants: { git: { codeParams: ["pathVar"] } }, variantOf: (params) => params.binary === "git" ? "git" : undefined },
   clean_filtered: { origin: "daemon", recovery: "scope", codeParams: ["path", "filter"] },
+  command_not_recognised: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, codeParams: ["command", "offered"] },
   config_dir_not_absolute: { origin: "daemon", recovery: "path", codeParams: ["tilde"], uiParams: { tilde: "~/" } },
   config_dir_taken: { origin: "daemon", recovery: "accountDirectory", defaultAccountParams: ["name"], nameParams: ["name"] },
   config_dir_unreachable: { origin: "daemon", recovery: "path", recoveryLine: true, codeParams: ["path"] },
@@ -224,6 +225,8 @@ const CORE_CODES = {
   import_choice_unavailable: { origin: "daemon", recovery: "configuration" },
   import_resolution_invalid: { origin: "daemon", recovery: "configuration" },
   import_settings_missing: { origin: "daemon", recovery: "configuration" },
+  interaction_answer_failed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, detailBlock: true, recoveryLine: true },
+  interaction_not_waiting: { origin: "daemon", recovery: "none" },
   internal_error: { origin: "daemon", unexpected: "a failure the daemon did not foresee, which is what the unexpected alert is for" },
   invalid_branch_name: { origin: "daemon", recovery: "branch", codeParams: ["branch"] },
   invalid_change: { origin: "daemon", unexpected: "the window names only sides the change's group can read" },
@@ -248,6 +251,7 @@ const CORE_CODES = {
   mcp_sign_in_not_running: { origin: "daemon", recovery: "none" },
   message_acceptance_unconfirmed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   message_refused: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, detailBlock: true },
+  message_not_written: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, detailBlock: true },
   message_discarded_by_dialog: { origin: "daemon" },
   message_diverted_by_view: { origin: "daemon" },
   message_not_sent: { origin: "daemon", recovery: "unsentMessage", failureNotice: true, alertTitle: true, variantOf: (params) => params.submit_retry === "once" ? "retry" : undefined },

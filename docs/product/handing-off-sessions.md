@@ -391,8 +391,10 @@ moved. The held queue is kept even if the original's process ends meanwhile.
 - Forwarded to a receiving session that is being resumed at that moment, the queue is delivered once it is up, and
   goes with it if that launch fails.
 - Where the queue ends up with a session that has no process to take it, it is dropped. So is a forwarded message that
-  cannot be delivered to the receiving session. Either way every window is sent the `handoff_messages_dropped` notice
-  about the session the messages ended up with — the original, or the receiving session — shown as an error alert
+  cannot be delivered to the receiving session, and so is a slash command or a message with images a client queued for
+  the original, which is never forwarded since it cannot be written to another session as text (see
+  `docs/product/slash-commands-and-image-messages.md`). Either way every window is sent the `handoff_messages_dropped`
+  notice about the session the messages ended up with — the original, or the receiving session — shown as an error alert
   saying that messages held back for a session during a handoff could not be delivered and were dropped, and asking
   the user to open the session they were meant for, or the one that took over, check its terminal, and send again
   anything that did not arrive. These messages were never part-written into a terminal, so the notice says nothing of

@@ -608,6 +608,44 @@ async fn a_claude_turn_interrupted_after_an_answered_prompt_goes_back_to_its_pro
     assert!(reaches_on_real_clock(&state, SessionStatus::Idle).await);
 }
 
+/// A hand Octoboard lowered itself when the prompt it raised for left the screen is still the
+/// hooks' wait: the first hook after it that carries a status arms the watch for a move off the
+/// prompt, which a turn interrupted from there needs, and ends the mark.
+#[tokio::test(start_paused = true)]
+async fn the_first_hook_after_a_prompt_left_arms_the_watch_as_a_move_off_the_prompt() {
+    let (state, _dir, live, path) =
+        claude_session_with_transcript("server-interrupt-after-left", SessionStatus::WaitingUser);
+    let status = || state.store.get_session("s").unwrap().unwrap().status;
+    state.interaction_left("s", Some("a"));
+    assert_eq!(status(), SessionStatus::Working);
+    assert!(live.interaction.lowered());
+    // A hook that says nothing of the status leaves the mark for the next.
+    apply_hook(&state, "s", &claude_hook("PreCompact", &path));
+    assert!(live.interaction.lowered());
+
+    apply_hook(&state, "s", &claude_hook("PostToolUse", &path));
+    assert!(!live.interaction.lowered());
+    std::fs::write(&path, crate::test_support::fresh_interrupt()).unwrap();
+    crate::adapter::claude::transcript_watch::polls_ran().await;
+    assert_eq!(status(), SessionStatus::Idle);
+}
+
+/// Without a hand lowered by a prompt leaving, the same hook of a session already working arms no
+/// watch: the turn it is in was watched when it started.
+#[tokio::test(start_paused = true)]
+async fn a_hook_of_a_working_session_arms_no_watch_when_no_prompt_left() {
+    let (state, _dir, live, path) =
+        claude_session_with_transcript("server-interrupt-no-prompt-left", SessionStatus::Working);
+    assert!(!live.interaction.lowered());
+    apply_hook(&state, "s", &claude_hook("PostToolUse", &path));
+    std::fs::write(&path, crate::test_support::fresh_interrupt()).unwrap();
+    crate::adapter::claude::transcript_watch::polls_ran().await;
+    assert_eq!(
+        state.store.get_session("s").unwrap().unwrap().status,
+        SessionStatus::Working
+    );
+}
+
 /// An interrupt the watch has not read yet when the next prompt arrives belongs to the turn
 /// before, and must not end the new one; the new turn's own interrupt still does, though the
 /// session never left `Working` between the two.
@@ -2070,4 +2108,76 @@ async fn another_agents_prompt_is_lowered_by_the_end_of_any_call() {
 
     apply_hook(&state, "s", &hook("PostToolUse", Some("other")));
     assert_eq!(status_of(&state), SessionStatus::Working);
+}
+
+/// A Claude Code `PreToolUse` for the call `id` of the tool `Bash` running `command`.
+fn claude_call(transcript: &std::path::Path, id: &str, command: &str) -> Vec<u8> {
+    serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_use_id": id,
+        "tool_name": "Bash",
+        "tool_input": {"command": command},
+        "transcript_path": transcript,
+    })
+    .to_string()
+    .into_bytes()
+}
+
+/// The calls a prompt can be matched to are the turn's: each tool call the hooks report is kept
+/// (the most recent ones only, and none of a subagent's), and a prompt submission forgets them.
+#[tokio::test]
+async fn the_calls_of_a_turn_are_kept_from_its_hooks_and_a_prompt_submission_clears_them() {
+    use crate::session::interaction::CALLS_KEPT;
+    let (state, _dir, live, path) =
+        claude_session_with_transcript("server-calls-kept", SessionStatus::Idle);
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+    apply_hook(&state, "s", &claude_call(&path, "t0", "ls"));
+    let kept = live.interaction.calls();
+    assert_eq!(kept.len(), 1);
+    assert_eq!(kept[0].id.as_deref(), Some("t0"));
+    assert_eq!(kept[0].tool, "Bash");
+    assert_eq!(kept[0].input, serde_json::json!({"command": "ls"}));
+
+    let mut subagent: serde_json::Value =
+        serde_json::from_slice(&claude_call(&path, "sub", "rm")).unwrap();
+    subagent["agent_id"] = serde_json::json!("agent-1");
+    apply_hook(&state, "s", subagent.to_string().as_bytes());
+    assert_eq!(live.interaction.calls().len(), 1, "a subagent's call");
+
+    for index in 1..=CALLS_KEPT {
+        apply_hook(&state, "s", &claude_call(&path, &format!("t{index}"), "ls"));
+    }
+    let kept = live.interaction.calls();
+    assert_eq!(kept.len(), CALLS_KEPT);
+    assert_eq!(kept[0].id.as_deref(), Some("t1"), "the oldest went");
+    assert_eq!(
+        kept.last().unwrap().id.as_deref(),
+        Some(format!("t{CALLS_KEPT}").as_str())
+    );
+
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+    assert!(live.interaction.calls().is_empty());
+}
+
+/// A hook that puts the session at its prompt starts the watch of its screen; one that does not,
+/// does not.
+#[tokio::test]
+async fn a_hook_that_raises_the_hand_starts_the_watch_of_the_screen() {
+    let (state, _dir, live, path) =
+        claude_session_with_transcript("server-watch-starts", SessionStatus::Idle);
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+    apply_hook(&state, "s", &claude_call(&path, "t0", "ls"));
+    assert!(!live
+        .interaction
+        .watching
+        .load(std::sync::atomic::Ordering::Acquire));
+    apply_hook(&state, "s", &claude_hook("PermissionRequest", &path));
+    assert_eq!(
+        state.session_record("s").unwrap().status,
+        SessionStatus::WaitingUser
+    );
+    assert!(live
+        .interaction
+        .watching
+        .load(std::sync::atomic::Ordering::Acquire));
 }

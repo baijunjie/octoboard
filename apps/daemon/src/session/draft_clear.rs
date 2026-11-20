@@ -105,6 +105,7 @@ impl LiveSession {
         &self,
         message: &[Input],
         prompt: &str,
+        finish: super::Finish<'_>,
     ) -> Result<(), PartialWrite> {
         if !crate::adapter::provider(self.agent)
             .screen()
@@ -114,6 +115,7 @@ impl LiveSession {
                 message,
                 prompt,
                 "the session's input box holds text and no key is known to clear it",
+                finish,
             );
         }
         self.wait_for_whole_frame();
@@ -194,8 +196,10 @@ impl LiveSession {
         };
         let (draft, rows, mut writes) = match found {
             // Emptied since it was read: nothing is left to clear.
-            Found::Empty => return self.write_empty_message_input(message, prompt, true),
-            Found::Unclearable(reason) => return self.write_unclearable(message, prompt, reason),
+            Found::Empty => return self.write_empty_message_input(message, prompt, true, finish),
+            Found::Unclearable(reason) => {
+                return self.write_unclearable(message, prompt, reason, finish)
+            }
             Found::Draft { text, rows, writes } => (text, rows, writes),
         };
         let (cleared, presses, changed, unseen) = clear_input_box(
@@ -241,6 +245,7 @@ impl LiveSession {
                     unsent: false,
                     read_before: Some(&draft),
                 },
+                finish,
             );
             // Refused after all: what the presses removed is never lost unseen.
             if written.is_err() && removed {
@@ -276,6 +281,7 @@ impl LiveSession {
                         unsent: false,
                         read_before: None,
                     },
+                    finish,
                 );
             }
             return Err(blocked(
@@ -284,7 +290,7 @@ impl LiveSession {
             ));
         }
         self.end_torn_run();
-        self.write_message_into_box(message, prompt, true, BoxIs::Cleared(writes))
+        self.write_message_into_box(message, prompt, true, BoxIs::Cleared(writes), finish)
     }
 
     /// Writes `message` into a box that holds text no key may clear now, as the box stands, once
@@ -295,6 +301,7 @@ impl LiveSession {
         message: &[Input],
         prompt: &str,
         reason: &'static str,
+        finish: super::Finish<'_>,
     ) -> Result<(), PartialWrite> {
         if !self.unclearable_wait_over(prompt) {
             return Err(blocked(reason));
@@ -307,6 +314,7 @@ impl LiveSession {
                 unsent: false,
                 read_before: None,
             },
+            finish,
         )
     }
 

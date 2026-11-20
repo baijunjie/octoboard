@@ -32,6 +32,20 @@ impl ScreenReader for ClaudeScreen {
         true
     }
 
+    /// `[Image #<n>]`, which Claude Code draws in its box for each image path pasted on its own
+    /// (2.1.328, `testdata/claude-interaction-captures.md`).
+    fn image_placeholders(&self, text: &str) -> usize {
+        crate::session::screen::count_image_placeholders(text)
+    }
+
+    fn without_image_placeholders(&self, text: &str) -> String {
+        crate::session::screen::strip_image_placeholders(text)
+    }
+
+    fn command_completion(&self, screen: &str) -> Option<String> {
+        command_completion(screen)
+    }
+
     fn native_stash(&self, spec: &LaunchSpec<'_>, plan: &LaunchPlan) -> bool {
         super::stash::supported(spec, plan)
     }
@@ -154,16 +168,55 @@ fn box_start(rows: &[&str]) -> Option<usize> {
 /// The rows of Claude Code's input box: from the last one starting with `❯` right below a
 /// horizontal rule, plain or labelled with a place in the prompt history ([`is_top_rule`]), up to
 /// the next rule.
-fn input_box_rows(screen: &str) -> Option<Vec<String>> {
+pub(super) fn input_box_rows(screen: &str) -> Option<Vec<String>> {
     let rows: Vec<&str> = screen.lines().map(str::trim_end).collect();
-    let start = box_start(&rows)?;
+    let (start, end) = box_bounds(&rows)?;
+    Some(box_rows(rows[start..end].iter().copied(), PROMPT_MARK))
+}
+
+/// Where the input box's rows start (the prompt row) and end (the rule below them) among `rows`.
+fn box_bounds(rows: &[&str]) -> Option<(usize, usize)> {
+    let start = box_start(rows)?;
     let end = start + 1 + rows[start + 1..].iter().position(|row| is_rule(row))?;
     // A labelled rule spans the box as the plain rule below it does.
     let width = |row: &str| row.trim().chars().count();
     if !is_rule(rows[start - 1]) && width(rows[start - 1]) != width(rows[end]) {
         return None;
     }
-    Some(box_rows(rows[start..end].iter().copied(), PROMPT_MARK))
+    Some((start, end))
+}
+
+/// The command Claude Code's slash completion highlights: its popup is drawn right above the
+/// input box's top rule, one command to a row, the highlighted one marked `❯` two columns in and
+/// the others indented to the same name (`  ❯ /help      Show help…`, `    /debug     …`), a
+/// long description wrapped under its own column. Measured on 2.1.328 for a pasted and a typed
+/// prefix (`testdata/claude-interaction-captures.md`); the popup is up only while the box holds a
+/// single `/word`.
+fn command_completion(screen: &str) -> Option<String> {
+    let rows: Vec<&str> = screen.lines().map(str::trim_end).collect();
+    let (start, _) = box_bounds(&rows)?;
+    let top = start - 1;
+    let mut found = None;
+    for row in rows[..top].iter().rev() {
+        let name = |text: &str| -> Option<String> {
+            let name = text.strip_prefix('/')?.split_whitespace().next()?;
+            Some(name.to_string())
+        };
+        if let Some(rest) = row.strip_prefix("  \u{276F} ") {
+            found = name(rest);
+            break;
+        }
+        // Another row of the popup, or the wrapped rest of a description.
+        let wrapped = row.starts_with("                ");
+        if !(wrapped
+            || row
+                .strip_prefix("    ")
+                .is_some_and(|rest| name(rest).is_some()))
+        {
+            break;
+        }
+    }
+    found
 }
 
 /// Whether `row` is a hint Claude Code shows in its empty input box, both written faint (see
@@ -219,7 +272,7 @@ fn is_top_rule(row: &str) -> bool {
 }
 
 /// Whether a row is one of the horizontal rules around Claude Code's input box.
-fn is_rule(row: &str) -> bool {
+pub(super) fn is_rule(row: &str) -> bool {
     let row = row.trim();
     row.chars().count() >= 20 && row.chars().all(|c| c == '\u{2500}')
 }

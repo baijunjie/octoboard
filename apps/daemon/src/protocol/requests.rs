@@ -721,9 +721,54 @@ pub enum RequestBody {
         session: String,
         colour: ConsoleSessionColour,
     },
+    /// The user's own message into a running session. `images` are images to attach, each a path
+    /// `save_pasted_image` answered for this session, for a provider that declares
+    /// `message_images`, at most ten; with images, `text` may be empty. Refused with
+    /// `session_waiting_for_user` while the session waits on the user, `session_trust_pending`
+    /// while its folder-trust confirmation may be up, `unreadable_request` (`field: images`) for an
+    /// image path that is not one of this session's or for more than ten images,
+    /// `field_required` (`field: text`) for nothing
+    /// to send, and `provider_unsupported` for images to a provider that takes none.
     SendMessage {
         session: String,
         text: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        #[cfg_attr(test, ts(optional = nullable))]
+        images: Vec<String>,
+    },
+    /// Writes a slash command, `command`, one line beginning with `/` and its arguments, into a
+    /// running session for its agent to run as one of its own commands, for a provider that
+    /// declares `slash_commands`. Answered with `ack` once written. Refused as `send_message` is,
+    /// and with `command_not_recognised` where the agent would run another command in its place
+    /// (its completion offers a different one), the command then cleared from the input box.
+    SendCommand {
+        session: String,
+        command: String,
+    },
+    /// The user's answer to the session's `interaction`, named by its `id`: `choice` for a
+    /// `permission` prompt (with `text` for a choice that takes it), `answers` for a `question`
+    /// prompt (one per question, in order), or `dismiss` to decline a dismissible question. The
+    /// daemon presses it into the agent's terminal and answers with `ack` once the prompt is seen
+    /// gone. Refused with `interaction_not_waiting` when that prompt is no longer up (answered
+    /// already, in the terminal or elsewhere, or replaced), `interaction_answer_failed` when the
+    /// keys could not be pressed or did not take (also broadcast as a `session_notice`; the prompt
+    /// is left for the terminal), `field_required` or `unreadable_request` for an answer that does
+    /// not fit the prompt, and `provider_unsupported`.
+    AnswerInteraction {
+        session: String,
+        interaction: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        choice: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        text: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        answers: Option<Vec<super::QuestionAnswer>>,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[cfg_attr(test, ts(optional = nullable))]
+        dismiss: bool,
     },
     /// Saves an image the user pasted into the terminal of a running session as a file on the daemon
     /// host, for its agent to read by path: `data` is the image as a PNG, JPEG, GIF or WebP file,
@@ -1542,6 +1587,8 @@ impl RequestBody {
             | Self::SetSessionLocked { .. }
             | Self::SetSessionColour { .. }
             | Self::SendMessage { .. }
+            | Self::SendCommand { .. }
+            | Self::AnswerInteraction { .. }
             | Self::InterruptSession { .. }
             | Self::RenameSession { .. }
             | Self::ReleaseSession { .. }

@@ -49,6 +49,7 @@ mod compatibility_consumer;
 mod conversation;
 mod feed;
 mod hooks;
+mod interaction;
 mod login;
 mod mcp_inventory;
 pub(crate) mod models;
@@ -304,6 +305,10 @@ impl AgentProvider for ClaudeProvider {
 
     fn hooks(&self) -> &'static dyn crate::hooks::HookInterpreter {
         &hooks::ClaudeHooks
+    }
+
+    fn interactions(&self) -> Option<&'static dyn crate::session::interaction::InteractionReader> {
+        Some(&interaction::ClaudeInteractions)
     }
 
     fn has_status_integration(&self) -> bool {

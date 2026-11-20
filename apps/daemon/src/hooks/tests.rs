@@ -1055,29 +1055,28 @@ fn other_grok_events_say_nothing_of_tool_calls() {
     }
 }
 
-/// Only Claude Code's and Grok Build's hooks tell calls apart; every other agent's events leave
-/// its status mapping as it was.
+/// A provider whose hooks are not read for tool calls reports no change to them, and leaves its
+/// status mapping as it was.
 #[test]
-fn only_claude_code_and_grok_build_report_tool_call_changes() {
+fn a_provider_that_reads_no_tool_calls_reports_no_change_to_them() {
     let payload = json!({"tool_name": "Bash", "tool_input": {}, "tool_use_id": "t1"});
-    for agent in [AgentId::CODEX, AgentId::TEST] {
-        for event in [
-            "PreToolUse",
-            "PermissionRequest",
-            "PostToolUse",
-            "PostToolUseFailure",
-            "PostToolBatch",
-            "UserPromptSubmit",
-            "Stop",
-            "StopFailure",
-            "SessionStart",
-        ] {
-            assert_eq!(
-                of(agent).tool_call_change(event, &payload),
-                None,
-                "{agent:?} {event}"
-            );
-        }
+    let agent = AgentId::TEST;
+    for event in [
+        "PreToolUse",
+        "PermissionRequest",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "PostToolBatch",
+        "UserPromptSubmit",
+        "Stop",
+        "StopFailure",
+        "SessionStart",
+    ] {
+        assert_eq!(
+            of(agent).tool_call_change(event, &payload),
+            None,
+            "{agent:?} {event}"
+        );
     }
 }
 

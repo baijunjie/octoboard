@@ -29,8 +29,11 @@ raises the hand and notifies afresh, as any other does.
   session does not report" in `docs/product/reporting-to-owners.md`).
 - **Claude Code sessions only.** Codex and Grok Build report a decline through their own hook events, and the transcript
   read here is Claude Code's own format; neither is watched this way.
-- Only a hand that is currently up is recovered this way. A turn cancelled while the session reads as *working* is
-  recovered by its own watch — see "Cancelling a Claude Code turn" below.
+- Only a hand that is up is recovered this way, or one Octoboard lowered itself because the prompt it had published
+  left the screen, which puts the session back to *working* before the decline can show up in the transcript (see
+  "When the prompt leaves the screen" in `docs/product/pending-interactions.md`): from there too the decline moves the
+  session to its prompt, provided no hook event of the agent's has moved it on since. A turn cancelled while the session reads as
+  *working* for any other reason is recovered by its own watch — see "Cancelling a Claude Code turn" below.
 - Only the decline Claude Code records as the user's own entry counts. The transcript also logs each request sent to the
   model, replaying the conversation so far — earlier declines included; a decline replayed inside one does not lower the
   hand.

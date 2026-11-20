@@ -57,6 +57,8 @@ export const REPLY_TYPES = {
   set_session_locked: "ack",
   set_session_colour: "ack",
   send_message: "ack",
+  send_command: "ack",
+  answer_interaction: "ack",
   save_pasted_image: "pasted_image_saved",
   create_pasted_image_upload: "pasted_image_upload_created",
   write_pasted_image_part: "ack",

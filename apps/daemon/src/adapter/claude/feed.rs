@@ -217,7 +217,7 @@ fn read_tool_use(block: &Value, at: Option<i64>, out: &mut FeedOut) {
 }
 
 /// What a tool call is, a line to show for it and the files it changes, from its name and input.
-fn describe(name: &str, input: &Value) -> (ToolCategory, Option<String>, Vec<String>) {
+pub(super) fn describe(name: &str, input: &Value) -> (ToolCategory, Option<String>, Vec<String>) {
     let field = |key| text_of(input, key);
     match name {
         "Bash" => (

@@ -600,6 +600,22 @@ Ctrl-C again to exit". Ctrl-U deletes one line of the input box a press, and at 
 before it, so a three-line prompt took six presses to empty; the box then shows "Ctrl+Y to paste deleted text". A fresh
 session's empty box shows a placeholder such as `❯ Try "refactor <filepath>"`, which reads like text.
 
+### Permission prompts, questions and the slash popup on screen
+
+Measured on 2.1.328 (120x40 PTY, stub API; screens in `apps/daemon/testdata/claude-interaction-captures.md`). Hooks
+say what a call is (`PreToolUse` with `tool_use_id`, then `PermissionRequest` without it); the options exist only on the
+screen. A prompt is a solid rule, a title, the call between dashed rules, `Do you want …?`, numbered options and, for
+Bash, Write and Edit, a footer `Esc to cancel`, with `· Tab to amend` only while the highlight is on the first or last
+row and no field is open. Options that switch the mode (`Yes, and switch to auto mode`, `… accept edits … (shift+tab)`)
+sit among the others. A digit picks at once; Tab opens a text field on the first or last row, whose empty placeholder is
+faint (a screen with faint cells blanked reads `Yes,` / `No,`); the `don't ask again for: <rule>` row is a field too.
+WebFetch has no footer and no amend. A plain No and Esc leave no hook. `AskUserQuestion` replaces the box with chips
+(`☐`, `☒`, `✔ Submit`), the question, options, a `Type something` row (single-select `3. Type something.`, focused and
+empty `3.`; multi-select `4. [ ] Type something`, which typing checks), a rule and `Chat about this`; a multi-select has
+an unnumbered `Next`/`Submit` row and a review page (`1. Submit answers`). The slash popup is drawn above the box's top
+rule with its highlighted command marked `  ❯ /name`; pasted `/probe` + Enter ran `/probecmd`. Not measured: a digit
+pressed in a focused text field or the rule row, Down past the last row, an MCP prompt.
+
 ### How the global config file is saved, and what a kill leaves behind
 
 Read from the 2.1.316 executable; the write count measured. `.claude.json` is saved under a lock on `<file>.lock`,
@@ -669,8 +685,9 @@ Turn-scoped events add `turn_id`, the per-turn key. The compaction events are th
   `turn_id`; an automatic one fires **after** `Stop` and **reuses the finished turn's `turn_id`**, so the same
   `turn_id` can appear on `Stop` and then again on a compaction event, which turn-keyed state must not read as the turn
   reopening. `PostCompact` carries no summary and no token counts.
-- **There is no question or notification event.** The two features that would produce a structured question to the
-  user, `default_mode_request_user_input` and `request_permissions_tool`, are off in this build.
+- **There is no notification event, and a question has no `PermissionRequest`.** Plan mode's `request_user_input` fires
+  `PreToolUse` (carrying the questions) and, once answered, `PostToolUse`; see "Codex 0.167.1: prompts on screen". The
+  features `default_mode_request_user_input` and `request_permissions_tool` are off in this build.
 - **There is no failure event either**, no counterpart to Claude Code's `StopFailure`. A turn that ends in an error
   fires `UserPromptSubmit` and **nothing else** — no `Stop`, no `Interrupt`, nothing — while Codex returns to its
   prompt about 0.7 s later and the terminal goes completely silent. Measured with an account at its usage limit,
@@ -856,6 +873,39 @@ with `reasoning_effort` `medium`, that account's default, and not with the entry
 `config.load` check names the effective `model` but not the effort (the project layer is under "Project configuration
 layering" above): a top-level `profile` key in `config.toml` makes the configuration fail to load (`invalid data`) —
 `--profile <name>` on this version layers `$CODEX_HOME/<name>.config.toml` instead.
+
+### Codex 0.167.1: prompts on screen
+
+Measured with Octoboard's arrangement (private app server, `--remote` terminal, asking mode), 120x40, against a stub
+model; captures in `apps/daemon/testdata/codex-interaction-captures.md`. The daemon reads these
+(`adapter/codex/interaction.rs`).
+
+- **Command and patch approvals** replace the composer. A command's reads `Would you like to run the following
+  command?`, `Environment:`, `Reason:` and `$ <command>`; a patch's `Would you like to make the following edits?`,
+  `Description:` and `Destination:` (a long path is cut mid-word across rows). Three rows follow, the highlight (`›`)
+  on the first: `1. Yes, proceed (y)`, `2. Yes, and don't ask again for … (p)` (a patch: `… for these files (a)`) and
+  `3. No, and tell Codex what to do differently (esc)`; the footer is `Press enter to confirm or esc to cancel`. The
+  digit and the letter take their option at once, no Enter; `p` also writes a prefix rule; Esc, `3` and `n` cancel and
+  interrupt the turn. There is no field for text. The hooks are `PreToolUse` and `PermissionRequest` (tool `Bash` or
+  `apply_patch`, the patch as `tool_input.command`).
+- **MCP tool approvals** are a form, `Field 1/1`, `Allow the <server> MCP server to run tool "<tool>"?`, the
+  arguments, and `1. Allow`, `2. Allow for this session`, `3. Always allow`, `4. Cancel` with descriptions after two
+  spaces; footer `enter to submit | esc to cancel`. A digit selects and submits; `4` and Esc cancel the call, not the
+  turn. The hook's tool is `mcp__<server>__<tool>`. An MCP server's own **elicitation** is the same form with another
+  title (`Field 1/1 (1 required unanswered)`) and fires no hook at all.
+- **`request_user_input`** exists in Plan mode (and in Default mode behind an unstable flag; without it Default mode
+  rejects the call at once: `PreToolUse`, no `PostToolUse`, then `Stop`, and the payloads do not tell the modes apart).
+  `PreToolUse` carries the questions (`id`, `header`, `question`, `options[].{label, description}`, no multi-select) and
+  no `PermissionRequest` follows; `PostToolUse` carries the answers. One page per question, `Question k/n (m
+  unanswered)`, the options numbered with the terminal's own `None of the above` last, footer `tab to add notes | enter
+  to submit answer | esc to interrupt` (`←/→ to navigate questions` with several). A digit answers and goes on, or
+  submits on a single question; Tab opens a notes field under the highlighted option (bracketed paste fills it, Enter
+  answers); a note alone is the `None of the above` option plus the note. Esc interrupts the turn. Submitting with a
+  question unanswered asks `Submit with unanswered questions?` first.
+- **The slash popup** lists the matching commands above the composer, each `/name  description`; the highlighted one is
+  led by `›`, and the descriptions of the others are drawn faint. An Enter runs the highlighted entry, so a typed
+  `/sta` runs `/status`.
+- **Pasted images** show as `[Image #n]` in the composer, one per path pasted on its own.
 
 ### Keys that interrupt a turn
 
@@ -1129,6 +1179,25 @@ the one Grok itself shows, and the names, efforts and `hidden` flag from the fil
 but only exists after Grok has run in that home, and the text is what refreshes it. The cache is per account (its
 `identity` differs). **An unknown id is refused loudly at launch** with `Couldn't set model '<id>'.`, the opposite of
 Codex's silent deferred failure.
+
+### Grok Build's permission and question cards (1.0.89)
+
+Measured with `--no-leader` (captures in `apps/daemon/testdata/grok-interaction-captures.md`). A card replaces the
+composer as a block of rows behind a `┃` margin with a footer under it. Permission: `›  <what it asks>`, the command or
+arguments behind `│`, then rows numbered **from 2** (`2 (●) Yes, proceed`, `3 (○) No, reject (type to add feedback)`,
+`4 (○) Never allow: <command>`; edits `2 Yes, allow edits in <dir> for this session`, `3 Yes`, `4 No…`; MCP `2 Always
+allow: …`, `3 Yes`, `4 No…`, `5 Never allow…`) and an unnumbered last row that switches the session to bypass mode and
+rewrites `config.toml` (never pressed). Digits choose at once; Down stops at the ends, Tab wraps; typing or pasting on the
+No row starts a message (`3 (●) ❯ text`, footer `Enter:send │ Esc:back`). `ask_user_question`: `N (○) label  description`
+rows (`[ ]`/`[x]` for multi-select), a `z` row for a written answer, several questions one at a time (`[k/n]`, no review
+page); a digit picks and advances, Enter submits ticked rows, Shift+X dismisses. Esc parks the keyboard in the scrollback
+(footer `Tab:permission` / `Tab:question`, card still drawn); Tab returns. The slash completion is a row
+`❯ /name <args> description` between two rules above the composer; with that row up, pasted `/sess` plus Enter ran
+`/session-info`, while pasted `/probe` plus Enter only completed into `/probecmd ` (a command that takes arguments) and
+sent nothing; why they differ is not measured. Pasted image paths each draw `[Image #N]` in the composer. Grok drops an
+image that is too small when the message is sent, with a notice on the screen (32x32 and 40x40 PNGs went through, a
+PNG under 512 pixels was dropped in one test; the threshold is unclear). A card with a pick or a tick already on it
+(`Esc:unselect` in its footer) is a card half answered and is not published.
 
 ### The id a turn records is not one of the ids `grok models` prints
 

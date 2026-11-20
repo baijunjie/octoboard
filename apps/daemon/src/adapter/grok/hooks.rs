@@ -305,7 +305,7 @@ fn last_assistant_message(payload: &Value) -> Option<String> {
 }
 
 /// Grok writes every payload field in both camelCase and snake_case; read whichever is present.
-fn field<'a>(payload: &'a Value, camel: &str, snake: &str) -> Option<&'a str> {
+pub(super) fn field<'a>(payload: &'a Value, camel: &str, snake: &str) -> Option<&'a str> {
     payload
         .get(camel)
         .or_else(|| payload.get(snake))

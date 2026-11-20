@@ -2,9 +2,9 @@
 
 use super::layout::AgentLayout;
 use super::{
-    AgentId, Capabilities, DeliveryQuirks, DetectionMarkers, ModelDisplay, ProviderCode,
-    ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming, SessionWindowName, SettingChoice,
-    SettingDescriptor, SettingKind, SwitchDefault,
+    AgentId, Capabilities, DeliveryQuirks, DetectionMarkers, InteractionKinds, ModelDisplay,
+    ProviderCode, ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming, SessionWindowName,
+    SettingChoice, SettingDescriptor, SettingKind, SwitchDefault,
 };
 
 /// A Grok Build session's pinned source home exists but Grok has never been run against it, so it
@@ -103,6 +103,9 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
             holds_report_for_completion_notice: false,
             resume_instruction_as_launch_prompt: false,
         },
+        interactions: InteractionKinds::ALL,
+        message_images: true,
+        slash_commands: true,
     },
     quota_windows: QuotaWindowNaming {
         kinds: &[QuotaWindowKind::CreditPeriod],

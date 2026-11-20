@@ -293,7 +293,10 @@ pub struct Spawned {
 }
 
 /// What the daemon itself writes into a terminal, by meaning; [`Pty::write_input`] encodes it as
-/// the host's terminal takes it.
+/// the host's terminal takes it. It also goes over the holder link to holders started by older
+/// builds of the daemon (`crate::holder::protocol`, `WriteInput`), which cannot read a variant they
+/// do not know: a key is written with the variants there are (Tab as `Ctrl('i')`), and a plan of
+/// keys avoids those there are not (Up, Left, Right, Shift+Tab) rather than adding one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Input {
     /// Text pasted in one piece, which a program that asked for bracketed paste reads as a paste

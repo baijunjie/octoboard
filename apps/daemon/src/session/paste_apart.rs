@@ -27,7 +27,6 @@
 //! Each step is logged at info level with lengths and row counts only, never the message's text.
 
 use std::io;
-use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use super::input_box::text_of;
@@ -59,7 +58,7 @@ pub(super) struct Timing {
 /// as long as a turn ran a tool, with the paste in its composer, and drawing that composer again
 /// once the turn ended; so the time no box is recognised has a cap of its own, long enough for a
 /// turn running tools to end.
-fn timing() -> Timing {
+pub(super) fn timing() -> Timing {
     Timing {
         paste_taken: Duration::from_secs(15),
         unread: Duration::from_secs(10 * 60),
@@ -96,6 +95,10 @@ pub(super) trait Target {
     /// The rows of the input box, each trimmed and empty rows kept, `None` where no input box is
     /// recognised.
     fn box_rows(&self) -> Option<Vec<String>>;
+    /// The session's agent, whose collapsed form of a long paste a box may show it as.
+    fn agent(&self) -> Option<crate::protocol::AgentId> {
+        None
+    }
     /// Whether the session has ended, is being stopped, or has been archived, so that no key will
     /// be written into it.
     fn gone(&self) -> bool;
@@ -141,12 +144,15 @@ struct Pasted {
     /// Written into a box found empty, which then has to show the message alone: text the user
     /// typed meanwhile would be sent along with it.
     alone: bool,
+    /// The agent whose own placeholder for a long paste, the whole message or what follows the
+    /// images in the box, counts as the message shown ([`ScreenReader::collapsed_paste`]).
+    agent: Option<crate::protocol::AgentId>,
 }
 
 impl Pasted {
     /// The message pasted by `now`, the inputs written before the submit key, into a box found
     /// empty where `alone`.
-    fn new(now: &[Input], alone: bool) -> Self {
+    fn new(now: &[Input], alone: bool, agent: Option<crate::protocol::AgentId>) -> Self {
         let text = now
             .iter()
             .rev()
@@ -159,6 +165,7 @@ impl Pasted {
             squeezed: squeezed(text),
             lengths: [text.chars().count(), text.trim().chars().count()],
             alone,
+            agent,
         }
     }
 
@@ -182,11 +189,25 @@ impl Pasted {
             .lengths
             .iter()
             .any(|length| shown == format!("[PastedContent{length}chars]"))
+            || (!self.alone
+                && self
+                    .agent
+                    .is_some_and(|agent| self.collapsed_for(agent, rows)))
         {
             Shown::Placeholder
         } else {
             Shown::No
         }
+    }
+}
+
+impl Pasted {
+    /// Whether the box `rows` show, after the placeholders of the images that came before it,
+    /// one placeholder `agent` draws for a long paste.
+    fn collapsed_for(&self, agent: crate::protocol::AgentId, rows: &[String]) -> bool {
+        let screen = crate::adapter::provider(agent).screen();
+        let text = screen.without_image_placeholders(&text_of(rows.to_vec()));
+        screen.collapsed_paste(text.trim())
     }
 }
 
@@ -216,13 +237,35 @@ pub(super) fn submit(
     keys: &[Input],
     alone: bool,
 ) -> Result<(), PartialWrite> {
+    submit_checked(target, timing, now, keys, alone, true, |_| Ok(()))
+}
+
+/// [`submit`] with `before_press` looking at the box's rows, once the paste is shown whole and
+/// settled and before the first submit key; an error it gives is the submit's, and no key is
+/// pressed (a message composed of several pastes, or a command checked before it is run). Without
+/// `confirm_sent` the submit is done once its key is written: where the agent puts a stashed draft
+/// back in the box as it sends the message, the box does not show the message gone, and the restore
+/// the caller waits for is what says it was sent.
+pub(super) fn submit_checked(
+    target: &impl Target,
+    timing: Timing,
+    now: &[Input],
+    keys: &[Input],
+    alone: bool,
+    confirm_sent: bool,
+    before_press: impl FnOnce(&[String]) -> Result<(), PartialWrite>,
+) -> Result<(), PartialWrite> {
     let written = term::encode(now).len();
     let full = written + term::encode(keys).len();
-    let pasted = Pasted::new(now, alone);
+    let pasted = Pasted::new(now, alone, target.agent());
     let Some(rows) = caught_up(target, &pasted, timing) else {
         return Err(not_submitted(written));
     };
+    before_press(&rows)?;
     press(target, &pasted, keys, 1, &rows, written, full)?;
+    if !confirm_sent {
+        return Ok(());
+    }
     let rows = match after_press(target, &pasted, &rows, timing, 1) {
         AfterPress::Sent => return Ok(()),
         AfterPress::LineBreak(rows) => rows,
@@ -235,7 +278,7 @@ pub(super) fn submit(
     }
 }
 
-fn not_submitted(written: usize) -> PartialWrite {
+pub(super) fn not_submitted(written: usize) -> PartialWrite {
     PartialWrite {
         written,
         error: io::Error::other(NotSubmitted),
@@ -526,16 +569,15 @@ impl Target for LiveSession {
         self.is_frozen() || self.poll_exit()
     }
 
+    fn agent(&self) -> Option<crate::protocol::AgentId> {
+        Some(self.agent)
+    }
+
     /// Under the input lock, with the checks every write of a message makes, but not the one on
     /// an input replacement: a message written while the draft is stashed is the replacement's
     /// own.
     fn press(&self, keys: &[Input]) -> Result<bool, PartialWrite> {
-        let input = self.pty.lock_input();
-        if self.is_frozen() || self.poll_exit() || !self.takes_automatic_keys() {
-            return Ok(false);
-        }
-        self.input_writes.fetch_add(1, Ordering::AcqRel);
-        self.pty.write_input_locked(&input, keys).map(|()| true)
+        self.write_message_keys_if(None, || true, keys)
     }
 }
 
@@ -733,7 +775,7 @@ mod tests {
 
     #[test]
     fn the_box_counts_as_showing_the_message_only_when_it_shows_all_of_it() {
-        let pasted = Pasted::new(&[Input::Paste(format!("  {LONG}\n"))], true);
+        let pasted = Pasted::new(&[Input::Paste(format!("  {LONG}\n"))], true, None);
         assert_eq!(pasted.shown_in(&rows(&[LONG])), Shown::Whole);
         assert_eq!(
             pasted.shown_in(&rows(&["Message from Octoboard: the report"])),
@@ -909,7 +951,7 @@ mod tests {
             assert_eq!(result.is_ok(), sent, "alone: {alone}");
             assert_eq!(agent.enters(), usize::from(sent), "alone: {alone}");
         }
-        let pasted = Pasted::new(&[Input::Paste("hello".into())], true);
+        let pasted = Pasted::new(&[Input::Paste("hello".into())], true, None);
         assert_eq!(pasted.shown_in(&rows(&["typed hello"])), Shown::No);
     }
 
@@ -940,7 +982,7 @@ mod tests {
 
     #[test]
     fn a_line_break_needs_an_empty_row_after_the_message() {
-        let pasted = Pasted::new(&[Input::Paste("hello".into())], true);
+        let pasted = Pasted::new(&[Input::Paste("hello".into())], true, None);
         let before = rows(&["hello"]);
         assert_eq!(read_press(Some(before.clone()), &before, &pasted), None);
         assert_eq!(

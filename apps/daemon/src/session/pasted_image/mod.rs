@@ -24,6 +24,7 @@ use base64::Engine;
 use super::scratch::{scratch_of, subdirectory};
 use super::upload::{Kind, UploadBudget, Uploads};
 use crate::hostfs::replace::{replace_beside, Permissions};
+use crate::protocol::{error_code, CodedError};
 use crate::state::AppState;
 
 /// The largest image taken, in bytes. The single-frame request carries it base64-encoded in one
@@ -98,6 +99,38 @@ pub fn save_bytes(state: &AppState, session_id: &str, bytes: &[u8]) -> Result<Pa
     write_image(session_id, &scratch, bytes)
 }
 
+/// Checks that `paths` are each an image `save` or `save_bytes` wrote for the running session
+/// `session_id`: directly in its scratch directory's `pasted` directory, a file that exists. A
+/// path anywhere else, one with `..` in it or one of another session's would have the agent read
+/// any file the daemon can. Refused with `unreadable_request` (`field: images`), or as
+/// [`scratch_of`] refuses.
+pub(crate) fn require_saved_for(
+    state: &AppState,
+    session_id: &str,
+    paths: &[String],
+) -> Result<()> {
+    let directory = scratch_of(state, session_id)?.join(DIRECTORY);
+    for path in paths {
+        let path = std::path::Path::new(path);
+        let own = path.parent() == Some(directory.as_path())
+            && path
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with("paste-"))
+            && path.is_file();
+        if !own {
+            return Err(CodedError::raised(
+                error_code::UNREADABLE_REQUEST,
+                format!(
+                    "`{}` is not an image saved for this session",
+                    path.display()
+                ),
+                &[("field", "images")],
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Writes `bytes` as an image file under `scratch`, the session's scratch directory.
 fn write_image(session_id: &str, scratch: &std::path::Path, bytes: &[u8]) -> Result<PathBuf> {
     if bytes.len() > MAX_BYTES {
@@ -156,6 +189,32 @@ mod tests {
 
     fn extension(path: &Path) -> String {
         path.extension().unwrap().to_string_lossy().into_owned()
+    }
+
+    /// Only a file `save_bytes` wrote for this session, still there, is one of its images.
+    #[tokio::test]
+    async fn only_an_image_saved_for_the_session_is_one_of_its_images() {
+        let f = fixture(true);
+        let saved = save_bytes(&f.state, &f.id, PNG).unwrap();
+        let path = saved.to_string_lossy().into_owned();
+        super::require_saved_for(&f.state, &f.id, std::slice::from_ref(&path)).unwrap();
+        let outside = f.run.join("paste-1.png");
+        std::fs::write(&outside, PNG).unwrap();
+        let sneaky = format!("{}/../{}", saved.parent().unwrap().display(), "paste-1.png");
+        for other in [
+            outside.to_string_lossy().into_owned(),
+            sneaky,
+            "/etc/hosts".to_string(),
+        ] {
+            let refused = super::require_saved_for(&f.state, &f.id, &[path.clone(), other.clone()])
+                .unwrap_err();
+            assert_eq!(code_of(&refused), error_code::UNREADABLE_REQUEST, "{other}");
+            assert_eq!(crate::test_support::param_of(&refused, "field"), "images");
+        }
+        std::fs::remove_file(&saved).unwrap();
+        let refused =
+            super::require_saved_for(&f.state, &f.id, std::slice::from_ref(&path)).unwrap_err();
+        assert_eq!(code_of(&refused), error_code::UNREADABLE_REQUEST);
     }
 
     #[tokio::test]

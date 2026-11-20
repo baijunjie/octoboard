@@ -100,6 +100,11 @@ pub mod error_code {
     /// this or another client or in the terminal, gone with its session, or never shown. Nothing is
     /// wrong, so a client shows nothing.
     pub const TRUST_NOT_WAITING: Code = Code("trust_not_waiting");
+    /// An answer to a session's `interaction` that is no longer up: answered already, in the
+    /// terminal or by another client, replaced by another prompt, or gone with its session; or
+    /// something was typed into the session's terminal since it was published, which leaves it to
+    /// the person typing. Nothing was pressed after that was seen. `params` names the `session`.
+    pub const INTERACTION_NOT_WAITING: Code = Code("interaction_not_waiting");
     /// A write of a record edited through a form (`update_settings`, `update_console`,
     /// `update_project`, `update_account`, or an import's settings) was based on a version of a
     /// field that another write has moved on from, so none of it was applied. `params` names the
@@ -113,6 +118,16 @@ pub mod error_code {
     /// press without asking. `params` names the `agent`, and the `reason_code` param says why, one
     /// of [`trust_reason`](crate::protocol::codes::trust_reason).
     pub const TRUST_ANSWER_FAILED: Code = Code("trust_answer_failed");
+    /// Octoboard could not press the answer to a session's `interaction`: the screen was not as the
+    /// next key needed, a key did not take, or the terminal could not be written. Keys may have
+    /// been pressed before it stopped; the prompt is left for the terminal. `params` names the
+    /// `agent` and, as `detail`, the English reason, for showing as it is.
+    pub const INTERACTION_ANSWER_FAILED: Code = Code("interaction_answer_failed");
+    /// A `send_command` whose command the session's agent would not run as written: its completion
+    /// offered another command in its place (one whose name begins the same, or one not yet
+    /// loaded), which the Enter would have run. The command was cleared from the input box and not
+    /// sent. `params` names the `agent`, the `command` as written and the one `offered`, with its slash.
+    pub const COMMAND_NOT_RECOGNISED: Code = Code("command_not_recognised");
     /// The confirmation of a provider that records trust per session (`Capabilities::
     /// per_session_trust`, Grok Build's) was accepted — pressed by Octoboard, or answered by the
     /// person in the terminal — but no trust entry for the folder reached the user's own store: the
@@ -314,6 +329,9 @@ pub mod error_code {
     /// the notice of the same code; `params` names the `agent` and gives the agent's reason as
     /// `detail`.
     pub const MESSAGE_REFUSED: Code = Code("message_refused");
+    /// A queued message could not be written as it was sent, through no fault of the agent's; as
+    /// the notice of the same code: `agent` and the English reason as `detail`.
+    pub const MESSAGE_NOT_WRITTEN: Code = Code("message_not_written");
     pub const PAGE_NOT_CURRENT: Code = Code("page_not_current");
     /// The page's form was already submitted: it takes one submission, whichever window sent it.
     pub const PAGE_ALREADY_SUBMITTED: Code = Code("page_already_submitted");
@@ -822,6 +840,10 @@ pub mod notice_code {
     pub const SHARING_MESSAGES_DROPPED: Code = Code("sharing_messages_dropped");
     pub const TRUST_ANSWER_FAILED: Code = Code("trust_answer_failed");
     pub const TRUST_NOT_CARRIED_OVER: Code = Code("trust_not_carried_over");
+    /// As the error of the same code: an answer to the session's `interaction` could not be
+    /// pressed, so the user answers it in the terminal. `params` names the `agent` and, as
+    /// `detail`, the English reason.
+    pub const INTERACTION_ANSWER_FAILED: Code = Code("interaction_answer_failed");
     /// A message written into the session was not sent by its agent and is waiting in the input
     /// box; later messages wait for a prompt to be sent, for 30 seconds at most once the message
     /// waits on the user, and then go into the box with it. `params` names the `agent`.
@@ -833,6 +855,16 @@ pub mod notice_code {
     /// sent, and later messages go on. `params` names the `agent` and gives its reason as
     /// `detail`.
     pub const MESSAGE_REFUSED: Code = Code("message_refused");
+    /// A slash command written for the session was not run: the agent's completion offered another
+    /// command in its place, which an Enter would have run, so it was cleared from the input box
+    /// where it could be and not sent. As the error of the same code: `params` names the `agent`,
+    /// the `command` as written and the command `offered` (with its slash, without arguments).
+    pub const COMMAND_NOT_RECOGNISED: Code = Code("command_not_recognised");
+    /// A message Octoboard queued for the session could not be written as it was sent, through no
+    /// fault of the agent's (its images were gone, or a command could only have gone beside text
+    /// the input box holds and could not be cleared): it was not sent, and later messages go on.
+    /// `params` names the `agent` and gives the English reason as `detail`.
+    pub const MESSAGE_NOT_WRITTEN: Code = Code("message_not_written");
     /// A message written into the session was thrown away by a dialog its agent raised as the
     /// message went in; it is back at the front of the queue and is written again once the dialog
     /// has been answered. `params` names the `agent`.

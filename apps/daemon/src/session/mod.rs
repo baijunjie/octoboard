@@ -21,12 +21,14 @@
 //! taken in parts through `upload` from a client on a slow link.
 
 pub(crate) mod attachment;
+pub(crate) mod composer;
 pub(crate) mod dialogs;
 mod draft;
 mod draft_clear;
 mod draft_hold;
 pub(crate) mod input_box;
 mod input_box_clear;
+pub(crate) mod interaction;
 pub(crate) mod interrupt;
 mod output_pace;
 mod paste_apart;
@@ -131,6 +133,9 @@ pub struct LiveSession {
     pub resolves_approvals_itself: bool,
     /// Watches the session's output for its agent's folder-trust confirmation.
     pub trust: TrustState,
+    /// The tool calls of the current turn and the prompt published for the session
+    /// ([`interaction`]).
+    pub interaction: interaction::InteractionState,
     /// How many times anything but the trust path has written into this session's input. An
     /// attached terminal's own protocol replies (focus reports, answers to the agent's terminal
     /// queries) are not counted, because they cannot move a cursor. Changed only under the PTY's
@@ -291,6 +296,7 @@ impl LiveSession {
             action_required: AtomicBool::new(false),
             resolves_approvals_itself: session.resolves_approvals_itself,
             trust: TrustState::new(session.agent, session.carried_trust),
+            interaction: interaction::InteractionState::default(),
             input_writes: AtomicU64::new(0),
             draft: Mutex::new(Draft::default()),
             swap: Mutex::new(swap::InputSwap::default()),
@@ -631,8 +637,9 @@ impl LiveSession {
         message: &[Input],
         prompt: &str,
         past_grace: bool,
+        finish: Finish<'_>,
     ) -> Result<(), PartialWrite> {
-        self.write_message_into_box(message, prompt, past_grace, BoxIs::Read)
+        self.write_message_into_box(message, prompt, past_grace, BoxIs::Read, finish)
     }
 
     /// [`Self::write_empty_message_input`], with what the box is taken to hold as `box_is` says:
@@ -655,10 +662,16 @@ impl LiveSession {
         prompt: &str,
         past_grace: bool,
         box_is: BoxIs<'_>,
+        finish: Finish<'_>,
     ) -> Result<(), PartialWrite> {
+        let needs_empty_box = finish.is_some_and(|tail| tail.needs_empty_box);
         let input = self.pty.lock_input();
         if self.pty.is_frozen() {
             return Err(swap::archived_refusal());
+        }
+        if needs_empty_box && matches!(box_is, BoxIs::Unclearable { .. }) {
+            tracing::warn!(session = %self.id, "a command was refused: the input box holds text that could not be cleared");
+            return Err(Tail::refuse_beside_text());
         }
         // A hold on the input that has lasted its bound no longer keeps a message written as the
         // box stands out ([`Self::input_swap_held_too_long`]).
@@ -718,6 +731,10 @@ impl LiveSession {
                 }
                 if !refusal.unclearable || !self.unclearable_wait_over(prompt) {
                     return Err(swap::blocked(refusal.reason));
+                }
+                if needs_empty_box {
+                    tracing::warn!(session = %self.id, "a command was refused: the input box holds text that could not be cleared");
+                    return Err(Tail::refuse_beside_text());
                 }
                 as_it_stands = true;
             }
@@ -783,9 +800,17 @@ impl LiveSession {
             }
         }
         let (now, rest) = paste_apart::split(message, self.submits_paste_apart());
-        draft.submission(None, prompt.to_string());
+        if finish.is_none_or(|tail| tail.records_prompt) {
+            draft.submission(None, prompt.to_string());
+        }
+        let box_before = finish.map(|_| self.input_box(&self.screen_text_undimmed()));
         self.input_writes.fetch_add(1, Ordering::AcqRel);
         let written = self.pty.write_input_locked(&input, now);
+        let saw = box_before.map(|box_before| Written {
+            writes: self.input_writes.load(Ordering::Acquire),
+            box_before,
+            stashed: false,
+        });
         if written.is_ok() {
             if held.is_some() {
                 // What the box held goes with the message: the typing record holds nothing of it.
@@ -813,7 +838,11 @@ impl LiveSession {
             self.report_draft_cleared(draft);
         }
         // Only a box found empty above has to show the message alone.
-        self.submit_rest(now, rest, self.checks_composer && !past_grace)
+        self.submit_rest(now, rest, self.checks_composer && !past_grace)?;
+        match (finish, saw) {
+            (Some(tail), Some(saw)) => (tail.then)(saw),
+            _ => Ok(()),
+        }
     }
 
     /// Whether an input box that shows `text` holds nothing but `message`, the message Octoboard
@@ -878,6 +907,30 @@ impl LiveSession {
         }
         if self.input_swap_active()
             || self.input_writes.load(Ordering::Acquire) != expected
+            || !gate()
+        {
+            return Ok(false);
+        }
+        self.input_writes.fetch_add(1, Ordering::AcqRel);
+        self.pty.write_input_locked(&input, keys).map(|()| true)
+    }
+
+    /// Writes `keys` of a message begun, under the input lock, unless the session can no longer take
+    /// them (it has ended, is frozen, or shows a dialog, which a key would answer), or, with
+    /// `expected`, anyone else has written since the count read as it, or `gate` does not hold, and
+    /// says whether it did. Unlike [`Self::write_keys_if`] it is not refused for an input
+    /// replacement: a message written while the draft is stashed is the replacement's own.
+    pub(crate) fn write_message_keys_if(
+        &self,
+        expected: Option<u64>,
+        gate: impl FnOnce() -> bool,
+        keys: &[Input],
+    ) -> Result<bool, PartialWrite> {
+        let input = self.pty.lock_input();
+        if self.is_frozen() || self.poll_exit() || !self.takes_automatic_keys() {
+            return Ok(false);
+        }
+        if expected.is_some_and(|expected| self.input_writes.load(Ordering::Acquire) != expected)
             || !gate()
         {
             return Ok(false);
@@ -1279,6 +1332,56 @@ impl LiveSession {
     #[cfg(test)]
     pub fn is_exit_settled(&self) -> bool {
         self.exit_settled.load(Ordering::Acquire)
+    }
+}
+
+/// What a composer request does after the first paste of its message went into the box, within the
+/// same draft-preservation step: a stash waits for the agent to restore the draft only once the
+/// whole message, its submit key included, has been written (`crate::session::composer`).
+pub(crate) struct Tail<'a> {
+    /// Writes the rest of the message and submits it, given what the write of the first paste
+    /// saw. A failure is the message's.
+    pub then: &'a dyn Fn(Written) -> Result<(), PartialWrite>,
+    /// Whether the prompt of the message is recorded as the one the agent is expected to report
+    /// sending; not for a message that reports no prompt of its own (a slash command) or whose text
+    /// is not what the box sends.
+    pub records_prompt: bool,
+    /// Whether the message may be written only into a box found or made empty, never as the box
+    /// stands beside other text: a slash command, which the text would turn into another.
+    pub needs_empty_box: bool,
+    /// How many images the message attaches.
+    pub images: usize,
+    /// The encoded length of the whole message, every paste of it, for a failure's `written`.
+    pub bytes: usize,
+}
+
+/// What the write of a [`Tail`]'s first paste saw, read under the input lock with it.
+#[derive(Debug, Clone)]
+pub(crate) struct Written {
+    /// How many writes the session's input had counted once it was in.
+    pub writes: u64,
+    /// The text the input box showed just before it, `None` where no box was recognised.
+    pub box_before: Option<String>,
+    /// Whether the draft was stashed around the message: the agent then puts it back as it sends
+    /// the message, so the box is not seen empty after the submit key.
+    pub stashed: bool,
+}
+
+/// The rest of a message after its first paste, where it has one ([`Tail`]).
+pub(crate) type Finish<'a> = Option<&'a Tail<'a>>;
+
+impl Tail<'_> {
+    /// The refusal of a message that needs an empty box when the box holds text that could not be
+    /// cleared: written beside it, the text would be part of the message.
+    fn refuse_beside_text() -> PartialWrite {
+        PartialWrite {
+            written: 0,
+            error: io::Error::other(term::Unwritable(
+                "the session's input box holds text that could not be cleared, and the command \
+                 would run together with it"
+                    .to_string(),
+            )),
+        }
     }
 }
 

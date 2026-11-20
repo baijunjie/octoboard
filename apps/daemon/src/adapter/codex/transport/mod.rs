@@ -773,6 +773,43 @@ impl MessageTransport for CodexTransport {
     }
 
     fn send(&self, text: &str, logical_id: &str) -> Result<Sent, PartialWrite> {
+        self.send_input(json!([text_item(text)]), logical_id)
+    }
+
+    /// The images as `localImage` items ahead of the text, which Codex reads when the message is
+    /// queued (0.167.1), so the files need to exist then and no longer.
+    fn send_with_images(
+        &self,
+        text: &str,
+        images: &[String],
+        logical_id: &str,
+    ) -> Result<Sent, PartialWrite> {
+        self.send_input(input_with_images(text, images), logical_id)
+    }
+}
+
+/// The `UserInput` item of Codex's queue for `text`.
+fn text_item(text: &str) -> Value {
+    json!({"type":"text","text":text,"text_elements":[]})
+}
+
+/// The items of a queued message with `images` attached (paths of local files) and `text`, which
+/// is left out where blank.
+fn input_with_images(text: &str, images: &[String]) -> Value {
+    let mut items: Vec<Value> = images
+        .iter()
+        .map(|path| json!({"type":"localImage","path":path}))
+        .collect();
+    if !text.trim().is_empty() {
+        items.push(text_item(text));
+    }
+    Value::Array(items)
+}
+
+impl CodexTransport {
+    /// Adds the message `input` (Codex's `UserInput` items) to the thread's queue as `logical_id`
+    /// and has it started; see [`MessageTransport::send`].
+    fn send_input(&self, input: Value, logical_id: &str) -> Result<Sent, PartialWrite> {
         let _operation = self.operation.lock().expect("Codex message lock poisoned");
         let wait = |reason: &str| {
             self.shared.note_held(reason);
@@ -873,7 +910,7 @@ impl MessageTransport for CodexTransport {
             "thread/queue/add",
             json!({
                 "threadId":thread_id,
-                "input":[{"type":"text","text":text,"text_elements":[]}],
+                "input":input,
                 "clientUserMessageId":logical_id,
             }),
         );

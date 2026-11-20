@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use super::agents::{AgentId, Launch, PerAgent};
 use super::fields::present_option;
 use super::git_workflow::GitWorkflowOverride;
+use super::interaction::PendingInteraction;
 #[cfg(test)]
 use super::page_content::SubmittedValue;
 use super::page_content::{PageContent, Submission};
@@ -549,6 +550,14 @@ pub struct Session {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub holder_link: Option<HolderLink>,
+    /// What the session's agent is asking the user, while the session is shown waiting on them
+    /// and the daemon has recognised the prompt from the agent's hooks and its screen together;
+    /// answered with `answer_interaction`. Absent otherwise, the prompt then answered in the
+    /// terminal. Never stored: it is filled in on the record a client receives
+    /// (`AppState::wire_session`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub interaction: Option<PendingInteraction>,
     /// Whether this session has a conversation on the agent's side: a turn taken, or one resumed
     /// at open. Until it has, the agent has stored no conversation to resume: `claude --resume`
     /// on such an id fails outright with "No conversation found", and a session the user opened

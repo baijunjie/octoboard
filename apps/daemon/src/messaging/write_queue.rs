@@ -13,6 +13,15 @@ use crate::session::dialogs::Sighting;
 use crate::session::LiveSession;
 use crate::state::AppState;
 
+/// Why a held queue's messages were dropped when a planned stop had saved the queues first.
+const HELD_STOPPING: &str =
+    "the daemon is stopping and had already saved its queued messages for the next daemon";
+
+/// Why a held queue's messages with images or a slash command were dropped: another session
+/// cannot be written them as text.
+pub(crate) const HELD_SHAPED: &str =
+    "they carry images or a slash command, which cannot be handed to another session as text";
+
 /// A session's queue paused by [`AppState::pause_outbox`].
 pub struct OutboxPause {
     state: Arc<AppState>,
@@ -155,15 +164,20 @@ impl Drop for OutboxHold {
             // Already where it is to go.
             Some(successor) if *successor == self.id => successor,
             Some(successor) => {
+                // A message with images or a slash command cannot be written as text to another
+                // session, so it counts as lost.
+                let (taken, shaped) = self.state.outbox.take_counting_shaped(&self.id);
+                self.state
+                    .tell_held_dropped(successor, shaped, for_sharing, Some(HELD_SHAPED));
                 let mut lost = 0;
-                for (text, _) in self.state.outbox.take(&self.id) {
+                for (text, _) in taken {
                     if self.state.outbox.push(successor, &text).is_none() {
                         lost += 1;
                     }
                 }
                 // Too late for the successor: a planned stop has saved the queues already.
                 self.state
-                    .tell_held_dropped(successor, lost, for_sharing, true);
+                    .tell_held_dropped(successor, lost, for_sharing, Some(HELD_STOPPING));
                 successor
             }
             None => &self.id,
@@ -385,6 +399,20 @@ impl AppState {
         Some(ticket)
     }
 
+    /// [`Self::queue_users_message`] for a message of the given `shape`: images, or a slash
+    /// command (see [`crate::session::term::Shape`]).
+    pub(crate) fn queue_users_shaped(
+        &self,
+        id: &str,
+        text: &str,
+        shape: crate::session::term::Shape,
+    ) -> Option<Ticket> {
+        self.cancel_recoveries_silently(id);
+        let ticket = self.outbox.push_shaped(id, text, shape, true)?;
+        self.note_activity(id);
+        Some(ticket)
+    }
+
     /// Reserves a new session's first automatic message before the session can receive reports.
     pub(crate) fn reserve_first_message(self: &Arc<Self>, id: &str) -> Result<FirstMessage> {
         anyhow::ensure!(
@@ -420,12 +448,15 @@ impl AppState {
             .count())
     }
 
-    /// Tells the session of each of its messages the agent's own queue refused that it has not been
-    /// told of yet; whichever caller asks first tells it.
+    /// Tells the session of each of its messages that failed alone (the agent's own queue refused
+    /// it, the agent would have run another command than the one written, or it could not be
+    /// written as sent) that it has not been told of yet; whichever caller asks first tells it.
     pub(crate) fn announce_refusals(&self, id: &str, agent: AgentId) {
-        for (_, reason) in self.outbox.refusals_to_announce(id) {
-            self.broadcast(
-                Notice::new(
+        use super::outbox::RefusalKind;
+        for (_, refused) in self.outbox.refusals_to_announce(id) {
+            let reason = &refused.reason;
+            let notice = match &refused.kind {
+                RefusalKind::Agent => Notice::new(
                     notice_code::MESSAGE_REFUSED,
                     format!(
                         "{} refused a message {} wrote for this session, so it was not sent: \
@@ -433,10 +464,32 @@ impl AppState {
                         agent.label(),
                         crate::APP_NAME
                     ),
-                    &[("agent", agent.label()), ("detail", &reason)],
-                )
-                .about(id),
-            );
+                    &[("agent", agent.label()), ("detail", reason)],
+                ),
+                RefusalKind::Unwritable => Notice::new(
+                    notice_code::MESSAGE_NOT_WRITTEN,
+                    format!(
+                        "A message {} queued for this session could not be written, so it was \
+                         not sent: {reason}. Later messages are still sent.",
+                        crate::APP_NAME
+                    ),
+                    &[("agent", agent.label()), ("detail", reason)],
+                ),
+                RefusalKind::OtherCommand(command, offered) => Notice::new(
+                    notice_code::COMMAND_NOT_RECOGNISED,
+                    format!(
+                        "{} would have run {offered} instead of {command}, so the command was not \
+                         sent.",
+                        agent.label()
+                    ),
+                    &[
+                        ("agent", agent.label()),
+                        ("command", command),
+                        ("offered", offered),
+                    ],
+                ),
+            };
+            self.broadcast(notice.about(id));
         }
     }
 
@@ -714,13 +767,20 @@ impl AppState {
     /// when anything was queued.
     pub(crate) fn drop_held_queue(&self, id: &str, for_sharing: bool) {
         let dropped = self.outbox.forget(id);
-        self.tell_held_dropped(id, dropped, for_sharing, false);
+        self.tell_held_dropped(id, dropped, for_sharing, None);
     }
 
     /// Tells every client that `dropped` messages held back for `id` were dropped, as
-    /// [`Self::drop_held_queue`] does, when there were any; with `stopping`, because a planned
-    /// stop had saved the queues for the next daemon before they could be forwarded to `id`.
-    fn tell_held_dropped(&self, id: &str, dropped: usize, for_sharing: bool, stopping: bool) {
+    /// [`Self::drop_held_queue`] does, when there were any; with `because`, the reason it gives
+    /// in place of the session having no process to receive them ([`HELD_STOPPING`],
+    /// [`HELD_SHAPED`]).
+    pub(crate) fn tell_held_dropped(
+        &self,
+        id: &str,
+        dropped: usize,
+        for_sharing: bool,
+        because: Option<&str>,
+    ) {
         if dropped == 0 {
             return;
         }
@@ -737,11 +797,7 @@ impl AppState {
                 "the session has no process to receive them",
             )
         };
-        let why = if stopping {
-            "the daemon is stopping and had already saved its queued messages for the next daemon"
-        } else {
-            why
-        };
+        let why = because.unwrap_or(why);
         self.broadcast(
             Notice::new(
                 code,
@@ -767,8 +823,15 @@ impl AppState {
 
     /// Removes and returns what is queued for a session, oldest first, each message with the row of
     /// the store it is kept in, if it is (see [`Self::queue_kept_message`]).
+    #[cfg(test)]
     pub fn take_queued_with_rows(&self, id: &str) -> Vec<(String, Option<i64>)> {
         self.outbox.take(id)
+    }
+
+    /// [`Self::take_queued_with_rows`], also counting the messages with images or a slash command
+    /// it left out because they cannot be written as text.
+    pub fn take_queued_counting_shaped(&self, id: &str) -> (Vec<(String, Option<i64>)>, usize) {
+        self.outbox.take_counting_shaped(id)
     }
 
     /// How many messages are queued for a session and not yet written into it.
@@ -1355,6 +1418,36 @@ mod tests {
         drop(hold);
         assert_eq!(state.outbox.len("x"), 1);
         drop(claim);
+    }
+
+    /// A hold that forwards its queue to a successor sends the plain messages and counts the ones
+    /// with images or a slash command as lost, saying so.
+    #[test]
+    fn a_held_queue_forwards_no_message_that_is_more_than_text() {
+        let (state, dir) = app_state("state-held-shaped");
+        insert_record(&state, &dir, "t", SessionStatus::Idle);
+        let successor = crate::test_support::idle_stand_in("t");
+        state.register_live(successor.clone());
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        let mut events = state.subscribe();
+        let hold = state.hold_outbox("s");
+        state.queue_message("s", "one");
+        state
+            .queue_users_shaped("s", "/status", crate::session::term::Shape::Command)
+            .unwrap();
+        hold.forward_to("t");
+        drop(hold);
+        assert_eq!((state.outbox.len("s"), state.outbox.len("t")), (0, 1));
+        match events.try_recv().expect("a notice") {
+            Event::SessionNotice { session, code, .. } => {
+                assert_eq!(
+                    (session.as_str(), code.as_str()),
+                    ("t", "handoff_messages_dropped")
+                );
+            }
+            other => panic!("expected a notice, got {other:?}"),
+        }
     }
 
     /// While a turn's usage limit holds a session, Octoboard's messages stay queued, the user's own

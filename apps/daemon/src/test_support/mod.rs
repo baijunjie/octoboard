@@ -27,6 +27,9 @@
 //! - `resize` (Unix): the shell script that reports its terminal's size each time it is resized,
 //!   the one place the daemon's sources trap the window-change signal; named as
 //!   `resize::reports_size`, not re-exported.
+//! - `composer_agent` (Unix): a stand-in agent that draws the test provider's input box and logs
+//!   what it is given, for the tests of the composer requests; named as `composer_agent::agent`,
+//!   not re-exported.
 //! - [`closed_port`]: a loopback port that refuses connections.
 //! - [`git`]: the environment a test's `git` runs in together with the repositories it builds
 //!   with it, the state a read must leave untouched and the stale stat that makes a read want to
@@ -48,6 +51,8 @@ pub(crate) mod body_first;
 pub(crate) mod cgroups;
 pub(crate) mod clock;
 pub(crate) mod closed_port;
+#[cfg(unix)]
+pub(crate) mod composer_agent;
 #[cfg(windows)]
 pub(crate) mod fixture;
 pub(crate) mod git;

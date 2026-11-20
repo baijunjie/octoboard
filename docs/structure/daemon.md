@@ -219,7 +219,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   unless `GENERATION` is raised. `mod.rs` holds the record, the check and the test on the real files, `norm.rs` reads a
   schema node as the values it accepts, `compare.rs` compares two of them by direction, and `release:version` refreshes
   the snapshot ([`apps/desktop/scripts/`](../../apps/desktop/scripts/README.md)). `attachments.rs` `AttachmentLimits`, the snapshot's `attachments` field whose presence says the daemon takes attached files. `conversation.rs` the wire types of the live conversation feed (its entries, tool calls and
-  page limits, and `CONVERSATION_REQUEST_TYPES`, the requests a connection serves itself). `page_content/` is a report page's
+  page limits, and `CONVERSATION_REQUEST_TYPES`, the requests a connection serves itself), `interaction.rs` (the wire types of a session's pending prompt, `PendingInteraction` in `Session.interaction`: a permission prompt's choices or an ask-the-user tool's questions, and the `QuestionAnswer` an `answer_interaction` carries). `page_content/` is a report page's
   content: the `Component` tree a session pushes with `show_page` and the `Submission` a form on it comes back with.
   `kinds.rs` holds every kind with the JSON Schema `show_page` enforces and `page_guide` hands out, `check.rs` is the
   validator that reads those schemas and names the failing path (and kind), `rules.rs` the cross-checks a schema cannot
@@ -257,7 +257,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   conversation in its agent's desktop application, `open_session_in_app`, and the `probe_native_apps` answer: which
   agents' applications are installed and which sessions' conversations they can see), `account_switch`, `model_change`,
   `account_sharing`, `accounts`, `settings`, `pages` (a session's page list and a form's submission), `processes`
-  (listing, stopping and keeping the process trees a client sees), `messages`, `auto_switch` (moving a session off an
+  (listing, stopping and keeping the process trees a client sees), `messages` (the user's own `send_message`, with its images, and `send_command`), `interactions` (`answer_interaction`: the user's answer to a session's published prompt, pressed by `session/interaction/press.rs`), `auto_switch` (moving a session off an
   account whose usage limit stopped a turn; lower layers reach it through `AppState`'s hooks), `validate` for the checks
   of request text fields; the requests that edit settings, a console, a project or an account carry `base_versions` and
   run through `settings::update_settings_checked`, `consoles::update_console_checked`,
@@ -295,7 +295,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   is, `change.rs` the account switch and handoff variant, `carry_out.rs` what an approval does, `outcome.rs` the wording
   of the outcome.
 - `src/messaging/` — every message Octoboard writes into sessions: `delivery.rs` (gates, queueing, what became of each
-  message), `outbox.rs` (the per-session ordered queue, sealed at a planned stop's handover, which also keeps the tickets a refusal failed, and whose holds include the one a restart puts on the queue so it is carried into the relaunched process; a daemon's tickets start from the clock, `Outbox::seeded_from_clock`, because an agent's own queue keeps a message's id across runs), `write_queue.rs`
+  message), `outbox.rs` (the per-session ordered queue, which also keeps how a message of images or a slash command is to be written (`session::term::Shape`) and drops such a message at a handover instead of carrying it as text, sealed at a planned stop's handover, which also keeps the tickets a refusal failed, and whose holds include the one a restart puts on the queue so it is carried into the relaunched process; a daemon's tickets start from the clock, `Outbox::seeded_from_clock`, because an agent's own queue keeps a message's id across runs), `write_queue.rs`
   (`AppState`'s queuing, flushing and holds over it, and the notice of a refused message), `restart_outbox.rs` (the messages still queued at the handover,
   saved for the next daemon and requeued by it), `reporting.rs`, `usage_limit.rs` (arming the hold on Octoboard's own writes once a turn stopped on the account's usage limit, and releasing it; the hold's state is `session/usage_limit.rs`'s), `capacity_retry.rs` (the retries of a Codex turn that stopped at its model's capacity; its
   waits live in `AppState::capacity_retries`), `sharing.rs`, `naming.rs` (how a message names a session, a place, a
@@ -337,7 +337,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   write Octoboard's database the user can fix (read-only data folder, full disk, a file that cannot be opened or read)
   as `store_write_failed`.
 - `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (running sessions, claims, status,
-  titles, turns, the tool calls a turn's hooks reported open or waiting on the user (`tool_calls.rs`), the background
+  titles, turns, the tool calls a turn's hooks reported open or waiting on the user (`tool_calls.rs`, which also lowers a session's hand once the prompt it waited on has left the screen: `AppState::interaction_left`), the background
   work each session's agent said it left running (`background.rs`) with its copy in the data directory that survives a
   daemon restart (`background_store.rs`, `paths::background_tasks_path`), sharing status, git
   status, requests, availability, hooks to the automatic account switch, whether the host is held awake
@@ -529,7 +529,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   cannot be cleared the message's wait is bounded by `UNCLEARABLE_DRAFT_WAIT`, kept per message under its queue id,
   after which the message goes into the box as it stands, the clients told in a `message_sent_with_draft` notice, and a
   box that stays unreadable gets a `message_waits_on_input` notice; `LiveSession::write_message_into_box` in `mod.rs` is
-  that write, told what the box holds by `BoxIs`: read, cleared or unclearable), `input_box_clear.rs` (the run of Ctrl-U
+  that write, told what the box holds by `BoxIs`: read, cleared or unclearable), `composer.rs` (the user's composer requests that are more than a paste and an Enter, written through the terminal inside the draft-preserving write: a message's images, each pasted alone and waited on until the input box shows one more placeholder, and a slash command, checked against the agent's completion before its Enter), `interaction/` (what the agent asks while the session waits on the user: `mod.rs` the `InteractionReader` trait a provider reads its prompts with, the tool calls kept from the hooks, the per-session `InteractionState` and the checks of an answer; `watch.rs` the screen watch that publishes `Session.interaction` and lowers the hand once a published prompt has left; `press.rs` pressing an answer key by key, each key chosen from the screen and gated like the trust confirmation's), `input_box_clear.rs` (the run of Ctrl-U
   presses on a provider's input box, each seen on the screen before the next, which that clear and an interrupt's
   clearing of the prompt share), `output_pace.rs` (whether the parsed screen shows a whole frame, from the agent's
   recent output), `paste_apart.rs` (submitting a message whose Enter has to wait until the agent has taken its paste;
@@ -568,7 +568,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `prompt_after_title_stop_ends_turn` declares whether a new prompt after a stopped title proves an interrupt landed;
   `user_action_title` is the title text a provider shows when only the user can act; `input_placeholder` the hint an
   empty input box shows; `clears_input_box_with_ctrl_u` and `collapsed_paste` what a provider's Ctrl-U does to its box
-  and the placeholder it shows for a long paste; `Interrupt` how a provider's turn is interrupted, including the wording
+  and the placeholder it shows for a long paste; `image_placeholders` and `without_image_placeholders` how many images the box holds as attachments and the box without them, `command_completion` the slash command the agent's completion offers, `leading_slash_guard` what keeps a message's leading slash from running as a command, `Interrupt` how a provider's turn is interrupted, including the wording
   of messages left waiting in its own queue past a cancel); the modules above keep only what is done with a reading (the
   dialogs are kept as `DialogPattern` and `DialogKind`), and read it through the session's provider.
 - `src/titles/` — the title a session shows, from the agent's records, the terminal title and the first prompt.
@@ -719,7 +719,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   it, inherited session marker variables, instruction file, tool-name prefix, ask-question tool, `Capabilities` (status
   line, reset credits, per-session trust, configuration sharing, the URL scheme of its desktop application
   `native_app_scheme`, whether it ends its running commands' process groups as it exits
-  `ends_command_groups_on_exit`, the delivery quirks), `quota_windows` (`QuotaWindowNaming`, which windows the provider has and
+  `ends_command_groups_on_exit`, the delivery quirks, which prompts it publishes and answers `interactions`, `message_images`, `slash_commands`), `quota_windows` (`QuotaWindowNaming`, which windows the provider has and
   what its own interface calls them), `model_display` (`ModelDisplay`, how its model ids are shown), whether other
   providers can be made compatible with it, its `settings` schema and its error and notice `codes`) and `descriptors()`
   in the registry's order. A `SettingDescriptor` declares one user setting of the provider: a choice (some choices
@@ -772,7 +772,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   refusing an account that cannot be launched, the installed version, reading the titles it shows, its hook interpreter,
   its record store, its screen reader, its accounts (`accounts()`, `AccountOps`), its model catalogue (`catalogue()`,
   `ModelCatalogue`), how its CLI is installed and updated (`cli_packaging()`, `CliPackaging`, defined in `mod.rs`, read
-  by `agents/cli/`), whether its hooks and signals give its sessions their status (`has_status_integration()`; where
+  by `agents/cli/`), the prompts it shows the user while a session waits on them (`interactions()`, an `InteractionReader`, `session/interaction/`), whether its hooks and signals give its sessions their status (`has_status_integration()`; where
   not, `session/program_status.rs` takes it from the program's own reports), its status line (`status_line()`,
   `StatusLine`, defined in `mod.rs`), how its desktop application is asked to show a conversation (`native_app()`,
   `NativeApp`, defined in `mod.rs`, with `native_app_unavailable`, the refusal it raises; implemented by
@@ -784,7 +784,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `CodexProvider` and `GrokProvider` in `claude/`, `codex/` and `grok/` (each provider's `hooks.rs` there is its
   `HookInterpreter`, and `records.rs` its `RecordStore`, with `conversation.rs` and `switch_continue.rs` its readings of
   a conversation and of how its last turn ended, `feed.rs` its `FeedReader` for the live conversation feed (Grok's
-  companion file is its `updates.jsonl`; its fixtures are `testdata/feed_*.jsonl`), and `screen.rs` its `ScreenReader`; `claude/stash.rs` is Claude Code's
+  companion file is its `updates.jsonl`; its fixtures are `testdata/feed_*.jsonl`), and `screen.rs` its `ScreenReader`, and `interaction.rs` its `InteractionReader` (reading its permission prompts and ask-the-user questions off the screen, matched to the calls its hooks reported, and choosing the keys that answer them; `grok/interaction_tests.rs` are Grok's tests); `claude/stash.rs` is Claude Code's
   stash keybinding gate; `claude/compatibility.rs` and `codex/compatibility.rs` (each with `compatibility.md`, the
   instruction text) are Claude Code's and Codex's `CompatibilitySource`; `claude/compatibility_consumer.rs` and
   `grok/compatibility_consumer.rs` are Claude Code and Grok Build taking a source's servers, skills and prompts into
@@ -804,7 +804,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   messages, `initialize_params` and `initialized`), `private_server.rs` (the `PrivateServerPlan` a Codex launch of
   0.166.0 or later carries as its `PrivateServer`: the server's overrides, the arguments of the terminal that attaches
   to it with `--remote`, the permission preset a resume applies) and `transport/` (its `CodexTransport`, the session's
-  `MessageTransport`, in `mod.rs`: identifying the session's conversation, delivering a message to Codex's own queue,
+  `MessageTransport`, in `mod.rs`: identifying the session's conversation, delivering a message to Codex's own queue (with local images, `send_with_images`),
   loading the conversation again when Codex unloaded it, starting the queue after a cancel, and the notice that messages
   are held, `held_notice`, coded `provider.codex.messages_held`; `rpc.rs` the JSON-RPC stream, the endpoint a client and
   the terminal connect to, and `Rpc` (its stream is a `platform::ipc::Connection`); `server.rs` starting the server
@@ -974,6 +974,7 @@ them is `docs/README.md`, "Coding conventions".
   `feed_companion` when the agent writes what it is still producing to a file beside the record); the generic code in
   `src/records/feed/`, `src/state/conversation_feeds.rs` and `src/coordinator/conversation_feed.rs` never branches on the
   agent. A new kind of entry is a type in `src/protocol/conversation.rs`.
+- A provider's reading of its prompts to the user (permission prompts, ask-the-user questions), and the keys that answer them: an `InteractionReader` in `src/adapter/<id>/interaction.rs`, returned by `AgentProvider::interactions` and enabled by the descriptor's `Capabilities::interactions`; the publishing, the answer's checks and the key pressing in `src/session/interaction/` never branch on the agent. Likewise images in a message and slash commands: the descriptor's `message_images` and `slash_commands`, with the box and completion readings in the provider's `ScreenReader`; the writing is `src/session/composer.rs`.
 - A new MCP tool: the catalogue in `src/session_tools/catalogue/`, its dispatch in `src/mcp/dispatch.rs` and the tool in
   a file of `src/mcp/tools/` (the rules: `docs/conventions/protocol-and-contracts.md`, "MCP tools and the MCP
   contract").
@@ -998,7 +999,7 @@ them is `docs/README.md`, "Coding conventions".
   not do about it is in `docs/conventions/provider-neutral-core.md`.
 - Tests sit beside the code they test (`tests.rs`, `*_tests.rs`); shared fixtures come from `src/test_support/`
   (`mod.rs` re-exports `scratch.rs`, `app.rs`, `stand_in.rs`, `processes.rs`, `git.rs` for repositories, `sessions.rs`,
-  `owner_team.rs` and `screens.rs` for the terminal screens of a usage limit, and holds `code_of` and `param_of`, the
+  `owner_team.rs`, `screens.rs` for the terminal screens of a usage limit, and `composer_agent.rs` (Unix only) for a stand-in agent that draws the test provider's input box and logs what it is given, and holds `code_of` and `param_of`, the
   code and a param of a coded error), and `src/test_support/clock.rs` holds the helpers for a clock (`tasks_idle` and
   `runtime_settled`/`runtime_advanced` on a paused tokio clock, `next_millisecond` for the named wait on the wall
   clock). How tests are written is in `docs/conventions/tests.md`, "Where tests sit", "Time in tests" and "Daemon

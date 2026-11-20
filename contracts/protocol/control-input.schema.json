@@ -1184,6 +1184,25 @@
         }
       ]
     },
+    "QuestionAnswer": {
+      "type": "object",
+      "properties": {
+        "selected": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "description": "The options chosen, by their index in the question's `options`; none when left out."
+        },
+        "text": {
+          "type": "string",
+          "description": "The user's own answer."
+        }
+      },
+      "description": "The answer to one question of a `question` interaction, in `answer_interaction`."
+    },
     "RangeFile": {
       "oneOf": [
         {
@@ -2529,6 +2548,12 @@
             "text": {
               "type": "string"
             },
+            "images": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "type": {
               "type": "string",
               "const": "send_message"
@@ -2538,7 +2563,65 @@
             "type",
             "session",
             "text"
-          ]
+          ],
+          "description": "The user's own message into a running session. `images` are images to attach, each a path\n`save_pasted_image` answered for this session, for a provider that declares\n`message_images`, at most ten; with images, `text` may be empty. Refused with\n`session_waiting_for_user` while the session waits on the user, `session_trust_pending`\nwhile its folder-trust confirmation may be up, `unreadable_request` (`field: images`) for an\nimage path that is not one of this session's or for more than ten images,\n`field_required` (`field: text`) for nothing\nto send, and `provider_unsupported` for images to a provider that takes none."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "command": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "send_command"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "command"
+          ],
+          "description": "Writes a slash command, `command`, one line beginning with `/` and its arguments, into a\nrunning session for its agent to run as one of its own commands, for a provider that\ndeclares `slash_commands`. Answered with `ack` once written. Refused as `send_message` is,\nand with `command_not_recognised` where the agent would run another command in its place\n(its completion offers a different one), the command then cleared from the input box."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "interaction": {
+              "type": "string"
+            },
+            "choice": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "answers": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/QuestionAnswer"
+              }
+            },
+            "dismiss": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "answer_interaction"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "interaction"
+          ],
+          "description": "The user's answer to the session's `interaction`, named by its `id`: `choice` for a\n`permission` prompt (with `text` for a choice that takes it), `answers` for a `question`\nprompt (one per question, in order), or `dismiss` to decline a dismissible question. The\ndaemon presses it into the agent's terminal and answers with `ack` once the prompt is seen\ngone. Refused with `interaction_not_waiting` when that prompt is no longer up (answered\nalready, in the terminal or elsewhere, or replaced), `interaction_answer_failed` when the\nkeys could not be pressed or did not take (also broadcast as a `session_notice`; the prompt\nis left for the terminal), `field_required` or `unreadable_request` for an answer that does\nnot fit the prompt, and `provider_unsupported`."
         },
         {
           "type": "object",

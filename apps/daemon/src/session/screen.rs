@@ -46,6 +46,27 @@ pub trait ScreenReader: Send + Sync {
         false
     }
 
+    /// How many images `text`, the whole of what the input box shows, holds as attachments: the
+    /// placeholders the provider draws for each image path pasted on its own (`send_message`'s
+    /// `images`).
+    fn image_placeholders(&self, _text: &str) -> usize {
+        0
+    }
+
+    /// `text`, the whole of what the input box shows, without the placeholders
+    /// [`Self::image_placeholders`] counts, for reading what else the box holds beside them (a
+    /// long paste's own placeholder, [`Self::collapsed_paste`]).
+    fn without_image_placeholders(&self, text: &str) -> String {
+        text.to_string()
+    }
+
+    /// The command the provider's slash-command completion offers on `screen` (the visible rows),
+    /// by its name without the slash, which an Enter would run in place of what the box holds;
+    /// `None` where no completion is up (`send_command`).
+    fn command_completion(&self, _screen: &str) -> Option<String> {
+        None
+    }
+
     /// What goes before a message's leading slash in a paste so that the provider reads it as text
     /// rather than run it as a slash command (`crate::session::term::frame_message`): a space,
     /// which is what Claude Code and Codex are measured to need, unless the provider says
@@ -193,25 +214,61 @@ pub enum InterruptKey {
     },
 }
 
+/// The byte ranges of the `[Image #<n>]` placeholders in `text`, for a provider that draws an
+/// image path pasted on its own in that form ([`ScreenReader::image_placeholders`]).
+fn image_placeholder_spans(text: &str) -> Vec<std::ops::Range<usize>> {
+    text.match_indices("[Image #")
+        .filter_map(|(at, marker)| {
+            let from = at + marker.len();
+            let digits = text[from..].bytes().take_while(u8::is_ascii_digit).count();
+            (digits > 0 && text[from + digits..].starts_with(']')).then_some(at..from + digits + 1)
+        })
+        .collect()
+}
+
+/// How many `[Image #<n>]` placeholders `text` holds, for a provider's
+/// [`ScreenReader::image_placeholders`] to answer with.
+pub(crate) fn count_image_placeholders(text: &str) -> usize {
+    image_placeholder_spans(text).len()
+}
+
+/// `text` without its `[Image #<n>]` placeholders.
+pub(crate) fn strip_image_placeholders(text: &str) -> String {
+    let mut rest = String::new();
+    let mut from = 0;
+    for span in image_placeholder_spans(text) {
+        rest.push_str(&text[from..span.start]);
+        from = span.end;
+    }
+    rest.push_str(&text[from..]);
+    rest
+}
+
 #[cfg(test)]
 mod tests {
     use crate::adapter::{provider, tests::spec_fixture};
     use crate::protocol::AgentId;
     use crate::session::trust::{StartSignal, HOOK_FALLBACK};
 
+    /// A reader that overrides nothing, as the trait's defaults.
+    struct Bare;
+    impl super::ScreenReader for Bare {}
+
     /// A provider with no reader of its own is read as the default recognises: no dialog, no input
-    /// box, no title activity, no draft stash and no interrupt key, all through the registry.
+    /// box, no title activity, no draft stash and no interrupt key. The test provider reads a
+    /// made-up input box (`adapter::test_provider::TestScreen`), so those are the defaults' own.
     #[test]
     fn a_provider_with_no_screen_reader_recognises_nothing() {
-        let screen = provider(AgentId::TEST).screen();
+        let screen = &Bare as &dyn super::ScreenReader;
         let text = "Do you want to proceed?\n1. Yes\n2. No\n❯ a draft\n";
         assert!(screen.dialogs().is_empty());
         assert!(crate::session::dialogs::recognise(AgentId::TEST, text).is_none());
         assert!(screen.input_box_rows(text).is_none());
-        assert!(crate::session::input_box::input_box(AgentId::TEST, text).is_none());
         assert_eq!(screen.as_submitted("typed"), "typed");
         assert!(!screen.pasted_image_path_loses_enter());
         assert_eq!(screen.leading_slash_guard(), " ");
+        assert_eq!(screen.image_placeholders("[Image #1] text"), 0);
+        assert!(screen.command_completion("/help Show help").is_none());
         assert!(!screen.stash_shown(text));
         assert_eq!(screen.stash_indicator_row(text), None);
         assert!(!screen.clears_input_box_with_ctrl_u());

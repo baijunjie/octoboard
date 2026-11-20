@@ -171,21 +171,16 @@ impl CodexFeedReader {
             Some(other) => other.clone(),
             None => Value::Null,
         };
-        let (category, title, paths) = match name.as_str() {
-            "exec" => (ToolCategory::Command, source_title(&input), Vec::new()),
-            "js" => (ToolCategory::Command, text_of(&input, "title"), Vec::new()),
-            "shell" | "exec_command" | "shell_command" => {
-                (ToolCategory::Command, command_title(&input), Vec::new())
-            }
-            // `wait` resumes a yielded `exec` cell, so it is no subagent call.
-            "wait" => (ToolCategory::Command, None, Vec::new()),
+        let category = tool_category(&name);
+        let (title, paths) = match name.as_str() {
+            "exec" => (source_title(&input), Vec::new()),
+            "js" => (text_of(&input, "title"), Vec::new()),
+            "shell" | "exec_command" | "shell_command" => (command_title(&input), Vec::new()),
             "apply_patch" => {
                 let paths = input.as_str().map(patch_paths).unwrap_or_default();
-                (ToolCategory::FileEdit, paths.first().cloned(), paths)
+                (paths.first().cloned(), paths)
             }
-            "spawn_agent" | "send_message" | "wait_agent" | "followup_task" | "list_agents"
-            | "interrupt_agent" => (ToolCategory::Subagent, None, Vec::new()),
-            _ => (ToolCategory::Other, None, Vec::new()),
+            _ => (None, Vec::new()),
         };
         self.calls.insert(call_id.clone());
         self.awaiting.push(call_id.clone());
@@ -352,6 +347,22 @@ impl CodexFeedReader {
         self.settled.insert(call.call_id.clone());
         self.awaiting.retain(|id| *id != call.call_id);
         out.tool_call(call, at);
+    }
+}
+
+/// What kind of tool `name` is, as a rollout's `function_call` and `custom_tool_call` items name
+/// it. The prompts of `super::interaction` classify the calls they belong to with it (after
+/// naming the tools only the hooks name), so a prompt and the feed's entry for the same call agree.
+pub(super) fn tool_category(name: &str) -> ToolCategory {
+    match name {
+        // `wait` resumes a yielded `exec` cell, so it is no subagent call.
+        "exec" | "js" | "shell" | "exec_command" | "shell_command" | "wait" => {
+            ToolCategory::Command
+        }
+        "apply_patch" => ToolCategory::FileEdit,
+        "spawn_agent" | "send_message" | "wait_agent" | "followup_task" | "list_agents"
+        | "interrupt_agent" => ToolCategory::Subagent,
+        _ => ToolCategory::Other,
     }
 }
 

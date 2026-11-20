@@ -7,6 +7,10 @@ user when it has to set that text aside or clear it, and what it does when the t
 message comes first, so a message does not wait without end on text Octoboard cannot get out of its way, but goes in
 with it as the last resort.
 
+A slash command or a message with images a client sends is written under the same rules, its several pastes and its
+Enter all within one draft-preserving step, so a stashed draft comes back only after its Enter (see
+`docs/product/slash-commands-and-image-messages.md`).
+
 ## Draft preservation has a bounded wait
 
 On supported launches, Octoboard first tries to deliver the automatic message separately while preserving the user's
@@ -256,7 +260,10 @@ stash or clearing key goes in on it.
 
 Once the 30 seconds are over, the message is written into the composer as it stands, followed by its Enter, so it may
 be sent together with that text; Octoboard's record of the typing then counts that text as gone with it, so later
-messages do not wait on it. Every client is sent the `message_sent_with_draft` notice:
+messages do not wait on it. A slash command a client sent is the exception: it is never written beside other text, and is
+refused with `message_not_written` instead (see "Sending a slash command" in
+`docs/product/slash-commands-and-image-messages.md`). For a message written so, every client is sent the
+`message_sent_with_draft` notice:
 
 - with the text the composer showed just before the write, or no text where it could not be read or showed none;
 - where a clear ran in the same attempt and left text, with the draft as read before that clear, what the clear took

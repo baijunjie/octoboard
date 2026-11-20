@@ -383,6 +383,17 @@ pub trait MessageTransport: Send + Sync {
     /// Delivers `text` as the message `logical_id`. An error whose `written` is 0 took nothing in;
     /// one carrying [`UncertainSubmission`] may have.
     fn send(&self, text: &str, logical_id: &str) -> Result<Sent, PartialWrite>;
+    /// [`Self::send`] with the images at `images` (absolute paths of files that exist) attached,
+    /// `text` possibly empty. A server that takes no images declines, and the terminal takes the
+    /// message instead.
+    fn send_with_images(
+        &self,
+        _text: &str,
+        _images: &[String],
+        _logical_id: &str,
+    ) -> Result<Sent, PartialWrite> {
+        Ok(Sent::Declined("the server takes no images".to_string()))
+    }
     /// Connects the server's events to the running session, once it is registered; an event that
     /// came before is passed on then.
     fn attach(&self, events: TransportEvents);
@@ -453,6 +464,43 @@ impl std::fmt::Display for RefusedByAgent {
 }
 
 impl std::error::Error for RefusedByAgent {}
+
+/// A message that could not be written as the user sent it, for the reason given, through no
+/// fault of the agent's: its images are gone, or a command would run together with text in the
+/// input box. Nothing of it is written (or it is cleared again), and it is not tried again by any
+/// route; its sender is told, and the queue behind it goes on.
+#[derive(Debug)]
+pub struct Unwritable(pub String);
+
+impl std::fmt::Display for Unwritable {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Unwritable {}
+
+/// The command a message written as a slash command would not run: the agent's completion offers
+/// another one in its place, `offered` (with its slash, without arguments), so an Enter would run
+/// that. The command has been cleared from the input box, or the box could not be cleared (the
+/// reason says which); nothing is sent, and it is not written again by any route.
+#[derive(Debug)]
+pub struct CommandNotRecognised {
+    /// The command as written.
+    pub command: String,
+    pub offered: String,
+    /// Whether the command was cleared from the input box.
+    pub cleared: bool,
+    pub reason: String,
+}
+
+impl std::fmt::Display for CommandNotRecognised {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.reason)
+    }
+}
+
+impl std::error::Error for CommandNotRecognised {}
 
 /// The session's own server holds a message back for now, for the reason given: nothing of it was
 /// taken, and it is written again later, by the server or, failing it, the terminal.
@@ -613,40 +661,10 @@ pub fn send_message_with_id(
     past_grace: bool,
     writes_stopped: &dyn Fn() -> bool,
 ) -> Result<Route, PartialWrite> {
-    if let Some(transport) = &session.transport {
-        if session.is_frozen()
-            || session.trust.holds_writes()
-            || session.look_for_dialog().current.is_some()
-        {
-            return Err(PartialWrite {
-                written: 0,
-                error: std::io::Error::new(
-                    std::io::ErrorKind::WouldBlock,
-                    "the session's terminal is frozen, or shows its trust confirmation or a dialog",
-                ),
-            });
-        }
-        match transport.send(&shaped(text), logical_id)? {
-            Sent::Queued => return Ok(Route::Queued),
-            // Nothing of the message reached the server. A send begun before the handover barrier
-            // can end after it rose, and from the barrier on the outbox writes nothing: the
-            // message stays whole for the next daemon rather than being written.
-            Sent::Declined(reason) if writes_stopped() => {
-                tracing::info!(
-                    session = %session.id,
-                    %reason,
-                    "the agent's own server did not take a message after the handover barrier \
-                     was raised; it is kept for the next daemon"
-                );
-                return Err(kept_for_next_daemon());
-            }
-            // Otherwise the terminal takes it instead.
-            Sent::Declined(reason) => tracing::warn!(
-                session = %session.id,
-                %reason,
-                "the agent's own server did not take a message; writing it into the terminal"
-            ),
-        }
+    if let Some(route) = through_transport(session, writes_stopped, |transport| {
+        transport.send(&shaped(text), logical_id)
+    })? {
+        return Ok(route);
     }
     let framed = frame_message(session.agent, text);
     let [Input::Paste(prompt), _] = &framed else {
@@ -655,6 +673,120 @@ pub fn send_message_with_id(
     session
         .write_message_input_as(logical_id, &framed, prompt, past_grace)
         .map(|()| Route::Terminal)
+}
+
+/// Offers a message to the session's own server, if it has one: `Some(Route::Queued)` where the
+/// server took it, an error where the session cannot take a write now or the server failed it, and
+/// `None` where the terminal is to take it instead (no server, or one that declined it and no
+/// planned stop's handover barrier is up; see [`send_message_with_id`]).
+fn through_transport(
+    session: &LiveSession,
+    writes_stopped: &dyn Fn() -> bool,
+    send: impl FnOnce(&dyn MessageTransport) -> Result<Sent, PartialWrite>,
+) -> Result<Option<Route>, PartialWrite> {
+    let Some(transport) = &session.transport else {
+        return Ok(None);
+    };
+    if session.is_frozen()
+        || session.trust.holds_writes()
+        || session.look_for_dialog().current.is_some()
+    {
+        return Err(PartialWrite {
+            written: 0,
+            error: std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "the session's terminal is frozen, or shows its trust confirmation or a dialog",
+            ),
+        });
+    }
+    match send(&**transport)? {
+        Sent::Queued => Ok(Some(Route::Queued)),
+        // Nothing of the message reached the server. A send begun before the handover barrier
+        // can end after it rose, and from the barrier on the outbox writes nothing: the
+        // message stays whole for the next daemon rather than being written.
+        Sent::Declined(reason) if writes_stopped() => {
+            tracing::info!(
+                session = %session.id,
+                %reason,
+                "the agent's own server did not take a message after the handover barrier \
+                 was raised; it is kept for the next daemon"
+            );
+            Err(kept_for_next_daemon())
+        }
+        // Otherwise the terminal takes it instead.
+        Sent::Declined(reason) => {
+            tracing::warn!(
+                session = %session.id,
+                %reason,
+                "the agent's own server did not take a message; writing it into the terminal"
+            );
+            Ok(None)
+        }
+    }
+}
+
+/// How a queued message is written besides its text: the messages of the user's composer that
+/// are more than a paste and an Enter. Kept beside the message's place in the outbox by ticket
+/// (`crate::messaging::outbox`), and never carried to another process or daemon as plain text:
+/// an image file goes with its session's scratch directory, and a command written as text would
+/// reach the model.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Shape {
+    /// With these images attached, by the paths `save_pasted_image` answered for this session.
+    Images(Vec<String>),
+    /// As a slash command of the agent's own: the text is the command line, written without the
+    /// guard a message's leading slash gets, and always through the terminal.
+    Command,
+}
+
+/// [`send_message_with_id`] for a message of the given `shape`.
+///
+/// Images go through the session's own server where it takes them, and otherwise into the
+/// terminal, each path pasted alone (`LiveSession::write_images_message`). A command goes into the
+/// terminal only: a server's queue would hand it to the model as text. A message whose images are
+/// gone (the session's scratch directory is removed with its process) is refused as
+/// [`Unwritable`], so its sender is told and the queue goes on.
+pub fn send_shaped_with_id(
+    session: &LiveSession,
+    text: &str,
+    shape: &Shape,
+    logical_id: &str,
+    past_grace: bool,
+    writes_stopped: &dyn Fn() -> bool,
+) -> Result<Route, PartialWrite> {
+    match shape {
+        Shape::Images(images) => {
+            if images.iter().any(|path| !Path::new(path).is_file()) {
+                return Err(PartialWrite {
+                    written: 0,
+                    error: std::io::Error::other(Unwritable(
+                        "an attached image no longer exists: images go away with the session's \
+                         process"
+                            .to_string(),
+                    )),
+                });
+            }
+            if let Some(route) = through_transport(session, writes_stopped, |transport| {
+                transport.send_with_images(&shaped(text), images, logical_id)
+            })? {
+                return Ok(route);
+            }
+            let text = stripped(text);
+            let text = (!text.trim().is_empty()).then(|| {
+                let [paste, _] = frame_message(session.agent, &text);
+                paste
+            });
+            session
+                .write_images_message(logical_id, images, text, past_grace)
+                .map(|()| Route::Terminal)
+        }
+        Shape::Command => {
+            let command = stripped(text);
+            session
+                .write_command(logical_id, command.trim(), past_grace)
+                .map(|()| Route::Terminal)
+        }
+    }
 }
 
 /// The failure of a message [`send_message_with_id`] does not write because the handover barrier is

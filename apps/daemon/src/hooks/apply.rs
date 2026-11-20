@@ -150,6 +150,21 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
         crate::records::on_hook(state, session_id, provider.records(), &payload);
     }
 
+    // The calls a prompt can be matched to: the current turn's, which a new prompt submission
+    // begins.
+    if let (Some(reader), Some(event), Some(live)) = (
+        provider.and_then(|provider| provider.interactions()),
+        event.as_deref(),
+        state.live_session(session_id),
+    ) {
+        if interpreter.is_some_and(|interpreter| interpreter.starts_conversation(event)) {
+            live.interaction.turn_started();
+        }
+        if let Some(call) = reader.call_started(event, &payload) {
+            live.interaction.call_started(call);
+        }
+    }
+
     let Some(event) = event else {
         tracing::debug!(session = %session_id, "hook payload carried no event name");
         return;
@@ -235,13 +250,36 @@ fn apply_status(
     if let Some(outcome) = outcome {
         state.set_paused(session_id, outcome == hooks::TurnOutcome::Abnormal);
     }
+    // A hand Octoboard lowered itself, once the prompt it raised for left the screen
+    // (`AppState::lower_hand_left_by_prompt`), is still the hooks' `WaitingUser`: what they arm on
+    // a move off a prompt is owed to the first hook after it, as if the hand had stayed up. That
+    // hook ends the mark.
+    let lowered = state
+        .live_session(session_id)
+        .filter(|live| live.interaction.lowered());
+    if let Some(live) = &lowered {
+        live.interaction.clear_lowered();
+    }
     // Read before the status lands: a watch armed on a move into a status, not on more of the
     // same, needs the status the event found.
     let previous = interpreter
         .watch_reads_previous_status()
-        .then(|| state.session_record(session_id).ok())
-        .flatten()
-        .map(|session| state.agent_status(&session));
+        .then(|| {
+            if lowered.is_some() {
+                return Some(SessionStatus::WaitingUser);
+            }
+            state
+                .session_record(session_id)
+                .ok()
+                .map(|session| state.agent_status(&session))
+        })
+        .flatten();
+    // The prompt is read off the screen for as long as the session waits on the user.
+    if status == SessionStatus::WaitingUser {
+        if let Some(live) = state.live_session(session_id) {
+            crate::session::interaction::watch::ensure(state, &live);
+        }
+    }
     match state.apply_hook_status(session_id, status) {
         // Delivery writes into the owner's PTY, which blocks.
         Ok(true) if status == SessionStatus::WaitingUser => {

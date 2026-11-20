@@ -726,6 +726,20 @@ export type Capabilities = {
    */
   ends_command_groups_on_exit: boolean,
   delivery: DeliveryQuirks,
+  /**
+   * Which of the prompts its agent shows while a session waits on the user Octoboard publishes
+   * and answers (`Session.interaction`, `answer_interaction`;
+   * `AgentProvider::interactions`).
+   */
+  interactions: InteractionKinds,
+  /**
+   * Takes images attached to a message (`send_message`'s `images`).
+   */
+  message_images: boolean,
+  /**
+   * Runs a slash command sent as one (`send_command`).
+   */
+  slash_commands: boolean,
 };
 
 /**
@@ -804,12 +818,22 @@ export type ChangeSide = {
 };
 
 /**
+ * What choosing an answer does. A value a client does not know reads as `other`.
+ */
+export type ChoiceEffect = "allow" | "allow_remember" | "deny" | "deny_remember" | "other";
+
+/**
  * One option of a choice: the `value` that is submitted, shown as `label` where there is one.
  */
 export type ChoiceOption = {
   value: string,
   label?: string,
 };
+
+/**
+ * How text goes with a choice. A value a client does not know reads as `optional`.
+ */
+export type ChoiceText = "optional";
 
 /**
  * How an agent's CLI was installed, which decides the command that updates it.
@@ -2713,6 +2737,12 @@ export type FileContent = {
   data: string | null,
 };
 
+/**
+ * How a written answer goes with a question's options. A client that does not know the value
+ * offers no written answer.
+ */
+export type FreeText = "instead" | "with";
+
 export type GitActivity = "idle" | "checking" | "pulling" | "pushing";
 
 /**
@@ -3240,6 +3270,20 @@ export type InspectedSettings = {
 };
 
 /**
+ * The kinds of prompt a provider's sessions publish and answer.
+ */
+export type InteractionKinds = {
+  /**
+   * Tool permission prompts.
+   */
+  permission: boolean,
+  /**
+   * Questions from the agent's own ask-the-user tool.
+   */
+  question: boolean,
+};
+
+/**
  * When Prevent sleep holds the daemon's host awake (`Settings.keep_awake`).
  */
 export type KeepAwakeWhen = "always" | "working";
@@ -3546,11 +3590,88 @@ export type PendingEntry = {
 });
 
 /**
+ * A prompt the session's agent is showing the user, recognised from its hooks and its screen
+ * together, which a client can answer with `answer_interaction`.
+ */
+export type PendingInteraction = {
+  /**
+   * This sighting of the prompt, new each time the daemon recognises one: an answer names it,
+   * so that it cannot land on the prompt after.
+   */
+  id: string,
+  /**
+   * The tool call the prompt belongs to, as the conversation feed's `tool_call.call_id` names
+   * it, where the agent says.
+   */
+  call_id?: string,
+} & ({
+  "kind": "permission"
+} & PermissionPrompt | {
+  "kind": "question"
+} & QuestionPrompt);
+
+/**
  * One value for each registered provider: a map keyed by [`AgentId`] that always holds an entry
  * for every one of them, serialised as `{"<provider id>": …, …}` in the registry's order. Reading
  * one, a key left out is the default value and a key naming no registered provider is ignored.
  */
 export type PerAgent<T> = Record<Agent, T>;
+
+/**
+ * One answer a permission prompt offers.
+ */
+export type PermissionChoice = {
+  /**
+   * What `answer_interaction`'s `choice` names it by.
+   */
+  id: string,
+  /**
+   * Its label as the agent shows it.
+   */
+  label: string,
+  effect: Received<ChoiceEffect>,
+  /**
+   * Whether text for the agent may go with it (`answer_interaction`'s `text`): absent where
+   * none can.
+   */
+  text?: Received<ChoiceText>,
+};
+
+/**
+ * A tool permission prompt.
+ */
+export type PermissionPrompt = {
+  /**
+   * The tool's name as the agent calls it.
+   */
+  tool: string,
+  /**
+   * What kind of tool it is, as the conversation feed classes it.
+   */
+  category?: Received<ToolCategory>,
+  /**
+   * One line saying what the call would do: the command, the file, the address, the server and
+   * tool.
+   */
+  title?: string,
+  /**
+   * The agent's own explanation of the call, where it gives one.
+   */
+  detail?: string,
+  /**
+   * The call's input as the agent wrote it, each string cut at [`INTERACTION_TEXT_LIMIT`].
+   */
+  input: unknown,
+  /**
+   * Whether a string of `input` was cut.
+   */
+  input_truncated?: boolean,
+  /**
+   * The answers offered, in the order the agent shows them. Only those the daemon can tell the
+   * effect of are listed; the others are left to the terminal.
+   */
+  choices: Array<PermissionChoice>,
+};
 
 /**
  * A connector the agent's platform hosts for the account.
@@ -3839,6 +3960,61 @@ export type PullOutcome = {
 }
 | {
   "kind": "merged"
+};
+
+/**
+ * One question.
+ */
+export type Question = {
+  text: string,
+  /**
+   * A short label the agent gives the question.
+   */
+  header?: string,
+  /**
+   * Whether more than one option may be chosen.
+   */
+  multi_select: boolean,
+  options: Array<QuestionOption>,
+  /**
+   * Whether the user may write an answer of their own, and how it goes with the options: absent
+   * where they may not.
+   */
+  free_text?: Received<FreeText>,
+};
+
+/**
+ * The answer to one question of a `question` interaction, in `answer_interaction`.
+ */
+export type QuestionAnswer = {
+  /**
+   * The options chosen, by their index in the question's `options`; none when left out.
+   */
+  selected?: Array<number>,
+  /**
+   * The user's own answer.
+   */
+  text?: string,
+};
+
+/**
+ * One option of a question.
+ */
+export type QuestionOption = {
+  label: string,
+  description?: string,
+};
+
+/**
+ * Questions from the agent's own ask-the-user tool, answered together.
+ */
+export type QuestionPrompt = {
+  questions: Array<Question>,
+  /**
+   * Whether the questions can be declined without an answer (`answer_interaction`'s
+   * `dismiss`).
+   */
+  dismissible: boolean,
 };
 
 /**
@@ -4595,6 +4771,21 @@ export type Request = {
   "type": "send_message",
   session: string,
   text: string,
+  images?: Array<string>,
+}
+  | {
+  "type": "send_command",
+  session: string,
+  command: string,
+}
+  | {
+  "type": "answer_interaction",
+  session: string,
+  interaction: string,
+  choice?: string,
+  text?: string,
+  answers?: Array<QuestionAnswer>,
+  dismiss?: boolean,
 }
   | {
   "type": "save_pasted_image",
@@ -5560,6 +5751,21 @@ export type RequestBody = {
   "type": "send_message",
   session: string,
   text: string,
+  images?: Array<string>,
+}
+| {
+  "type": "send_command",
+  session: string,
+  command: string,
+}
+| {
+  "type": "answer_interaction",
+  session: string,
+  interaction: string,
+  choice?: string,
+  text?: string,
+  answers?: Array<QuestionAnswer>,
+  dismiss?: boolean,
 }
 | {
   "type": "save_pasted_image",
@@ -6120,6 +6326,14 @@ export type Session = {
    * record a client receives (`AppState::wire_session`).
    */
   holder_link?: Received<HolderLink>,
+  /**
+   * What the session's agent is asking the user, while the session is shown waiting on them
+   * and the daemon has recognised the prompt from the agent's hooks and its screen together;
+   * answered with `answer_interaction`. Absent otherwise, the prompt then answered in the
+   * terminal. Never stored: it is filled in on the record a client receives
+   * (`AppState::wire_session`).
+   */
+  interaction?: PendingInteraction,
   /**
    * Whether this session has a conversation on the agent's side: a turn taken, or one resumed
    * at open. Until it has, the agent has stored no conversation to resume: `claude --resume`

@@ -45,6 +45,48 @@ impl ScreenReader for CodexScreen {
         true
     }
 
+    /// `[Image #<n>]`, which Codex 0.167.1 draws in the composer for each image path pasted on
+    /// its own (`testdata/codex-interaction-captures.md`).
+    fn image_placeholders(&self, text: &str) -> usize {
+        crate::session::screen::count_image_placeholders(text)
+    }
+
+    fn without_image_placeholders(&self, text: &str) -> String {
+        crate::session::screen::strip_image_placeholders(text)
+    }
+
+    /// The entry the slash popup highlights, which an Enter runs in place of the typed partial
+    /// (`/sta` runs `/status`; `testdata/codex-interaction-captures.md`). The popup is the rows
+    /// right above the composer row (one blank row may lie between), each `/name`, then two spaces
+    /// and its description where it is shown (it comes blanked where Codex draws it faint, as it
+    /// does for an entry that is not highlighted), the highlighted one led by `›`. A past message
+    /// of the transcript has single spaces after its first word.
+    /// Unmeasured: a popup taller than the screen, scrolled so the highlight is not in view.
+    fn command_completion(&self, screen: &str) -> Option<String> {
+        let rows: Vec<&str> = screen.lines().map(str::trim_end).collect();
+        let composer = rows.iter().rposition(|row| row.starts_with('›'))?;
+        let mut end = composer;
+        if end > 0 && rows[end - 1].trim().is_empty() {
+            end -= 1;
+        }
+        rows[..end]
+            .iter()
+            .rev()
+            .map_while(|row| {
+                let (marked, rest) = match row.strip_prefix('›') {
+                    Some(rest) => (true, rest.trim_start()),
+                    None => (false, row.strip_prefix("  ")?),
+                };
+                let entry = rest.strip_prefix('/')?;
+                // The screen comes with faint cells blanked: Codex draws the description of an
+                // entry that is not highlighted faint, so it may be missing.
+                let name = entry.split_whitespace().next()?;
+                let description = &entry[name.len()..];
+                (description.is_empty() || description.starts_with("  ")).then_some((marked, name))
+            })
+            .find_map(|(marked, name)| marked.then(|| name.to_string()))
+    }
+
     fn trust_screen(&self) -> &'static Screen {
         &TRUST
     }
@@ -130,7 +172,7 @@ fn queued_waiting(started: &crate::session::term::QueueStart) -> Option<String> 
 /// Windows ones (`style`). Either layout is read in each shape Codex 0.166.0's source gives it at
 /// narrower widths and in other states (`testdata/codex-composer.md`, section "Footer shapes from
 /// Codex 0.166.0's source").
-fn composer(screen: &str, style: PathStyle) -> Option<Vec<String>> {
+pub(super) fn composer(screen: &str, style: PathStyle) -> Option<Vec<String>> {
     let rows: Vec<&str> = screen.lines().map(str::trim_end).collect();
     let last = rows.iter().rposition(|row| !row.trim().is_empty())?;
     let footer = if last >= 1
@@ -523,8 +565,9 @@ const CODEX_USAGE_LIMIT: &str = "codex_usage_limit";
 
 #[cfg(test)]
 mod tests {
-    use super::composer;
+    use super::{composer, CodexScreen};
     use crate::platform::names::PathStyle;
+    use crate::session::screen::ScreenReader;
 
     /// The footer's directory is the agent's text: an absolute Unix path or one from the home
     /// directory (`~`, `~/…`) ends the composer on any host, in a footer of one row or two and
@@ -570,6 +613,62 @@ mod tests {
                 assert!(composer(screen, style).is_none(), "{screen:?}");
             }
         }
+    }
+
+    /// The Codex 0.167.1 rows with `[Image #n]` in the composer, and the slash popup
+    /// (`testdata/codex-interaction-captures.md`).
+    #[test]
+    fn codex_s_image_placeholders_are_counted() {
+        let text = include_str!("../../../testdata/codex_interaction_images.txt");
+        let rows = composer(text, PathStyle::Unix).unwrap().join("\n");
+        assert_eq!(rows, "[Image #1] [Image #2]  compare these two");
+        assert_eq!(CodexScreen.image_placeholders(&rows), 2);
+        assert_eq!(
+            CodexScreen.image_placeholders("[Image #] [Image #x] text"),
+            0
+        );
+        assert_eq!(CodexScreen.image_placeholders("no images"), 0);
+    }
+
+    #[test]
+    fn codex_s_highlighted_slash_completion_is_read() {
+        let partial = include_str!("../../../testdata/codex_interaction_slash_partial.txt");
+        assert_eq!(
+            CodexScreen.command_completion(partial).as_deref(),
+            Some("status")
+        );
+        let bare = include_str!("../../../testdata/codex_interaction_slash_bare.txt");
+        assert_eq!(
+            CodexScreen.command_completion(bare).as_deref(),
+            Some("model")
+        );
+        // No popup: the composer back after `/status` ran, and a past message in the rows above.
+        let none = include_str!("../../../testdata/codex_interaction_slash_none.txt");
+        assert_eq!(CodexScreen.command_completion(none), None);
+    }
+
+    /// The screen the composer's readers are given has faint cells blanked
+    /// (`ScreenReader::command_completion`), which Codex's popup draws its descriptions of the
+    /// entries not highlighted in (`testdata/codex-interaction-captures.md`).
+    #[test]
+    fn codex_s_slash_completion_is_read_with_faint_cells_blanked() {
+        let replay = |capture: &[u8]| {
+            let mut screen = crate::terminal::snapshot::TerminalSnapshot::new(40, 120);
+            screen.process(capture);
+            screen.visible_text_undimmed()
+        };
+        let typed = replay(include_bytes!(
+            "../../../testdata/codex_interaction_slash_status.bin"
+        ));
+        assert!(typed.contains("/statusline"), "{typed}");
+        assert_eq!(
+            CodexScreen.command_completion(&typed).as_deref(),
+            Some("status")
+        );
+        let run = replay(include_bytes!(
+            "../../../testdata/codex_interaction_slash_none.bin"
+        ));
+        assert_eq!(CodexScreen.command_completion(&run), None);
     }
 
     /// The inbox console host's captures of Codex 0.166.0 (`testdata/conhost-captures.md`): the

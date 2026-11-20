@@ -103,13 +103,7 @@ impl ToolCalls {
             }
             ToolCallChange::Ended { id: Some(id) } => {
                 self.open.retain(|call| call.id != id);
-                let waited = self.waiting.len();
-                self.waiting
-                    .retain(|waiting| waiting.as_deref() != Some(id));
-                // A call waiting under no known id may be this one, and is taken to be.
-                if self.waiting.len() == waited {
-                    self.waiting.retain(Option::is_some);
-                }
+                self.release(Some(id));
             }
             // An end that names no call could be any of them.
             ToolCallChange::Ended { id: None } => self.waiting.clear(),
@@ -118,6 +112,21 @@ impl ToolCalls {
                 self.waiting.clear();
             }
         }
+    }
+
+    /// Takes call `call` off those waiting on the user (by its id, or one waiting under no known
+    /// id when `call` names none or matches none), and says whether any still waits.
+    fn release(&mut self, call: Option<&str>) -> bool {
+        let before = self.waiting.len();
+        if let Some(call) = call {
+            self.waiting
+                .retain(|waiting| waiting.as_deref() != Some(call));
+        }
+        // A call waiting under no known id may be this one, and is taken to be.
+        if self.waiting.len() == before {
+            self.waiting.retain(Option::is_some);
+        }
+        !self.waiting.is_empty()
     }
 
     fn wait(&mut self, id: Option<String>) {
@@ -181,11 +190,30 @@ impl AppState {
             })
             .unwrap_or_default()
     }
+
+    /// The published prompt of session `id` for call `call` has left the screen, whoever answered
+    /// it: the call no longer waits on the user, and once no call does, the session's hand comes
+    /// down (`AppState::lower_hand_left_by_prompt`). Lowered under the tool-call lock, so that a
+    /// call a hook reports waiting meanwhile is not lowered with it.
+    ///
+    /// The tool-call lock is held across the status write and the publication that follows, so
+    /// nothing those reach may take it.
+    pub(crate) fn interaction_left(self: &std::sync::Arc<Self>, id: &str, call: Option<&str>) {
+        let mut calls = self.tool_calls.lock().expect("tool call lock poisoned");
+        if calls
+            .get_mut(id)
+            .is_some_and(|session| session.release(call))
+        {
+            return;
+        }
+        self.lower_hand_left_by_prompt(id);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::SessionStatus;
     use crate::test_support::app_state;
     use serde_json::json;
 
@@ -663,5 +691,193 @@ mod tests {
             state.tool_call_activity("closed"),
             ToolCallActivity::default()
         );
+    }
+
+    /// A session `s` at `status`, whose calls `waiting` wait on the user, and whose events are
+    /// being read.
+    fn waiting_on(
+        label: &str,
+        status: SessionStatus,
+        waiting: &[&str],
+    ) -> (
+        std::sync::Arc<AppState>,
+        tokio::sync::broadcast::Receiver<crate::protocol::Event>,
+        crate::test_support::ScratchDir,
+    ) {
+        let (state, dir) = app_state(label);
+        crate::state::test_support::insert_record(&state, &dir, "s", status);
+        let input = json!({"questions": []});
+        for id in waiting {
+            assert!(state.apply_tool_call_change("s", question(id, &input)));
+        }
+        let events = state.subscribe();
+        (state, events, dir)
+    }
+
+    fn published_statuses(
+        events: &mut tokio::sync::broadcast::Receiver<crate::protocol::Event>,
+    ) -> Vec<SessionStatus> {
+        std::iter::from_fn(|| events.try_recv().ok())
+            .filter_map(|event| match event {
+                crate::protocol::Event::SessionUpserted { session } => Some(session.status),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// With no other call waiting, the prompt leaving puts the waiting session back to working and
+    /// tells the clients.
+    #[test]
+    fn a_prompt_leaving_lowers_the_hand_of_a_waiting_session() {
+        let (state, mut events, _dir) =
+            waiting_on("tool-calls-left", SessionStatus::WaitingUser, &["a"]);
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        state.interaction_left("s", Some("a"));
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::Working
+        );
+        assert_eq!(published_statuses(&mut events), [SessionStatus::Working]);
+        assert!(live.interaction.lowered());
+        // The call no longer waits: the end of it raises nothing.
+        assert!(!state.apply_tool_call_change("s", ended("a")));
+    }
+
+    /// Another call still waiting on the user keeps the hand up; its own prompt leaving lowers it.
+    #[test]
+    fn the_hand_stays_up_while_another_call_waits() {
+        let (state, mut events, _dir) = waiting_on(
+            "tool-calls-left-other",
+            SessionStatus::WaitingUser,
+            &["a", "b"],
+        );
+        state.interaction_left("s", Some("a"));
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::WaitingUser
+        );
+        assert!(published_statuses(&mut events).is_empty());
+        state.interaction_left("s", Some("b"));
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::Working
+        );
+    }
+
+    /// The hand is noted as lowered only once it comes down: not while another call still waits,
+    /// and also for a session none of whose calls the hooks reported.
+    #[test]
+    fn the_hand_is_noted_as_lowered_only_once_it_comes_down() {
+        let (state, _events, _dir) = waiting_on(
+            "tool-calls-left-noted",
+            SessionStatus::WaitingUser,
+            &["a", "b"],
+        );
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        state.interaction_left("s", Some("a"));
+        assert!(!live.interaction.lowered());
+        state.interaction_left("s", Some("b"));
+        assert!(live.interaction.lowered());
+
+        let (state, _events, _dir) = waiting_on(
+            "tool-calls-left-unreported",
+            SessionStatus::WaitingUser,
+            &[],
+        );
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        state.interaction_left("s", Some("unknown"));
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::Working
+        );
+        assert!(live.interaction.lowered());
+    }
+
+    /// A record a hook has already moved on is left as it is: nothing is published, and the hand is
+    /// not noted as lowered.
+    #[test]
+    fn a_record_a_hook_already_moved_is_not_touched() {
+        for status in [SessionStatus::Working, SessionStatus::Idle] {
+            let (state, mut events, _dir) = waiting_on("tool-calls-left-moved", status, &["a"]);
+            let live = crate::test_support::idle_stand_in("s");
+            state.register_live(live.clone());
+            state.interaction_left("s", Some("a"));
+            assert_eq!(state.session_record("s").unwrap().status, status);
+            assert!(published_statuses(&mut events).is_empty());
+            assert!(!live.interaction.lowered(), "{status:?}");
+        }
+    }
+
+    /// With a session request's hand up, the record stays waiting and what the agent is
+    /// remembered at beneath it becomes working; an agent remembered at another status is left.
+    #[test]
+    fn a_prompt_leaving_under_a_session_request_lowers_the_remembered_status() {
+        for (remembered, expected, lowered) in [
+            (SessionStatus::WaitingUser, SessionStatus::Working, true),
+            (SessionStatus::Idle, SessionStatus::Idle, false),
+        ] {
+            let (state, mut events, _dir) = waiting_on(
+                "tool-calls-left-request",
+                SessionStatus::WaitingUser,
+                &["a"],
+            );
+            let live = crate::test_support::idle_stand_in("s");
+            state.register_live(live.clone());
+            state
+                .request_hands
+                .lock()
+                .unwrap()
+                .insert("s".to_string(), remembered);
+            state.interaction_left("s", Some("a"));
+            assert_eq!(
+                state.request_hands.lock().unwrap().get("s").copied(),
+                Some(expected)
+            );
+            assert_eq!(
+                state.session_record("s").unwrap().status,
+                SessionStatus::WaitingUser,
+                "the request's hand stays up"
+            );
+            assert!(published_statuses(&mut events).is_empty());
+            assert_eq!(live.interaction.lowered(), lowered, "{remembered:?}");
+        }
+    }
+
+    /// The messages held back while the session waited on the user are written once the hand comes
+    /// down.
+    #[tokio::test]
+    async fn the_messages_queued_behind_a_prompt_are_written_once_it_leaves() {
+        let (state, dir) = app_state("tool-calls-left-flush");
+        crate::state::test_support::insert_record(&state, &dir, "s", SessionStatus::WaitingUser);
+        let mut record = state.session_record("s").unwrap();
+        record.agent = crate::protocol::AgentId::TEST;
+        state.save_session(&record).unwrap();
+        let live = crate::test_support::idle_stand_in_of("s", crate::protocol::AgentId::TEST);
+        crate::session::spawn_reader_thread((*live).clone(), 8 * 1024);
+        state.register_live(live.clone());
+        let input = json!({"questions": []});
+        assert!(state.apply_tool_call_change("s", question("a", &input)));
+        let delivery = crate::messaging::delivery::write_message(
+            &state,
+            "s",
+            "queued behind the prompt",
+            crate::messaging::delivery::WhenBlocked::Queue,
+        )
+        .unwrap();
+        assert!(matches!(
+            delivery,
+            crate::messaging::delivery::Delivery::Queued
+        ));
+        assert_eq!(state.outbox.len("s"), 1);
+        state.interaction_left("s", Some("a"));
+        let heard = tokio::task::spawn_blocking(move || {
+            crate::test_support::output_containing(&live, "queued behind the prompt")
+        })
+        .await
+        .unwrap();
+        assert!(heard.contains("queued behind the prompt"), "{heard}");
     }
 }

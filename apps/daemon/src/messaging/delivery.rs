@@ -10,13 +10,13 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use crate::messaging::idle_children::idle_after_report;
-use crate::messaging::outbox::{Drain, Ticket};
+use crate::messaging::outbox::{Drain, RefusalKind, Refused, Ticket};
 use crate::messaging::texts::{
     idle_notice_session, is_idle_notice, is_waiting_notice, waiting_notice_session,
 };
 use crate::messaging::write_queue::FirstMessage;
 use crate::protocol::{error_code, AgentId, CodedError, Session, SessionStatus};
-use crate::session::term;
+use crate::session::term::{self, Shape};
 use crate::session_tools::catalogue;
 use crate::state::AppState;
 use crate::time;
@@ -161,7 +161,7 @@ pub fn write_message(
     text: &str,
     when_blocked: WhenBlocked,
 ) -> Result<Delivery> {
-    write_message_inner(state, id, text, when_blocked, Origin::Automatic, None)
+    write_message_inner(state, id, text, when_blocked, Origin::Automatic, None, None)
 }
 
 /// Who wrote a message handed to [`write_message_inner`].
@@ -185,7 +185,43 @@ pub async fn write_users_message_off_runtime(
     let state = state.clone();
     let id = id.to_string();
     tokio::task::spawn_blocking(move || {
-        write_message_inner(&state, &id, &text, WhenBlocked::Refuse, Origin::User, None)
+        write_message_inner(
+            &state,
+            &id,
+            &text,
+            WhenBlocked::Refuse,
+            Origin::User,
+            None,
+            None,
+        )
+    })
+    .await?
+}
+
+/// [`write_users_message_off_runtime`] for a message of the given `shape`: with images (the text
+/// may be empty), or a slash command (the text is the command line). Kept to the same rules as
+/// any message of the user's: refused while the session waits for them or shows its trust
+/// confirmation, past a hold for the usage limit, queued behind earlier messages. It is written as
+/// its shape says, and never carried over a restart or a handoff as text
+/// (`crate::messaging::outbox::Outbox::seal`).
+pub async fn write_users_shaped_off_runtime(
+    state: &Arc<AppState>,
+    id: &str,
+    text: String,
+    shape: Shape,
+) -> Result<Delivery> {
+    let state = state.clone();
+    let id = id.to_string();
+    tokio::task::spawn_blocking(move || {
+        write_message_inner(
+            &state,
+            &id,
+            &text,
+            WhenBlocked::Refuse,
+            Origin::User,
+            None,
+            Some(shape),
+        )
     })
     .await?
 }
@@ -219,9 +255,11 @@ fn write_message_inner(
     when_blocked: WhenBlocked,
     origin: Origin,
     mut first: Option<&mut FirstMessage>,
+    shape: Option<Shape>,
 ) -> Result<Delivery> {
     // Written, it would be an empty prompt the agent does not send, and nobody would learn why.
-    if term::is_blank_once_stripped(text) {
+    // Images are a message of their own without text.
+    if term::is_blank_once_stripped(text) && !matches!(shape, Some(Shape::Images(_))) {
         return Err(blank_text());
     }
     let session = state.session_record(id)?;
@@ -233,11 +271,19 @@ fn write_message_inner(
             .queue_if_restarting_with(id, || first.enqueue(text))
             .transpose()?
             .is_some(),
-        None => match state.queue_if_restarting(id, text) {
-            Some(Some(_)) => true,
-            Some(None) => return Err(outbox_saved()),
-            None => false,
-        },
+        None => {
+            let queued = match shape.as_ref() {
+                Some(shape) => state.queue_if_restarting_with(id, || {
+                    state.outbox.push_shaped(id, text, shape.clone(), false)
+                }),
+                None => state.queue_if_restarting(id, text),
+            };
+            match queued {
+                Some(Some(_)) => true,
+                Some(None) => return Err(outbox_saved()),
+                None => false,
+            }
+        }
     };
     if restarting {
         return Ok(Delivery::Queued);
@@ -282,9 +328,11 @@ fn write_message_inner(
             state.note_activity(id);
             ticket
         }
-        None if origin == Origin::User => state
-            .queue_users_message(id, text)
-            .ok_or_else(outbox_saved)?,
+        None if origin == Origin::User => match shape {
+            Some(shape) => state.queue_users_shaped(id, text, shape),
+            None => state.queue_users_message(id, text),
+        }
+        .ok_or_else(outbox_saved)?,
         None => state
             .queue_message_unless_sealed(id, text)
             .ok_or_else(outbox_saved)?,
@@ -293,8 +341,8 @@ fn write_message_inner(
     // Told first, as the flush may have stopped before it told the session; then taken by ticket,
     // whichever drain met it: one running on another thread may have.
     state.announce_refusals(id, session.agent);
-    if let Some(reason) = state.outbox.take_refusal(ticket) {
-        return Err(refused_error(session.agent, &reason));
+    if let Some(refused) = state.outbox.take_refusal(ticket) {
+        return Err(refusal_error(session.agent, refused));
     }
     // A message still on the queue is queued, whatever the drain met: the user's message goes past
     // a hold for the usage limit, so a drain that writes it can end on it while messages queued
@@ -303,6 +351,30 @@ fn write_message_inner(
         return Ok(Delivery::Queued);
     }
     delivery_of(drain, ticket, session.agent)
+}
+
+/// The error a sender gets for a message that failed alone ([`Refused`]).
+fn refusal_error(agent: AgentId, refused: Refused) -> anyhow::Error {
+    match refused.kind {
+        RefusalKind::Agent => refused_error(agent, &refused.reason),
+        RefusalKind::Unwritable => CodedError::raised(
+            error_code::MESSAGE_NOT_WRITTEN,
+            format!(
+                "the message could not be written, so it was not sent: {}",
+                refused.reason
+            ),
+            &[("agent", agent.label()), ("detail", &refused.reason)],
+        ),
+        RefusalKind::OtherCommand(command, offered) => CodedError::raised(
+            error_code::COMMAND_NOT_RECOGNISED,
+            refused.reason,
+            &[
+                ("agent", agent.label()),
+                ("command", &command),
+                ("offered", &offered),
+            ],
+        ),
+    }
 }
 
 /// The error a sender gets for a message its session's agent refused outright, for `reason`.
@@ -334,6 +406,7 @@ pub(crate) async fn write_first_message_off_runtime(
             WhenBlocked::Queue,
             Origin::Automatic,
             Some(&mut first),
+            None,
         )
     })
     .await?

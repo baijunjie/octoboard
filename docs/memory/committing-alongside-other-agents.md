@@ -17,5 +17,7 @@ moment.
 - Never rewrite a commit there (`git commit --amend`, `reset`, `rebase`): by the time you run it, `HEAD` may be another
   agent's commit, and an amend has landed on one that way. Make a new commit instead.
 
-A dispatcher running several agents that commit at once gives each its own branch and worktree, and merges them one
-by one; sharing a worktree is for an agent and its dispatcher, or agents that commit one after another.
+A dispatcher running several agents at once that edit code or commit gives each its own branch and worktree, and
+merges them one by one, even where their files do not overlap: in one worktree each agent's half-finished edits break
+the others' builds and tests, not only their commits. Sharing a worktree is for an agent and its dispatcher, or agents
+that work one after another.

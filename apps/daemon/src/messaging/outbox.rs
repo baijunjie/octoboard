@@ -42,7 +42,7 @@ use std::time::{Duration, Instant};
 
 use crate::platform::term::PartialWrite;
 use crate::session::dialogs::Sighting;
-use crate::session::term::{self, Route};
+use crate::session::term::{self, Route, Shape};
 use crate::session::LiveSession;
 
 /// How long draft preservation waits for the user's edits to be confirmed before an automatic
@@ -211,6 +211,10 @@ pub struct Outbox {
     /// The messages a hold for the account's usage limit does not hold, by ticket: the user's own,
     /// sent from a client.
     past_usage_limit: Mutex<HashSet<Ticket>>,
+    /// How the messages that are more than text are written, by ticket (images, a slash command;
+    /// see [`Shape`]). Such a message is never carried across processes or daemons as plain text:
+    /// [`Self::seal`] and [`Self::take`] drop it, and say so in the log.
+    shapes: Mutex<HashMap<Ticket, Shape>>,
     /// The instruction a relaunch after a restart put at the front of the session's held queue
     /// ([`Outbox::push_relaunch_instruction`]), by session: withdrawn if the relaunch fails, as a
     /// restore of the session after that gives none.
@@ -240,12 +244,33 @@ pub struct Outbox {
     taken: AtomicBool,
 }
 
-/// A message the agent's own queue refused outright.
+/// A message that failed alone, for its sender (and the session, for the agent's refusals) to be
+/// told of.
 struct Refusal {
     session: String,
-    reason: String,
+    refused: Refused,
     /// When it was announced, if it has been.
     announced: Option<Instant>,
+}
+
+/// Why a message failed alone, and what its sender is told.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Refused {
+    pub reason: String,
+    pub kind: RefusalKind,
+}
+
+/// Who refused a message that failed alone, and so how the session is told of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RefusalKind {
+    /// The agent's own queue (`term::RefusedByAgent`): a `message_refused` notice.
+    Agent,
+    /// It could not be written as sent (`term::Unwritable`), not the agent's doing: a
+    /// `message_not_written` notice.
+    Unwritable,
+    /// A slash command, the first, that the agent would have run as the second, which its
+    /// completion offered (`term::CommandNotRecognised`): a `command_not_recognised` notice.
+    OtherCommand(String, String),
 }
 
 /// How long a refusal is kept for its sender once announced, counted while no drain of its session
@@ -338,7 +363,7 @@ impl Outbox {
     /// hold: written as soon as nothing else holds the session, ahead of the messages that hold
     /// keeps back, which stay in their order behind it.
     pub fn push_past_usage_limit(&self, id: &str, text: &str) -> Option<Ticket> {
-        self.push_unsealed(id, text, true)
+        self.push_unsealed(id, text, true, None)
     }
 
     /// The instruction a relaunch gives a session whose queue a restart holds
@@ -397,17 +422,42 @@ impl Outbox {
     /// then `None`, and nothing is queued. Judged under the queues' lock, so a message either is
     /// among those sealed or is refused.
     pub fn push_unless_sealed(&self, id: &str, text: &str) -> Option<Ticket> {
-        self.push_unsealed(id, text, false)
+        self.push_unsealed(id, text, false, None)
+    }
+
+    /// [`Self::push_unless_sealed`] for a message of the given `shape` (`past_usage_limit` as
+    /// [`Self::push_past_usage_limit`]): written as the shape says, and not carried over anywhere
+    /// as text.
+    pub fn push_shaped(
+        &self,
+        id: &str,
+        text: &str,
+        shape: Shape,
+        past_usage_limit: bool,
+    ) -> Option<Ticket> {
+        self.push_unsealed(id, text, past_usage_limit, Some(shape))
     }
 
     /// [`Self::push_unless_sealed`], marking the message as going past a hold for the account's
-    /// usage limit when `past_usage_limit`.
-    fn push_unsealed(&self, id: &str, text: &str, past_usage_limit: bool) -> Option<Ticket> {
+    /// usage limit when `past_usage_limit`, and noting its `shape`.
+    fn push_unsealed(
+        &self,
+        id: &str,
+        text: &str,
+        past_usage_limit: bool,
+        shape: Option<Shape>,
+    ) -> Option<Ticket> {
         let mut queues = self.queues.lock().expect("outbox lock poisoned");
         if self.sealed.load(Ordering::Acquire) {
             return None;
         }
         let ticket = self.next_ticket.fetch_add(1, Ordering::Relaxed);
+        if let Some(shape) = shape {
+            self.shapes
+                .lock()
+                .expect("outbox shapes lock poisoned")
+                .insert(ticket, shape);
+        }
         if past_usage_limit {
             self.past_usage_limit
                 .lock()
@@ -434,8 +484,10 @@ impl Outbox {
     /// still writing is waited for, for at most `drains`, so that the message whose write the
     /// handover refused, which it puts back, is taken with the rest rather than lost. The rows
     /// stay in the store, for the next daemon's queue to keep them as this one did. Sessions come
-    /// in no particular order. Once the queues are taken, [`Self::push`] refuses too. **Blocks**
-    /// for up to `drains`.
+    /// in no particular order. Once the queues are taken, [`Self::push`] refuses too. A message of a
+    /// [`Shape`] (images, a slash command) is dropped, with a warning in the log, and not saved: it
+    /// cannot be saved as text, the image files go with the session's scratch directory, and a
+    /// command written as text would reach the model. **Blocks** for up to `drains`.
     pub fn seal(&self, drains: Duration) -> Vec<SealedQueue> {
         {
             let _queues = self.queues.lock().expect("outbox lock poisoned");
@@ -464,12 +516,22 @@ impl Outbox {
             .map(|(id, queue)| {
                 let messages = queue
                     .into_iter()
-                    .map(|(ticket, text, _)| {
+                    .filter_map(|(ticket, text, _)| {
                         let row = kept.queued.remove(&ticket);
                         if let Some(row) = row {
                             kept.tickets.remove(&row);
                         }
-                        (ticket, text, row)
+                        let shaped = self
+                            .shapes
+                            .lock()
+                            .expect("outbox shapes lock poisoned")
+                            .remove(&ticket)
+                            .is_some();
+                        if shaped {
+                            tracing::warn!(session = %id, "a queued message with images or a slash command cannot be carried to the next daemon as text; it is dropped");
+                            return None;
+                        }
+                        Some((ticket, text, row))
                     })
                     .collect();
                 (id, messages)
@@ -615,18 +677,35 @@ impl Outbox {
     }
 
     /// The refusal of the message `ticket`, for its sender, which takes it.
-    pub fn take_refusal(&self, ticket: Ticket) -> Option<String> {
+    pub fn take_refusal(&self, ticket: Ticket) -> Option<Refused> {
         self.refused
             .lock()
             .expect("outbox refused lock poisoned")
             .remove(&ticket)
-            .map(|refusal| refusal.reason)
+            .map(|refusal| refusal.refused)
     }
 
-    /// The refusals of messages for session `id` not announced yet, by ticket with the agent's
-    /// reason, which are now marked announced; whichever drain asks first announces them, and
+    /// Records that the message `ticket`, written for the session `id`, failed alone, and is no
+    /// longer queued.
+    fn refuse(&self, id: &str, ticket: Ticket, reason: String, kind: RefusalKind) {
+        self.mark_written(ticket);
+        self.refused
+            .lock()
+            .expect("outbox refused lock poisoned")
+            .insert(
+                ticket,
+                Refusal {
+                    session: id.to_string(),
+                    refused: Refused { reason, kind },
+                    announced: None,
+                },
+            );
+    }
+
+    /// The refusals of messages for session `id` not announced yet, by ticket, which are now marked
+    /// announced; whichever drain asks first announces them, and
     /// each sender still finds its own ([`Self::take_refusal`]).
-    pub fn refusals_to_announce(&self, id: &str) -> Vec<(Ticket, String)> {
+    pub fn refusals_to_announce(&self, id: &str) -> Vec<(Ticket, Refused)> {
         let draining = self
             .draining
             .lock()
@@ -641,12 +720,12 @@ impl Outbox {
                     .announced
                     .is_none_or(|announced| announced.elapsed() < REFUSAL_KEPT)
         });
-        let mut announce: Vec<(Ticket, String)> = refused
+        let mut announce: Vec<(Ticket, Refused)> = refused
             .iter_mut()
             .filter(|(_, refusal)| refusal.session == id && refusal.announced.is_none())
             .map(|(ticket, refusal)| {
                 refusal.announced = Some(Instant::now());
-                (*ticket, refusal.reason.clone())
+                (*ticket, refusal.refused.clone())
             })
             .collect();
         announce.sort_by_key(|(ticket, _)| *ticket);
@@ -675,7 +754,8 @@ impl Outbox {
     }
 
     /// Forgets what is noted of these messages beside the queue as they leave it: whether a hold of
-    /// the server started their grace again, and whether they go past a hold for the usage limit.
+    /// the server started their grace again, whether they go past a hold for the usage limit, and
+    /// their shape.
     fn forget_ticket_marks(&self, tickets: impl Iterator<Item = Ticket>) {
         let mut restarted = self
             .grace_restarted
@@ -685,9 +765,11 @@ impl Outbox {
             .past_usage_limit
             .lock()
             .expect("outbox usage limit lock poisoned");
+        let mut shapes = self.shapes.lock().expect("outbox shapes lock poisoned");
         for ticket in tickets {
             restarted.remove(&ticket);
             past.remove(&ticket);
+            shapes.remove(&ticket);
         }
     }
 
@@ -699,13 +781,22 @@ impl Outbox {
         self.drain_with(
             &session.id,
             &mut |ticket, text, past_grace| {
-                term::send_message_with_id(
-                    session,
-                    text,
-                    &format!("{}:{ticket}", session.launch_id),
-                    past_grace,
-                    &|| prompts.writes_stopped(),
-                )
+                let logical_id = format!("{}:{ticket}", session.launch_id);
+                match self.shape_of(ticket) {
+                    Some(shape) => term::send_shaped_with_id(
+                        session,
+                        text,
+                        &shape,
+                        &logical_id,
+                        past_grace,
+                        &|| prompts.writes_stopped(),
+                    ),
+                    None => {
+                        term::send_message_with_id(session, text, &logical_id, past_grace, &|| {
+                            prompts.writes_stopped()
+                        })
+                    }
+                }
             },
             prompts,
         )
@@ -788,6 +879,9 @@ impl Outbox {
                 return Drain::Clear;
             };
             let protection_started = protection_started.unwrap_or_else(Instant::now);
+            // A slash command is no prompt: a built-in one reports none, so its hook is not waited
+            // for. Its write confirmed that it left the input box (`LiveSession::write_command`).
+            let checked = checked && self.shape_of(ticket) != Some(Shape::Command);
             let before = prompts.sent();
             let mid_turn = prompts.mid_turn();
             let written = write(ticket, &text, protection_started.elapsed() >= DRAFT_WAIT);
@@ -851,6 +945,30 @@ impl Outbox {
                         "the native queue did not confirm accepting a message; it will not be resent");
                     return Drain::Uncertain(ticket);
                 }
+                // The agent would have run another command than the one written, or the message
+                // could not be written as sent: it fails to its sender alone, is never written
+                // again, and the queue behind it goes on. Not the agent refusing: the session is told
+                // with a notice of its own kind (`command_not_recognised`, `message_not_written`),
+                // and the log holds no text of it.
+                Err(partial)
+                    if partial.error.get_ref().is_some_and(|error| {
+                        error.is::<term::CommandNotRecognised>() || error.is::<term::Unwritable>()
+                    }) =>
+                {
+                    tracing::warn!(session = %id, "a message was refused: it could not be written as sent");
+                    let kind = match partial
+                        .error
+                        .get_ref()
+                        .and_then(|error| error.downcast_ref::<term::CommandNotRecognised>())
+                    {
+                        Some(other) => {
+                            RefusalKind::OtherCommand(other.command.clone(), other.offered.clone())
+                        }
+                        None => RefusalKind::Unwritable,
+                    };
+                    self.refuse(id, ticket, partial.error.to_string(), kind);
+                    continue;
+                }
                 // The agent's own queue refused it outright: it fails to its sender, is never written
                 // again, and the queue behind it goes on.
                 Err(partial)
@@ -860,18 +978,7 @@ impl Outbox {
                         .is_some_and(|error| error.is::<term::RefusedByAgent>()) =>
                 {
                     tracing::warn!(session = %id, error = %partial.error, "the agent's own queue refused a message");
-                    self.mark_written(ticket);
-                    self.refused
-                        .lock()
-                        .expect("outbox refused lock poisoned")
-                        .insert(
-                            ticket,
-                            Refusal {
-                                session: id.to_string(),
-                                reason: partial.error.to_string(),
-                                announced: None,
-                            },
-                        );
+                    self.refuse(id, ticket, partial.error.to_string(), RefusalKind::Agent);
                     continue;
                 }
                 // Nothing went in, so the session simply could not take it — most likely a modal its
@@ -1062,8 +1169,15 @@ impl Outbox {
     }
 
     /// Removes and returns what is queued for this session, oldest first, each with the row it is
-    /// kept in, if it is.
+    /// kept in, if it is. A message of a [`Shape`] is dropped, with a warning in the log, and not
+    /// returned: whoever forwards what is returned writes it as text.
+    #[cfg(test)]
     pub fn take(&self, id: &str) -> Vec<(String, Option<i64>)> {
+        self.take_counting_shaped(id).0
+    }
+
+    /// [`Self::take`], also counting the messages of a [`Shape`] it dropped.
+    pub fn take_counting_shaped(&self, id: &str) -> (Vec<(String, Option<i64>)>, usize) {
         let queue = self
             .queues
             .lock()
@@ -1077,12 +1191,34 @@ impl Outbox {
             .map(|(ticket, _, _)| kept.queued.get(ticket).copied())
             .collect();
         drop(kept);
+        let shaped: HashSet<Ticket> = {
+            let shapes = self.shapes.lock().expect("outbox shapes lock poisoned");
+            queue
+                .iter()
+                .map(|(ticket, _, _)| *ticket)
+                .filter(|ticket| shapes.contains_key(ticket))
+                .collect()
+        };
         self.unkeep(queue.iter().map(|(ticket, _, _)| *ticket));
-        queue
+        if !shaped.is_empty() {
+            tracing::warn!(session = %id, dropped = shaped.len(), "queued messages with images or a slash command cannot be forwarded as text; they are dropped");
+        }
+        let messages = queue
             .into_iter()
             .zip(rows)
+            .filter(|((ticket, _, _), _)| !shaped.contains(ticket))
             .map(|((_, text, _), row)| (text, row))
-            .collect()
+            .collect();
+        (messages, shaped.len())
+    }
+
+    /// How the message `ticket`, still queued, is written besides its text, if it is shaped.
+    pub fn shape_of(&self, ticket: Ticket) -> Option<Shape> {
+        self.shapes
+            .lock()
+            .expect("outbox shapes lock poisoned")
+            .get(&ticket)
+            .cloned()
     }
 
     /// Makes the caller the session's one drainer until the claim is dropped, or `None` when
@@ -1215,6 +1351,167 @@ mod tests {
         assert_eq!(second, first + 1, "tickets still follow one another");
     }
 
+    /// An agent that reports each prompt it sends and is at its prompt, whose reports are never
+    /// awaited by a test that does not expect to.
+    struct ReportsPrompts;
+
+    impl PromptSignal for ReportsPrompts {
+        fn sent(&self) -> u64 {
+            0
+        }
+        fn expects_send(&self) -> bool {
+            true
+        }
+        fn wait_past(&self, _before: u64) -> bool {
+            false
+        }
+        fn mark_unsent(&self, _before: u64) {}
+        fn mark_not_submitted(&self, _before: u64) {}
+        fn unsent_waiting(&self) -> bool {
+            false
+        }
+        fn sighting(&self) -> Sighting {
+            Sighting::default()
+        }
+        fn watch_screen(&self, _on: bool) {}
+        fn trust_holds_writes(&self) -> bool {
+            false
+        }
+    }
+
+    /// A slash command reports no prompt when it is one of the agent's own, so a command written
+    /// and out of the box is written, where a message the agent does not report sending is unsent.
+    #[test]
+    fn a_command_is_not_waited_on_for_a_prompt_report_a_message_is() {
+        let outbox = Outbox::default();
+        outbox
+            .push_shaped("s", "/status", Shape::Command, true)
+            .expect("accepted");
+        let outcome = outbox.drain_with("s", &mut |_, _, _| Ok(Route::Terminal), &ReportsPrompts);
+        assert_eq!(outcome, Drain::Clear);
+
+        let message = outbox.push("s", "hello").expect("accepted");
+        let outcome = outbox.drain_with("s", &mut |_, _, _| Ok(Route::Terminal), &ReportsPrompts);
+        assert_eq!(outcome, Drain::Unsent(message));
+    }
+
+    /// A slash command the agent would have run another way fails alone with the command it
+    /// offered, and the queue behind it goes on.
+    #[test]
+    fn a_command_the_agent_would_run_as_another_is_refused_with_what_it_offered() {
+        let outbox = Outbox::default();
+        let refused = outbox
+            .push_shaped("s", "/probe", Shape::Command, true)
+            .expect("accepted");
+        let next = outbox.push("s", "next").expect("accepted");
+        let mut attempts = Vec::new();
+        let outcome = outbox.drain_with(
+            "s",
+            &mut |ticket, _, _| {
+                attempts.push(ticket);
+                if ticket == refused {
+                    Err(PartialWrite {
+                        written: 1,
+                        error: std::io::Error::other(term::CommandNotRecognised {
+                            command: "/probe".into(),
+                            offered: "/probecmd".into(),
+                            cleared: true,
+                            reason: "another".into(),
+                        }),
+                    })
+                } else {
+                    Ok(Route::Queued)
+                }
+            },
+            &MidTurn,
+        );
+        assert_eq!(outcome, Drain::Clear);
+        assert_eq!(attempts, [refused, next]);
+        let announced = outbox.refusals_to_announce("s");
+        assert_eq!(announced.len(), 1);
+        assert_eq!(
+            announced[0].1.kind,
+            RefusalKind::OtherCommand("/probe".into(), "/probecmd".into())
+        );
+        assert_eq!(
+            outbox.take_refusal(refused),
+            Some(Refused {
+                reason: "another".to_string(),
+                kind: RefusalKind::OtherCommand("/probe".to_string(), "/probecmd".to_string()),
+            })
+        );
+        assert_eq!(
+            outbox.shape_of(refused),
+            None,
+            "the shape goes with the message"
+        );
+    }
+
+    /// A message with images whose files are gone (the scratch directory went with the process) is
+    /// refused to its sender and the queue goes on; nothing is written into the terminal.
+    #[test]
+    fn a_message_whose_images_are_gone_is_refused_and_the_queue_goes_on() {
+        let live = crate::test_support::idle_stand_in("outbox-images-gone");
+        let outbox = Outbox::default();
+        let before = live.input_writes();
+        let gone = outbox
+            .push_shaped(
+                "outbox-images-gone",
+                "look",
+                Shape::Images(vec!["/no/such/dir/paste-1.png".to_string()]),
+                true,
+            )
+            .expect("accepted");
+        assert_eq!(outbox.drain(&live, &MidTurn), Drain::Clear);
+        let announced = outbox.refusals_to_announce("outbox-images-gone");
+        assert_eq!(announced.len(), 1);
+        assert_eq!(announced[0].1.kind, RefusalKind::Unwritable);
+        let refused = outbox.take_refusal(gone).expect("refused");
+        assert_eq!(refused.kind, RefusalKind::Unwritable);
+        assert!(refused.reason.contains("image"), "{}", refused.reason);
+        assert_eq!(live.input_writes(), before);
+    }
+
+    /// A message with images or a slash command cannot be saved as text for the next daemon: the
+    /// seal drops it, and keeps the plain messages around it in order.
+    #[test]
+    fn sealing_drops_the_messages_that_are_more_than_text() {
+        let outbox = Outbox::default();
+        outbox.push("s", "one").expect("accepted");
+        let shaped = outbox
+            .push_shaped("s", "/status", Shape::Command, true)
+            .expect("accepted");
+        outbox
+            .push_shaped("s", "", Shape::Images(vec!["/a.png".into()]), false)
+            .expect("accepted");
+        outbox.push("s", "two").expect("accepted");
+        let sealed = outbox.seal(Duration::ZERO);
+        let texts: Vec<&str> = sealed[0]
+            .1
+            .iter()
+            .map(|(_, text, _)| text.as_str())
+            .collect();
+        assert_eq!(texts, ["one", "two"]);
+        assert_eq!(outbox.shape_of(shaped), None);
+    }
+
+    /// What a hold takes to forward as text leaves out the messages that are more than text, and
+    /// says how many.
+    #[test]
+    fn taking_a_queue_to_forward_leaves_out_and_counts_the_shaped_messages() {
+        let outbox = Outbox::default();
+        outbox.push("s", "one").expect("accepted");
+        outbox
+            .push_shaped("s", "/status", Shape::Command, true)
+            .expect("accepted");
+        outbox.push("s", "two").expect("accepted");
+        let (taken, shaped) = outbox.take_counting_shaped("s");
+        let texts: Vec<String> = taken.into_iter().map(|(text, _)| text).collect();
+        assert_eq!(texts, ["one", "two"]);
+        assert_eq!(shaped, 1);
+        assert_eq!(outbox.len("s"), 0);
+    }
+
     /// A message the agent's own queue refused outright fails alone: it is not written again, its
     /// sender can be told why, and the queue behind it goes on.
     #[test]
@@ -1252,7 +1549,7 @@ mod tests {
         assert!(outbox.refusals_to_announce("other").is_empty());
         assert!(outbox
             .take_refusal(refused)
-            .is_some_and(|reason| reason.contains("input too long")));
+            .is_some_and(|refused| refused.reason.contains("input too long")));
         assert_eq!(outbox.take_refusal(refused), None);
         assert_eq!(outbox.take_refusal(next), None);
     }
@@ -1270,7 +1567,10 @@ mod tests {
                 7,
                 Refusal {
                     session: "s".into(),
-                    reason: "input too long".into(),
+                    refused: Refused {
+                        reason: "input too long".into(),
+                        kind: RefusalKind::Agent,
+                    },
                     announced: Some(long_ago),
                 },
             );

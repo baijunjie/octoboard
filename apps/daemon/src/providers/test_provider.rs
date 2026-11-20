@@ -1,13 +1,14 @@
-//! A provider registered only in tests, declaring nothing beyond what every provider must: no
-//! capability, no compatibility, one setting and no codes of its own. It proves that a provider
-//! is added by its own modules and a line in each registry: every test that iterates the
-//! registries runs it through the defaults a provider without anything of its own gets.
+//! A provider registered only in tests: no compatibility, one setting and no codes of its own, and
+//! of the capabilities only those generic code is shown to follow from a declaration (the prompts
+//! it publishes and answers, images on a message and slash commands sent as commands, read and
+//! pressed by `crate::adapter::test_provider`). It proves that a provider is added by its own
+//! modules and a line in each registry.
 
 use super::layout::AgentLayout;
 use super::{
-    AgentId, Capabilities, DeliveryQuirks, DetectionMarkers, ModelDisplay, ProviderDescriptor,
-    QuotaWindowKind, QuotaWindowNaming, SessionWindowName, SettingChoice, SettingDescriptor,
-    SettingKind,
+    AgentId, Capabilities, DeliveryQuirks, DetectionMarkers, InteractionKinds, ModelDisplay,
+    ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming, SessionWindowName, SettingChoice,
+    SettingDescriptor, SettingKind,
 };
 
 impl AgentId {
@@ -57,6 +58,9 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
             holds_report_for_completion_notice: false,
             resume_instruction_as_launch_prompt: false,
         },
+        interactions: InteractionKinds::ALL,
+        message_images: true,
+        slash_commands: true,
     },
     quota_windows: QuotaWindowNaming {
         kinds: &[QuotaWindowKind::Session],

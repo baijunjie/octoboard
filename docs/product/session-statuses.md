@@ -135,8 +135,8 @@ arc's label distinguishes *reconnecting*, *starting* and *switching account* whe
 
 Status comes from hook events Octoboard injects into each agent per launch, with the exceptions below. Only the
 session's own events count: those of a subagent it runs never change its status, on any agent, and on Claude Code
-neither do those of its internal helper agents. Seven things besides those events bear on a running session's status,
-and only these seven.
+neither do those of its internal helper agents. Eight things besides those events bear on a running session's status,
+and only these eight.
 
 - While a **Claude Code** session is *working* or *waiting for the user*, Octoboard also reads that session's own
   transcript file — the machine-readable record the agent keeps of the conversation, still not its rendered output —
@@ -166,6 +166,9 @@ and only these seven.
   stopped turn's `background_tasks` (see "Working in background" below): the session is waiting for the user only on
   its account's limit, and is at rest for a handoff (see "What can be handed off" in
   `docs/product/handing-off-sessions.md`).
+- A prompt Octoboard published from the agent's screen while the session waited for the user (see
+  `docs/product/pending-interactions.md`) puts the session back to *working* once it is seen gone from the screen,
+  whoever answered it, without waiting for the agent's next event; see "The raised hand" below.
 - A session request — a `request_session` or `request_resume_session` call, or an owner's `switch_session_account` or
   `handoff_session` call the user is asked to approve — waiting for the user's answer holds its session at *waiting for
   the user* for the whole wait, whatever the agent's own events say meanwhile; when the request ends the session goes
@@ -188,9 +191,10 @@ limitations of what the agents expose rather than of this one:
 - Grok Build's bash mode (`!`) fires no tool or turn events, so work done through it never shows in the status; Grok's
   turn-end backstop, which was seen to follow about a minute later in one run (see "When a session does not report" in
   `docs/product/reporting-to-owners.md`), finds the session already at its prompt.
-- A question the agent asks through **its own ask-the-user tool** is reported by Claude Code and Grok Build but not by
-  Codex, which has no such event; a Codex session asking that way reads as *working* unless its terminal title signals
-  `Action Required`.
+- A question the agent asks through **its own ask-the-user tool** is reported by Claude Code and Grok Build through
+  their own events. Codex has no such event: its `request_user_input` questions raise the hand from the call's start,
+  which Codex reports alike for a question it shows (Plan mode) and for one it rejects at once (Default mode), so the
+  latter raises the hand briefly (see "Codex" in `docs/product/pending-interactions.md`).
 - For status reporting, work left running in the background is followed for **Claude Code and Grok Build only**. A Codex
   session whose turn ends with work still running reads as *done* (or another status at its prompt), never *working in
   background*.
@@ -539,33 +543,34 @@ status as before. The system notification follows the stored status alone: it fi
 the user*, whatever is shown, and a session whose process is reached again does not notify again for a wait it already
 notified.
 
-**Where the hand is the agent's own, the user answers in the session's terminal**, and the status leaves *waiting for
-the user* on the agent's next event, when its Codex action title clears or when the screen that held it is no longer
-shown — or, where the answer was a decline and no event follows, on the decline showing up in the agent's own record of
-the conversation, which only Claude Code sessions are read for (see "Declining a Claude Code prompt or question" in
-`docs/product/turns-hooks-do-not-report.md`). Nobody can answer for them: a session driving others — a console session,
-or a project session that started sessions — is told to leave such a session alone, a message addressed to it is held
-until the user is done — see "Messages held until a session can take them" in `docs/product/message-delivery.md` — and
-an interrupt of its turn is refused (see "When a key is sent" in `docs/product/interrupting-turns.md`).
+**Where the hand is the agent's own, the user answers in the session's terminal**, or, for a prompt Octoboard
+publishes, from a client (see `docs/product/pending-interactions.md`), and the status leaves *waiting for the user* on
+the agent's next event, once a published prompt is seen gone from the screen, when its Codex action title clears or when
+the screen that held it is no longer shown — or, where the answer was a decline and no event follows, on the decline
+showing up in the agent's own record of the conversation, which only Claude Code sessions are read for (see "Declining
+a Claude Code prompt or question" in `docs/product/turns-hooks-do-not-report.md`). Nobody can answer for them: a
+session driving others — a console session, or a project session that started sessions — is told to leave such a
+session alone, a message addressed to it is held until the user is done — see "Messages held until a session can take
+them" in `docs/product/message-delivery.md` — and an interrupt of its turn is refused (see "When a key is sent" in
+`docs/product/interrupting-turns.md`).
 
-**A granted tool permission prompt reported through hooks lowers the hand only once the call it let through has
-finished.** The user answering *yes* is itself reported by no event, so the next event the session produces is normally
-the end of that tool call — the hand stays up from the moment the prompt appeared until the call is done, which is a
-moment for a file write and minutes for a build or a test run. For that whole time the session reads as *waiting for the
-user* everywhere the hand is shown, it counts in the rail's waiting count and the Dock badge, and a message addressed to
-it goes on being held. There is no earlier signal to read: the delay is in what the agents report, not in how often
-Octoboard looks. Measured on Codex 0.160.0 and on Claude Code 2.1.274; Grok Build was not measured. A prompt the user
-*declines* is not delayed this way: the decline ends the turn, and the hand comes down right after the answer.
+**A prompt Octoboard published lowers the hand as soon as it leaves the screen**, whoever answered it, rather than on
+the agent's next event; how is in "When the prompt leaves the screen" in `docs/product/pending-interactions.md`. Any
+other prompt lowers the hand only on the agent's next event, which for a granted permission prompt is normally the end
+of the call it let through: a moment for a file write, minutes for a build or a test run. For that whole time the
+session reads as *waiting for the user* everywhere the hand is shown, it counts in the rail's waiting count and the Dock
+badge, and a message addressed to it goes on being held. Measured on Codex 0.160.0 and on Claude Code 2.1.274.
 
 **On Claude Code and Grok Build, the hand stays up until the call it was raised for has ended**, whatever another call
 of the same turn does meanwhile. Both run the calls of one model response side by side, so the end of one of them can be
 reported while a question from the same response is still on screen, and on Claude Code a permission prompt as well; in
 Claude Code's auto mode an agent call that waits for the safety check ends only once the question is already up, and on
 Grok Build a shell command or a subagent started beside a question ends while it waits. That end, or the start of
-another call, leaves the session *waiting for the user*. The end of the call the hand was raised for lowers it, as does
-the end of all the response's calls, the end of the turn or its next prompt. A prompt whose call Octoboard did not see
-start comes down with the next call to end. Every Grok Build permission prompt comes down with the next call to start
-or end, since it holds back the other calls of its response until it is answered.
+another call, leaves the session *waiting for the user*. The end of the call the hand was raised for lowers it, and so
+do its published prompt leaving the screen (see above), the end of all the response's calls, the end of the turn or its
+next prompt. A prompt whose call Octoboard did not see start comes down with the next call to end. Every Grok Build
+permission prompt comes down with the next call to start or end, since it holds back the other calls of its response
+until it is answered.
 
 A hand raised for a folder-trust confirmation can be answered in its trust dialog or the terminal; see "What happens
 when a confirmation comes up" in `docs/product/folder-trust.md`.

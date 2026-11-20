@@ -1,0 +1,39 @@
+› MCP1 call the tool
+• Called stubmcp.probe_tool
+  └ probe_tool ran
+    + Show details
+
+• DONE 9: got tool output: [{"type": "input_text", "text": "Script completed\nWall time 21.8 seconds\nOutput:\n"},
+  {"type": "input_text", "text": "{"content":[{"type":"text","text":"probe_tool ran"}]}"}]
+
+  Worked for 21s • 01:11
+
+
+› MCP1 call the tool again
+
+
+• Called stubmcp.probe_tool
+  └ probe_tool ran
+    + Show details
+
+• DONE 11: got tool output: [{"type": "input_text", "text": "Script completed\nWall time 0.0 seconds\nOutput:\n"},
+  {"type": "input_text", "text": "{"content":[{"type":"text","text":"probe_tool ran"}]}"}]
+
+  Worked for <1s • 01:11
+
+
+› MCPE elicit
+
+
+• Calling stubmcp.probe_elicit
+    + Show details
+
+
+  Field 1/1 (1 required unanswered)
+  Probe elicitation: pick a fruit
+
+  fruit
+  Fruit
+  › 1. apple
+    2. pear
+  enter to submit | esc to cancel

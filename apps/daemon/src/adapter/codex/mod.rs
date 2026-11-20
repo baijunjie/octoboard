@@ -76,6 +76,7 @@ mod config;
 mod conversation;
 mod feed;
 mod hooks;
+mod interaction;
 mod login;
 mod mcp_auth;
 mod mcp_inventory;
@@ -243,6 +244,10 @@ impl AgentProvider for CodexProvider {
 
     fn has_status_integration(&self) -> bool {
         true
+    }
+
+    fn interactions(&self) -> Option<&'static dyn crate::session::interaction::InteractionReader> {
+        Some(&interaction::CodexInteractions)
     }
 
     fn accounts(&self) -> Option<&'static dyn crate::accounts::AccountOps> {

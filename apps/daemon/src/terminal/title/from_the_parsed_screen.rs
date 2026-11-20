@@ -100,13 +100,16 @@ fn a_title_before_anything_is_drawn_is_not_reported() {
             "claude_input_placeholder.bin"
             | "claude_input_queued.bin"
             | "claude_input_queued_draft.bin"
-            | "claude_input_restored.bin" => std::slice::from_ref(&at_prompt),
+            | "claude_input_restored.bin"
+            | "claude_interaction_composer.bin" => std::slice::from_ref(&at_prompt),
             "grok_composer_draft.bin"
             | "grok_composer_restored.bin"
             | "grok_native_stashed.bin"
             | "grok_trust_screen.bin"
             | "grok_slash_space_guarded.bin"
-            | "grok_slash_zwsp_guarded.bin" => std::slice::from_ref(&grok),
+            | "grok_slash_zwsp_guarded.bin"
+            | "grok_interaction_mcp_card.bin"
+            | "grok_interaction_shell_card.bin" => std::slice::from_ref(&grok),
             name if name.starts_with("conhost_claude_") => std::slice::from_ref(&host_claude),
             "claude_title_cancel.bin"
             | "claude_title_idle.bin"

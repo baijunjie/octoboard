@@ -32,7 +32,9 @@
 //! [`is_rejection_line`] is the pure half: whether one transcript line carries one of those two
 //! markers. [`watch_for_rejection`] arms `crate::records::watch` with it, from the moment a hook
 //! puts a Claude Code session into `WaitingUser`, until the rejection is found and applied or the
-//! watch is no longer owed anything.
+//! watch is no longer owed anything. A decline answered through `crate::session::interaction` leaves
+//! the session `Working` (the prompt left the screen, no hook moved it), and the watch then finds
+//! the rejection there too.
 //!
 //! An interrupt while the session is working — Esc pressed while the model is thinking, writing or
 //! running a tool — is silent in the same way: the interrupted turn fires no hook at all, so the
@@ -361,6 +363,11 @@ fn tool_result_text(block: &Value) -> Option<&str> {
 /// reaches `WaitingUser` at all, and Codex and Grok report a decline through their own events and
 /// must get no watcher.
 ///
+/// The watch is owed while the session is `WaitingUser`, and also while it is `Working` because the
+/// prompt left the screen (`crate::session::interaction`): a prompt answered or declined in the
+/// terminal or by a client puts the hand down to working at once, and a decline leaves no hook to
+/// move it on from there ([`still_owed`]).
+///
 /// Spawned, never awaited: the hook response has to return inside the adapters' few-second
 /// timeout, and a person may sit at the prompt for far longer than that.
 ///
@@ -376,6 +383,10 @@ pub fn watch_for_rejection(state: &Arc<AppState>, session_id: &str, transcript_p
         );
         return;
     };
+    // A prompt that went before this one is not the one this watch is for.
+    if let Some(live) = state.live_session(session_id) {
+        live.interaction.clear_lowered();
+    }
     watch::spawn(
         state,
         session_id,
@@ -384,19 +395,42 @@ pub fn watch_for_rejection(state: &Arc<AppState>, session_id: &str, transcript_p
             interval: POLL_INTERVAL,
             start: Start::AtEnd,
         },
-        |state, session_id| still_at(state, session_id, SessionStatus::WaitingUser),
+        still_owed,
         |line| is_rejection_line(line).then_some(()),
         |state, session_id, generation, ()| {
-            watch::back_at_prompt(
-                state,
-                session_id,
-                generation,
-                SessionStatus::WaitingUser,
-                "transcript rejection",
-            );
+            // The status the session is at now: the write is conditional on it.
+            let lowered = state
+                .live_session(session_id)
+                .is_some_and(|live| live.interaction.lowered());
+            let at = if lowered
+                && state
+                    .session_record(session_id)
+                    .is_ok_and(|session| state.agent_status(&session) == SessionStatus::Working)
+            {
+                SessionStatus::Working
+            } else {
+                SessionStatus::WaitingUser
+            };
+            watch::back_at_prompt(state, session_id, generation, at, "transcript rejection");
             Then::Stop
         },
     );
+}
+
+/// Whether [`watch_for_rejection`] is still owed anything: the session waits on the user, or the
+/// interaction layer put it back to working when the prompt left the screen and no hook has
+/// moved it since. A session working for any other reason has moved on.
+fn still_owed(state: &AppState, session_id: &str) -> Owed {
+    match still_at(state, session_id, SessionStatus::WaitingUser) {
+        Owed::No
+            if state
+                .live_session(session_id)
+                .is_some_and(|live| live.interaction.lowered()) =>
+        {
+            still_at(state, session_id, SessionStatus::Working)
+        }
+        owed => owed,
+    }
 }
 
 /// Starts watching `session_id`'s transcript for the record an interrupted turn leaves, the only
@@ -958,6 +992,48 @@ mod tests {
         assert!(
             fixture.state.last_turn_abnormal("s"),
             "a declined prompt leaves it paused"
+        );
+    }
+
+    /// A prompt that left the screen put the session back to working with no hook behind it: a
+    /// decline found in the transcript then puts it back at the prompt, which no hook will.
+    #[tokio::test(start_paused = true)]
+    async fn a_rejection_found_after_the_prompt_left_is_applied() {
+        let fixture = Fixture::new("prompt-left", waiting_session("s"));
+        watch_for_rejection(&fixture.state, "s", Some(&fixture.path.to_string_lossy()));
+        fixture.state.interaction_left("s", None);
+        assert_eq!(
+            status_of(&fixture.state, "s"),
+            Some(SessionStatus::Working),
+            "the prompt leaving lowers the hand"
+        );
+
+        std::fs::write(&fixture.path, REJECTION).expect("write rejection");
+
+        assert!(
+            reaches(&fixture.state, SessionStatus::Idle).await,
+            "the rejection must be applied to the lowered session"
+        );
+        assert!(fixture.state.last_turn_abnormal("s"));
+    }
+
+    /// The mark of a lowered hand is cleared when a watch is armed for the next prompt, so a
+    /// session working for another reason is still left alone.
+    #[tokio::test(start_paused = true)]
+    async fn a_lowering_before_the_watch_was_armed_owes_it_nothing() {
+        let fixture = Fixture::new("lowered-before", working_session("s"));
+        let live = fixture.state.live_session("s").expect("live");
+        live.interaction.note_lowered();
+        watch_for_rejection(&fixture.state, "s", Some(&fixture.path.to_string_lossy()));
+        assert!(!live.interaction.lowered());
+
+        std::fs::write(&fixture.path, REJECTION).expect("write rejection");
+
+        polls_ran().await;
+        assert_eq!(
+            status_of(&fixture.state, "s"),
+            Some(SessionStatus::Working),
+            "a session working by its own hooks is not moved"
         );
     }
 

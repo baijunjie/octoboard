@@ -123,7 +123,7 @@ pub struct ToolCallEntry {
 /// What kind of thing a tool call does, whichever agent made it. A value a client does not know
 /// reads as `other`.
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolCategory {
     /// Runs a shell command.

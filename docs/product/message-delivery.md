@@ -1,7 +1,9 @@
 # Message delivery
 
 How Octoboard writes into a running session everything it has to put there — an instruction from an owner, a report,
-information shared by another session, a report panel form submission — and when it holds one back.
+information shared by another session, a report panel form submission, a client's own message — and when it holds one
+back. A slash command or a message with images a client sends goes through the same queue and holds; what is particular
+to them is in `docs/product/slash-commands-and-image-messages.md`.
 
 ## Messages held until a session can take them
 
@@ -82,10 +84,12 @@ prose.
 An instruction, a report or information shared by another session, for a session that **cannot** take one right now — it
 is waiting for the user at a permission prompt or a question — is queued rather than dropped, and delivered as soon as
 the session can take one, oldest first. A session that sent an instruction or shared information is told it was queued
-and that it must not send it again. The wait can outlast the user's answer: a permission prompt reported through hooks
-keeps the session's hand up until the call it let through has finished. A Codex action title also holds messages; when
-it clears, delivery resumes if the last hook-reported status permits it (see "The raised hand" in
-`docs/product/session-statuses.md`).
+and that it must not send it again. The wait can outlast the user's answer: a prompt the session's hand was raised for
+keeps it up until the agent's next event, which for a granted permission prompt is the end of the call it let through,
+unless Octoboard published that prompt and sees it leave the screen (see "When the prompt leaves the screen" in
+`docs/product/pending-interactions.md`). While a client's answer to a published prompt is being pressed, nothing queued
+for the session is written into it. A Codex action title also holds messages; when it clears, delivery resumes if the
+last hook-reported status permits it (see "The raised hand" in `docs/product/session-statuses.md`).
 
 A message for a session with no process running is refused outright: a resume starts the agent at
 its prompt and replays nothing. The exceptions are information shared with an interrupted session, and the reports and
@@ -110,7 +114,9 @@ where a Codex session can run such a message twice, see "Messages through Codex'
 running that process any more gets none of them, as a session whose process ended with messages queued gets none,
 apart from those kept for an interrupted session, which stay kept for its next resume; nor does a session whose
 process is taken over only later, once its holder can be connected to. A message written only in part when the stop
-began is not saved: it is reported lost, as a message cut short always is, and never written again whole.
+began is not saved: it is reported lost, as a message cut short always is, and never written again whole. Nor is a slash
+command or a message with images a client queued, which is dropped instead (see "Queued commands and image messages" in
+`docs/product/slash-commands-and-image-messages.md`).
 
 **What is queued crosses an account switch or a model change.** An account switch — the user's, an owner's or
 Octoboard's automatic one, its restart on the session's own account once that account's quota has recovered included —
@@ -122,7 +128,9 @@ Code session that resumes a conversation is given that instruction as its launch
 carried is written after it. While the restart runs, what it keeps is written nowhere and is not reported in
 `writes_held`, the session showing as switching its account or as starting meanwhile; it holds nothing typed into the
 session's terminal. Once the relaunched process has started, what was carried is written as into any session, under
-the holds of this section; the old process's hold after a usage limit (see below) does not come along.
+the holds of this section; the old process's hold after a usage limit (see below) does not come along. A message with
+images among it is refused there, its images having gone with the old process (see "Queued commands and image
+messages" in `docs/product/slash-commands-and-image-messages.md`).
 
 - **A relaunched process that ends within the few seconds it is watched** has its instruction taken back. Where
   Octoboard then brings the session back up on the account it had, after its own switch failed (see "When the switch

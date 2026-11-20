@@ -1,0 +1,39 @@
+› ASYNC1 default mode
+  • Red
+  • Blue
+
+• DONE 17: got tool output: "{"accepted":true}"
+
+  Worked for <1s • 01:13
+
+• Model changed to gpt-6.1-sol medium for Plan mode.
+
+
+› ASK1 plan mode
+
+
+• Questions 1/1 answered
+  • Which color should the probe use?
+    answer: None of the above
+    note: Green please, pasted
+          second line
+
+• DONE 19: got tool output: "{"answers":{"color":{"answers":["None of the above","user_note: Green please,
+  pasted\nsecond line"]}}}"
+
+  Worked for 28s • 01:14
+
+
+› ASK3 three questions
+
+
+
+  Question 2/3 (2 unanswered)
+  Which size should the probe use?
+
+  › 1. Small (Recommended)  Fits anywhere.
+    2. Large                Easier to see.
+    3. Huge                 Hard to miss.
+    4. None of the above    Optionally, add details in notes (tab)
+
+  tab to add notes | enter to submit answer | ←/→ to navigate questions | esc to interrupt

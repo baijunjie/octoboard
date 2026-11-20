@@ -102,6 +102,19 @@ pub(super) fn clear_input_box(
     allowance: Duration,
     allowed: impl Fn() -> bool,
 ) -> (Cleared, usize, bool, bool) {
+    clear_input_box_in(live, writes, shown, allowance, allowed, false)
+}
+
+/// [`clear_input_box`], with `owned` where the presses belong to a message being written while the
+/// draft is stashed, which an input replacement does not refuse (`LiveSession::write_message_keys_if`).
+pub(super) fn clear_input_box_in(
+    live: &LiveSession,
+    writes: &mut u64,
+    shown: Duration,
+    allowance: Duration,
+    allowed: impl Fn() -> bool,
+    owned: bool,
+) -> (Cleared, usize, bool, bool) {
     let Some(text) = live.input_box(&live.screen_text_undimmed()) else {
         return (Cleared::Left, 0, false, false);
     };
@@ -123,7 +136,12 @@ pub(super) fn clear_input_box(
             None => return (Cleared::Left, pressed, changed, false),
         }
         let before = live.input_box_rows(&screen);
-        match live.write_keys_if(*writes, &allowed, CTRL_U) {
+        let pressed_now = if owned {
+            live.write_message_keys_if(Some(*writes), &allowed, CTRL_U)
+        } else {
+            live.write_keys_if(*writes, &allowed, CTRL_U)
+        };
+        match pressed_now {
             Ok(true) => {
                 *writes += 1;
                 pressed += 1;

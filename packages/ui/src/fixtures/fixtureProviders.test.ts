@@ -32,6 +32,12 @@ function between(source: string, start: string, end: string): string {
 
 const snake = (name: string) => name.replace(/(?<!^)([A-Z])/g, "_$1").toLowerCase();
 
+// The interaction kinds a descriptor declares by its `InteractionKinds` constant.
+function kinds(constant: string): ProviderInfo["capabilities"]["interactions"] {
+  if (constant !== "ALL" && constant !== "NONE") throw new Error(`unknown InteractionKinds::${constant}`);
+  return { permission: constant === "ALL", question: constant === "ALL" };
+}
+
 function capabilitiesOf(source: string): ProviderInfo["capabilities"] {
   const body = between(source, "capabilities: Capabilities {", "quota_windows:");
   const flag = (name: string) => required(body, new RegExp(`\\b${name}: (true|false)`), name) === "true";
@@ -45,6 +51,9 @@ function capabilitiesOf(source: string): ProviderInfo["capabilities"] {
     config_sharing: flag("config_sharing"),
     mcp_inventory: flag("mcp_inventory"),
     ends_command_groups_on_exit: flag("ends_command_groups_on_exit"),
+    interactions: kinds(required(body, /\binteractions: InteractionKinds::([A-Z]+)/, "interactions")),
+    message_images: flag("message_images"),
+    slash_commands: flag("slash_commands"),
     delivery: {
       confirms_by_reported_prompt: flag("confirms_by_reported_prompt"),
       holds_report_for_completion_notice: flag("holds_report_for_completion_notice"),

@@ -83,6 +83,11 @@ impl AppState {
             .live_session(&session.id)
             .is_some_and(|live| live.screen_inexact());
         session.holder_link = self.shown_holder_link(&session.id);
+        // What is published only while the session is shown waiting on the user.
+        session.interaction = (session.status == SessionStatus::WaitingUser)
+            .then(|| self.live_session(&session.id))
+            .flatten()
+            .and_then(|live| live.interaction.interaction());
         session.default_effort =
             if session.observed_model.is_some() && session.observed_effort.is_none() {
                 self.default_effort_of(&session.id)
@@ -170,6 +175,59 @@ impl AppState {
                 Ok(true)
             }
             None => Ok(false),
+        }
+    }
+
+    /// Lowers the hand of session `id` once the prompt Octoboard published for it has left the
+    /// screen and no call waits on the user any more (`AppState::interaction_left`): a session still
+    /// waiting on the user is put back to working, which is where answering leaves the agent (a
+    /// decline the agent reports, or its record watch finds, moves it on from there), and its queued
+    /// messages may go. A session request's hand stays up, the agent remembered as working beneath
+    /// it. The session's interaction state is told first (`InteractionState::note_lowered`), so a
+    /// record watch looking in between finds the mark with the status, and untold if nothing moved.
+    pub(crate) fn lower_hand_left_by_prompt(self: &std::sync::Arc<Self>, id: &str) {
+        let live = self.live_session(id);
+        // A mark an earlier lowering set, not yet ended by a hook, is not this call's to clear.
+        let marked_before = live.as_ref().is_some_and(|live| live.interaction.lowered());
+        if let Some(live) = &live {
+            live.interaction.note_lowered();
+        }
+        let mut lowered = false;
+        let moved = {
+            let mut hands = self
+                .request_hands
+                .lock()
+                .expect("request hands lock poisoned");
+            if let Some(remembered) = hands.get_mut(id) {
+                if *remembered == SessionStatus::WaitingUser {
+                    *remembered = SessionStatus::Working;
+                    lowered = true;
+                }
+                None
+            } else {
+                match self.store.update_session_status_if(
+                    id,
+                    SessionStatus::WaitingUser,
+                    SessionStatus::Working,
+                ) {
+                    Ok(moved) => moved,
+                    Err(err) => {
+                        tracing::debug!(session = %id, %err, "lowering the hand of an answered prompt failed");
+                        None
+                    }
+                }
+            }
+        };
+        if !lowered && moved.is_none() && !marked_before {
+            if let Some(live) = &live {
+                live.interaction.clear_lowered();
+            }
+        }
+        if let Some(session) = moved {
+            self.publish_session(&session);
+            if tokio::runtime::Handle::try_current().is_ok() {
+                self.spawn_flush_outbox(id, SessionStatus::Working);
+            }
         }
     }
 
@@ -653,5 +711,88 @@ mod tests {
             .wire_session(state.session_record("s").unwrap())
             .background_tasks
             .is_empty());
+    }
+
+    /// A session `s` at `status` with a live stand-in registered, for the lowering of its hand.
+    fn lowering(
+        label: &str,
+        status: SessionStatus,
+    ) -> (
+        std::sync::Arc<AppState>,
+        crate::test_support::StandIn,
+        crate::test_support::ScratchDir,
+    ) {
+        let (state, dir) = app_state(label);
+        insert_record(&state, &dir, "s", status);
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        (state, live, dir)
+    }
+
+    /// A prompt leaving puts a session still waiting on the user back to working and notes it; a
+    /// record that moved on already is left, and nothing is noted for a hand that nothing lowered.
+    #[test]
+    fn lowering_the_hand_of_a_left_prompt_notes_it_only_when_the_record_moved() {
+        for (before, after, lowered) in [
+            (SessionStatus::WaitingUser, SessionStatus::Working, true),
+            (SessionStatus::Working, SessionStatus::Working, false),
+            (SessionStatus::Idle, SessionStatus::Idle, false),
+        ] {
+            let (state, live, _dir) = lowering("status-lower-record", before);
+            let mut events = state.subscribe();
+            state.lower_hand_left_by_prompt("s");
+            assert_eq!(
+                state.session_record("s").unwrap().status,
+                after,
+                "{before:?}"
+            );
+            assert_eq!(live.interaction.lowered(), lowered, "{before:?}");
+            let published = std::iter::from_fn(|| events.try_recv().ok())
+                .filter(|event| matches!(event, Event::SessionUpserted { .. }))
+                .count();
+            assert_eq!(published, usize::from(lowered), "{before:?}");
+        }
+    }
+
+    /// Under a session request's hand only the status remembered beneath it is lowered, and noted
+    /// when it was waiting on the user; the record stays at the request's hand.
+    #[test]
+    fn lowering_the_hand_of_a_left_prompt_under_a_request_notes_only_a_remembered_wait() {
+        for (remembered, expected, lowered) in [
+            (SessionStatus::WaitingUser, SessionStatus::Working, true),
+            (SessionStatus::Working, SessionStatus::Working, false),
+            (SessionStatus::Idle, SessionStatus::Idle, false),
+        ] {
+            let (state, live, _dir) = lowering("status-lower-request", SessionStatus::WaitingUser);
+            state
+                .request_hands
+                .lock()
+                .unwrap()
+                .insert("s".to_string(), remembered);
+            state.lower_hand_left_by_prompt("s");
+            assert_eq!(
+                state.request_hands.lock().unwrap().get("s").copied(),
+                Some(expected),
+                "{remembered:?}"
+            );
+            assert_eq!(
+                state.session_record("s").unwrap().status,
+                SessionStatus::WaitingUser,
+                "the request's hand stays up"
+            );
+            assert_eq!(live.interaction.lowered(), lowered, "{remembered:?}");
+        }
+    }
+
+    /// A session whose process is not registered is lowered all the same.
+    #[test]
+    fn lowering_the_hand_of_a_left_prompt_needs_no_live_session() {
+        let (state, dir) = app_state("status-lower-no-live");
+        insert_record(&state, &dir, "s", SessionStatus::WaitingUser);
+        state.lower_hand_left_by_prompt("s");
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::Working
+        );
     }
 }

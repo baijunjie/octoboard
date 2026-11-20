@@ -389,6 +389,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         prompt_on_launch: false,
         screen_inexact: false,
         holder_link: None,
+        interaction: None,
         default_effort: None,
         context: None,
         observed_model: None,

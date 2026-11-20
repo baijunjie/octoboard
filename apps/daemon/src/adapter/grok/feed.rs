@@ -404,6 +404,19 @@ fn describe(name: &str, input: &Value) -> (ToolCategory, Option<String>, Vec<Str
     }
 }
 
+/// What the feed makes of a call a hook reports, which names an MCP tool by itself
+/// (`probemcp__echo`) where the record reaches it through `use_tool`: its category, one-line title
+/// and changed files, so a prompt for the call is classed as the call is in the feed.
+pub(super) fn describe_hook_call(
+    tool: &str,
+    input: &Value,
+) -> (ToolCategory, Option<String>, Vec<String>) {
+    if tool.contains("__") {
+        return describe("use_tool", &serde_json::json!({ "tool_name": tool }));
+    }
+    describe(tool, input)
+}
+
 /// The category for the `kind` an update gives a call of a tool not known by name.
 fn category_of_kind(kind: &str) -> ToolCategory {
     match kind {

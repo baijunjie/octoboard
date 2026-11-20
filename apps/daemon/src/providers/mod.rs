@@ -470,6 +470,37 @@ pub struct Capabilities {
     /// without another group leader in between.
     pub ends_command_groups_on_exit: bool,
     pub delivery: DeliveryQuirks,
+    /// Which of the prompts its agent shows while a session waits on the user Octoboard publishes
+    /// and answers (`Session.interaction`, `answer_interaction`;
+    /// `AgentProvider::interactions`).
+    pub interactions: InteractionKinds,
+    /// Takes images attached to a message (`send_message`'s `images`).
+    pub message_images: bool,
+    /// Runs a slash command sent as one (`send_command`).
+    pub slash_commands: bool,
+}
+
+/// The kinds of prompt a provider's sessions publish and answer.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct InteractionKinds {
+    /// Tool permission prompts.
+    pub permission: bool,
+    /// Questions from the agent's own ask-the-user tool.
+    pub question: bool,
+}
+
+impl InteractionKinds {
+    /// Neither kind.
+    pub const NONE: Self = Self {
+        permission: false,
+        question: false,
+    };
+    /// Both kinds.
+    pub const ALL: Self = Self {
+        permission: true,
+        question: true,
+    };
 }
 
 /// How writing a message into the provider's session differs from the plain case.

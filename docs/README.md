@@ -60,6 +60,12 @@ Where to start, by question:
 - [Interrupting a session's turn](product/interrupting-turns.md) — how a parent stops a child session's running turn.
 - [Message delivery](product/message-delivery.md) — how messages are written into a running session and held when it
   cannot take them.
+- [Slash commands and image messages](product/slash-commands-and-image-messages.md) — `send_command` and images on
+  `send_message`: the completion check, writing images and text through the terminal or Codex's queue, and why neither
+  is ever carried to another process as text.
+- [Answering an agent's prompts](product/pending-interactions.md) — how a session's permission prompt or ask-the-user
+  questions are published as `Session.interaction` and a client's answer pressed into the terminal, per agent, and
+  when the hand comes down.
 - [Draft preservation](product/draft-preservation.md) — how an automatic message is kept from being sent with the
   user's half-typed draft: the native stash, the grace period, clearing the draft and handing it back, and which keys
   hold a message.
@@ -431,7 +437,8 @@ Binding rules for code, one home per rule; the structure docs keep placement and
 - [Catching a branch up with its target](memory/catching-a-branch-up-with-its-target.md) — which branch is the target,
   and why a guarded pushed branch is merged, not rebased.
 - [Committing alongside other agents](memory/committing-alongside-other-agents.md) — several agents in one worktree
-  share one index: stage your paths only right before committing and check the index holds nothing else.
+  share one index and one build: stage your paths only right before committing, and give agents that edit or commit
+  at once a worktree each.
 - [Driving and reading the real app window](memory/driving-and-reading-the-real-app-window.md) — scripting and
   inspecting the live window without touching the user's work, and what a probe can prove.
 - [Fading the edge of a scroller](memory/fading-the-edge-of-a-scroller.md) — declaring scrollers the coverage check

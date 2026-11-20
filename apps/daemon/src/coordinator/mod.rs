@@ -58,6 +58,7 @@ pub mod conversation_feed;
 pub mod exit_watch;
 pub mod handoff;
 pub mod handover_check;
+mod interactions;
 pub mod launch;
 pub mod lifecycle;
 mod messages;
@@ -916,8 +917,35 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::SendMessage { session, text } => {
-            send_message(state, &session, text).await?;
+        RequestBody::SendMessage {
+            session,
+            text,
+            images,
+        } => {
+            send_message(state, &session, text, images).await?;
+            Ok(None)
+        }
+
+        RequestBody::SendCommand { session, command } => {
+            messages::send_command(state, &session, command).await?;
+            Ok(None)
+        }
+
+        RequestBody::AnswerInteraction {
+            session,
+            interaction,
+            choice,
+            text,
+            answers,
+            dismiss,
+        } => {
+            let fields = crate::session::interaction::AnswerFields {
+                choice,
+                text,
+                answers,
+                dismiss,
+            };
+            interactions::answer_interaction(state, &session, interaction, fields).await?;
             Ok(None)
         }
 
