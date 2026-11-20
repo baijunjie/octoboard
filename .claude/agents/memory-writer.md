@@ -52,6 +52,7 @@ Anything that clears the bar but is not of this shape does not belong to memory 
 | Topic docs (the record of a task focused on one thing, such as research conclusions, measured baselines) | Maintained by that dedicated task; do not break it into entries and haul it in — hand it back |
 | Why some concrete object in the repo (a piece of code, a config, a file) is the way it is, and what to watch out for when using it | That object's own comment — hand it back; important, hidden, and painfully expensive are not exceptions |
 | Content that only holds on one machine (local paths, environment variable values, local install locations and versions, a phenomenon that only reproduces on one person's machine) | Hand it back, listed separately |
+| Coding rules (criteria for right and wrong that constrain code in many places) | The project's coding conventions — hand it back |
 | Anything already spelled out in an instruction file, a skill, the product docs, or the project map | Not recorded; when an entry genuinely has to mention it, reference it by its path relative to the repo root (plus the exact section heading when pointing at a section) |
 | Code change history, outdated content, general programming knowledge, one-off problems | Not recorded; an outdated entry is changed or deleted in place |
 

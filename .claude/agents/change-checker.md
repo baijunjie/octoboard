@@ -14,6 +14,8 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
   the project's `agent-change-check` skill; where that says "none" or "unspecified", the listed documents cannot be
   read, or the skill cannot be found, look for them in the instruction files and project docs; where none can be found
   at all, skip the "Violates the project's coding conventions" item and note it in the report.
+- In a convention document, read the "General principles" (where there are any) and the section headings first, then
+  the sections on the topics of this change; read the ones you are unsure are relevant.
 - Read **the full text** of every file involved in this change (not just the diff), and get a clear picture of the
   existing structure of the modules they live in; any conclusion drawn without having read is void and must be redone.
 
@@ -66,18 +68,51 @@ The plan must state: why the current organization is a poor fit, what to split i
 
 ## Convention suggestions
 
-The coding conventions are the project's long-term agreement, changed only by the user's decision. When the review
-turns up any of the following, list "Convention suggestions" separately at the end of the report, only within your
-scope; leave the section out when there are none. Convention suggestions do not count as failed checklist items.
+Only for problems within your scope, list "Convention suggestions" separately at the end of the report by the standard
+below, with deletions and changes aimed only at entries you read this time; leave the section out when there are none.
+Convention suggestions do not count as failed checklist items.
 
-- Something the conventions do not cover went wrong in this change, and would go wrong again elsewhere
+A coding convention only takes a rule that meets all three: it constrains many future changes, in many places; it
+cannot be derived without the conventions (neither general knowledge nor the code's consistent practice yields it, or the
+code holds both practices side by side); a violation can be judged a defect at review. The conventions are read at every
+review, so what falls short stays out.
+
+What falls short goes elsewhere by its nature:
+
+| Content | Where it goes |
+|---|---|
+| Why a piece of code is written the way it is, what to watch out for when using it | That code's comment |
+| Development experience, system behavior and business rules | The matching project doc (which one by the project's documentation conventions; with none, give only the content) |
+| What formatting and lint tools can enforce automatically | The tool configuration |
+
+The shape of the conventions: an opening "General principles" section states a few overarching principles (the
+project's consistent leanings, such as following the surrounding existing practice and reusing the existing design
+system and shared components), and cases not written down are judged by them; topic sections follow, each entry written
+as a rule that can be judged right or wrong, with half a sentence of why; a table of worked cases is added only for
+typical cases the rule itself cannot settle.
+
+Changes to the conventions subtract before they add: what existing entries or the general principles already imply
+leaves the conventions as they are; what rewriting, merging or relaxing existing entries, or lifting several detailed
+rules into one principle, can cover is rewritten; only when none of that works is something added. Whether a change
+qualifies is judged on the conventions as they stand after it: added or rewritten entries must meet all three
+conditions; a deletion or relaxation holds when the part removed falls short of them. A single convention document over
+about 500 lines has detail or content from elsewhere mixed in and needs streamlining as a whole.
+
+A problem the conventions do not cover but a general principle settles is listed as failing for violating the
+conventions, naming the general principle it rests on. What falls short is not listed as a convention suggestion. What
+can also be raised:
+
 - A convention entry contradicts the project's current state, refers to something that no longer exists, or is no
-  longer followed by anyone
+  longer followed by anyone: where this change is consistent with the existing practice around it, it is not listed as
+  failing
 - The change violates a convention, but is consistent with a user trade-off that whoever dispatched you handed over
+- An entry you read falls short of admission: until it is changed it still holds, and a violation this time is still
+  listed as failing; streamlining as a whole is not yours — where a document exceeds the size above, a one-line mention is enough
 
-For each, state: which part of the conventions to change (the document and the exact section heading; for an addition,
-which section it goes in; where the project has no convention document yet, which document it should go in), into what,
-and what in this change it rests on.
+For each, state: the type (delete / merge / rewrite / add), which part of the conventions to change (the document and
+the exact section heading; for an addition, which section it goes in; where the project has no convention document yet,
+which document it should go in), into what, the net number of lines added or removed, and what in this change it rests
+on; for an addition, also why rewriting existing entries cannot cover it.
 
 ## Boundaries
 
@@ -93,6 +128,7 @@ and what in this change it rests on.
 
 ## Report
 
-State: which files were checked, which convention documents were checked against, the failed checklist items, and for
-each one the location of the problem / the reasoning / the suggested fix, followed by "Convention suggestions"; say so
-explicitly when everything passes, and mark the uncertain items as uncertain.
+State: which files were checked, which sections of which convention documents were checked against, the failed
+checklist items, and for each one the location of the problem / the reasoning / the suggested fix, followed by
+"Convention suggestions" and where the content that falls short belongs; say so explicitly when everything passes, and
+mark the uncertain items as uncertain.
