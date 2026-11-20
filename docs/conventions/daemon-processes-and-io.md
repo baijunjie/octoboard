@@ -217,7 +217,9 @@ through its provider, not branched on in generic code). The helpers named here a
   `LiveSession::message_key`, never under its text, per session or per process.** A new refusal or hold gets the same
   bound, and a test of a forced write also sends the next message and asserts it waits out its own grace and bound.
 - **A switch that turns such a step off ends once the state that caused it has moved** (`stash_unsettled_at` ends at the
-  next prompt sent), never for the rest of the session or process.
+  next prompt sent), never for the rest of the session or process. Where the cause is the agent build itself (a stash
+  indicator the provider does not read), that state moves only when the launch ends, so the switch lasts the launch (in
+  memory: a daemon that adopts the launch after a restart starts with it on again).
 - **The write as the box stands hands back what the box held in exactly one notice** (`message_sent_with_draft` with the
   draft read before any clear, or `draft_discarded`): never lost unseen, never reported twice.
 - **Every refusal, start of a wait, discard or write with the user's text logs a `tracing::warn!` naming the session,

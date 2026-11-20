@@ -66,6 +66,13 @@ pub trait ScreenReader: Send + Sync {
         false
     }
 
+    /// The row of `screen` where the provider shows its stash indicator, for the log when a stash
+    /// key emptied the box but [`Self::stash_shown`] did not read a stash. Only a row that holds
+    /// the agent's own indicators, never the user's text; `None` where there is no such row.
+    fn stash_indicator_row(&self, _screen: &str) -> Option<String> {
+        None
+    }
+
     /// Whether `text`, the whole of what the input box shows, is the placeholder the provider shows
     /// for a long paste instead of its text, for telling that a box holds nothing but a message
     /// written there (`crate::session::LiveSession::retry_unsent_submit`).
@@ -197,6 +204,7 @@ mod tests {
         assert_eq!(screen.as_submitted("typed"), "typed");
         assert!(!screen.pasted_image_path_loses_enter());
         assert!(!screen.stash_shown(text));
+        assert_eq!(screen.stash_indicator_row(text), None);
         assert!(!screen.clears_input_box_with_ctrl_u());
         assert!(!screen.collapsed_paste("[Pasted text #1]"));
         let fixture = spec_fixture();

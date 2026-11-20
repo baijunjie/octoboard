@@ -36,12 +36,19 @@ impl ScreenReader for ClaudeScreen {
         super::stash::supported(spec, plan)
     }
 
+    /// Claude Code shows a stash at the right end of the row just above its input box's top rule:
+    /// `› stashed` (2.1.274 to 2.1.314), `draft stashed` (2.1.329), after the effort indicator
+    /// while it is still shown. How far that row is from the bottom of the screen varies with the
+    /// rows Claude Code draws under the box, so the row is found from the box. The word
+    /// `stashed` is looked for anywhere in that row rather than one exact indicator, so a
+    /// rewording that keeps the word is still read; that row holds only Claude Code's own
+    /// indicators, never the user's text.
     fn stash_shown(&self, screen: &str) -> bool {
-        screen
-            .lines()
-            .rev()
-            .take(6)
-            .any(|line| line.contains("› stashed"))
+        indicator_row(screen).is_some_and(|row| row.contains(STASH_WORD))
+    }
+
+    fn stash_indicator_row(&self, screen: &str) -> Option<String> {
+        indicator_row(screen).map(|row| row.trim().to_string())
     }
 
     /// `[Pasted text #<n>]` or `[Pasted text #<n> +<lines> lines]`, as Claude Code draws a long
@@ -125,14 +132,31 @@ const RUNNING: std::ops::RangeInclusive<char> = '\u{25D0}'..='\u{25D3}';
 /// The glyph Claude Code starts its title with when it is back at its prompt.
 const AT_PROMPT: char = '\u{2733}';
 
+/// The word every stash indicator of Claude Code's has held, in the row above its input box.
+const STASH_WORD: &str = "stashed";
+
+/// The row just above the input box's top rule, where Claude Code shows its indicators (effort,
+/// stash) and never the user's text.
+fn indicator_row(screen: &str) -> Option<&str> {
+    let rows: Vec<&str> = screen.lines().map(str::trim_end).collect();
+    let above = box_start(&rows)?.checked_sub(2)?;
+    Some(rows[above])
+}
+
+/// The row of `rows` that the input box's first line is on: the last one starting with the prompt
+/// mark under the box's top rule.
+fn box_start(rows: &[&str]) -> Option<usize> {
+    (1..rows.len())
+        .rev()
+        .find(|&row| rows[row].starts_with(PROMPT_MARK) && is_top_rule(rows[row - 1]))
+}
+
 /// The rows of Claude Code's input box: from the last one starting with `❯` right below a
 /// horizontal rule, plain or labelled with a place in the prompt history ([`is_top_rule`]), up to
 /// the next rule.
 fn input_box_rows(screen: &str) -> Option<Vec<String>> {
     let rows: Vec<&str> = screen.lines().map(str::trim_end).collect();
-    let start = (1..rows.len())
-        .rev()
-        .find(|&row| rows[row].starts_with(PROMPT_MARK) && is_top_rule(rows[row - 1]))?;
+    let start = box_start(&rows)?;
     let end = start + 1 + rows[start + 1..].iter().position(|row| is_rule(row))?;
     // A labelled rule spans the box as the plain rule below it does.
     let width = |row: &str| row.trim().chars().count();
@@ -358,3 +382,259 @@ const DIALOGS: &[DialogPattern] = &[
     )
     .of_kind(DialogKind::AgentsView),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const WIDTH: usize = 100;
+
+    /// A screen of Claude Code's input box with `above` the row right over its top rule and
+    /// `below` the rows under its bottom rule.
+    fn screen(above: &str, below: &[&str]) -> String {
+        let rule = "\u{2500}".repeat(WIDTH);
+        let mut rows = vec![
+            "\u{23FA} an answer from the transcript".to_string(),
+            String::new(),
+            above.to_string(),
+            rule.clone(),
+            format!("{PROMPT_MARK}\u{A0}"),
+            rule,
+        ];
+        rows.extend(below.iter().map(|row| row.to_string()));
+        rows.join("\n")
+    }
+
+    fn right_aligned(text: &str) -> String {
+        format!("{text:>WIDTH$}")
+    }
+
+    #[test]
+    fn a_stash_word_anywhere_in_the_row_above_the_input_box_is_shown() {
+        for (name, above) in [
+            ("2.1.314 marker", right_aligned("\u{203A} stashed")),
+            ("2.1.329 marker", right_aligned("draft stashed")),
+            (
+                "2.1.329 marker after the effort indicator",
+                right_aligned("\u{25D0} medium \u{B7} /effort \u{B7} draft stashed"),
+            ),
+            ("marker alone", "draft stashed".to_string()),
+            (
+                "marker followed by other text",
+                right_aligned("draft stashed for later"),
+            ),
+            // The word alone is read, so a reworded indicator that keeps it still is.
+            ("a reworded indicator", right_aligned("stashed draft")),
+            ("the bare word", right_aligned("stashed")),
+            (
+                "trailing spaces",
+                format!("{}   ", right_aligned("draft stashed")),
+            ),
+        ] {
+            assert!(
+                ClaudeScreen.stash_shown(&screen(&above, &[])),
+                "{name}: {above:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_rows_under_the_box_do_not_move_where_the_marker_is_read() {
+        let above = right_aligned("draft stashed");
+        for below in [
+            &[][..],
+            &["auto mode on"],
+            &["warning line", "auto mode on (shift+tab to cycle)"],
+            &["a", "b", "c", "d", "e", "f", "g", "h"],
+        ] {
+            assert!(
+                ClaudeScreen.stash_shown(&screen(&above, below)),
+                "{} rows under the box",
+                below.len()
+            );
+        }
+    }
+
+    #[test]
+    fn a_box_whose_top_rule_names_a_place_in_the_history_still_has_its_marker_read() {
+        // As wide as the plain rule under the box: `─── History 3/9 ` is 16 cells.
+        let rule = "\u{2500}".repeat(WIDTH - 16);
+        let screen = format!(
+            "{}\n\u{2500}\u{2500}\u{2500} History 3/9 {rule}\n{PROMPT_MARK}\u{A0}old prompt\n{}",
+            right_aligned("draft stashed"),
+            "\u{2500}".repeat(WIDTH),
+        );
+        assert!(ClaudeScreen.input_box_rows(&screen).is_some());
+        assert!(ClaudeScreen.stash_shown(&screen));
+    }
+
+    #[test]
+    fn no_stash_is_shown_without_the_marker_directly_above_the_top_rule() {
+        let marker = right_aligned("draft stashed");
+        for (name, screen) in [
+            ("an empty row above", screen("", &[])),
+            (
+                "other text above",
+                screen(&right_aligned("medium \u{B7} /effort"), &[]),
+            ),
+            (
+                "the marker two rows above",
+                format!("{marker}\n{}", screen("", &[])),
+            ),
+            (
+                "the marker below the box",
+                screen("", &[&marker, "auto mode on"]),
+            ),
+            (
+                "the marker in the transcript",
+                screen("", &[]).replacen(
+                    "an answer from the transcript",
+                    "the footer ends with draft stashed",
+                    1,
+                ),
+            ),
+            (
+                "the marker typed in the box",
+                format!(
+                    "{}\n{PROMPT_MARK}\u{A0}draft stashed\n{}",
+                    "\u{2500}".repeat(WIDTH),
+                    "\u{2500}".repeat(WIDTH)
+                ),
+            ),
+        ] {
+            assert!(!ClaudeScreen.stash_shown(&screen), "{name}:\n{screen}");
+        }
+    }
+
+    #[test]
+    fn no_stash_is_shown_when_there_is_no_input_box() {
+        let marker = right_aligned("draft stashed");
+        let rule = "\u{2500}".repeat(WIDTH);
+        for (name, screen) in [
+            ("an empty screen", String::new()),
+            ("only the marker", marker.clone()),
+            ("a rule and no prompt row", format!("{marker}\n{rule}\n")),
+            (
+                "a prompt row and no rule",
+                format!("{marker}\n{PROMPT_MARK}\u{A0}"),
+            ),
+            (
+                "the rule is the first row",
+                format!("{rule}\n{PROMPT_MARK}\u{A0}\n{rule}"),
+            ),
+        ] {
+            assert!(!ClaudeScreen.stash_shown(&screen), "{name}");
+        }
+    }
+
+    #[test]
+    fn only_the_last_box_decides_where_the_marker_is_read() {
+        let stashed_box = screen(&right_aligned("draft stashed"), &[]);
+        let later_box = screen("", &[]);
+        assert!(!ClaudeScreen.stash_shown(&format!("{stashed_box}\n{later_box}")));
+        assert!(ClaudeScreen.stash_shown(&format!("{later_box}\n{stashed_box}")));
+    }
+
+    #[test]
+    fn the_indicator_row_is_the_trimmed_row_directly_above_the_top_rule() {
+        for (above, row) in [
+            (
+                right_aligned("\u{25D0} medium \u{B7} /effort"),
+                "\u{25D0} medium \u{B7} /effort",
+            ),
+            (right_aligned("draft stashed"), "draft stashed"),
+            (format!("  {}  ", "left padded"), "left padded"),
+            (String::new(), ""),
+        ] {
+            assert_eq!(
+                ClaudeScreen
+                    .stash_indicator_row(&screen(&above, &["auto mode on"]))
+                    .as_deref(),
+                Some(row),
+                "{above:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_indicator_row_is_never_a_row_of_the_box_or_the_transcript() {
+        let rule = "\u{2500}".repeat(WIDTH);
+        let text = screen("", &["below the box"]);
+        let row = ClaudeScreen.stash_indicator_row(&text).unwrap();
+        for other in [
+            "an answer from the transcript",
+            "below the box",
+            &PROMPT_MARK.to_string(),
+            &rule,
+        ] {
+            assert!(!row.contains(other), "{row:?} holds {other:?}");
+        }
+        // The last box decides, as for the stash itself.
+        let two = format!("{}\n{text}", screen(&right_aligned("draft stashed"), &[]));
+        assert_eq!(ClaudeScreen.stash_indicator_row(&two).as_deref(), Some(""));
+    }
+
+    #[test]
+    fn there_is_no_indicator_row_without_an_input_box() {
+        let rule = "\u{2500}".repeat(WIDTH);
+        for (name, screen) in [
+            ("an empty screen", String::new()),
+            ("text only", "an answer\ndraft stashed".to_string()),
+            (
+                "a rule and no prompt row",
+                format!("draft stashed\n{rule}\n"),
+            ),
+            (
+                "the rule is the first row",
+                format!("{rule}\n{PROMPT_MARK}\u{A0}\n{rule}"),
+            ),
+        ] {
+            assert_eq!(ClaudeScreen.stash_indicator_row(&screen), None, "{name}");
+        }
+    }
+
+    /// Replays `capture` into a terminal the size it was recorded at and returns its screen.
+    fn replayed(capture: &[u8]) -> String {
+        let mut terminal = crate::terminal::snapshot::TerminalSnapshot::new(40, 120);
+        terminal.process(capture);
+        terminal.visible_text()
+    }
+
+    /// The recordings that show a stash are replayed by
+    /// `session::swap::tests::measured_native_stash_markers_require_an_empty_composer`; these are
+    /// the screens beside them where none is drawn.
+    #[test]
+    fn a_recorded_screen_without_a_stash_shows_none() {
+        let capture = include_bytes!("../../../testdata/claude_input_placeholder.bin");
+        let text = replayed(capture);
+        assert!(ClaudeScreen.input_box_rows(&text).is_some(), "{text}");
+        assert!(!ClaudeScreen.stash_shown(&text), "{text}");
+    }
+
+    /// 2.1.329 draws the stash as `draft`, a move to the right edge and `stashed`, in the same
+    /// frame that leaves the draft out of the box. The recording up to the start of that frame is
+    /// the screen right before: the draft in the box, the indicator row reading `◐ medium ·
+    /// /effort` with no marker.
+    #[test]
+    fn the_screen_before_2_1_329_draws_its_stash_marker_shows_none() {
+        let capture = include_bytes!("../../../testdata/claude_native_stashed_2.1.329.bin");
+        let find = |haystack: &[u8], needle: &[u8]| {
+            haystack
+                .windows(needle.len())
+                .rposition(|window| window == needle)
+                .expect("the capture holds the bytes")
+        };
+        let marker = find(capture, b"stashed");
+        let frame = find(&capture[..marker], b"\x1b[?25l");
+
+        let before = replayed(&capture[..frame]);
+        assert!(ClaudeScreen.input_box_rows(&before).is_some(), "{before}");
+        assert!(
+            before.contains("\u{25D0} medium \u{B7} /effort"),
+            "{before}"
+        );
+        assert!(before.contains("draft text"), "{before}");
+        assert!(!ClaudeScreen.stash_shown(&before), "{before}");
+        assert!(ClaudeScreen.stash_shown(&replayed(capture)));
+    }
+}

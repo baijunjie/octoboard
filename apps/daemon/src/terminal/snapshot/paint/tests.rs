@@ -114,6 +114,11 @@ fn a_first_paint_reproduces_recorded_agent_screens_as_their_replay_does() {
             120,
         ),
         (
+            &include_bytes!("../../../../testdata/claude_native_stashed_2.1.329.bin")[..],
+            40,
+            120,
+        ),
+        (
             &include_bytes!("../../../../testdata/codex_0166_macos_120x40.bin")[..],
             40,
             120,

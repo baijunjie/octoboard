@@ -218,6 +218,35 @@ impl LiveSession {
             .stash_unsettled_at = Some(self.prompts_sent());
     }
 
+    /// Turns the native stash off for the rest of this launch when the stash key emptied the box
+    /// but the screen showed no stash the provider recognises: the agent build of this launch draws
+    /// its indicator in a way the provider does not read, so a stash the user already holds could
+    /// not be seen either, and a later stash key could overwrite it. That build does not change
+    /// until the launch ends, which is the state this switch waits on; messages take the guarded
+    /// delivery meanwhile. The switch is kept in memory only, so a daemon that adopts the launch
+    /// after a restart turns the stash back on, and the first unread stash turns it off again.
+    /// The provider's indicator row is logged so the new indicator can be taught to the provider.
+    fn stop_stash_on_unread_marker(&self) {
+        if self.composer().as_deref() != Some("")
+            || self.stash_shown()
+            || self.is_frozen()
+            || self.poll_exit()
+        {
+            return;
+        }
+        self.native_stash.store(false, Ordering::Release);
+        let indicator = crate::adapter::provider(self.agent)
+            .screen()
+            .stash_indicator_row(&self.screen_text())
+            .unwrap_or_default();
+        tracing::warn!(
+            session = %self.id,
+            agent = %self.agent.label(),
+            %indicator,
+            "the stash key emptied the input box but no stash indicator was recognised; the native stash is off for this launch"
+        );
+    }
+
     /// Whether the stash key may be pressed for a message now: the launch has a native stash, and
     /// no stash left unsettled before is still waiting on a prompt sent (`swap` locked).
     fn native_stash_usable(&self, swap: &InputSwap) -> bool {
@@ -564,6 +593,7 @@ impl LiveSession {
             return Err(blocked("the session could not stash its composer"));
         }
         if !self.wait_for_swap(false, deadline) {
+            self.stop_stash_on_unread_marker();
             self.report_input_recovery(notice_code::DRAFT_SAVE_UNCONFIRMED, "The agent did not confirm saving the draft in time. The message was not written with the draft: it waits for the input box to empty, and once the draft's grace is over the box is cleared first.");
             // The stash key may already have taken effect. It is not pressed again for this
             // message, nor for a later one until a prompt is sent, which restores what it holds.
@@ -916,7 +946,7 @@ mod tests {
         let rule = "─".repeat(60);
         let screen = match agent {
             AgentId::CLAUDE => format!(
-                "{rule}\r\n❯ {text}\r\n{rule}\r\n{}",
+                "{:>60}\r\n{rule}\r\n❯ {text}\r\n{rule}",
                 if stashed { "› stashed" } else { "" }
             ),
             AgentId::GROK => format!(
@@ -938,6 +968,10 @@ mod tests {
             (
                 AgentId::CLAUDE,
                 &include_bytes!("../../testdata/claude_native_stashed.bin")[..],
+            ),
+            (
+                AgentId::CLAUDE,
+                &include_bytes!("../../testdata/claude_native_stashed_2.1.329.bin")[..],
             ),
             (
                 AgentId::GROK,
@@ -1441,6 +1475,171 @@ mod tests {
             "one stash key and the message"
         );
         assert!(!live.input_swap_active());
+    }
+
+    /// A log writer the test reads back.
+    #[derive(Clone, Default)]
+    struct LogBuffer(Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl io::Write for LogBuffer {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// When the stash key empties the box and the screen then shows no stash the provider reads,
+    /// the agent build of this launch draws its indicator in a way that is not recognised, so
+    /// stashing is off for the launch: not even a prompt sent brings it back, and the next message
+    /// over a draft takes the guarded delivery with no stash key. The user is told once, the
+    /// message is not written, and the log names the provider's indicator row and nothing of the
+    /// user's text.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_stash_key_that_empties_the_box_unread_turns_the_stash_off_for_the_launch() {
+        const DRAFT: &str = "USER_DRAFT_7q";
+        let id = "stash-unread";
+        let (state, dir) = crate::test_support::app_state(id);
+        insert_session_record(&state, &dir, id);
+        let live = crate::test_support::fake_live_session(id, AgentId::CLAUDE, 120, 40, "sleep 30")
+            .with_composer();
+        state.register_live(live.clone());
+        let mut events = state.subscribe();
+        live.enable_native_stash(true);
+        live.on_output(&draw(DRAFT, false, AgentId::CLAUDE));
+        live.write_terminal_input(DRAFT.as_bytes()).unwrap();
+        live.settle_input();
+        let before = live.input_writes();
+        let clock = Arc::new(SwapClock {
+            now: std::sync::Mutex::new(Instant::now()),
+            reads: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let logs = LogBuffer::default();
+        let writer = live.clone();
+        let writer_clock = clock.clone();
+        let writer_logs = logs.clone();
+        let send = std::thread::spawn(move || {
+            let _log = tracing::subscriber::set_default(
+                tracing_subscriber::fmt()
+                    .with_ansi(false)
+                    .with_writer(move || writer_logs.clone())
+                    .finish(),
+            );
+            SETTLE_OVERRIDE.with(|value| value.set(Some(SETTLE)));
+            SWAP_CLOCK_OVERRIDE.with(|value| *value.borrow_mut() = Some(writer_clock));
+            let framed = crate::session::term::frame_message(AgentId::CLAUDE, "peer");
+            let result = writer.write_message_input(&framed, "peer", false);
+            SWAP_CLOCK_OVERRIDE.with(|value| *value.borrow_mut() = None);
+            SETTLE_OVERRIDE.with(|value| value.set(None));
+            result
+        });
+        wait_until(|| clock.reads.load(Ordering::Acquire) >= 2);
+        wait_until(|| live.input_writes() == before + 1);
+        // The stash key emptied the box, and the row above it holds an indicator with no `stashed`.
+        let rule = "─".repeat(60);
+        live.on_output(
+            format!(
+                "\x1b[2J\x1b[34;1H{:>60}\r\n{rule}\r\n❯ \r\n{rule}",
+                "◐ medium · /effort · parked"
+            )
+            .as_bytes(),
+        );
+        *clock.now.lock().unwrap() += SETTLE;
+        wait_until(|| send.is_finished());
+        let error = send.join().unwrap().unwrap_err();
+        assert_eq!(error.written, 0);
+        assert_eq!(
+            live.input_writes(),
+            before + 1,
+            "the stash key, and nothing of the message"
+        );
+        assert!(!live.input_swap_active());
+        assert!(!live.native_stash_usable(&live.swap.lock().unwrap()));
+
+        let mut codes = Vec::new();
+        while let Ok(event) = events.try_recv() {
+            if let crate::protocol::Event::SessionNotice { code, .. } = event {
+                codes.push(code);
+            }
+        }
+        assert_eq!(codes, [notice_code::DRAFT_SAVE_UNCONFIRMED]);
+        let log = String::from_utf8(logs.0.lock().unwrap().clone()).unwrap();
+        assert!(log.contains("WARN"), "{log}");
+        assert!(log.contains(id), "{log}");
+        assert!(log.contains("◐ medium · /effort · parked"), "{log}");
+        assert!(!log.contains(DRAFT), "the user's text is not logged: {log}");
+
+        // The stash is not given back by a prompt sent: the next message over a draft is held
+        // by the guarded delivery, and no stash key is pressed for it.
+        live.note_prompt_sent(Some(DRAFT));
+        assert!(!live.native_stash_usable(&live.swap.lock().unwrap()));
+        live.on_output(&draw(DRAFT, false, AgentId::CLAUDE));
+        live.write_terminal_input(DRAFT.as_bytes()).unwrap();
+        let before = live.input_writes();
+        let framed = crate::session::term::frame_message(AgentId::CLAUDE, "peer");
+        assert_eq!(
+            live.write_message_input(&framed, "peer", false)
+                .unwrap_err()
+                .written,
+            0
+        );
+        assert_eq!(live.input_writes(), before, "no stash key");
+    }
+
+    /// A stash key that did nothing, the draft still in the box at the timeout, says nothing about
+    /// the agent's indicator: the native stash stays on and is held only until a prompt is sent.
+    #[test]
+    fn a_stash_key_that_left_the_draft_in_the_box_keeps_the_native_stash_on() {
+        let live = crate::test_support::fake_live_session(
+            "stash-did-nothing",
+            AgentId::CLAUDE,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        live.enable_native_stash(true);
+        live.on_output(&draw("draft", false, AgentId::CLAUDE));
+        live.write_terminal_input(b"draft").unwrap();
+        let (clock, send) = controlled_send(&live);
+        *clock.now.lock().unwrap() += SETTLE;
+        wait_until(|| send.is_finished());
+        assert_eq!(send.join().unwrap().unwrap_err().written, 0);
+        assert!(!live.native_stash_usable(&live.swap.lock().unwrap()));
+        live.note_prompt_sent(Some("draft"));
+        assert!(live.native_stash_usable(&live.swap.lock().unwrap()));
+    }
+
+    /// An indicator drawn just after the confirmation's deadline, before the check that turns the
+    /// stash off, is a stash read after all: the native stash stays on. Calls the check directly,
+    /// since no clock this wait runs on can put a frame between its last read of the screen and
+    /// the check that follows; an empty box with no indicator is the contrast, and turns it off.
+    #[test]
+    fn an_indicator_drawn_after_the_deadline_keeps_the_native_stash_on() {
+        let live = crate::test_support::fake_live_session(
+            "stash-late",
+            AgentId::CLAUDE,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        live.enable_native_stash(true);
+        live.on_output(&draw("", true, AgentId::CLAUDE));
+        assert!(live.stash_shown());
+        assert_eq!(live.composer().as_deref(), Some(""));
+        live.stop_stash_on_unread_marker();
+        live.note_prompt_sent(Some("sent"));
+        assert!(live.native_stash_usable(&live.swap.lock().unwrap()));
+
+        live.on_output(&draw("", false, AgentId::CLAUDE));
+        assert!(!live.stash_shown());
+        assert_eq!(live.composer().as_deref(), Some(""));
+        live.stop_stash_on_unread_marker();
+        assert!(!live.native_stash_usable(&live.swap.lock().unwrap()));
     }
 
     /// A draft read off a frame not yet drawn whole, as at the start of a turn, may not be there:

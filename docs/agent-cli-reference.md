@@ -2975,8 +2975,14 @@ separate bracketed paste and CR, they automatically restore the saved draft, eve
 still running. Do not press Ctrl-S again after submission: it toggles the stash and would hide the restored draft.
 A second stash can replace the person's existing stash, so an occupied stash must be left alone. In Grok, sending
 Ctrl-S and the paste in one PTY write merged the draft with the message; observe the stashed, empty composer before
-writing the payload instead of relying on a delay. Claude's `› stashed` indicator is dimmed, so the undimmed screen
-cannot establish this transition; Grok's top composer border includes `Stashed`.
+writing the payload instead of relying on a delay. Claude's indicator, drawn in grey (`ESC[38;5;246m`), sits at the
+right end of the row just above the composer's top rule: `› stashed` in 2.1.274 and 2.1.314, `draft stashed` in 2.1.329
+(after `◐ medium · /effort` for the moment that indicator still shows, then alone), measured in a 120×40 PTY and kept
+as `apps/daemon/testdata/claude_native_stashed.bin` and `claude_native_stashed_2.1.329.bin`. In 2.1.329, a message
+pasted into the stashed composer and submitted with CR brought the draft back and removed the indicator within about
+0.2 seconds. The rows Claude draws under the composer vary (a warning line, the mode line,
+the agents hint), so the indicator's distance from the screen's bottom is not fixed. Grok's top composer border
+includes `Stashed`.
 
 Isolated local-endpoint runs confirmed exact restoration of Chinese text, multiline drafts, and collapsed long
 pastes, including a 4,699-character draft. Claude retained the cursor; Grok restored it at the end. Attachments were

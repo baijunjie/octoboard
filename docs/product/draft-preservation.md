@@ -15,7 +15,10 @@ draft, without waiting for the user to finish typing:
 - **Claude Code 2.1.274 or later and Grok Build 1.0.70 or later:** when Octoboard recognises a nonempty composer and
   can safely use the agent's native stash, it saves the draft, confirms the stash and an empty composer, then sends
   the automatic message. The agent restores the draft automatically after submission; Octoboard does not toggle the
-  stash a second time. An existing stash of the user's is never overwritten by another stash operation. The stash key
+  stash a second time. An existing stash of the user's is never overwritten by another stash operation. Octoboard
+  sees a stash by the agent's own indicator on the screen: on Claude Code, the word `stashed` in the row just above the
+  input box's top rule (`› stashed` up to 2.1.314, `draft stashed` in 2.1.329, after the effort indicator while that
+  is still shown); on Grok Build, `Stashed` in the input box's top border. The stash key
   is pressed only on a composer read off a whole frame (the first condition under "Keys that leave the composer empty
   are confirmed by the screen" below): Octoboard waits up to half a second for one, and a composer that shows text off
   a frame still being drawn — as at the start of a turn, when the box can be read before it is drawn again — holds the
@@ -60,6 +63,14 @@ retained typing cannot all be replayed yet — a dialog is up or the terminal is
 confirmation window has run out with the stash unsettled — Octoboard sends the `typing_held` notice. If the process ends
 before restoration is confirmed, Octoboard sends the `typing_lost` notice: the retained typing is not replayed into a
 resumed session.
+
+Where the stash key emptied the composer but no stash indicator Octoboard recognises showed within the confirmation
+window, nor right after it, the agent draws its indicator in a way Octoboard cannot read, so it could not see a stash
+the user already holds either, and a further stash key could overwrite it. Octoboard then stops using the agent's native
+stash for the rest of the agent's process: the `draft_save_unconfirmed` notice is still sent for that attempt, and every
+later message takes the guarded terminal delivery below, also after a prompt is sent. A daemon that restarts and adopts
+the running session uses the native stash again, until the next such attempt. Where the composer still shows the draft
+at the timeout, only the hold above applies: no stash key until a prompt is sent.
 
 ## The draft and typing notices
 
@@ -172,7 +183,8 @@ for a partial write outside a stash).
 ## Clearing a draft past the grace period
 
 Past a message's grace period, where the agent's native stash cannot take the draft — no stash on the agent or on this
-launch, a stash already shown, a stash left unsettled (see "Draft preservation has a bounded wait" above) — Octoboard
+launch, a stash already shown, a stash left unsettled, a stash turned off after an indicator Octoboard could not read
+(see "Draft preservation has a bounded wait" above) — Octoboard
 clears the composer before it writes the message. It does so on Claude Code, Grok Build and Codex, whose Ctrl-U is
 measured to delete one line of the composer a press and to do nothing else, mid-turn included. On an agent with no
 measured clearing key, a composer that shows text holds the message as "When the composer cannot be cleared" below says.
