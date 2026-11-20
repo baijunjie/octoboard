@@ -4,6 +4,8 @@ Captured on 2026-11-20 from Grok Build 1.0.89 (`--no-leader --permission-mode de
 120x40 PTY against a local stand-in for its inference API, from a scratch home with a fake API key; its hooks were
 logged beside the screens. Each file replays into the daemon's own screen (`TerminalSnapshot::new(40, 120)`). The
 measurements are summarised in `docs/agent-cli-reference.md`, "Grok Build".
+The probe directory's machine-local path is rewritten in every file to `/private/tmp/probe-dir/...`, segment by
+segment at the same length, so the byte offsets and the screen columns are those of the capture.
 
 Two are the raw output from the launch on:
 

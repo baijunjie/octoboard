@@ -78,7 +78,7 @@ without moving the others.
   `git://`, `git+ssh://` and `ssh+git://` remotes use HTTPS. Credentials, query strings, fragments and a trailing `.git`
   are omitted from the opened address, as are transport ports on non-web remotes. Opening raises no success notice; a
   failure is an error alert.
-- **Open panel** — a submenu with **Files**, then **Processes**, then **Terminal**, which open that panel of the
+- **Open panel** — a submenu with **Terminal**, then **Files**, then **Processes**, which open that panel of the
   project's right pane inside the window; an entry whose panel is already on screen for the project is left out, and so
   is the submenu when all are (see "Opening a panel from a project's action menu" in
   `docs/product/right-pane-panels.md`).

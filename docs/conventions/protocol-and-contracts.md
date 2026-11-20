@@ -10,7 +10,11 @@ declared and worded is in `docs/conventions/error-codes.md`; file placement is i
 
 - **A wire type is added in the daemon's Rust types (`apps/daemon/src/protocol/`) and documented in
   `apps/daemon/PROTOCOL.md`; its handler is under `src/coordinator/`, or for a browse request in `src/browse/`, served
-  through `browse::lane`.** The UI never writes a wire type by hand:
+  through `browse::lane`; a request that acts only on per-connection state (a connection's uploads, the conversations
+  it follows) is served by the control connection in `src/server/control/` (`uploads.rs`, or a per-connection worker
+  it starts, as `conversation_feed::Connection`), and its coordinator arm only refuses it.** Why: the coordinator
+  dispatcher holds no connection, so state kept there outlives or leaks across connections. The UI never writes a wire
+  type by hand:
   `packages/ui/src/protocol.generated.ts` is regenerated and never edited (ESLint ignores it as test-written).
 - **The body of an HTTP route that only the daemon's own subcommands read (`POST /restart-check`,
   `POST /revert-gate/:session`, `POST /git-ref/:session`) is defined in the module that handles it, without the `TS` and `JsonSchema` derives, and is

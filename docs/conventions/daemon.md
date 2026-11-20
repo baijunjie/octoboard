@@ -56,6 +56,10 @@ file sits and which directory owns what is in [`docs/structure/daemon.md`](../st
   stored status only where nothing else is left to judge by (a daemon that went down without stopping its sessions), and
   keep it revisable by a late end of the same turn, told apart by its turn id, since a hook the agent does not wait for
   can arrive after the exit. A process killed mid-turn fires no hook.
+- **State the daemon writes outside a hook (a status it reads off the screen, the hand coming down once a published
+  interaction leaves the screen) never invalidates hook logic armed on the state before it.** What a hook armed (a
+  turn it waits to end, a prompt it waits to be answered) keeps the identity it was armed with, and the daemon's own
+  write neither clears it nor makes a later hook of the same turn look stale.
 - **A session row is never written back whole from a copy read earlier; each change writes only its own columns.**
   Hooks, renames, archives, the exit watcher and account switches change it on tasks of their own, and a whole-row
   write undoes theirs. A change of status that must not undo another is a conditional write: a status the agent reports
@@ -82,6 +86,14 @@ file sits and which directory owns what is in [`docs/structure/daemon.md`](../st
   client owns the interval and asks again on every fresh `snapshot`; the daemon bounds the work itself with a per-entity
   floor on how recently it last completed, since several clients each run the interval on their own phase and an
   in-flight claim alone never fires.
+- **A `subscribe_X` push stream is the one allowed exception: the daemon works on its own while a connection is
+  subscribed**, provided it works only while some connection is subscribed, its subscribers share one read (one task
+  per followed entity, not one per connection), and the subscriptions are limited per connection
+  (`subscribe_session_conversation`: `AppState::conversation_feeds`, `conversation_feed::SUBSCRIPTION_LIMIT`).
+- **Lag recovery of a per-connection push takes the replacement page and the new receiver together, under the
+  publisher's lock** (`FeedChannel::resubscribe`), so nothing published between the two is lost or sent before the
+  page; **and a reply that supersedes a forwarding task waits for that task, once aborted, to end before it is sent**
+  (`Subscription::end`), so nothing the task forwarded arrives after the reply.
 - **An in-flight claim for such work is a guard released on `Drop`, never a `begin`/`end` pair**, since the work can
   panic and the entity would stay excluded for the daemon's life. A wait on the claim to share one computation is
   bounded and answers the last result noted, or fails; it never answers an empty result, which a client shows as
@@ -109,6 +121,10 @@ file sits and which directory owns what is in [`docs/structure/daemon.md`](../st
   with one confirming read under it.** Work started from an event that will not come again waits for a claim with a
   bound and re-reads, instead of returning, or the event is lost; the refusal that suits a request the user can repeat
   does not suit it.
+- **Provider code that parses an agent's records never runs inside a lock that request handling also takes.** A
+  provider's reader works through files of any size and shape the agent wrote; under such a lock one slow or
+  pathological record stalls every request that needs it. Read and parse outside, and take the lock only to put the
+  result in place.
 
 ## Agent accounts
 

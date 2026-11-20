@@ -44,6 +44,10 @@ codes are declared and worded is in `docs/conventions/error-codes.md`.
   through `ScreenReader`. Why: each trait is the one place the agent's way of doing that thing is written.
 - **A value held for every provider is a `protocol::PerAgent<T>`**, indexed by `AgentId`, so a new provider is covered
   without a change.
+- **Where providers map their own kinds onto a neutral enum (a tool call's `ToolCategory`), like things get the same
+  value in every provider**: a shell command, a file edit or a search is the same category whichever agent ran it.
+  Check the other providers' mappings when adding one. Why: clients render and group by the neutral value, so two
+  providers that differ on it show the same act two ways.
 - **A default method of `AgentProvider` or of a trait it hands out is the answer of a provider with none of the
   thing**: it recognises, hints, proves and acts on nothing. Never write it as what the built-in providers happen to
   share, least of all where the answer leads to a refusal or a deletion. Behaviour several providers share goes in a

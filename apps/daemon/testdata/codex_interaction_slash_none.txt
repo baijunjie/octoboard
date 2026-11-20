@@ -1,6 +1,6 @@
 
   >_ OpenAI Codex (v0.167.1)
-     /Volumes/2TB/AgentData/tmp/claude/claude-501/-Volumes-2TB-Document-Code-App-octoboard/…/scratchpad/probe-codex/work
+     /private/tmp/probe-dir/tmp/claude/claude-501/-private-tmp-probe-project-dir-octoboard/…/scratchpad/probe-codex/work
 
   To get started, describe a task or try one of these commands:
 
@@ -18,8 +18,8 @@
 
   Model:               GPT-6.1-Sol (reasoning low)
   Model provider:      stub
-  Directory:           /Volumes/2TB/AgentData/tmp/claude/
-                       claude-501/-Volumes-2TB-Document-Code-App-octoboard/2ff4bb3d-9f8c-4870-ad08-369f852262ee/
+  Directory:           /private/tmp/probe-dir/tmp/claude/
+                       claude-501/-private-tmp-probe-project-dir-octoboard/2ff4bb3d-9f8c-4870-ad08-369f852262ee/
                        scratchpad/probe-codex/work
   Permissions:         Workspace (Ask for approval)
   Agents.md:           <none>
@@ -36,5 +36,5 @@
 
 › Ask Codex to do anything
 
-  GPT-6.1-Sol default · /Volumes/2TB/AgentData/tmp/claude/claude-501/-Volumes-2TB-Document-Code-App-octoboard/2ff4bb3d-…
+  GPT-6.1-Sol default · /private/tmp/probe-dir/tmp/claude/claude-501/-private-tmp-probe-project-dir-octoboard/2ff4bb3d-…
   ← for agents · ? for shortcuts                                                               ⚠ 1 warning · f2 to view

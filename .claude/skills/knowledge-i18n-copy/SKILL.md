@@ -496,6 +496,20 @@ are now wrong or it leaves out one thing, the meaning has changed.
   trees or a parent), one half-width space between Chinese and Latin text,
   numbers or placeholders, and full-width punctuation in Chinese sentences, parentheses included (`（{detail}）`).
   (`packages/ui/src/i18n/messages/zh-CN.ts`, the catalog's doc comment)
+- **Prompts and requests**: three things English may all call a prompt or a request are kept apart in every language:
+  the user's prompt (what is sent to the agent as a turn), a prompt the agent is waiting on (a permission or question
+  prompt in its terminal, `Session.interaction`), and a session request (a session asking for another session to be
+  started). Where a language uses one noun for two of them, the verb tells them apart and is never swapped, and a
+  session request is always qualified as one, never a bare "request".
+
+  | Language | The user's prompt | A prompt the agent is waiting on | A session request |
+  |---|---|---|---|
+  | zh-CN | 提示, sent: 发送提示 | 提示, answered: 回应提示 | 会话请求 (新建会话请求) |
+  | ja | プロンプト, sent: プロンプトを送信 | プロンプト, answered: プロンプトに回答 | セッションのリクエスト |
+  | ko | 프롬프트, sent: 프롬프트를 보내다 | 요청, answered: 요청에 답하다 | 세션 요청 |
+
+  (the user's decision; `packages/ui/src/i18n/messages/zh-CN.ts`, `ja.ts`, `ko.ts`: `daemon.queued_messages_lost.*`,
+  `daemon.interaction_*`, `settings.autoApproveSession.label`)
 - **App name and other app-level facts**: copy writes the product name as the global placeholder `{appName}`, never as
   a literal, and never translates it; how the placeholder is filled is in `docs/conventions/i18n-in-code.md`,
   "Placeholders, numbers and plurals". (`docs/product/language.md`, "What follows the language")

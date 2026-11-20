@@ -4,6 +4,8 @@ Captured from Codex 0.167.1 in a 120x40 PTY on macOS, in Octoboard's arrangement
 terminal, asking mode with `approval_policy="on-request"`, `approvals_reviewer="user"`), against a local stand-in for the
 Responses API, from a scratch home. A `.bin` is the raw output from the launch on, replayed into the daemon's own screen;
 a `.txt` is the rendered screen of a larger capture (kept as text for size).
+The probe directory's machine-local path is rewritten in every file to `/private/tmp/probe-dir/...`, segment by
+segment at the same length, so the byte offsets and the screen columns are those of the capture.
 
 - `codex_interaction_command.bin`: a command approval (`touch probe_cmd_out.txt && echo created`), three options.
 - `codex_interaction_command_granted.bin`: the same after `1`: the composer is back (`Gone`).

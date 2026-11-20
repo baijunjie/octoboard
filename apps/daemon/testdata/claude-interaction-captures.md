@@ -5,6 +5,8 @@ permission mode (`permissions.defaultMode: "default"`) against a local stand-in 
 tool call. Each file is the raw output from the launch on; a state is the screen after replaying a prefix of it into the
 daemon's own screen (`TerminalSnapshot::new(40, 120)`, read with `visible_text_undimmed`). The tests slice the files at
 the offsets below.
+The probe directory's machine-local path is rewritten in every file to `/private/tmp/probe-dir/...`, segment by
+segment at the same length, so the byte offsets and the screen columns are those of the capture.
 
 ## `claude_interaction_prompts.bin` (280041 bytes)
 

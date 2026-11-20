@@ -222,6 +222,18 @@ through its provider, not branched on in generic code). The helpers named here a
   memory: a daemon that adopts the launch after a restart starts with it on again).
 - **The write as the box stands hands back what the box held in exactly one notice** (`message_sent_with_draft` with the
   draft read before any clear, or `draft_discarded`): never lost unseen, never reported twice.
+- **A message written in several writes (images, then text, then its Enter) stays inside one draft-guard step
+  throughout** (`LiveSession::write_message_input_finishing` with the rest as its tail, `session/composer.rs`), and
+  each later write is refused once anyone else has written since. Why: a draft stashed around the message is restored
+  by the agent at the submit key, so a step that ends before it lets the draft run together with the message.
+- **A paste the next write depends on waits, bounded, for the provider's folded form of it in the input box** (an
+  image path drawn as one more image placeholder, `ScreenReader::image_placeholders`), and where that form never
+  appears the message ends as written and not sent, with nothing pressed blind.
+- **A slash command is written only into an input box found or made empty, never beside other text**, and refused
+  before anything is written where the provider cannot clear its box to take back a wrong completion.
+- **A key-by-key loop judges that the screen has settled by its readings (what the provider reads off it and the key it
+  would press), never by the raw screen** (`session/interaction/press.rs`): an agent animates what it is doing beside a
+  prompt, so the raw screen may never read the same twice.
 - **Every refusal, start of a wait, discard or write with the user's text logs a `tracing::warn!` naming the session,
   never the text.** The daemon log is the only trace afterwards.
 - **A gate on a terminal mode the agent sets (bracketed paste, focus reporting, alternate screen) rests on a real

@@ -20,8 +20,8 @@
 
   Model:               GPT-6.1-Sol (reasoning low)
   Model provider:      stub
-  Directory:           /Volumes/2TB/AgentData/tmp/claude/
-                       claude-501/-Volumes-2TB-Document-Code-App-octoboard/2ff4bb3d-9f8c-4870-ad08-369f852262ee/
+  Directory:           /private/tmp/probe-dir/tmp/claude/
+                       claude-501/-private-tmp-probe-project-dir-octoboard/2ff4bb3d-9f8c-4870-ad08-369f852262ee/
                        scratchpad/probe-codex/work
   Permissions:         Workspace (Ask for approval)
   Agents.md:           <none>
@@ -36,4 +36,4 @@
 
 › /
 
-  GPT-6.1-Sol default · /Volumes/2TB/AgentData/tmp/claude/claude-501/-Volumes-2TB-Document-Code-App-octoboard/2ff4bb3d-…
+  GPT-6.1-Sol default · /private/tmp/probe-dir/tmp/claude/claude-501/-private-tmp-probe-project-dir-octoboard/2ff4bb3d-…

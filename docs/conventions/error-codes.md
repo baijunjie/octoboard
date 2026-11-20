@@ -61,6 +61,11 @@ messages". What code must do to meet it:
   code or `cause` it carries). A refusal the user can fix, however rare, gets a `recovery` (`none` where its own
   sentence says it all). Why: `classifyError` shows a code whose record gives no remedy as an unexpected failure, which
   tells the user to file an Issue.
+- **An `unexpected` code's message states only what happened** (what was refused or failed), never a remedy or a
+  guess at the cause: the unexpected alert already says what to do, and a remedy in the sentence contradicts it.
+- **The daemon's English free text (an `anyhow` message, `message`, a param carrying a system's wording) never goes into
+  a catalog sentence**; it is shown only as the alert's detail. Why: a sentence in the user's language with English
+  inside reads as broken, and that text is not worded for users.
 - **A remedy that must hold whatever the operating system's text says gets an early return in `classifyError`** ahead
   of the signature check, and the code is covered in `errorRecovery.test.ts` with a signature in its `detail`.
 - **A code worded by a param uses `variantOf`**, with `daemon.<code>.<variant>` per variant; the code's own key is

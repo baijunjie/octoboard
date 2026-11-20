@@ -19,8 +19,9 @@ interaction rules a gallery scenario shows are in [`ui-standard.md`](ui-standard
   the same name shadow each other in imports and in the editor. A source file may have several test files split by topic
   (`App.report.test.tsx`, `TerminalPane.focusReporting.test.tsx`).
 - **Helpers shared by several tests live in the places the structure docs name:** `packages/ui/src/test/`,
-  `*TestSupport.ts(x)` / `*TestState.tsx` beside the module that uses them, `apps/daemon/src/test_support/`. They are
-  not named like the test of a source file.
+  `*TestSupport.ts(x)` / `*TestState.tsx` beside the module that uses them, `apps/daemon/src/test_support/`, and in
+  the daemon a module-local `#[cfg(test)] mod test_support;` (`test_support.rs` in the module's directory) for helpers
+  only that module's tests share (`src/session/test_support.rs`). They are not named like the test of a source file.
 - **UI tests read `packages/ui/src/fixtures/` for shared data and never gallery scenarios;** it is changed only through
   the gallery workflow (see "The UI state gallery and its fixtures" below). Besides the fixtures, a UI test may read a daemon
   case table (next bullet).
@@ -65,6 +66,9 @@ interaction rules a gallery scenario shows are in [`ui-standard.md`](ui-standard
   under `apps/daemon/testdata/` with the CLI version beside it, never from text written from memory (a hook payload, a
   transcript, a screen, a package manager's failure). Replay the production entry conditions too (the offset the real
   caller starts from, a half-finished write), and commit the near-miss capture next to the matching one.
+- **A committed capture holds no machine-local path** (a home directory, an external volume, a user name): probe in a
+  neutral directory (`/tmp/probe/...`) so what the agent prints names only that, and where a capture already holds one,
+  rewrite it consistently, together with any test that asserts on it.
 - **A reader that classifies an agent's records line by line is built from a survey of every record of that agent on
   the machine, across all the CLI versions they span and including long, compacted sessions,** with a real line for each
   distinct value of the fields that tell lines apart (`type`, `origin`, attachment and synthetic-line markers, event
@@ -80,8 +84,9 @@ interaction rules a gallery scenario shows are in [`ui-standard.md`](ui-standard
   only after reproducing the failure against a real daemon** (throwaway `HOME`, read-only or small volume); the fixture
   carries exactly the code, params and `detail` the daemon sends.
 - **Tests never hard-code the provider list.** Under test a fourth provider exists (`AgentId::TEST`, `test_agent`; the
-  UI's `TEST_PROVIDERS` and `TEST_AGENTS`) that declares no capability, code or account operation, so `AgentId::ALL`
-  holds four providers. A test of a rule every provider follows iterates all of them and derives each expectation from
+  UI's `TEST_PROVIDERS` and `TEST_AGENTS`) that declares no code or account operation and only the capabilities
+  generic code is shown to follow from a declaration (step 6 of "Adding a per-agent difference" in
+  [`provider-neutral-core.md`](provider-neutral-core.md)), so `AgentId::ALL` holds four providers. A test of a rule every provider follows iterates all of them and derives each expectation from
   the descriptor; a test needing a real provider's fixtures picks by the capability or sub-interface the code reads
   (`provider(agent).accounts().and_then(|ops| ops.quota_probe()).is_some()`), not by id; a `match` over ids ends in a
   panicking arm (`other => panic!("no fixture for {other}")`). A test of one provider's own behaviour may name that
