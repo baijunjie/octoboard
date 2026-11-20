@@ -41,8 +41,11 @@
 //! changes the glyphs, and a running frame and the prompt title after it read from the PTY in one
 //! chunk, of which only the last title is seen. A prompt title while one of
 //! `crate::session::dialogs`' dialogs is up is a turn waiting on the user, with no hook to say so,
-//! and is not counted either, nor for [`SETTLE`] after the dialog goes, since the agent can take a
-//! moment after the answer to show its turn running again (`TurnReading::settled_at_prompt`).
+//! and is not counted either; nor is one while the hooks report a tool call open, since a wait
+//! raised from inside a tool leaves the title at the prompt whether or not its screen is known, and
+//! a cancel mid-tool is reported by other means. Neither counts for [`SETTLE`] after the dialog
+//! goes or the last call ends, since the agent can take a moment to show its turn running again
+//! (`TurnReading::settled_at_prompt`).
 //!
 //! Codex reports its own cancels (`Interrupt`), so its title is not watched for one.
 
@@ -218,7 +221,7 @@ mod tests {
     use crate::state::TurnClose;
     use crate::test_support::{
         app_state, console, console_session, idle_stand_in, idle_stand_in_of, output_containing,
-        within, ScratchDir, StandIn,
+        tool_call_ended, tool_call_started, within, ScratchDir, StandIn,
     };
     use std::time::Instant;
 
@@ -529,6 +532,46 @@ mod tests {
         replay(&fixture.live, CANCEL_TITLES);
         polls_settled().await;
         assert_ne!(status(&fixture.state), Some(SessionStatus::Idle));
+    }
+
+    /// A wait raised from inside a running tool call, such as an MCP server's access dialog, leaves
+    /// the title at the prompt with no hook and no screen the daemon knows: the turn stays working
+    /// for as long as the call is open, and is put at its prompt only once the call has ended and
+    /// the title still shows it.
+    #[tokio::test]
+    async fn a_title_at_the_prompt_during_an_open_tool_call_is_no_cancel() {
+        let fixture = fixture("tool-open", SessionStatus::Working);
+        armed(&fixture);
+        tool_call_started(&fixture.state, "s", "call");
+        replay(&fixture.live, CANCEL_TITLES);
+        polls_settled().await;
+        assert_eq!(status(&fixture.state), Some(SessionStatus::Working));
+        assert!(!fixture.state.last_turn_abnormal("s"));
+
+        tool_call_ended(&fixture.state, "s", "call");
+        assert!(reaches(&fixture.state, SessionStatus::Idle).await);
+        assert!(
+            fixture.state.last_turn_abnormal("s"),
+            "the turn went back to its prompt paused"
+        );
+    }
+
+    /// The same for the reports of Claude Code 2.1.322, which has no glyph to read.
+    #[tokio::test]
+    async fn an_idle_report_during_an_open_tool_call_is_no_cancel() {
+        let fixture = fixture("tool-open-reported", SessionStatus::Working);
+        armed(&fixture);
+        tool_call_started(&fixture.state, "s", "call");
+        fixture.live.on_output(GLYPHLESS_TITLE);
+        fixture.live.on_output(REPORTS_WORKING);
+        fixture.live.on_output(REPORTS_IDLE);
+        polls_settled().await;
+        assert_eq!(status(&fixture.state), Some(SessionStatus::Working));
+        assert!(!fixture.state.last_turn_abnormal("s"));
+
+        tool_call_ended(&fixture.state, "s", "call");
+        assert!(reaches(&fixture.state, SessionStatus::Idle).await);
+        assert!(fixture.state.last_turn_abnormal("s"));
     }
 
     /// A watch the next prompt retired does not end the turn that prompt opened.

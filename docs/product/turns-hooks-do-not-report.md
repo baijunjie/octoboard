@@ -67,10 +67,8 @@ the session to its prompt as soon as either shows the cancel, normally within ab
   the turn running, Octoboard has applied every hook event it has received for the session, and the session still reads
   *working*. The same `✳` comes up when a turn ends normally and when a permission prompt or question waits on the user,
   but the hook events that come with those have moved the session by then, and a session they moved stays where they put
-  it. A dialog that waits on the user with no hook (see "Messages held until a session can take them" in
-  `docs/product/message-delivery.md`), such as Claude Code's computer-use access request raised mid-turn, also leaves
-  the title at `✳`: while one is on the screen the title is not read as a cancel, and once it goes, that second's wait
-  starts over, so the turn has time to show itself running again after the user answers.
+  it. A wait on the user that no hook reports leaves the title at `✳` too; when such a `✳` is not counted is under
+  "Not while a screen of the agent's own is up" and "Not while a tool call is open" below.
 
   Once the terminal answers its OSC 7501 support query, Claude Code 2.1.322 drops these glyphs from its title and
   reports its state instead: `working` when a turn starts, `idle` when it is cancelled (about 80 ms after the Esc,
@@ -111,8 +109,19 @@ leaves it.
   on the title does not end this one. Each submitted prompt retires the previous turn's watches before its own turn
   opens, so a cancel found late never ends the turn after it.
 - **Not while a screen of the agent's own is up.** While one of the Claude Code screens that hold messages is on the
-  session's screen (see "Messages held until a session can take them" in `docs/product/message-delivery.md`), a `✳` is
-  the turn waiting on the user and is not counted.
+  session's screen (see "Messages held until a session can take them" in `docs/product/message-delivery.md`), such as
+  Claude Code's computer-use access request raised mid-turn, a `✳` is the turn waiting on the user and is not counted.
+  Once the screen goes, the second's wait starts over, so the turn has time to show itself running again after the user
+  answers.
+- **Not while a tool call is open.** While the session's hooks report a tool call open — a `PreToolUse` with no
+  `PostToolUse` or `PostToolUseFailure` for it yet, and no end of the tool batch (`PostToolBatch`), prompt submission,
+  turn end or session start since — a `✳` is not counted either: a wait raised from inside a running tool, such as the
+  computer-use access request or an MCP server's own confirmation, puts the title back at the prompt with no hook,
+  whether or not Octoboard recognises its screen. Once the last open call ends, the second's wait starts over, as after
+  a screen goes. Such a wait whose screen is not one of those that hold messages leaves the session reading *working*,
+  with no raised hand, until it is answered; it is never read as a cancel. A cancel while a tool runs comes after the
+  model has shown output, so it is read from the transcript alone, by its `[Request interrupted by user for tool use]`
+  entry.
 - The agent's process is still running, so the session is at its prompt, *paused*, and not *interrupted*.
 - No turn end was reported, so no report is synthesised for the session's owner for that turn (see "When a session does
   not report" in `docs/product/reporting-to-owners.md`).
@@ -133,7 +142,8 @@ Where it is not recovered, the session keeps reading *working* until its next pr
 - for a cancel before any output, which only the title or the reports show: Claude Code has been told not to set its
   terminal title and reports no status, or the title showing the turn running and the `✳` after it reached Octoboard in
   one piece of output, of which only the last title is seen (rare);
-- for a cancel after output: the interrupt entry carries no timestamp Octoboard can read, and the title misses it too.
+- for a cancel after output: the interrupt entry carries no timestamp Octoboard can read, and the title misses it too,
+  or is not read because a tool call is open.
 
 **What this costs to keep working.** As with a decline, the transcript is a file format Claude Code owns and rewrites on
 upgrade, and a cancel is recognised there by the two fixed interrupt strings above; they were seen in real transcripts
@@ -181,6 +191,11 @@ How the watch is kept to the right turn:
 - **Not while a screen of the agent's own is up.** While one of Grok's screens that hold messages is on the session's
   screen (see "Messages held until a session can take them" in `docs/product/message-delivery.md`), a title without a
   spinner is not counted.
+- **Not while a tool call is open.** While Grok's hooks report a tool call open — a `PreToolUse` with no `PostToolUse`,
+  `PostToolUseFailure` or `PermissionDenied` for it yet, and no prompt submission, turn end or session start since — a
+  title without a spinner is not counted, and once the last open call ends, the second's wait starts over, as for
+  Claude Code (see "Cancelling a Claude Code turn" above). A cancel while a tool runs comes after the first token, and
+  Grok reports it with `StopCancelled`.
 - **Only this turn's cancel counts.** A title without a spinner counts only after a spinner the title showed when the
   watch started or later.
 

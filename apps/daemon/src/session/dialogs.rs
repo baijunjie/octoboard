@@ -314,6 +314,13 @@ mod tests {
     // Its macOS permissions screen, laid out as the access request is, with strings read from the
     // 2.1.325 executable.
     const COMPUTER_USE_PERMISSIONS: &str = " Computer Use needs macOS permissions\n\n  Accessibility: not granted\n  Screen Recording: granted\n\n  Grant the missing permissions in System Settings, then select \"Try again\".\n\n\u{276F} Open System Settings \u{2192} Accessibility\n  Try again\n\n Enter to confirm \u{B7} Esc to cancel\n";
+    // The same request as 2.1.329 draws it, for the one app Simulator, and the titles the request has
+    // from 2.1.328 for several apps and for none.
+    const COMPUTER_USE_ACCESS_ONE_APP: &str = "\u{25CF} Calling computer-use \u{B7} 3m 55s\u{2026}\n\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\n Claude wants to use Simulator\n\n  \u{2502} Drive the Octoboard iOS app in my own simulator to verify the new terminal view.\n\n  \u{25CF} Simulator (full access)\n\n 2 other apps will be hidden while Claude works.\n With full access, Claude can change or delete files on your computer without asking first.\n\n \u{276F} Deny, and tell Claude what to do differently (esc)\n   Allow for this session (1 app)\n\n Enter to confirm \u{B7} Esc to cancel\n";
+    const COMPUTER_USE_ACCESS_SEVERAL_APPS: &str = "\u{25CF} Calling computer-use \u{B7} 12s\u{2026}\n\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\n Claude wants to use these apps\n\n  \u{25CF} Simulator\n  \u{25CF} Xcode\n\n \u{276F} Deny, and tell Claude what to do differently (esc)\n   Allow for this session (2 apps)\n\n Enter to confirm \u{B7} Esc to cancel\n";
+    const COMPUTER_USE_ACCESS_NO_APP: &str = "\u{25CF} Calling computer-use \u{B7} 12s\u{2026}\n\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\n Claude wants these permissions\n\n  \u{25CF} Clipboard read\n\n \u{276F} Deny, and tell Claude what to do differently (esc)\n   Allow for this session\n\n Enter to confirm \u{B7} Esc to cancel\n";
+    // Its macOS permissions screen as 2.1.329 titles it, with a lowercase "use".
+    const COMPUTER_USE_PERMISSIONS_LOWERCASE: &str = " Computer use needs macOS permissions\n\n  Accessibility: not granted\n  Screen Recording: granted\n\n \u{276F} Open System Settings \u{2192} Accessibility\n   Try again\n\n Enter to confirm \u{B7} Esc to cancel\n";
     const AGENTS_VIEW: &str = "New sessions: Opus 5.5 · medium effort\n0 awaiting input · 1 working · 0 completed\nYour conversation moved to the background — enter opens it · esc returns to it\n❯ describe a task for a new session\n  enter to return · space to reply · ctrl+x to delete · ? for shortcuts\n";
 
     #[test]
@@ -379,6 +386,26 @@ mod tests {
                 COMPUTER_USE_PERMISSIONS,
                 "claude_computer_use_permissions",
             ),
+            (
+                AgentId::CLAUDE,
+                COMPUTER_USE_ACCESS_ONE_APP,
+                "claude_computer_use_access",
+            ),
+            (
+                AgentId::CLAUDE,
+                COMPUTER_USE_ACCESS_SEVERAL_APPS,
+                "claude_computer_use_access",
+            ),
+            (
+                AgentId::CLAUDE,
+                COMPUTER_USE_ACCESS_NO_APP,
+                "claude_computer_use_access",
+            ),
+            (
+                AgentId::CLAUDE,
+                COMPUTER_USE_PERMISSIONS_LOWERCASE,
+                "claude_computer_use_permissions",
+            ),
             (AgentId::CLAUDE, AUTO_DEFAULT, "claude_auto_mode_default"),
             (
                 AgentId::CLAUDE,
@@ -412,6 +439,14 @@ mod tests {
         assert_eq!(written(AUTO_DEFAULT), WrittenMessage::Discarded);
         assert_eq!(written(COMPUTER_USE_ACCESS), WrittenMessage::Discarded);
         assert_eq!(written(COMPUTER_USE_PERMISSIONS), WrittenMessage::Discarded);
+        for screen in [
+            COMPUTER_USE_ACCESS_ONE_APP,
+            COMPUTER_USE_ACCESS_SEVERAL_APPS,
+            COMPUTER_USE_ACCESS_NO_APP,
+            COMPUTER_USE_PERMISSIONS_LOWERCASE,
+        ] {
+            assert_eq!(written(screen), WrittenMessage::Discarded, "{screen}");
+        }
     }
 
     #[test]
@@ -457,6 +492,16 @@ mod tests {
             "> it said \"Computer Use wants to control these apps\"\n",
             // A transcript row quoting both the title and the footer.
             "\u{25CF} \"Computer Use wants to control these apps\" \u{2026} \"Enter to confirm \u{B7} Esc to cancel\"\n",
+            // The same for the titles of 2.1.328 and later, and the lowercase permissions title.
+            "> it said \"Claude wants to use Simulator\"\n",
+            "> it said \"Claude wants these permissions\"\n",
+            "> it said \"Computer use needs macOS permissions\"\n",
+            "\u{25CF} \"Claude wants to use Simulator\" \u{2026} \"Enter to confirm \u{B7} Esc to cancel\"\n",
+            "\u{25CF} \"Claude wants to use these apps\" \u{2026} \"Enter to confirm \u{B7} Esc to cancel\"\n",
+            "\u{25CF} \"Claude wants these permissions\" \u{2026} \"Enter to confirm \u{B7} Esc to cancel\"\n",
+            "\u{25CF} \"Computer use needs macOS permissions\" \u{2026} \"Enter to confirm \u{B7} Esc to cancel\"\n",
+            // The footer alone, with none of the titles.
+            " Enter to confirm \u{B7} Esc to cancel\n",
             "",
         ] {
             assert_eq!(recognise(AgentId::CLAUDE, screen), None, "{screen}");

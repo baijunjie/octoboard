@@ -116,7 +116,9 @@ pub trait ScreenReader: Send + Sync {
 
     /// How a turn whose title went back to the prompt with no hook is closed, for a provider that
     /// leaves some cancels without any other trace (`crate::session::title_interrupt`); `None`
-    /// where the title is not watched for one.
+    /// where the title is not watched for one. The title is not read while the provider's hooks
+    /// report a tool call open, so a provider that opts in must report a cancel made while a tool
+    /// runs some other way, by a hook or a record watch.
     fn title_cancel(&self) -> Option<TitleCancel> {
         None
     }

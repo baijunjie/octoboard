@@ -223,6 +223,11 @@ const CLAUDE_SUBAGENT_VIEW: &str = "claude_subagent_view";
 const CLAUDE_AGENTS_VIEW: &str = "claude_agents_view";
 const CLAUDE_AGENT_LIST_FOCUS: &str = "claude_agent_list_focus";
 
+/// The names of the dialogs of Claude Code's computer-use MCP server: its access request, and the
+/// same request when macOS has not granted it what it needs.
+const CLAUDE_COMPUTER_USE_ACCESS: &str = "claude_computer_use_access";
+const CLAUDE_COMPUTER_USE_PERMISSIONS: &str = "claude_computer_use_permissions";
+
 /// Claude Code prints a usage limit in its conversation; its `/rate-limit-options` menu is not
 /// recognised as a dialog.
 const DIALOGS: &[DialogPattern] = &[
@@ -265,26 +270,47 @@ const DIALOGS: &[DialogPattern] = &[
             "Yes,setautomodeasmydefaultpermissionmode",
         ],
     ),
-    // The access request of Claude Code's computer-use MCP server (`request_access`; title read
-    // from the 2.1.325 executable, footer from a user's screenshot), raised from inside a running
-    // tool call, so no `PermissionRequest` hook announces it, and the terminal title goes back to
-    // the prompt while it waits. A paste is dropped and the Enter picks the focused row: Deny by
-    // default, which refuses Claude the apps, or Allow if the user moved the focus. The footer must
-    // be a row of its own, so a transcript quoting the title and the footer on one line does not
-    // match.
+    // The access request of Claude Code's computer-use MCP server (`request_access`), raised from
+    // inside a running tool call, so no `PermissionRequest` hook announces it. A paste is dropped
+    // and the Enter picks the focused row: Deny by default, which refuses Claude the apps, or Allow
+    // if the user moved the focus. The footer must be a row of its own, so a transcript quoting the
+    // title and the footer on one line does not match. Its title, read from the executables: up to
+    // 2.1.327 "Computer Use wants to control these apps"; from 2.1.328 "Claude wants to use"
+    // followed by the one app's name or by "these apps", or "Claude wants these permissions" when
+    // it asks for no app. Footer from users' screenshots of both. A title this misses only loses
+    // the raised hand: the title's cancel watch does not read a wait inside a tool call as a cancel.
     DialogPattern::all_of(
-        "claude_computer_use_access",
+        CLAUDE_COMPUTER_USE_ACCESS,
         WrittenMessage::Discarded,
         &["ComputerUsewantstocontroltheseapps"],
     )
     .with_row("Entertoconfirm\u{B7}Esctocancel"),
-    // The same request when Accessibility or Screen Recording is not granted (2.1.325, read from
-    // the executable, not reproduced): its rows open System Settings or try again, and it is drawn
-    // in the same frame, so its footer is taken to be the access request's.
     DialogPattern::all_of(
-        "claude_computer_use_permissions",
+        CLAUDE_COMPUTER_USE_ACCESS,
+        WrittenMessage::Discarded,
+        &["Claudewantstouse"],
+    )
+    .with_row("Entertoconfirm\u{B7}Esctocancel"),
+    DialogPattern::all_of(
+        CLAUDE_COMPUTER_USE_ACCESS,
+        WrittenMessage::Discarded,
+        &["Claudewantsthesepermissions"],
+    )
+    .with_row("Entertoconfirm\u{B7}Esctocancel"),
+    // The same request when Accessibility or Screen Recording is not granted (read from the
+    // executables, not reproduced): its rows open System Settings or try again, and it is drawn in
+    // the same frame, so its footer is taken to be the access request's. Titled "Computer Use
+    // needs macOS permissions" on 2.1.325, "Computer use needs macOS permissions" on 2.1.329.
+    DialogPattern::all_of(
+        CLAUDE_COMPUTER_USE_PERMISSIONS,
         WrittenMessage::Discarded,
         &["ComputerUseneedsmacOSpermissions"],
+    )
+    .with_row("Entertoconfirm\u{B7}Esctocancel"),
+    DialogPattern::all_of(
+        CLAUDE_COMPUTER_USE_PERMISSIONS,
+        WrittenMessage::Discarded,
+        &["ComputeruseneedsmacOSpermissions"],
     )
     .with_row("Entertoconfirm\u{B7}Esctocancel"),
     // Focus moved from the prompt to the task list under the prompt box: a paste is dropped, and

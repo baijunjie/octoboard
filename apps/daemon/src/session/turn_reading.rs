@@ -1,7 +1,8 @@
 //! One reading of whether a session's agent is in a turn, for everything that acts on it: the
 //! interrupt key (`interrupt`), the cancel read off the title (`title_interrupt`) and the lone Esc
 //! the draft's key timing marks as typed mid-turn (`draft`). Each signal is read here once, in one
-//! order — the title observer's lock, then the dialog sighting's, then the store — and each
+//! order — the title observer's lock, then the dialog sighting's, then the tool calls', then the
+//! store — and each
 //! consumer combines them as its own method below, so where they differ the difference is written
 //! down in one place.
 //!
@@ -21,7 +22,7 @@ use std::time::{Duration, Instant};
 use super::title_activity::TitleActivity;
 use super::LiveSession;
 use crate::protocol::SessionStatus;
-use crate::state::AppState;
+use crate::state::{AppState, ToolCallActivity};
 
 /// What the session's signals said about its turn at one moment. The hooks' status is read from
 /// the store on first use only, as a consumer that has its answer from the terminal needs no more.
@@ -38,6 +39,9 @@ pub(crate) struct TurnReading<'a> {
     /// When the screen last showed a dialog go away
     /// ([`crate::session::dialogs::Sighting::gone_at`]).
     dialog_gone_at: Option<Instant>,
+    /// Whether the hooks report a tool call open, and when the last one ended
+    /// ([`AppState::tool_call_activity`]).
+    tool_calls: ToolCallActivity,
     /// Whether the title says the agent waits on the user (Codex's `Action Required`).
     action_title: bool,
     /// The record's own status and the status the session reads as the agent's
@@ -53,6 +57,10 @@ impl LiveSession {
             (observer.activity, observer.state.clone())
         };
         let sighting = self.dialog_sighting();
+        let tool_calls = state
+            .upgrade()
+            .map(|state| state.tool_call_activity(&self.id))
+            .unwrap_or_default();
         TurnReading {
             live: self,
             state,
@@ -60,6 +68,7 @@ impl LiveSession {
             activity,
             dialog_up: sighting.current.is_some(),
             dialog_gone_at: sighting.gone_at,
+            tool_calls,
             action_title: self.needs_user_action(),
             statuses: OnceCell::new(),
         }
@@ -131,16 +140,25 @@ impl TurnReading<'_> {
     }
 
     /// Whether the title has gone back to the prompt since `armed`, the count of stops taken
-    /// earlier, held there for `settle`, and no dialog is up nor has gone away within `settle`: a
-    /// turn that went back to its prompt with no hook, for the title's cancel watch. A dialog
-    /// raised mid-turn leaves the title at the prompt while it is up, and the agent can take a
-    /// moment after the answer to show its turn running again, so the settle starts over when the
-    /// dialog goes.
+    /// earlier, held there for `settle`, and neither a dialog nor a tool call is open, nor has one
+    /// ended within `settle`: a turn that went back to its prompt with no hook, for the title's
+    /// cancel watch.
+    ///
+    /// A dialog raised mid-turn leaves the title at the prompt while it is up, and so can a wait
+    /// raised from inside a running tool call that no hook reports and no screen pattern knows,
+    /// such as an MCP server's own confirmation. A cancel while a tool runs needs no title to be
+    /// seen: the model has shown output by then, so the agent's other channels report it (see
+    /// `docs/product/turns-hooks-do-not-report.md`, section "Cancelling a Claude Code turn"). The
+    /// agent can take a moment after either ends to show its turn running again, so the settle
+    /// starts over when one does.
     pub(crate) fn settled_at_prompt(&self, armed: u64, settle: Duration) -> bool {
+        let settled_since = |at: Option<Instant>| {
+            at.is_none_or(|at| self.at.saturating_duration_since(at) >= settle)
+        };
         !self.dialog_up
-            && self
-                .dialog_gone_at
-                .is_none_or(|gone| self.at.saturating_duration_since(gone) >= settle)
+            && !self.tool_calls.open
+            && settled_since(self.dialog_gone_at)
+            && settled_since(self.tool_calls.last_closed_at)
             && self.activity.settled_at_prompt(armed, self.at, settle)
     }
 }

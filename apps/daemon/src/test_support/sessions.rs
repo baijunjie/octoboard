@@ -1,4 +1,5 @@
-//! Session, Codex rollout and page records for tests of what is stored about a session.
+//! Session, Codex rollout and page records for tests of what is stored about a session, and the
+//! tool calls the hooks report for one.
 
 use std::path::{Path, PathBuf};
 
@@ -194,4 +195,28 @@ pub(crate) fn test_page_content(text: &str) -> PageContent {
             },
         }],
     }
+}
+
+/// Has the hooks report session `session`'s tool call `id` started, as a computer-use MCP tool's
+/// `PreToolUse` does.
+pub(crate) fn tool_call_started(state: &crate::state::AppState, session: &str, id: &str) {
+    state.apply_tool_call_change(
+        session,
+        crate::hooks::ToolCallChange::Started {
+            id: Some(id),
+            call: crate::hooks::CallShape {
+                tool: Some("mcp__computer-use__request_access"),
+                input: None,
+            },
+            waits_on_user: false,
+        },
+    );
+}
+
+/// Has the hooks report session `session`'s tool call `id` ended.
+pub(crate) fn tool_call_ended(state: &crate::state::AppState, session: &str, id: &str) {
+    state.apply_tool_call_change(
+        session,
+        crate::hooks::ToolCallChange::Ended { id: Some(id) },
+    );
 }

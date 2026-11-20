@@ -538,6 +538,15 @@ in System Settings, then select 'Try again'." and rows "Open System Settings →
 Screen Recording" and "Try again" (read from the executable only; its footer is taken to be the same). Claude Code may
 take a moment after the answer to show its turn running again (not measured).
 
+From 2.1.328 (read from the 2.1.328 and 2.1.329 executables, and a user's 2.1.329 screenshot) the old title is gone:
+the request reads "Claude wants to use <app>" when it asks for one app (for example "Claude wants to use Simulator",
+with the app row "● Simulator (full access)"), "Claude wants to use these apps" for several, and "Claude wants these
+permissions" when it asks for no app. Full access adds the line "With full access, Claude can change or delete files on
+your computer without asking first."; the options and the footer are unchanged. The permissions screen is titled
+"Computer use needs macOS permissions" on 2.1.329, with a lowercase "use". The tool call is open throughout (its
+`PreToolUse` came, its `PostToolUse` comes only after the answer), which is what keeps the title's cancel watch off it
+whatever the title says.
+
 ### Views of background agents
 
 Measured on 2.1.307, reproduced against a local stub. A turn that starts an `Agent` with `run_in_background` adds a task

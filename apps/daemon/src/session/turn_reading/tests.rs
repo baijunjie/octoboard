@@ -4,13 +4,14 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::hooks::ToolCallChange;
 use crate::protocol::{AgentId, SessionStatus};
 use crate::session::title_activity::Shown;
 use crate::session::LiveSession;
 use crate::state::test_support::insert_record;
 use crate::state::AppState;
 use crate::terminal::program_status::ReportedState;
-use crate::test_support::{app_state, fake_live_session, ScratchDir, StandIn};
+use crate::test_support::{app_state, fake_live_session, tool_call_started, ScratchDir, StandIn};
 
 /// How long ago a running title was sent, for one the agent stopped sending: far past any
 /// freshness window.
@@ -421,4 +422,105 @@ fn a_turn_running_again_is_not_settled_at_the_prompt() {
     assert!(!live.turn_reading().settled_at_prompt(1, Duration::ZERO));
     live.on_output(RUNNING_TITLE);
     assert!(!live.turn_reading().settled_at_prompt(0, Duration::ZERO));
+}
+
+/// Has the title of `live` run and then go back to the prompt long ago, so that nothing but a
+/// dialog or a tool call can keep it from reading as settled.
+fn title_long_back_at_the_prompt(live: &LiveSession) {
+    let mut observer = live.title.lock().unwrap();
+    observer
+        .activity
+        .note(Some(Shown::Running), before_now(STALE));
+    observer
+        .activity
+        .note(Some(Shown::AtPrompt), before_now(STALE / 2));
+}
+
+/// A wait raised from inside a running tool call leaves the title at the prompt with nothing on
+/// the screen the daemon knows: while the hooks report a call open, the title is not settled at the
+/// prompt, however long it has stayed there and whatever the settle.
+#[test]
+fn a_title_at_the_prompt_is_not_settled_while_a_tool_call_is_open() {
+    let fixture = bound("tool-open", AgentId::CLAUDE, SessionStatus::Working);
+    title_long_back_at_the_prompt(&fixture.live);
+    let settle = Duration::from_secs(60);
+    assert!(fixture.live.turn_reading().settled_at_prompt(0, settle));
+
+    // Another session's call says nothing of this one.
+    tool_call_started(&fixture.state, "other", "x");
+    assert!(fixture.live.turn_reading().settled_at_prompt(0, settle));
+
+    tool_call_started(&fixture.state, "s", "a");
+    for settle in [Duration::ZERO, settle] {
+        assert!(
+            !fixture.live.turn_reading().settled_at_prompt(0, settle),
+            "{settle:?}"
+        );
+    }
+    let mut reading = fixture.live.turn_reading();
+    reading.at += settle * 100;
+    assert!(
+        !reading.settled_at_prompt(0, settle),
+        "time passing does not close the call"
+    );
+}
+
+/// Once the last call ends the title is settled only after the settle counted from that end, so the
+/// agent has time to show its turn running again, whichever way the calls ended; the end of one of
+/// several calls leaves the title unsettled.
+#[test]
+fn the_settle_starts_over_when_the_last_tool_call_ends() {
+    let settle = Duration::from_secs(60);
+    for (label, end) in [
+        ("the call's end", ToolCallChange::Ended { id: Some("a") }),
+        ("the end of all calls", ToolCallChange::AllEnded),
+    ] {
+        let fixture = bound("tool-ended", AgentId::CLAUDE, SessionStatus::Working);
+        title_long_back_at_the_prompt(&fixture.live);
+        tool_call_started(&fixture.state, "s", "a");
+        fixture.state.apply_tool_call_change("s", end);
+
+        let reading = fixture.live.turn_reading();
+        assert!(
+            !reading.settled_at_prompt(0, settle),
+            "{label}: the settle counts from the call's end, not the title's stop"
+        );
+        assert!(
+            reading.settled_at_prompt(0, Duration::ZERO),
+            "{label}: no settle to wait for"
+        );
+        let mut later = fixture.live.turn_reading();
+        later.at += settle * 2;
+        assert!(later.settled_at_prompt(0, settle), "{label}: settled");
+        let mut sooner = fixture.live.turn_reading();
+        sooner.at += settle / 2;
+        assert!(!sooner.settled_at_prompt(0, settle), "{label}: not yet");
+    }
+
+    let fixture = bound("tool-two", AgentId::CLAUDE, SessionStatus::Working);
+    title_long_back_at_the_prompt(&fixture.live);
+    tool_call_started(&fixture.state, "s", "a");
+    tool_call_started(&fixture.state, "s", "b");
+    fixture
+        .state
+        .apply_tool_call_change("s", ToolCallChange::Ended { id: Some("a") });
+    assert!(!fixture
+        .live
+        .turn_reading()
+        .settled_at_prompt(0, Duration::ZERO));
+}
+
+/// A tool call does not make a title settled that is not: the title still has to have gone back to
+/// the prompt after the watch was armed.
+#[test]
+fn an_ended_tool_call_settles_nothing_the_title_did_not() {
+    let fixture = bound("tool-title", AgentId::CLAUDE, SessionStatus::Working);
+    running_title_sent(&fixture.live, STALE);
+    tool_call_started(&fixture.state, "s", "a");
+    fixture
+        .state
+        .apply_tool_call_change("s", ToolCallChange::Ended { id: Some("a") });
+    let mut reading = fixture.live.turn_reading();
+    reading.at += Duration::from_secs(3600);
+    assert!(!reading.settled_at_prompt(0, Duration::ZERO));
 }

@@ -33,7 +33,8 @@
 //!   write.
 //! - [`programs`]: the small programs a test starts (sleep, echo, hold stdin, ignore the hang-up,
 //!   print a variable), spelled for each host; named as `programs::sleep`, not re-exported.
-//! - [`sessions`]: session records, Codex rollout chains and report pages.
+//! - [`sessions`]: session records, Codex rollout chains and report pages, and the tool calls the
+//!   hooks report for a session.
 //! - [`screens`]: what an agent's terminal shows at a usage limit.
 //! - [`owner_team`]: an owner with sessions bound to it, for the tests of what is written into
 //!   an owner.

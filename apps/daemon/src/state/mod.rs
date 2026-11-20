@@ -95,6 +95,7 @@ pub use restart_screens::ExactScreen;
 pub use sessions::Deletion;
 pub use sharing_lock::AccountSharingLock;
 pub use stop::{RestartRefusal, StopKind};
+pub use tool_calls::ToolCallActivity;
 pub use turns::{LastReport, TurnClose};
 pub use unlinked::UnlinkedFinished;
 
@@ -323,8 +324,9 @@ pub struct AppState {
     /// in it; see [`background_store`].
     saved_background: background_store::SavedBackground,
     /// The tool calls of each session's current turn its hooks have reported open or waiting on
-    /// the user (`tool_calls`). Held in memory only: they belong to the agent process's turn.
-    /// Dropped with the session's other bookkeeping.
+    /// the user, and when its last open call ended, for the title's cancel watch (`tool_calls`).
+    /// Held in memory only: they belong to the agent process. Dropped with the session's other
+    /// bookkeeping.
     tool_calls: Mutex<HashMap<String, tool_calls::ToolCalls>>,
     /// The effort each session's agent runs it at by itself (`Session::default_effort`), kept by
     /// the record collector for the sessions that have one. Held in memory only: it is read off

@@ -1,8 +1,10 @@
 //! The tool calls of a session's current turn as its hooks report them: the open ones, for telling
-//! which call a permission prompt belongs to, and those waiting on the user, kept so that the end
-//! of another call of the same turn does not lower the hand raised for them.
+//! which call a permission prompt belongs to and whether a tool is running, and those waiting on the
+//! user, kept so that the end of another call of the same turn does not lower the hand raised for
+//! them. When the last open call ended is kept past the turn, for the title's cancel watch.
 
 use std::hash::{Hash, Hasher};
+use std::time::Instant;
 
 use super::AppState;
 use crate::hooks::{CallShape, ToolCallChange};
@@ -15,6 +17,16 @@ pub(super) struct ToolCalls {
     open: Vec<OpenCall>,
     /// The calls waiting on the user, each by its id, or `None` for one whose id is not known.
     waiting: Vec<Option<String>>,
+    /// When the last open call ended, leaving none open.
+    last_closed_at: Option<Instant>,
+}
+
+/// Whether a session has a tool call open, and when its last one ended, for telling a title back at
+/// the prompt from a cancel (`crate::session::turn_reading::TurnReading::settled_at_prompt`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ToolCallActivity {
+    pub open: bool,
+    pub last_closed_at: Option<Instant>,
 }
 
 struct OpenCall {
@@ -60,6 +72,14 @@ fn hash_value(value: &serde_json::Value, hasher: &mut impl Hasher) {
 
 impl ToolCalls {
     fn apply(&mut self, change: ToolCallChange<'_>) {
+        let was_open = !self.open.is_empty();
+        self.apply_change(change);
+        if was_open && self.open.is_empty() {
+            self.last_closed_at = Some(Instant::now());
+        }
+    }
+
+    fn apply_change(&mut self, change: ToolCallChange<'_>) {
         match change {
             ToolCallChange::Started {
                 id,
@@ -142,10 +162,24 @@ impl AppState {
         let session = calls.entry(id.to_string()).or_default();
         session.apply(change);
         let waiting = !session.waiting.is_empty();
-        if !waiting && session.open.is_empty() {
+        // Kept once empty while it remembers when its last call ended; dropped with the session's
+        // other bookkeeping.
+        if !waiting && session.open.is_empty() && session.last_closed_at.is_none() {
             calls.remove(id);
         }
         waiting
+    }
+
+    /// Whether session `id` has a tool call open, and when its last one ended.
+    pub fn tool_call_activity(&self, id: &str) -> ToolCallActivity {
+        let calls = self.tool_calls.lock().expect("tool call lock poisoned");
+        calls
+            .get(id)
+            .map(|session| ToolCallActivity {
+                open: !session.open.is_empty(),
+                last_closed_at: session.last_closed_at,
+            })
+            .unwrap_or_default()
     }
 }
 
@@ -472,5 +506,162 @@ mod tests {
         assert!(state.apply_tool_call_change("s", question("q", &input)));
         state.forget_session_bookkeeping("s");
         assert!(!state.apply_tool_call_change("s", ended("a")));
+    }
+
+    fn bash() -> serde_json::Value {
+        json!({"command": "ls"})
+    }
+
+    /// A session nothing is known of has no call open and none that ended.
+    #[test]
+    fn an_unknown_session_has_no_tool_call_activity() {
+        let (state, _dir) = app_state("tool-calls-activity-unknown");
+        assert_eq!(state.tool_call_activity("s"), ToolCallActivity::default());
+    }
+
+    /// A call is open from its start to its end, and its end is stamped when it leaves none open.
+    #[test]
+    fn a_call_is_open_from_its_start_until_its_end() {
+        let (state, _dir) = app_state("tool-calls-activity-open");
+        let input = bash();
+        state.apply_tool_call_change("s", started("a", "Bash", &input));
+        let activity = state.tool_call_activity("s");
+        assert!(activity.open);
+        assert_eq!(activity.last_closed_at, None, "nothing has ended yet");
+
+        let before = Instant::now();
+        state.apply_tool_call_change("s", ended("a"));
+        let activity = state.tool_call_activity("s");
+        assert!(!activity.open);
+        let closed = activity.last_closed_at.expect("the end is stamped");
+        assert!(closed >= before && closed <= Instant::now());
+    }
+
+    /// The end of one of several calls leaves the session with a call open and stamps nothing; only
+    /// the end of the last does.
+    #[test]
+    fn the_session_stays_open_until_its_last_call_ends() {
+        let (state, _dir) = app_state("tool-calls-activity-two");
+        let input = bash();
+        state.apply_tool_call_change("s", started("a", "Bash", &input));
+        state.apply_tool_call_change("s", started("b", "Bash", &input));
+        state.apply_tool_call_change("s", ended("a"));
+        let activity = state.tool_call_activity("s");
+        assert!(activity.open);
+        assert_eq!(activity.last_closed_at, None);
+        state.apply_tool_call_change("s", ended("b"));
+        let activity = state.tool_call_activity("s");
+        assert!(!activity.open);
+        assert!(activity.last_closed_at.is_some());
+    }
+
+    /// The end of the turn while calls are open closes them, and is stamped as their end.
+    #[test]
+    fn the_end_of_all_calls_while_some_are_open_is_stamped() {
+        let (state, _dir) = app_state("tool-calls-activity-all-ended");
+        let input = bash();
+        state.apply_tool_call_change("s", started("a", "Bash", &input));
+        state.apply_tool_call_change("s", started("b", "Bash", &input));
+        state.apply_tool_call_change("s", ToolCallChange::AllEnded);
+        let activity = state.tool_call_activity("s");
+        assert!(!activity.open);
+        assert!(activity.last_closed_at.is_some());
+    }
+
+    /// Ends that close nothing, because no call was open, stamp nothing.
+    #[test]
+    fn an_end_with_no_call_open_stamps_nothing() {
+        let (state, _dir) = app_state("tool-calls-activity-nothing-open");
+        state.apply_tool_call_change("s", ToolCallChange::AllEnded);
+        state.apply_tool_call_change("s", ended("never-started"));
+        state.apply_tool_call_change("s", ToolCallChange::Ended { id: None });
+        assert_eq!(state.tool_call_activity("s"), ToolCallActivity::default());
+    }
+
+    /// A call whose event named no id cannot be told apart from the others, so it is not counted
+    /// as open.
+    #[test]
+    fn a_call_started_without_an_id_is_not_open() {
+        let (state, _dir) = app_state("tool-calls-activity-no-id");
+        let input = bash();
+        state.apply_tool_call_change(
+            "s",
+            ToolCallChange::Started {
+                id: None,
+                call: CallShape {
+                    tool: Some("Bash"),
+                    input: Some(&input),
+                },
+                waits_on_user: false,
+            },
+        );
+        assert_eq!(state.tool_call_activity("s"), ToolCallActivity::default());
+    }
+
+    /// The stamp is kept after the entry is empty, through a later call, and moves on with the next
+    /// end.
+    #[test]
+    fn the_stamp_outlives_an_empty_entry_and_a_later_call() {
+        let (state, _dir) = app_state("tool-calls-activity-kept");
+        let input = bash();
+        state.apply_tool_call_change("s", started("a", "Bash", &input));
+        state.apply_tool_call_change("s", ended("a"));
+        let first = state
+            .tool_call_activity("s")
+            .last_closed_at
+            .expect("stamped");
+
+        state.apply_tool_call_change("s", started("b", "Bash", &input));
+        assert!(state.tool_call_activity("s").open);
+        let before = Instant::now();
+        state.apply_tool_call_change("s", ended("b"));
+        let second = state
+            .tool_call_activity("s")
+            .last_closed_at
+            .expect("stamped");
+        assert!(second >= first);
+        assert!(second >= before, "the second end moved the stamp");
+    }
+
+    /// Calls open for one session say nothing of another's activity.
+    #[test]
+    fn tool_call_activity_is_kept_per_session() {
+        let (state, _dir) = app_state("tool-calls-activity-sessions");
+        let input = bash();
+        state.apply_tool_call_change("one", started("a", "Bash", &input));
+        assert!(state.tool_call_activity("one").open);
+        assert_eq!(state.tool_call_activity("two"), ToolCallActivity::default());
+    }
+
+    /// The hand's answer is unchanged by the stamp: it reads nothing after the last call is gone.
+    #[test]
+    fn a_stamped_empty_entry_raises_no_hand() {
+        let (state, _dir) = app_state("tool-calls-activity-no-hand");
+        let input = bash();
+        state.apply_tool_call_change("s", started("a", "Bash", &input));
+        state.apply_tool_call_change("s", ended("a"));
+        assert!(!state.apply_tool_call_change("s", ended("a")));
+        assert!(!state.apply_tool_call_change("s", ToolCallChange::AllEnded));
+    }
+
+    /// What a session's calls left, the open ones and the stamp, goes with its bookkeeping.
+    #[test]
+    fn the_activity_of_a_session_is_forgotten_with_its_bookkeeping() {
+        let (state, _dir) = app_state("tool-calls-activity-forget");
+        let input = bash();
+        state.apply_tool_call_change("open", started("a", "Bash", &input));
+        state.apply_tool_call_change("closed", started("a", "Bash", &input));
+        state.apply_tool_call_change("closed", ended("a"));
+        assert!(state.tool_call_activity("closed").last_closed_at.is_some());
+        state.forget_session_bookkeeping("open");
+        state.forget_session_bookkeeping("closed");
+        assert_eq!(
+            state.tool_call_activity("open"),
+            ToolCallActivity::default()
+        );
+        assert_eq!(
+            state.tool_call_activity("closed"),
+            ToolCallActivity::default()
+        );
     }
 }
