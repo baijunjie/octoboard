@@ -52,6 +52,7 @@ pub(crate) mod closed_port;
 pub(crate) mod fixture;
 pub(crate) mod git;
 pub(crate) mod owner_team;
+pub(crate) mod port_probe;
 pub(crate) mod processes;
 pub(crate) mod programs;
 #[cfg(unix)]
@@ -66,6 +67,7 @@ pub(crate) use background::Background;
 pub(crate) use clock::*;
 pub(crate) use closed_port::ClosedPort;
 pub(crate) use git::*;
+pub(crate) use port_probe::{is_port_probe, probe_port};
 pub(crate) use processes::*;
 pub(crate) use scratch::*;
 pub(crate) use sessions::*;

@@ -694,7 +694,7 @@ mod tests {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
         let port = listener.local_addr().unwrap().port();
         let served = std::thread::spawn(move || {
-            // A probe of the port (`background::tests::is_probe`) is answered and left out.
+            // A probe of the port (`test_support::is_port_probe`) is answered and left out.
             let (mut reader, request_line, body) = accept_request(&listener);
             reader
                 .get_mut()

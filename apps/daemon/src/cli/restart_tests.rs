@@ -12,7 +12,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use super::background::tests::{answer_once, probe, read_request, NOT_FOUND};
+use super::background::tests::{answer_once, read_request, NOT_FOUND};
 use super::background::Proceed;
 use super::background_tests::{command, finished, in_home, said, Renewal, StandIn};
 use crate::owner_record::{Owner, Predecessor};
@@ -69,7 +69,7 @@ fn restart_asked_child() {
 
 /// Whether `request_line` is one of the calls `restart` makes of the daemon: a `POST` to
 /// `/restart-check` or `/restart`. Anything else that reaches a stand-in, such as the `HEAD /` a
-/// running Octoboard daemon probes a session's ports with (`background::tests::is_probe`), is
+/// running Octoboard daemon probes a session's ports with (`test_support::is_port_probe`), is
 /// not one.
 fn is_restart_call(request_line: &str) -> bool {
     let mut parts = request_line.split_whitespace();
@@ -119,8 +119,9 @@ impl HttpDaemon {
                         continue;
                     };
                     if !is_restart_call(&request_line) {
-                        // A probe of the port (`is_probe`), or anything else the command does
-                        // not send: answered plainly, and not counted as asked of the daemon.
+                        // A probe of the port (`test_support::is_port_probe`), or anything else
+                        // the command does not send: answered plainly, and not counted as asked
+                        // of the daemon.
                         reader.get_mut().write_all(NOT_FOUND.as_bytes()).ok();
                         continue;
                     }
@@ -241,7 +242,10 @@ fn restart_refused() -> (&'static str, &'static str, String) {
 #[test]
 fn the_stand_in_counts_only_the_calls_restart_makes() {
     let daemon = HttpDaemon::start(&[restart_refused()]);
-    assert_eq!(probe(daemon.port), "HTTP/1.1 404 Not Found");
+    assert_eq!(
+        crate::test_support::probe_port(daemon.port),
+        "HTTP/1.1 404 Not Found"
+    );
     assert!(daemon.paths().is_empty(), "{:?}", daemon.paths());
     assert!(is_restart_call(&format!(
         "POST /restart-check?key={TEST_KEY} HTTP/1.1"

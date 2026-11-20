@@ -8,10 +8,8 @@
 //! `cli::key_source_tests`.
 
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{TcpListener, TcpStream};
-use std::sync::mpsc::{channel, Sender};
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
+use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 
 use crate::owner_record::Owner;
@@ -31,62 +29,89 @@ enum Answer {
     Silent,
 }
 
+/// The request line [`StandIn::finish`] sends to end the server.
+const FINISH: &str = "FINISH";
+
 /// A loopback server that records the request line of every request it reads, and answers them all
 /// the same way, until it is finished.
+///
+/// It reads one connection at a time, each read bounded by [`PATIENCE`], and never blocks on
+/// anything but the next connection or the read of it: a silent answer keeps the connection open
+/// instead of holding the loop, so whatever else connects, the request [`StandIn::finish`] sends is
+/// read in turn and ends the server. Probes of the port (`test_support::is_port_probe`) are
+/// answered plainly and not recorded; each stand-in is probed once as it starts.
 struct StandIn {
     port: u16,
-    seen: Arc<Mutex<Vec<String>>>,
-    release: Sender<()>,
-    thread: JoinHandle<()>,
+    seen: Receiver<Vec<String>>,
 }
 
 impl StandIn {
     fn start(answer: Answer) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        let seen = Arc::new(Mutex::new(Vec::new()));
-        let (release, released) = channel::<()>();
-        let record = seen.clone();
-        let thread = std::thread::spawn(move || loop {
-            let (stream, _) = listener.accept().unwrap();
-            // A connection that sends nothing is the one that ends the server.
-            let Some(line) = read_request(&stream) else {
-                return;
-            };
-            record.lock().unwrap().push(line);
-            match answer {
-                Answer::Status(status) => {
-                    let reply = format!(
-                        "HTTP/1.1 {status}\r\nContent-Length: 6\r\nConnection: close\r\n\r\nanswer"
-                    );
-                    let _ = (&stream).write_all(reply.as_bytes());
+        let (done, seen) = channel();
+        std::thread::spawn(move || {
+            let mut record = Vec::new();
+            // The connections of silent answers, held open until the server ends.
+            let mut held = Vec::new();
+            loop {
+                let (stream, _) = listener.accept().expect("a connection");
+                stream.set_read_timeout(Some(PATIENCE)).unwrap();
+                stream.set_write_timeout(Some(PATIENCE)).unwrap();
+                // A connection that sends no request in time is not one the test made.
+                let Some(line) = read_request(&stream) else {
+                    continue;
+                };
+                if line == FINISH {
+                    let _ = done.send(record);
+                    return;
                 }
-                // Held until the test is over: the caller's deadline is what ends its wait.
-                Answer::Silent => {
-                    let _ = released.recv();
+                if crate::test_support::is_port_probe(&line) {
+                    let _ = (&stream).write_all(
+                        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    );
+                    continue;
+                }
+                record.push(line);
+                match answer {
+                    Answer::Status(status) => {
+                        let reply = format!(
+                            "HTTP/1.1 {status}\r\nContent-Length: 6\r\nConnection: close\r\n\r\nanswer"
+                        );
+                        let _ = (&stream).write_all(reply.as_bytes());
+                    }
+                    // The caller's deadline is what ends its wait.
+                    Answer::Silent => held.push(stream),
                 }
             }
         });
-        Self {
-            port,
-            seen,
-            release,
-            thread,
-        }
+        // Probed before the test uses it, as a running daemon may probe it at any point.
+        assert_eq!(
+            crate::test_support::probe_port(port),
+            "HTTP/1.1 404 Not Found"
+        );
+        Self { port, seen }
     }
 
-    /// The request lines that reached it, once everything that was going to has.
+    /// The request lines that reached it, once everything that was going to has: the connections
+    /// made before this one are read before it.
     fn finish(self) -> Vec<String> {
-        let _ = self.release.send(());
-        drop(TcpStream::connect(("127.0.0.1", self.port)).unwrap());
-        self.thread.join().unwrap();
-        let seen = self.seen.lock().unwrap().clone();
-        seen
+        let address = SocketAddr::from(([127, 0, 0, 1], self.port));
+        let mut stream = TcpStream::connect_timeout(&address, PATIENCE).unwrap();
+        stream.set_write_timeout(Some(PATIENCE)).unwrap();
+        stream
+            .write_all(format!("{FINISH}\r\n\r\n").as_bytes())
+            .unwrap();
+        // Each connection ahead of this one takes at most `PATIENCE` to read; the probe's or the
+        // route's own close well before that.
+        self.seen
+            .recv_timeout(PATIENCE * 2)
+            .expect("the stand-in read the request that ends it")
     }
 }
 
 /// The request line of the request on `stream`, its headers and body read; `None` for a connection
-/// closed without one.
+/// closed or gone quiet without one.
 fn read_request(stream: &TcpStream) -> Option<String> {
     let mut reader = BufReader::new(stream);
     let mut line = String::new();

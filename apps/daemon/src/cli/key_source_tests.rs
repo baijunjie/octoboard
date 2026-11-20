@@ -71,13 +71,14 @@ impl StandInDaemon {
             let mut received = Vec::new();
             loop {
                 let (stream, _) = listener.accept().unwrap();
+                stream.set_read_timeout(Some(PATIENCE)).unwrap();
                 // A connection that sends nothing is the one that ends the server.
                 let Some(request) = read_request(&stream) else {
                     return received;
                 };
                 // The `HEAD /` a running Octoboard daemon probes a session's ports with
                 // (`crate::processes::web_ports`), which no helper sends, is answered and left out.
-                let probe = crate::cli::background::tests::is_probe(&request.line);
+                let probe = crate::test_support::is_port_probe(&request.line);
                 let refused = !request.line.contains(&format!("?key={key} "));
                 let (status, body) = if refused {
                     ("401 Unauthorized", "")
@@ -94,6 +95,11 @@ impl StandInDaemon {
                 }
             }
         });
+        // Probed before the test uses it, as a running daemon may probe it at any point.
+        assert_eq!(
+            crate::test_support::probe_port(port),
+            "HTTP/1.1 401 Unauthorized"
+        );
         Self { port, thread }
     }
 
@@ -574,7 +580,11 @@ fn a_helper_given_a_data_directory_reads_the_daemons_records_there_and_not_under
             text(&output.stderr)
         );
         let requests = named.finish();
-        assert_eq!(requests.len(), 1, "{mode}");
+        let seen: Vec<(&str, &str)> = requests
+            .iter()
+            .map(|r| (r.line.as_str(), r.body.as_str()))
+            .collect();
+        assert_eq!(requests.len(), 1, "{mode}: {seen:?}");
         assert!(
             requests[0].line.contains(&format!("?key={DAEMON_KEY} ")),
             "{mode}: {}",

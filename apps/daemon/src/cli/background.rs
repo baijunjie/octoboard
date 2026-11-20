@@ -1080,17 +1080,9 @@ pub(super) mod tests {
         Some((request_line, body))
     }
 
-    /// Whether `request_line` is a probe a test's loopback stand-in did not ask for: the `HEAD /`
-    /// a running Octoboard daemon sends to the listening ports of a session's processes, to find
-    /// the ones that serve web pages (`crate::processes::web_ports`), which reaches a stand-in
-    /// whenever the tests run in such a session. No command line request is a `HEAD`.
-    pub(in crate::cli) fn is_probe(request_line: &str) -> bool {
-        request_line.starts_with("HEAD ")
-    }
-
-    /// The first request on `listener` that is not a probe ([`is_probe`]), each probe before it
-    /// answered with a plain `404` and left out: the reader its answer is written to, its request
-    /// line and its body.
+    /// The first request on `listener` that is not a probe
+    /// ([`crate::test_support::is_port_probe`]), each probe before it answered with a plain `404`
+    /// and left out: the reader its answer is written to, its request line and its body.
     pub(in crate::cli) fn accept_request(
         listener: &TcpListener,
     ) -> (BufReader<std::net::TcpStream>, String, Vec<u8>) {
@@ -1101,7 +1093,7 @@ pub(super) mod tests {
             let Some((request_line, body)) = read_request(&mut reader) else {
                 continue;
             };
-            if is_probe(&request_line) {
+            if crate::test_support::is_port_probe(&request_line) {
                 reader.get_mut().write_all(NOT_FOUND.as_bytes()).ok();
                 continue;
             }
@@ -1114,7 +1106,8 @@ pub(super) mod tests {
         "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 
     /// Answers one request with `response`, and gives its request line (through the first line
-    /// of the head) back through the handle. Probes are answered and left out ([`is_probe`]).
+    /// of the head) back through the handle. Probes are answered and left out
+    /// ([`crate::test_support::is_port_probe`]).
     pub(in crate::cli) fn answer_once(
         response: impl Into<String>,
     ) -> (u16, std::thread::JoinHandle<String>) {
@@ -1132,24 +1125,14 @@ pub(super) mod tests {
         (port, served)
     }
 
-    /// Sends the probe a running Octoboard daemon sends a session's listening ports to `port`, and
-    /// gives the status line of its answer.
-    pub(in crate::cli) fn probe(port: u16) -> String {
-        let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).expect("the port");
-        stream.set_read_timeout(Some(PATIENCE)).unwrap();
-        stream
-            .write_all(b"HEAD / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Octoboard\r\n\r\n")
-            .unwrap();
-        let mut status = String::new();
-        BufReader::new(stream).read_line(&mut status).unwrap();
-        status.trim_end().to_owned()
-    }
-
     /// A probe of the port before the request is answered plainly and is not the request served.
     #[test]
     fn a_probe_before_the_request_is_answered_and_left_out() {
         let (port, served) = answer_once("HTTP/1.1 202 Accepted\r\nConnection: close\r\n\r\n");
-        assert_eq!(probe(port), "HTTP/1.1 404 Not Found");
+        assert_eq!(
+            crate::test_support::probe_port(port),
+            "HTTP/1.1 404 Not Found"
+        );
         let asked = request_over_loopback(&owner_on(port), KEY, "/shutdown").unwrap();
         assert!(matches!(asked, Asked::Accepted), "{asked:?}");
         assert_eq!(
