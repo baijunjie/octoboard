@@ -3112,6 +3112,7 @@ export const zhTW: Translation<"other"> = {
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "無法開啟更新",
   "settings.remoteAccess.remoteLogin.label": "遠端登入",
   "settings.remoteAccess.remoteLogin.description": "另一台電腦的 App 和瀏覽器都透過 SSH 登入這台電腦，{osName} 稱之為 {remoteLogin}。",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "從另一台電腦透過 App 或瀏覽器連線到這台電腦時，需要使用 SSH。",
   "settings.remoteAccess.remoteLogin.on": "已開啟",
   "settings.remoteAccess.remoteLogin.off": "已關閉。請在 {systemSettings} 中開啟：依序選擇 {path}，然後開啟 {remoteLogin}。",
   "settings.remoteAccess.remoteLogin.unknown": "本應用程式無法判斷它是否已開啟。請在 {systemSettings} 中查看：依序選擇 {path}。",

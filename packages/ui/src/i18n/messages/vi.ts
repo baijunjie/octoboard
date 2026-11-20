@@ -2945,6 +2945,7 @@ export const vi: Translation<"other"> = {
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "Không mở được Cập nhật",
   "settings.remoteAccess.remoteLogin.label": "Đăng nhập từ xa",
   "settings.remoteAccess.remoteLogin.description": "Cả ứng dụng của máy tính khác lẫn trình duyệt đều đăng nhập vào máy này qua SSH, mà {osName} gọi là {remoteLogin}.",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "Để truy cập máy tính này từ ứng dụng hoặc trình duyệt trên máy khác, cần có kết nối SSH.",
   "settings.remoteAccess.remoteLogin.on": "Bật",
   "settings.remoteAccess.remoteLogin.off": "Tắt. Bật trong {systemSettings}: đi tới {path}, rồi bật {remoteLogin}.",
   "settings.remoteAccess.remoteLogin.unknown": "Ứng dụng không xác định được liệu tính năng này có bật hay không. Hãy kiểm tra trong {systemSettings}: đi tới {path}.",

@@ -3112,6 +3112,7 @@ export const ko: Translation<"other"> = {
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "업데이트를 열 수 없습니다",
   "settings.remoteAccess.remoteLogin.label": "원격 로그인",
   "settings.remoteAccess.remoteLogin.description": "다른 컴퓨터의 앱과 브라우저 모두 SSH로 이 컴퓨터에 로그인하며, {osName}에서는 이를 {remoteLogin}(이)라고 합니다.",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "다른 컴퓨터의 앱이나 브라우저에서 접속하려면 이 컴퓨터에 SSH로 연결해야 합니다.",
   "settings.remoteAccess.remoteLogin.on": "켬",
   "settings.remoteAccess.remoteLogin.off": "꺼짐. {systemSettings}에서 켜 주세요. {path} 순서로 선택한 다음 {remoteLogin}을(를) 켭니다.",
   "settings.remoteAccess.remoteLogin.unknown": "앱에서 원격 로그인이 켜져 있는지 확인하지 못했습니다. {systemSettings}에서 확인해 주세요. {path} 순서로 선택합니다.",

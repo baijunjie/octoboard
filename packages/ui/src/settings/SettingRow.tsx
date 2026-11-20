@@ -30,6 +30,7 @@ export function SettingRow({
   searchId,
   label,
   help,
+  status,
   description,
   children,
   below,
@@ -40,6 +41,7 @@ export function SettingRow({
   searchId?: SettingsSearchId;
   label: React.ReactNode;
   help?: React.ReactNode;
+  status?: React.ReactNode;
   description?: React.ReactNode;
   children?: React.ReactNode;
   below?: React.ReactNode;
@@ -61,6 +63,7 @@ export function SettingRow({
             <div className="min-w-0">{label}</div>
             {help && <MarkLineBox size="text-sm">{help}</MarkLineBox>}
           </div>
+          {status && <div className="text-sm text-app-muted">{status}</div>}
           {description && <div data-setting-description="" className="text-sm text-app-muted">{description}</div>}
         </div>
         {/* A row whose controls all render nothing (`false`) draws no empty box taking the gap. */}

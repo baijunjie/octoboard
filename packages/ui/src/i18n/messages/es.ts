@@ -2946,6 +2946,7 @@ export const es: Translation<"one" | "many" | "other"> = {
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "No se pudo abrir Actualizaciones",
   "settings.remoteAccess.remoteLogin.label": "Acceso remoto",
   "settings.remoteAccess.remoteLogin.description": "Tanto la app de otro equipo como un navegador inician sesión en este por SSH, lo que {osName} llama {remoteLogin}.",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "Para acceder a este equipo desde otro ordenador mediante la aplicación o el navegador, necesitas una conexión SSH.",
   "settings.remoteAccess.remoteLogin.on": "Activado",
   "settings.remoteAccess.remoteLogin.off": "Desactivado. Actívalo en {systemSettings}: ve a {path} y activa {remoteLogin}.",
   "settings.remoteAccess.remoteLogin.unknown": "La aplicación no pudo saber si está activado. Compruébalo en {systemSettings}: ve a {path}.",

@@ -19,9 +19,9 @@ served, the way in the owner wants.
 
 ## The SSH server
 
-The first row says whether this computer's SSH server is on, since both ways in log in through it: **Remote Login** on
-macOS, **OpenSSH Server** on Windows. Its description says that both another computer's application and a browser log in
-to this computer over SSH, which the system calls by that name.
+The first row shows the status of this computer's SSH server, **Remote Login** on macOS and **OpenSSH Server** on
+Windows. Its description explains that access from another computer through the application or a browser requires an
+SSH connection. When the server is off or its status is unknown, the status and directions appear above the description.
 
 - **On** (on Windows, running): a badge saying so.
 - **Off** (on Windows, not running or not installed): a line saying how to turn it on in the system's settings — on

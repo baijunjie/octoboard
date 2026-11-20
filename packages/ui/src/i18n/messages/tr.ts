@@ -3192,6 +3192,7 @@ export const tr: Translation<"one" | "other"> = {
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "Güncellemeler açılamadı",
   "settings.remoteAccess.remoteLogin.label": "Uzaktan Oturum Açma",
   "settings.remoteAccess.remoteLogin.description": "Hem başka bir bilgisayarın uygulaması hem de bir tarayıcı bu bilgisayarda SSH ile oturum açar; {osName} bunu {remoteLogin} olarak adlandırır.",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "Başka bir bilgisayardaki uygulama veya tarayıcı üzerinden erişim için bu bilgisayara SSH bağlantısı gerekir.",
   "settings.remoteAccess.remoteLogin.on": "Açık",
   "settings.remoteAccess.remoteLogin.off": "Kapalı. {systemSettings} içinde açın: {path} yolunu izleyin, ardından {remoteLogin} seçeneğini açın.",
   "settings.remoteAccess.remoteLogin.unknown": "Uygulama açık olup olmadığını belirleyemedi. {systemSettings} içinde kontrol edin: {path} yolunu izleyin.",

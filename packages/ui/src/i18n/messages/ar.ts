@@ -2946,6 +2946,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "تعذّر فتح التحديثات",
   "settings.remoteAccess.remoteLogin.label": "تسجيل الدخول عن بُعد",
   "settings.remoteAccess.remoteLogin.description": "يسجّل كل من تطبيق جهاز آخر والمتصفح الدخول إلى هذا الجهاز عبر SSH، وهو ما يسميه {osName} {remoteLogin}.",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "يحتاج الوصول إلى هذا الكمبيوتر من جهاز آخر عبر التطبيق أو المتصفح إلى اتصال SSH.",
   "settings.remoteAccess.remoteLogin.on": "قيد التشغيل",
   "settings.remoteAccess.remoteLogin.off": "متوقف. شغّله في {systemSettings}: انتقل إلى {path}، ثم فعّل {remoteLogin}.",
   "settings.remoteAccess.remoteLogin.unknown": "لم يستطع التطبيق معرفة ما إذا كان مفعّلًا. تحقق في {systemSettings}: انتقل إلى {path}.",

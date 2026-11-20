@@ -211,7 +211,10 @@ it("shows Remote Login on, or off with the way to System Settings", async () => 
 
   loginStatus.mockResolvedValue(false);
   const off = await mount(SERVING);
-  expect(off.container.textContent).toContain("go to General > Sharing, then turn on Remote Login");
+  const offRow = off.container.querySelector("[data-settings-search-id='remote-access.remote-login']")!;
+  expect(offRow.textContent).toMatch(/^Remote Login\s*Off\..*go to General > Sharing, then turn on Remote Login\./s);
+  expect(offRow.textContent).toContain("Access from another computer through the app or a browser requires an SSH connection to this computer.");
+  expect(offRow.textContent).not.toContain("macOS");
   await act(async () => buttonNamed(off.container, "Open System Settings")!.click());
   expect(openLoginSettings).toHaveBeenCalled();
 });

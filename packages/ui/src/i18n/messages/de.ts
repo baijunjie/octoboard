@@ -2979,6 +2979,7 @@ export const de: Translation<"one" | "other"> = {
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "Updates konnten nicht geöffnet werden",
   "settings.remoteAccess.remoteLogin.label": "Entfernte Anmeldung",
   "settings.remoteAccess.remoteLogin.description": "Sowohl die App eines anderen Computers als auch ein Browser melden sich per SSH an diesem an, was {osName} als {remoteLogin} bezeichnet.",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "Für den Zugriff von einem anderen Computer per App oder Browser ist eine SSH-Verbindung zu diesem Computer erforderlich.",
   "settings.remoteAccess.remoteLogin.on": "Ein",
   "settings.remoteAccess.remoteLogin.off": "Aus. Schalte sie in den {systemSettings} ein: Gehe zu {path} und aktiviere {remoteLogin}.",
   "settings.remoteAccess.remoteLogin.unknown": "Die App konnte nicht feststellen, ob sie eingeschaltet ist. Prüfe es in den {systemSettings}: Gehe zu {path}.",

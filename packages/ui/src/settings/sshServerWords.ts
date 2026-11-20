@@ -24,7 +24,7 @@ export const SSH_SERVER_NAMES = {
 const WORDS = {
   macos: {
     label: "settings.remoteAccess.remoteLogin.label",
-    description: "settings.remoteAccess.remoteLogin.description",
+    description: "settings.remoteAccess.remoteLogin.accessRequirement",
     off: "settings.remoteAccess.remoteLogin.off",
     unknown: "settings.remoteAccess.remoteLogin.unknown",
     openFailed: "settings.remoteAccess.remoteLogin.openFailed",

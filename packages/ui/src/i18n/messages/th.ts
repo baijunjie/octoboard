@@ -3110,6 +3110,7 @@ export const th: Translation<"other"> = {
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "เปิดอัปเดตไม่ได้",
   "settings.remoteAccess.remoteLogin.label": "การเข้าสู่ระบบระยะไกล",
   "settings.remoteAccess.remoteLogin.description": "ทั้งแอปของคอมพิวเตอร์อีกเครื่องและเบราว์เซอร์เข้าสู่ระบบเครื่องนี้ผ่าน SSH ซึ่ง {osName} เรียกว่า{remoteLogin}",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "การเข้าถึงคอมพิวเตอร์เครื่องนี้จากเครื่องอื่นผ่านแอปหรือเบราว์เซอร์ต้องใช้การเชื่อมต่อ SSH",
   "settings.remoteAccess.remoteLogin.on": "เปิด",
   "settings.remoteAccess.remoteLogin.off": "ปิดอยู่ เปิดได้ใน {systemSettings}: ไปที่ {path} แล้วเปิด {remoteLogin}",
   "settings.remoteAccess.remoteLogin.unknown": "แอปตรวจไม่ได้ว่าเปิดอยู่หรือไม่ ตรวจสอบได้ใน {systemSettings}: ไปที่ {path}",

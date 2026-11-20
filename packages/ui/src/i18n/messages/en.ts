@@ -3419,6 +3419,7 @@ export const en = {
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "Could not open Updates",
   "settings.remoteAccess.remoteLogin.label": "Remote Login",
   "settings.remoteAccess.remoteLogin.description": "Both another computer's app and a browser log in to this one over SSH, which {osName} calls {remoteLogin}.",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "Access from another computer through the app or a browser requires an SSH connection to this computer.",
   "settings.remoteAccess.remoteLogin.on": "On",
   "settings.remoteAccess.remoteLogin.off": "Off. Switch it on in {systemSettings}: go to {path}, then turn on {remoteLogin}.",
   "settings.remoteAccess.remoteLogin.unknown": "The app could not tell whether it is on. Check in {systemSettings}: go to {path}.",

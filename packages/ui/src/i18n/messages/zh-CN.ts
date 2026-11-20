@@ -3196,6 +3196,7 @@ export const zhCN: Translation<"other"> = {
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "无法打开更新",
   "settings.remoteAccess.remoteLogin.label": "远程登录",
   "settings.remoteAccess.remoteLogin.description": "另一台电脑的应用和浏览器都通过 SSH 登录这台电脑，{osName} 把它称为 {remoteLogin}。",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "从另一台电脑通过应用或浏览器访问这台电脑，需要建立 SSH 连接。",
   "settings.remoteAccess.remoteLogin.on": "已开启",
   "settings.remoteAccess.remoteLogin.off": "已关闭。请在 {systemSettings} 中开启：依次选择 {path}，然后打开 {remoteLogin}。",
   "settings.remoteAccess.remoteLogin.unknown": "本应用无法判断它是否已开启。请在 {systemSettings} 中查看：依次选择 {path}。",

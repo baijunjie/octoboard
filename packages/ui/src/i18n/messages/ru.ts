@@ -2946,6 +2946,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "Не удалось открыть обновления",
   "settings.remoteAccess.remoteLogin.label": "Удалённый вход",
   "settings.remoteAccess.remoteLogin.description": "И приложение другого компьютера, и браузер входят на этот компьютер по SSH, что {osName} называет {remoteLogin}.",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "Для доступа к этому компьютеру с другого компьютера через приложение или браузер требуется подключение по SSH.",
   "settings.remoteAccess.remoteLogin.on": "Включён",
   "settings.remoteAccess.remoteLogin.off": "Выключен. Включите его в {systemSettingsIn}: перейдите в {path} и включите {remoteLogin}.",
   "settings.remoteAccess.remoteLogin.unknown": "Приложению не удалось определить, включён ли он. Проверьте в {systemSettingsIn}: перейдите в {path}.",

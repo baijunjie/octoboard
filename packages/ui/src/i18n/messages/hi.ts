@@ -2945,6 +2945,7 @@ export const hi: Translation<"one" | "other"> = {
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "अपडेट नहीं खुल सका",
   "settings.remoteAccess.remoteLogin.label": "Remote Login",
   "settings.remoteAccess.remoteLogin.description": "दूसरे कंप्यूटर का ऐप और ब्राउज़र, दोनों SSH से इस कंप्यूटर में लॉग इन करते हैं, जिसे {osName} {remoteLogin} कहता है।",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "किसी दूसरे कंप्यूटर के ऐप या ब्राउज़र से इस कंप्यूटर को एक्सेस करने के लिए SSH कनेक्शन चाहिए।",
   "settings.remoteAccess.remoteLogin.on": "चालू",
   "settings.remoteAccess.remoteLogin.off": "बंद। इसे {systemSettings} में चालू करें: {path} पर जाएँ, फिर {remoteLogin} चालू करें।",
   "settings.remoteAccess.remoteLogin.unknown": "ऐप यह नहीं बता सका कि यह चालू है या नहीं। {systemSettings} में जाँचें: {path} पर जाएँ।",

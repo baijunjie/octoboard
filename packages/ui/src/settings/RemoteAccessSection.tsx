@@ -173,16 +173,10 @@ export function RemoteAccessSection(): React.ReactElement {
           compact
           searchId="remote-access.remote-login"
           label={t(sshServer.label)}
-          description={
-            <>
-              <Message id={sshServer.description} params={sshServerNames(chip)} />
-              {/* Where it stands is a line of its own, not part of the searched description; a state on is the badge at
-                  the row's end instead. */}
-              {loginOn !== true && (
-                <span className="block"><Message id={loginOn === false ? sshServer.off : sshServer.unknown} params={sshParams(loginOn === false ? "off" : "unknown", true)} /></span>
-              )}
-            </>
-          }
+          status={loginOn !== true && (
+            <Message id={loginOn === false ? sshServer.off : sshServer.unknown} params={sshParams(loginOn === false ? "off" : "unknown", true)} />
+          )}
+          description={<Message id={sshServer.description} params={sshServerNames(chip)} />}
         >
           {loginOn === true ? (
             <StatusBadge size="lg" color="success" variant="soft" separated={false} className="inline-flex items-center gap-1">
@@ -297,8 +291,7 @@ export function RemoteAccessSection(): React.ReactElement {
           </SettingsTabPanel>
         </Tabs>
       )}
-      {/* The state is the row's description too; this says a change of it, made in the system's settings while the
-          user was out of the window or as they come back. Where it cannot be told nothing is said. */}
+      {/* Announce changes made in System Settings when the user returns to the window. */}
       <AttendedStatusAnnouncer text={loginOn === undefined ? undefined : t(loginOn ? sshServer.announcedOn : sshServer.announcedOff)} />
       {confirmingAllow && (
         <ConfirmDialog

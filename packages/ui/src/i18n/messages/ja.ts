@@ -3111,6 +3111,7 @@ export const ja: Translation<"other"> = {
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "アップデートを開けませんでした",
   "settings.remoteAccess.remoteLogin.label": "リモートログイン",
   "settings.remoteAccess.remoteLogin.description": "別のコンピューターのアプリもブラウザも、SSH でこのコンピューターにログインします。{osName} ではこれを {remoteLogin} と呼びます。",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "別のコンピューターのアプリやブラウザからアクセスするには、このコンピューターへの SSH 接続が必要です。",
   "settings.remoteAccess.remoteLogin.on": "オン",
   "settings.remoteAccess.remoteLogin.off": "オフです。{systemSettings} でオンにします。{path} の順に選び、{remoteLogin} をオンにします。",
   "settings.remoteAccess.remoteLogin.unknown": "アプリではオンかどうかを判別できませんでした。{systemSettings} で確認してください。{path} の順に選びます。",

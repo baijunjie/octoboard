@@ -2946,6 +2946,7 @@ export const id: Translation<"other"> = {
   "remoteDaemons.mismatch.goToUpdatesFailedTitle": "Tidak dapat membuka Pembaruan",
   "settings.remoteAccess.remoteLogin.label": "Login Jarak Jauh",
   "settings.remoteAccess.remoteLogin.description": "Baik aplikasi komputer lain maupun browser masuk ke komputer ini melalui SSH, yang disebut {remoteLogin} oleh {osName}.",
+  "settings.remoteAccess.remoteLogin.accessRequirement": "Akses ke komputer ini dari komputer lain melalui aplikasi atau browser memerlukan koneksi SSH.",
   "settings.remoteAccess.remoteLogin.on": "Aktif",
   "settings.remoteAccess.remoteLogin.off": "Nonaktif. Aktifkan di {systemSettings}: buka {path}, lalu aktifkan {remoteLogin}.",
   "settings.remoteAccess.remoteLogin.unknown": "Aplikasi tidak dapat mengetahui apakah ini aktif. Periksa di {systemSettings}: buka {path}.",
