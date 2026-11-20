@@ -354,6 +354,43 @@ mod tests {
     }
 
     #[test]
+    fn no_window_may_show_a_notification_through_the_plugin() {
+        // On macOS the shell hears a notification's click through one delegate, which the plugin's
+        // `notify` would replace for good; a page shows one through `show_notification` alone.
+        let asking = [
+            "notification:allow-is-permission-granted",
+            "notification:allow-request-permission",
+        ];
+        for name in [
+            "default.json",
+            "remote.json",
+            "flyout.json",
+            "remote-window.json",
+        ] {
+            let (_, permissions) = capability(name);
+            for permission in permissions
+                .iter()
+                .filter(|permission| permission.starts_with("notification:"))
+            {
+                assert!(
+                    asking.contains(&permission.as_str()),
+                    "{name}: {permission}"
+                );
+            }
+        }
+        // The UI's permission check needs both commands.
+        for name in ["default.json", "remote.json"] {
+            let (_, permissions) = capability(name);
+            for permission in asking {
+                assert!(
+                    permissions.iter().any(|granted| granted == permission),
+                    "{name}: {permission}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn the_flyout_is_allowed_its_own_commands_alone_and_no_other_window_those() {
         let flyout = reachable("flyout.json");
         let own: std::collections::BTreeSet<String> = [

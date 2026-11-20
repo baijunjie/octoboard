@@ -71,7 +71,8 @@ define_class!(
 /// Sets the delegate that hears the clicks, for the life of the process. Called on the main thread
 /// at setup, before any notification is shown. A notification sent through the notification
 /// plugin's `notify` would replace it with `mac-notification-sys`'s own delegate for good, after
-/// which a click only activates the app, so notifications on macOS go through `show` alone.
+/// which a click only activates the app; the windows' capabilities grant the plugin's permission
+/// query alone, so notifications on macOS go through `show`.
 pub fn install(app: &AppHandle) {
     let delegate = ClickDelegate::alloc().set_ivars(DelegateIvars { app: app.clone() });
     // SAFETY: `NSObject`'s `init` takes no arguments and returns the initialised object.

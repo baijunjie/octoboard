@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "remote",
-  "description": "for the window of a daemon other than the local one: the default permissions, the menu labels, the configuration file dialogs, opening the app's notification settings, its own menu bar icon's menu and whether it shows the computer kept awake, its share of the Dock badge, system notifications marked with the window that raised them, clipboard text, opening a link in the system's browser, native window theming, revealing the window the shell creates hidden, and dragging and zooming it by the UI's own top bar; none of the exit flow (only the local daemon's window quits the application or stops its daemon), the settings the shell keeps, launch at login, the privacy grants, the updater, the system directory picker (the daemon does not share this machine's files)",
+  "description": "for the window of a daemon other than the local one: the default permissions, the menu labels, the configuration file dialogs, opening the app's notification settings, its own menu bar icon's menu and whether it shows the computer kept awake, its share of the Dock badge, system notifications marked with the window that raised them (of the notification plugin, only asking whether notifications are allowed: a page shows a notification through the shell alone, so that on macOS its click still reaches the shell), clipboard text, opening a link in the system's browser, native window theming, revealing the window the shell creates hidden, and dragging and zooming it by the UI's own top bar; none of the exit flow (only the local daemon's window quits the application or stops its daemon), the settings the shell keeps, launch at login, the privacy grants, the updater, the system directory picker (the daemon does not share this machine's files)",
   "windows": [
     "daemon-*"
   ],
@@ -17,7 +17,8 @@
     "allow-tray",
     "allow-badge",
     "allow-show-notification",
-    "notification:default",
+    "notification:allow-is-permission-granted",
+    "notification:allow-request-permission",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-read-text",
     "shell:allow-open"
