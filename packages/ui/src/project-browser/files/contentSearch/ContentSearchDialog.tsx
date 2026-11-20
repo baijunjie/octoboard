@@ -1,6 +1,7 @@
-import { SearchX } from "lucide-react";
+import { ChevronRight, SearchX } from "lucide-react";
 import React, { useId, useRef, useState } from "react";
 
+import { FadeOverflow } from "../../../components/text/FadeOverflow";
 import { DaemonErrorMessage } from "../../../components/alerts/DaemonErrorMessage";
 import { PaneFailure } from "../../../components/alerts/PaneFailure";
 import { StatusAnnouncer } from "../../../components/announce/StatusAnnouncer";
@@ -79,17 +80,20 @@ function selectedOf(result: ContentSearch, chosen: string | null): ContentMatch 
 }
 
 /**
- * The project's Find in files modal: the query, with the Match case, Whole word and Use regular expression toggles in
- * it, then a file mask and the include-ignored toggle; under them the count of matches and files, and the result list,
- * one row per matching line, filled as the daemon streams them (`useContentSearch`). Opened on a `directory`, the search
- * is limited to it, which the modal shows and offers no way to change. Opening a result (Enter, a double click, or
- * Enter in the query for the selected one) calls `onOpen`, whose caller closes the modal and shows the file at its line.
+ * The project's Find in files modal. Under its title, the scope (the project, and the folder after it when opened on a
+ * `directory`, which the modal offers no way to change), with the count of matches and files at the end of that line;
+ * then the query, with the Match case, Whole word and Use regular expression toggles in it, a file mask and the
+ * include-ignored toggle; and under them the result list, one row per matching line, filled as the daemon streams them
+ * (`useContentSearch`). Opening a result (Enter, a double click, or Enter in the query for the selected one) calls
+ * `onOpen`, whose caller closes the modal and shows the file at its line.
  *
  * Under the list, the selected result's file is previewed at its line (`ContentSearchPreview`). At narrow and phone
  * widths the modal fills the screen and holds the list alone.
  */
-export function ContentSearchDialog({ project, directory, query, options, onQueryChange, onOptionsChange, onOpen, onClose }: {
+export function ContentSearchDialog({ project, projectName, directory, query, options, onQueryChange, onOptionsChange, onOpen, onClose }: {
   project: string;
+  /** The project's name, shown as the search's scope. */
+  projectName: string;
   /** The wire path of the directory the search is limited to; the whole project when absent. */
   directory?: string;
   query: string;
@@ -126,21 +130,68 @@ export function ContentSearchDialog({ project, directory, query, options, onQuer
   };
 
   const spoken = result.state === "done" ? endText(t, result) : undefined;
+  // The line keeps its chips on one line for the fade to clip; its tooltip lets them wrap, a path at its slashes.
+  const scope = (wrap: boolean) => (
+    <Message
+      id="contentSearch.scope"
+      params={{
+        scope: (
+          <>
+            <InlineReference dir="auto" wrap={wrap}>{projectName}</InlineReference>
+            {/* A location rather than a run of names, so each part keeps its own chip (the folder the monospace one a
+                path takes), joined as the title bar's breadcrumb is: an exception to one chip per joined run, settled
+                with the user. A screen reader hears a slash where the chevron is drawn. */}
+            {directory !== undefined && (
+              <>
+                <ChevronRight className="mx-0.5 inline size-3 align-middle rtl:-scale-x-100" />
+                <span className="sr-only"> / </span>
+                <InlineReference monospace wrap={wrap}>{displayWirePath(directory)}</InlineReference>
+              </>
+            )}
+          </>
+        ),
+      }}
+    />
+  );
   return (
     <Dialog
       size="viewer"
       fullScreen={fullScreen}
       title={t("contentSearch.title")}
-      subtitle={directory !== undefined ? (
-        <div data-content-search-scope="" className="col-span-full min-w-0 text-xs text-app-muted">
-          <Message id="contentSearch.scope" params={{ directory: <InlineReference monospace wrap>{displayWirePath(directory)}</InlineReference> }} />
+      subtitle={(
+        // The scope at the start, always, so the user knows which project is searched; what the search has found at the
+        // end of the same line, which keeps the fields' row free of a line held empty until results come. The line is
+        // one line of text, whatever it holds: a scope too long for the room the count leaves fades at its end and
+        // shows in full in its tooltip, as the file viewer's subtitle does, so the fields below never move as the count
+        // comes and goes.
+        <div className="col-span-full flex min-w-0 items-center justify-between gap-x-4 text-xs text-app-muted">
+          <div data-content-search-scope="" className="flex min-w-0 flex-1">
+            <FadeOverflow as="span" className="min-w-0" titleWhenClipped={scope(true)}>
+              {scope(false)}
+            </FadeOverflow>
+          </div>
+          {/* The spinner and the incomplete mark stand over the line rather than make it taller. */}
+          <div className="flex h-4 shrink-0 items-center gap-1.5" data-content-search-status="">
+            {found && (found.matches.length > 0 || (found.state === "done" && !found.complete)) ? (
+              // Before the first result the list's place says the search is running; at the end, a search that found
+              // nothing says so there, with the count and the mark kept here only when it is incomplete.
+              <>
+                {found.state === "searching" && <span data-content-search-spinner="" className="flex"><Spinner size="sm" /></span>}
+                <span className="tabular-nums">{countText(t, found)}</span>
+                {found.state === "done" && !found.complete && (
+                  <StatusMark tone="warning" label={t("contentSearch.partial")}>{incompleteDetails(t, found)}</StatusMark>
+                )}
+              </>
+            ) : null}
+          </div>
         </div>
-      ) : undefined}
+      )}
       onClose={onClose}
       footer={null}
     >
-      {/* The top padding is the fields' focus ring's room: the body clips at its top edge, right under the header. */}
-      <div className="flex min-w-0 shrink-0 flex-col gap-2 groove-b px-6 pt-1 pb-3 max-tablet:px-3">
+      {/* The top padding sets the fields apart from the header (it also holds their focus ring, which the body would clip
+          at its top edge). */}
+      <div className="flex min-w-0 shrink-0 flex-col groove-b px-6 pt-4 pb-4 max-tablet:px-3">
         {/* Down and Enter in the query, caught before the field's own handler: keys an input method composes are its own,
             and none of them moves to the list or opens a result. */}
         {/* Lined up at their tops: a refusal under one field leaves the other where it is. */}
@@ -193,19 +244,6 @@ export function ContentSearchDialog({ project, directory, query, options, onQuer
               <RefusalMessage error={invalid?.field === "fileMask" ? invalid.error : undefined} />
             </TextField>
           </div>
-        </div>
-        <div className="flex min-h-5 min-w-0 items-center gap-1.5 text-xs text-app-muted" data-content-search-status="">
-          {found && (found.matches.length > 0 || (found.state === "done" && !found.complete)) ? (
-            // Before the first result the list's place says the search is running; at the end, a search that found
-            // nothing says so there, with the count and the mark kept here only when it is incomplete.
-            <>
-              {found.state === "searching" && <span data-content-search-spinner="" className="flex"><Spinner size="sm" /></span>}
-              <span className="tabular-nums">{countText(t, found)}</span>
-              {found.state === "done" && !found.complete && (
-                <StatusMark tone="warning" label={t("contentSearch.partial")}>{incompleteDetails(t, found)}</StatusMark>
-              )}
-            </>
-          ) : null}
         </div>
       </div>
       {/* A refusal is announced by its field's alert. */}

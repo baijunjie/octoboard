@@ -198,6 +198,7 @@ export function ProjectBrowser({
       {contentSearch.open && (
         <ContentSearchDialog
           project={project.id}
+          projectName={project.name}
           directory={contentSearch.open.directory}
           query={contentSearch.query}
           options={contentSearch.options}

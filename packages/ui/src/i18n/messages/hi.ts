@@ -1277,7 +1277,7 @@ export const hi: Translation<"one" | "other"> = {
   "browser.filter.includeIgnored": "अनदेखी की गई फ़ाइलें शामिल करें",
   "browser.filter.excludeIgnored": "अनदेखी की गई फ़ाइलें छोड़ें",
   "contentSearch.title": "फ़ाइलों में खोजें",
-  "contentSearch.scope": "{directory} में",
+  "contentSearch.scope": "{scope} में",
   "contentSearch.query": "फ़ाइलों की सामग्री में खोजें",
   "contentSearch.fileMask": "फ़ाइल मास्क",
   "contentSearch.fileMask.placeholder": "फ़ाइल मास्क, जैसे {example}",

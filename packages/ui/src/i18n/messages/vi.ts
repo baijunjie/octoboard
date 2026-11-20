@@ -1277,7 +1277,7 @@ export const vi: Translation<"other"> = {
   "browser.filter.includeIgnored": "Bao gồm tệp bị bỏ qua",
   "browser.filter.excludeIgnored": "Loại trừ tệp bị bỏ qua",
   "contentSearch.title": "Tìm nội dung tệp",
-  "contentSearch.scope": "Trong {directory}",
+  "contentSearch.scope": "Trong {scope}",
   "contentSearch.query": "Văn bản cần tìm",
   "contentSearch.fileMask": "Mặt nạ tệp",
   "contentSearch.fileMask.placeholder": "Mặt nạ tệp, ví dụ {example}",

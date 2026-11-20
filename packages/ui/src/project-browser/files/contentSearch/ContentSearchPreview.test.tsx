@@ -53,7 +53,7 @@ async function mount({ narrow = false, read }: { narrow?: boolean; read?: (path:
   function Host() {
     const [query, setQuery] = useState("");
     const [options, setOptions] = useState<ContentSearchOptions>(DEFAULT_CONTENT_SEARCH_OPTIONS);
-    return <ContentSearchDialog project="p" query={query} options={options} onQueryChange={setQuery} onOptionsChange={setOptions} onOpen={() => {}} onClose={() => {}} />;
+    return <ContentSearchDialog project="p" projectName="demo" query={query} options={options} onQueryChange={setQuery} onOptionsChange={setOptions} onOpen={() => {}} onClose={() => {}} />;
   }
   act(() => root.render(<ThemeProvider><DaemonProvider value={fake.daemon}><Host /></DaemonProvider></ThemeProvider>));
   onTestFinished(() => {

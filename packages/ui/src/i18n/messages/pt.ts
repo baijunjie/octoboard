@@ -1277,7 +1277,7 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "browser.filter.includeIgnored": "Incluir arquivos ignorados",
   "browser.filter.excludeIgnored": "Excluir arquivos ignorados",
   "contentSearch.title": "Buscar nos arquivos",
-  "contentSearch.scope": "Em {directory}",
+  "contentSearch.scope": "Em {scope}",
   "contentSearch.query": "Buscar no conteúdo dos arquivos",
   "contentSearch.fileMask": "Máscara de arquivos",
   "contentSearch.fileMask.placeholder": "Máscara de arquivos, por ex., {example}",

@@ -1316,7 +1316,7 @@ export const th: Translation<"other"> = {
   "browser.filter.includeIgnored": "รวมไฟล์ที่ละเว้น",
   "browser.filter.excludeIgnored": "ไม่รวมไฟล์ที่ละเว้น",
   "contentSearch.title": "ค้นหาเนื้อหาไฟล์",
-  "contentSearch.scope": "ใน {directory}",
+  "contentSearch.scope": "ใน {scope}",
   "contentSearch.query": "ข้อความที่จะค้นหา",
   "contentSearch.fileMask": "มาสก์ไฟล์",
   "contentSearch.fileMask.placeholder": "มาสก์ไฟล์ เช่น {example}",

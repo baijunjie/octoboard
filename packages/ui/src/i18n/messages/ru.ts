@@ -1278,7 +1278,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "browser.filter.includeIgnored": "Включить игнорируемые файлы",
   "browser.filter.excludeIgnored": "Исключить игнорируемые файлы",
   "contentSearch.title": "Найти в файлах",
-  "contentSearch.scope": "В {directory}",
+  "contentSearch.scope": "В {scope}",
   "contentSearch.query": "Поиск по содержимому файлов",
   "contentSearch.fileMask": "Маска файлов",
   "contentSearch.fileMask.placeholder": "Маска файлов, например {example}",

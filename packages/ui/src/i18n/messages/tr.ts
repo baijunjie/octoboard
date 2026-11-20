@@ -1335,7 +1335,7 @@ export const tr: Translation<"one" | "other"> = {
   "browser.filter.includeIgnored": "Yok sayılan dosyaları dahil et",
   "browser.filter.excludeIgnored": "Yok sayılan dosyaları hariç tut",
   "contentSearch.title": "Dosyalarda bul",
-  "contentSearch.scope": "{directory} içinde",
+  "contentSearch.scope": "{scope} içinde",
   "contentSearch.query": "Dosya içeriklerinde ara",
   "contentSearch.fileMask": "Dosya maskesi",
   "contentSearch.fileMask.placeholder": "Dosya maskesi, örneğin {example}",

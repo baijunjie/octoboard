@@ -25,7 +25,7 @@ function mount(daemon: Daemon, { directory, narrow = false }: { directory?: stri
   function Host() {
     const [query, setQuery] = useState("");
     const [options, setOptions] = useState<ContentSearchOptions>(DEFAULT_CONTENT_SEARCH_OPTIONS);
-    return <ContentSearchDialog project="p" directory={directory} query={query} options={options} onQueryChange={setQuery} onOptionsChange={setOptions} onOpen={onOpen} onClose={onClose} />;
+    return <ContentSearchDialog project="p" projectName="demo" directory={directory} query={query} options={options} onQueryChange={setQuery} onOptionsChange={setOptions} onOpen={onOpen} onClose={onClose} />;
   }
   act(() => root.render(<ThemeProvider><DaemonProvider value={daemon}><Host /></DaemonProvider></ThemeProvider>));
   onTestFinished(() => {
@@ -130,7 +130,7 @@ it("shows the daemon's refusal of the query under the query field, as an alert, 
   expect(message.closest("[role=alert]")).not.toBeNull();
   const error = message.closest<HTMLElement>("[id]")!;
   expect(query().getAttribute("aria-describedby")).toContain(error.id);
-  // Nothing in the line under the fields: the refusal is the field's own.
+  // The count under the title stays empty: the refusal is the field's own.
   expect(status().textContent).toBe("");
   // Marked invalid as the file mask is for a refused mask.
   expect(query().getAttribute("aria-invalid")).toBe("true");
@@ -170,11 +170,33 @@ it("opens the selected result from the query's Enter, and moves into the list wi
   expect(onOpen).toHaveBeenLastCalledWith(second);
 });
 
-it("shows the folder a search is limited to", async () => {
+it("shows the project's name as the scope when the search is not limited to a folder", () => {
+  fakeTimers();
+  mount(contentSearchDaemon().daemon);
+  expect(document.querySelector("[data-content-search-scope]")?.textContent).toBe("In demo");
+});
+
+it("keeps the scope and the count in the dialog's header, not with the fields", async () => {
+  fakeTimers();
+  const fake = contentSearchDaemon();
+  mount(fake.daemon);
+  await search("foo");
+  await act(async () => fake.matches([contentMatch("src/a.ts", 1, "foo", "foo")]));
+  expect(document.querySelectorAll("[data-content-search-status]")).toHaveLength(1);
+  expect(status().textContent).toBe("1 match in 1 file");
+  // The header is what holds the heading that names the dialog.
+  const heading = document.getElementById(document.querySelector("[role=dialog]")!.getAttribute("aria-labelledby")!)!;
+  const header = heading.parentElement!;
+  expect(header.contains(status())).toBe(true);
+  expect(header.contains(document.querySelector("[data-content-search-scope]"))).toBe(true);
+  expect(header.contains(query())).toBe(false);
+});
+
+it("shows the folder a search is limited to, after the project's name", async () => {
   fakeTimers();
   const fake = contentSearchDaemon();
   mount(fake.daemon, { directory: "src/lib" });
-  expect(document.querySelector("[data-content-search-scope]")?.textContent).toBe("In src/lib");
+  expect(document.querySelector("[data-content-search-scope]")?.textContent).toBe("In demo / src/lib");
   await search("foo");
   expect(fake.latest()).toMatchObject({ directory: "src/lib" });
 });

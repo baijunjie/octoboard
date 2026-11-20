@@ -19,9 +19,9 @@ Simplified Chinese, so that it is never named like Find in file.
   panel on screen it does nothing. The key never reaches the terminal; holding it down opens the modal once.
 - **Find in folder**, the first item of a folder's action menu in the Files mode — in the tree and in file-name filter
   results alike, set apart from the items after it (see "A row's actions" in `docs/product/project-pane.md`) — searches
-  only that folder and everything beneath it. The modal then shows the folder's path under its title, and offers no way
-  to remove or change it; searching the whole project is opening the modal from the button or the shortcut. The Git
-  mode's change list has no Find in folder.
+  only that folder and everything beneath it. The modal then names the folder in its scope line (see "The modal"
+  below), and offers no way to remove or change it; searching the whole project is opening the modal from the button
+  or the shortcut. The Git mode's change list has no Find in folder.
 
 **The query and the options are kept**: opening the modal again shows the last search, run afresh. They last as the
 file-name filter's choices do — while the project's pane stays in the right pane, through tab switches and the pane
@@ -29,11 +29,19 @@ being hidden — and are not shared across projects (see "Filtering by file name
 
 ## The modal
 
-The modal is the file viewer's size (see `docs/product/file-viewer.md`). Across its top are the **query field** and the
-**file mask field** with the include-ignored toggle beside it, side by side where they fit and the mask wrapping under
-the query where they do not, so that the mask is never cut narrower than its placeholder. Under them is the **count**, then the
-**result list**, and under the list the **preview** of the selected result. At a window width of 768 px or less the
-modal fills the screen and shows no preview: the fields, the count and the list take it all.
+The modal is the file viewer's size (see `docs/product/file-viewer.md`). Under its title is the **scope line**, always
+shown, which says what is searched: the project, by its name, and for a search limited to a folder the folder's path
+after it. The project and the folder are each shown as a reference, joined by a chevron as the title bar's breadcrumb
+is; assistive technology hears a slash in the chevron's place. The **count** is at the end of the same line. The line is
+always one line of text: a scope too long for the room the count leaves fades out at its end and carries its full
+wording as its tooltip, as the file viewer's subtitle does, and the count's spinner and warning mark never make the
+line taller, so the fields below never move as the count appears and goes.
+
+Below the header are the **query field** and the **file mask field** with the include-ignored toggle beside it, side
+by side where they fit and the mask wrapping under the query where they do not, so that the mask is never cut narrower
+than its placeholder. Under them is the **result list**, and under the list the **preview** of the selected result. At
+a window width of 768 px or less the modal fills the screen and shows no preview: the fields and the list take it
+all.
 
 ### The query and its options
 
@@ -158,7 +166,8 @@ Files panel still shows it.
   search took too long, reached the most matches it lists, read as much as it reads at once, found more than can be
   sent, or could not read some files or folders — and that not every match may be listed. It opens as a row's mark does
   (see "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`). With no matches, the
-  list's place says there are none and that not every file was searched, and the count and its mark stay above it.
+  list's place says there are none and that not every file was searched, and the count and its mark stay in the scope
+  line.
 - **A refused query or file mask**: a regular expression or a pattern of the mask that is not valid is said under its
   own field, in plain words, and the field is marked invalid; nothing is searched. A regular expression's refusal names
   where it fails as the character it is at, counted from 1 as the user sees the characters (an emoji counts as one) —

@@ -1362,7 +1362,7 @@ export const zhCN: Translation<"other"> = {
   "browser.filter.includeIgnored": "包含已忽略的文件",
   "browser.filter.excludeIgnored": "排除已忽略的文件",
   "contentSearch.title": "搜索文件内容",
-  "contentSearch.scope": "范围：{directory}",
+  "contentSearch.scope": "范围：{scope}",
   "contentSearch.query": "要查找的文本",
   "contentSearch.fileMask": "文件掩码",
   "contentSearch.fileMask.placeholder": "文件掩码，例如 {example}",

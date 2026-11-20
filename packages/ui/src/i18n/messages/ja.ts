@@ -1317,7 +1317,7 @@ export const ja: Translation<"other"> = {
   "browser.filter.includeIgnored": "無視対象のファイルを含める",
   "browser.filter.excludeIgnored": "無視対象のファイルを除外",
   "contentSearch.title": "ファイルの内容を検索",
-  "contentSearch.scope": "対象: {directory}",
+  "contentSearch.scope": "対象: {scope}",
   "contentSearch.query": "検索する文字列",
   "contentSearch.fileMask": "ファイルマスク",
   "contentSearch.fileMask.placeholder": "ファイルマスク（例: {example}）",

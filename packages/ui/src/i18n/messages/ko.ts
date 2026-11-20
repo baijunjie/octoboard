@@ -1318,7 +1318,7 @@ export const ko: Translation<"other"> = {
   "browser.filter.includeIgnored": "무시된 파일 포함",
   "browser.filter.excludeIgnored": "무시된 파일 제외",
   "contentSearch.title": "파일 내용 검색",
-  "contentSearch.scope": "범위: {directory}",
+  "contentSearch.scope": "범위: {scope}",
   "contentSearch.query": "찾을 텍스트",
   "contentSearch.fileMask": "파일 마스크",
   "contentSearch.fileMask.placeholder": "파일 마스크(예: {example})",

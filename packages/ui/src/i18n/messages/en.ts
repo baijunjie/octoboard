@@ -1489,7 +1489,7 @@ export const en = {
   "browser.filter.includeIgnored": "Include ignored files",
   "browser.filter.excludeIgnored": "Exclude ignored files",
   "contentSearch.title": "Find in files",
-  "contentSearch.scope": "In {directory}",
+  "contentSearch.scope": "In {scope}",
   "contentSearch.query": "Search file contents",
   "contentSearch.fileMask": "File mask",
   "contentSearch.fileMask.placeholder": "File mask, such as {example}",

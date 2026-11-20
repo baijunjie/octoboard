@@ -1278,7 +1278,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "browser.filter.includeIgnored": "تضمين الملفات المتجاهلة",
   "browser.filter.excludeIgnored": "استبعاد الملفات المتجاهلة",
   "contentSearch.title": "بحث في الملفات",
-  "contentSearch.scope": "في {directory}",
+  "contentSearch.scope": "في {scope}",
   "contentSearch.query": "البحث في محتوى الملفات",
   "contentSearch.fileMask": "قناع الملفات",
   "contentSearch.fileMask.placeholder": "قناع الملفات، مثل {example}",

@@ -51,7 +51,7 @@ async function mount({ mode = "files", active = true }: { mode?: "files" | "git"
   function Browser() {
     const browser = useProjectBrowserState("p");
     useEffect(() => browser.setMode(mode), []);
-    return <ProjectBrowser project={{ id: "p", name: "p" } as Project} active={active} selectedSessionId={undefined} onViewFile={onViewFile} />;
+    return <ProjectBrowser project={{ id: "p", name: "demo" } as Project} active={active} selectedSessionId={undefined} onViewFile={onViewFile} />;
   }
   await act(async () =>
     view.render(
@@ -85,7 +85,7 @@ it("opens Find in files on the whole project from the button beside the filter",
   expect(filter.compareDocumentPosition(findButton()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   await act(async () => findButton()!.click());
   expect(dialog()?.textContent).toContain("Find in files");
-  expect(document.querySelector("[data-content-search-scope]")).toBeNull();
+  expect(document.querySelector("[data-content-search-scope]")?.textContent).toBe("In demo");
   type(query(), "foo");
   await act(async () => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
   expect(fake.latest()).not.toHaveProperty("directory");
@@ -100,7 +100,7 @@ it("opens it on the whole project from the window's shortcut", async () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyF", key: "F", shiftKey: true, metaKey: IS_MAC, ctrlKey: !IS_MAC, bubbles: true, cancelable: true }));
   });
   expect(dialog()?.textContent).toContain("Find in files");
-  expect(document.querySelector("[data-content-search-scope]")).toBeNull();
+  expect(document.querySelector("[data-content-search-scope]")?.textContent).toBe("In demo");
 });
 
 it("opens it limited to a folder from the folder's actions, showing the folder", async () => {
@@ -112,7 +112,7 @@ it("opens it limited to a folder from the folder's actions, showing the folder",
   const item = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Find in folder");
   expect(item).toBeDefined();
   await act(async () => item!.click());
-  expect(document.querySelector("[data-content-search-scope]")?.textContent).toBe("In src");
+  expect(document.querySelector("[data-content-search-scope]")?.textContent).toBe("In demo / src");
   type(query(), "foo");
   await act(async () => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
   expect(fake.latest()).toMatchObject({ directory: "src" });

@@ -1318,7 +1318,7 @@ export const zhTW: Translation<"other"> = {
   "browser.filter.includeIgnored": "包含已忽略的檔案",
   "browser.filter.excludeIgnored": "排除已忽略的檔案",
   "contentSearch.title": "搜尋檔案內容",
-  "contentSearch.scope": "範圍：{directory}",
+  "contentSearch.scope": "範圍：{scope}",
   "contentSearch.query": "要尋找的文字",
   "contentSearch.fileMask": "檔案遮罩",
   "contentSearch.fileMask.placeholder": "檔案遮罩，例如 {example}",

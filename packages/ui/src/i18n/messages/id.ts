@@ -1278,7 +1278,7 @@ export const id: Translation<"other"> = {
   "browser.filter.includeIgnored": "Sertakan file yang diabaikan",
   "browser.filter.excludeIgnored": "Kecualikan file yang diabaikan",
   "contentSearch.title": "Cari isi file",
-  "contentSearch.scope": "Di {directory}",
+  "contentSearch.scope": "Di {scope}",
   "contentSearch.query": "Teks yang dicari",
   "contentSearch.fileMask": "Mask file",
   "contentSearch.fileMask.placeholder": "Mask file, misalnya {example}",
