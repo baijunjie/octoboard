@@ -94,6 +94,9 @@ call for are dispatched as the workflow, their skills and the rules below say, a
   `pnpm --filter @octoboard/ui test:app`. They wait for the machine-wide heavy-step slot `pnpm verify` uses
   (`scripts/verify/heavy.mjs`), so sessions testing at once queue instead of running the machine out of memory; a wait
   message names what holds the slot. The wait can take minutes, so run them with a long timeout or in the background.
+  A UI run that names at most eight test files (`pnpm --filter @octoboard/ui test <files>`) runs at once instead, so
+  name the test files rather than a directory or a pattern when checking a few, and put no `--` or flag without `=`
+  before them.
 - Before committing, the `pre-commit` hook runs `scripts/hooks/format-staged.mjs` (the same as `pnpm format:staged`):
   format only staged supported source files, preserving unstaged edits. A partial commit (`git commit <paths>`) is
   refused; stage the files and commit without paths. A checkout without the script (a branch older than the hook)

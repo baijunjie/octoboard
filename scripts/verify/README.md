@@ -69,10 +69,16 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    consecutive heavy steps share one hold). The number of slots follows cores and memory and is overridden by
    `OCTOBOARD_VERIFY_SLOTS`. The UI's gallery sweep and the docs' screenshot command take the same lock, and so do the package scripts that run
    tests and Rust checks on their own (`pnpm test:rust`, `clippy:rust`, `check:windows`, and the UI's `test`,
-   `test:related` and `test:app`), through `heavy.mjs`. A heavy step marks its commands as running under its hold
+   `test:related` and `test:app`), through `heavy.mjs`. A UI test run that names at most eight existing test files
+   (`small-run.mjs`) does not wait: it runs at once, in a group of its own with the stall watch below, and with at
+   most four workers. Only flags and the value of a test name filter (`-t`) may come with the files; `--`, a heavy
+   flag (`--typecheck`, `--coverage`, `--browser`, `--watch`, `--changed`), short flags run together (`-uw`) or a flag given without `=` right before a file
+   (`-u src/a.test.ts`, which vitest may read as the flag's value and then run every test) makes the run queue.
+   Such a run's group is recorded in no slot, so one whose `heavy.mjs` is killed outright is left for no waiter
+   to end. A heavy step marks its commands as running under its hold
    (`HELD_ENV`), so those scripts run at once inside `pnpm verify` instead of waiting on the slot it holds.
    A slot cannot be held for ever, nor left with work still running (`process-group.mjs`, Unix only). Each of
-   `pnpm verify`'s steps, and the command `heavy.mjs` takes a slot for, runs in a process group of its own: a
+   `pnpm verify`'s steps, and the command `heavy.mjs` takes a slot for (or runs without one, as a small run), runs in a process group of its own: a
    signal to the runner goes to the whole group, and whatever is left of the group once the command closes is
    ended, so an interrupted run leaves no orphaned `cargo` or test binary. A holder records its command's group in
    the slot, and a waiter taking over the slot of a holder that was killed outright ends what is left of that
@@ -195,6 +201,8 @@ retention and timing measurements are documented in the [Rust cache module](../.
   `changedFiles`, `requirePushedTree`.
 - `heavy.mjs`: `node scripts/verify/heavy.mjs <command> [arguments]` runs a command once it holds a slot
   (`OCTOBOARD_HEAVY_SLOT_ROOT` moves the slots, for tests).
+- `small-run.mjs`: `smallRun` decides whether a heavy command runs without the slot (`SMALL_RUN_FILES`,
+  `SMALL_RUN_WORKERS`).
 - `process-group.mjs`: `startOf`; `runInGroup` runs a command in its own group with the stall watch (`stallWatch`, `stallMs`,
   `STALLED_EXIT`); `endLeftovers` ends what is left of a recorded group.
 - `lock.mjs`: `acquireSlot` (its release function also has `recordGroup`), `HELD_ENV`; `stamp.mjs`: `readStamp`, `recordPass`; `rerun.mjs`: the failed-file record;

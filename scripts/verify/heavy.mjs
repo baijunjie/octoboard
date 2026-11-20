@@ -13,12 +13,17 @@
 // A command that took the slot itself runs in a process group of its own (`process-group.mjs`): a signal goes
 // to the whole group, nothing of it outlives the run, and a command that stops making progress is reported and
 // ended rather than holding the slot. One started under a held slot runs inside the holder's group instead.
+//
+// A small UI test run, naming a few test files (`small-run.mjs`), does not wait for the slot: it runs at once in a
+// group of its own, its workers capped.
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireSlot, defaultRoot, describeWait, HELD_ENV } from "./lock.mjs";
 import { runInGroup, stallMs } from "./process-group.mjs";
+import { SMALL_RUN_FILES, smallRun } from "./small-run.mjs";
 
 const repoRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const [command, ...args] = process.argv.slice(2);
@@ -30,16 +35,22 @@ if (!command) {
 let release = () => {};
 const holdsOwnSlot = !process.env[HELD_ENV];
 const label = `${path.basename(repoRoot)}: ${[command, ...args].join(" ")}`;
-if (holdsOwnSlot) {
+// Named files are relative to the command's working directory, the package's.
+const small = holdsOwnSlot ? smallRun(command, args, (file) => existsSync(path.resolve(file))) : null;
+const runArgs = small ?? args;
+if (small) {
+  console.error(`heavy: a run of at most ${SMALL_RUN_FILES} named test files; running at once, without waiting for the heavy-step slot`);
+} else if (holdsOwnSlot) {
   release = await acquireSlot(label, {
     root: process.env.OCTOBOARD_HEAVY_SLOT_ROOT || defaultRoot,
     onWait: (holders, ahead) => console.error(`heavy: waiting for a free heavy-step slot; ${describeWait(holders, ahead)}`),
   });
 }
 
-const env = { ...process.env, [HELD_ENV]: "1" };
+// The command's own heavy scripts run under the hold, except under a small run's, which holds no slot.
+const env = small ? { ...process.env } : { ...process.env, [HELD_ENV]: "1" };
 if (holdsOwnSlot && process.platform !== "win32") {
-  const { code } = await runInGroup(command, args, { env, label, stallMs: stallMs(), onGroup: release.recordGroup });
+  const { code } = await runInGroup(command, runArgs, { env, label, stallMs: stallMs(), onGroup: release.recordGroup });
   release();
   process.exit(code);
 }
@@ -49,8 +60,8 @@ if (holdsOwnSlot && process.platform !== "win32") {
 // whole: an argument with a space (`-t "renders the menu"`) stays one argument.
 const quoteForCmd = (arg) => `"${arg.replaceAll('"', '""')}"`;
 const child = process.platform === "win32"
-  ? spawn([command, ...args].map(quoteForCmd).join(" "), { stdio: "inherit", env, shell: true })
-  : spawn(command, args, { stdio: "inherit", env });
+  ? spawn([command, ...runArgs].map(quoteForCmd).join(" "), { stdio: "inherit", env, shell: true })
+  : spawn(command, runArgs, { stdio: "inherit", env });
 // A signal goes to the command, and the slot is released only once it has closed, so it is not handed on
 // while the command's own processes still run.
 let signaled = null;

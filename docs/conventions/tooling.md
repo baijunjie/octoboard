@@ -9,7 +9,8 @@ checks are run in a piece of work, and that nothing bypasses them, is in `CLAUDE
 
 - **Tests, clippy and the Windows cross-check run through the package scripts, not `cargo` or `vitest` directly**
   (`CLAUDE.md`, "Repository checks"). The scripts wait for the machine-wide heavy-step slot (`scripts/verify/heavy.mjs`)
-  so sessions testing at once queue; there are three exceptions, where cargo runs without that slot:
+  so sessions testing at once queue (a UI run naming at most eight test files runs at once, its workers capped:
+  `scripts/verify/small-run.mjs`); there are three exceptions, where cargo runs without that slot:
   - a CI runner, which has Node already, runs `node scripts/cargo.mjs <test|clippy|check> [cargo arguments]`, so the
     flags (`--workspace --all-targets -D warnings`, the desktop crate's `TAURI_CONFIG`) come from one place;
   - a container without Node runs plain `cargo` with the same flags `scripts/cargo.mjs` passes; do not install Node only
