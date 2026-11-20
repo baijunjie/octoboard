@@ -75,6 +75,9 @@ impl StandInDaemon {
                 let Some(request) = read_request(&stream) else {
                     return received;
                 };
+                // The `HEAD /` a running Octoboard daemon probes a session's ports with
+                // (`crate::processes::web_ports`), which no helper sends, is answered and left out.
+                let probe = crate::cli::background::tests::is_probe(&request.line);
                 let refused = !request.line.contains(&format!("?key={key} "));
                 let (status, body) = if refused {
                     ("401 Unauthorized", "")
@@ -86,7 +89,9 @@ impl StandInDaemon {
                     body.len()
                 );
                 let _ = (&stream).write_all(reply.as_bytes());
-                received.push(request);
+                if !probe {
+                    received.push(request);
+                }
             }
         });
         Self { port, thread }

@@ -406,9 +406,9 @@ pub(super) fn confirm_from(input: &mut dyn BufRead, out: &mut dyn Write) -> bool
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::background::tests::{owner_on, KEY};
+    use crate::cli::background::tests::{accept_request, owner_on, KEY};
     use crate::coordinator::handover_check::{ImpactRefusal, ImpactSession, ImpactTerminal};
-    use crate::test_support::{ClosedPort, PATIENCE};
+    use crate::test_support::ClosedPort;
 
     fn impact(verdict: RestartVerdict) -> RestartImpact {
         RestartImpact {
@@ -690,31 +690,12 @@ mod tests {
     /// Answers one request with `response` and gives its request line and its body back through
     /// the handle.
     fn serve_once(response: impl Into<String>) -> (u16, std::thread::JoinHandle<(String, String)>) {
-        use std::io::Read;
         let response = response.into();
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
         let port = listener.local_addr().unwrap().port();
         let served = std::thread::spawn(move || {
-            let (stream, _) = listener.accept().expect("a request");
-            stream.set_read_timeout(Some(PATIENCE)).unwrap();
-            let mut reader = std::io::BufReader::new(stream);
-            let mut request_line = String::new();
-            reader.read_line(&mut request_line).expect("a request line");
-            let mut body_len = 0;
-            loop {
-                let mut line = String::new();
-                reader.read_line(&mut line).expect("a header");
-                if line.trim().is_empty() {
-                    break;
-                }
-                if let Some((name, value)) = line.split_once(':') {
-                    if name.eq_ignore_ascii_case("content-length") {
-                        body_len = value.trim().parse().expect("a content length");
-                    }
-                }
-            }
-            let mut body = vec![0u8; body_len];
-            reader.read_exact(&mut body).expect("the body");
+            // A probe of the port (`background::tests::is_probe`) is answered and left out.
+            let (mut reader, request_line, body) = accept_request(&listener);
             reader
                 .get_mut()
                 .write_all(response.as_bytes())

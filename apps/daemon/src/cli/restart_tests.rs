@@ -12,7 +12,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use super::background::tests::{answer_once, read_request};
+use super::background::tests::{answer_once, probe, read_request, NOT_FOUND};
 use super::background::Proceed;
 use super::background_tests::{command, finished, in_home, said, Renewal, StandIn};
 use crate::owner_record::{Owner, Predecessor};
@@ -67,9 +67,26 @@ fn restart_asked_child() {
     std::process::exit(status);
 }
 
-/// A loopback server standing in for the daemon's port: it answers a request by its path from
-/// `routes` (`404` for any other) and records every request, as its request line and body, in the
-/// order they came. It ends when dropped.
+/// Whether `request_line` is one of the calls `restart` makes of the daemon: a `POST` to
+/// `/restart-check` or `/restart`. Anything else that reaches a stand-in, such as the `HEAD /` a
+/// running Octoboard daemon probes a session's ports with (`background::tests::is_probe`), is
+/// not one.
+fn is_restart_call(request_line: &str) -> bool {
+    let mut parts = request_line.split_whitespace();
+    let (Some("POST"), Some(target)) = (parts.next(), parts.next()) else {
+        return false;
+    };
+    matches!(
+        target.split('?').next(),
+        Some("/restart-check" | "/restart")
+    )
+}
+
+/// A loopback server standing in for the daemon's port: it answers a call `restart` makes
+/// ([`is_restart_call`]) by its path from `routes` (`404` for any other) and records it, as its
+/// request line and body, in the order they came; anything else is answered with a plain `404`
+/// and not recorded, so that what reaches the port from elsewhere changes no assertion. It ends
+/// when dropped.
 struct HttpDaemon {
     port: u16,
     requests: Arc<Mutex<Vec<(String, String)>>>,
@@ -101,6 +118,12 @@ impl HttpDaemon {
                     let Some((request_line, body)) = read_request(&mut reader) else {
                         continue;
                     };
+                    if !is_restart_call(&request_line) {
+                        // A probe of the port (`is_probe`), or anything else the command does
+                        // not send: answered plainly, and not counted as asked of the daemon.
+                        reader.get_mut().write_all(NOT_FOUND.as_bytes()).ok();
+                        continue;
+                    }
                     let path = request_line
                         .split_whitespace()
                         .nth(1)
@@ -211,6 +234,22 @@ fn restart_refused() -> (&'static str, &'static str, String) {
         r#"{"reason":"agent_update_running","message":"an agent CLI update is running"}"#
             .to_owned(),
     )
+}
+
+/// What reaches the stand-in's port from elsewhere, such as a running Octoboard daemon's probe of
+/// a session's ports, is answered and not counted as asked of the daemon.
+#[test]
+fn the_stand_in_counts_only_the_calls_restart_makes() {
+    let daemon = HttpDaemon::start(&[restart_refused()]);
+    assert_eq!(probe(daemon.port), "HTTP/1.1 404 Not Found");
+    assert!(daemon.paths().is_empty(), "{:?}", daemon.paths());
+    assert!(is_restart_call(&format!(
+        "POST /restart-check?key={TEST_KEY} HTTP/1.1"
+    )));
+    assert!(is_restart_call("POST /restart HTTP/1.1"));
+    assert!(!is_restart_call("HEAD / HTTP/1.1"));
+    assert!(!is_restart_call("GET /restart HTTP/1.1"));
+    assert!(!is_restart_call("POST /shutdown HTTP/1.1"));
 }
 
 /// Runs `octoboardd restart <arguments>` against a stand-in daemon recording `daemon`'s port, with
