@@ -12,6 +12,7 @@ import { git, run } from "./lib/git.mjs";
 import { changedFiles, chooseBase, requirePushedTree } from "./verify/changes.mjs";
 import { assertRepositoryEnvironmentCleared } from "./verify/environment.mjs";
 import { acquireSlot, describeWait, HELD_ENV } from "./verify/lock.mjs";
+import { runInGroup, stallMs } from "./verify/process-group.mjs";
 import { clearFailure, failedFiles, narrowedFiles, readFailure, recordFailure, REPORT_ENV } from "./verify/rerun.mjs";
 import { quickSteps } from "./verify/quick.mjs";
 import { MENU_KEYS_FILE, planScope } from "./verify/scope.mjs";
@@ -95,7 +96,17 @@ function plan(base) {
   return { tree, scope, checks: quick.steps, notes: quick.notes };
 }
 
-function exec(cmd, env = process.env) {
+// Runs a step's command. Outside Windows it runs in a process group of its own (`verify/process-group.mjs`):
+// a signal goes to the whole group, nothing of it outlives the step, and a step that stops making progress is
+// reported and ended rather than holding the heavy-step slot. `recordGroup` gets the group, for the slot.
+async function exec(cmd, env = process.env, { label = cmd.join(" "), recordGroup = () => {} } = {}) {
+  if (process.platform !== "win32") {
+    const { code, signaled } = await runInGroup(cmd[0], cmd.slice(1), { env, name: "verify", label, stallMs: stallMs(), onGroup: recordGroup });
+    // An interrupted run fails whatever the step answered: a step that handled the signal and exited 0 did not
+    // finish its checks, and the steps after it were not run.
+    if (signaled) process.exit(code || 128 + (os.constants.signals[signaled] ?? 0));
+    return code;
+  }
   return new Promise((resolve) => {
     const child = spawn(cmd[0], cmd.slice(1), { stdio: "inherit", env });
     // A signal goes to the child and the run ends once it has closed, so the slot is not released
@@ -123,7 +134,7 @@ let recorded = true;
 // A step that can be narrowed (`rerun`) and failed last time on content that differs from `tree` only
 // in isolated test files runs on the failed and changed files alone (`scripts/verify/rerun.mjs`); its
 // failed files are recorded when it fails, for the next run to narrow to.
-async function runStep(step, key, tree) {
+async function runStep(step, key, tree, recordGroup) {
   const files = step.rerun && !flag("--fresh") ? narrowedFiles(git, readFailure(stampDir, root, step), tree, toolchain) : null;
   const commands = files ? step.rerun(files) : [step.cmd];
   if (files) {
@@ -136,7 +147,7 @@ async function runStep(step, key, tree) {
   let code = 0;
   for (const cmd of commands) {
     console.log(`verify: ${step.label}: ${cmd.join(" ")}`);
-    code = await exec(cmd, env);
+    code = await exec(cmd, env, { label: step.label, recordGroup });
     if (code !== 0) break;
   }
   if (step.rerun) {
@@ -210,7 +221,7 @@ for (const group of groups) {
   // The steps' heavy scripts (`pnpm test:rust` and the like, which go through `verify/heavy.mjs`) run under
   // this hold rather than queue for a second slot.
   if (group[0].heavy) process.env[HELD_ENV] = "1";
-  for (const step of group) await runStep(step, key, current.tree);
+  for (const step of group) await runStep(step, key, current.tree, release.recordGroup);
   if (!inheritedHold) delete process.env[HELD_ENV];
   release();
 }

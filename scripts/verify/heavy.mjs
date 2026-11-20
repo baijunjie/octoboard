@@ -9,11 +9,16 @@
 // heavy steps) runs at once, so a step does not wait on the slot its own run holds. The command gets the same
 // marker, so a heavy script it starts in turn does not wait either. `OCTOBOARD_HEAVY_SLOT_ROOT` moves the
 // slots elsewhere, for tests.
+//
+// A command that took the slot itself runs in a process group of its own (`process-group.mjs`): a signal goes
+// to the whole group, nothing of it outlives the run, and a command that stops making progress is reported and
+// ended rather than holding the slot. One started under a held slot runs inside the holder's group instead.
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireSlot, defaultRoot, describeWait, HELD_ENV } from "./lock.mjs";
+import { runInGroup, stallMs } from "./process-group.mjs";
 
 const repoRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const [command, ...args] = process.argv.slice(2);
@@ -23,19 +28,26 @@ if (!command) {
 }
 
 let release = () => {};
-if (!process.env[HELD_ENV]) {
-  const label = `${path.basename(repoRoot)}: ${[command, ...args].join(" ")}`;
+const holdsOwnSlot = !process.env[HELD_ENV];
+const label = `${path.basename(repoRoot)}: ${[command, ...args].join(" ")}`;
+if (holdsOwnSlot) {
   release = await acquireSlot(label, {
     root: process.env.OCTOBOARD_HEAVY_SLOT_ROOT || defaultRoot,
     onWait: (holders, ahead) => console.error(`heavy: waiting for a free heavy-step slot; ${describeWait(holders, ahead)}`),
   });
 }
 
+const env = { ...process.env, [HELD_ENV]: "1" };
+if (holdsOwnSlot && process.platform !== "win32") {
+  const { code } = await runInGroup(command, args, { env, label, stallMs: stallMs(), onGroup: release.recordGroup });
+  release();
+  process.exit(code);
+}
+
 // Windows resolves a package binary (`vitest`) only through its `.cmd` shim, which needs a shell. Node joins
 // a shell command's arguments with bare spaces, so each is quoted for `cmd.exe` here and the line is passed
 // whole: an argument with a space (`-t "renders the menu"`) stays one argument.
 const quoteForCmd = (arg) => `"${arg.replaceAll('"', '""')}"`;
-const env = { ...process.env, [HELD_ENV]: "1" };
 const child = process.platform === "win32"
   ? spawn([command, ...args].map(quoteForCmd).join(" "), { stdio: "inherit", env, shell: true })
   : spawn(command, args, { stdio: "inherit", env });

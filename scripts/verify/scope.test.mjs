@@ -109,6 +109,9 @@ const CASES = [
   ["something/new.txt", ALL_PACKAGES],
   ["apps/web/app/README.md", []],
   ["apps/docs/README.md", []],
+  // The templates of the machine-local and release-credential files are read by no check, though the files are.
+  [".env.local.example", []],
+  [".env.secret.example", []],
   ["apps/daemon/README.md", []],
   ["packages/ui/src/nested/NOTES.md", []],
   ["scripts/NOTES.md", []],

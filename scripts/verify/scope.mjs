@@ -66,8 +66,8 @@ export const DESKTOP_CONTRACT = [
 export const MENU_KEYS_FILE = "packages/ui/src/i18n/messages/en.ts";
 
 // The modules of `scripts/verify/` that the UI's gallery sweep also uses, which the UI's tests run: the
-// machine-wide heavy-step lock.
-export const SWEEP_SHARED = ["scripts/verify/lock.mjs"];
+// machine-wide heavy-step lock and the process-group helpers it imports.
+export const SWEEP_SHARED = ["scripts/verify/lock.mjs", "scripts/verify/process-group.mjs"];
 
 // What the docs' screenshot script (`apps/docs/scripts/screenshots.mjs`) imports from the UI's gallery sweep (its browser
 // and dev server helpers) and takes from `scripts/verify/` (the heavy-step lock).
@@ -164,7 +164,7 @@ export const RULES = [
   { match: ["config/holder-floor.txt"], consumers: ["verify", "desktop", "daemon"], why: "the daemon compiles in the holder floor and the desktop release scripts read it for validation and publishing" },
 
   // Nothing local reads these. Listed so that they do not fall through to "unknown".
-  { match: ["docs/", ".claude/", ".agents/", ".codex/", "assets/branding/", ".github/", "CLAUDE.md", "AGENTS.md"], consumers: [], why: "documentation, agent files, brand assets and CI definitions are read by no local check" },
+  { match: ["docs/", ".claude/", ".agents/", ".codex/", "assets/branding/", ".github/", "CLAUDE.md", "AGENTS.md", ".env.local.example", ".env.secret.example"], consumers: [], why: "documentation, agent files, brand assets, CI definitions and the templates of the machine-local and release-credential files (`scripts/lib/env.mjs` reads the files, not their templates) are read by no local check" },
 
   // Cross-package reads. Each also selects `verify`, whose tests check that the paths named here exist.
   { match: [...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS, ...WEB_RESOLVES_UI], consumers: ["verify", "ui", "web"], why: "the website imports these modules, builds its preview from them, or resolves the package through its `exports` map" },

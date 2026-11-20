@@ -77,7 +77,8 @@ in the [desktop scripts README](../../apps/desktop/scripts/README.md).
 The rules behind these edges are in `docs/conventions/tooling.md`, "Scripts".
 
 - Repository scripts depend on nothing in the product code. The desktop scripts (`apps/desktop/scripts/`) import
-  `scripts/lib/env.mjs` and `scripts/lib/git.mjs`, the UI's gallery sweep and the docs' screenshot script import `scripts/verify/lock.mjs`, and the
+  `scripts/lib/env.mjs` and `scripts/lib/git.mjs`, the UI's gallery sweep and the docs' screenshot script import `scripts/verify/lock.mjs` (and through it
+  `scripts/verify/process-group.mjs`), and the
   UI's test scripts run `scripts/verify/heavy.mjs`.
 - Reads across package boundaries are declared in `scripts/verify/scope.mjs`, which the verification README explains;
   `scope.test.mjs` scans the packages' sources (`.rs`, `.ts`, `.tsx`, `.mjs`, `.astro`, `.mdx`) for ones not declared, and the

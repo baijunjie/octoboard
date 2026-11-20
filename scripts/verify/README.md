@@ -71,6 +71,17 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    tests and Rust checks on their own (`pnpm test:rust`, `clippy:rust`, `check:windows`, and the UI's `test`,
    `test:related` and `test:app`), through `heavy.mjs`. A heavy step marks its commands as running under its hold
    (`HELD_ENV`), so those scripts run at once inside `pnpm verify` instead of waiting on the slot it holds.
+   A slot cannot be held for ever, nor left with work still running (`process-group.mjs`, Unix only). Each of
+   `pnpm verify`'s steps, and the command `heavy.mjs` takes a slot for, runs in a process group of its own: a
+   signal to the runner goes to the whole group, and whatever is left of the group once the command closes is
+   ended, so an interrupted run leaves no orphaned `cargo` or test binary. A holder records its command's group in
+   the slot, and a waiter taking over the slot of a holder that was killed outright ends what is left of that
+   group first. A command whose processes together use under 2 s of CPU for ten minutes is stalled: its processes
+   are listed, with the tests the threads of its leaf processes run on macOS (from `sample`; libtest names each
+   test's thread after the test), the group is ended and the run fails with exit 124, freeing the slot.
+   `OCTOBOARD_HEAVY_STALL_SECONDS` (environment, else `.env.local`) sets another window. The shared compiler
+   cache's server (`sccache`), which a build may start inside its group, and the compilers it runs are never
+   counted or ended.
 6. **Quick mode** (`quick.mjs`, `--quick`). The normal plan without builds and without the two full test suites (nor the
    website and docs tests, which need their builds); UI and Rust tests narrow to what the changes reach (`vitest
    related`, and cargo module filters), falling back to a full suite where the reach cannot be traced. A file outside
@@ -184,7 +195,9 @@ retention and timing measurements are documented in the [Rust cache module](../.
   `changedFiles`, `requirePushedTree`.
 - `heavy.mjs`: `node scripts/verify/heavy.mjs <command> [arguments]` runs a command once it holds a slot
   (`OCTOBOARD_HEAVY_SLOT_ROOT` moves the slots, for tests).
-- `lock.mjs`: `acquireSlot`, `HELD_ENV`; `stamp.mjs`: `readStamp`, `recordPass`; `rerun.mjs`: the failed-file record;
+- `process-group.mjs`: `startOf`; `runInGroup` runs a command in its own group with the stall watch (`stallWatch`, `stallMs`,
+  `STALLED_EXIT`); `endLeftovers` ends what is left of a recorded group.
+- `lock.mjs`: `acquireSlot` (its release function also has `recordGroup`), `HELD_ENV`; `stamp.mjs`: `readStamp`, `recordPass`; `rerun.mjs`: the failed-file record;
   `tree.mjs`: `workingTree`.
 - `environment.mjs`: `withoutRepositoryEnvironment`, `assertRepositoryEnvironmentCleared`.
 - `provider-neutral.mjs`: `checkProviderNeutral` searches a repository's production core; `violations` checks one

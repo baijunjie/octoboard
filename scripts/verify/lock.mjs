@@ -5,18 +5,21 @@
 //
 // A slot is a directory made with `mkdir`, which is atomic, holding an `owner.json` with the
 // holder's pid and a token that marks it as the holder's. A slot whose holder is gone (killed
-// without releasing) is taken over on the next poll.
+// without releasing) is taken over on the next poll. A holder that runs its command through
+// `process-group.mjs` records the command's process group in the slot (`recordGroup`), and whatever is left of
+// that group is ended before the slot is taken over, so a test binary a killed holder left running does not
+// go on beside the next holder.
 //
 // Waiters are served first come, first served: each takes a numbered ticket in `queue/` before it
 // looks at the slots, and claims one only while fewer waiters are ahead of it than slots are free.
 // Otherwise whoever polled first after a release would win, and a waiter could keep losing to runs
 // that arrived after it. A ticket whose waiter is gone is dropped by the next waiter behind it.
-import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { localValue } from "../lib/env.mjs";
+import { endLeftovers, startOf } from "./process-group.mjs";
 
 const GIB = 1024 ** 3;
 // Set in the environment of a command that runs under a slot already held for it (`pnpm verify`'s heavy
@@ -39,13 +42,6 @@ export function slotCount({ cores = os.cpus().length, memory = os.totalmem(), co
   const override = Number.parseInt(configured ?? "", 10);
   if (override > 0) return override;
   return Math.min(2, Math.max(1, Math.min(Math.floor(cores / 8), Math.floor(memory / (12 * GIB)))));
-}
-
-// When the process started, to tell a holder from an unrelated process that reused its pid.
-function startOf(pid) {
-  // `ps` prints the time in the caller's locale and time zone; pin both so every run reads the same text.
-  const result = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8", env: { ...process.env, LC_ALL: "C", TZ: "UTC" } });
-  return result.status === 0 ? result.stdout.trim() : "";
 }
 
 function isAlive({ pid, started }) {
@@ -82,6 +78,9 @@ function isOrphaned(dir, owner) {
 function clearOrphan(dir) {
   const owner = readOwner(dir);
   if (!isOrphaned(dir, owner) || JSON.stringify(readOwner(dir)) !== JSON.stringify(owner)) return false;
+  // What the gone holder's command left running, which would otherwise run beside the next holder's; when the
+  // processes cannot be listed this poll, the slot is left for the next, so the record of the group is kept.
+  if (owner?.group && endLeftovers(owner.group) === null) return false;
   const stale = `${dir}.stale-${process.pid}`;
   try {
     renameSync(dir, stale);
@@ -201,7 +200,7 @@ export function describeWait(holders, ahead) {
 
 // Resolves with a `release` function once a slot is held. `onWait(holders, ahead)` gets the labels of
 // the runs holding the slots and of the waiters queued ahead; it is called when the first attempt
-// fails, whenever the number ahead changes, and otherwise every `reminderMs`. Releasing twice is harmless.
+// fails, whenever the number ahead changes, and otherwise every `reminderMs`. Releasing twice is harmless. The function also has `recordGroup(group)`.
 export async function acquireSlot(label, { root = defaultRoot, slots = slotCount(), pollMs = 2000, reminderMs = 60_000, onWait = () => {} } = {}) {
   const queue = path.join(root, "queue");
   mkdirSync(queue, { recursive: true });
@@ -233,10 +232,19 @@ export async function acquireSlot(label, { root = defaultRoot, slots = slotCount
           if (readOwner(dir)?.token === owner.token) rmSync(dir, { recursive: true, force: true });
         };
         process.once("exit", release);
-        return () => {
+        const releaseSlot = () => {
           process.off("exit", release);
           release();
         };
+        // Records the process group of the command the slot is held for (`{ pid, started }`, from
+        // `runInGroup`'s `onGroup`), for a waiter to end what is left of it should this holder be killed.
+        releaseSlot.recordGroup = (group) => {
+          if (readOwner(dir)?.token !== owner.token) return;
+          const written = path.join(dir, `owner.json.${process.pid}`);
+          writeFileSync(written, JSON.stringify({ ...owner, group }));
+          renameSync(written, path.join(dir, "owner.json"));
+        };
+        return releaseSlot;
       }
       if (Date.now() >= nextReminder || ahead.length !== lastAhead) {
         onWait(holders, ahead);

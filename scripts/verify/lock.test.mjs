@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { mock, test } from "node:test";
 import { NO_OWNER_GRACE_MS, acquireSlot, describeWait, slotCount } from "./lock.mjs";
+import { startOf } from "./process-group.mjs";
+import { alive, gone, reported, scratch, startGroup, withoutPs } from "./processTestSupport.mjs";
 
 const GIB = 1024 ** 3;
 const POLL_MS = 20;
@@ -266,4 +268,93 @@ test("a waiter whose ticket was removed takes a new one behind those queued mean
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+const readOwner = (root) => JSON.parse(readFileSync(path.join(root, "slot-0", "owner.json"), "utf8"));
+// A slot of `root` left by a holder that is gone, with `group` recorded as its command's group.
+function leaveDeadHolder(root, group) {
+  mkdirSync(path.join(root, "slot-0"), { recursive: true });
+  writeFileSync(path.join(root, "slot-0", "owner.json"), JSON.stringify({ pid: DEAD_PID, label: "dead", token: "dead", group }));
+}
+
+test("the holder records its command's group in the slot, for as long as it holds the slot", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "slots-"));
+  try {
+    const release = await acquireSlot("holder", options(root, 1));
+    assert.equal(readOwner(root).group, undefined);
+    release.recordGroup({ pid: 4242, started: "Mon Jan  1 00:00:00 2024" });
+    const owner = readOwner(root);
+    assert.deepEqual(owner.group, { pid: 4242, started: "Mon Jan  1 00:00:00 2024" });
+    assert.equal(owner.pid, process.pid);
+    assert.equal(owner.label, "holder");
+    release();
+    release.recordGroup({ pid: 1, started: "" });
+    assert.deepEqual(readdirSync(root).filter((name) => name !== "queue"), [], "a released holder does not bring its slot back");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a holder that no longer owns the slot leaves what is recorded there alone", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "slots-"));
+  try {
+    const release = await acquireSlot("holder", options(root, 1));
+    const other = { pid: process.pid, label: "taken over", token: "someone else's", group: { pid: 7, started: "x" } };
+    writeFileSync(path.join(root, "slot-0", "owner.json"), JSON.stringify(other));
+    release.recordGroup({ pid: 99, started: "y" });
+    assert.deepEqual(readOwner(root), other);
+    release();
+    assert.deepEqual(readOwner(root), other, "and does not release the slot of the one that owns it");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a waiter that takes over a dead holder's slot first ends what is left of the holder's group", async (t) => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "slots-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const area = scratch(t);
+  const leader = startGroup(area, "orphan");
+  const started = startOf(leader.pid);
+  await leader.exited;
+  const info = await reported(area);
+  assert.ok(alive(info.sleep), "the holder's command left a process running");
+  leaveDeadHolder(root, { pid: leader.pid, started });
+  (await acquireSlot("next", options(root, 1)))();
+  await gone(info.sleep, "what the dead holder's command left");
+});
+
+test("a takeover leaves alone a process that only has the dead holder's group id", async (t) => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "slots-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const area = scratch(t);
+  const unrelated = startGroup(area, "idle");
+  const info = await reported(area);
+  leaveDeadHolder(root, { pid: unrelated.pid, started: "Thu Jan  1 00:00:00 1970" });
+  (await acquireSlot("next", options(root, 1)))();
+  // The first signal it gets is this SIGTERM; a SIGKILL from the takeover would have come before it.
+  process.kill(unrelated.pid, "SIGTERM");
+  assert.equal((await unrelated.exited).signal, "SIGTERM");
+  assert.ok(alive(info.sleep), "what it started is untouched");
+});
+
+test("a takeover waits for the next poll when the processes cannot be listed, keeping the slot and its record", async (t) => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "slots-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const area = scratch(t);
+  const leader = startGroup(area, "orphan");
+  const started = startOf(leader.pid);
+  await leader.exited;
+  const info = await reported(area);
+  const group = { pid: leader.pid, started };
+  leaveDeadHolder(root, group);
+  // The first poll runs inside the call, with `ps` unavailable: the slot must stay as the dead holder left it.
+  let waited = null;
+  const next = withoutPs(() => acquireSlot("next", { ...options(root, 1), onWait: (holders) => (waited ??= holders) }));
+  assert.deepEqual(waited, ["dead"], "the slot is still held, as far as the waiter can tell");
+  assert.deepEqual(readOwner(root).group, group, "its record of the group is kept");
+  assert.ok(alive(info.sleep), "nothing was ended without the listing");
+  // The next poll can list the processes: it ends the leftovers and takes the slot.
+  (await next)();
+  await gone(info.sleep, "what the dead holder's command left");
 });
