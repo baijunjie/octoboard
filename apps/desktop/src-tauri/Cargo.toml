@@ -113,8 +113,9 @@ objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSA
 # `permissions/macos.rs` the Accessibility prompt's options dictionary, in `system_settings.rs` the
 # System Settings URL, in `notification_settings.rs` the bundle identifier and the OS version that
 # picks the pane's address, in `launch_at_login/macos.rs` the error a login item's registration
-# reports, pinned like `objc2-app-kit` above.
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSAttributedString", "NSBundle", "NSData", "NSDictionary", "NSError", "NSGeometry", "NSLocale", "NSNotification", "NSOperation", "NSProcessInfo", "NSString", "NSURL", "NSValue"] }
+# reports, in `notifications/macos.rs` the notifications and the delegate that hears a click on one,
+# pinned like `objc2-app-kit` above.
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSAttributedString", "NSBundle", "NSData", "NSDictionary", "NSError", "NSGeometry", "NSLocale", "NSNotification", "NSOperation", "NSProcessInfo", "NSString", "NSURL", "NSUserNotification", "NSValue"] }
 # For the content rule list `page_isolation/macos.rs` puts on the window's webview, and the block its
 # compile reports back through; `WebviewWindowBuilder::with_webview_configuration` takes this
 # crate's type. Pinned like `objc2-app-kit` above, `block2` to the version already resolved
@@ -127,11 +128,10 @@ libc = "0.2"
 # For `remote/credentials.rs`, which keeps each remote daemon's device key in the login keychain as a
 # generic password. The release line the TLS stack's platform verifier already resolves.
 security-framework = "3.7"
-# For `notifications/macos.rs`, which shows the notifications on macOS itself so that a click on one is reported:
-# `notify-rust`, which the notification plugin shows them through, waits for a click only on a notification
-# with buttons. The version the plugin already resolves through `notify-rust`, pinned like `objc2-app-kit`
-# above, and it has to stay the same one: the application it attributes notifications to and the delegate
-# it hears clicks through are set once for the process.
+# For `notifications/macos.rs`, which attributes the notifications it shows to the app's bundle (or to Terminal
+# for a development build) through this crate's bundle identifier hook. The version the notification plugin
+# already resolves through `notify-rust`, pinned like `objc2-app-kit` above, and it has to stay the same one:
+# the application it attributes notifications to is set once for the process.
 mac-notification-sys = "=0.6.15"
 
 [dev-dependencies]

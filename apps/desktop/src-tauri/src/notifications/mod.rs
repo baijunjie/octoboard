@@ -7,8 +7,9 @@
 //!   window's label, and reports a click on it to the handler `install` registers, as far as the
 //!   system reports it (on Windows only while the toast is on screen, not once it is in the Action
 //!   Center).
-//! - `macos.rs`: the shell shows it itself through `mac-notification-sys` and waits for the click
-//!   on a thread of its own, since the plugin reports none for a notification without buttons.
+//! - `macos.rs`: the shell delivers it itself, marked with the window's label, and hears the click
+//!   through a delegate of the user notification center, since the plugin reports none for a
+//!   notification without buttons.
 
 use tauri::{AppHandle, Manager, WebviewWindow};
 
