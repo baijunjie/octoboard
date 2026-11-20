@@ -21,7 +21,7 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
 
 - If the project has the `agent-docs` skill, read it first: where the memory directory is and this project's extra conventions.
 - Verify what is to be recorded against the code or the change, not from a second-hand account alone.
-- Read the files in the memory directory relevant to this round.
+- Read the documentation index, to know which docs in the project can be a destination; read the files in the memory directory relevant to this round.
 - Also read the other subagents' reports handed over by whoever dispatched you; do not record again what is already written into the docs.
 
 ## Judging whether it is worth recording
@@ -31,33 +31,41 @@ the file whose topic matches gets pulled into context **in full** — the cost o
 the bar is not "is this correct, is it useful", but "you would take the wrong path without knowing it **before
 touching anything**"; anything below that bar is not recorded, however correct, important, or hard-won it is.
 
-**The default is to write nothing.** If you judge it not worth it, say plainly "nothing to record this time" with
-your reasoning; review what whoever dispatched you wants recorded, and why, yourself too — do not take it at face
-value.
+**The default is to write nothing.** When nothing was written into memory and there is nothing to hand back, say
+plainly "nothing to record this time" with your reasoning; review what whoever dispatched you wants recorded, and why,
+yourself too — do not take it at face value.
 
-**Should be recorded** (loose, developer-facing, one entry stating one self-contained rule about "how to do things"):
+**Worth capturing** (loose, developer-facing, one entry stating one self-contained rule about "how to do things"):
 
 - a convention specific to this project, different from general practice, that must be followed the same way next time
 - a premise that runs counter to intuition, where not spelling it out in advance leads to the wrong approach being chosen
 - the criteria by which this kind of task decides how to do it
 - the kind of mistake made repeatedly, or explicitly corrected (written as what should be done)
 
-Anything that clears the bar but is not of this shape does not belong to memory — handle it as below.
+What states facts about the product and the system rather than how developers do things (such as product behavior,
+business rules, where the code is) does not belong to memory — hand it back, even when no doc in the project covers it
+yet.
 
-**Should not be recorded**:
+**Memory is the last destination.** For content that clears the bar, first see whether some place in the project
+already covers its topic: a doc the documentation index lists (with no documentation index, the repository's docs
+directory), or an instruction file or skill that already covers the topic — then it belongs there; do not record it on
+its behalf, hand it back with its destination (file and section). Only when no place covers the topic is it recorded in
+memory; do not suggest creating a new doc for it, and do not push a new topic onto the instruction file.
 
-| Content | Where it belongs |
+- Why some concrete object in the repo (a piece of code, a config, a file) is the way it is, and what to watch out for
+  when using it, has that object's own comment as its destination; important, hidden, and painfully expensive are not
+  exceptions. A helping test: when the reader actually needs this entry, are they necessarily looking at that object?
+  If so, it belongs in the comment.
+- Topic docs (the record of a task focused on one thing, such as research conclusions, measured baselines) are
+  maintained by that dedicated task; do not break them into entries and haul them in.
+
+In addition, these kinds, whatever their destination:
+
+| Content | What to do |
 |------|------|
-| What the system looks like, where the code is (product behavior, business rules, external contracts, code structure and module responsibilities) | The product docs or the project map; even when that side has not written it yet, do not record it here on their behalf — hand it back |
-| Topic docs (the record of a task focused on one thing, such as research conclusions, measured baselines) | Maintained by that dedicated task; do not break it into entries and haul it in — hand it back |
-| Why some concrete object in the repo (a piece of code, a config, a file) is the way it is, and what to watch out for when using it | That object's own comment — hand it back; important, hidden, and painfully expensive are not exceptions |
 | Content that only holds on one machine (local paths, environment variable values, local install locations and versions, a phenomenon that only reproduces on one person's machine) | Hand it back, listed separately |
-| Coding rules (criteria for right and wrong that constrain code in many places) | The project's coding conventions — hand it back |
-| Anything already spelled out in an instruction file, a skill, the product docs, or the project map | Not recorded; when an entry genuinely has to mention it, reference it by its path relative to the repo root (plus the exact section heading when pointing at a section) |
+| Anything already written elsewhere | Not recorded |
 | Code change history, outdated content, general programming knowledge, one-off problems | Not recorded; an outdated entry is changed or deleted in place |
-
-A helping test for "is this a concrete object": when the reader actually needs this entry, are they necessarily
-looking at that object? If so, it does not belong to memory.
 
 ## How to write it
 
@@ -66,15 +74,16 @@ looking at that object? If so, it does not belong to memory.
 - It must hold for anyone on any machine: write locations as paths relative to the repo root, write an environment variable's name rather than its value on this machine; a premise that genuinely holds only on one platform / one environment is written with its conditions of application spelled out.
 - Before adding, see whether an old entry can be replaced or deleted, **do not only add and never remove**; an entry overturned by this change is changed or deleted in place.
 - Memory entries do not reference each other: one thing lands in one entry only, related ones are merged into the nearest.
-- Memory may reference systematic docs (the product docs, the project map, instruction files, skills) and temporary docs
-  that still exist (committed with the repo, deleted once done), written as a path relative to the repo root (plus the
-  exact section heading when pointing at a section), with no code names, and a reference to a temporary doc is marked `TODO`; no other docs are referenced.
+- Memory may reference systematic docs (long-lived docs the documentation index lists, instruction files, skills) and
+  temporary docs that still exist (committed with the repo, deleted once done), written as a path relative to the repo
+  root (plus the exact section heading when pointing at a section), with no code names, and a reference to a temporary
+  doc is marked `TODO`; no other docs are referenced.
 - One topic per file, the file name saying the topic plainly; merge into an existing topic where it belongs. When a single file goes past roughly 15 entries, split it by subtopic. No `README.md` under the memory directory acting as a directory index; do not pre-create empty directories or placeholder files.
 
 ## Report
 
 State conclusions only:
 
-- which section of which file you wrote into; changed or deleted old entries and why; each refused item with its reasoning, noting a clear destination when there is one; what you left unrecorded, unchanged because you were not sure;
+- which section of which file you wrote into; changed or deleted old entries and why; each refused item with its reasoning; what you left unrecorded, unchanged because you were not sure;
 - **the files added, deleted, or renamed**, each with a one-sentence description someone can use to judge whether to open it, for updating the documentation index;
-- hand back anything with a clear destination, listed separately: belonging to the product docs or the project map, belonging in some code comment, belonging to a topic doc, or only holding on this machine.
+- each item handed back, with its content and destination (file and section; where the project has no destination for it yet, which kind of content it is); what only holds on this machine listed separately.
