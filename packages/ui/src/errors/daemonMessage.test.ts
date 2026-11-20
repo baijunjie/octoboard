@@ -5,6 +5,7 @@ import { EXAMPLE_CONVERSATION_ID } from "../agents/conversationId";
 import { daemonMessage, daemonParams, messageCode, richMessageCode } from "./daemonMessage";
 import { CATALOGS } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
+import { droppedFilesParams } from "./droppedFileEntries";
 import type { Language } from "../i18n/languages";
 import { type Console, type Project, type Session, type ShellTerminal } from "../protocol";
 import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
@@ -655,5 +656,63 @@ describe("a refused content search pattern or file mask", () => {
     expect(mask({ cause: "other" })).toBe(`The file mask ${isolate("src/[a")} is not valid.`);
     expect(mask({ cause: "something_new" })).toBe(`The file mask ${isolate("src/[a")} is not valid.`);
     expect(mask({ cause: "unclosed_class" })).not.toContain("missing");
+  });
+});
+
+it("words a refusal of several dropped files as the lead and a line to a file, and the images-only refusal with its limit as a number", () => {
+  const params = droppedFilesParams([
+    { name: "docs", code: "dropped_file_folder", params: { name: "docs" }, message: "" },
+    { name: "n.txt", code: "dropped_file_images_only", params: { name: "n.txt", limit_mib: "10" }, message: "" },
+  ]);
+  const lines = daemonMessage("en", "dropped_files_refused", params, "fallback", records).split("\n");
+  expect(lines[0]).toBe("These files were not attached, each for its own reason:");
+  expect(lines[1]).toBe(`${isolate("docs")} is a folder, and only files can be attached.`);
+  expect(lines[2]).toContain("10 MiB");
+  expect(daemonMessage("en", "dropped_file_images_only", { name: "n.txt", limit_mib: "10" }, "fallback", records)).toContain("up to 10 MiB");
+});
+
+it("words why the daemon failed a dropped file in the language, with a generic sentence for a failure it has no words for", () => {
+  const entry = (name: string, code: string, message: string) => ({ name, code, params: {}, message });
+  const params = droppedFilesParams([
+    entry("a.txt", "session_not_running", "daemon english"),
+    entry("b.txt", "a_code_from_a_newer_daemon", "raw daemon english"),
+    entry("c.txt", "unexpected_error", "TypeError: x is undefined"),
+  ]);
+  const lines = daemonMessage("en", "dropped_files_refused", params, "fallback", records).split("\n");
+  expect(lines.slice(1)).toEqual([
+    `${isolate("a.txt")} could not be attached. This session is not running.`,
+    `${isolate("b.txt")} could not be attached. The operation could not be completed.`,
+    `${isolate("c.txt")} could not be attached. Something unexpected went wrong.`,
+  ]);
+  const zh = daemonMessage("zh-CN", "dropped_files_refused", params, "fallback", records);
+  expect(zh).not.toContain("daemon english");
+  expect(zh).not.toContain("raw daemon english");
+  expect(zh).not.toContain("TypeError");
+});
+
+describe("why a dropped file failed, as a plain-text line says it", () => {
+  const entry = (name: string, code: string, message: string) => ({ name, code, params: {}, message });
+  const lineOf = (entries: ReturnType<typeof entry>[], language: Language = "en", uncatalogued?: Parameters<typeof daemonMessage>[6]) =>
+    daemonMessage(language, "dropped_files_refused", droppedFilesParams(entries), "fallback", records, false, uncatalogued).split("\n").slice(1);
+
+  it.each(["connection_closed", "request_timed_out"])("is the failure's own message for the client's own code %s, which the client already worded in the language", (code) => {
+    expect(lineOf([entry("a.txt", code, "The connection to the daemon was lost.")])).toEqual([`${isolate("a.txt")} could not be attached. The connection to the daemon was lost.`]);
+    const zh = lineOf([entry("a.txt", code, "与守护进程的连接已断开。")], "zh-CN");
+    expect(zh[0]).toContain("与守护进程的连接已断开。");
+  });
+
+  it("is what the caller's own wording of an uncatalogued failure says, where it gives one", () => {
+    const wording = (failure: { code: string; message: string }) => (failure.code === "a_code_from_a_newer_daemon" ? `Worded for ${failure.message.length}` : undefined);
+    expect(lineOf([entry("a.txt", "a_code_from_a_newer_daemon", "raw")], "en", wording)).toEqual([`${isolate("a.txt")} could not be attached. Worded for 3`]);
+  });
+
+  it("is the catalog's sentence for a catalogued code even when the caller words uncatalogued ones", () => {
+    expect(lineOf([entry("a.txt", "session_not_running", "x")], "en", () => undefined)).toEqual([`${isolate("a.txt")} could not be attached. This session is not running.`]);
+  });
+
+  it("is the generic sentence for an uncatalogued failure where the caller gives no wording, or declines to", () => {
+    const generic = `${isolate("a.txt")} could not be attached. The operation could not be completed.`;
+    expect(lineOf([entry("a.txt", "a_code_from_a_newer_daemon", "raw")])).toEqual([generic]);
+    expect(lineOf([entry("a.txt", "a_code_from_a_newer_daemon", "raw")], "en", () => undefined)).toEqual([generic]);
   });
 });

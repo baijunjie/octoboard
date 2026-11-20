@@ -259,6 +259,10 @@ export interface Fixture {
    * error refusing the lookup, or `"pending"` for a request that is never answered. Left out, no
    * conversation was found. */
   conversationLocation?: ConversationLocation | FixtureError | "pending";
+  /** A file dropped on a session's terminal stays uploading: each attachment upload has its first `answeredParts` parts
+   * of `write_attachment_part` answered and the next never answered (0 holds the first), so a file of several parts is
+   * held part-way. */
+  attachmentUpload?: { answeredParts: number };
   /** A runtime refusal after the user confirms archiving; no session changes on failure. */
   sessionArchiveError?: FixtureError;
   /** A coded refusal of releasing a session from its owner after the user confirms; the session stays bound. */

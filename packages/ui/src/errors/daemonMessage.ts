@@ -6,6 +6,7 @@ import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { countdown, quotaWindowPhrase, type QuotaNaming } from "../accounts/quotaFormat";
 import type { Language } from "../i18n/languages";
 import { hostPathsOf } from "../format/hostPath";
+import { droppedFileEntries, droppedFilesText } from "./droppedFileEntries";
 import { leftBranchesText, leftBranchGroups, leftBranchItems } from "./branchCleanupItems";
 import { providerLabel } from "../agents/providers";
 import { CODE, codeRecord, messageFacets, messageKey } from "./codes";
@@ -202,6 +203,7 @@ export function daemonParams<V = never>(
   if (/^\d+$/.test(all.count ?? "")) shown.count = Number(all.count);
   if ((code === CODE.account_in_use || code === CODE.account_has_running_sessions) && /^\d+$/.test(all.sessions ?? "")) shown.count = Number(all.sessions);
   if (code === CODE.field_too_long && /^\d+$/.test(all.limit ?? "")) shown.limit = Number(all.limit);
+  if ((code === CODE.dropped_file_too_large || code === CODE.dropped_file_images_only) && /^\d+$/.test(all.limit_mib ?? "")) shown.limit_mib = Number(all.limit_mib);
   // Where a refused regular expression fails, as the 1-based character it is shown as. The daemon's `offset` counts
   // UTF-16 units; with the `query` the refusal was worded with (`useContentSearch` adds it), characters are counted as
   // the user sees them, an emoji as one.
@@ -242,6 +244,18 @@ export function daemonParams<V = never>(
   return marked;
 }
 
+/** Why a file of a drop was failed, in the language: the failure's own sentence where the application words it, else
+ * the generic one that stands for a failure it has no words for, which `uncatalogued` words as the alert's list does
+ * (it knows the cause the system's text names, which this module does not) and which defaults to the plain generic one. */
+function droppedReason(language: Language, entry: { code: string; params: MessageParams; message: string }, records: RecordNames, uncatalogued?: (entry: { code: string; params: MessageParams; message: string }) => string | undefined): string {
+  // The client words its own failures (a closed connection, a timeout) in the language already.
+  if (codeRecord(entry.code)?.origin === "client") return entry.message;
+  const generic = uncatalogued?.(entry);
+  if (generic !== undefined) return generic;
+  if (isMessageKey(messageKey(messageCode(entry.code, entry.params)))) return daemonMessage(language, entry.code, entry.params, entry.message, records, true);
+  return format(language, entry.code === CODE.unexpected_error ? "error.unexpected.summary" : "error.systemFailure.other", {});
+}
+
 /** What the daemon's `error` or `session_notice` says, in `language`: the catalog's text
  * for its `code` with its params filled in, a record id shown as that record's name (the raw id only
  * when the record is unknown). A code the catalog does not have — a daemon newer than this client —
@@ -256,6 +270,7 @@ export function daemonMessage(
   fallback: string,
   records: RecordNames,
   summary = false,
+  uncatalogued?: (entry: { code: string; params: MessageParams; message: string }) => string | undefined,
 ): string {
   if (summary && lacksSummary(code)) return "";
   const summaryKey = messageKey(richMessageCode(code, params));
@@ -269,6 +284,10 @@ export function daemonMessage(
   const text = format(language, key, shown);
   // Each entry the change could not finish follows on a line of its own, in this language. The
   // daemon's English summary of the same list is not repeated under it.
+  // The plain-text list is kept for parity with the other list codes (sharing failures, branches left behind), though no route
+  // reaches it today: a refusal is raised through `raiseError` and shown as `DaemonErrorMessage`'s structured list.
+  const dropped = droppedFileEntries(code, params);
+  if (dropped) return `${text}\n${droppedFilesText(language, dropped, (entry) => droppedReason(language, entry, records, uncatalogued))}`;
   const sharing = sharingFailureItems(code, params);
   if (sharing) {
     const title = (id: string) => records.sessions.get(id)?.title;

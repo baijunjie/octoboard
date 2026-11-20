@@ -19,7 +19,7 @@ export function hasErrorDetails(error: Failure): boolean {
   if (parts.uncatalogued) return false;
   if (parts.shellTimeout) return true;
   if (!parts.worded) return false;
-  if (parts.left || parts.further || parts.ownText) return true;
+  if (parts.left || parts.droppedFiles || parts.further || parts.ownText) return true;
   if (parts.sharing?.hasReasonLine) return true;
   return parts.nested !== undefined && hasErrorDetails(parts.nested);
 }

@@ -1,6 +1,7 @@
 import type { Step } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { consoleOf, projectOf, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
+import { consoleOf, failureTitle, projectOf, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
+import { droppedFilesParams, type DroppedFileEntry } from "../../errors/droppedFileEntries";
 import { PROTOCOL_GENERATION } from "../../protocol";
 import { staging, homeLab } from "./remoteDaemons";
 import { sessionHolderLink } from "./liveChanges";
@@ -43,6 +44,16 @@ const PATH_LINK_SCENARIO = {
   ...PATH_LINK_FIXTURE,
   state: connected("open"),
 } satisfies Partial<Scenario>;
+
+const LONG_NAME_MOV = "Quarterly-review-recording-and-supporting-documents-FINAL-v3-UnbrokenFileNameForLayout.mov";
+/** What a drop of several files met: the window refused three before sending anything, and the daemon failed one, with the
+ * failure it sends for a write it could not make (no code the window knows, so `internal_error`). */
+const REFUSED_FILES: DroppedFileEntry[] = [
+  { name: LONG_NAME_MOV, code: "dropped_file_too_large", params: { name: LONG_NAME_MOV, limit_mib: "100" }, message: "" },
+  { name: "empty.log", code: "dropped_file_empty", params: { name: "empty.log" }, message: "" },
+  { name: "build output", code: "dropped_file_folder", params: { name: "build output" }, message: "" },
+  { name: "disk-image.iso", code: "internal_error", params: { detail: "No space left on device (os error 28)" }, message: "No space left on device (os error 28)" },
+];
 
 const STARTUP_AND_CONNECTION = "Startup and connection";
 const TERMINAL = "Terminal";
@@ -263,6 +274,32 @@ export const connectionScenarios: Scenario[] = [
     steps: [pickSession, (ui) => ui.focusTerminal()],
   },
   {
+    id: "terminal-file-drop-target",
+    group: TERMINAL,
+    category: "normal",
+    title: "A file dragged over the terminal",
+    description: "A file is held over the session's terminal, as when it is dragged in from the system's file manager: the whole terminal view takes a soft accent tint under an accent ring inset at its edge, which marks it as taking the drop. The tint lies over the output and the cursor without moving them, and the ring with the tint tells the drop target from the keyboard focus ring, which is the ring alone.",
+    state: connected("open"),
+    steps: [pickSession, (ui) => ui.dragFileOverTerminal()],
+  },
+  {
+    id: "terminal-file-drop-uploading",
+    group: TERMINAL,
+    category: "normal",
+    title: "Dropped files uploading",
+    description: "Three files were dropped on the session's terminal and the first, 4 MiB with a long unbroken name, is half uploaded: a single notice line sits at the top of the terminal with a progress ring about half full, \"Uploading 1 of 3:\", the file name in monospace and a small Cancel at the end. The name stays on the line and fades at its edge where it does not fit, with its full name in a tooltip on hover; narrow the window to see it fade sooner. F6 reaches Cancel.",
+    attachmentUpload: { answeredParts: 2 },
+    state: connected("open"),
+    steps: [
+      pickSession,
+      (ui) => ui.dropFilesOnTerminal([
+        { name: "Quarterly-review-recording-and-supporting-documents-FINAL-v3-UnbrokenFileNameForLayout.zip", bytes: 4 * 1024 * 1024 },
+        { name: "notes.txt" },
+        { name: "budget.csv" },
+      ]),
+    ],
+  },
+  {
     id: "terminal-fullscreen-links",
     group: TERMINAL,
     category: "normal",
@@ -436,6 +473,22 @@ export const connectionScenarios: Scenario[] = [
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, [TEMP_IMAGE_PATH]: { kind: "file", refused: "unreadable", detail: "Input/output error (os error 5)" } },
     steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink(TEMP_IMAGE_PATH)],
+  },
+  {
+    id: "terminal-file-drop-refused",
+    group: TERMINAL,
+    category: "exceptional",
+    title: "Several dropped files refused",
+    description: "An alert for a drop in which several files were refused, titled \"Could not attach the files\", with the session and its project as chips above it. The lead sentence, \"These files were not attached, each for its own reason:\", introduces a bulleted list, one row to a file: the window's own refusals say why in a sentence that names the file, and the file the daemon failed has its name as a monospace chip, then says it could not be attached and why. The long unbroken name wraps inside its row. OK is the only button.",
+    state: connected("open"),
+    notifications: [{
+      kind: "raised",
+      title: failureTitle("terminal.dropFilesFailedTitle"),
+      code: "dropped_files_refused",
+      params: droppedFilesParams(REFUSED_FILES),
+      message: "",
+      session: "s-working",
+    }],
   },
   {
     id: "terminal-reconnecting",

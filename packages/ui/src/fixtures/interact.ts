@@ -313,6 +313,14 @@ export interface Ui {
   terminalContextMenu: (text?: string) => Promise<void>;
   /** Focuses the rendered agent terminal without sending input or changing its selection. */
   focusTerminal: () => Promise<void>;
+  /** Starts dragging a file over the agent terminal and leaves the drag there, as when a file is held over the window: the
+   * terminal view gets its drop-target look (`data-file-drop`: the accent ring and the tint over the view), which stays until a
+   * step or the viewer moves the drag on. Waits until the terminal takes input, which is when it accepts a drag. */
+  dragFileOverTerminal: () => Promise<void>;
+  /** Drops files on the agent terminal, as a drop from the system's file manager does: each is a file of `bytes` (1 by default)
+   * of no image type, so it is uploaded as an attachment. Waits as `dragFileOverTerminal` does, and leaves no drag over the
+   * terminal afterwards. */
+  dropFilesOnTerminal: (files: Array<{ name: string; bytes?: number }>) => Promise<void>;
   /** Waits until the program in the agent terminal has switched mouse reporting on, which lands a moment after its
    * output is first drawn. Put it before a step that reads the mode once, such as the edit menu opening. */
   terminalMouseReporting: () => Promise<void>;
@@ -797,6 +805,19 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
    * Items in an inert subtree stay out, as everywhere else. */
   const findMenuItem = (matcher: Matcher): HTMLElement | undefined =>
     Array.from(doc.querySelectorAll<HTMLElement>(MENU_ITEM)).find((element) => !element.closest("[inert]") && matches(matcher, nameOf(element)));
+
+  /** Holds a drag of files over the agent terminal until it shows its drop target: the view only takes a drag
+   * once the terminal accepts input, which lands after its first output, so the drag is offered again until it is taken. */
+  const holdFilesOverTerminal = async (files: Array<{ name: string; bytes?: number }>): Promise<{ view: HTMLElement; dragged: DataTransfer }> => {
+    const dragged = new DataTransfer();
+    for (const { name, bytes = 1 } of files) dragged.items.add(new File([new Uint8Array(bytes)], name, { type: "application/octet-stream" }));
+    const view = await waitFor(() => {
+      const found = doc.querySelector<HTMLElement>(`${AGENT_TERMINAL}[data-terminal-surface]`);
+      found?.dispatchEvent(new DragEvent("dragenter", { bubbles: true, cancelable: true, dataTransfer: dragged }));
+      return found?.hasAttribute("data-file-drop") ? found : undefined;
+    }, "The agent terminal took no dragged file");
+    return { view, dragged };
+  };
 
   /** Puts the pointer on the terminal's text `text`, waiting for a row that holds it. `away` is a point on
    * another row, for a pointer that must leave this one: the nearest row that holds no text, else a neighbour. */
@@ -1558,6 +1579,13 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
       }, "No rendered terminal to focus");
       input.focus();
       await wait(150);
+    },
+    async dragFileOverTerminal() {
+      await holdFilesOverTerminal([{ name: "notes.txt" }]);
+    },
+    async dropFilesOnTerminal(files) {
+      const { view, dragged } = await holdFilesOverTerminal(files);
+      view.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dragged }));
     },
     async terminalMouseReporting() {
       // xterm marks the element while the program's mouse tracking mode is on, and only then does it keep a plain

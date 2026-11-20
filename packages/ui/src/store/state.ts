@@ -2,7 +2,7 @@ import { createStore, type StoreApi } from "zustand";
 
 import type { ConnectionState } from "../daemon-client";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
-import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus, type Console, type DaemonUpdateStatus, type GitStatus, type Host, type HostInfo, type Page, type Project, type ProviderInfo, type RemoteAccess, type ScheduledTask, type ScheduledTaskRun, type Session, type Settings, type ShellTerminal } from "../protocol";
+import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus, type AttachmentLimits, type Console, type DaemonUpdateStatus, type GitStatus, type Host, type HostInfo, type Page, type Project, type ProviderInfo, type RemoteAccess, type ScheduledTask, type ScheduledTaskRun, type Session, type Settings, type ShellTerminal } from "../protocol";
 import type { SessionRequest } from "./sessionRequests";
 
 /** A page's submission at one of its revisions, as `Page` and `page_submission` carry it. */
@@ -140,6 +140,9 @@ export interface State {
   /** The daemon host's own facts as the last `snapshot` said (see `HostInfo`): its operating system, how it writes a
    * path and whether it can make file links. Null until the first snapshot. */
   host: HostInfo | null;
+  /** The limits of a file attached to a session as the last `snapshot` said, or null where it carried none: a daemon
+   * that predates attachments, which a client then attaches no file to. Null until the first snapshot. */
+  attachmentLimits: AttachmentLimits | null;
   /** Whether the daemon is holding its host awake (Prevent sleep) as the last `snapshot` or `keep_awake_held_updated`
    * said. False until the first snapshot. */
   keepAwakeHeld: boolean;
@@ -199,6 +202,7 @@ const initialState: State = {
   accountSharing: new Map(),
   homeDir: null,
   host: null,
+  attachmentLimits: null,
   keepAwakeHeld: false,
   daemonUpdate: null,
   daemonUpdateStale: false,

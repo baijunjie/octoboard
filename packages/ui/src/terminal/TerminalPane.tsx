@@ -10,8 +10,10 @@ import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { ringForAutomaticFocus } from "../input/lastInput";
 import { useLatest } from "../components/hooks/useLatest";
+import { FadeOverflow } from "../components/text/FadeOverflow";
+import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
-import { liveAnnouncerProps } from "../primitives";
+import { liveAnnouncerProps, ProgressCircle } from "../primitives";
 import { type Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { hasNoProcess, holdsPendingLink, isLive } from "../sessions/sessionStatus";
@@ -22,6 +24,7 @@ import { SessionHistoryView } from "./history/SessionHistoryView";
 import { TerminalEditMenu } from "./TerminalEditMenu";
 import { TerminalSurface } from "./TerminalSurface";
 import { TerminalCover } from "./TerminalCover";
+import { dropUploads, useDropProgress } from "./dropUploads";
 import { TerminalNoticeBar, TerminalNoticeSlot } from "./TerminalNoticeBar";
 import { useAnnouncedOnRise } from "./useAnnouncedOnRise";
 import { useHeldWhileHidden } from "./useHeldWhileHidden";
@@ -267,7 +270,7 @@ export function TerminalPane({
     inputHeld: livePending,
     project: session?.project_id,
     viewFile: onViewFile,
-    pasteImages: true,
+    takesAttachments: true,
   });
   const syncSession = useCallback(() => {
     const controller = controllerRef.current;
@@ -394,11 +397,16 @@ export function TerminalPane({
         ? { sessionId: session.id, sentence: t("terminal.archived"), action: t("sidebar.session.reopen") }
         : { sessionId: session.id, sentence: t("terminal.notRunning"), action: t("terminal.resume") }
       : undefined;
+  // The bar over a session whose dropped files are uploading (a window that reads them itself uploads them to the daemon),
+  // with the way to stop: it shares the slot of the bar below, which a session with a process never needs.
+  const uploading = useDropProgress(session?.id);
+  const uploadBar = uploading && !noProcessBar ? uploading : undefined;
+  const uploadSentence = uploadBar && t("terminal.dropUploading", { index: uploadBar.index, total: uploadBar.total, name: isolate(uploadBar.name) });
   // A sentence that arrives or changes under a modal (selecting an interrupted session on an account
   // whose sharing change did not finish asks first), or while the pane is not exposed (a panel or the
   // archive view over it), would be written into a hidden region, and closing the modal or the cover
   // moves focus over it, so it waits for that and the focus move (`useHeldWhileHidden`).
-  const barSaid = useHeldWhileHidden(noProcessBar?.sentence, modalOpen || !exposed);
+  const barSaid = useHeldWhileHidden(noProcessBar?.sentence ?? uploadSentence, modalOpen || !exposed);
   const pendingCover = livePending && session ? { label: sessionDisplayTitle(t, session), title: t("terminal.holderPending.title"), body: t("terminal.holderPending.body") } : undefined;
   const pendingSaid = useAnnouncedWhilePending(session?.id, livePending, t("terminal.holderPending.sentence"), coverHasFocus);
   const waitingForProcess = isStarting || resuming;
@@ -532,6 +540,32 @@ export function TerminalPane({
             variant="primary"
             onPress={() => onResume(noProcessBar.sessionId)}
           />
+        )}
+      </TerminalNoticeSlot>
+      {/* Along the top, which keeps clear the last rows, where an agent's input box and cursor are. A stop of the F6 cycle
+          (`uploads`) while it shows, since the terminal keeps Tab; focus on Cancel is handed back to the terminal when the
+          bar goes (`held`).
+          Two exceptions to the usual forms, both for a notice that stays on one line: the progress is a small ring inside
+          the sentence, which is hidden from assistive technology and spoken once for each file by `barSaid`, not a
+          `ProgressBar` read as it moves; and the file's name is plain monospace text that fades where it is clipped
+          (`FadeOverflow`), not an `InlineReference` chip, which cannot fade or stay on the line. */}
+      <TerminalNoticeSlot edge="top">
+        {uploadBar && session && (
+          <div data-region="uploads" {...held} className="contents">
+            <TerminalNoticeBar
+              compact
+              sentence={(
+                <>
+                  <span className="me-2 shrink-0"><ProgressCircle label={uploadSentence ?? ""} value={uploadBar.fraction === undefined ? undefined : uploadBar.fraction * 100} indeterminate={uploadBar.fraction === undefined} trackClassName="size-4" /></span>
+                  <Message id="terminal.dropUploading" params={{ index: uploadBar.index, total: uploadBar.total, name: <FadeOverflow as="span" dir="ltr" titleWhenClipped={uploadBar.name} className="min-w-0 flex-1 font-mono text-foreground">{uploadBar.name}</FadeOverflow> }} />
+                </>
+              )}
+              action={t("common.cancel")}
+              actionLabel={t("terminal.dropUploadCancel")}
+              variant="secondary"
+              onPress={() => dropUploads.cancel(session.id)}
+            />
+          </div>
         )}
       </TerminalNoticeSlot>
     </TerminalSurface>

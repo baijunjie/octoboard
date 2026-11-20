@@ -14,10 +14,12 @@ import { revealPathTarget } from "../components/host/revealPathTarget";
 import { openPathTarget } from "./links/openPathTarget";
 import { pathLinkKindOf } from "./links/pathLinks";
 import type { HoveredTerminalLink } from "./links/terminalLinks";
+import { dropFilesHandler } from "./droppedFiles";
 import { programCopyHandler } from "./osc52";
 import { pasteImageHandlers } from "./pastedImage";
 import { terminalFontSize } from "./terminalFontSize";
 import { TerminalController, type TerminalControllerOptions, type TermStatus } from "./TerminalController";
+import { useTerminalFileDrop } from "./useTerminalFileDrop";
 
 /**
  * The one `TerminalController` of a terminal view, built when the view mounts into `containerRef` and
@@ -40,7 +42,7 @@ export function useTerminalController({
   inputHeld = false,
   project,
   viewFile,
-  pasteImages = false,
+  takesAttachments = false,
   options,
 }: {
   controllerRef: RefObject<TerminalController | undefined>;
@@ -64,15 +66,16 @@ export function useTerminalController({
   /** Shows a file a path in the output named. Without it a click on a file path does nothing: a file is never opened on
    * the host from a click. */
   viewFile?: (file: ViewedFile) => void;
-  /** Whether an image pasted into the terminal is saved for the session's agent and its path pasted (an agent session's
-   * terminal), rather than pasted as the clipboard's text, empty or not (a shell). Read once, when the controller is
-   * built. */
-  pasteImages?: boolean;
+  /** Whether the terminal's process takes files as paths (an agent session's terminal): an image pasted into it is saved
+   * on the daemon and its path pasted, rather than pasted as the clipboard's text, empty or not (a shell), and files
+   * dropped on it are uploaded there where the window cannot give their paths (`useTerminalFileDrop`). Read once,
+   * when the controller is built. */
+  takesAttachments?: boolean;
   /** Read once, when the controller is built. */
   options?: Omit<TerminalControllerOptions, "host">;
 }): void {
   const t = useT();
-  const { request, isLocal } = useDaemon();
+  const { request, isLocal, store } = useDaemon();
   const { links, clipboard, host } = usePlatform();
   const { style: pathStyle } = useHostPaths();
   const { resolved: colorTheme } = useOctoboardTheme();
@@ -97,7 +100,8 @@ export function useTerminalController({
         openLink: links && ((url) => links.open(url).catch((cause: unknown) => reportExternalLinkFailure(latest.current.t, url, cause))),
         onLinkHover: (link) => setLinkRef.current?.(link),
         copyToClipboard: programCopyHandler(clipboard, () => latest.current),
-        pasteImage: pasteImages ? pasteImageHandlers(() => latest.current, clipboard?.readImage?.bind(clipboard)) : undefined,
+        pasteImage: takesAttachments ? pasteImageHandlers(() => latest.current, clipboard?.readImage?.bind(clipboard)) : undefined,
+        dropFiles: takesAttachments ? dropFilesHandler(() => ({ ...latest.current, attachmentLimits: store.getState().attachmentLimits })) : undefined,
         // A path is checked and read on the daemon's host, whichever it is, but opened or revealed there only where the
         // host is this machine: in the window of a daemon elsewhere a file opens in the viewer and a folder is a link
         // only when it has a README or index file for the viewer to show.
@@ -151,6 +155,8 @@ export function useTerminalController({
     // One controller for the life of the view; what changes while it lives comes through `latest`, bar the
     // callbacks and options documented as read once.
   }, []);
+
+  useTerminalFileDrop({ controllerRef, containerRef, uploads: takesAttachments });
 
   // Only views whose containers changed need a catch-up fit; floating panes leave the agent alone.
   const wasResizingRef = useRef(false);

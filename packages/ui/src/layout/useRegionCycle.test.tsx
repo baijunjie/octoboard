@@ -7,7 +7,7 @@ import { useRegionCycle } from "./useRegionCycle";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const SHOWN = { topbar: true, rail: false, devices: false, tasks: false, welcome: false, sidebar: false, archive: false, terminal: false, banner: false, update: false };
+const SHOWN = { topbar: true, rail: false, devices: false, tasks: false, welcome: false, sidebar: false, archive: false, uploads: false, terminal: false, banner: false, update: false };
 
 function Cycle({ panel, landing = false }: { panel: boolean; landing?: boolean }) {
   useRegionCycle({ shown: SHOWN, panels: { "panel-files": panel }, focusTerminal: () => {} });
@@ -125,4 +125,50 @@ it("visits the update notice, then the connection banner, while they are shown",
   act(() => root.render(<BannerCycle update={false} banner />));
   f6();
   expect(document.activeElement?.id).toBe("retry");
+});
+
+function UploadsCycle({ uploads }: { uploads: boolean }) {
+  useRegionCycle({
+    shown: { ...SHOWN, terminal: true, uploads },
+    focusTerminal: () => document.getElementById("terminal-input")?.focus(),
+  });
+  return (
+    <>
+      <header data-region="topbar"><button id="bar">bar</button></header>
+      {uploads && <div data-region="uploads"><button id="cancel-uploads">Cancel</button></div>}
+      <section data-region="terminal"><textarea id="terminal-input" /></section>
+    </>
+  );
+}
+
+function mountUploads(uploads: boolean) {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  act(() => root.render(<UploadsCycle uploads={uploads} />));
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const f6 = (shiftKey = false) => act(() => void window.dispatchEvent(new KeyboardEvent("keydown", { key: "F6", shiftKey, bubbles: true })));
+  return { f6, active: () => document.activeElement?.id };
+}
+
+it("visits the uploads notice just before the terminal while it is shown, in both directions", () => {
+  const cycle = mountUploads(true);
+  document.getElementById("bar")!.focus();
+  cycle.f6();
+  expect(cycle.active()).toBe("cancel-uploads");
+  cycle.f6();
+  expect(cycle.active()).toBe("terminal-input");
+  cycle.f6(true);
+  expect(cycle.active()).toBe("cancel-uploads");
+  cycle.f6(true);
+  expect(cycle.active()).toBe("bar");
+});
+
+it("skips the uploads notice where it is not shown", () => {
+  const cycle = mountUploads(false);
+  document.getElementById("bar")!.focus();
+  cycle.f6();
+  expect(cycle.active()).toBe("terminal-input");
 });

@@ -185,6 +185,14 @@ const CORE_CODES = {
   draft_discarded: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailLabel: true, variantOf: (params) => (params.cleared === "part" ? "part" : undefined) },
   draft_restore_unconfirmed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   draft_save_unconfirmed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
+  // Files dropped on a terminal that the window refuses before sending anything (`terminal/droppedFiles.ts`): the alert says only why.
+  dropped_file_empty: { origin: "ui", causeOnly: true, codeParams: ["name"] },
+  dropped_file_folder: { origin: "ui", causeOnly: true, codeParams: ["name"] },
+  dropped_file_images_only: { origin: "ui", causeOnly: true, codeParams: ["name"] },
+  dropped_file_too_large: { origin: "ui", causeOnly: true, codeParams: ["name"] },
+  dropped_file_unreadable: { origin: "ui", causeOnly: true, codeParams: ["name"] },
+  // Several files of one drop refused: one alert lists them (`terminal/droppedFiles.ts`), each with its own sentence.
+  dropped_files_refused: { origin: "ui", causeOnly: true },
   // The export dialog keeps Export unavailable while nothing is chosen, so only a client that does not guard it
   // meets this.
   export_empty: { origin: "daemon", recovery: "exportSelection" },
@@ -422,8 +430,8 @@ const CORE_CODES = {
   unreadable_request: { origin: "daemon", unexpected: "the window sends only requests of the shapes it knows", detailBlock: true },
   unshared_state_database: { origin: "daemon", recovery: "none", codeParams: ["path"], nameParams: ["name"] },
   unsupported_file_type: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { unmerged: { codeParams: ["path"] } }, variantOf: (params) => params.file_type === "unmerged" ? "unmerged" : undefined },
-  upload_parts_mismatch: { origin: "daemon", unexpected: "a pasted image or attachment uploaded in parts, which the window never does" },
-  upload_unavailable: { origin: "daemon", unexpected: "a pasted image or attachment uploaded in parts, which the window never does" },
+  upload_parts_mismatch: { origin: "daemon", unexpected: "the window sends an upload's parts in order and saves after the last, so only a window bug, or an upload that expired after 60 seconds without a part, meets it" },
+  upload_unavailable: { origin: "daemon", unexpected: "the window sends an upload's parts in order and saves after the last, so only a window bug, or an upload that expired after 60 seconds without a part, meets it" },
   upstream_not_a_remote: { origin: "daemon", recovery: "gitFailure" },
   // Raised by every checked write (a settings control, a form dialog, an import); its `fields` and `versions` params
   // are for the window's own reconciliation, not for the sentence.

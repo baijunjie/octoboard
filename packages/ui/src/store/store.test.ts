@@ -694,6 +694,24 @@ it("holds where remote access stands from the snapshot and follows remote_access
   expect(daemon.store.getState().remoteAccess).toBe(held);
 });
 
+it("holds the limits of an attached file from the snapshot, null where it carries none, and keeps the same object when a later snapshot repeats them", () => {
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+  expect(daemon.store.getState().attachmentLimits).toBeNull();
+  const snapshotOf = (attachments?: { max_bytes: number; max_part_bytes: number }) => ({
+    type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], agent_cli_statuses: [], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings", keep_awake: false }, keep_awake_held: false, shell_terminals: [], ...(attachments && { attachments }),
+  }) as unknown as Event;
+  client.onEvents!([snapshotOf({ max_bytes: 104857600, max_part_bytes: 1048576 })]);
+  const held = daemon.store.getState().attachmentLimits;
+  expect(held).toEqual({ max_bytes: 104857600, max_part_bytes: 1048576 });
+  client.onEvents!([snapshotOf({ max_bytes: 104857600, max_part_bytes: 1048576 })]);
+  expect(daemon.store.getState().attachmentLimits).toBe(held);
+  client.onEvents!([snapshotOf({ max_bytes: 2048, max_part_bytes: 512 })]);
+  expect(daemon.store.getState().attachmentLimits).toEqual({ max_bytes: 2048, max_part_bytes: 512 });
+  client.onEvents!([snapshotOf()]);
+  expect(daemon.store.getState().attachmentLimits).toBeNull();
+});
+
 describe("whether the daemon shares this machine", () => {
   it("is so only when the daemon is reached at a loopback address", () => {
     expect(createDaemon({ origin: "ws://127.0.0.1:4242", key: "k" }).isLocal).toBe(true);

@@ -57,6 +57,11 @@ export interface PlatformAdapter {
   readonly trayFlyout?: TrayFlyoutCapability;
   /** The system clipboard, for text the UI puts there on the user's say-so. */
   readonly clipboard?: ClipboardCapability;
+  /** Files the user drags from the system's file manager over the page, with the absolute paths they have on this
+   * computer; present only in the local daemon's window of the desktop application, whose shell takes the drag itself
+   * (a page never sees one there as a `drop` event) and whose daemon runs on the same computer, so the paths mean
+   * something to it. Elsewhere the page receives the files as `File` objects and reads them. */
+  readonly fileDrop?: FileDropCapability;
   /** Saving the configuration document as a file the user names and opening one the user picks,
    * each through the system's own dialog. Present wherever the environment offers a way to
    * do both. */
@@ -415,6 +420,21 @@ export interface TrayFlyoutCapability {
   choose(id: string): Promise<void>;
   /** The user dismissed the flyout from the keyboard; the shell hides it. */
   close(): Promise<void>;
+}
+
+/** What happens to a drag of files over the window, in CSS pixels from the page's top left corner. */
+export type FileDragEvent =
+  /** The files are over `position`: the drag has entered the window or moved. */
+  | { kind: "over"; position: { x: number; y: number } }
+  /** The drag left the window, or was cancelled. */
+  | { kind: "leave" }
+  /** The files were released at `position`; `paths` are their absolute paths, folders included. */
+  | { kind: "drop"; position: { x: number; y: number }; paths: string[] };
+
+export interface FileDropCapability {
+  /** Reports every drag of files over the window to `handler` until the returned function is called, even when that is
+   * before the subscription is in place. */
+  listen(handler: (event: FileDragEvent) => void): () => void;
 }
 
 export interface ClipboardCapability {

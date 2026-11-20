@@ -178,6 +178,16 @@ fn build_window(
         None => builder,
     };
     let builder = page_isolation::apply(builder, configuration);
+    // A remote daemon's window must see a dropped file as the page's own `drop` event with `File`
+    // objects, since the page reads the bytes itself to upload them to the daemon. The native
+    // handler would swallow that event and give only local paths, which mean nothing on the remote
+    // host. The main window keeps it: its daemon runs here, so the paths it reports are the ones
+    // to paste.
+    let builder = if identity.is_some() {
+        builder.disable_drag_drop_handler()
+    } else {
+        builder
+    };
     let builder = chrome::decorate(builder);
     // Every load of the main window's page is counted, whoever asks for it (the shell pointing it
     // at a restarted daemon, the page reloading itself): what a connection had under way from the

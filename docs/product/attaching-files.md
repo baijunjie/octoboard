@@ -3,16 +3,20 @@
 A client that shares no file system with the daemon, such as a phone, hands a running session a file by uploading it
 to the daemon's host: the daemon saves it in the session's scratch directory and answers with the saved file's absolute
 path, which the client puts into the message it sends the agent. The agent reads the file with its own tools, as it
-reads any file named by path. The desktop and browser windows offer no way to attach a file.
+reads any file named by path. A remote window of the desktop application and a browser attach a file this way when it
+is dropped onto a session's terminal, and paste the saved file's path into it (see "In a remote window and in a
+browser" in `docs/product/dropping-files-onto-a-terminal.md`); they offer no other way to attach a file.
 
-An image is not attached this way: it is saved as a pasted image (see `docs/product/pasting-images.md`), whose path
-every agent takes as an attached image rather than a file to read.
+An image meant for the agent to take as an image is not attached this way: it is saved as a pasted image (see
+`docs/product/pasting-images.md`), whose path every agent takes as an attached image rather than a file to read.
 
 ## Whether a daemon takes attachments
 
 A daemon that takes attachments says so in its `snapshot` with `attachments`, carrying `max_bytes` (the largest file it
 takes) and `max_part_bytes` (the largest part). A daemon that predates attachments sends no `attachments` and answers
-the attachment requests with `unreadable_request`; a client connected to one offers no way to attach a file.
+the attachment requests with `unreadable_request`; a client connected to one attaches no file: a window takes only
+dropped images it can save as pasted images (see "How each file is sent" in
+`docs/product/dropping-files-onto-a-terminal.md`).
 
 ## Uploading and saving a file
 

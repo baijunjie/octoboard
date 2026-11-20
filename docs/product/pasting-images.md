@@ -6,7 +6,8 @@ system terminal pastes the path of an image file dragged onto it. Claude Code, C
 path of an image file as an attached image (`[Image #1]` in their input). Because the agent reads the file, not the
 clipboard, this works for every agent, also when the daemon runs on another machine than the window, and in a browser
 as well as in the desktop app. Pasting text, and the editing menu itself, are described in
-`docs/product/terminal-copy-paste-and-selection.md`.
+`docs/product/terminal-copy-paste-and-selection.md`; dropping image files onto the terminal, in
+`docs/product/dropping-files-onto-a-terminal.md`.
 
 ## Which pastes paste an image
 
@@ -71,7 +72,7 @@ The window saves an image with the control request `save_pasted_image`:
 
 | Field | Value |
 |---|---|
-| `session` | The session whose terminal the image is pasted into |
+| `session` | The session whose terminal the image is pasted or dropped into |
 | `data` | The image file's bytes, base64-encoded: a PNG, JPEG, GIF or WebP file (judged by its signature, which also gives the file's extension), at most 10 MiB decoded |
 | `upload` | In place of `data`, an upload of the same connection whose parts hold the image (see "Uploading the image in parts" below). Exactly one of `data` and `upload` is given; the window always sends `data` |
 

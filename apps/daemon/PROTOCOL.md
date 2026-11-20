@@ -3571,10 +3571,10 @@ A daemon that predates these requests answers them with `unreadable_request`, an
 
 A client that shares no file system with the daemon (a phone) hands a session a file by uploading it to the daemon's
 host and putting the path it is answered with into what it sends the agent, which reads the file with its own tools.
-An image is not attached this way: it keeps `save_pasted_image`, whose path every agent takes as an attached image
-(and `send_message`'s `images`). A daemon that takes attachments says so with `snapshot.attachments`
-(`max_bytes`, `max_part_bytes`); one that predates them sends no such field and answers the requests with
-`unreadable_request`, and a client offers no way to attach a file.
+An image meant for the agent to take as an image is not attached this way: it keeps `save_pasted_image`, whose path
+every agent takes as an attached image (and `send_message`'s `images`). A daemon that takes attachments says so with
+`snapshot.attachments` (`max_bytes`, `max_part_bytes`); one that predates them sends no such field and answers the
+requests with `unreadable_request`, and a client offers no way to attach a file.
 
 1. `create_attachment_upload` (`session`, `name`, `size`) is answered with `attachment_upload_created` and its `upload`
    handle, after the same checks of the session as a pasted image's. `size` is 1 byte to 100 MiB; `name` is the file's

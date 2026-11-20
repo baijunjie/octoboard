@@ -30,6 +30,11 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
   const { treesOfSession, oldestFirst, keepTrees, refuseUnkeepable, unprobed, endSessions } = ledger;
   let openedSessionCount = 0;
   let pastedImageCount = 0;
+  // The names the open attachment uploads were started with, for the path their save answers.
+  const attachmentUploads = new Map<string, string>();
+  let startedAttachmentUploads = 0;
+  // The parts of each upload asked for so far, for a scenario that holds an upload part-way (`attachmentUpload`).
+  const partsAnswered = new Map<string, number>();
   // The daemon remembers its ordinal counter independently of session history. Seed it from
   // fixture ordinals once, so renaming or deleting a session never reuses an ordinal.
   const initial = store.getState();
@@ -320,6 +325,28 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
       // Where the daemon writes it (the session's scratch directory); the image itself is not kept.
       return { type: "pasted_image_saved", id: null, path: `${HOME}/.octoboard/run/${session.id}/pasted/paste-${Date.now()}-${++pastedImageCount}.png` };
+    },
+    create_attachment_upload: (body) => {
+      if (!store.getState().sessions.has(body.session)) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+      const upload = `attachment-upload-${++startedAttachmentUploads}`;
+      attachmentUploads.set(upload, body.name);
+      return { type: "attachment_upload_created", id: null, upload };
+    },
+    write_attachment_part: (body) => {
+      const answered = (partsAnswered.get(body.upload) ?? 0) + 1;
+      partsAnswered.set(body.upload, answered);
+      return scenario.attachmentUpload && answered > scenario.attachmentUpload.answeredParts ? neverReplied() : { type: "ack", id: null };
+    },
+    save_attachment: (body) => {
+      const name = attachmentUploads.get(body.upload);
+      if (name === undefined) return fail({ code: "upload_unavailable", params: {}, message: `no upload ${body.upload}` });
+      attachmentUploads.delete(body.upload);
+      // Where the daemon writes it (the session's scratch directory); the file itself is not kept.
+      return { type: "attachment_saved", id: null, path: `${HOME}/.octoboard/run/${body.session}/attachments/${name}` };
+    },
+    delete_attachment_upload: (body) => {
+      attachmentUploads.delete(body.upload);
+      return { type: "ack", id: null };
     },
     locate_conversation_to_resume: () => {
       const located = scenario.conversationLocation ?? { kind: "not_found" as const };

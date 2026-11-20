@@ -12,6 +12,7 @@ The rest of the session terminal is described in its own docs:
 - what the terminal's area shows with no session selected, and what it offers in a console with nothing in it:
   `docs/product/session-terminal-with-no-session-selected.md`;
 - the editing menu, copying, pasting and selecting: `docs/product/terminal-copy-paste-and-selection.md`;
+- dropping files onto the terminal, which pastes their paths: `docs/product/dropping-files-onto-a-terminal.md`;
 - attaching, scrollback, a client that falls behind the output, the terminal's size and colours:
   `docs/product/terminal-output-scrollback-and-size.md`;
 - reconnecting, the cover while the session's process cannot be reached, and the loading state:

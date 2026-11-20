@@ -22,7 +22,7 @@ export function failureSummaryText(t: Translate, language: Language, error: Erro
   if (typeof error !== "string" && isUncataloguedFailure(error)) return t(uncataloguedSummaryKey(error));
   if (typeof error === "string") return error;
   if (hasShellTimeoutDetails(error)) return t("daemon.shell_environment_timeout.cause");
-  return hasCodeParams(error) ? daemonMessage(language, error.code, error.params, error.message, records, true) : error.message;
+  return hasCodeParams(error) ? daemonMessage(language, error.code, error.params, error.message, records, true, (entry) => isUncataloguedFailure(entry) ? t(uncataloguedSummaryKey(entry)) : undefined) : error.message;
 }
 
 /** A stack led by `heading` (the error's name and message, or its message): as it is where it already starts or

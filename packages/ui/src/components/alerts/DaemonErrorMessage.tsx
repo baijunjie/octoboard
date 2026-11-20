@@ -7,6 +7,7 @@ import { leftBranchDetail, leftBranchGroups, leftBranchName, type LeftBranchItem
 import { hasCodeParams, hasShellTimeoutDetails, systemCauseKey, uncataloguedSummaryKey, type ErrorPresentation } from "../../errors/errorPresentation";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { ActionableError } from "../../errors/actionableError";
+import { isOwnSentence, type DroppedFileEntry } from "../../errors/droppedFileEntries";
 import { errorText, unexpectedFailureDiagnostic } from "../../errors/errorText";
 import { isMessageKey, type MessageKey } from "../../i18n/catalog";
 import { joinNodes } from "../../i18n/joinPhrases";
@@ -77,6 +78,32 @@ function LeftBranches({ count, items, part }: { count: number; items: LeftBranch
   );
 }
 
+/** What a `dropped_files_refused` alert lists: the files of one drop that were refused, each with its reason. The lead
+ * line is the summary and the list is the further explanation, as the groups of `LeftBranches` are, and there is no
+ * remedy or raw text. A file the window refused is one sentence with its name in it, as it is when it is the only one
+ * refused; one the daemon failed has its name first, then the failure's own summary. A long name wraps. */
+function RefusedFiles({ entries, part }: { entries: DroppedFileEntry[]; part?: DaemonErrorPart }): React.ReactElement | null {
+  if (part === "remedy" || part === "raw" || part === "own") return null;
+  const lead = <Message id="daemon.dropped_files_refused" />;
+  if (part === "summary") return lead;
+  const list = (
+    <ul className="ms-4 flex min-w-0 list-disc flex-col gap-1 [overflow-wrap:anywhere]">
+      {entries.map((entry, at) => {
+        const failure = new CodedError(entry.message, entry.code, entry.params);
+        return (
+          <li key={at}>
+            {isOwnSentence(entry)
+              ? <DaemonErrorMessage error={failure} part="summary" />
+              : <Message id="daemon.dropped_files_refused.row" params={{ name: <InlineReference dir="ltr" monospace wrap>{entry.name}</InlineReference>, reason: <DaemonErrorMessage error={failure} part="summary" /> }} />}
+          </li>
+        );
+      })}
+    </ul>
+  );
+  if (part) return list;
+  return <div className="flex min-w-0 flex-col gap-2"><span>{lead}</span>{list}</div>;
+}
+
 /** Git's own message for one branch or worktree that could not be removed, under its name, which names the block. */
 function LeftBranchDetail({ name, detail }: { name: string; detail: string }): React.ReactElement {
   const id = useId();
@@ -122,6 +149,7 @@ function CodedDaemonMessage({ error, part, ownTextApart }: { error: CodedError; 
   const actionableRaw = parts.actionableDetail ? <DiagnosticBlock>{parts.actionableDetail}</DiagnosticBlock> : null;
   const summaryless = lacksSummary(error.code);
   if (!parts.worded) return part === undefined || part === "summary" ? <>{error.message}</> : part === "details" || part === "raw" ? actionableRaw : null;
+  if (parts.droppedFiles) return <RefusedFiles entries={parts.droppedFiles} part={part} />;
   const left = parts.left;
   if (left) return <LeftBranches count={left.length} items={left} part={part} />;
   const params = daemonParams<React.ReactNode>(language, error.code, error.params, { consoles, projects, sessions, shellTerminals, accounts, providers }, (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>);

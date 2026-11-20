@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { translatorFor } from "../i18n/catalog";
 import { looseRequestSender, type RequestHandler } from "../requests";
-import { imageInPaste, MAX_PASTED_IMAGE_BYTES, pasteImageHandlers, pastedPath } from "./pastedImage";
+import { base64Of, imageInPaste, isSavedAsIs, MAX_PASTED_IMAGE_BYTES, pasteImageHandlers, pastedPath, savePastedImagePath } from "./pastedImage";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -206,5 +206,66 @@ describe("the handlers of a terminal that pastes images", () => {
       expect(requests).toEqual([]);
       expect(alerts()[0]).toMatchObject({ message: "The image is larger than 10 MiB." });
     });
+  });
+});
+
+describe("whether the daemon saves an image as it is", () => {
+  it.each(["image/png", "image/jpeg", "image/gif", "image/webp"])("is so for a %s", (type) => {
+    expect(isSavedAsIs(new Blob(["x"], { type }))).toBe(true);
+  });
+
+  it.each(["image/bmp", "image/svg+xml", "text/plain", ""])("is not so for the type %j", (type) => {
+    expect(isSavedAsIs(new Blob(["x"], { type }))).toBe(false);
+  });
+
+  it("is so up to exactly 10 MiB and not beyond", () => {
+    expect(isSavedAsIs(new Blob([new Uint8Array(MAX_PASTED_IMAGE_BYTES)], { type: "image/png" }))).toBe(true);
+    expect(isSavedAsIs(new Blob([new Uint8Array(MAX_PASTED_IMAGE_BYTES + 1)], { type: "image/png" }))).toBe(false);
+  });
+});
+
+describe("the base64 text of a blob", () => {
+  it("is that of its bytes alone, with no data URL prefix", async () => {
+    await expect(base64Of(new Blob([Uint8Array.from([137, 80, 78, 71, 0, 255])], { type: "image/png" }))).resolves.toBe(Buffer.from([137, 80, 78, 71, 0, 255]).toString("base64"));
+  });
+
+  it("is empty for an empty blob", async () => {
+    await expect(base64Of(new Blob([]))).resolves.toBe("");
+  });
+
+  it("rejects when the blob cannot be read", async () => {
+    vi.spyOn(FileReader.prototype, "readAsDataURL").mockImplementation(function (this: FileReader) {
+      this.onerror?.(new ProgressEvent("error") as ProgressEvent<FileReader>);
+    });
+    await expect(base64Of(new Blob(["x"]))).rejects.toBeInstanceOf(Error);
+  });
+});
+
+describe("saving an image on the daemon of a session", () => {
+  it("sends it as it is and answers the path, quoted where it has whitespace", async () => {
+    const requests: unknown[] = [];
+    const request = looseRequestSender(async (body) => {
+      requests.push(body);
+      return { type: "pasted_image_saved", id: null, path: "/Users/some one/pasted/p.png" };
+    });
+    await expect(pasteImageHandlers(() => ({ t, request }), undefined).save(new Blob(["abc"], { type: "image/png" }), "s-9")).resolves.toBe("'/Users/some one/pasted/p.png'");
+    expect(requests).toEqual([{ type: "save_pasted_image", session: "s-9", data: Buffer.from("abc").toString("base64") }]);
+  });
+
+  it("rejects, sending nothing, for an image over 10 MiB", async () => {
+    const send = vi.fn();
+    const request = looseRequestSender(async (body) => {
+      send(body);
+      return { type: "pasted_image_saved", id: null, path: "/x" };
+    });
+    await expect(savePastedImagePath(new Blob([new Uint8Array(MAX_PASTED_IMAGE_BYTES + 1)], { type: "image/png" }), "s-9", { t, request })).rejects.toThrow("The image is larger than 10 MiB.");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("rejects with the daemon's failure", async () => {
+    const request = looseRequestSender(async () => {
+      throw new Error("refused");
+    });
+    await expect(savePastedImagePath(new Blob(["abc"], { type: "image/png" }), "s-9", { t, request })).rejects.toThrow("refused");
   });
 });

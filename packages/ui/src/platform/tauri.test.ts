@@ -32,6 +32,18 @@ vi.mock("@tauri-apps/api/webviewWindow", () => ({
   },
 }));
 
+/** The shell's drag and drop of files over the webview: the test calls `dragDrop` itself, as the shell would. */
+let dragDrop: ((event: { payload: unknown }) => void) | undefined;
+const unlistenDragDrop = vi.fn();
+vi.mock("@tauri-apps/api/webview", () => ({
+  getCurrentWebview: () => ({
+    onDragDropEvent: async (handler: (event: { payload: unknown }) => void) => {
+      dragDrop = handler;
+      return unlistenDragDrop;
+    },
+  }),
+}));
+
 const shellOpen = vi.fn(async (_address: string) => {});
 vi.mock("@tauri-apps/plugin-shell", () => ({ open: (address: string) => shellOpen(address) }));
 
@@ -54,6 +66,8 @@ afterEach(() => {
   shellOpen.mockReset();
   shellOpen.mockResolvedValue(undefined);
   listeners.clear();
+  dragDrop = undefined;
+  unlistenDragDrop.mockReset();
   vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
 });
@@ -870,5 +884,64 @@ describe("the notification-area flyout's page", () => {
     undoModel();
     undoOpened();
     expect(listeners.size).toBe(0);
+  });
+});
+
+describe("the files dragged over the window", () => {
+  function openAs(query: string): void {
+    vi.stubGlobal("__TAURI_INTERNALS__", {});
+    window.history.replaceState(null, "", `/?host=${encodeURIComponent(JSON.stringify(MAC_HOST))}${query}`);
+  }
+
+  it("are the local daemon's window's to take, and no other kind of window has the capability", () => {
+    openAs("");
+    expect(tauriPlatform().fileDrop).toBeDefined();
+    openAs("&daemon=me%40host&remote=host");
+    expect(tauriPlatform().fileDrop).toBeUndefined();
+    openAs("&flyout=1");
+    expect(tauriPlatform().fileDrop).toBeUndefined();
+  });
+
+  it("are reported to the handler with the position in CSS pixels, the shell's physical pixels divided by the device pixel ratio", async () => {
+    vi.stubGlobal("devicePixelRatio", 2);
+    const handler = vi.fn();
+    const stop = tauriPlatform().fileDrop!.listen(handler);
+    await afterQueuedWork();
+    dragDrop!({ payload: { type: "enter", paths: ["/a"], position: { x: 200, y: 101 } } });
+    dragDrop!({ payload: { type: "over", position: { x: 300, y: 50 } } });
+    dragDrop!({ payload: { type: "drop", paths: ["/Users/u/a.txt", "/Users/u/folder"], position: { x: 10, y: 20 } } });
+    dragDrop!({ payload: { type: "leave" } });
+    expect(handler.mock.calls.map(([event]) => event)).toEqual([
+      { kind: "over", position: { x: 100, y: 50.5 } },
+      { kind: "over", position: { x: 150, y: 25 } },
+      { kind: "drop", position: { x: 5, y: 10 }, paths: ["/Users/u/a.txt", "/Users/u/folder"] },
+      { kind: "leave" },
+    ]);
+    stop();
+  });
+
+  it("are positioned as they are where the device pixel ratio is 1", async () => {
+    vi.stubGlobal("devicePixelRatio", 1);
+    const handler = vi.fn();
+    const stop = tauriPlatform().fileDrop!.listen(handler);
+    await afterQueuedWork();
+    dragDrop!({ payload: { type: "over", position: { x: 33, y: 44 } } });
+    expect(handler).toHaveBeenCalledExactlyOnceWith({ kind: "over", position: { x: 33, y: 44 } });
+    stop();
+  });
+
+  it("stop being reported when the listener is undone", async () => {
+    const stop = tauriPlatform().fileDrop!.listen(() => {});
+    await afterQueuedWork();
+    expect(unlistenDragDrop).not.toHaveBeenCalled();
+    stop();
+    expect(unlistenDragDrop).toHaveBeenCalledOnce();
+  });
+
+  it("stop being reported even when the listener is undone before the shell has been subscribed to", async () => {
+    const stop = tauriPlatform().fileDrop!.listen(() => {});
+    stop();
+    await afterQueuedWork();
+    expect(unlistenDragDrop).toHaveBeenCalledOnce();
   });
 });

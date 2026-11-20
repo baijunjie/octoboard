@@ -10,6 +10,7 @@ import { raiseError } from "./raiseError";
 import { CODES } from "../../errors/codes";
 import { daemonMessage } from "../../errors/daemonMessage";
 import { CodedError } from "../../errors/codedError";
+import { droppedFilesParams, type DroppedFileEntry } from "../../errors/droppedFileEntries";
 import { format, isMessageKey, translatorFor } from "../../i18n/catalog";
 import { RecoveryGuidance, recoveryParams } from "./ErrorGuidance";
 import { errorPresentation, hasCodeParams } from "../../errors/errorPresentation";
@@ -1248,4 +1249,48 @@ it("splits an agent app that could not be opened into its sentence, what to do, 
   // Plain text (a toast, a notification) joins the sentence and the step, and carries none of the raw reason.
   const plain = daemonMessage("en", "native_app_unavailable", params, "fallback", createStateStore({}).getState());
   expect(plain).toBe("The agent's app may not be installed, may not have started, or has no conversation to open. See the details for the cause, then try again.");
+});
+
+describe("the files of a drop that were refused", () => {
+  const entries: DroppedFileEntry[] = [
+    { name: "docs", code: "dropped_file_folder", params: { name: "docs" }, message: "docs is a folder" },
+    { name: "big.zip", code: "dropped_file_too_large", params: { name: "big.zip", limit_mib: "3" }, message: "big.zip is too large" },
+    { name: "notes, final.txt", code: "session_not_running", params: {}, message: "This session is not running." },
+  ];
+  const refused = () => new CodedError("fallback", "dropped_files_refused", droppedFilesParams(entries));
+  const plain = (node: Element | null | undefined) => node?.textContent?.replace(/[\u2066-\u2069]/g, "");
+  const mountPart = (part?: "summary" | "details" | "remedy" | "raw" | "own") =>
+    mount(<DaemonProvider value={testDaemon()}><DaemonErrorMessage error={refused()} part={part} /></DaemonProvider>);
+
+  it("is a lead line and one row to a file", () => {
+    const container = mountPart();
+    expect(plain(container.querySelector("span"))).toBe("These files were not attached, each for its own reason:");
+    expect(Array.from(container.querySelectorAll("li"), plain)).toEqual([
+      "docs is a folder, and only files can be attached.",
+      "big.zip is larger than 3 MiB.",
+      "notes, final.txt could not be attached. This session is not running.",
+    ]);
+  });
+
+  it("names each file as a reference", () => {
+    const container = mountPart();
+    expect(Array.from(container.querySelectorAll("li"), (row) => row.querySelector("[data-inline-reference]")?.textContent)).toEqual(["docs", "big.zip", "notes, final.txt"]);
+  });
+
+  it("gives the lead line alone as the summary and the list alone as the details", () => {
+    const summary = mountPart("summary");
+    expect(plain(summary)).toBe("These files were not attached, each for its own reason:");
+    expect(summary.querySelector("li")).toBeNull();
+    const details = mountPart("details");
+    expect(details.querySelectorAll("li")).toHaveLength(3);
+    expect(plain(details)).not.toContain("These files were not attached, each for its own reason:");
+  });
+
+  it.each(["remedy", "raw", "own"] as const)("has nothing as its %s part", (part) => {
+    expect(mountPart(part).textContent).toBe("");
+  });
+
+  it("has details to show", () => {
+    expect(hasErrorDetails(refused())).toBe(true);
+  });
 });

@@ -24,9 +24,11 @@ import { MAX_AUTO_RECONNECT_ATTEMPTS, reconnectDelay } from "./reconnectPolicy";
 import { PAST_ANY_RETRY_MS } from "./reconnectTestSupport";
 import { resetTerminalFontSize, terminalFontSize } from "./terminalFontSize";
 import type { TermStatus } from "./TerminalController";
+import { dropUploads, type DropTurn } from "./dropUploads";
 import { LOADING_LIMIT_MS, TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 import { BROWSER_HOST } from "../test/hosts";
 import { afterQueuedWork, fakeTimers } from "../test/clock";
+import { acknowledgeAllAlerts } from "../test/alertQueue";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -44,11 +46,14 @@ const { FakeController } = vi.hoisted(() => {
       openLink?: (url: string) => Promise<void>;
       pathLinks?: { open: (target: PathTarget) => Promise<void>; probe: (paths: string[]) => Promise<{ kind: string; view?: unknown }[]>; reveal?: unknown; openDefault?: unknown };
       pasteImage?: { save: (image: Blob, sessionId: string) => Promise<string | undefined>; read?: () => Promise<Blob | undefined> };
+      dropFiles?: { upload: (files: { file: File; folder: boolean }[], sessionId: string) => Promise<string | undefined> };
     }) {
       FakeController.last = this;
     }
     /** The image paste handlers the pane gave the controller, if any. */
     get pasteImage() { return this.callbacks.pasteImage; }
+    /** The dropped-file handlers the pane gave the controller, if any. */
+    get dropFiles() { return this.callbacks.dropFiles; }
     openPath(target: PathTarget): Promise<void> | undefined {
       return this.callbacks.pathLinks?.open(target);
     }
@@ -2145,34 +2150,37 @@ describe("the terminal's focus ring", () => {
     expect(ringed(container)).toBe(drawn);
   });
 
+  /** The ring of keyboard focus in the terminal, as distinct from the one that marks a file drag over it (`data-file-drop:ring-2`), which the view always carries. */
+  const FOCUS_RING = /has-\[\.xterm-helper-textarea:focus\]:ring-2/;
+
   it("is not applied while the loading cover hides the terminal, and is once the first paint has uncovered it", () => {
     const { container } = mount();
-    expect(surface(container).className).not.toMatch(/ring-2/);
+    expect(surface(container).className).not.toMatch(FOCUS_RING);
     FakeController.last.settle("open");
-    expect(surface(container).className).not.toMatch(/ring-2/);
+    expect(surface(container).className).not.toMatch(FOCUS_RING);
     FakeController.last.paint();
-    expect(surface(container).className).toMatch(/ring-2/);
+    expect(surface(container).className).toMatch(FOCUS_RING);
   });
 
   it("is not applied while the reconnecting or the disconnected cover hides the terminal", () => {
     const { container } = mountUncovered();
-    expect(surface(container).className).toMatch(/ring-2/);
+    expect(surface(container).className).toMatch(FOCUS_RING);
     FakeController.last.settle("closed");
     expect(status(container) ?? "").not.toBe("Loading terminal…");
-    expect(surface(container).className).not.toMatch(/ring-2/);
+    expect(surface(container).className).not.toMatch(FOCUS_RING);
     for (let i = 0; i < 5; i++) failAttempt();
     FakeController.last.settle("closed");
-    expect(surface(container).className).not.toMatch(/ring-2/);
+    expect(surface(container).className).not.toMatch(FOCUS_RING);
   });
 
   it("is not applied while the pending cover hides the terminal, and is again once it has cleared and painted", () => {
     const { container, root } = mountUncovered();
     render(root, { ...session, holder_link: "pending" });
-    expect(surface(container).className).not.toMatch(/ring-2/);
+    expect(surface(container).className).not.toMatch(FOCUS_RING);
     render(root, session);
     FakeController.last.settle("open");
     FakeController.last.paint();
-    expect(surface(container).className).toMatch(/ring-2/);
+    expect(surface(container).className).toMatch(FOCUS_RING);
   });
 });
 
@@ -2207,5 +2215,242 @@ describe("pasting an image into the agent's terminal", () => {
     mount();
     expect(FakeController.last.pasteImage!.read).toBeUndefined();
     await afterQueuedWork();
+  });
+});
+
+describe("files dropped on the agent's terminal", () => {
+  const dropped = (name: string) => ({ file: new File(["abc"], name), folder: false });
+  const attachmentReplies = async (body: ClientRequestBody): Promise<Event> => {
+    if (body.type === "create_attachment_upload") return { type: "attachment_upload_created", id: null, upload: "up-1" };
+    if (body.type === "save_attachment") return { type: "attachment_saved", id: null, path: "/data/run/s-1/attachments/a.txt" };
+    return { type: "ack", id: null };
+  };
+
+  it("marks the terminal view for the drop, which is found by it", () => {
+    const { container } = mount();
+    expect(container.querySelector("[data-region=terminal][data-terminal-surface]")).not.toBeNull();
+  });
+
+  it("is given to the controller, uploading through the daemon with the limits its snapshot gave", async () => {
+    request.mockImplementation(attachmentReplies);
+    onTestFinished(() => {
+      request.mockImplementation(async (body) => (body.type === "read_session_history" ? { type: "session_history", id: null, session: "", messages: [] } : { type: "ack", id: null }));
+      acknowledgeAllAlerts();
+    });
+    // jsdom's FileReader, which reads the file, finishes on a timer: it needs the real clock, which nothing else in this test arms a timer on.
+    fakeTimers({ toFake: ["Date"] });
+    mount();
+    setState({ attachmentLimits: { max_bytes: 100, max_part_bytes: 10 } });
+    const dropping = FakeController.last.dropFiles!;
+    expect(dropping).toBeDefined();
+    await expect(dropping.upload([dropped("a.txt")], "s-1")).resolves.toBe("/data/run/s-1/attachments/a.txt ");
+    expect(request).toHaveBeenCalledWith({ type: "create_attachment_upload", session: "s-1", name: "a.txt", size: 3 });
+    expect(request).toHaveBeenCalledWith({ type: "save_attachment", session: "s-1", upload: "up-1" });
+  });
+
+  it("judges a file by the limits of the snapshot at the time of the drop, refusing a file that is not an image when the daemon gave none", async () => {
+    request.mockImplementation(attachmentReplies);
+    onTestFinished(() => {
+      request.mockImplementation(async (body) => (body.type === "read_session_history" ? { type: "session_history", id: null, session: "", messages: [] } : { type: "ack", id: null }));
+      acknowledgeAllAlerts();
+    });
+    fakeTimers({ toFake: ["Date"] });
+    mount();
+    setState({ attachmentLimits: null });
+    request.mockClear();
+    await expect(FakeController.last.dropFiles!.upload([dropped("a.txt")], "s-1")).resolves.toBeUndefined();
+    expect(request).not.toHaveBeenCalled();
+    expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  });
+});
+
+describe("the notice bar of dropped files uploading", () => {
+  /** Queues a drop of `names` for `sessionId` whose files each end when the test says; the turn is what the drop's task was given. */
+  function queueDrop(sessionId: string, names: string[]) {
+    const gates = names.map(() => { let end!: () => void; const promise = new Promise<void>((resolve) => { end = resolve; }); return { promise, end }; });
+    let turn!: DropTurn;
+    let done!: Promise<void>;
+    act(() => {
+      done = dropUploads.run(sessionId, names, async (given) => {
+        turn = given;
+        for (const [at, name] of names.entries()) {
+          given.begin(name);
+          await gates[at].promise;
+          given.end();
+        }
+      });
+    });
+    // Whatever a test leaves unfinished must not stay queued for the next.
+    onTestFinished(async () => {
+      for (const gate of gates) gate.end();
+      await act(async () => { await done; });
+    });
+    return { turn: () => turn, finish: (at: number) => act(async () => { gates[at].end(); await Promise.resolve(); }) };
+  }
+
+  const bar = (container: HTMLElement) => [...container.querySelectorAll("[aria-hidden=true]")].find((node) => node.textContent?.includes("Uploading"));
+  const plain = (node: Element | undefined | null) => node?.textContent?.replace(/[\u2066-\u2069]/g, "");
+  const cancelButton = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>("[data-region=terminal] button")].find((button) => button.textContent === "Cancel");
+
+  it("is not there while no upload is queued for the session", () => {
+    const { container } = mount();
+    expect(bar(container)).toBeUndefined();
+    expect(cancelButton(container)).toBeUndefined();
+  });
+
+  it("says which file of how many is going, with the name in monospace left to right rather than as a reference, and offers a compact Cancel, while the session's uploads are queued", () => {
+    const { container } = mount();
+    queueDrop("s-1", ["a.bin", "b.bin"]);
+    expect(plain(bar(container))).toBe("Uploading 1 of 2: a.bin");
+    expect(bar(container)?.querySelector("[data-inline-reference]")).toBeNull();
+    const name = [...bar(container)!.querySelectorAll("span")].find((node) => node.children.length === 0 && node.textContent === "a.bin");
+    expect(name?.getAttribute("dir")).toBe("ltr");
+    expect(name?.className).toContain("font-mono");
+    const cancel = cancelButton(container);
+    expect(cancel).toBeDefined();
+    expect(cancel?.getAttribute("data-size")).toBe("xs");
+  });
+
+  it("keeps the whole sentence on one line, its spacing kept as the locale's string writes it", () => {
+    const { container } = mount();
+    queueDrop("s-1", ["a.bin"]);
+    expect(bar(container)?.className).toContain("whitespace-pre");
+    expect(bar(container)?.className).not.toContain("gap-");
+  });
+
+  it("floats along the top of the terminal, while the other notice bars stay along the bottom", () => {
+    const { container } = mount();
+    queueDrop("s-1", ["a.bin"]);
+    const slot = container.querySelector("[data-region=uploads]")?.parentElement;
+    expect(slot?.className).toContain("top-4");
+    expect(slot?.className).not.toContain("bottom-4");
+    const interrupted = sessionOf("s-1", "c-1", undefined, "Work", "interrupted");
+    const other = document.body.appendChild(document.createElement("div"));
+    const otherRoot = createRoot(other);
+    roots.push(otherRoot);
+    render(otherRoot, interrupted);
+    const sentence = [...other.querySelectorAll("[aria-hidden=true]")].find((node) => node.textContent === "Not running");
+    expect(sentence?.parentElement?.parentElement?.className).toContain("bottom-4");
+  });
+
+  it("names its button Cancel uploads for assistive technology, which still says Cancel", () => {
+    const { container } = mount();
+    queueDrop("s-1", ["a.bin"]);
+    const cancel = cancelButton(container);
+    expect(cancel?.textContent).toBe("Cancel");
+    expect(cancel?.getAttribute("aria-label")).toBe("Cancel uploads");
+    expect(cancel?.getAttribute("aria-label")).toContain(cancel?.textContent);
+  });
+
+  it("is a region of its own for F6 while it shows, and not otherwise", () => {
+    const { container } = mount();
+    expect(container.querySelector("[data-region=uploads]")).toBeNull();
+    queueDrop("s-1", ["a.bin"]);
+    const region = container.querySelector("[data-region=uploads]");
+    expect(region).not.toBeNull();
+    expect(region?.contains(cancelButton(container) ?? null)).toBe(true);
+  });
+
+  it("hands focus back to the terminal when the bar goes while Cancel holds it", async () => {
+    const { container } = mount();
+    const drop = queueDrop("s-1", ["a.bin"]);
+    act(() => cancelButton(container)!.focus());
+    expect(document.activeElement).toBe(cancelButton(container));
+    const focuses = FakeController.last.focuses;
+    await drop.finish(0);
+    expect(bar(container)).toBeUndefined();
+    expect(FakeController.last.focuses).toBe(focuses + 1);
+  });
+
+  it("leaves focus where it is when the bar goes while it is elsewhere", async () => {
+    const { container } = mount();
+    const drop = queueDrop("s-1", ["a.bin"]);
+    const outside = document.body.appendChild(document.createElement("button"));
+    onTestFinished(() => outside.remove());
+    act(() => outside.focus());
+    const focuses = FakeController.last.focuses;
+    await drop.finish(0);
+    expect(bar(container)).toBeUndefined();
+    expect(document.activeElement).toBe(outside);
+    expect(FakeController.last.focuses).toBe(focuses);
+  });
+
+  it("follows the uploads from file to file and goes when they are done", async () => {
+    const { container } = mount();
+    const drop = queueDrop("s-1", ["a.bin", "b.bin"]);
+    await drop.finish(0);
+    expect(plain(bar(container))).toBe("Uploading 2 of 2: b.bin");
+    await drop.finish(1);
+    expect(bar(container)).toBeUndefined();
+    expect(cancelButton(container)).toBeUndefined();
+  });
+
+  const circle = (container: HTMLElement) => bar(container)?.querySelector("[role=progressbar]");
+
+  it("shows a spinning circle in the sentence until the file says how far it is", () => {
+    const { container } = mount();
+    queueDrop("s-1", ["a.bin"]);
+    expect(circle(container)).not.toBeNull();
+    expect(circle(container)?.hasAttribute("aria-valuenow")).toBe(false);
+  });
+
+  it("fills the circle to the fraction of the file uploaded, moving with each part, without speaking it again", () => {
+    const { container } = mount();
+    const drop = queueDrop("s-1", ["a.bin"]);
+    speak();
+    const spoken = () => [...container.querySelectorAll("[role=status]:not([data-slot=spinner])")].map(plain).filter((text) => text?.startsWith("Uploading"));
+    act(() => drop.turn().advance(0, 10));
+    expect(circle(container)?.getAttribute("aria-valuenow")).toBe("0");
+    act(() => drop.turn().advance(4, 10));
+    expect(circle(container)?.getAttribute("aria-valuenow")).toBe("40");
+    act(() => drop.turn().advance(10, 10));
+    expect(circle(container)?.getAttribute("aria-valuenow")).toBe("100");
+    speak();
+    expect(spoken()).toEqual(["Uploading 1 of 1: a.bin"]);
+  });
+
+  it("keeps the circle inside the sentence, hidden from assistive technology", () => {
+    const { container } = mount();
+    queueDrop("s-1", ["a.bin"]);
+    expect(circle(container)?.closest("[aria-hidden=true]")).toBe(bar(container));
+  });
+
+  it("is not shown for the uploads of another session", () => {
+    const { container } = mount();
+    queueDrop("s-other", ["a.bin"]);
+    expect(bar(container)).toBeUndefined();
+  });
+
+  it("cancels the session's uploads from its Cancel button", () => {
+    const { container } = mount();
+    const drop = queueDrop("s-1", ["a.bin", "b.bin"]);
+    expect(drop.turn().signal.aborted).toBe(false);
+    act(() => cancelButton(container)!.click());
+    expect(drop.turn().signal.aborted).toBe(true);
+  });
+
+  it("is spoken from a status region once, after the first write delay", () => {
+    const { container } = mount();
+    queueDrop("s-1", ["a.bin", "b.bin"]);
+    speak();
+    const spoken = [...container.querySelectorAll("[role=status]:not([data-slot=spinner])")].map(plain);
+    expect(spoken.filter((text) => text === "Uploading 1 of 2: a.bin")).toHaveLength(1);
+  });
+});
+
+describe("the compact notice bar", () => {
+  it("is opt-in: the bar of a session with no process keeps its wrapping sentence and its small button", () => {
+    const interrupted = sessionOf("s-1", "c-1", undefined, "Work", "interrupted");
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    render(root, interrupted);
+    const sentence = [...container.querySelectorAll("[aria-hidden=true]")].find((node) => node.textContent === "Not running");
+    expect(sentence).toBeDefined();
+    expect(sentence?.className).not.toContain("whitespace-pre");
+    expect(sentence?.parentElement?.className).not.toContain("max-w-");
+    const button = sentence?.parentElement?.querySelector("button");
+    expect(button?.getAttribute("data-size")).toBe("sm");
+    expect(button?.className).not.toContain("app-button--xs");
   });
 });

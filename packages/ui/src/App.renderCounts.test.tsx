@@ -6,7 +6,7 @@
 import { defaultDaemonReply } from "./test/testDaemon";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { fakeTimers } from "./test/clock";
 import { App } from "./App";
@@ -15,6 +15,7 @@ import { byLabel, fakeDaemon, row, stubWindow } from "./appTestSupport";
 import { consoleOf, gitStatusOf, markdownContent, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import { PlatformProvider } from "./platform/react";
+import { dropUploads } from "./terminal/dropUploads";
 import type { Event, ClientRequestBody, ScheduledTask } from "./protocol";
 import { applyDaemonEvent, DaemonProvider, type Daemon, type State } from "./store";
 import { ThemeProvider } from "./preferences/theme";
@@ -263,4 +264,87 @@ it("does not render App when a save starts, and renders it no more than twice wh
     applyDaemonEvent(daemon.store, { type: "scheduled_task_upserted", task: { ...task, prompt: "Edited" } });
     answerSave();
   })).App).toBeLessThanOrEqual(2);
+});
+
+/** Queues a drop for `sessionId` that ends when `finish` is called, and hands out its turn to say where it is. */
+function queueUpload(sessionId: string, names: string[]) {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let turn!: Parameters<Parameters<typeof dropUploads.run>[2]>[0];
+  const done = dropUploads.run(sessionId, names, async (given) => {
+    turn = given;
+    given.begin(names[0]);
+    await held;
+    given.end();
+  });
+  onTestFinished(async () => {
+    release();
+    await act(async () => { await done; });
+  });
+  return { turn: () => turn, finish: async () => { release(); await act(async () => { await done; }); } };
+}
+
+it("renders App when a session's uploads appear and when they go, and not as they advance through parts", async () => {
+  mountApp();
+  await rendersOf(() => found(row(fix.title)).click());
+  let upload!: ReturnType<typeof queueUpload>;
+  const appeared = await rendersOf(() => { upload = queueUpload(fix.id, ["a.bin"]); });
+  // As the code stood when this was written: a bound no change may exceed. The flip of the notice's visibility is the
+  // only reason App renders here.
+  expect(appeared.App).toBeLessThanOrEqual(2);
+  expect(appeared.TerminalPane).toBeGreaterThan(0);
+  const advanced = await rendersOf(() => {
+    for (const uploaded of [0, 2, 4, 6, 8]) upload.turn().advance(uploaded, 8);
+  });
+  // The pane shows the circle, so it renders; the window around it has nothing to change.
+  expect(advanced.TerminalPane).toBeGreaterThan(0);
+  expect(advanced.App).toBe(0);
+  const gone = await rendersOf(() => upload.finish());
+  expect(gone.App).toBeLessThanOrEqual(2);
+});
+
+describe("the uploads notice as a stop of F6", () => {
+  const press = () => act(() => void window.dispatchEvent(new KeyboardEvent("keydown", { key: "F6", bubbles: true })));
+  /** The regions F6 lands on in turn, from the top bar, until it comes back to it. */
+  function visits(): string[] {
+    act(() => document.querySelector<HTMLElement>("[data-region=topbar] button")!.focus());
+    const seen: string[] = [];
+    for (let i = 0; i < 20; i++) {
+      press();
+      const region = document.activeElement?.closest("[data-region]")?.getAttribute("data-region") ?? "";
+      if (region === "topbar") break;
+      seen.push(region);
+    }
+    return seen;
+  }
+
+  it("is visited just before the terminal while the selected session has uploads queued, and not while none do", async () => {
+    mountApp();
+    await rendersOf(() => found(row(fix.title)).click());
+    expect(visits()).not.toContain("uploads");
+    queueUpload(fix.id, ["a.bin"]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS); });
+    const seen = visits();
+    expect(seen).toContain("uploads");
+    expect(seen[seen.indexOf("uploads") + 1]).toBe("terminal");
+  });
+
+  it("is not visited for another session's uploads", async () => {
+    mountApp();
+    await rendersOf(() => found(row(fix.title)).click());
+    queueUpload(plan.id, ["a.bin"]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS); });
+    expect(visits()).not.toContain("uploads");
+  });
+
+  it("is not visited while the archive is open over the session", async () => {
+    mountApp();
+    await rendersOf(() => found(row(fix.title)).click());
+    queueUpload(fix.id, ["a.bin"]);
+    await rendersOf(() => found(byLabel(`Actions for project ${isolate(site.name)}`)).click());
+    await rendersOf(() => openSubmenu(menuItem("View archive")));
+    await rendersOf(() => menuItem("View all").click());
+    expect(document.querySelector("[data-region=archive]")).not.toBeNull();
+    expect(visits()).not.toContain("uploads");
+  });
 });

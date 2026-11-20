@@ -52,6 +52,8 @@ import { useAppExit } from "./lifecycle/useAppExit";
 import { useGitStatusSchedule } from "./lifecycle/useGitStatusSchedule";
 import { useInterfaceLanguage } from "./lifecycle/useInterfaceLanguage";
 import { useNativeAppsSync } from "./lifecycle/useNativeAppsSync";
+import { useStrayFileDrops } from "./lifecycle/useStrayFileDrops";
+import { useDropUploadsShown } from "./terminal/dropUploads";
 import { useStatusItemMenu } from "./statusItem/useStatusItemMenu";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { sessionDisplayTitle } from "./sessions/sessionLabel";
@@ -160,6 +162,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   useGitStatusSchedule();
   useInterfaceLanguage();
   useNativeAppsSync();
+  useStrayFileDrops();
 
   const currentConsole = sidebarView.currentConsole;
   // The Remote devices page, in the application's own window (`useRemoteDevicesPage`): while it shows it takes the
@@ -326,6 +329,8 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   const updateNoticeShown = useUpdateSelector((state) => updateNoticeKind(state) !== undefined) ?? false;
   // F6 includes only regions currently on screen, including a revealed floating group.
   // The top bar is always available.
+  // The notice with Cancel over a session whose dropped files are uploading is a stop of its own, as the terminal takes Tab.
+  const uploadsShown = useDropUploadsShown(selectedSession?.id) && !archiveOpen && !agentAreaInert && !pageShown;
   useRegionCycle({
     shown: {
       topbar: true,
@@ -335,6 +340,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
       welcome: noConsoles && !pageShown,
       sidebar: !noSidebar && panes.sidebarShown,
       archive: archiveOpen && !agentAreaInert && !pageShown,
+      uploads: uploadsShown,
       terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen && !agentAreaInert && !pageShown,
       banner: connectionState === "reconnecting" || connectionState === "closed",
       update: updateNoticeShown,

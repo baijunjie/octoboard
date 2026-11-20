@@ -2,6 +2,7 @@
 import { expect, it } from "vitest";
 
 import { CodedError } from "./codedError";
+import { droppedFilesParams } from "./droppedFileEntries";
 import { diagnosticText, failureSummaryText } from "./errorText";
 import { translatorFor } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
@@ -41,4 +42,18 @@ it("keeps a failure the daemon coded as its own text for a diagnostic block, nev
   expect(diagnosticText(coded)).toBe("database is locked");
   const script = new Error("boom");
   expect(diagnosticText(script)).toBe(script.stack);
+});
+
+it("words each file a drop could not attach, an uncatalogued failure as the application's generic sentence for what the system said", () => {
+  const entry = (name: string, code: string, message: string) => ({ name, code, params: {}, message });
+  const error = new CodedError("fallback", "dropped_files_refused", droppedFilesParams([
+    entry("big.iso", "a_code_from_a_newer_daemon", "No space left on device (os error 28)"),
+    entry("a.txt", "session_not_running", "x"),
+    entry("b.txt", "connection_closed", "The connection closed."),
+  ]));
+  expect(failureSummaryText(t, "en", error, records).split("\n").slice(1)).toEqual([
+    `${isolate("big.iso")} could not be attached. The disk is full.`,
+    `${isolate("a.txt")} could not be attached. This session is not running.`,
+    `${isolate("b.txt")} could not be attached. The connection closed.`,
+  ]);
 });

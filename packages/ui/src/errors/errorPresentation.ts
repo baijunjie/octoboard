@@ -1,6 +1,7 @@
 import { CodedError, type MessageParams } from "./codedError";
 import { lacksSummary, hasTrustDiagnostic, referenceNameParams, runningSessionIds, messageCode, withUiParams } from "./daemonMessage";
 import { leftBranchItems } from "./branchCleanupItems";
+import { droppedFileEntries } from "./droppedFileEntries";
 import { classifyError, namedSystemCause, type ErrorRecovery } from "./errorRecovery";
 import { globalParam, isMessageKey, type PlainMessageKey } from "../i18n/catalog";
 import { CODE, codeRecord, messageFacets } from "./codes";
@@ -63,7 +64,7 @@ export function hasCodeParams(error: { code: string; params: MessageParams }): b
   if (lacksSummary(error.code)) return true;
   if (error.code === CODE.shell_environment_timeout) return !hasShellTimeoutDetails(error) && !!error.params.detail;
   if (error.code === CODE.session_has_running_sessions) return !!runningSessionIds(error.params);
-  if (leftBranchItems(error.code, error.params)) return true;
+  if (leftBranchItems(error.code, error.params) || droppedFileEntries(error.code, error.params)) return true;
   const params = withUiParams(error.code, error.params);
   const code = messageCode(error.code, params);
   const references = referenceNameParams(error.code, params);

@@ -162,6 +162,9 @@ then sent away with its Close panel button or by moving the pointer away. In the
   and text a program copies with OSC 52, follow the same section; a program in a tab not shown can copy too, and each
   tab's menu offers what its own program copied. An Option-click moves the shell's cursor as described in "Typing and
   the mouse" in the same doc.
+- **Dropping files**: files dropped onto a shell terminal paste their paths in the desktop application's main window
+  only; in a remote window and a browser a shell terminal refuses the drop (see
+  `docs/product/dropping-files-onto-a-terminal.md`).
 - **Answers to a program's queries**: a program in the shell gets one answer to each query it puts to its terminal,
   however many clients show the terminal, most of them answered by Octoboard whether or not a client is attached, by
   the rules of `docs/product/terminal-queries.md`.

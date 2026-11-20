@@ -70,7 +70,9 @@ their cascade order does not depend on which screen opened first.
   (the only place that imports `@tauri-apps/*`) and `browser.ts`, exposed by `react.tsx`; `host.ts` the `HostFacts`
   every adapter carries as `host` (the system, input facts, window chrome and native capabilities). The desktop shell
   supplies its facts in the window's `?host=` query. A browser derives the input facts it needs, including the xterm
-  selection modifier and Android's virtual pointer convention;
+  selection modifier and Android's virtual pointer convention; the optional `fileDrop` capability (the local daemon's
+  window only, from the shell's drag-and-drop event) reports the absolute paths of files dragged in from the system, and
+  where it is absent the page gets the files as `File` objects instead;
   `useAppVersion.ts` the hook that asks the shell for the running application's version; `reloadPage.ts` the one way the
   page reloads itself (`reloadPage`, and `isReloading` for what must not run on a page already unloading);
   `windowKind.ts` which window of the desktop application the page is, as the shell puts it on the URL (`windowKind`:
@@ -121,7 +123,8 @@ their cascade order does not depend on which screen opened first.
   code), `codes.ts` (the one record per error code, core codes and the providers' `PROVIDER_CODES` merged, with `Code` and `CODE`; `messageKey` maps a code to its catalog key), daemon wording (`daemonMessage.ts`, with
   `sharingFailure.ts` and `branchCleanupItems.ts` for the two items-bearing messages, and the folder rules the latter
   applies), `causes.ts` (parsers for the structured causes a daemon failure carries), `writeConflict.ts` (the `base_versions` a
-  checked write carries, and what a `write_conflict` names), the shared `ErrorPresentation`, recovery classification,
+  checked write carries, and what a `write_conflict` names), `droppedFileEntries.ts` (the entries of the gathered
+  `dropped_files_refused` alert, which `components/alerts/DaemonErrorMessage.tsx` draws), the shared `ErrorPresentation`, recovery classification,
   issue-report address.
 - `src/browse/` — browse requests to the daemon: `budget.ts` (the window's shares of the daemon's bound of outstanding
   browse requests, the shared slot names and the lanes every browse request goes through), the lane primitive
@@ -163,7 +166,7 @@ their cascade order does not depend on which screen opened first.
 
 ### Feature directories
 
-- `src/layout/` — pane layout: panel kinds and widths, the resize handle, the sidebar drawer, swipes below `phone`.
+- `src/layout/` — pane layout: panel kinds and widths, the resize handle, the sidebar drawer, swipes below `phone`, and the F6 region cycle (`useRegionCycle.ts`, the window's regions in visual order).
 - `src/shortcuts/` — the central registry of keyboard shortcuts and its persisted overrides.
 - `src/navigation/` — Back and Forward through the locations the content area has shown, the Remote devices page (`devices`), the Scheduled tasks page (`tasks`) and the offline window's status (`offline`) among them; a move can be put behind a confirmation (`confirm`), which is how the unsaved-changes guard asks before one.
 - `src/lifecycle/` — hooks and parts tying the UI to the platform: exit flow (`useAppExit.ts`, which asks through the unsaved-changes guard before quitting or restarting and also
@@ -173,7 +176,8 @@ their cascade order does not depend on which screen opened first.
   preferences, started from the window's `settings` query, pushing changes through the platform capabilities,
   `connectShellSettings` called in `main.tsx`), keep awake (the daemon holds the computer awake itself;
   `useKeepAwakeSync.ts` hands the shell the daemon's `keep_awake_held` for its menu bar icon), git status schedule,
-  keeping the window in the daemon's interface language (`useInterfaceLanguage.ts`), the probe of which agents' desktop applications the host has (`useNativeAppsSync.ts`).
+  keeping the window in the daemon's interface language (`useInterfaceLanguage.ts`), `useStrayFileDrops.ts` (stops a file dropped on
+  no terminal from navigating the page, where the platform has no `fileDrop`), the probe of which agents' desktop applications the host has (`useNativeAppsSync.ts`).
 - `src/remoteDaemons/` — a client's remote daemons, reached over SSH by the desktop shell, and the Remote devices page of
   the application's own window that manages them: `RemoteDevices.tsx` (`RemoteDevicesProvider` and `useRemoteDevices`,
   mounted around the whole `App` so the rail button, the sidebar and the page share it: the connect hook, the shell's
@@ -209,7 +213,12 @@ their cascade order does not depend on which screen opened first.
   output as text, the font size (`terminalFontSize.ts`: the client-held, persisted preference the controller applies to every
   terminal; `terminalFontShortcut.ts`: `useTerminalFontShortcuts`, mounted in `App.tsx`, which runs the three Terminal
   shortcut commands), `pastedImage.ts` (a clipboard image pasted into an agent session's terminal: sent to the daemon to be saved, and its
-  path pasted in its place; `TerminalController.pasteImage` is the entry, `ClipboardCapability.readImage` supplies the image to a paste that carries none), path `links/`, project `shell/` terminals (with their tabs), archived-session `history/`;
+  path pasted in its place; `TerminalController.pasteImage` is the entry, `ClipboardCapability.readImage` supplies the image to a paste that carries none), files dropped on a terminal from the system
+  (`useTerminalFileDrop.ts`: the drop target, by hit-testing the platform's `fileDrop` positions or by HTML5 drag events; `fileDrag.ts`
+  file and folder detection; `droppedFiles.ts` pastes the paths the platform gave, or routes each `File` to the pasted-image save or an
+  attachment upload and gathers the refusals of one drop into one alert; `dropUploads.ts` the window-wide serial upload queue with
+  per-session progress and cancel, read by `useDropProgress` and `useDropUploadsShown`, whose notice `TerminalPane.tsx` draws in a top
+  `TerminalNoticeSlot` and which is the `uploads` region of the F6 cycle in `src/layout/useRegionCycle.ts`), path `links/`, project `shell/` terminals (with their tabs), archived-session `history/`;
   xterm's private members are reached from two adapters only: `xtermInternals.ts` (`watchUserInput`, the mark that
   tells the user's input from xterm's own replies) and `links/terminalLinks.ts` (OSC 8 link data).
 - `src/report/` — a session's report panel: `ReportPanel.tsx` (pager, header badges, the drafts and the pending or
@@ -459,7 +468,7 @@ are the helper list; the rules that go beyond "use helper X" are in `docs/conven
 | The checked-write side of a form dialog for a console, a project or an account | `useCheckedEdit` (`src/components/hooks/useCheckedEdit.ts`) over `baseVersions` and `writeConflict` (`src/errors/writeConflict.ts`): the `base_versions` of the fields the user changed, and putting a field the store moved past back to its current value, announced through `ChangedElsewhereAnnouncer` when the user had edited it |
 | Wait for the store to reach a state from code that outlives its component (a checked write that goes on after its field has gone) | `whenState` (`src/store/whenState.ts`) |
 | Announce a change made under the user that nothing marks on screen (a form field replaced because it changed elsewhere, a review read again) | `ChangeAnnouncer` (`src/components/announce/ChangeAnnouncer.tsx`) over `AttendedStatusAnnouncer`; `ChangedElsewhereAnnouncer` for replaced fields, naming them |
-| An xterm terminal view | `useTerminalController` and `useTerminalReconnect`, with `TerminalSurface`, `TerminalCover` and `TerminalNoticeBar` in its `TerminalNoticeSlot` (`src/terminal/`), shared by the session pane and shell terminals |
+| An xterm terminal view | `useTerminalController` and `useTerminalReconnect`, with `TerminalSurface`, `TerminalCover` and `TerminalNoticeBar` (`compact` for a one-line notice) in its `TerminalNoticeSlot` (`edge="top"` over the first rows) (`src/terminal/`), shared by the session pane and shell terminals |
 | The loading line of a panel | `LoadingState` (`src/components/panel/LoadingState.tsx`) |
 | A failure's status mark with its Try again | `RetryStatusMark` (`src/components/status/RetryStatusMark.tsx`) |
 | Read something again now and then: pace, a pause while the document is hidden with a catch-up on return, reads the caller sends itself | `usePoll` (`src/components/hooks/usePoll.ts`), on `startPolling`; the browser's lists poll at `AUTO_REFRESH_MS` (`src/project-browser/autoRefresh.ts`) |
@@ -495,7 +504,7 @@ are the helper list; the rules that go beyond "use helper X" are in `docs/conven
 | A provider's mark and colour | `providerMark`, `providerColour` (`src/providers/registry.ts`); `AgentIcon` (`src/components/icons/`) draws the mark, `providerFillVars` (`src/quota/providerFill.ts`) paints a quota bar |
 | Which accounts a quota list shows | `listedQuotaAccounts` (`src/quota/quotaListing.ts`) |
 | The tags offered to a tag field (projects and agents) | `tagVocabulary` (`src/components/form/tagVocabulary.ts`) with `TagsInput` |
-| Platform capabilities (native menu, menu bar icon visibility, showing the daemon's keep-awake hold on the menu bar icon, launch at login, updater, clipboard, directory picker, permissions) | the `PlatformAdapter` through `src/platform/` |
+| Platform capabilities (native menu, menu bar icon visibility, showing the daemon's keep-awake hold on the menu bar icon, launch at login, updater, clipboard, directory picker, permissions, the paths of files dragged in from the system) | the `PlatformAdapter` through `src/platform/` |
 | Follow the user leaving the window and coming back (whether the window has focus, a change of it, a return to it, a loss of it) | `windowHasFocus`, `subscribeWindowFocus`, `onWindowFocusReturn` and `onWindowFocusLoss` (`src/components/hooks/windowFocus.ts`), which follow the webview's own window `focus` and `blur` and `document.hasFocus()` in the desktop app as in a browser; they arrive only because `src/input/focusGuard.ts` swallows window-targeted focus events solely between a press's mousedown and the tick after the next frame, then replays a swallowed change. Users of the return: `usePoll`, `useMacosPermissionsRead`, `useNotificationPermission`, `useLaunchAtLogin`, `ImportConfigurationDialog`, `terminal/TerminalController.ts`; of the loss: `useQuickCreateModifier`, `tabDrag`, `AgentTabList`, `accountDrag`, `useNavigationHistory`; `useWindowAttended` uses the subscription and `windowHasFocus`, which `terminal/TerminalController.ts` also asks before it activates its terminal |
 | A behaviour or a word that differs by operating system | on the client's machine, `PlatformAdapter.host` (`HostFacts`, `src/platform/host.ts`), read with `usePlatform()` or `useHost()` (`readHost()` for startup code with no adapter); on the daemon's machine (its paths, its Trash), `snapshot.host` in the store (`useHostPaths()`, the daemon's words in `platformTerms.ts`) |
 | The daemon's view of each agent's CLI version and update, and which updates this window started | `agentCliStatuses` and `cliUpdatesStartedHere` of the store state (`src/store/state.ts`; `trackAgentCliUpdate` in `src/store/actions.ts`); the Version dialog and `AgentCliUpdateAlerts` read them |

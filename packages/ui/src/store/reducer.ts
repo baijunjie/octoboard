@@ -238,6 +238,7 @@ export function reducer(state: State, action: Action): State {
             accountSharing: keepSame(state.accountSharing, event.account_sharing.filter(hasSharingState), (sharing) => sharing.account),
             homeDir: event.home_dir,
             host: sameValue(state.host, event.host) ? state.host : event.host,
+            attachmentLimits: sameValue(state.attachmentLimits, event.attachments ?? null) ? state.attachmentLimits : (event.attachments ?? null),
             keepAwakeHeld: event.keep_awake_held,
             daemonUpdate: sameValue(state.daemonUpdate, event.daemon_update) ? state.daemonUpdate : event.daemon_update,
             daemonUpdateStale: false,

@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW, GIT_WORKFLOW_ITEM_KEYS } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type Console, type DaemonUpdateStatus, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PageContent, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Received, type RemoteAccess, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
+import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type AttachmentLimits, type Console, type DaemonUpdateStatus, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PageContent, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Received, type RemoteAccess, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
 import { type MessageParams } from "../errors/codedError";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import type { NotificationFixture } from "./fixture";
@@ -357,6 +357,9 @@ export function snapshotState(parts: {
   /** The daemon host's own facts and home directory, for a scenario on a machine that is not the Unix one the rest assumes. */
   host?: HostInfo;
   homeDir?: string;
+  /** What the snapshot says of the files the daemon takes as attachments: left out, the daemon takes them up to the
+   * real daemon's limits; `null` is a daemon that predates them. */
+  attachmentLimits?: AttachmentLimits | null;
 }): Partial<State> {
   return {
     connectionState: parts.connectionState ?? "open",
@@ -381,6 +384,7 @@ export function snapshotState(parts: {
     accountQuotas: parts.accountQuotas ?? [],
     accountSharing: accountSharingOf(parts.accountSharing ?? []),
     homeDir: parts.homeDir ?? "/Users/dev",
+    attachmentLimits: parts.attachmentLimits === undefined ? { max_bytes: 100 * 1024 * 1024, max_part_bytes: 1024 * 1024 } : parts.attachmentLimits,
     ...(parts.host && { host: parts.host }),
   };
 }

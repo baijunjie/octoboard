@@ -35,7 +35,7 @@ const { FakeController } = vi.hoisted(() => {
     }
     fits = 0;
     inputLabel: string | undefined;
-    constructor(readonly callbacks: { onStatusChange: (status: TermStatus) => void; pasteImage?: unknown }) {
+    constructor(readonly callbacks: { onStatusChange: (status: TermStatus) => void; pasteImage?: unknown; dropFiles?: unknown }) {
       FakeController.last = this;
     }
     mount(element: HTMLElement): void {
@@ -917,5 +917,11 @@ it("writes the pending sentence at once when the shown shell turns pending, even
 
 it("keeps the shell's paste to the clipboard's text, giving its terminal no image paste", () => {
   mount();
+  expect(FakeController.last.callbacks.pasteImage).toBeUndefined();
+});
+
+it("gives its controller no handler for dropped files, which a shell takes only as paths the window reports", () => {
+  mount();
+  expect(FakeController.last.callbacks.dropFiles).toBeUndefined();
   expect(FakeController.last.callbacks.pasteImage).toBeUndefined();
 });

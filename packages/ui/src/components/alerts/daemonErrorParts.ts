@@ -1,5 +1,6 @@
 import { ActionableError } from "../../errors/actionableError";
 import { leftBranchItems, type LeftBranchItem } from "../../errors/branchCleanupItems";
+import { droppedFileEntries, type DroppedFileEntry } from "../../errors/droppedFileEntries";
 import { CodedError, type MessageParams } from "../../errors/codedError";
 import { codeRecord, messageKey } from "../../errors/codes";
 import { furtherKey, hasRichMessage, hasTrustDiagnostic, messageCode } from "../../errors/daemonMessage";
@@ -28,6 +29,8 @@ export type DaemonErrorParts = {
   actionableDetail?: string;
   /** The entries of a failure to remove branches or worktrees. */
   left?: LeftBranchItem[];
+  /** The files of a drop that were refused, which a failure listing them names. */
+  droppedFiles?: DroppedFileEntry[];
   /** The failure's further explanation in the application's own words. */
   further?: MessageKey;
   /** For a sharing failure, its entries, the raw text that says why the change failed as a whole, its cause as a whole,
@@ -78,6 +81,7 @@ export function daemonErrorParts(error: Failure): DaemonErrorParts {
     worded,
     actionableDetail,
     left: leftBranchItems(error.code, error.params),
+    droppedFiles: droppedFileEntries(error.code, error.params),
     further: furtherKey(error.code, error.params),
     sharing: reason && sharingParts(error.params, reason.raw, sharingFailureItems(error.code, error.params)),
     diagnostic,

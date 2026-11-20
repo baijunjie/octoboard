@@ -63,11 +63,17 @@ export function TerminalSurface({
 } & Omit<React.HTMLAttributes<HTMLDivElement>, "style">): React.ReactElement {
   const { resolved: colorTheme } = useOctoboardTheme();
   const focusVisible = useArrivalFocusProps();
+  // What `useTerminalFileDrop` asks for while a file drag is over the view and it would take the drop: the accent ring, and a
+  // tint over the whole view, which tells it from the keyboard focus ring alone. The view is positioned, so the overlay
+  // covers it above the xterm canvas, takes no pointer or drag event and moves nothing.
+  const dropTarget = "data-file-drop:ring-2 data-file-drop:ring-inset data-file-drop:ring-accent data-file-drop:after:pointer-events-none data-file-drop:after:absolute data-file-drop:after:inset-0 data-file-drop:after:z-1 data-file-drop:after:bg-(--tint-accent-bg)";
   const ring = "ui-keyboard-focus:has-[.xterm-helper-textarea:focus]:ring-2 ui-keyboard-focus:has-[.xterm-helper-textarea:focus]:ring-inset ui-keyboard-focus:has-[.xterm-helper-textarea:focus]:ring-focus";
   return (
     <div
       ref={ref}
-      className={covered ? className : `${className} ${ring}`}
+      className={covered ? className : `${className} ${dropTarget} ${ring}`}
+      data-terminal-surface=""
+      data-covered={covered || undefined}
       style={{ "--terminal-background": XTERM_THEMES[colorTheme].background, backgroundColor: "var(--terminal-background)" } as React.CSSProperties}
       inert={rootInert}
       {...rootProps}

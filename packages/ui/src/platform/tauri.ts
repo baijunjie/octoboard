@@ -8,6 +8,7 @@ import type {
   ConfigurationFileCapability,
   DirectoryPickerCapability,
   ExitCapability,
+  FileDropCapability,
   KeepAwakeCapability,
   LaunchAtLoginCapability,
   LaunchAtLoginStatus,
@@ -65,6 +66,7 @@ export function tauriPlatform(): PlatformAdapter {
     statusItem: host.statusItem === "none" ? undefined : tauriStatusItem(local),
     trayFlyout: kind === "flyout" ? tauriTrayFlyout() : undefined,
     clipboard: tauriClipboard(),
+    fileDrop: local ? tauriFileDrop() : undefined,
     configurationFile: tauriConfigurationFile(),
     directoryPicker: local ? tauriDirectoryPicker() : undefined,
     links: tauriLinks(kind === "remote"),
@@ -349,6 +351,28 @@ function tauriNotifications(host: HostFacts): NotificationCapability {
         await invoke("open_notification_settings");
       },
     }),
+  };
+}
+
+/** The shell's drag-and-drop of files over the webview, which stays on for the local daemon's window (a remote window
+ * turns it off: `build_window` in `apps/desktop/src-tauri/src/window_factory.rs`). The shell reports positions in
+ * physical pixels, which `devicePixelRatio` turns into the CSS pixels the page hit-tests with. */
+function tauriFileDrop(): FileDropCapability {
+  return {
+    listen(handler) {
+      const { track, undo } = unlistenTracker();
+      void import("@tauri-apps/api/webview")
+        .then(({ getCurrentWebview }) =>
+          getCurrentWebview().onDragDropEvent(({ payload }) => {
+            if (payload.type === "leave") return handler({ kind: "leave" });
+            const position = { x: payload.position.x / window.devicePixelRatio, y: payload.position.y / window.devicePixelRatio };
+            if (payload.type === "drop") handler({ kind: "drop", position, paths: payload.paths });
+            else handler({ kind: "over", position });
+          }),
+        )
+        .then(track);
+      return undo;
+    },
   };
 }
 

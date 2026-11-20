@@ -10,6 +10,11 @@ export const MAX_PASTED_IMAGE_BYTES = 10 * 1024 * 1024;
 /** The image formats the daemon saves as they are; any other the clipboard holds is sent as a PNG. */
 const SAVED_AS_IS = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
+/** Whether the daemon saves `file` as a pasted image just as it is: one of its formats, and no larger than it takes. */
+export function isSavedAsIs(file: Blob): boolean {
+  return SAVED_AS_IS.has(file.type) && file.size <= MAX_PASTED_IMAGE_BYTES;
+}
+
 /** The image a paste event carries, if any: the file a browser or webview makes of an image on the clipboard. */
 export function imageInPaste(data: DataTransfer | null): File | undefined {
   return Array.from(data?.files ?? []).find((file) => file.type.startsWith("image/"));
@@ -41,13 +46,26 @@ async function savedFormat(image: Blob): Promise<Blob> {
 }
 
 /** The base64 text of `blob`'s bytes. */
-function base64Of(blob: Blob): Promise<string> {
+export function base64Of(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).slice(String(reader.result).indexOf(",") + 1));
-    reader.onerror = () => reject(reader.error ?? new Error("the image could not be read"));
+    reader.onerror = () => reject(reader.error ?? new Error("the data could not be read"));
     reader.readAsDataURL(blob);
   });
+}
+
+/** Saves `image` on the daemon of `sessionId` and answers with its path there, as the daemon wrote it (unquoted); rejects
+ * with the failure to show. */
+export async function savePastedImagePath(image: Blob, sessionId: string, { t, request }: { t: Translate; request: RequestSender }): Promise<string> {
+  const file = await savedFormat(image).catch((cause: unknown) => {
+    throw new ActionableError(t("terminal.pasteImageUnconvertible"), "none", { cause });
+  });
+  if (file.size > MAX_PASTED_IMAGE_BYTES) {
+    throw new ActionableError(t("terminal.pasteImageTooLarge", { limit_mib: MAX_PASTED_IMAGE_BYTES / 1024 / 1024 }), "none");
+  }
+  const reply = await request({ type: "save_pasted_image", session: sessionId, data: await base64Of(file) });
+  return reply.path;
 }
 
 /** The `pasteImage` handlers of a terminal controller: `save` sends the image to the session's daemon and answers with
@@ -61,18 +79,10 @@ export function pasteImageHandlers(
     read: readImage && (() => readImage()),
     async save(image, sessionId) {
       const { t, request } = latest();
-      const alert = { title: t("terminal.pasteImageFailedTitle"), session: sessionId };
       try {
-        const file = await savedFormat(image).catch((cause: unknown) => {
-          throw new ActionableError(t("terminal.pasteImageUnconvertible"), "none", { cause });
-        });
-        if (file.size > MAX_PASTED_IMAGE_BYTES) {
-          throw new ActionableError(t("terminal.pasteImageTooLarge", { limit_mib: MAX_PASTED_IMAGE_BYTES / 1024 / 1024 }), "none");
-        }
-        const reply = await request({ type: "save_pasted_image", session: sessionId, data: await base64Of(file) });
-        return pastedPath(reply.path);
+        return pastedPath(await savePastedImagePath(image, sessionId, { t, request }));
       } catch (error) {
-        raiseError(error, alert);
+        raiseError(error, { title: t("terminal.pasteImageFailedTitle"), session: sessionId });
         return undefined;
       }
     },

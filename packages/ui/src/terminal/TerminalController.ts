@@ -36,6 +36,8 @@ import {
   type SelectionGuard,
   writeInSlices,
 } from "./terminalOutput";
+import { droppedPathsText } from "./droppedFiles";
+import type { DroppedFile } from "./fileDrag";
 import { imageInPaste } from "./pastedImage";
 import { watchUserInput } from "./xtermInternals";
 import { XTERM_THEMES } from "./xtermThemes";
@@ -99,6 +101,15 @@ export interface TerminalControllerHandlers {
      * rejection pastes an empty paste without a word, as before images were pasted. Absent where the platform cannot
      * read one, which leaves such a paste empty. */
     read?: () => Promise<Blob | undefined>;
+  };
+  /** How files dropped on the terminal reach the session's agent where the page reads them itself (a window with no
+   * native paths to give): uploaded to the session's daemon, the paths it answers pasted (see `dropFiles`). Absent for
+   * a terminal that takes no such drop (a shell). */
+  dropFiles?: {
+    /** Uploads `files` for the session and resolves to the text to paste for the ones that arrived, or `undefined` where
+     * none did. Shows its own failures. `wanted` tells whether the drop still has a destination, which the uploads check
+     * before each file. */
+    upload: (files: DroppedFile[], sessionId: string, wanted?: () => boolean) => Promise<string | undefined>;
   };
   /** What the daemon makes of the file paths in the output, for the session on screen: absent where
    * there is no daemon to ask, which leaves paths as plain text. */
@@ -599,6 +610,26 @@ export class TerminalController {
         if (text !== undefined) this.paste(text, sessionId);
       })
       // `save` shows its own failures, so a rejection here has nothing more to tell the user.
+      .catch(() => {});
+  }
+
+  /** Pastes the paths of files dropped on the terminal (see `droppedPathsText`), as one paste. */
+  pasteDroppedPaths(paths: string[], sessionId: string): void {
+    this.paste(droppedPathsText(paths), sessionId);
+  }
+
+  /**
+   * Pastes the paths of `files`, dropped on the terminal, once `dropFiles.upload` has sent them to the session's
+   * daemon. The destination is checked again when the uploads are done, which may take long: a session no longer
+   * selected, or that cannot take input, gets nothing, and never the paths of a session it was not dropped on.
+   */
+  dropFiles(files: DroppedFile[], sessionId: string): void {
+    this.handlers.dropFiles
+      ?.upload(files, sessionId, () => this.inputSessionId === sessionId)
+      .then((text) => {
+        if (text !== undefined) this.paste(text, sessionId);
+      })
+      // `upload` shows its own failures, so a rejection here has nothing more to tell the user.
       .catch(() => {});
   }
 

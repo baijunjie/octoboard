@@ -250,6 +250,8 @@ Where to start, by question:
   saved file's path that is pasted, where the file is kept and how a failure shows.
 - [Attaching a file to a session](product/attaching-files.md) — how a client with no shared file system uploads any
   file in parts to a session's scratch directory, its limits, the saved file's name and how a failure shows.
+- [Dropping files onto a terminal](product/dropping-files-onto-a-terminal.md) — how dropped files' paths are pasted,
+  local paths in the desktop main window and uploads elsewhere, refusals, the upload queue and its notice.
 - [Links in terminal output](product/terminal-links.md) — how web addresses and file paths in terminals become links.
 - [Answers to a program's queries](product/terminal-queries.md) — which terminal queries Octoboard answers itself, the
   colours and sizes a program reads, and the queries the clients answer.

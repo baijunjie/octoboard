@@ -975,6 +975,133 @@ describe("pasting an image", () => {
   });
 });
 
+describe("pasting the paths of dropped files", () => {
+  const dropped = (name: string) => ({ file: new File(["x"], name), folder: false });
+
+  /** A controller with `dropFiles.upload` as `upload` (none where it is `undefined`) over a session `s-drop` open to input. */
+  function mountDropping(upload: ((files: ReturnType<typeof dropped>[], sessionId: string) => Promise<string | undefined>) | undefined) {
+    controller.dispose();
+    return mountController(BROWSER_HOST, upload && { dropFiles: { upload } }).then(() => {
+      controller.attach("s-drop", url("s-drop"), false);
+      lastSocket().open();
+    });
+  }
+
+  describe("where the paths are known", () => {
+    it("pastes them as one paste, a path with whitespace quoted, one space between and one after the last", async () => {
+      await mountDropping(undefined);
+      controller.pasteDroppedPaths(["/Users/u/a.txt", "/Users/some one/b c.txt", "/tmp/it's"], "s-drop");
+      expect(sentText()).toEqual([bracketed("/Users/u/a.txt '/Users/some one/b c.txt' /tmp/it's ")]);
+    });
+
+    it("writes a single quote inside a quoted path as '\\''", async () => {
+      await mountDropping(undefined);
+      controller.pasteDroppedPaths(["/tmp/it's here"], "s-drop");
+      expect(sentText()).toEqual([bracketed("'/tmp/it'\\''s here' ")]);
+    });
+
+    it("pastes nothing for a session the input is not on", async () => {
+      await mountDropping(undefined);
+      controller.pasteDroppedPaths(["/a"], "s-other");
+      expect(sentText()).toEqual([]);
+    });
+
+    it("pastes nothing while the input is held", async () => {
+      await mountDropping(undefined);
+      controller.holdInput(true);
+      controller.pasteDroppedPaths(["/a"], "s-drop");
+      expect(sentText()).toEqual([]);
+    });
+  });
+
+  describe("where the files are uploaded first", () => {
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      let reject!: (reason: unknown) => void;
+      const promise = new Promise<T>((done, fail) => {
+        resolve = done;
+        reject = fail;
+      });
+      return { promise, resolve, reject };
+    }
+
+    it("hands the files and the session to the upload, and pastes the text it answers", async () => {
+      const upload = vi.fn(async (_files: ReturnType<typeof dropped>[], _sessionId: string, _wanted?: () => boolean) => "/run/s-drop/attachments/a.txt " as string | undefined);
+      await mountDropping(upload);
+      const files = [dropped("a.txt")];
+      controller.dropFiles(files, "s-drop");
+      await vi.waitFor(() => expect(sentText()).toEqual([bracketed("/run/s-drop/attachments/a.txt ")]));
+      expect(upload).toHaveBeenCalledExactlyOnceWith(files, "s-drop", expect.any(Function));
+      // The drop is wanted while the session still has the input, and no longer once the input has moved.
+      const wanted = upload.mock.calls[0][2]!;
+      expect(wanted()).toBe(true);
+      controller.attach("s-other", url("s-other"), false);
+      lastSocket().open();
+      expect(wanted()).toBe(false);
+    });
+
+    it("pastes nothing where none of the files arrived", async () => {
+      const upload = vi.fn(async () => undefined);
+      await mountDropping(upload);
+      controller.dropFiles([dropped("a.txt")], "s-drop");
+      await afterQueuedWork();
+      expect(upload).toHaveBeenCalledOnce();
+      expect(sentText()).toEqual([]);
+    });
+
+    it("pastes nothing, and leaves no rejection unhandled, where the upload fails", async () => {
+      const unhandled = vi.fn();
+      process.on("unhandledRejection", unhandled);
+      onTestFinished(() => void process.off("unhandledRejection", unhandled));
+      await mountDropping(async () => {
+        throw new Error("upload failed");
+      });
+      controller.dropFiles([dropped("a.txt")], "s-drop");
+      await afterQueuedWork();
+      expect(sentText()).toEqual([]);
+      expect(unhandled).not.toHaveBeenCalled();
+    });
+
+    it("pastes nothing once the input has moved to another session while the files were uploaded, never into the other one", async () => {
+      const uploading = deferred<string | undefined>();
+      await mountDropping(() => uploading.promise);
+      controller.dropFiles([dropped("a.txt")], "s-drop");
+      const staleSocket = lastSocket();
+      controller.attach("s-other", url("s-other"), false);
+      lastSocket().open();
+      uploading.resolve("/run/s-drop/attachments/a.txt ");
+      await afterQueuedWork();
+      expect(sentText()).toEqual([]);
+      expect(staleSocket.sent.filter((entry) => ArrayBuffer.isView(entry))).toEqual([]);
+    });
+
+    it("pastes nothing once the session can no longer take input while the files were uploaded", async () => {
+      const uploading = deferred<string | undefined>();
+      await mountDropping(() => uploading.promise);
+      controller.dropFiles([dropped("a.txt")], "s-drop");
+      controller.detach({ keepScreenFor: "s-drop" });
+      uploading.resolve("/run/s-drop/attachments/a.txt ");
+      await afterQueuedWork();
+      expect(lastSocket().sent.filter((entry) => ArrayBuffer.isView(entry))).toEqual([]);
+    });
+
+    it("pastes into the session still on input when the upload ends", async () => {
+      const uploading = deferred<string | undefined>();
+      await mountDropping(() => uploading.promise);
+      controller.dropFiles([dropped("a.txt")], "s-drop");
+      uploading.resolve("/p ");
+      await vi.waitFor(() => expect(sentText()).toEqual([bracketed("/p ")]));
+    });
+
+    it("does nothing in a terminal that takes no dropped files", async () => {
+      await mountDropping(undefined);
+      expect(() => controller.dropFiles([dropped("a.txt")], "s-drop")).not.toThrow();
+      await afterQueuedWork();
+      expect(sentText()).toEqual([]);
+    });
+  });
+});
+
 describe("keyboard focus on attaching a session the user picked", () => {
   it.each([
     [false, 2],
