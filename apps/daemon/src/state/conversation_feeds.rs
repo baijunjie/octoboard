@@ -6,13 +6,14 @@
 //! is what it fills and the connections read.
 
 use std::collections::HashMap;
-use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use tokio::sync::{broadcast, watch};
 
-use crate::protocol::{Event, PendingEntry, CONVERSATION_PAGE_BYTES, CONVERSATION_PAGE_DEFAULT};
+use crate::protocol::{
+    ConversationEntry, Event, PendingEntry, CONVERSATION_PAGE_BYTES, CONVERSATION_PAGE_DEFAULT,
+};
 use crate::records::feed::{Changes, FeedOut, Page};
 
 /// Events a connection may lag behind by before it is sent the conversation whole again.
@@ -110,7 +111,10 @@ impl ConversationFeeds {
     }
 }
 
-/// One session's feed.
+/// One session's feed: the conversation as last published to it. What fills it (the following
+/// task) holds the [`FeedOut`] its provider's reader works on and parses into it outside this
+/// feed's lock, which only the publishing of what that changed takes: the requests that read the
+/// feed never wait on a provider's parsing.
 pub struct FeedChannel {
     pub session: String,
     state: Mutex<FeedState>,
@@ -120,14 +124,12 @@ pub struct FeedChannel {
     stopped: watch::Sender<bool>,
 }
 
+/// The conversation as clients are given it.
 struct FeedState {
     epoch: u64,
-    out: FeedOut,
+    entries: Vec<ConversationEntry>,
+    pending: Vec<PendingEntry>,
 }
-
-/// A provider's reader panicked while its lines were applied to a feed.
-#[derive(Debug)]
-pub struct ReaderPanicked;
 
 /// The conversation as a subscriber starts with it.
 pub struct Snapshot {
@@ -142,7 +144,8 @@ impl FeedChannel {
             session: session.to_owned(),
             state: Mutex::new(FeedState {
                 epoch: 0,
-                out: FeedOut::default(),
+                entries: Vec::new(),
+                pending: Vec::new(),
             }),
             epochs,
             events: broadcast::channel(EVENT_CAPACITY).0,
@@ -177,8 +180,7 @@ impl FeedChannel {
 
     /// The latest page of at most `limit` entries, and a receiver of everything that changes after
     /// it: taken together, so that nothing is lost between them or repeated.
-    /// `None` for a feed that has stopped, which nobody is to be given any more (a reader's panic
-    /// leaves half-applied entries in it).
+    /// `None` for a feed that has stopped, which nobody is to be given any more.
     pub fn subscribe(&self, limit: usize) -> Option<(Snapshot, broadcast::Receiver<Event>)> {
         let state = self.lock();
         if self.is_stopped() {
@@ -186,8 +188,8 @@ impl FeedChannel {
         }
         let snapshot = Snapshot {
             epoch: state.epoch,
-            page: state.out.page(None, limit),
-            pending: state.out.pending().to_vec(),
+            page: Page::of(&state.entries, None, limit),
+            pending: state.pending.clone(),
         };
         Some((snapshot, self.events.subscribe()))
     }
@@ -214,55 +216,96 @@ impl FeedChannel {
         if epoch != state.epoch {
             return Some((state.epoch, Page::default()));
         }
-        Some((state.epoch, state.out.page(Some(before), limit)))
+        Some((state.epoch, Page::of(&state.entries, Some(before), limit)))
     }
 
-    /// Lets `read` add lines to the entries and sends what that changed, in events of at most
-    /// [`CONVERSATION_PAGE_BYTES`] of entries each. Entries a reader dropped that clients hold
-    /// replace the conversation, under a new epoch. A `read` that panics (a provider's reader) is
-    /// caught here, inside the lock a panic through it would poison: nothing of what it
-    /// half-applied is sent, and the feed is stopped, so that nobody goes on to read it.
-    pub fn apply(&self, read: impl FnOnce(&mut FeedOut)) -> Result<(), ReaderPanicked> {
-        let mut state = self.lock();
-        if std::panic::catch_unwind(AssertUnwindSafe(|| read(&mut state.out))).is_err() {
-            self.stop();
-            return Err(ReaderPanicked);
-        }
-        let changes = state.out.take_changes();
+    /// Publishes what the reader changed in `out` since it was last published, and sends it in
+    /// events of at most [`CONVERSATION_PAGE_BYTES`] of entries each. Entries a reader dropped
+    /// that clients hold replace the conversation, under a new epoch. `out` must be the one this
+    /// feed was last given, by [`Self::replace_with`] or here, changed by nothing else since: its
+    /// new entries then follow the ones published. The provider's parsing that changed `out`, the
+    /// copying of what changed and its batching into events, and a replacement's page are all
+    /// done before the lock is taken, which only puts the result in place and sends it.
+    pub fn publish(&self, out: &mut FeedOut) {
+        let changes = out.take_changes();
         if changes.replaced {
-            state.epoch = self.epochs.fetch_add(1, Ordering::SeqCst) + 1;
-            let _ = self.events.send(self.replaced_event(&state));
-        } else {
-            for event in changed_events(&self.session, state.epoch, changes) {
-                let _ = self.events.send(event);
+            let (entries, pending) = (out.entries().to_vec(), out.pending().to_vec());
+            // Taken before the lock: the task that fills the feed is the only one that sets it.
+            let epoch = self.epochs.fetch_add(1, Ordering::SeqCst) + 1;
+            let replaced = replaced_event(&self.session, epoch, &entries, &pending);
+            let mut state = self.lock();
+            state.epoch = epoch;
+            state.entries = entries;
+            state.pending = pending;
+            let _ = self.events.send(replaced);
+            return;
+        }
+        let (appended, updated, pending) = (
+            changes.appended.clone(),
+            changes.updated.clone(),
+            changes.pending.clone(),
+        );
+        let batches = changed_batches(changes);
+        if batches.is_empty() {
+            return;
+        }
+        let mut state = self.lock();
+        for entry in updated {
+            if let Some(held) = usize::try_from(entry.seq)
+                .ok()
+                .and_then(|seq| state.entries.get_mut(seq))
+            {
+                *held = entry;
             }
         }
-        Ok(())
+        if let Some(first) = appended.first() {
+            // They follow the ones published, as `out` is the one this feed was last given.
+            debug_assert_eq!(
+                usize::try_from(first.seq).ok(),
+                Some(state.entries.len()),
+                "appended entries that do not follow the published ones"
+            );
+            state.entries.extend(appended);
+        }
+        if let Some(pending) = pending {
+            state.pending = pending;
+        }
+        for (appended, updated, pending) in batches {
+            let _ = self.events.send(Event::SessionConversationChanged {
+                session: self.session.clone(),
+                epoch: state.epoch,
+                appended,
+                updated,
+                pending,
+            });
+        }
     }
 
-    /// Puts the entries of a conversation read afresh in place of the held ones and sends it to
-    /// the subscribers as the conversation whole, under a new epoch; the first one makes the feed
-    /// ready. When the entries are the ones held, the epoch stays and only what the agent is still
-    /// producing is sent, if that changed.
-    pub fn replace_with(&self, mut out: FeedOut) {
+    /// Puts the entries of a conversation read afresh, `out`, in place of the held ones and sends
+    /// it to the subscribers as the conversation whole, under a new epoch; the first one makes the
+    /// feed ready. When the entries are the ones held, the epoch stays and only what the agent is
+    /// still producing is sent, if that changed. What changes in `out` from here on is published
+    /// with [`Self::publish`].
+    pub fn replace_with(&self, out: &mut FeedOut) {
         out.take_changes();
+        let (entries, pending) = (out.entries().to_vec(), out.pending().to_vec());
         {
             let mut state = self.lock();
-            if state.epoch != 0 && state.out.entries() == out.entries() {
-                let pending_changed = state.out.pending() != out.pending();
-                state.out = out;
-                if pending_changed {
+            if state.epoch != 0 && state.entries == entries {
+                if state.pending != pending {
+                    state.pending = pending;
                     let _ = self.events.send(Event::SessionConversationChanged {
                         session: self.session.clone(),
                         epoch: state.epoch,
                         appended: Vec::new(),
                         updated: Vec::new(),
-                        pending: Some(state.out.pending().to_vec()),
+                        pending: Some(state.pending.clone()),
                     });
                 }
             } else {
                 state.epoch = self.epochs.fetch_add(1, Ordering::SeqCst) + 1;
-                state.out = out;
+                state.entries = entries;
+                state.pending = pending;
                 let _ = self.events.send(self.replaced_event(&state));
             }
         }
@@ -270,40 +313,51 @@ impl FeedChannel {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, FeedState> {
-        // Nothing that can panic runs under it but the reader, whose panic is caught there.
+        // Nothing that is expected to panic runs under it: a provider's reader never does.
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     fn replaced_event(&self, state: &FeedState) -> Event {
-        let page = state.out.page(None, CONVERSATION_PAGE_DEFAULT);
-        Event::SessionConversationReplaced {
-            session: self.session.clone(),
-            epoch: state.epoch,
-            entries: page.entries,
-            has_earlier: page.has_earlier,
-            pending: state.out.pending().to_vec(),
-        }
+        replaced_event(&self.session, state.epoch, &state.entries, &state.pending)
     }
 }
 
-/// What changed as events, in order (the updated entries, then the appended ones), each event
-/// holding at most [`CONVERSATION_PAGE_BYTES`] of entries serialized, one entry at least, and
-/// what is pending with the last of them (or alone, when no entry changed).
-fn changed_events(session: &str, epoch: u64, changes: Changes) -> Vec<Event> {
+/// The conversation whole, as `session_conversation_replaced` sends it: its latest page.
+fn replaced_event(
+    session: &str,
+    epoch: u64,
+    entries: &[ConversationEntry],
+    pending: &[PendingEntry],
+) -> Event {
+    let page = Page::of(entries, None, CONVERSATION_PAGE_DEFAULT);
+    Event::SessionConversationReplaced {
+        session: session.to_owned(),
+        epoch,
+        entries: page.entries,
+        has_earlier: page.has_earlier,
+        pending: pending.to_vec(),
+    }
+}
+
+/// The entries of one `session_conversation_changed` event: appended, updated and pending.
+type Batch = (
+    Vec<ConversationEntry>,
+    Vec<ConversationEntry>,
+    Option<Vec<PendingEntry>>,
+);
+
+/// What changed as the contents of events, in order (the updated entries, then the appended
+/// ones), each holding at most [`CONVERSATION_PAGE_BYTES`] of entries serialized, one entry at
+/// least, and what is pending with the last of them (or alone, when no entry changed); none when
+/// nothing did.
+fn changed_batches(changes: Changes) -> Vec<Batch> {
     let Changes {
         appended,
         updated,
         pending,
         ..
     } = changes;
-    let event = |appended, updated, pending| Event::SessionConversationChanged {
-        session: session.to_owned(),
-        epoch,
-        appended,
-        updated,
-        pending,
-    };
-    let mut events = Vec::new();
+    let mut batches = Vec::new();
     let (mut run_appended, mut run_updated, mut bytes) = (Vec::new(), Vec::new(), 0);
     let entries = updated
         .into_iter()
@@ -312,7 +366,7 @@ fn changed_events(session: &str, epoch: u64, changes: Changes) -> Vec<Event> {
     for (entry, is_update) in entries {
         let size = serde_json::to_vec(&entry).map_or(0, |json| json.len());
         if bytes > 0 && bytes + size > CONVERSATION_PAGE_BYTES {
-            events.push(event(
+            batches.push((
                 std::mem::take(&mut run_appended),
                 std::mem::take(&mut run_updated),
                 None,
@@ -327,9 +381,9 @@ fn changed_events(session: &str, epoch: u64, changes: Changes) -> Vec<Event> {
         }
     }
     if !run_appended.is_empty() || !run_updated.is_empty() || pending.is_some() {
-        events.push(event(run_appended, run_updated, pending));
+        batches.push((run_appended, run_updated, pending));
     }
-    events
+    batches
 }
 
 #[cfg(test)]
@@ -356,15 +410,26 @@ mod tests {
             .collect()
     }
 
-    /// A feed with the entries `lines` (each a user message), made ready.
-    fn ready(feeds: &ConversationFeeds, session: &str, lines: &[&str]) -> Arc<FeedChannel> {
+    /// A feed with the entries `lines` (each a user message), made ready, and the entries it was
+    /// filled from, which go on to be read into as a following task's are.
+    fn ready(
+        feeds: &ConversationFeeds,
+        session: &str,
+        lines: &[&str],
+    ) -> (Arc<FeedChannel>, FeedOut) {
         let (channel, _) = feeds.join(session);
         let mut out = FeedOut::default();
         for line in lines {
             out.user(line, None);
         }
-        channel.replace_with(out);
-        channel
+        channel.replace_with(&mut out);
+        (channel, out)
+    }
+
+    /// Lets `read` change `out`, as a reader does, and publishes what that changed.
+    fn apply(channel: &FeedChannel, out: &mut FeedOut, read: impl FnOnce(&mut FeedOut)) {
+        read(out);
+        channel.publish(out);
     }
 
     #[test]
@@ -433,7 +498,7 @@ mod tests {
             let channel = Arc::clone(&channel);
             async move { channel.wait_ready().await }
         });
-        channel.replace_with(FeedOut::default());
+        channel.replace_with(&mut FeedOut::default());
         assert!(waiting.await.unwrap());
         assert!(channel.wait_ready().await);
     }
@@ -453,7 +518,7 @@ mod tests {
     #[test]
     fn a_replacement_gives_a_new_epoch_and_tells_the_subscribers_the_whole_conversation() {
         let feeds = feeds();
-        let channel = ready(&feeds, "s", &["one"]);
+        let (channel, _) = ready(&feeds, "s", &["one"]);
         let (snapshot, mut events) = channel.subscribe(50).expect("a live feed");
         let first = snapshot.epoch;
         assert!(first > 0);
@@ -462,7 +527,7 @@ mod tests {
         out.user("two", None);
         out.assistant("answer", None);
         out.set_pending(vec![Pending::Assistant("typing".to_owned())]);
-        channel.replace_with(out);
+        channel.replace_with(&mut out);
         let Ok(Event::SessionConversationReplaced {
             session,
             epoch,
@@ -488,8 +553,8 @@ mod tests {
     #[test]
     fn epochs_never_repeat_across_feeds() {
         let feeds = feeds();
-        let a = ready(&feeds, "a", &[]);
-        let b = ready(&feeds, "b", &[]);
+        let (a, _) = ready(&feeds, "a", &[]);
+        let (b, _) = ready(&feeds, "b", &[]);
         let epochs = [
             a.subscribe(1).expect("a live feed").0.epoch,
             b.subscribe(1).expect("a live feed").0.epoch,
@@ -503,14 +568,12 @@ mod tests {
     #[test]
     fn changes_reach_the_subscribers_and_no_change_sends_nothing() {
         let feeds = feeds();
-        let channel = ready(&feeds, "s", &["one"]);
+        let (channel, mut out) = ready(&feeds, "s", &["one"]);
         let (snapshot, mut events) = channel.subscribe(50).expect("a live feed");
-        channel.apply(|_| {}).expect("applied");
+        apply(&channel, &mut out, |_| {});
         assert!(matches!(events.try_recv(), Err(TryRecvError::Empty)));
 
-        channel
-            .apply(|out| out.assistant("two", None))
-            .expect("applied");
+        apply(&channel, &mut out, |out| out.assistant("two", None));
         let Ok(Event::SessionConversationChanged {
             epoch,
             appended,
@@ -525,16 +588,14 @@ mod tests {
         assert_eq!((appended.len(), appended[0].seq), (1, 1));
         assert!(updated.is_empty() && pending.is_none());
 
-        channel
-            .apply(|out| out.set_pending(vec![Pending::Assistant("x".to_owned())]))
-            .expect("applied");
+        apply(&channel, &mut out, |out| {
+            out.set_pending(vec![Pending::Assistant("x".to_owned())])
+        });
         let Ok(Event::SessionConversationChanged { pending, .. }) = events.try_recv() else {
             panic!("a change");
         };
         assert_eq!(pending.map(|pending| pending.len()), Some(1));
-        channel
-            .apply(|out| out.set_pending(Vec::new()))
-            .expect("applied");
+        apply(&channel, &mut out, |out| out.set_pending(Vec::new()));
         let Ok(Event::SessionConversationChanged { pending, .. }) = events.try_recv() else {
             panic!("a change");
         };
@@ -546,17 +607,15 @@ mod tests {
     #[test]
     fn dropping_entries_that_were_sent_replaces_the_conversation() {
         let feeds = feeds();
-        let channel = ready(&feeds, "s", &["one", "two", "three"]);
+        let (channel, mut out) = ready(&feeds, "s", &["one", "two", "three"]);
         let (snapshot, mut events) = channel.subscribe(50).expect("a live feed");
-        channel
-            .apply(|out| {
-                out.user("four", None);
-                out.truncate(3);
-            })
-            .expect("applied");
+        apply(&channel, &mut out, |out| {
+            out.user("four", None);
+            out.truncate(3);
+        });
         assert!(matches!(events.try_recv(), Err(TryRecvError::Empty)));
 
-        channel.apply(|out| out.truncate(1)).expect("applied");
+        apply(&channel, &mut out, |out| out.truncate(1));
         let Ok(Event::SessionConversationReplaced { epoch, entries, .. }) = events.try_recv()
         else {
             panic!("a replacement");
@@ -565,9 +624,7 @@ mod tests {
         assert_eq!(texts(&entries), ["one"]);
         assert!(matches!(events.try_recv(), Err(TryRecvError::Empty)));
         // The entries after it are appended from where the conversation stands.
-        channel
-            .apply(|out| out.assistant("again", None))
-            .expect("applied");
+        apply(&channel, &mut out, |out| out.assistant("again", None));
         let Ok(Event::SessionConversationChanged {
             epoch: same,
             appended,
@@ -584,14 +641,10 @@ mod tests {
     #[test]
     fn a_subscription_loses_and_repeats_nothing_between_the_page_and_the_events() {
         let feeds = feeds();
-        let channel = ready(&feeds, "s", &["one"]);
-        channel
-            .apply(|out| out.assistant("before", None))
-            .expect("applied");
+        let (channel, mut out) = ready(&feeds, "s", &["one"]);
+        apply(&channel, &mut out, |out| out.assistant("before", None));
         let (snapshot, mut events) = channel.subscribe(50).expect("a live feed");
-        channel
-            .apply(|out| out.assistant("after", None))
-            .expect("applied");
+        apply(&channel, &mut out, |out| out.assistant("after", None));
         assert_eq!(texts(&snapshot.page.entries), ["one", "before"]);
         let Ok(Event::SessionConversationChanged { appended, .. }) = events.try_recv() else {
             panic!("a change");
@@ -603,7 +656,7 @@ mod tests {
     #[test]
     fn a_page_of_an_earlier_epoch_is_empty_and_names_the_current_one() {
         let feeds = feeds();
-        let channel = ready(&feeds, "s", &["a", "b", "c", "d"]);
+        let (channel, _) = ready(&feeds, "s", &["a", "b", "c", "d"]);
         let (snapshot, _) = channel.subscribe(2).expect("a live feed");
         assert_eq!(texts(&snapshot.page.entries), ["c", "d"]);
         let (epoch, page) = channel.read(snapshot.epoch, 2, 10).expect("a live feed");
@@ -628,13 +681,11 @@ mod tests {
     #[test]
     fn the_replacement_for_a_lagging_connection_is_the_conversation_as_it_stands() {
         let feeds = feeds();
-        let channel = ready(&feeds, "s", &["one"]);
-        channel
-            .apply(|out| {
-                out.assistant("two", None);
-                out.set_pending(vec![Pending::Assistant("typing".to_owned())]);
-            })
-            .expect("applied");
+        let (channel, mut out) = ready(&feeds, "s", &["one"]);
+        apply(&channel, &mut out, |out| {
+            out.assistant("two", None);
+            out.set_pending(vec![Pending::Assistant("typing".to_owned())]);
+        });
         let (replacement, mut listening) = channel.resubscribe().expect("a live feed");
         let Event::SessionConversationReplaced {
             epoch,
@@ -650,9 +701,7 @@ mod tests {
         assert_eq!(pending.len(), 1);
         // What changes after it reaches the receiver it came with, and nothing before does.
         assert!(matches!(listening.try_recv(), Err(TryRecvError::Empty)));
-        channel
-            .apply(|out| out.assistant("three", None))
-            .expect("applied");
+        apply(&channel, &mut out, |out| out.assistant("three", None));
         let Ok(Event::SessionConversationChanged { appended, .. }) = listening.try_recv() else {
             panic!("a change");
         };
@@ -664,7 +713,7 @@ mod tests {
     #[test]
     fn a_rebuild_with_the_entries_held_keeps_the_epoch_and_sends_only_the_pending_change() {
         let feeds = feeds();
-        let channel = ready(&feeds, "s", &["one", "two"]);
+        let (channel, _) = ready(&feeds, "s", &["one", "two"]);
         let (snapshot, mut events) = channel.subscribe(50).expect("a live feed");
         let same = || {
             let mut out = FeedOut::default();
@@ -672,11 +721,11 @@ mod tests {
             out.user("two", None);
             out
         };
-        channel.replace_with(same());
+        channel.replace_with(&mut same());
         assert!(matches!(events.try_recv(), Err(TryRecvError::Empty)));
         let mut typing = same();
         typing.set_pending(vec![Pending::Assistant("typing".to_owned())]);
-        channel.replace_with(typing);
+        channel.replace_with(&mut typing);
         let Ok(Event::SessionConversationChanged {
             epoch,
             appended,
@@ -698,7 +747,7 @@ mod tests {
         // Another conversation replaces it under a new epoch.
         let mut other = FeedOut::default();
         other.user("three", None);
-        channel.replace_with(other);
+        channel.replace_with(&mut other);
         let Ok(Event::SessionConversationReplaced { epoch, .. }) = events.try_recv() else {
             panic!("a replacement");
         };
@@ -710,17 +759,15 @@ mod tests {
     #[test]
     fn changes_larger_than_a_page_are_split_into_events() {
         let feeds = feeds();
-        let channel = ready(&feeds, "s", &[]);
+        let (channel, mut out) = ready(&feeds, "s", &[]);
         let (_, mut events) = channel.subscribe(50).expect("a live feed");
         let size = CONVERSATION_PAGE_BYTES / 3;
-        channel
-            .apply(|out| {
-                for _ in 0..5 {
-                    out.assistant(&"x".repeat(size), None);
-                }
-                out.set_pending(vec![Pending::Assistant("typing".to_owned())]);
-            })
-            .expect("applied");
+        apply(&channel, &mut out, |out| {
+            for _ in 0..5 {
+                out.assistant(&"x".repeat(size), None);
+            }
+            out.set_pending(vec![Pending::Assistant("typing".to_owned())]);
+        });
         let mut seqs = Vec::new();
         let mut pending = Vec::new();
         while let Ok(event) = events.try_recv() {
@@ -767,24 +814,22 @@ mod tests {
         for n in 0..calls {
             out.tool_call(call(&format!("c{n}")), None);
         }
-        channel.replace_with(out);
+        channel.replace_with(&mut out);
         let (_, mut events) = channel.subscribe(50).expect("a live feed");
-        channel
-            .apply(|out| {
-                for n in 0..calls {
-                    out.tool_result(
-                        &format!("c{n}"),
-                        ToolOutcome {
-                            status: ToolStatus::Completed,
-                            output: Some("ok".to_owned()),
-                            exit_code: Some(0),
-                        },
-                    );
-                }
-                out.assistant("tail", None);
-                out.set_pending(vec![Pending::Assistant("typing".to_owned())]);
-            })
-            .expect("applied");
+        apply(&channel, &mut out, |out| {
+            for n in 0..calls {
+                out.tool_result(
+                    &format!("c{n}"),
+                    ToolOutcome {
+                        status: ToolStatus::Completed,
+                        output: Some("ok".to_owned()),
+                        exit_code: Some(0),
+                    },
+                );
+            }
+            out.assistant("tail", None);
+            out.set_pending(vec![Pending::Assistant("typing".to_owned())]);
+        });
         let mut updated_seqs = Vec::new();
         let mut appended_texts = Vec::new();
         let mut pending_in = Vec::new();
@@ -820,11 +865,11 @@ mod tests {
     #[test]
     fn an_entry_larger_than_a_page_is_sent_alone() {
         let feeds = feeds();
-        let channel = ready(&feeds, "s", &[]);
+        let (channel, mut out) = ready(&feeds, "s", &[]);
         let (_, mut events) = channel.subscribe(50).expect("a live feed");
-        channel
-            .apply(|out| out.assistant(&"x".repeat(CONVERSATION_PAGE_BYTES * 2), None))
-            .expect("applied");
+        apply(&channel, &mut out, |out| {
+            out.assistant(&"x".repeat(CONVERSATION_PAGE_BYTES * 2), None)
+        });
         assert!(matches!(
             events.try_recv(),
             Ok(Event::SessionConversationChanged { appended, .. }) if appended.len() == 1
@@ -835,7 +880,7 @@ mod tests {
     #[tokio::test]
     async fn a_stopped_feed_resolves_ended_for_the_connections_following_it() {
         let feeds = feeds();
-        let channel = ready(&feeds, "s", &["one"]);
+        let (channel, _) = ready(&feeds, "s", &["one"]);
         let waiting = tokio::spawn({
             let channel = Arc::clone(&channel);
             async move { channel.ended().await }
@@ -849,21 +894,46 @@ mod tests {
             .unwrap();
     }
 
-    /// A reader that panics half-way sends nothing of what it applied, stops the feed, and leaves
-    /// the lock usable.
+    /// What a reader has parsed but not yet published is nobody's: a read, a subscription and a
+    /// lagging connection's replacement all see the conversation as last published.
     #[test]
-    fn a_reader_that_panics_is_caught_and_broadcasts_nothing() {
+    fn entries_being_parsed_are_not_seen_until_they_are_published() {
         let feeds = feeds();
-        let channel = ready(&feeds, "s", &["one"]);
+        let (channel, mut out) = ready(&feeds, "s", &["one"]);
         let (snapshot, mut events) = channel.subscribe(50).expect("a live feed");
-        let applied = channel.apply(|out| {
-            out.assistant("half", None);
-            panic!("a reader failed");
-        });
-        assert!(applied.is_err());
+        out.assistant("half", None);
+        out.truncate(0);
+        out.user("other", None);
+        let (_, page) = channel
+            .read(snapshot.epoch, u64::MAX, 50)
+            .expect("a live feed");
+        assert_eq!(texts(&page.entries), ["one"]);
+        assert_eq!(
+            texts(&channel.subscribe(50).expect("a live feed").0.page.entries),
+            ["one"]
+        );
+        let (Event::SessionConversationReplaced { entries, .. }, _) =
+            channel.resubscribe().expect("a live feed")
+        else {
+            panic!("a replacement");
+        };
+        assert_eq!(texts(&entries), ["one"]);
         assert!(matches!(events.try_recv(), Err(TryRecvError::Empty)));
-        assert!(channel.is_stopped());
-        // Nobody is served the half-applied entry, and the lock is not poisoned.
+
+        channel.publish(&mut out);
+        let Ok(Event::SessionConversationReplaced { entries, .. }) = events.try_recv() else {
+            panic!("a replacement");
+        };
+        assert_eq!(texts(&entries), ["other"]);
+    }
+
+    /// A stopped feed (its task ended, or its reader panicked) serves nobody.
+    #[test]
+    fn a_stopped_feed_serves_nobody() {
+        let feeds = feeds();
+        let (channel, _) = ready(&feeds, "s", &["one"]);
+        let (snapshot, _) = channel.subscribe(50).expect("a live feed");
+        channel.stop();
         assert!(channel.subscribe(50).is_none());
         assert!(channel.resubscribe().is_none());
         assert!(channel.read(snapshot.epoch, u64::MAX, 50).is_none());

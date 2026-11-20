@@ -350,8 +350,10 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   (`restart_screens.rs`), and `field_versions.rs`, the version of each field of the settings, consoles, projects and
   accounts a form edits, with the lock of checked writes; `field_versions/paths.rs` lists the versioned paths),
   `conversation_feeds.rs` (`ConversationFeeds`, `AppState::conversation_feeds`: one `FeedChannel` per session a
-  connection follows, holding its entries, epoch and broadcast of changes, made for the first subscriber and dropped
-  with the last or when the session is forgotten; the task that fills it is `coordinator/conversation_feed/follow.rs`),
+  connection follows, holding its entries as last published, epoch and broadcast of changes, made for the first
+  subscriber and dropped with the last or when the session is forgotten; the task that fills it is
+  `coordinator/conversation_feed/follow.rs`, which parses into a `FeedOut` of its own outside the feed's lock and
+  publishes only what that changed, so the requests that read the feed never wait on a provider's parsing),
   plus
   `bindings.rs` (the read-only walks over which session is bound to which) and `refusals.rs` (the locked and archived
   refusals every operation on a session shares).

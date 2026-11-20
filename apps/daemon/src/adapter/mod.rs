@@ -47,7 +47,7 @@ pub(crate) mod files;
 pub mod grok;
 mod hooks;
 #[cfg(test)]
-mod test_provider;
+pub(crate) mod test_provider;
 
 pub(crate) use account_cli::snapshot_home;
 pub use account_cli::{

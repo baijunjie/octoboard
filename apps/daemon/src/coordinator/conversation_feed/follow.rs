@@ -49,6 +49,9 @@ struct Whereabouts {
 struct Following {
     agent: Option<AgentId>,
     follower: Option<Follower>,
+    /// The entries the follower's reader works on. Parsing changes this, outside the feed's lock;
+    /// the feed is then given what changed ([`FeedChannel::publish`]).
+    out: FeedOut,
     /// Where the conversation was last looked for.
     whereabouts: Option<Whereabouts>,
     /// Whether the feed has been given the conversation once, which makes it ready.
@@ -78,6 +81,7 @@ async fn run(state: Arc<AppState>, channel: Arc<FeedChannel>) {
     let mut following = Following {
         agent: None,
         follower: None,
+        out: FeedOut::default(),
         whereabouts: None,
         published: false,
         missing: false,
@@ -122,12 +126,17 @@ fn step(
             Read::Unchanged => following.missing = false,
             Read::Lines(lines) => {
                 following.missing = false;
-                // `FeedChannel::apply` catches a reader's panic; the feed then ends.
-                let applied = channel.apply(|out| follower.apply(lines, out));
-                if applied.is_err() {
+                // Parsed outside the feed's lock, so that no request waits on it. A reader that
+                // panics ends the feed, with nothing of what it half-applied published.
+                let parsed = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    follower.apply(lines, &mut following.out);
+                }));
+                if parsed.is_err() {
                     tracing::error!(session = %channel.session, "a feed reader panicked");
+                    channel.stop();
                     return None;
                 }
+                channel.publish(&mut following.out);
             }
             Read::Restarted => {
                 following.missing = false;
@@ -178,7 +187,8 @@ fn step(
             }
             // A session with no record yet is an empty conversation that keeps being looked for.
             None if !following.published => {
-                channel.replace_with(FeedOut::default());
+                following.out = FeedOut::default();
+                channel.replace_with(&mut following.out);
                 following.published = true;
             }
             _ => {}
@@ -199,9 +209,11 @@ fn rebuild(
         std::panic::catch_unwind(AssertUnwindSafe(|| Follower::build(agent, stretches)))
     else {
         tracing::error!(session = %channel.session, "a feed reader panicked");
+        channel.stop();
         return None;
     };
-    channel.replace_with(built.out);
+    following.out = built.out;
+    channel.replace_with(&mut following.out);
     following.follower = Some(built.follower);
     following.published = true;
     Some(())

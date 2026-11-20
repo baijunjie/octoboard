@@ -256,28 +256,28 @@ fn a_page_ends_before_an_entry_and_is_kept_to_its_limits() {
             .map(|entry| entry.seq)
             .collect::<Vec<_>>()
     };
-    let latest = out.page(None, 3);
+    let latest = Page::of(out.entries(), None, 3);
     assert_eq!((seqs(&latest), latest.has_earlier), (vec![7, 8, 9], true));
-    let earlier = out.page(Some(7), 5);
+    let earlier = Page::of(out.entries(), Some(7), 5);
     assert_eq!(
         (seqs(&earlier), earlier.has_earlier),
         (vec![2, 3, 4, 5, 6], true)
     );
-    let first = out.page(Some(2), 50);
+    let first = Page::of(out.entries(), Some(2), 50);
     assert_eq!((seqs(&first), first.has_earlier), (vec![0, 1], false));
-    assert!(out.page(Some(0), 5).entries.is_empty());
-    assert_eq!(out.page(Some(1000), 2).entries.len(), 2);
-    assert_eq!(out.page(None, 0).entries.len(), 1);
+    assert!(Page::of(out.entries(), Some(0), 5).entries.is_empty());
+    assert_eq!(Page::of(out.entries(), Some(1000), 2).entries.len(), 2);
+    assert_eq!(Page::of(out.entries(), None, 0).entries.len(), 1);
 
     // Entries that together pass the size limit end a page sooner, with one at least.
     let mut big = FeedOut::default();
     for _ in 0..4 {
         big.assistant(&"x".repeat(CONVERSATION_PAGE_BYTES / 4), None);
     }
-    assert_eq!(big.page(None, 50).entries.len(), 3);
+    assert_eq!(Page::of(big.entries(), None, 50).entries.len(), 3);
     let mut huge = FeedOut::default();
     huge.assistant(&"x".repeat(CONVERSATION_PAGE_BYTES * 2), None);
-    assert_eq!(huge.page(None, 50).entries.len(), 1);
+    assert_eq!(Page::of(huge.entries(), None, 50).entries.len(), 1);
 }
 
 fn write(path: &Path, content: &str) {

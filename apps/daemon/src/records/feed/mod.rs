@@ -139,6 +139,29 @@ impl Page {
             (limit as usize).clamp(1, CONVERSATION_PAGE_LIMIT)
         })
     }
+
+    /// The page of at most `limit` of `entries` (at least one: see [`Self::size`] for what a
+    /// request's limit gives) that ends just before the entry `before`, or at the last entry when
+    /// there is none, also kept to [`CONVERSATION_PAGE_BYTES`] serialized.
+    pub fn of(entries: &[ConversationEntry], before: Option<u64>, limit: usize) -> Self {
+        let end = before.map_or(entries.len(), |seq| {
+            usize::try_from(seq).map_or(entries.len(), |seq| seq.min(entries.len()))
+        });
+        let limit = limit.max(1);
+        let mut start = end;
+        let mut bytes = 0;
+        while start > 0 && end - start < limit {
+            bytes += serde_json::to_vec(&entries[start - 1]).map_or(0, |json| json.len());
+            if bytes > CONVERSATION_PAGE_BYTES && start < end {
+                break;
+            }
+            start -= 1;
+        }
+        Self {
+            entries: entries[start..end].to_vec(),
+            has_earlier: start > 0,
+        }
+    }
 }
 
 /// The conversation's entries as read so far, and what changed in them since the changes were
@@ -172,29 +195,6 @@ impl FeedOut {
 
     pub fn pending(&self) -> &[PendingEntry] {
         &self.pending
-    }
-
-    /// The page of at most `limit` entries (at least one: see [`Page::size`] for what a request's
-    /// limit gives) that ends just before the entry `before`, or at the last entry when there is
-    /// none, also kept to [`CONVERSATION_PAGE_BYTES`] serialized.
-    pub fn page(&self, before: Option<u64>, limit: usize) -> Page {
-        let end = before.map_or(self.entries.len(), |seq| {
-            usize::try_from(seq).map_or(self.entries.len(), |seq| seq.min(self.entries.len()))
-        });
-        let limit = limit.max(1);
-        let mut start = end;
-        let mut bytes = 0;
-        while start > 0 && end - start < limit {
-            bytes += serde_json::to_vec(&self.entries[start - 1]).map_or(0, |json| json.len());
-            if bytes > CONVERSATION_PAGE_BYTES && start < end {
-                break;
-            }
-            start -= 1;
-        }
-        Page {
-            entries: self.entries[start..end].to_vec(),
-            has_earlier: start > 0,
-        }
     }
 
     /// A message on the user's side, as the provider reads what the user typed: Octoboard's own

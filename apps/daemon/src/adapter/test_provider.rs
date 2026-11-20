@@ -55,7 +55,8 @@ impl AgentProvider for TestProvider {
 
 /// The test provider's records: a file `<agent session id>.jsonl` in the records directory, whose
 /// lines are `{"user": text}`, `{"assistant": text}`, `{"call": id, "name": name}`,
-/// `{"result": id, "output": text}`, `{"truncate": len}` and `{"panic": true}`, which panics;
+/// `{"result": id, "output": text}`, `{"truncate": len}`, `{"panic": true}`, which panics, and
+/// `{"gate": name}`, which holds the reader until the test opens that gate ([`gate`]);
 /// beside it, `<id>.live` lines `{"pending": text}` (or none, which clears what was pending).
 pub struct TestRecords;
 
@@ -96,6 +97,9 @@ impl FeedReader for TestReader {
     fn line(&mut self, line: &Value, out: &mut FeedOut) {
         if line["panic"].as_bool() == Some(true) {
             panic!("the test reader was told to panic");
+        }
+        if let Some(name) = line["gate"].as_str() {
+            gate::pass(name);
         }
         if let Some(text) = line["user"].as_str() {
             out.user(text, None);
@@ -138,6 +142,65 @@ impl FeedReader for TestReader {
                 .into_iter()
                 .collect(),
         );
+    }
+}
+
+/// Gates a test holds the test reader at, by name: a slow parse, for as long as the test likes.
+pub mod gate {
+    use std::collections::HashMap;
+    use std::sync::{Condvar, Mutex, PoisonError};
+    use std::time::Duration;
+
+    /// Per gate: whether the reader has reached it, and whether it is open.
+    static GATES: Mutex<Option<HashMap<String, (bool, bool)>>> = Mutex::new(None);
+    static CHANGED: Condvar = Condvar::new();
+
+    /// Waits until `name` is open (the tests' patience at most), having said it was reached.
+    pub(super) fn pass(name: &str) {
+        let mut gates = GATES.lock().unwrap_or_else(PoisonError::into_inner);
+        gates
+            .get_or_insert_with(HashMap::new)
+            .entry(name.to_owned())
+            .or_default()
+            .0 = true;
+        CHANGED.notify_all();
+        let open = |gates: &mut Option<HashMap<String, (bool, bool)>>| {
+            gates
+                .as_ref()
+                .and_then(|gates| gates.get(name))
+                .is_some_and(|gate| gate.1)
+        };
+        let _ = CHANGED
+            .wait_timeout_while(gates, crate::test_support::PATIENCE, |gates| !open(gates))
+            .unwrap_or_else(PoisonError::into_inner);
+    }
+
+    /// Whether the reader has reached `name`, waiting for it at most `patience`.
+    pub fn reached(name: &str, patience: Duration) -> bool {
+        let gates = GATES.lock().unwrap_or_else(PoisonError::into_inner);
+        let (gates, _) = CHANGED
+            .wait_timeout_while(gates, patience, |gates| {
+                !gates
+                    .as_ref()
+                    .and_then(|gates| gates.get(name))
+                    .is_some_and(|gate| gate.0)
+            })
+            .unwrap_or_else(PoisonError::into_inner);
+        gates
+            .as_ref()
+            .and_then(|gates| gates.get(name))
+            .is_some_and(|gate| gate.0)
+    }
+
+    /// Lets the reader through `name`, now or when it gets there.
+    pub fn open(name: &str) {
+        let mut gates = GATES.lock().unwrap_or_else(PoisonError::into_inner);
+        gates
+            .get_or_insert_with(HashMap::new)
+            .entry(name.to_owned())
+            .or_default()
+            .1 = true;
+        CHANGED.notify_all();
     }
 }
 

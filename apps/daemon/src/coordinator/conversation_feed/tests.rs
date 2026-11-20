@@ -828,15 +828,14 @@ async fn a_lagging_connection_is_sent_a_fresh_replacement_and_then_the_changes()
     let (channel, _) = client.state.conversation_feeds.join("s1");
     let mut out = FeedOut::default();
     out.user("one", None);
-    channel.replace_with(out);
+    channel.replace_with(&mut out);
     let (snapshot, events) = channel
         .subscribe(CONVERSATION_PAGE_DEFAULT)
         .expect("a live feed");
     // More changes than the feed buffers for a connection that is not taking them.
     for n in 0..2000 {
-        channel
-            .apply(|out| out.assistant(&format!("m{n}"), None))
-            .expect("applied");
+        out.assistant(&format!("m{n}"), None);
+        channel.publish(&mut out);
     }
     let (outbound, mut sent) = mpsc::channel(1024);
     let (ended, _watching) = mpsc::unbounded_channel();
@@ -862,9 +861,8 @@ async fn a_lagging_connection_is_sent_a_fresh_replacement_and_then_the_changes()
         Some("m1999"),
         "the latest page as it stands"
     );
-    channel
-        .apply(|out| out.assistant("last", None))
-        .expect("applied");
+    out.assistant("last", None);
+    channel.publish(&mut out);
     let next = tokio::time::timeout(PATIENCE, sent.recv())
         .await
         .expect("an event in time")
@@ -937,8 +935,8 @@ fn a_claude_rewind_replaces_what_the_subscribers_hold() {
             cut: None,
         }],
     );
-    let mut follower = built.follower;
-    channel.replace_with(built.out);
+    let (mut follower, mut out) = (built.follower, built.out);
+    channel.replace_with(&mut out);
     let (snapshot, mut events) = channel
         .subscribe(CONVERSATION_PAGE_LIMIT)
         .expect("a live feed");
@@ -950,9 +948,8 @@ fn a_claude_rewind_replaces_what_the_subscribers_hold() {
     let Read::Lines(read) = follower.read_new() else {
         panic!("lines");
     };
-    channel
-        .apply(|out| follower.apply(read, out))
-        .expect("applied");
+    follower.apply(read, &mut out);
+    channel.publish(&mut out);
     let Ok(Event::SessionConversationReplaced { epoch, entries, .. }) = events.try_recv() else {
         panic!("a replacement");
     };
@@ -1053,6 +1050,61 @@ async fn a_reader_that_panics_ends_the_feed_and_the_connection_goes_on() {
         panic!("a subscribed reply");
     };
     assert_eq!(texts(&entries), ["again"]);
+}
+
+/// A provider's reader parses outside the feed's lock: a read of the conversation is answered
+/// while the reader is held part-way through what was added, and what it parsed follows once it
+/// goes on.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_read_is_answered_while_the_reader_is_still_parsing() {
+    use crate::adapter::test_provider::gate;
+
+    const GATE: &str = "a-read-is-answered-while-the-reader-is-still-parsing";
+    // A failure below lets the reader go on, rather than hold its blocking thread.
+    let _open = scopeguard(|| gate::open(GATE));
+    let mut client = Client::new();
+    client.session("s1", Some(AGENT_ID));
+    client.write(&[r#"{"user":"one"}"#, r#"{"assistant":"two"}"#]);
+    let Event::SessionConversationSubscribed { epoch, .. } = client.subscribe("s1", None).await
+    else {
+        panic!("a subscribed reply");
+    };
+    client.append(&[
+        r#"{"assistant":"three"}"#,
+        &format!(r#"{{"gate":"{GATE}"}}"#),
+        r#"{"assistant":"four"}"#,
+    ]);
+    let reached = tokio::task::spawn_blocking(|| gate::reached(GATE, PATIENCE))
+        .await
+        .unwrap();
+    assert!(reached, "the reader reached the gate");
+
+    client
+        .send(
+            "r",
+            RequestBody::ReadSessionConversation {
+                session: "s1".to_owned(),
+                epoch,
+                before: 2,
+                limit: None,
+            },
+        )
+        .await;
+    let Event::SessionConversation { id, entries, .. } = client.next().await else {
+        panic!("a page");
+    };
+    assert_eq!(id.as_deref(), Some("r"));
+    assert_eq!(texts(&entries), ["one", "two"]);
+
+    gate::open(GATE);
+    let Event::SessionConversationChanged { appended, .. } = client.next().await else {
+        panic!("a change");
+    };
+    assert_eq!(texts(&appended), ["three", "four"]);
+    assert_eq!(
+        appended.iter().map(|entry| entry.seq).collect::<Vec<_>>(),
+        [2, 3]
+    );
 }
 
 /// A feed that is dropped under its subscribers (its session was deleted) ends their subscriptions
@@ -1299,6 +1351,17 @@ async fn a_reader_that_panics_on_the_first_read_answers_the_subscribe_with_an_er
     assert_eq!(texts(&entries), ["fine"]);
 }
 
+/// Entries as the feed was last given them, `lines` each a user message: what a test fills it
+/// from in place of its task, which has nothing more to read.
+fn published(lines: &[&str]) -> FeedOut {
+    let mut out = FeedOut::default();
+    for line in lines {
+        out.user(line, None);
+    }
+    out.take_changes();
+    out
+}
+
 /// Changes the feed sent while the connection's forwarder had not yet run are the page of a
 /// repeated subscribe too: nothing the first subscription's forwarder holds comes after the reply.
 #[tokio::test(start_paused = true)]
@@ -1308,10 +1371,10 @@ async fn a_repeat_subscribe_sends_nothing_from_the_old_forwarder_after_its_reply
     client.write(&[r#"{"user":"one"}"#]);
     client.subscribe("s1", None).await;
     let (channel, _) = client.state.conversation_feeds.join("s1");
+    let mut out = published(&["one"]);
     for text in ["a", "b", "c"] {
-        channel
-            .apply(|out| out.assistant(text, None))
-            .expect("applied");
+        out.assistant(text, None);
+        channel.publish(&mut out);
     }
     client
         .send(
@@ -1330,9 +1393,8 @@ async fn a_repeat_subscribe_sends_nothing_from_the_old_forwarder_after_its_reply
     tasks_idle().await;
     client.assert_nothing_pending();
 
-    channel
-        .apply(|out| out.assistant("after", None))
-        .expect("applied");
+    out.assistant("after", None);
+    channel.publish(&mut out);
     let Event::SessionConversationChanged { appended, .. } = client.next().await else {
         panic!("a change");
     };
@@ -1350,10 +1412,10 @@ async fn an_unsubscribe_sends_nothing_from_the_forwarder_after_its_ack() {
     client.write(&[r#"{"user":"one"}"#]);
     client.subscribe("s1", None).await;
     let (channel, _) = client.state.conversation_feeds.join("s1");
+    let mut out = published(&["one"]);
     for text in ["a", "b", "c"] {
-        channel
-            .apply(|out| out.assistant(text, None))
-            .expect("applied");
+        out.assistant(text, None);
+        channel.publish(&mut out);
     }
     client
         .send(
@@ -1367,9 +1429,8 @@ async fn an_unsubscribe_sends_nothing_from_the_forwarder_after_its_ack() {
     assert!(matches!(ack, Event::Ack { .. }));
     tasks_idle().await;
     client.assert_nothing_pending();
-    channel
-        .apply(|out| out.assistant("after", None))
-        .expect("applied");
+    out.assistant("after", None);
+    channel.publish(&mut out);
     client.quiet().await;
     client.assert_nothing_pending();
     client.state.conversation_feeds.leave(&channel);
