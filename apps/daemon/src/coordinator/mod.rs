@@ -1200,8 +1200,11 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::OpenSessionInApp { session } => {
-            native_app::open_session_in_app(state, &session).await?;
+        RequestBody::OpenSessionInApp {
+            session,
+            keep_process_ids,
+        } => {
+            native_app::open_session_in_app(state, &session, keep_process_ids).await?;
             Ok(None)
         }
 

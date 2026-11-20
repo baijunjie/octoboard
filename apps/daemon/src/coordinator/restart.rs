@@ -22,9 +22,7 @@ pub(crate) use crate::records::resumability::record_needs_shell_env;
 use crate::records::switch_continue;
 use crate::state::{AppState, ChangeAdmission, OutboxHold};
 
-use super::launch::{
-    came_up, stop_process_listing_trees, wait_until_down_within, SWITCH_STOP_TIMEOUT,
-};
+use super::launch::{came_up, stop_process_listing_trees, wait_until_stopped};
 use super::resume::resumable_agent_session_id;
 
 /// How long a relaunched session has to stay up before a switch counts it as having come up. An
@@ -60,22 +58,6 @@ thread_local! {
     /// await.
     pub(super) static SWITCH_SETTLED: std::cell::RefCell<Option<Arc<tokio::sync::Notify>>> = const { std::cell::RefCell::new(None) };
     pub(super) static SWITCH_SETTLE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
-}
-
-/// How long a restart waits for the process it ended to be recorded down: [`SWITCH_STOP_TIMEOUT`],
-/// shortened by a test.
-#[cfg_attr(not(test), allow(unused_variables))]
-fn stop_timeout(state: &AppState) -> Duration {
-    #[cfg(test)]
-    if let Some(shorter) = *state.restart_stop_timeout.lock().unwrap() {
-        return shorter;
-    }
-    SWITCH_STOP_TIMEOUT
-}
-
-/// Waits for `id`, a session a restart ended, to be recorded down, for [`stop_timeout`].
-pub(super) async fn wait_until_stopped(state: &Arc<AppState>, id: &str) -> Result<()> {
-    wait_until_down_within(state, id, stop_timeout(state)).await
 }
 
 /// Why [`run`] failed: the error, and whether the restart had ended the session's process and seen

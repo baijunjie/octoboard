@@ -15,11 +15,39 @@ describe("openInAppBlock", () => {
     expect(openInAppBlock(t, session(status))).toBeUndefined();
   });
 
-  it.each<SessionStatus>(["starting", "working", "waiting_user", "dormant", "idle"])("keeps a %s session, which has a process, from being opened, and tells the user to stop it", (status) => {
+  it("lets a session at rest, with a process, be opened", () => {
+    expect(openInAppBlock(t, session("idle"))).toBeUndefined();
+    expect(openInAppBlock(t, session("waiting_user", { at_usage_limit: true }))).toBeUndefined();
+  });
+
+  it.each<SessionStatus>(["working", "waiting_user", "dormant"])("keeps a %s session, which is at work, from being opened, and tells the user when it can be", (status) => {
     expect(openInAppBlock(t, session(status))).toEqual({
-      detail: "Stop the session first: the agent's app and Octoboard would both write to this conversation.",
-      state: "Session running",
+      detail: "The session is still working or waiting for you. It can be opened once it is waiting for instructions or interrupted.",
+      state: "Session busy",
     });
+  });
+
+  it("keeps a starting session, and one an account switch holds, from being opened, with no short reason", () => {
+    expect(openInAppBlock(t, session("starting"))).toEqual({ detail: "The session is still starting, so it cannot be opened yet." });
+    expect(openInAppBlock(t, session("interrupted"), { switching: true })).toEqual({ detail: "Unavailable while this session is switching its account" });
+  });
+
+  it("names a locked session before one at work", () => {
+    expect(openInAppBlock(t, session("working", { locked: true }))?.state).toBe("Session locked");
+  });
+
+  it("keeps an idle session with work running in the background from being opened, and a usage-limit wait only while it has none", () => {
+    const working = { detail: "The session is still working or waiting for you. It can be opened once it is waiting for instructions or interrupted.", state: "Session busy" };
+    const task = { id: "dev-server", type: "shell" };
+    expect(openInAppBlock(t, session("idle", { background_tasks: [task] }))).toEqual(working);
+    expect(openInAppBlock(t, session("idle", { background_tasks: [] }))).toBeUndefined();
+    expect(openInAppBlock(t, session("waiting_user", { at_usage_limit: true, background_tasks: [task] }))).toEqual(working);
+    expect(openInAppBlock(t, session("waiting_user", { at_usage_limit: true, background_tasks: [] }))).toBeUndefined();
+  });
+
+  it("keeps a locked session that is not archived from being opened, as archiving refuses it", () => {
+    expect(openInAppBlock(t, session("interrupted", { locked: true }))).toEqual({ detail: "The session is locked, so it cannot be archived and opened in the agent's app.", state: "Session locked" });
+    expect(openInAppBlock(t, session("archived", { locked: true }))).toBeUndefined();
   });
 
   it("keeps a session with no conversation yet from being opened", () => {
@@ -37,8 +65,21 @@ describe("openInAppBlock", () => {
     expect(openInAppNote(t, true)).toBeUndefined();
   });
 
-  it("names a running session first, over a missing conversation", () => {
-    expect(openInAppBlock(t, session("working", { has_conversation: false }))?.state).toBe("Session running");
+  it("names the first block in the order locked, at work, switching, starting, no conversation", () => {
+    const gone = { has_conversation: false };
+    expect(openInAppBlock(t, session("working", { locked: true, ...gone }), { switching: true })?.state).toBe("Session locked");
+    expect(openInAppBlock(t, session("working", gone), { switching: true })?.state).toBe("Session busy");
+    expect(openInAppBlock(t, session("starting", gone), { switching: true })?.detail).toBe("Unavailable while this session is switching its account");
+    expect(openInAppBlock(t, session("starting", gone))?.detail).toBe("The session is still starting, so it cannot be opened yet.");
+    expect(openInAppBlock(t, session("interrupted", gone))?.state).toBe("No conversation yet");
+  });
+
+  it("lets an archived session be opened whatever else its record says, but for a missing conversation", () => {
+    expect(openInAppBlock(t, session("archived", { locked: true }), { switching: false })).toBeUndefined();
+  });
+
+  it("names a session at work first, over a missing conversation", () => {
+    expect(openInAppBlock(t, session("working", { has_conversation: false }))?.state).toBe("Session busy");
     expect(openInAppBlock(t, session("interrupted", { has_conversation: false }))?.state).toBe("No conversation yet");
   });
 });

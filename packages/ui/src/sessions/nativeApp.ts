@@ -1,14 +1,23 @@
 import type { Translate } from "../i18n/catalog";
 import type { Session } from "../protocol";
-import { hasNoProcess } from "./sessionStatus";
+import { sessionIsBusy } from "./sessionStatus";
 
 /** Why a session's conversation cannot be opened in its agent's desktop application, or `undefined` when nothing keeps
- * it: the session has a process (the application and Octoboard would both write to the conversation, and nothing is
- * stopped for it) or it has no conversation yet. Only a session that has no process at all (interrupted or archived)
- * is opened, which is stricter than a handoff's rest: a session idle at its prompt still has one. `detail` is the
- * whole sentence, for a menu item's description or an alert, and `state` the short reason drawn under a menu item. */
-export function openInAppBlock(t: Translate, session: Pick<Session, "status" | "has_conversation" | "agent_session_id">): { detail: string; state: string } | undefined {
-  if (!hasNoProcess(session.status)) return { detail: t("sidebar.session.openInApp.running"), state: t("sidebar.session.openInApp.running.reason") };
+ * it: it is locked and not archived yet (opening archives it, which a lock refuses), it is at work (busy as
+ * `sessionIsBusy` has it, which is the daemon's judgement of a session that is not at rest), an account switch holds it
+ * (`switching`), it is still starting, or it has no conversation yet. Any other session is opened: an archived one as it
+ * is, the rest after the daemon has archived them with the sessions bound to them. `detail` is the whole sentence, for a
+ * menu item's description or an alert, and `state` the short reason drawn under a menu item, absent for the short-lived
+ * blocks (a switch, a start). */
+export function openInAppBlock(
+  t: Translate,
+  session: Pick<Session, "status" | "has_conversation" | "agent_session_id" | "background_tasks" | "at_usage_limit" | "locked">,
+  { switching = false }: { switching?: boolean } = {},
+): { detail: string; state?: string } | undefined {
+  if (session.locked && session.status !== "archived") return { detail: t("sidebar.session.openInApp.locked"), state: t("accountChoice.sessionLocked.reason") };
+  if (sessionIsBusy(session)) return { detail: t("sidebar.session.openInApp.working"), state: t("accountChoice.handoff.working.reason") };
+  if (switching) return { detail: t("accountChoice.switching.detail") };
+  if (session.status === "starting") return { detail: t("sidebar.session.openInApp.starting") };
   if (!session.has_conversation || !session.agent_session_id) return { detail: t("sidebar.session.openInApp.noConversation"), state: t("sidebar.session.openInApp.noConversation.reason") };
   return undefined;
 }

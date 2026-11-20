@@ -117,6 +117,30 @@ fn forced_and_kept_items_are_read_with_their_state_and_default_to_none() {
     assert!(serde_json::from_str::<Request>(unshown).is_err());
 }
 
+/// An open in the agent's app names the process trees to keep running when its process is ended,
+/// and leaving them out names none.
+#[test]
+fn an_open_in_app_reads_the_trees_to_keep_and_defaults_to_none() {
+    let kept = r#"{"type":"open_session_in_app","session":"s","keep_process_ids":["10:1","20:2"]}"#;
+    match serde_json::from_str::<Request>(kept).unwrap().body {
+        RequestBody::OpenSessionInApp {
+            session,
+            keep_process_ids,
+        } => {
+            assert_eq!(session, "s");
+            assert_eq!(keep_process_ids, ["10:1", "20:2"]);
+        }
+        _ => panic!("not open_session_in_app"),
+    }
+    let bare = r#"{"type":"open_session_in_app","session":"s"}"#;
+    match serde_json::from_str::<Request>(bare).unwrap().body {
+        RequestBody::OpenSessionInApp {
+            keep_process_ids, ..
+        } => assert!(keep_process_ids.is_empty()),
+        _ => panic!("not open_session_in_app"),
+    }
+}
+
 /// A `git` request may leave out `path`, and the source is emitted as `git`.
 #[test]
 fn a_git_request_may_omit_its_path_and_the_source_is_written_as_git() {

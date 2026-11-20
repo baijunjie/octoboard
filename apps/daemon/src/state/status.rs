@@ -23,6 +23,25 @@ impl AppState {
         self.status_when(session, LiveSession::waits_for_user_beyond_usage_limit)
     }
 
+    /// What a session with a process is busy with, or `None` when it is at rest: waiting for
+    /// instructions, or interrupted. Starting, mid-turn, waiting for the user, showing its
+    /// background agents and idle with background tasks shown all count as at work; a wait only on
+    /// a usage-limit dialog does not, as for [`Self::status_for_switch`]. A handoff and an open in
+    /// the agent's application judge a session by it.
+    pub(crate) fn what_it_is_doing(&self, session: &Session) -> Option<&'static str> {
+        let shown = self.status_for_switch(session);
+        match shown {
+            SessionStatus::Starting => Some("still starting"),
+            SessionStatus::Working => Some("in the middle of a turn"),
+            SessionStatus::WaitingUser => Some("waiting for the user"),
+            SessionStatus::Dormant => Some("showing its background agents"),
+            SessionStatus::Idle if !self.shown_background_tasks(&session.id, shown).is_empty() => {
+                Some("running work in the background")
+            }
+            SessionStatus::Idle | SessionStatus::Interrupted | SessionStatus::Archived => None,
+        }
+    }
+
     /// [`Self::status_for_switch`] as a change of the session's model judges it, which holds the
     /// session's claim and may have it shown starting already: the status the session would be
     /// shown without that change.

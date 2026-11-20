@@ -541,7 +541,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   const stableQuickCreateSession = useStableHandler(quickCreateSession);
   const nativeApps = useDaemonStore((s) => s.nativeApps);
   const nativeAppsUnseen = useDaemonStore((s) => s.nativeAppsUnseen);
-  const stableOpenSessionInApp = useStableHandler(useOpenSessionInApp());
+  const stableOpenSessionInApp = useStableHandler(useOpenSessionInApp((session, label) => openDialog({ kind: "open-session-in-app", session, label })));
   const stableRefreshNativeApps = useStableHandler(useNativeAppsRefresh());
   const {
     stableSetSessionColour,

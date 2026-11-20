@@ -27,6 +27,9 @@ export type DialogRequest =
   | { kind: "rename-session"; session: Session }
   /** `inspection` is the bound branches and worktrees, and the process trees, already found for this archive. */
   | { kind: "archive-session"; session: Session; inspection?: SessionInspection }
+  /** Confirms opening `session`, which is not archived, in its agent's desktop application, which archives it with the
+   * sessions bound to it first: `label` is the provider's wording of the action. */
+  | { kind: "open-session-in-app"; session: Session; label: string }
   /** Moves `session` to `account` (`null`, the default account), named `accountName` in the
    * dialog. */
   | { kind: "switch-account"; session: Session; account: string | null; accountName: string }

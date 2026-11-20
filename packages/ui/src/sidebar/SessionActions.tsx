@@ -68,7 +68,7 @@ export function SessionActions({
   const refreshNativeApps = useNativeAppsRefresh();
   const nativeAppInstalled = useNativeAppInstalled(session.agent);
   const nativeAppUnseen = useNativeAppUnseen(session.id);
-  const openInApp = useOpenSessionInApp();
+  const openInApp = useOpenSessionInApp((target, label) => handlers.onOpenDialog({ kind: "open-session-in-app", session: target, label }));
   const nativeAppLabelOf = nativeAppLabel(t, useDaemonStore((s) => s.providers), session.agent);
   const handoff = useFocusHandoff(() => rowRef.current?.focus());
   const title = sessionDisplayTitle(t, session);

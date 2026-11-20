@@ -641,6 +641,89 @@ async fn a_keep_of_a_tree_in_an_agent_command_group_is_refused_and_nothing_is_ar
     assert_eq!(after[0].session_id.as_deref(), Some("s1"));
 }
 
+/// The trees chosen to keep when a session's process is ended are made the user's, as a keep does;
+/// naming none touches nothing, even for a session that does not exist.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_trees_chosen_to_keep_for_an_ended_process_are_kept() {
+    let (state, dir) = console_with_project_and_accounts("process-requests-keep-chosen");
+    super::keep_chosen(&state, "nobody", Vec::new())
+        .await
+        .expect("naming none is not an error");
+
+    let (_live, pids) = agent_with(&state, "s1", &[&dir.join("one"), &dir.join("two")]);
+    let _guard = KillOnDrop(pids.clone());
+    let trees = trees_when(&state, session_s1, 2).await;
+    let chosen = trees
+        .iter()
+        .find(|tree| tree.id.starts_with(&format!("{}:", pids[0])))
+        .unwrap()
+        .id
+        .clone();
+
+    super::keep_chosen(&state, "s1", vec![chosen])
+        .await
+        .expect("kept");
+
+    let in_project = trees_when(&state, project_1, 2).await;
+    let kept = in_project
+        .iter()
+        .find(|tree| tree.id.starts_with(&format!("{}:", pids[0])))
+        .unwrap();
+    assert!(kept.kept);
+    assert_eq!(kept.session_id, None);
+    let owned = trees_when(&state, session_s1, 1).await;
+    assert!(owned[0].id.starts_with(&format!("{}:", pids[1])));
+}
+
+/// A tree that is no longer there, or that a console session owns (which keeps none), is not an
+/// error: whatever is left of it is stopped with the process, and nothing is kept.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chosen_tree_that_cannot_be_kept_is_passed_over_and_not_refused() {
+    let (state, dir) = console_with_project_and_accounts("process-requests-keep-chosen-missed");
+    let (_live, pid) = console_agent(&state, &dir.join("child"));
+    let _guard = KillOnDrop(vec![pid]);
+    let trees = trees_when(&state, session_hub, 1).await;
+    let console_tree = trees[0].id.clone();
+
+    super::keep_chosen(
+        &state,
+        "hub",
+        vec![console_tree.clone(), "2147483646:1".to_string()],
+    )
+    .await
+    .expect("passed over");
+
+    let after = trees_when(&state, session_hub, 1).await;
+    assert_eq!(after[0].id, console_tree);
+    assert!(!after[0].kept);
+}
+
+/// A chosen tree that ends with its session whatever keeps it is refused as a keep refuses it, with
+/// nothing kept, so the caller does not go on to end the process.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chosen_tree_on_its_agent_s_console_is_refused() {
+    let (state, dir) = console_with_project_and_accounts("process-requests-keep-chosen-console");
+    let (_live, pids) = agent_with(&state, "s1", &[&dir.join("one")]);
+    let _guard = KillOnDrop(pids.clone());
+    let tree = trees_when(&state, session_s1, 1).await[0].id.clone();
+    let shared = ProcessIdentity::parse(&tree).unwrap();
+    AGENT_CONSOLE_OVERRIDE.lock().unwrap().push(shared);
+
+    let refused = super::keep_chosen(&state, "s1", vec![tree]).await;
+    AGENT_CONSOLE_OVERRIDE
+        .lock()
+        .unwrap()
+        .retain(|kept| *kept != shared);
+
+    let err = refused.expect_err("a tree on its agent's console was kept");
+    let coded = CodedError::of(&err);
+    assert_eq!(coded.code, error_code::PROCESS_SHARES_AGENT_CONSOLE);
+    assert_eq!(coded.params.get("pid"), Some(&pids[0].to_string()));
+    let after = trees_when(&state, session_s1, 1).await;
+    assert!(!after[0].kept);
+    assert!(is_running(pids[0]));
+}
+
 /// A list of the same target computed a moment ago answers again, so clients polling it do not
 /// each read the table; a keep through the daemon makes the next list read it.
 #[tokio::test(flavor = "multi_thread")]

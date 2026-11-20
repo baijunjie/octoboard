@@ -308,21 +308,81 @@ describe("the fixture daemon's session reopening", () => {
 describe("the fixture daemon's native application requests", () => {
   const ready = sessionOf("ready", "c", "p", "Ready", "interrupted", { agent_session_id: "a-1" });
   const unseen = sessionOf("unseen", "c", "p", "Unseen", "archived", { agent_session_id: "a-2" });
-  const running = sessionOf("running", "c", "p", "Running", "idle", { agent_session_id: "a-3" });
+  const atRest = sessionOf("at-rest", "c", "p", "At rest", "idle", { agent_session_id: "a-3" });
+  const working = sessionOf("working", "c", "p", "Working", "working", { agent_session_id: "a-5" });
   const starting = sessionOf("starting", "c", "p", "Starting", "starting", { agent_session_id: "a-4" });
   const empty = sessionOf("empty", "c", "p", "Empty", "archived", { has_conversation: false });
-  const daemon = () => createFixtureDaemon({ state: snapshotState({ sessions: [ready, unseen, running, starting, empty] }), nativeApps: ["claude"], nativeAppsUnseen: [unseen.id] });
+  const daemon = () => createFixtureDaemon({ state: snapshotState({ sessions: [ready, unseen, atRest, working, starting, empty] }), nativeApps: ["claude"], nativeAppsUnseen: [unseen.id] });
 
   it("lists the sessions it judges unseen apart from the seen ones", async () => {
     await expect(daemon().request({ type: "probe_native_apps", sessions: [ready.id, unseen.id] })).resolves.toEqual({ type: "native_apps", id: null, agents: ["claude"], sessions_seen: [ready.id], sessions_unseen: [unseen.id] });
   });
 
-  it("opens a session without a process that has a conversation", async () => {
+  it("opens an archived session that has a conversation as it is", async () => {
     await expect(daemon().request({ type: "open_session_in_app", session: unseen.id })).resolves.toEqual({ type: "ack", id: null });
   });
 
-  it("refuses as the daemon does a session with a process, one being started and one without a conversation", async () => {
-    await expect(daemon().request({ type: "open_session_in_app", session: running.id })).rejects.toMatchObject({ code: "session_already_running" });
+  it("archives a session that is not archived, with the sessions bound to it and a working one included, before opening it", async () => {
+    const bound = sessionOf("bound", "c", "p", "Bound", "idle", { bound_to: atRest.id, agent_session_id: "a-11" });
+    const worker = sessionOf("worker", "c", "p", "Worker", "working", { bound_to: atRest.id, agent_session_id: "a-12" });
+    const elsewhere = sessionOf("elsewhere", "c", "p", "Elsewhere", "working", { agent_session_id: "a-13" });
+    const fixture = createFixtureDaemon({ state: snapshotState({ sessions: [ready, atRest, bound, worker, elsewhere] }), nativeApps: ["claude"] });
+    await expect(fixture.request({ type: "open_session_in_app", session: atRest.id, keep_process_ids: [] })).resolves.toEqual({ type: "ack", id: null });
+    const statusOf = (id: string) => fixture.store.getState().sessions.get(id)?.status;
+    expect([atRest.id, bound.id, worker.id].map(statusOf)).toEqual(["archived", "archived", "archived"]);
+    expect(statusOf(elsewhere.id)).toBe("working");
+    await expect(fixture.request({ type: "open_session_in_app", session: ready.id })).resolves.toEqual({ type: "ack", id: null });
+    expect(statusOf(ready.id)).toBe("archived");
+  });
+
+  it("opens an archived session as it is, leaving it archived with its archive time", async () => {
+    const archived = sessionOf("archived", "c", "p", "Archived", "archived", { agent_session_id: "a-14", ended_at: 5 });
+    const fixture = createFixtureDaemon({ state: snapshotState({ sessions: [archived] }), nativeApps: ["claude"] });
+    await expect(fixture.request({ type: "open_session_in_app", session: archived.id, keep_process_ids: ["4242:1"] })).resolves.toEqual({ type: "ack", id: null });
+    expect(fixture.store.getState().sessions.get(archived.id)).toEqual(archived);
+  });
+
+  it("refuses every kind of session at work, leaving it as it was, and takes one at rest on a usage limit", async () => {
+    const sessions = [
+      sessionOf("waiting", "c", "p", "Waiting", "waiting_user", { agent_session_id: "a-6" }),
+      sessionOf("dormant", "c", "p", "Dormant", "dormant", { agent_session_id: "a-7" }),
+      sessionOf("background", "c", "p", "Background", "idle", { agent_session_id: "a-8", background_tasks: [{ id: "dev-server", type: "shell" }] }),
+      sessionOf("limit-busy", "c", "p", "Limit busy", "waiting_user", { agent_session_id: "a-9", at_usage_limit: true, background_tasks: [{ id: "dev-server", type: "shell" }] }),
+    ];
+    const fixture = createFixtureDaemon({ state: snapshotState({ sessions: [...sessions, sessionOf("limit", "c", "p", "Limit", "waiting_user", { agent_session_id: "a-10", at_usage_limit: true })] }), nativeApps: ["claude"] });
+    for (const { id, status } of sessions) {
+      await expect(fixture.request({ type: "open_session_in_app", session: id })).rejects.toMatchObject({ code: "session_working" });
+      expect(fixture.store.getState().sessions.get(id)?.status).toBe(status);
+    }
+
+    await expect(fixture.request({ type: "open_session_in_app", session: "limit" })).resolves.toEqual({ type: "ack", id: null });
+    expect(fixture.store.getState().sessions.get("limit")?.status).toBe("archived");
+  });
+
+  it("leaves a session it refuses as it was", async () => {
+    const noConversation = sessionOf("no-conversation", "c", "p", "No conversation", "interrupted", { has_conversation: false });
+    const locked = sessionOf("locked", "c", "p", "Locked", "interrupted", { agent_session_id: "a-15", locked: true });
+    const owner = sessionOf("owner", "c", "p", "Owner", "interrupted", { agent_session_id: "a-16" });
+    const lockedChild = sessionOf("locked-child", "c", "p", "Locked child", "interrupted", { bound_to: owner.id, locked: true });
+    const fixture = createFixtureDaemon({ state: snapshotState({ sessions: [noConversation, locked, owner, lockedChild, starting, working] }), nativeApps: ["claude"] });
+    const statusOf = (id: string) => fixture.store.getState().sessions.get(id)?.status;
+    const refusals = [
+      [noConversation.id, "native_app_unavailable"],
+      [locked.id, "session_locked"],
+      [owner.id, "session_locked"],
+      [starting.id, "session_already_starting"],
+      [working.id, "session_working"],
+    ] as const;
+    for (const [id, code] of refusals) {
+      const before = statusOf(id);
+      await expect(fixture.request({ type: "open_session_in_app", session: id })).rejects.toMatchObject({ code });
+      expect(statusOf(id)).toBe(before);
+    }
+    expect(statusOf(lockedChild.id)).toBe("interrupted");
+  });
+
+  it("refuses as the daemon does a session at work, one being started and one without a conversation", async () => {
+    await expect(daemon().request({ type: "open_session_in_app", session: working.id })).rejects.toMatchObject({ code: "session_working" });
     await expect(daemon().request({ type: "open_session_in_app", session: starting.id })).rejects.toMatchObject({ code: "session_already_starting" });
     await expect(daemon().request({ type: "open_session_in_app", session: empty.id })).rejects.toMatchObject({ code: "native_app_unavailable" });
     await expect(daemon().request({ type: "open_session_in_app", session: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
@@ -3001,6 +3061,52 @@ describe("the fixture daemon's process ledger", () => {
     const refused = createFixtureDaemon({ ...scenario, sessionArchiveError: { code: "store_write_failed", params: { cause: "disk_full", detail: "database or disk is full: Error code 13: Insertion failed because database is full" }, message: "Octoboard could not read or write its own data: database or disk is full: Error code 13: Insertion failed because database is full" } });
     await expect(refused.request({ type: "archive_session", session: running.id, keep_process_ids: ["1:1"] })).rejects.toMatchObject({ code: "store_write_failed" });
     await expect(list(refused, { session_id: running.id })).resolves.toEqual(["2:1"]);
+  });
+
+  describe("for an open in the agent's app, which archives the session it opens", () => {
+    const opened = { ...running, agent_session_id: "a-1" };
+    const openScenario = (extra: Partial<Parameters<typeof createFixtureDaemon>[0]> = {}, session = opened) =>
+      createFixtureDaemon({ ...scenario, state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [project, other], sessions: [session, working, idleElsewhere, interrupted] }), ...extra });
+
+    it("keeps the trees named and ends the others with the session, whatever archive error the scenario stages for a user's archive", async () => {
+      const staged = { code: "store_write_failed", params: { cause: "disk_full", detail: "database or disk is full" }, message: "Octoboard could not read or write its own data: database or disk is full" };
+      const daemon = openScenario({ sessionArchiveError: staged });
+
+      await expect(daemon.request({ type: "open_session_in_app", session: opened.id, keep_process_ids: ["1:1"] })).resolves.toEqual({ type: "ack", id: null });
+
+      expect(daemon.store.getState().sessions.get(opened.id)?.status).toBe("archived");
+      await expect(list(daemon, { project_id: project.id })).resolves.toEqual(["3:1", "6:1", "1:1"]);
+      await expect(openScenario({ sessionArchiveError: staged }).request({ type: "archive_session", session: opened.id })).rejects.toMatchObject({ code: "store_write_failed" });
+    });
+
+    it("refuses a locked session before keeping the trees named, leaving them its own and the session as it was", async () => {
+      const daemon = openScenario({}, { ...opened, locked: true });
+
+      await expect(daemon.request({ type: "open_session_in_app", session: opened.id, keep_process_ids: ["1:1"] })).rejects.toMatchObject({ code: "session_locked", params: { session: opened.id } });
+
+      expect(daemon.store.getState().sessions.get(opened.id)?.status).toBe("idle");
+      await expect(list(daemon, { session_id: opened.id })).resolves.toEqual(["1:1", "2:1"]);
+    });
+
+    it("refuses a session with a locked one bound to it before keeping the trees named", async () => {
+      const lockedChild = sessionOf("locked-child", "c", project.id, "Locked child", "interrupted", { bound_to: opened.id, locked: true });
+      const daemon = createFixtureDaemon({ ...scenario, state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [project, other], sessions: [opened, lockedChild, working, idleElsewhere, interrupted] }) });
+
+      await expect(daemon.request({ type: "open_session_in_app", session: opened.id, keep_process_ids: ["1:1"] })).rejects.toMatchObject({ code: "session_locked", params: { session: lockedChild.id } });
+
+      expect(daemon.store.getState().sessions.get(opened.id)?.status).toBe("idle");
+      await expect(list(daemon, { session_id: opened.id })).resolves.toEqual(["1:1", "2:1"]);
+    });
+
+    it("refuses a tree that cannot be kept before anything is kept or ended", async () => {
+      const shared = processTreeOf("8:1", running, "/usr/bin/node serve.mjs", 40, { keepable: false, unkeepable_reason: "agent_console" });
+      const daemon = openScenario({ processes: { ...scenario.processes, trees: [...scenario.processes.trees, shared] } });
+
+      await expect(daemon.request({ type: "open_session_in_app", session: opened.id, keep_process_ids: ["1:1", "8:1"] })).rejects.toMatchObject({ code: "process_shares_agent_console" });
+
+      expect(daemon.store.getState().sessions.get(opened.id)?.status).toBe("idle");
+      await expect(list(daemon, { session_id: opened.id })).resolves.toEqual(["1:1", "8:1", "2:1"]);
+    });
   });
 
   it("answers the first list and refuses the polls that follow it once a second has passed, when the scenario says so", async () => {

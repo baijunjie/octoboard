@@ -11,6 +11,7 @@ import { DeleteArchivedDialog } from "./confirmations/DeleteArchivedDialog";
 import { DeleteConsoleDialog } from "./confirmations/DeleteConsoleDialog";
 import { DeleteProjectDialog } from "./confirmations/DeleteProjectDialog";
 import { DeleteSessionDialog } from "./confirmations/DeleteSessionDialog";
+import { OpenSessionInAppDialog } from "./confirmations/OpenSessionInAppDialog";
 import { PullMergeProjectBranchDialog } from "./confirmations/PullMergeProjectBranchDialog";
 import { RestoreProjectChangesDialog } from "./confirmations/RestoreProjectChangesDialog";
 import { UnbindSessionDialog } from "./confirmations/UnbindSessionDialog";
@@ -128,6 +129,8 @@ export function RequestedDialog({
       );
     case "archive-session":
       return <ArchiveSessionDialog requested={dialog.session} inspection={dialog.inspection} onClose={onClose} />;
+    case "open-session-in-app":
+      return <OpenSessionInAppDialog requested={dialog.session} label={dialog.label} onClose={onClose} />;
     case "switch-account":
       return (
         <LiveSession requested={dialog.session}>

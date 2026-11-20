@@ -1,6 +1,6 @@
 import { EXAMPLE_CONVERSATION_ID } from "../agents/conversationId";
 import { CodedError, type MessageParams } from "./codedError";
-import { accountTrashFailedCause, invalidFileMaskCause, invalidSearchPatternCause, pathLinkRefusedCause, projectTrashFailedCause } from "./causes";
+import { accountTrashFailedCause, invalidFileMaskCause, invalidSearchPatternCause, pathLinkRefusedCause, projectTrashFailedCause, sessionDidNotStopCause } from "./causes";
 import { PROVIDER_CODES } from "../agents/providers";
 import type { ErrorRecovery } from "./errorRecovery";
 import type { PlatformHost } from "../i18n/platformTerms";
@@ -348,7 +348,7 @@ const CORE_CODES = {
   session_busy: { origin: "daemon", recovery: "wait" },
   session_changing: { origin: "daemon", recovery: "wait" },
   session_child_active: { origin: "daemon", recovery: "wait" },
-  session_did_not_stop: { origin: "daemon", recovery: "stopProcess", recordIds: ["session"], nameParams: ["session"] },
+  session_did_not_stop: { origin: "daemon", recovery: "stopProcess", recordIds: ["session"], nameParams: ["session"], variants: { open_in_app: { nameParams: ["session"] } }, variantOf: (params) => sessionDidNotStopCause(params.cause) },
   session_has_running_sessions: { origin: "daemon", recovery: "stopSessions", recoveryLine: true },
   session_lock_busy: { origin: "daemon", recovery: "wait", recoveryLine: true },
   session_locked: { origin: "daemon", recovery: "unlock", recoveryLine: true },

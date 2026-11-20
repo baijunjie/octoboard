@@ -67,13 +67,18 @@ function hoverAgentIcon(): string | undefined {
   return text;
 }
 
-// Each of the three confirmations that list sessions, over the session it lists.
+// Each of the confirmations that list sessions, over the session it lists.
 const CONFIRMATIONS: Array<[string, DialogRequest, Session]> = [
   ["removing a project", { kind: "delete-project", project }, sessionOf("s-1", console_.id, project.id, "Running", "working")],
   [
     "archiving a session",
     { kind: "archive-session", session: owner },
     sessionOf("s-2", console_.id, project.id, "Stopped", "interrupted", { bound_to: owner.id }),
+  ],
+  [
+    "opening a session in its agent's app",
+    { kind: "open-session-in-app", session: owner, label: "Open in Claude app" },
+    sessionOf("s-4", console_.id, project.id, "Stopped", "interrupted", { bound_to: owner.id }),
   ],
   [
     "deleting an archived session",

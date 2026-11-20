@@ -289,8 +289,8 @@ describe("the Hand off entry and the sessions under the session", () => {
 describe("the Open in the app entry", () => {
   const conversation = "0b8f1c52-3d1e-4a7b-9c41-5e6d7f8091a2";
   const app = (extra: Partial<{ label: string; seen: boolean; onOpen: () => void }> = {}) => ({ label: "Open in Claude app", seen: true, onOpen: vi.fn(), ...extra });
-  const entryOf = (session: Session, nativeApp: ReturnType<typeof app> | undefined) =>
-    sessionMenu(t, {} as SidebarHandlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, nativeApp }).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Open in Claude app") as ActionMenuItem | undefined;
+  const entryOf = (session: Session, nativeApp: ReturnType<typeof app> | undefined, switching = false) =>
+    sessionMenu(t, {} as SidebarHandlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching, nativeApp }).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Open in Claude app") as ActionMenuItem | undefined;
   const asleep = (status: "interrupted" | "archived" = "interrupted", extra: Partial<Session> = {}) => sessionOf("s", "c", "p", "Title", status, { agent_session_id: conversation, ...extra });
 
   it("is not in the menu unless the caller offers it, as where the app is not installed", () => {
@@ -312,11 +312,49 @@ describe("the Open in the app entry", () => {
     expect(menu.some((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Open in Codex app")).toBe(true);
   });
 
-  it.each(["starting", "working", "waiting_user", "dormant", "idle"] as const)("is disabled, saying to stop the session first, for a %s session, which has a process", (status) => {
+  it.each(["working", "waiting_user", "dormant"] as const)("is disabled, saying the session is busy, for a %s session, which is at work", (status) => {
     const entry = entryOf(asleep(status as never), app())!;
     expect(entry.disabled).toBe(true);
-    expect(entry.reason).toEqual({ state: "Session running" });
-    expect(entry.description).toBe("Stop the session first: the agent's app and Octoboard would both write to this conversation.");
+    expect(entry.reason).toEqual({ state: "Session busy" });
+    expect(entry.description).toBe("The session is still working or waiting for you. It can be opened once it is waiting for instructions or interrupted.");
+  });
+
+  it("is disabled, saying the session is busy, for an idle session with work running in the background", () => {
+    const entry = entryOf(asleep("idle" as never, { background_tasks: [{ id: "dev-server", type: "shell" }] }), app())!;
+    expect(entry.disabled).toBe(true);
+    expect(entry.reason).toEqual({ state: "Session busy" });
+  });
+
+  it.each([
+    ["idle", {}],
+    ["waiting_user", { at_usage_limit: true }],
+  ] as const)("is enabled for a %s session at rest with a process, which the daemon archives first", (status, extra) => {
+    const nativeApp = app();
+    const entry = entryOf(asleep(status as never, extra), nativeApp)!;
+    expect(entry.disabled).toBeFalsy();
+    expect(entry.reason).toBeUndefined();
+    entry.onClick();
+    expect(nativeApp.onOpen).toHaveBeenCalledOnce();
+  });
+
+  it("is disabled, saying the session is locked, for a locked session that is not archived, and enabled for a locked archived one", () => {
+    for (const status of ["interrupted", "idle"] as const) {
+      const entry = entryOf(asleep(status as never, { locked: true }), app())!;
+      expect(entry.disabled).toBe(true);
+      expect(entry.reason).toEqual({ state: "Session locked" });
+      expect(entry.description).toBe("The session is locked, so it cannot be archived and opened in the agent's app.");
+    }
+    expect(entryOf(asleep("archived", { locked: true }), app())!.disabled).toBeFalsy();
+  });
+
+  it.each([
+    ["starting", asleep("starting" as never), false, "The session is still starting, so it cannot be opened yet."],
+    ["held by an account switch", asleep(), true, "Unavailable while this session is switching its account"],
+  ])("is disabled, with its sentence as the description and no reason line, for a session that is %s", (_name, session, switching, sentence) => {
+    const entry = entryOf(session, app(), switching)!;
+    expect(entry.disabled).toBe(true);
+    expect(entry.reason).toBeUndefined();
+    expect(entry.description).toBe(sentence);
   });
 
   it("is disabled for a session with no conversation yet", () => {

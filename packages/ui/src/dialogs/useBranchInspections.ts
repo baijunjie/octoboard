@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import { useLatest } from "../components/hooks/useLatest";
 import { useLatestRequest } from "../components/hooks/useLatestRequest";
 import { CodedError } from "../errors/codedError";
 import type { ErrorPresentation } from "../errors/errorPresentation";
-import type { ProcessTree, SessionBranchItem } from "../protocol";
-import { useDaemon } from "../store";
+import type { ProcessTree, Session, SessionBranchItem } from "../protocol";
+import { boundSessionsArchivedWith } from "../sessions/order";
+import { indexSessions } from "../sessions/sessionIndex";
+import { useDaemon, useDaemonStore, useSession } from "../store";
 import { shownError } from "./shownError";
 import { inspectSessionBranches, isRemovalRefusal, type Inspected, type SessionInspection } from "./branchInspection";
 
@@ -53,6 +56,17 @@ function useInspection(sessionIds: string[], initial: SessionInspection | undefi
  * and the process trees it would stop. `initial` is an inspection already made for this archive. */
 export function useArchiveInspection(sessionIds: string[], initial?: SessionInspection): Inspected & Pick<SessionInspection, "processes"> {
   return useInspection(sessionIds, initial, true);
+}
+
+/** What an archive of the session `requested` takes along, read live for a confirmation: the session as the store holds
+ * it now (`requested` once the store has dropped it), the unarchived sessions bound to it that go with it
+ * (`boundSessionsArchivedWith`), and what archiving them all would find (`useArchiveInspection`). `initial` is an
+ * inspection already made for this archive. */
+export function useArchiveScope(requested: Session, initial?: SessionInspection): { session: Session; withIt: Session[]; inspected: ReturnType<typeof useArchiveInspection> } {
+  const session = useSession(requested.id) ?? requested;
+  const withIt = useDaemonStore(useShallow((s) => boundSessionsArchivedWith(Array.from(s.sessions.values()), requested.id, indexSessions(s.sessions).delegatingIds, s.queuedAccountSwitches)));
+  const inspected = useArchiveInspection([session.id, ...withIt.map((s) => s.id)], initial);
+  return { session, withIt, inspected };
 }
 
 /** What a deletion of `sessionIds` would find (`useInspection`): the bound branches and worktrees. */

@@ -158,7 +158,7 @@ async function openMenu(container: HTMLElement) {
 const itemNamed = (items: HTMLElement[], label: string) => items.find((el) => el.textContent?.startsWith(label));
 
 it("lists Open in the app for a session whose agent's app is installed, and opens the session in it when chosen", async () => {
-  const { container, request } = mount(asleep(), probeAnswering(["claude"]), { nativeApps: ["claude"] });
+  const { container, request } = mount(asleep({ status: "archived" }), probeAnswering(["claude"]), { nativeApps: ["claude"] });
   const items = await openMenu(container);
 
   const open = itemNamed(items, "Open in Claude app");
@@ -206,7 +206,7 @@ it("keeps Open in the app enabled, noting that the app may not see the conversat
 });
 
 it("gives the whole sentence as the description of Open in the app, which stays enabled, where the conversation is already known to be unseen", async () => {
-  const { container, request } = mount(asleep(), notSeenAnswer, { nativeApps: ["claude"], nativeAppsUnseen: new Set(["asleep"]) });
+  const { container, request } = mount(asleep({ status: "archived" }), notSeenAnswer, { nativeApps: ["claude"], nativeAppsUnseen: new Set(["asleep"]) });
   await openMenu(container);
   await act(async () => {});
 
@@ -230,7 +230,14 @@ it("gives the whole sentence as the description of Open in the app also where th
 });
 
 it.each([
-  ["the session has a process", { status: "idle" as const }, ["claude"] as string[], "Session running"],
+  ["the session is at work", { status: "working" as const }, ["claude"] as string[], "Session busy"],
+  ["the session is waiting for the user", { status: "waiting_user" as const }, ["claude"] as string[], "Session busy"],
+  ["the session shows its background agents", { status: "dormant" as const }, ["claude"] as string[], "Session busy"],
+  ["the session is idle with work running in the background", { status: "idle" as const, background_tasks: [{ id: "dev-server", type: "shell" }] }, ["claude"] as string[], "Session busy"],
+  ["the session waits on a usage limit with work running in the background", { status: "waiting_user" as const, at_usage_limit: true, background_tasks: [{ id: "dev-server", type: "shell" }] }, ["claude"] as string[], "Session busy"],
+  ["the session is locked and not archived yet", { status: "interrupted" as const, locked: true }, ["claude"] as string[], "Session locked"],
+  ["the session at rest with a process is locked", { status: "idle" as const, locked: true }, ["claude"] as string[], "Session locked"],
+  ["the session has no conversation yet", { status: "interrupted" as const, has_conversation: false }, ["claude"] as string[], "No conversation yet"],
 ])("disables Open in the app, saying why, when %s", async (_name, extra, seen, reason) => {
   const answer: RequestHandler = async (body) => body.type === "probe_native_apps" ? { type: "native_apps", id: null, agents: ["claude"], sessions_seen: seen.length ? (body.sessions ?? []) : [] } : { type: "ack", id: null };
   const { container } = mount(asleep(extra), answer, { nativeApps: ["claude"] });
@@ -241,6 +248,85 @@ it.each([
   const item = itemNamed([...document.querySelectorAll<HTMLElement>("[role=menuitem]")], "Open in Claude app");
   expect(item?.getAttribute("aria-disabled")).toBe("true");
   expect(item?.textContent).toContain(reason);
+});
+
+it("gives the whole sentence of why a session at work cannot be opened as the description of the disabled item", async () => {
+  const { container } = mount(asleep({ status: "working" }), probeAnswering(["claude"]), { nativeApps: ["claude"] });
+  await openMenu(container);
+  await act(async () => {});
+
+  expect(descriptionOf(openInAppItem())).toBe("The session is still working or waiting for you. It can be opened once it is waiting for instructions or interrupted.");
+});
+
+it("keeps Open in the app enabled for a locked archived session, which is opened as it is", async () => {
+  const { container } = mount(asleep({ status: "archived", locked: true }), probeAnswering(["claude"]), { nativeApps: ["claude"] });
+  await openMenu(container);
+  await act(async () => {});
+
+  expect(openInAppItem()?.getAttribute("aria-disabled")).not.toBe("true");
+});
+
+/** Presses W on what has focus, which is inside the open menu. */
+const pressW = () => act(() => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "w", bubbles: true, cancelable: true })));
+
+it("asks to open the session in the app on the W shortcut of its menu", async () => {
+  const session = asleep({ status: "idle" });
+  const { container, handlers } = mount(session, probeAnswering(["claude"]), { nativeApps: ["claude"] });
+  await openMenu(container);
+  await act(async () => {});
+
+  pressW();
+
+  expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: "open-session-in-app", session, label: "Open in Claude app" });
+});
+
+it("does nothing on the W shortcut where Open in the app is disabled", async () => {
+  const { container, request, handlers } = mount(asleep({ status: "working" }), probeAnswering(["claude"]), { nativeApps: ["claude"] });
+  await openMenu(container);
+  await act(async () => {});
+  expect(openInAppItem()?.getAttribute("aria-disabled")).toBe("true");
+
+  pressW();
+
+  expect(handlers.onOpenDialog).not.toHaveBeenCalled();
+  expect(request.mock.calls.map(([body]) => body.type)).not.toContain("open_session_in_app");
+});
+
+it.each([
+  ["idle at its prompt", { status: "idle" as const }],
+  ["stopped on a usage limit", { status: "waiting_user" as const, at_usage_limit: true }],
+])("keeps Open in the app enabled for a session with a process that is %s, which is at rest", async (_name, extra) => {
+  const { container } = mount(asleep(extra), probeAnswering(["claude"]), { nativeApps: ["claude"] });
+  await openMenu(container);
+  await act(async () => {});
+
+  const item = openInAppItem();
+  expect(item).toBeDefined();
+  expect(item?.getAttribute("aria-disabled")).not.toBe("true");
+});
+
+it("opens an archived session at once when Open in the app is chosen, with no dialog", async () => {
+  const { container, request, handlers } = mount(asleep({ status: "archived" }), probeAnswering(["claude"]), { nativeApps: ["claude"] });
+  await openMenu(container);
+  press(openInAppItem()!, "mouse");
+  await act(async () => {});
+
+  expect(request).toHaveBeenCalledWith({ type: "open_session_in_app", session: "asleep" });
+  expect(handlers.onOpenDialog).not.toHaveBeenCalled();
+});
+
+it.each([
+  ["interrupted", { status: "interrupted" as const }],
+  ["at rest with a process", { status: "idle" as const }],
+])("asks for confirmation instead of opening a session that is %s, which the daemon archives", async (_name, extra) => {
+  const session = asleep(extra);
+  const { container, request, handlers } = mount(session, probeAnswering(["claude"]), { nativeApps: ["claude"] });
+  await openMenu(container);
+  press(openInAppItem()!, "mouse");
+  await act(async () => {});
+
+  expect(request.mock.calls.map(([body]) => body.type)).not.toContain("open_session_in_app");
+  expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: "open-session-in-app", session, label: "Open in Claude app" });
 });
 
 describe("the Bind to entry of a session's menu", () => {

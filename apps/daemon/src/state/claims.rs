@@ -155,22 +155,14 @@ impl AppState {
     /// does around the launch is done.
     ///
     /// Cancels the session's pending recoveries first, since a launch supersedes them; an operation
-    /// that takes the claim only for exclusivity and may still refuse uses
-    /// [`Self::begin_launch_leaving_recoveries`] and cancels them itself once it goes ahead.
+    /// that takes the claim only for exclusivity and may still refuse uses [`Self::begin_switch`]
+    /// and cancels them itself once it goes ahead.
     ///
     /// Refused too while the session's account is locked for a change of its sharing (see
     /// [`Self::lock_account_sharing`]): judged under the same lock as the claim, so a change
     /// either sees the claim or the launch sees the change.
     pub fn begin_launch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
         self.cancel_recoveries(id);
-        self.claim_to_launch(id)
-    }
-
-    /// [`Self::begin_launch`] without the cancelling of the session's pending recoveries, for an
-    /// operation that may still be refused after it holds the claim and cancels them itself once it
-    /// is not (`coordinator::native_app::open_session_in_app`): a refused open leaves the session
-    /// as it was, a pending retry included.
-    pub fn begin_launch_leaving_recoveries(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
         self.claim_to_launch(id)
     }
 

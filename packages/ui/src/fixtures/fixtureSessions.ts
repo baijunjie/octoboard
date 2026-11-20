@@ -7,11 +7,11 @@ import { isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents
 import { servedLabel } from "./fixtureProviders";
 import { type Agent, type ConsoleSessionColour, type Session, type SessionRecordPresence, type SubmittedValue } from "../protocol";
 import { CONSOLE_SESSION_COLOURS } from "../sessions/sessionColours";
-import { childCanReport, hasNoProcess, sessionIsBusy } from "../sessions/sessionStatus";
+import { childCanReport, sessionIsBusy } from "../sessions/sessionStatus";
 import { applyDaemonEvent } from "../store";
 import type { AccountGuards } from "./fixtureAccounts";
 import type { ProcessLedger } from "./fixtureProcesses";
-import { HOME, neverReplied, type FixtureContext, type Handlers } from "./fixtureContext";
+import { HOME, neverReplied, type FixtureContext, type Handler, type Handlers } from "./fixtureContext";
 
 /** How long a tree's top process must have run before an archive's inspection lists it: what started a moment ago is
  * a command still finishing (the daemon's `ASK_AFTER`, repeated here as the fixture stands on the daemon's side). */
@@ -54,32 +54,37 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
     return presence;
   };
 
-  return {
-    archive_session: (body) => {
-      const current = store.getState();
-      const session = current.sessions.get(body.session);
-      if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: "Unknown session" });
-      // A tree that cannot be kept refuses the archive before anything is kept or ended.
-      refuseUnkeepable(body.keep_process_ids ?? []);
-      // The trees the user chose to keep are theirs before anything else happens, so a refusal leaves them kept.
-      keepTrees(body.keep_process_ids ?? []);
-      if (scenario.sessionArchiveError) return fail(scenario.sessionArchiveError);
-      // Match coordinator::bindings::team over the valid fixture hierarchy: owners reach two
-      // levels.
-      const childrenOf = (owner: Session) => [...current.sessions.values()].filter((child) => child.bound_to === owner.id);
-      const direct = childrenOf(session);
-      const team = [...direct.flatMap(childrenOf), ...direct];
-      refuseLocked([session, ...team]);
-      const descendants = team.filter((child) => child.status !== "archived");
-      const sessions = new Map(current.sessions);
-      const ended_at = Date.now();
-      for (const record of [...descendants, session]) sessions.set(record.id, { ...record, status: "archived", ended_at });
-      store.setState({ sessions });
-      // The processes of the sessions archived end with them.
-      const ended = new Set([...descendants, session].map((record) => record.id));
-      endSessions(ended);
-      return { type: "ack", id: null };
-    },
+  /** An archive of a session and the sessions bound to it; `opening` is the one an `open_session_in_app` makes first. */
+  const archive = (body: Parameters<NonNullable<Handlers["archive_session"]>>[0], opening: boolean): ReturnType<Handler<"archive_session">> => {
+    const current = store.getState();
+    const session = current.sessions.get(body.session);
+    if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: "Unknown session" });
+    // Match coordinator::bindings::team over the valid fixture hierarchy: owners reach two
+    // levels.
+    const childrenOf = (owner: Session) => [...current.sessions.values()].filter((child) => child.bound_to === owner.id);
+    const direct = childrenOf(session);
+    const team = [...direct.flatMap(childrenOf), ...direct];
+    // An open refuses a lock before anything is kept or ended, and has no archive error of its own to stage.
+    if (opening) refuseLocked([session, ...team]);
+    // A tree that cannot be kept refuses the archive before anything is kept or ended.
+    refuseUnkeepable(body.keep_process_ids ?? []);
+    // The trees the user chose to keep are theirs before anything else happens, so a refusal leaves them kept.
+    keepTrees(body.keep_process_ids ?? []);
+    if (!opening && scenario.sessionArchiveError) return fail(scenario.sessionArchiveError);
+    if (!opening) refuseLocked([session, ...team]);
+    const descendants = team.filter((child) => child.status !== "archived");
+    const sessions = new Map(current.sessions);
+    const ended_at = Date.now();
+    for (const record of [...descendants, session]) sessions.set(record.id, { ...record, status: "archived", ended_at });
+    store.setState({ sessions });
+    // The processes of the sessions archived end with them.
+    const ended = new Set([...descendants, session].map((record) => record.id));
+    endSessions(ended);
+    return { type: "ack", id: null };
+  };
+
+  const handlers: Handlers = {
+    archive_session: (body) => archive(body, false),
     resume_session: (body) => {
       if (scenario.sessionResumes?.[body.session] === "pending") return neverReplied();
       const current = store.getState();
@@ -285,12 +290,15 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
       // A refusal the scenario stages: one the window could not have seen coming.
       if (scenario.sessionAppOpenError) return fail(scenario.sessionAppOpenError);
-      // As the daemon: nothing is stopped for it, so a session with a process (or one being started or switched) is
-      // refused, and so is one with no conversation to open. The window blocks both first.
+      // As the daemon: a session being started or switched is refused, and so is one at work, and one with no conversation
+      // to open. The window blocks a session at work and one with no conversation before asking. An archived session is
+      // opened as it is; any other is archived first, with the sessions bound to it and keeping the trees named, as a
+      // user's archive does it.
       if (session.status === "starting" || session.switching_account) return fail({ code: "session_already_starting", params: { session: body.session }, message: "this session is already being started" });
-      if (!hasNoProcess(session.status)) return fail({ code: "session_already_running", params: { session: body.session }, message: "this session still has a process" });
+      if (sessionIsBusy(session)) return fail({ code: "session_working", params: { session: body.session }, message: "this session is still working" });
       if (!session.has_conversation || !session.agent_session_id) return fail({ code: "native_app_unavailable", params: { detail: "the session has no conversation yet" }, message: "The application could not be opened: the session has no conversation yet" });
-      return { type: "ack", id: null };
+      if (session.status === "archived") return { type: "ack", id: null };
+      return archive({ type: "archive_session", session: body.session, ...(body.keep_process_ids ? { keep_process_ids: body.keep_process_ids } : {}) }, true);
     },
     probe_native_apps: (body) => ({ type: "native_apps", id: null, agents: scenario.nativeApps ?? [], sessions_seen: (body.sessions ?? []).filter((id) => !scenario.nativeAppsUnseen?.includes(id)), sessions_unseen: (body.sessions ?? []).filter((id) => scenario.nativeAppsUnseen?.includes(id)) }),
     set_session_locked: (body) => {
@@ -511,4 +519,5 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       return { type: "ack", id: null };
     },
   };
+  return handlers;
 }

@@ -97,8 +97,8 @@ cover:
     and looking back at the earlier conversation.
   - **Agent handoff**: moving a session's work to a new session of another agent, which takes over its place from a
     handoff record, and the compatibility switches that let one agent load another's setup.
-  - **Open in the agent's app**: opening a stopped session's conversation in the Claude or Codex desktop app on the
-    computer that runs the daemon.
+  - **Open in the agent's app**: opening a session's conversation in the Claude or Codex desktop app on the computer
+    that runs the daemon.
   - **Cross-project coordination**: giving one request to a console session, which starts a session in each project it
     touches, follows them and brings their reports together.
   - **Native project sessions**: each session being the agent's own command-line program in one project, so the

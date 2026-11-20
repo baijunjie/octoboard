@@ -239,6 +239,13 @@ the sessions it owns — and reads a package built from its conversation, while 
 starts one from the session's **Hand off** menu item, and an owner with the `handoff_session` tool for a session of its
 own; see `docs/product/handing-off-sessions.md`.
 
+### Opening a session in its agent's app
+
+A session of an agent with a desktop application of its own (Claude Code, Codex) can have its conversation opened in
+that application. A session that is not archived yet is archived first, after the user confirms, as the user's own
+archive archives it, with the sessions under it, but with no branch or worktree removed; see
+`docs/product/opening-a-session-in-its-agents-app.md`.
+
 ### Archived sessions
 
 A project's archived sessions, and a console's archived console sessions, stay until the user deletes them (see

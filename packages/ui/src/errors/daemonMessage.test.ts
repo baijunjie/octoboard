@@ -534,6 +534,22 @@ it("says a sharing change did not start because a session did not stop, in every
   }
 });
 
+it("words a session that did not stop for an open in the agent's app as not opened and archived, and any other as not switched", () => {
+  const opened = daemonMessage("en", "session_did_not_stop", { session: "s1", cause: "open_in_app" }, "x", records);
+  expect(opened).toBe(`${isolate("Hub")} did not stop in time, so its conversation was not opened in the agent's app. The session is archived, but it may still be running.`);
+  expect(opened).not.toContain("switched");
+  const switched = `${isolate("Hub")} did not stop in time, so it was not switched. It may still be running.`;
+  expect(daemonMessage("en", "session_did_not_stop", { session: "s1" }, "x", records)).toBe(switched);
+  expect(daemonMessage("en", "session_did_not_stop", { session: "s1", cause: "from_a_newer_daemon" }, "x", records)).toBe(switched);
+  for (const language of Object.keys(CATALOGS) as Language[]) {
+    const text = daemonMessage(language, "session_did_not_stop", { session: "s1", cause: "open_in_app" }, "fallback", records);
+    expect(text, language).not.toBe("fallback");
+    expect(text, language).toContain(isolate("Hub"));
+    expect(text, language).not.toMatch(/\{\w+\}/);
+    if (language !== "en") expect(text, language).not.toBe(opened);
+  }
+});
+
 it("words a session that did not stop as possibly still running, and a resume that failed as left interrupted", () => {
   const params = { account: "a1", name: "Work", detail: "timed out" };
   expect(daemonMessage("en", "sharing_resume_failed", { ...params, still_running: "true" }, "x", records)).toContain("may still be running; it was not restarted");

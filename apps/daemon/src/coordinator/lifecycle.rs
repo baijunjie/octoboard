@@ -81,21 +81,33 @@ pub(super) async fn archive_requested(
     // the record is known so an unknown session keeps nothing.
     if !keep_process_ids.is_empty() {
         state.session_record(&session)?;
-        let kept = super::processes::keep(state, keep_process_ids.clone()).await?;
-        let missed: Vec<&String> = keep_process_ids
-            .iter()
-            .filter(|id| !kept.contains(id))
-            .collect();
-        if !missed.is_empty() {
-            tracing::warn!(
-                session = %session, ids = ?missed,
-                "process trees the user chose to keep were no longer found, or were a console session's, which keeps none; whatever is left of them is stopped with the session"
-            );
-        }
+        super::processes::keep_chosen(state, &session, keep_process_ids).await?;
     }
     let archived = archive_session_group(state, &session, true)?;
     remove_branches_once_stopped(state, archived, force_remove, keep);
     Ok(())
+}
+
+/// Refuses, with nothing changed, a session or a session bound to it that is locked, as an archive
+/// of `id` would: for an operation that must refuse before it changes anything of its own ahead
+/// of the archive ([`archive_keeping_branches`]). The archive checks again under its own claim.
+pub(super) fn ensure_group_unlocked(state: &Arc<AppState>, id: &str) -> Result<()> {
+    let session = state.session_record(id)?;
+    let descendants = team(state, &session)?;
+    ensure_unlocked(std::iter::once(session).chain(descendants))
+}
+
+/// Archives `id` and what is bound to it as a user's `archive_session` does, running descendants
+/// included, but removes no branch or worktree, which is what opening a session's conversation in
+/// its agent's application needs: the application works in the session's directory. A locked
+/// session or descendant refuses it, with nothing changed. The processes are ended as an archive
+/// ends them, not awaited: the caller waits for the one it needs gone.
+pub(super) fn archive_keeping_branches(
+    state: &Arc<AppState>,
+    _admission: &ChangeAdmission,
+    id: &str,
+) -> Result<()> {
+    archive_session_group(state, id, true).map(drop)
 }
 
 /// A user-confirmed archive may end every process in the group; agent tools retain the

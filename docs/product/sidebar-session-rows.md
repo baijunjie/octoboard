@@ -109,8 +109,11 @@ A session row's action menu offers:
 - **Open in Claude app** / **Open in Codex app** — opens the session's conversation in its agent's desktop
   application (see `docs/product/opening-a-session-in-its-agents-app.md`), with a window icon. Present, on a live or an
   archived session's row, only while the agent's application is installed on the daemon's host; Grok Build has none.
-  Disabled while the session has a process, with "Session running" under its name, and while it has no conversation
-  yet, with "No conversation yet", each with a full sentence as its description. Where the application may not see the
+  On a session that is not archived it asks for confirmation first, since the open archives the session (see "The
+  confirmation" there). Disabled while the session, not archived, is locked ("Session locked" under its name), while it
+  is not at rest ("Session busy"), while it is shown as switching its account or is *starting* (no reason shown), and
+  while it has no conversation yet ("No conversation yet"), as "When it can be used" there sets out, with the
+  precedence and the descriptions. Where the application may not see the
   conversation, it stays enabled and shows a muted line under its name saying so, the full sentence being its
   description.
 - **Unbind** — asks for confirmation, then releases the session from its owner, making it an independent project

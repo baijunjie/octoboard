@@ -291,18 +291,19 @@ function handoffItem(t: Translate, handlers: SidebarHandlers, session: Session, 
 
 /** "Open in <the agent's app>": offered for a session whose agent declares a desktop application, which the caller has
  * found installed on the daemon's host (`label` is the provider's wording). Disabled, with the reason, while the session
- * has a process or has no conversation yet (`openInAppBlock`). Where the application may not see the conversation (`seen`
- * false, `openInAppNote`) it stays enabled and says so in a muted line under its label, which assistive technology reads
- * in full as the item's description. */
-function openInAppItem(t: Translate, session: Session, { label, seen, onOpen }: { label: string; seen: boolean; onOpen: () => void }): ActionMenuItem {
-  const block = openInAppBlock(t, session);
+ * is at work, is locked and not archived (opening archives it), or has no conversation yet; disabled with no reason line
+ * while it is still starting or an account switch holds it (`switching`), as Hand off is (`openInAppBlock`). Where the
+ * application may not see the conversation (`seen` false, `openInAppNote`) it stays enabled and says so in a muted line
+ * under its label, which assistive technology reads in full as the item's description. */
+function openInAppItem(t: Translate, session: Session, { label, seen, onOpen }: { label: string; seen: boolean; onOpen: () => void }, switching: boolean): ActionMenuItem {
+  const block = openInAppBlock(t, session, { switching });
   const note = block ? undefined : openInAppNote(t, seen);
   return {
     label,
     icon: AppWindow,
     shortcut: "W",
     onClick: onOpen,
-    ...(block ? { disabled: true, description: block.detail, reason: { state: block.state } } : {}),
+    ...(block ? { disabled: true, description: block.detail, ...(block.state ? { reason: { state: block.state } } : {}) } : {}),
     ...(note
       ? {
         ariaLabel: label,
@@ -414,7 +415,7 @@ export function sessionMenu(
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
   const archived = session.status === "archived";
-  const openInApp = nativeApp && openInAppItem(t, session, nativeApp);
+  const openInApp = nativeApp && openInAppItem(t, session, nativeApp, switching);
   const copyId: ActionMenuItem = {
     label: t("sidebar.session.copyId"),
     ariaLabel: t("sidebar.session.copyId"),

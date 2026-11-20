@@ -324,6 +324,28 @@ pub async fn keep(state: &Arc<AppState>, ids: Vec<String>) -> Result<Vec<String>
     })
 }
 
+/// [`keep`] for the trees a user chose to keep when ending `session`'s process: logs the ones that
+/// were no longer found, or were a console session's, which keeps none, since whatever is left of
+/// them is stopped with the process. Refused as [`keep`] is.
+pub(super) async fn keep_chosen(
+    state: &Arc<AppState>,
+    session: &str,
+    ids: Vec<String>,
+) -> Result<()> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let kept = keep(state, ids.clone()).await?;
+    let missed: Vec<&String> = ids.iter().filter(|id| !kept.contains(id)).collect();
+    if !missed.is_empty() {
+        tracing::warn!(
+            session = %session, ids = ?missed,
+            "process trees the user chose to keep were no longer found, or were a console session's, which keeps none; whatever is left of them is stopped with the session"
+        );
+    }
+    Ok(())
+}
+
 /// The trees of `sessions` whose top has run for at least `min_age`: what an archive of them
 /// would stop and asks the user about. A session with no process has none.
 pub async fn long_running(

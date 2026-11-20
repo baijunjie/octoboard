@@ -66,6 +66,18 @@ export function accountTrashFailedCause(raw: string | undefined): AccountTrashFa
   return ACCOUNT_TRASH_FAILED_CAUSES.find((cause) => cause === raw);
 }
 
+const SESSION_DID_NOT_STOP_CAUSES = ["open_in_app"] as const;
+
+/** The `cause` of a `session_did_not_stop`: the operation that waited for the session's process to end, where the daemon
+ * names one other than the account switch the code was first raised for. */
+export type SessionDidNotStopCause = (typeof SESSION_DID_NOT_STOP_CAUSES)[number];
+
+/** `raw` as a `session_did_not_stop` cause: none, and one this client does not know, are `undefined`, worded by the
+ * code's own key (the account switch's). */
+export function sessionDidNotStopCause(raw: string | undefined): SessionDidNotStopCause | undefined {
+  return SESSION_DID_NOT_STOP_CAUSES.find((cause) => cause === raw);
+}
+
 const PROJECT_TRASH_FAILED_CAUSES = ["unanswered", "unreadable"] as const;
 
 /** The `cause` of a `project_directory_trash_failed`: why a project's directory was not moved to the Trash. */

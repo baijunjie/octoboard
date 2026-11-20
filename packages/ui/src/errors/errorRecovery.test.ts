@@ -290,3 +290,12 @@ it("gives removing an account with its directory no remedy, even where the syste
     expect(classifyError(new CodedError("x", code, { detail: "Permission denied (os error 13)" }))).toEqual({ kind: "actionable", recovery: "none" });
   }
 });
+
+it.each([
+  ["an open in the agent's app, which is retried by waiting again with the session already archived", { cause: "open_in_app" }, "stopProcessWait"],
+  ["no cause, a switch's", {}, "stopProcess"],
+  ["a cause this client does not know", { cause: "from_a_newer_daemon" }, "stopProcess"],
+])("classifies a session that did not stop for %s", (_name, params, recovery) => {
+  const error = new CodedError("localized text", "session_did_not_stop", { session: "s1", ...params });
+  expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
+});

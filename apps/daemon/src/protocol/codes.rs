@@ -381,16 +381,17 @@ pub mod error_code {
     /// in time, and no counts had been noted to answer with. Nothing was counted; the next request
     /// asks again. No `params`.
     pub const PROCESS_COUNT_TIMED_OUT: Code = Code("process_count_timed_out");
-    /// A `keep_processes`, or an `archive_session` with `keep_process_ids`, named a tree with a
-    /// process attached to its agent's own console, which ends with the session whatever keeps it
-    /// (`ProcessTree.unkeepable_reason` `agent_console`). Nothing was kept, and the archive did not
-    /// go ahead. `params` names the process's `pid` and `name`.
+    /// A `keep_processes`, or an `archive_session` or `open_session_in_app` with
+    /// `keep_process_ids`, named a tree with a process attached to its agent's own console, which
+    /// ends with the session whatever keeps it (`ProcessTree.unkeepable_reason` `agent_console`).
+    /// Nothing was kept, and the archive or open did not go ahead. `params` names the process's
+    /// `pid` and `name`.
     pub const PROCESS_SHARES_AGENT_CONSOLE: Code = Code("process_shares_agent_console");
-    /// A `keep_processes`, or an `archive_session` with `keep_process_ids`, named a tree with a
-    /// process in the process group of one of its agent's running commands, which the agent ends
-    /// as it exits, so the process ends with the session whatever keeps it
-    /// (`ProcessTree.unkeepable_reason` `agent_command_group`). Nothing was kept, and the archive
-    /// did not go ahead. `params` names the process's `pid` and `name`.
+    /// A `keep_processes`, or an `archive_session` or `open_session_in_app` with
+    /// `keep_process_ids`, named a tree with a process in the process group of one of its agent's
+    /// running commands, which the agent ends as it exits, so the process ends with the session
+    /// whatever keeps it (`ProcessTree.unkeepable_reason` `agent_command_group`). Nothing was kept,
+    /// and the archive or open did not go ahead. `params` names the process's `pid` and `name`.
     pub const PROCESS_IN_AGENT_COMMAND_GROUP: Code = Code("process_in_agent_command_group");
     /// A `use_reset_credit` for an account whose use of a credit is already running. Nothing
     /// was sent. `params` names `agent`.
@@ -495,8 +496,9 @@ pub mod error_code {
     pub const SESSION_ARCHIVED: Code = Code("session_archived");
     /// A handoff, or a transfer of a session's branches, was asked for a session in the middle of a
     /// turn, still starting, waiting for the user, showing its background agents or running work in
-    /// the background (a handoff only; a transfer's `from` is judged by its own rule). `params`
-    /// names the `session`.
+    /// the background (a handoff only; a transfer's `from` is judged by its own rule), or an
+    /// `open_session_in_app` for such a session, which is opened once it is at rest or archived.
+    /// `params` names the `session`.
     pub const SESSION_WORKING: Code = Code("session_working");
     /// A handoff was asked for a session that owns a session which can still send it something: it
     /// is at work, waiting for the user, running work in the background or has a message on its way.
@@ -539,9 +541,11 @@ pub mod error_code {
     /// Copying the conversation into the target account's directory did not complete. `params`
     /// names the target `path` and the `detail`.
     pub const RELOCATION_FAILED: Code = Code("relocation_failed");
-    /// A switch ended the session's process and it was still not seen gone after a generous wait,
-    /// so the switch stopped there: nothing was copied or recorded, and the process may still be
-    /// running. `params` names the `session`.
+    /// A switch, or an `open_session_in_app`, ended the session's process and it was still not seen
+    /// gone after a generous wait, so the operation stopped there: a switch copied and recorded
+    /// nothing, an open did not ask the application (the session stays archived), and the process
+    /// may still be running. `params` names the `session`; an open's refusal also has `cause`
+    /// `open_in_app`, for a client to word it as an open's, not a switch's.
     pub const SESSION_DID_NOT_STOP: Code = Code("session_did_not_stop");
     /// A switch relaunched the session and its process ended at once, so it is back on the
     /// account it had. `params` names the `session`.

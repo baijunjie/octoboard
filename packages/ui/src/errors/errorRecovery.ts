@@ -1,5 +1,5 @@
 import { isKeptForItsFolder } from "./branchCleanupItems";
-import { pathLinkRefusedCause, relocationCause, sourceUnavailableCause, storeWriteCause, type PathLinkRefusedCause, type RelocationCause, type SourceUnavailableCause, type StoreWriteCause } from "./causes";
+import { pathLinkRefusedCause, relocationCause, sessionDidNotStopCause, sourceUnavailableCause, storeWriteCause, type PathLinkRefusedCause, type RelocationCause, type SessionDidNotStopCause, type SourceUnavailableCause, type StoreWriteCause } from "./causes";
 import { ActionableError } from "./actionableError";
 import { CODE, codeRecord } from "./codes";
 import { CodedError } from "./codedError";
@@ -16,7 +16,7 @@ export type ErrorRecovery =
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
   | "configuration" | "exportSelection" | "image" | "avatarSize" | "avatarImage" | "clipboardRetry" | "clipboardTerminalCopy" | "clipboardCopy" | "clipboardPaste" | "fileRead" | "fileWrite" | "gitFailure" | "gitSwitchFailure" | "gitRestoreFailure" | "gitHistory" | "noUpstream" | "mergeConflict" | "branch"
   | "refresh" | "refreshMessages" | "scope" | "limit" | "openExternal" | "openTerminal" | "openFileManager" | "openDefaultApplication" | "issueAddress"
-  | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "changeModelSetting" | "modelChange" | "switchRelaunch" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
+  | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "changeModelSetting" | "modelChange" | "switchRelaunch" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "stopProcessWait" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "submitRetry" | "unresumable" | "resetCredit" | "resetCreditLogin" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "accountDisabled" | "accountNotSignedIn"
   | "fileChanging" | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate" | "forwardRefused"
   | "mcpSignIn" | "mcpSignInTimedOut" | "mcpSignOut"
@@ -60,6 +60,13 @@ export type ErrorClassification = { kind: "actionable"; recovery: ErrorRecovery 
  * names none. */
 const RELOCATION_CAUSE_RECOVERY: Record<RelocationCause, ErrorRecovery | undefined> = {
   permission_denied: "access", busy: "fileBusy", no_space: "diskSpace", symlink: "symlink", not_restored: "notRestored", other: undefined,
+};
+
+/** The remedy of a `session_did_not_stop` for a cause the daemon names, as `sessionDidNotStopCause` reads it: an open in
+ * the agent's app waited for the process to end, which a retry waits for again, with the session already archived. No
+ * cause, and one this client does not know, keep the record's own remedy (the account switch's). */
+const SESSION_DID_NOT_STOP_RECOVERY: Record<SessionDidNotStopCause, ErrorRecovery> = {
+  open_in_app: "stopProcessWait",
 };
 
 /** The remedy of a `source_unavailable` by its `cause`, as `sourceUnavailableCause` reads it. */
@@ -229,6 +236,8 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
     // Remedied as it is worded: the variant its record names for a missing `git`. A removal that could not tell what
     // went along with its folder for want of one has nothing to try again; what it left follows (`additionalRecovery`).
     if (code && messageCode(code, error.params) === "binary_not_found.git") return { kind: "actionable", recovery: "installGit" };
+    const stopCause = code === CODE.session_did_not_stop ? sessionDidNotStopCause(error.params.cause) : undefined;
+    if (stopCause) return { kind: "actionable", recovery: SESSION_DID_NOT_STOP_RECOVERY[stopCause] };
     if (isProjectBranchesWithoutGit(error)) return { kind: "actionable", recovery: "installGitNoRetry" };
     const domain = code ? codeRecord(code)?.recovery : undefined;
     if (domain) return { kind: "actionable", recovery: domain };

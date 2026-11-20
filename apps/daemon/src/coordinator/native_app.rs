@@ -2,19 +2,21 @@
 //! is the descriptors' (`Capabilities::native_app_scheme`, what the host is asked about) and how
 //! one is asked to show a conversation the provider's (`AgentProvider::native_app`); this only
 //! checks the session and the host. The application and Octoboard would both write to a
-//! conversation a live process holds, so the session must have none: nothing is stopped on the
-//! user's behalf. The applications read the default account's directory only, so one whose latest
-//! record that directory does not hold may not show in them ([`default_directory_holds_latest`]);
-//! that is told to the client (`probe_native_apps`, [`probe`]), which warns, and does not keep it
-//! from being opened.
+//! conversation a live process holds or a resume would start, so a session that is not archived
+//! is archived first, and one with a process only when it is at rest. The applications read the
+//! default account's directory only, so one whose latest record that directory does not hold may
+//! not show in them ([`default_directory_holds_latest`]); that is told to the client
+//! (`probe_native_apps`, [`probe`]), which warns, and does not keep it from being opened.
 
+use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::adapter::{native_app_unavailable as unavailable, provider, NativeAppOpen};
+use crate::adapter::{native_app_unavailable as unavailable, provider, NativeApp, NativeAppOpen};
 use crate::platform::open::native_app::url_scheme_handled;
-use crate::protocol::{error_code, AgentId, CodedError, Session};
+use crate::protocol::{error_code, AgentId, CodedError, Session, SessionStatus};
 use crate::records::locate::Locator;
 use crate::state::AppState;
 
@@ -34,25 +36,88 @@ pub fn installed_agents() -> Vec<AgentId> {
         .collect()
 }
 
-/// Opens `id`'s conversation in its agent's desktop application. Refused with
-/// `session_already_running` unless the session has no process, with `session_already_starting`
-/// while a launch or another operation holds it, with `account_sharing_in_progress` while a change
-/// of its account's sharing moves the account's directory, and with `native_app_unavailable` for an
-/// agent with no application, one that is not installed, a session with no conversation yet, a
-/// conversation id the agent would not take and a launch that fails. A refusal before the
-/// application is asked leaves everything as it was: the session's pending recoveries are cancelled
-/// (the user now has the conversation) only once it is about to be.
-pub async fn open_session_in_app(state: &Arc<AppState>, id: &str) -> Result<()> {
-    // Held until the open has ended: a resume, a switch or a launch begun meanwhile would start a
-    // process on the conversation the application is being shown.
-    let claim = state.begin_launch_leaving_recoveries(id)?;
+/// Opens `id`'s conversation in its agent's desktop application. An archived session is opened as
+/// it is. Any other is archived first, as a user's archive does (what is bound to it is archived
+/// with it, running sessions included, but no branch or worktree is removed), so that nothing
+/// resumes the conversation the application now holds: the trees in `keep_process_ids` are kept
+/// from being stopped with it, and the open waits until its process is gone. The session stays
+/// archived if its process does not go down in time or the application then fails to open.
+/// Refused with `session_working` while the session itself is at work
+/// ([`AppState::what_it_is_doing`]), `session_locked` for it or a session bound to it,
+/// `session_already_starting` while a launch or another operation holds it,
+/// `account_sharing_in_progress` while a change of its account's sharing moves the account's
+/// directory, `session_did_not_stop`, the codes of [`super::processes::keep`] for a tree that
+/// cannot be kept, `daemon_shutting_down`, `shell_environment_timeout` when the shell environment
+/// cannot be captured, and `native_app_unavailable` for an agent with no application, one that is
+/// not installed, a session with no conversation yet, a conversation id the agent would not take
+/// and a launch that fails. Everything that does not depend on archiving is checked before it, so
+/// a refusal for it leaves everything as it was; the one exception is a `session_working` found
+/// only by the check repeated after the chosen trees were kept, which leaves them kept, and the
+/// session running. The archive cancels the session's pending recoveries as its process leaves
+/// (the user now has the conversation); those of a session with no process, or already archived,
+/// are cancelled just before the application is asked. `keep_process_ids` is ignored for an
+/// archived session.
+pub async fn open_session_in_app(
+    state: &Arc<AppState>,
+    id: &str,
+    keep_process_ids: Vec<String>,
+) -> Result<()> {
+    open_with(
+        state,
+        id,
+        keep_process_ids,
+        url_scheme_handled,
+        crate::env_shell::cached_snapshot,
+        ask_app(state),
+    )
+    .await
+}
+
+/// The asking [`open_session_in_app`] does: cancels the session's pending recoveries and has the
+/// application open the conversation. The cancel is a guard for a session with no process to
+/// archive, an archived one, whose recoveries no archive cancelled.
+fn ask_app(
+    state: &Arc<AppState>,
+) -> impl FnOnce(&dyn NativeApp, &Session, &str, &Path, &Path, &HashMap<String, String>) -> Result<()>
+       + Send
+       + 'static {
+    let state = Arc::clone(state);
+    move |app, session, conversation, cwd, scratch, shell| {
+        state.cancel_recoveries(&session.id);
+        app.open(&NativeAppOpen {
+            session,
+            conversation,
+            cwd,
+            shell,
+            scratch,
+        })
+    }
+}
+
+/// [`open_session_in_app`] with the things that reach the host handed in, so that a test opens
+/// nothing: `installed` asks whether a scheme is handled, `snapshot` takes the shell environment,
+/// and `ask` does the asking.
+async fn open_with(
+    state: &Arc<AppState>,
+    id: &str,
+    keep_process_ids: Vec<String>,
+    installed: fn(&str) -> bool,
+    snapshot: fn() -> Result<HashMap<String, String>>,
+    ask: impl FnOnce(&dyn NativeApp, &Session, &str, &Path, &Path, &HashMap<String, String>) -> Result<()>
+        + Send
+        + 'static,
+) -> Result<()> {
+    // Held until the open has ended, archive included: a resume, a switch or a launch begun
+    // meanwhile would start a process on the conversation the application is being shown. Taken
+    // as a switch takes it, which needs no process down; the archive takes none of its own, so
+    // the two do not meet.
+    let claim = state.begin_switch(id)?;
     let session = state.session_record(id)?;
-    if !session.status.has_no_process() {
-        return Err(CodedError::raised(
-            error_code::SESSION_ALREADY_RUNNING,
-            "this session is not interrupted or archived",
-            &[("session", id)],
-        ));
+    crate::accounts::shared_config::refuse_if_changing(state, session.account_id.as_deref())?;
+    let archived = session.status == SessionStatus::Archived && state.live_session(id).is_none();
+    let had_process = state.live_session(id).is_some() || !session.status.has_no_process();
+    if had_process {
+        refuse_if_at_work(state, &session)?;
     }
     let (Some(scheme), Some(app)) = (
         scheme_of(session.agent),
@@ -71,28 +136,91 @@ pub async fn open_session_in_app(state: &Arc<AppState>, id: &str) -> Result<()> 
         .map_err(|err| unavailable(&format!("{err:#}")))?;
     let cwd = super::launch::session_cwd(state, &session)?;
     let scratch = crate::paths::session_scratch(&session.id);
-    let state = Arc::clone(state);
-    let opened = tokio::task::spawn_blocking(move || {
-        if !url_scheme_handled(scheme) {
-            return Err(unavailable(&format!(
-                "the {} application is not installed",
-                session.agent.label()
-            )));
+    // Both before anything is archived: a refusal for either leaves everything as it was.
+    let shell = tokio::task::spawn_blocking(move || {
+        if !installed(scheme) {
+            return Ok(None);
         }
-        let shell =
-            crate::env_shell::cached_snapshot().map_err(crate::env_shell::capture_failed)?;
-        state.cancel_recoveries(&session.id);
-        app.open(&NativeAppOpen {
-            session: &session,
-            conversation: &conversation,
-            cwd: &cwd,
-            shell: &shell,
-            scratch: &scratch,
-        })
+        snapshot()
+            .map(Some)
+            .map_err(crate::env_shell::capture_failed)
+    })
+    .await??;
+    let Some(shell) = shell else {
+        return Err(unavailable(&format!(
+            "the {} application is not installed",
+            session.agent.label()
+        )));
+    };
+    if !archived {
+        archive_and_wait(state, id, had_process, keep_process_ids).await?;
+    }
+    let opened = tokio::task::spawn_blocking(move || {
+        ask(app, &session, &conversation, &cwd, &scratch, &shell)
     })
     .await?;
     drop(claim);
     opened
+}
+
+/// Refuses, with `session_working`, a session that is at work ([`AppState::what_it_is_doing`]).
+fn refuse_if_at_work(state: &AppState, session: &Session) -> Result<()> {
+    match state.what_it_is_doing(session) {
+        Some(doing) => Err(CodedError::raised(
+            error_code::SESSION_WORKING,
+            format!(
+                "this session is {doing}, and its conversation cannot be opened in the app while \
+                 it is: open it once it is waiting for instructions or interrupted"
+            ),
+            &[("session", &session.id)],
+        )),
+        None => Ok(()),
+    }
+}
+
+/// Archives `id` and what is bound to it for an open, keeping the trees in `keep_process_ids` (the
+/// rest of what the process started is stopped by the exit path, and not carried over, since
+/// nothing relaunches it), and, for a session that `had_process`, waits until that is gone.
+async fn archive_and_wait(
+    state: &Arc<AppState>,
+    id: &str,
+    had_process: bool,
+    keep_process_ids: Vec<String>,
+) -> Result<()> {
+    // Counted by the handover barrier from before anything is kept until the archive is made.
+    let admission = state.admit_change()?;
+    {
+        // Held until the archive is made, and not through the wait for the process, so that no
+        // lock is set between the check below and the archive, which holds a claim of its own:
+        // the claims count, so they nest.
+        let _removal = state.claim_session_removal();
+        // Before anything is kept, so that a refusal for a lock leaves the trees as they were.
+        super::lifecycle::ensure_group_unlocked(state, id)?;
+        if had_process {
+            super::processes::keep_chosen(state, id, keep_process_ids).await?;
+            // The judgement of a destructive act is made after the last wait, with nothing
+            // awaited between it and the archive: a turn may have begun while the trees were
+            // being kept, which then stay kept.
+            let session = state.session_record(id)?;
+            if state.live_session(id).is_some() || !session.status.has_no_process() {
+                refuse_if_at_work(state, &session)?;
+            }
+        }
+        super::lifecycle::archive_keeping_branches(state, &admission, id)?;
+    }
+    if !had_process {
+        return Ok(());
+    }
+    super::launch::wait_until_stopped(state, id).await.map_err(|err| {
+        match err.downcast_ref::<CodedError>() {
+            Some(coded) if coded.code == error_code::SESSION_DID_NOT_STOP => CodedError::raised(
+                error_code::SESSION_DID_NOT_STOP,
+                "the session's process did not end in time, so its conversation was not opened in the app; the session is archived",
+                &[("session", id), ("cause", "open_in_app")],
+            ),
+            _ => err,
+        }
+    })
 }
 
 /// Whether the default account's directory, the one both applications read, holds the latest record

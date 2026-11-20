@@ -155,7 +155,7 @@ last change of sharing is incomplete (see "Starting a session on an account whos
 selected. A refusal or failure is shown as an error alert (see `docs/product/error-alerts.md`) and the dialog stays
 open for another try, except a failure after the work has moved, which closes the dialog (see "When a handoff fails").
 A session that is not at rest (`session_working`) is answered by saying that it is still working or waiting for the
-user, so it cannot be handed off yet; one with a session under it that can still send it something
+user, and to try again once it is waiting for instructions; one with a session under it that can still send it something
 (`session_child_active`), by saying that a session under it is still at work and may report to it, and to hand it off
 once its sessions are at rest; a receiving agent that is the session's own (`handoff_to_same_agent`), which the dialog cannot
 send, is shown as an unexpected failure.

@@ -111,7 +111,8 @@ file sits and which directory owns what is in [`docs/structure/daemon.md`](../st
 - **A check made early in a request handler or daemon task is stale by the time it acts.** Every control request runs on
   a task of its own on a multi-threaded runtime, so another request can run between any two lines. Where acting on it
   would do harm, take a claim on `AppState` that the competing path checks too (`begin_launch`;
-  `begin_launch_leaving_recoveries` where the operation may still refuse and must not cancel pending recoveries first),
+  `begin_switch` where the operation may still refuse and must not cancel pending recoveries first, or needs the session
+  while its process still runs),
   or redo the check after the long step.
 - **Under a claim, every check made before it is repeated and what decided it re-read.** That includes the caller's (an
   MCP tool's check that the session is its own) and each member of a group, not only one row. The check for a

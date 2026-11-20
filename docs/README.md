@@ -50,9 +50,10 @@ Where to start, by question:
   agent and carrying its conversation.
 - [Automatic account switch](product/automatic-account-switch.md) — switching a session whose turn stopped at its
   account's usage limit, waiting for quota recovery, and restoring it when a switch fails.
-- [Opening a session in its agent's app](product/opening-a-session-in-its-agents-app.md) — opening a stopped
-  session's conversation in the agent's own desktop app: which agents have one, when it is offered and allowed, the
-  warning when the app may not see the conversation, and the failure alert.
+- [Opening a session in its agent's app](product/opening-a-session-in-its-agents-app.md) — opening a session's
+  conversation in the agent's own desktop app, archiving it first unless it is already archived: which agents have one,
+  when it is offered and allowed, the confirmation, what the archive takes along and keeps, the warning when the app
+  may not see the conversation, and the failures.
 - [Handing a session off to another agent](product/handing-off-sessions.md) — moving a session's work to a new session
   of a different agent.
 - [Changing a session's parent](product/changing-session-owners.md) — transferring to a parent, working independently

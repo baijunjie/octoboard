@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { accountTrashFailedCause, projectTrashFailedCause, sharingCause } from "./causes";
+import { accountTrashFailedCause, projectTrashFailedCause, sessionDidNotStopCause, sharingCause } from "./causes";
 
 it.each(["unanswered", "unreadable", "other_unlooked", "signing_in"])("reads the account trash cause %s as itself", (cause) => {
   expect(accountTrashFailedCause(cause)).toBe(cause);
@@ -24,4 +24,12 @@ it.each(["permission_denied", "busy", "not_found", "no_space", "conflict", "defa
 
 it.each([undefined, "", "from_a_newer_daemon", "BUSY"])("reads %j, no sharing cause or one the client does not know, as other", (cause) => {
   expect(sharingCause(cause)).toBe("other");
+});
+
+it("reads the session did not stop cause open_in_app as itself", () => {
+  expect(sessionDidNotStopCause("open_in_app")).toBe("open_in_app");
+});
+
+it.each([undefined, "", "switch", "from_a_newer_daemon", "OPEN_IN_APP"])("reads %j, no cause or one the client does not know, as none, so the code is worded as a switch's", (cause) => {
+  expect(sessionDidNotStopCause(cause)).toBeUndefined();
 });

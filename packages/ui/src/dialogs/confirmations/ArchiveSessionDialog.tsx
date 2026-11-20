@@ -1,20 +1,17 @@
 import React from "react";
-import { useShallow } from "zustand/react/shallow";
 
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
 import { ConsequenceLines, SessionList } from "../../components/dialog/ConfirmConsequences";
 import { InlineReference } from "../../i18n/InlineReference";
 import { Message, useT } from "../../i18n/react";
 import type { Session } from "../../protocol";
-import { boundSessionsArchivedWith } from "../../sessions/order";
 import { sessionDisplayTitle } from "../../sessions/sessionLabel";
-import { indexSessions } from "../../sessions/sessionIndex";
 import { runsInBackground } from "../../sessions/sessionStatus";
-import { useDaemon, useDaemonStore, useSession } from "../../store";
+import { useDaemon } from "../../store";
 import { useBranchCleanup } from "../BranchCleanupOptions";
 import { useProcessStopping } from "../ProcessStopOptions";
 import type { SessionInspection } from "../branchInspection";
-import { useArchiveInspection } from "../useBranchInspections";
+import { useArchiveScope } from "../useBranchInspections";
 import { ConfirmSection } from "./ConfirmSection";
 
 /** Confirms archiving a session and every unarchived session under it, listing the bound branches
@@ -32,9 +29,7 @@ export function ArchiveSessionDialog({ requested, inspection, onClose }: {
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
-  const session = useSession(requested.id) ?? requested;
-  const withIt = useDaemonStore(useShallow((s) => boundSessionsArchivedWith(Array.from(s.sessions.values()), requested.id, indexSessions(s.sessions).delegatingIds, s.queuedAccountSwitches)));
-  const inspected = useArchiveInspection([session.id, ...withIt.map((s) => s.id)], inspection);
+  const { session, withIt, inspected } = useArchiveScope(requested, inspection);
   const cleanup = useBranchCleanup(inspected);
   const processes = useProcessStopping(inspected.processes);
   const showBound = withIt.length > 0;

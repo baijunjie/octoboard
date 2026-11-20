@@ -1135,3 +1135,39 @@ async fn a_launch_names_the_installation_for_the_git_hooks() {
     assert_eq!(install_exe, crate::test_support::INSTALL_EXE);
     assert_ne!(install_exe, self_exe);
 }
+
+/// What a restart and an open in the agent's app wait on: a process not recorded down is waited for
+/// only as long as `restart_stop_timeout` says under test, and then refused as `session_did_not_stop`;
+/// once the session is recorded down, the wait is over.
+#[tokio::test(flavor = "multi_thread")]
+async fn waiting_for_a_stopped_session_gives_up_at_the_overridden_timeout_and_ends_once_it_is_down()
+{
+    let (state, _dir) = console_with_project_and_accounts("launch-wait-stopped");
+    state
+        .store
+        .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
+        .unwrap();
+    // No exit watcher: nothing records the process down.
+    let live = idle_stand_in("s");
+    state.register_live(live.clone());
+    *state.restart_stop_timeout.lock().unwrap() = Some(Duration::from_millis(200));
+
+    let err = wait_until_stopped(&state, "s").await.expect_err("gave up");
+
+    assert_eq!(code_of(&err), error_code::SESSION_DID_NOT_STOP);
+    assert_eq!(
+        err.to_string(),
+        "the session's process did not end in time, so it was not switched"
+    );
+    assert_eq!(crate::test_support::param_of(&err, "session"), "s");
+
+    assert!(state.remove_live(&live));
+    state
+        .store
+        .update_session(&Session {
+            status: SessionStatus::Interrupted,
+            ..state.session_record("s").unwrap()
+        })
+        .unwrap();
+    wait_until_stopped(&state, "s").await.expect("down");
+}

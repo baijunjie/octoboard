@@ -5120,6 +5120,12 @@ export type Request = {
   | {
   "type": "open_session_in_app",
   session: string,
+  /**
+   * The ids of process trees (see `ProcessTree`) the user chose to keep running when the
+   * session's process is ended by the archive the open makes; ignored for an archived
+   * session. Absent means none.
+   */
+  keep_process_ids?: Array<string>,
 }
   | {
   "type": "probe_native_apps",
@@ -6100,6 +6106,12 @@ export type RequestBody = {
 | {
   "type": "open_session_in_app",
   session: string,
+  /**
+   * The ids of process trees (see `ProcessTree`) the user chose to keep running when the
+   * session's process is ended by the archive the open makes; ignored for an archived
+   * session. Absent means none.
+   */
+  keep_process_ids?: Array<string>,
 }
 | {
   "type": "probe_native_apps",

@@ -252,17 +252,7 @@ pub(crate) fn refuse_unless_it_can_be_handed_off(
             &[("session", &original.id)],
         ));
     }
-    let shown = state.status_for_switch(original);
-    let doing = match shown {
-        SessionStatus::Starting => Some("still starting"),
-        SessionStatus::Working => Some("in the middle of a turn"),
-        SessionStatus::WaitingUser => Some("waiting for the user"),
-        SessionStatus::Dormant => Some("showing its background agents"),
-        SessionStatus::Idle if !state.shown_background_tasks(&original.id, shown).is_empty() => {
-            Some("running work in the background")
-        }
-        SessionStatus::Idle | SessionStatus::Interrupted | SessionStatus::Archived => None,
-    };
+    let doing = state.what_it_is_doing(original);
     if let Some(doing) = doing {
         return Err(CodedError::raised(
             error_code::SESSION_WORKING,

@@ -793,6 +793,24 @@ pub(crate) async fn wait_until_down_within(
     Ok(())
 }
 
+/// How long an operation that ended a session's process waits for it to be recorded down, which a
+/// restart and an open in the agent's application do: [`SWITCH_STOP_TIMEOUT`], shortened by a
+/// test.
+#[cfg_attr(not(test), allow(unused_variables))]
+fn stop_timeout(state: &AppState) -> Duration {
+    #[cfg(test)]
+    if let Some(shorter) = *state.restart_stop_timeout.lock().unwrap() {
+        return shorter;
+    }
+    SWITCH_STOP_TIMEOUT
+}
+
+/// Waits for `id`, a session a restart or an open in the agent's application ended, to be recorded
+/// down, for [`stop_timeout`].
+pub(crate) async fn wait_until_stopped(state: &Arc<AppState>, id: &str) -> Result<()> {
+    wait_until_down_within(state, id, stop_timeout(state)).await
+}
+
 /// Whether the relaunched process is still running after `settle`.
 pub(super) async fn came_up(live: &Arc<LiveSession>, settle: Duration) -> bool {
     let deadline = Instant::now() + settle;

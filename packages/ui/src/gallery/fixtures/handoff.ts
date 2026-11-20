@@ -2,7 +2,7 @@ import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { accountOf, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf, WINDOWS_MACHINE } from "../../fixtures/builders";
+import { accountOf, SAMPLE, branchItemOf, minutesAgo, processTreeOf, sessionOf, snapshotState, worktreeItemOf, WINDOWS_MACHINE } from "../../fixtures/builders";
 import { WINDOWS_HOST } from "../../test/hosts";
 
 const { console: console_, web, api, consoleSession: hub } = SAMPLE;
@@ -18,7 +18,12 @@ const owned = [
 // A project session bound to no one that owns none and is responsible for no branch: nothing moves.
 const bare = sessionOf("s-handoff-bare", console_.id, api.id, "Add idempotency keys", "idle", { started_at: minutesAgo(30) });
 // What the hub owns besides the coordinator: a live session and an archived one.
-const sibling = sessionOf("s-handoff-sibling", console_.id, web.id, "Update the dependencies", "idle", { bound_to: hub.id, started_at: minutesAgo(45) });
+// It has a conversation on record, which its agent's desktop application can open although the session is at rest with a process.
+const sibling = sessionOf("s-handoff-sibling", console_.id, web.id, "Update the dependencies", "idle", {
+  bound_to: hub.id,
+  agent_session_id: "5c2e9a44-7b0d-4e6f-8a31-0d4b1c7e92aa",
+  started_at: minutesAgo(45),
+});
 // A bound session at work, which keeps its owner (`sibling`) from being handed off while it can still report to it; it
 // can itself still be unbound.
 const working = sessionOf("s-handoff-working", console_.id, web.id, "Fix the summary layout", "working", { bound_to: sibling.id, started_at: minutesAgo(20) });
@@ -114,6 +119,20 @@ const stoppedState = snapshotState({
   sessions: [hub, coordinator, ...owned, ...hubOwned, bare, working, stopped],
   settings,
 });
+// An idle project session at its prompt with a conversation on record, the dev server and the watcher it started still
+// running, and a worker bound to it that is at work: opening it in its agent's application archives it with the worker,
+// so the confirmation lists the worker and the processes first. Kept out of `state` so it does not appear in the other
+// scenarios.
+const resting = sessionOf("s-handoff-resting", console_.id, web.id, "Preview the ranking change", "idle", {
+  agent_session_id: "e3a8d1f0-2c64-4b9e-9f57-6a0c8b21d4e7",
+  started_at: minutesAgo(60),
+});
+const restingWorker = sessionOf("s-handoff-resting-worker", console_.id, web.id, "Check the ranking fixtures", "working", { bound_to: resting.id, role: "worker", started_at: minutesAgo(20) });
+const restingState = snapshotState({ consoles: [console_], projects: [web, api], sessions: [hub, coordinator, ...owned, ...hubOwned, bare, working, resting, restingWorker], settings });
+const restingTrees = [
+  processTreeOf("700:1", resting, "pnpm dev --port 5173", 45, { process_count: 3, memory_bytes: 142_000_000, ports: [5173] }),
+  processTreeOf("701:1", resting, "vitest --watch --reporter=dot", 30, { process_count: 2, memory_bytes: 96_000_000 }),
+];
 // An independent project session beside what could own it: two console sessions, and two running coordinators of its
 // project, one of them with a title that runs past the menu. The sessions that cannot own it stay in the sidebar: a
 // worker and a coordinator of another project.
@@ -254,11 +273,21 @@ export const handoffScenarios: Scenario[] = [
     id: "sidebar-session-menu-hand-off-blocked",
     group: GROUP,
     category: "normal",
-    title: "Menu of a session with a child at work, Hand off and Open in the agent's app disabled",
-    description: "Both items are greyed out with their reason on a short line under the label, in place of a description: Hand off says \"Child sessions working\" because a session under this one can still report to it (a session that is itself busy, waiting for the user or running work in the background says \"Session busy\"), and Open in Claude app says \"Session running\" because the session still has a process. Look at how much room the two reason lines take in the menu. A session with no conversation yet reads \"No conversation yet\" under Open in Claude app the same way.",
+    title: "Menu of an idle session with a child at work, Hand off disabled, Open in the agent's app offered",
+    description: "Hand off is greyed out with its reason on a short line under the label, in place of a description: \"Child sessions working\", because a session under this one can still report to it (a session that is itself busy, waiting for the user or running work in the background says \"Session busy\"). Look at how much room the reason line takes in the menu. Open in Claude app is enabled with no reason line, although the session is idle and still has a process: a session at rest can be opened in the agent's app.",
     state,
     nativeApps: ["claude", "codex"],
     steps: [openMenu(sibling.title)],
+  },
+  {
+    id: "sidebar-session-menu-open-in-app-working",
+    group: GROUP,
+    category: "normal",
+    title: "Menu of a session at work, Open in the agent's app disabled",
+    description: "Open in Claude app is greyed out with \"Session busy\" on a short line under the label, in place of a description, and Hand off says the same. Look at how much room the two reason lines take in the menu.",
+    state,
+    nativeApps: ["claude", "codex"],
+    steps: [openMenu(working.title)],
   },
   {
     id: "sidebar-session-menu-handoff-locked",
@@ -376,6 +405,17 @@ export const handoffScenarios: Scenario[] = [
     steps: [openMenu(stopped.title), (ui) => ui.press(ui.t("provider.claude.openInApp")), (ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
+    id: "dialog-open-session-in-app",
+    group: GROUP,
+    category: "normal",
+    title: "Open an idle session with a bound session and background processes in the agent's app",
+    description: "A warning confirmation titled Open in Claude app, with the session named in the first sentence, which says it will be archived and then opened in the agent's app, and the message that its branches and worktrees are kept and that it should be reopened from the archive once the app is done with the conversation. Under it a section headed \"Archived with it (1)\" lists the worker bound to the session, then a Background processes section under a divider, as the archive confirmation has them: the line \"Selected processes will be stopped. Uncheck any to keep them running.\" leads two ticked checkboxes labelled by their commands, and \"2 processes will be stopped.\" follows them. The confirming button reads Open in Claude app.",
+    state: restingState,
+    nativeApps: ["claude", "codex"],
+    processes: { trees: restingTrees },
+    steps: [openMenu(resting.title), (ui) => ui.press(ui.t("provider.claude.openInApp"))],
+  },
+  {
     id: "dialog-handoff-pending",
     group: GROUP,
     category: "normal",
@@ -390,7 +430,7 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Hand off refused, the session is mid-turn",
-    description: "The daemon found the session in the middle of a turn after the window listed it as idle. The alert says the session cannot be handed off yet, and the dialog stays behind it for another try. A session archived meanwhile is refused in the same alert.",
+    description: "The daemon found the session in the middle of a turn after the window listed it as idle. The alert says the session is still working or waiting for the user and to try again once it is waiting for instructions, and the dialog stays behind it for another try. A session archived meanwhile is refused in the same alert.",
     state,
     sessionHandoffs: {
       [bare.id]: { code: "session_working", params: { session: bare.id }, message: "The session is in the middle of a turn" },

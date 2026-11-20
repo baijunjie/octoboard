@@ -289,7 +289,7 @@ async fn stop(
     }
     let mut first = None;
     for session in &mut stopped {
-        if super::restart::wait_until_stopped(state, &session.id)
+        if super::launch::wait_until_stopped(state, &session.id)
             .await
             .is_err()
         {

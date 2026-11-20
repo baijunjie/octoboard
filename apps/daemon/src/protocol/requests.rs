@@ -1424,17 +1424,38 @@ pub enum RequestBody {
     },
     /// Opens a session's conversation in its agent's own desktop application (the Claude app for
     /// Claude Code, the Codex app for Codex) on the daemon's host. Answered with `ack` once the
-    /// application has been asked to open. Nothing is stopped for it: refused with
-    /// `session_already_running` while the session has a process, with `session_already_starting`
-    /// while a launch or another operation holds it, with `account_sharing_in_progress` while a
-    /// change of its account's sharing moves the account's directory, and with
-    /// `native_app_unavailable` for an agent with no such application, one that is not installed, a
-    /// session with no conversation yet, a conversation id the agent would not take, and a failed
-    /// launch. Where the application may not see the conversation (the default account's directory,
-    /// the only one it reads, does not hold its latest record, which `probe_native_apps` tells) it
-    /// is opened all the same. An unknown session is `unknown_session`.
+    /// application has been asked to open. An archived session is opened as it is. Any other is
+    /// archived first, as a user's `archive_session` does it, so that nothing resumes the
+    /// conversation the application holds: the sessions bound to it are archived with it, running
+    /// ones included, and the open waits until its own process is gone; no branch or worktree is
+    /// removed. A session with a process must be at rest (waiting for instructions, or stopped on
+    /// its account's usage limit). The process trees in `keep_process_ids` are kept running, as an
+    /// archive keeps them. The session stays archived if the application then fails to open, or
+    /// its process does not end in time. Refused, with nothing archived, with `session_working`
+    /// while the session is at work (starting, mid-turn, waiting for the user, showing its
+    /// background agents or running work in the background), with `session_locked` for it or a
+    /// session bound to it, with `session_already_starting` while a launch or another operation
+    /// holds it, with `account_sharing_in_progress` while a change of its account's sharing moves
+    /// the account's directory, with `daemon_shutting_down` once a planned stop has begun, with
+    /// `process_shares_agent_console` or `process_in_agent_command_group` for a tree that cannot
+    /// be kept, and with `native_app_unavailable` for an agent with no such application, one that
+    /// is not installed, a session with no conversation yet and a conversation id the agent would
+    /// not take, and with `shell_environment_timeout` when the shell environment cannot be
+    /// captured; `native_app_unavailable` also answers a failed launch, and `session_did_not_stop`
+    /// (param `cause` `open_in_app`) a process that does not end, after the archive. A
+    /// `session_working` found only by the check repeated after the chosen trees were kept leaves
+    /// them kept, and the session running. Where the application may not see the conversation (the
+    /// default account's directory, the only one it reads, does not hold its latest record, which
+    /// `probe_native_apps` tells) it is opened all the same. An unknown session is
+    /// `unknown_session`.
     OpenSessionInApp {
         session: String,
+        /// The ids of process trees (see `ProcessTree`) the user chose to keep running when the
+        /// session's process is ended by the archive the open makes; ignored for an archived
+        /// session. Absent means none.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        keep_process_ids: Vec<String>,
     },
     /// Asks which agents' desktop applications are installed on the daemon's host, and, for the
     /// `sessions` named (at most 200 are judged), which ones' conversations the applications can

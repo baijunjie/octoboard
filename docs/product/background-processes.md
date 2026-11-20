@@ -254,7 +254,8 @@ process inside a command the agent is still running, on macOS and Linux. For suc
   be kept.
 - **A keep naming it is refused** with the error code of its reason, whose parameters name the first such process
   (`pid`, and `name`, empty when unknown): a `keep_processes` keeps none of the trees it names, and an
-  `archive_session` whose `keep_process_ids` names it keeps nothing and does not archive. The error's own message, the
+  `archive_session` or `open_session_in_app` whose `keep_process_ids` names it keeps nothing and does not archive,
+  nor open. The error's own message, the
   daemon's English sentence rather than the window's, gives the cause and what to do to keep such a process running.
 
 ### Processes on the agent's own console
@@ -449,6 +450,11 @@ When the archive scope changes, the confirmation inspects the new scope and cann
 answers. If reinspection fails, previously known processes still in the current scope retain their keep choices;
 stale information grants no permission to force branch removal. The selected keeps are applied before archiving starts
 and remain in effect even if the archive is subsequently refused, for example because a session is locked.
+
+Opening a session that is not archived in its agent's app archives it, and its confirmation lists the trees in a
+**Background processes** section the same way, with the same choices (see "The confirmation" in
+`docs/product/opening-a-session-in-its-agents-app.md`). There the lock checks come before anything is kept, so a lock
+leaves the trees as they were.
 
 An archive initiated by an agent tool or an automatic report does not ask the user which processes to keep. It stops
 every attributed process that has not already been kept. A handoff's archive of the original asks nothing either, and
