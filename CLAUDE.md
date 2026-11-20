@@ -204,6 +204,21 @@ At delivery:
    configuration of those format checks and lint, the commands written down for them, or the tool versions: the check
    results cannot change then.
 
+   Where it is already settled that the checks will run again later on code that contains this change (run by you, later
+   in this same task), and this change can stay local until that run passes (not pushed, no PR; a merge flow that
+   pushes at once or merges on the remote does not count), do not run them now: that run's result stands in for this
+   one. For example, when several branches are merged locally into the same target branch one after another, each later
+   branch is checked only once aligned with the target branch that already holds the earlier changes, so the checks run
+   once, on the final merge result. A check run to decide whether a branch may be rewritten (such as verifying its
+   unpushed commits before rebasing it onto its target branch while aligning) runs on the spot and is not stood in for
+   by a later one. When asking the user to confirm a merge or reporting check results, say that this change has not
+   been checked yet and which run stands in for it. When that run sets its scope, the stood-in changes count as changes,
+   not as already checked because they are now in the target branch; if that run fails, trace which change the failing
+   part comes from, and fix one that belongs to the stood-in changes on its own, not mixed into another branch's
+   commits; if that run does not complete, run the checks on the current code with the scope set by the stood-in
+   changes. When unsure whether that run will certainly happen, or whether it will contain this change, run them as
+   usual.
+
 Formatting and checks run only as the "Formatting and checks" step sets out, before delivery (push, PR or merge);
 the earlier steps do not run them separately (the related tests a step runs to confirm its own change, and the tests
 the test-adding subagent runs as its definition says, do not count).
