@@ -109,9 +109,13 @@ Whether the framework is newly installed or already in the project, its configur
 ## Wrap-up: add tests
 
 When you are a subagent, do not follow this skill: finish and hand back, and let whoever dispatched you arrange it.
-A subagent is an agent dispatched to do one job, which hands its conclusions or changes back to the dispatcher, who
-is responsible for bringing them into the branch; an agent whose deliverable is a branch (no matter who ends up pushing
-or merging it) is not a subagent.
+A subagent is an agent dispatched by another agent to do a specific task and hand it back to that agent when done, however
+it was dispatched (a subagent mechanism, a separately opened session and so on) and whether or not it works on a branch
+or working copy of its own: when the task description, your definition or your system prompt says you hand back to
+another agent, you are a subagent; delivery is done only by the agent answering directly to the user; when the user
+directly asks a subagent to push, merge or open a PR, it becomes the deliverer and runs the workflow's self-checks
+before delivering. When dispatching a subagent, write "you are a subagent; hand back when done" in the task description:
+some subagents can only recognize their role from there.
 
 1. List the source files changed this round, new, renamed and deleted ones included.
 2. **Dispatch the `test-writer` subagent to add the tests; when there is a subagent mechanism, do not write them

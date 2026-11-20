@@ -19,14 +19,21 @@ subagent, and take only the conclusion: briefing a subagent on a small task cost
 The self-checks before delivery (adding tests, the change check, updating the docs and the like) and the fixes they
 call for are dispatched as the workflow, their skills and the rules below say, and this test does not limit them.
 
-- When you are a subagent, do the work yourself and hand it back: dispatch no further subagents, and skip the
-  self-checks before delivery in the instruction file's workflow; before starting, only read the project context, with
-  no fetch and no branch alignment. Self-checks such as adding tests, the change check and updating the docs are
-  arranged by whoever dispatched you, once you hand back. Subagents that each dispatch again and each self-check do so
-  uncoordinated, and together saturate the machine.
-  A subagent is an agent dispatched to do one job, which hands its conclusions or changes back to the dispatcher, who is
-  responsible for bringing them into the branch; an agent whose deliverable is a branch (no matter who ends up pushing
-  or merging it) is not a subagent.
+- When you are a subagent, do only the task dispatched to you, and do it yourself and hand it back: dispatch no further
+  subagents, do not push, merge or open a PR, and skip the self-checks before delivery in the instruction file's
+  workflow; to confirm the change works, run only the tests that directly cover this change of yours, not the full test
+  suites, lint, type checking or builds. Where the task dispatched to you is itself one of the self-checks (such as
+  adding tests or a review), do it as the dispatch and your own definition say. Before starting, only read the project
+  context, with no fetch and no branch alignment. The self-checks are run by whoever dispatched you, once all the tasks
+  have been handed back. Subagents that each dispatch again and each self-check do so uncoordinated, and together
+  saturate the machine.
+  A subagent is an agent dispatched by another agent to do a specific task and hand it back to that agent when done, however
+  it was dispatched (a subagent mechanism, a separately opened session and so on) and whether or not it works on a branch
+  or working copy of its own: when the task description, your definition or your system prompt says you hand back to
+  another agent, you are a subagent; delivery is done only by the agent answering directly to the user; when the user
+  directly asks a subagent to push, merge or open a PR, it becomes the deliverer and runs the workflow's self-checks
+  before delivering. When dispatching a subagent, write "you are a subagent; hand back when done" in the task description:
+  some subagents can only recognize their role from there.
 - One task per dispatch, with the completion criteria spelled out; give the full background (it knows none of the
   premises you did not write down); ask it for conclusions, not a replay of its process.
 - Never let several subagents change the same place at once, and never dispatch several to do the same thing
@@ -106,14 +113,21 @@ When unsure, report back: stop, spell out what needs deciding (with the options)
 together with what you have already found out, and let the recipient of the report (the user, or the dispatcher
 passing it on to the user) decide before going on; do not decide for yourself.
 
-- When you are a subagent, do the work yourself and hand it back: dispatch no further subagents, and skip the
-  self-checks before delivery in the instruction file's workflow; before starting, only read the project context, with
-  no fetch and no branch alignment. Self-checks such as adding tests, the change check and updating the docs are
-  arranged by whoever dispatched you, once you hand back. Subagents that each dispatch again and each self-check do so
-  uncoordinated, and together saturate the machine.
-  A subagent is an agent dispatched to do one job, which hands its conclusions or changes back to the dispatcher, who is
-  responsible for bringing them into the branch; an agent whose deliverable is a branch (no matter who ends up pushing
-  or merging it) is not a subagent.
+- When you are a subagent, do only the task dispatched to you, and do it yourself and hand it back: dispatch no further
+  subagents, do not push, merge or open a PR, and skip the self-checks before delivery in the instruction file's
+  workflow; to confirm the change works, run only the tests that directly cover this change of yours, not the full test
+  suites, lint, type checking or builds. Where the task dispatched to you is itself one of the self-checks (such as
+  adding tests or a review), do it as the dispatch and your own definition say. Before starting, only read the project
+  context, with no fetch and no branch alignment. The self-checks are run by whoever dispatched you, once all the tasks
+  have been handed back. Subagents that each dispatch again and each self-check do so uncoordinated, and together
+  saturate the machine.
+  A subagent is an agent dispatched by another agent to do a specific task and hand it back to that agent when done, however
+  it was dispatched (a subagent mechanism, a separately opened session and so on) and whether or not it works on a branch
+  or working copy of its own: when the task description, your definition or your system prompt says you hand back to
+  another agent, you are a subagent; delivery is done only by the agent answering directly to the user; when the user
+  directly asks a subagent to push, merge or open a PR, it becomes the deliverer and runs the workflow's self-checks
+  before delivering. When dispatching a subagent, write "you are a subagent; hand back when done" in the task description:
+  some subagents can only recognize their role from there.
 
 ### Before starting work
 
@@ -125,8 +139,9 @@ passing it on to the user) decide before going on; do not decide for yourself.
 ### Before delivery
 
 The self-check targets one **complete delivery** covering all of this round's changes, not every single edit —
-an intermediate commit does not count either; changes a subagent hands back count as this round's changes too, and the
-self-check runs even when you did not touch the code yourself. A user request to push, open a PR or merge counts as
+an intermediate commit does not count either; changes a subagent hands back (including those it made on a branch of its
+own and you merge in) count as this round's changes too, merging them in is not a delivery, and the self-check runs once
+all of them are in; the self-check runs even when you did not touch the code yourself. A user request to push, open a PR or merge counts as
 delivery too.
 At delivery:
 
@@ -190,7 +205,8 @@ At delivery:
    results cannot change then.
 
 Formatting and checks run only as the "Formatting and checks" step sets out, before delivery (push, PR or merge);
-the earlier steps do not run them separately (the related tests a step runs to confirm its own change do not count).
+the earlier steps do not run them separately (the related tests a step runs to confirm its own change, and the tests
+the test-adding subagent runs as its definition says, do not count).
 
 - **Changed behavior, logic or UI again** (in response to the change check, to preview feedback, to pass the checks,
   or while resolving conflicts, including changes handed to a subagent): walk this new change through again from the
