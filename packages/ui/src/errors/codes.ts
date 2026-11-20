@@ -406,8 +406,8 @@ const CORE_CODES = {
   unreadable_request: { origin: "daemon", unexpected: "the window sends only requests of the shapes it knows", detailBlock: true },
   unshared_state_database: { origin: "daemon", recovery: "none", codeParams: ["path"], nameParams: ["name"] },
   unsupported_file_type: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { unmerged: { codeParams: ["path"] } }, variantOf: (params) => params.file_type === "unmerged" ? "unmerged" : undefined },
-  upload_parts_mismatch: { origin: "daemon", unexpected: "a pasted image uploaded in parts, which the window never does" },
-  upload_unavailable: { origin: "daemon", unexpected: "a pasted image uploaded in parts, which the window never does" },
+  upload_parts_mismatch: { origin: "daemon", unexpected: "a pasted image or attachment uploaded in parts, which the window never does" },
+  upload_unavailable: { origin: "daemon", unexpected: "a pasted image or attachment uploaded in parts, which the window never does" },
   upstream_not_a_remote: { origin: "daemon", recovery: "gitFailure" },
   // Raised by every checked write (a settings control, a form dialog, an import); its `fields` and `versions` params
   // are for the window's own reconciliation, not for the sentence.

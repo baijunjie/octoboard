@@ -699,8 +699,8 @@ export const zhCN: Translation<"other"> = {
   "daemon.pull_merge_conflict.summary": "将上游合并到此分支时有冲突，因此已取消合并，没有任何更改。",
   "daemon.request_superseded": "此请求已被更新的请求取代。",
   "daemon.reply_part_unavailable": "此回复的分块已不可用。",
-  "daemon.upload_parts_mismatch": "图片分块不一致，上传已被丢弃。",
-  "daemon.upload_unavailable": "此图片上传已不可用。",
+  "daemon.upload_parts_mismatch": "分块不一致，上传已被丢弃。",
+  "daemon.upload_unavailable": "此次上传已不可用。",
   "daemon.trust_directory_too_broad":
     "{path} 范围过大，无法整体信任。它是文件系统根目录或你的主文件夹，或包含它们。请单独信任此项目，或将其移到更窄的文件夹下，再信任该文件夹。",
   "daemon.trust_directory_unreachable": "{path} 或其上层文件夹未及时响应，因此无法检查该文件夹。请取消勾选该文件夹选项，单独信任此项目；或等相关的卷恢复响应后重试。",

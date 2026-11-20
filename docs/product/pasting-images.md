@@ -93,6 +93,9 @@ belongs to the connection that started it and is discarded when it is deleted (`
 any of its requests is refused, 60 seconds after it was started or last received a part, or when the connection
 closes; a request naming a discarded upload is refused with `upload_unavailable`, and parts that do not continue
 where the received bytes end, run past the declared size, or end short of it at the save are refused with
-`upload_parts_mismatch`. A connection holds at most 2 uploads at once, and all connections' uploads together at most
-64 MiB of declared sizes; past either, starting an upload is refused with `limit_exceeded`. The requests' fields and
-refusals in full are in "Uploading a pasted image in parts" in `apps/daemon/PROTOCOL.md`.
+`upload_parts_mismatch`. A connection holds at most 2 image uploads at once, and all connections' image uploads
+together at most 64 MiB of declared sizes; past either, starting an upload is refused with `limit_exceeded`. Files
+attached to a session are uploaded in parts the same way, with limits of their own counted apart from these (see
+"Limits" in `docs/product/attaching-files.md`); an image upload's handle given to an attachment request, or the reverse,
+is refused with `upload_unavailable`. The requests' fields and refusals in full are in "Uploading a pasted image in
+parts" in `apps/daemon/PROTOCOL.md`.

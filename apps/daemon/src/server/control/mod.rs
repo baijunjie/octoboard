@@ -16,11 +16,14 @@ use crate::browse::lane::{Frame, Lane};
 use crate::coordinator::conversation_feed;
 use crate::coordinator::Followup;
 use crate::protocol::{
-    BrowseRequest, Event, Request, RequestBody, BROWSE_REQUEST_TYPES, CONVERSATION_REQUEST_TYPES,
+    BrowseRequest, Event, Request, BROWSE_REQUEST_TYPES, CONVERSATION_REQUEST_TYPES,
 };
 use crate::server::access::Admission;
-use crate::session::pasted_image::upload::Uploads;
 use crate::state::{AppState, Stamp};
+
+mod uploads;
+
+use uploads::{serve_upload, upload_request, ConnectionUploads, UploadFrame};
 
 /// Events queued for one control client before its writer is considered the bottleneck. Small:
 /// these are state records, not terminal output, and a client this far behind is better served by
@@ -82,8 +85,8 @@ async fn handle_control(
         content_tx,
     ));
 
-    // This connection's pasted image uploads, dropped with it, and with them their parts.
-    let uploads = Arc::new(Uploads::new(state.pasted_image_uploads.clone()));
+    // This connection's uploads, dropped with it, and with them their parts.
+    let uploads = Arc::new(ConnectionUploads::new(&state));
 
     let mut writer = tokio::spawn(write_frames(
         sink,
@@ -207,7 +210,9 @@ async fn handle_control(
                     }
                     // Answered as unreadable by the ordinary path below; the upload it names is
                     // discarded, as on any refusal of one of its requests.
-                    Some(UploadFrame::Unreadable(upload)) => uploads.delete(&upload),
+                    Some(UploadFrame::Unreadable { kind, upload }) => {
+                        uploads.discard(&kind, &upload);
+                    }
                     None => {}
                 }
                 let state = state.clone();
@@ -408,138 +413,6 @@ async fn submit_browse(state: &Arc<AppState>, lane: &Arc<Lane>, request: BrowseR
     .await;
 }
 
-/// The `type`s of the requests about a pasted image upload, which the connection serves itself:
-/// it holds the uploads' parts.
-const UPLOAD_REQUEST_TYPES: &[&str] = &[
-    "create_pasted_image_upload",
-    "write_pasted_image_part",
-    "delete_pasted_image_upload",
-    "save_pasted_image",
-];
-
-/// What [`upload_request`] makes of a frame.
-enum UploadFrame {
-    /// A request this connection serves itself.
-    Serve(Box<Request>),
-    /// A frame of an upload request type whose fields do not read, naming this upload: it is
-    /// discarded, and the frame answered by the ordinary request path.
-    Unreadable(String),
-}
-
-/// The frame as a request about one of this connection's uploads, when its `type` (`kind`) is
-/// one: `None` for any other frame, `save_pasted_image` with no `upload` included, which the
-/// ordinary request path serves. A frame of one of these types whose fields do not read is left
-/// to that path too, which answers it, with the upload it names, if any, to discard.
-fn upload_request(text: &str, kind: Option<&str>) -> Option<UploadFrame> {
-    /// The `upload` of a frame, read without the rest of its fields: a single-frame save's
-    /// `data` is skipped, not copied.
-    #[derive(serde::Deserialize)]
-    struct Named {
-        #[serde(default)]
-        upload: Option<String>,
-    }
-    let kind = kind?;
-    if !UPLOAD_REQUEST_TYPES.contains(&kind) {
-        return None;
-    }
-    let upload = serde_json::from_str::<Named>(text)
-        .ok()
-        .and_then(|named| named.upload);
-    if kind == "save_pasted_image" && upload.is_none() {
-        return None;
-    }
-    match serde_json::from_str::<Request>(text) {
-        Ok(request) => Some(UploadFrame::Serve(Box::new(request))),
-        Err(_) => upload.map(UploadFrame::Unreadable),
-    }
-}
-
-/// Serves a request about one of this connection's uploads, in the order the frames came, so
-/// that a client may send the parts of an upload without waiting for each `ack`. Only the save
-/// leaves this loop, for the file write, once it has taken the upload's bytes.
-async fn serve_upload(
-    state: &Arc<AppState>,
-    uploads: &Arc<Uploads>,
-    outbound: &mpsc::Sender<Event>,
-    request: Request,
-) {
-    let id = request.id;
-    let answer = match request.body {
-        // Off this loop, since it reads the store: no part can name the upload before the client
-        // has its handle from the reply, so the frames after it lose nothing by not waiting.
-        RequestBody::CreatePastedImageUpload { session, size } => {
-            let state = state.clone();
-            let uploads = uploads.clone();
-            let outbound = outbound.clone();
-            tokio::spawn(async move {
-                let reply = match uploads.create(&state, &session, size) {
-                    Ok(upload) => Event::PastedImageUploadCreated { id, upload },
-                    Err(err) => Event::from_error(id, &err),
-                };
-                let _ = outbound.send(reply).await;
-            });
-            return;
-        }
-        RequestBody::WritePastedImagePart {
-            upload,
-            offset,
-            data,
-        } => uploads
-            .write(&upload, offset, &data)
-            .map(|()| Event::Ack { id: id.clone() }),
-        RequestBody::DeletePastedImageUpload { upload } => {
-            uploads.delete(&upload);
-            Ok(Event::Ack { id: id.clone() })
-        }
-        RequestBody::SavePastedImage {
-            session,
-            data,
-            upload: Some(upload),
-        } => {
-            if data.is_some() {
-                uploads.delete(&upload);
-                Err(anyhow::anyhow!(
-                    "save_pasted_image takes exactly one of data and upload"
-                ))
-            } else {
-                match uploads.take(&upload, &session) {
-                    Ok(taken) => {
-                        let state = state.clone();
-                        let outbound = outbound.clone();
-                        tokio::spawn(async move {
-                            let saved = tokio::task::spawn_blocking(move || {
-                                // The bytes stay counted against the uploads' budget until
-                                // written.
-                                crate::session::pasted_image::save_bytes(
-                                    &state,
-                                    &session,
-                                    &taken.bytes,
-                                )
-                            })
-                            .await
-                            .map_err(anyhow::Error::from)
-                            .and_then(|saved| saved);
-                            let reply = match saved {
-                                Ok(path) => Event::PastedImageSaved {
-                                    id,
-                                    path: path.to_string_lossy().into_owned(),
-                                },
-                                Err(err) => Event::from_error(id, &err),
-                            };
-                            let _ = outbound.send(reply).await;
-                        });
-                        return;
-                    }
-                    Err(err) => Err(err),
-                }
-            }
-        }
-        _ => unreachable!("only upload requests are served here"),
-    };
-    let reply = answer.unwrap_or_else(|err| Event::from_error(id, &err));
-    let _ = outbound.send(reply).await;
-}
-
 /// Forwards state broadcasts to one client. A client that fell behind cannot repair itself from
 /// the stream, so it is sent a fresh snapshot instead.
 async fn forward_broadcasts(
@@ -674,8 +547,12 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
         keep_awake_held: state.keep_awake_held(),
         shell_terminals: state.shell_terminals.list(),
         remote_access: state.remote_access.info(state),
+        attachments: Some(crate::session::attachment::limits()),
     })
 }
+
+#[cfg(test)]
+mod uploads_tests;
 
 #[cfg(test)]
 mod tests {
@@ -830,7 +707,7 @@ mod tests {
     }
 
     /// [`serve_control`] for a state the test made.
-    async fn serve_control_of(state: Arc<AppState>, heartbeat: Heartbeat) -> u16 {
+    pub(super) async fn serve_control_of(state: Arc<AppState>, heartbeat: Heartbeat) -> u16 {
         let served = state.clone();
         let app = axum::Router::new().route(
             "/ws/control",
@@ -1107,13 +984,13 @@ mod tests {
 
     /// A control client that sends requests as JSON and takes the replies by request id,
     /// keeping whatever else arrives (the hello, the snapshot, broadcasts) out of the way.
-    struct Client {
-        socket: Socket,
-        spare: Vec<serde_json::Value>,
+    pub(super) struct Client {
+        pub(super) socket: Socket,
+        pub(super) spare: Vec<serde_json::Value>,
     }
 
     impl Client {
-        async fn connect(port: u16) -> Self {
+        pub(super) async fn connect(port: u16) -> Self {
             let (socket, _) =
                 tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws/control"))
                     .await
@@ -1124,7 +1001,7 @@ mod tests {
             }
         }
 
-        async fn send(&mut self, request: serde_json::Value) {
+        pub(super) async fn send(&mut self, request: serde_json::Value) {
             use tokio_tungstenite::tungstenite::Message as Wire;
             self.socket
                 .send(Wire::Text(request.to_string()))
@@ -1133,7 +1010,7 @@ mod tests {
         }
 
         /// The reply to request `id`, however many other frames come first.
-        async fn reply(&mut self, id: &str) -> serde_json::Value {
+        pub(super) async fn reply(&mut self, id: &str) -> serde_json::Value {
             use tokio_tungstenite::tungstenite::Message as Wire;
             if let Some(at) = self.spare.iter().position(|v| v["id"] == id) {
                 return self.spare.remove(at);
@@ -1154,305 +1031,14 @@ mod tests {
             }
         }
 
-        async fn ask(&mut self, id: &str, request: serde_json::Value) -> serde_json::Value {
+        pub(super) async fn ask(
+            &mut self,
+            id: &str,
+            request: serde_json::Value,
+        ) -> serde_json::Value {
             self.send(request).await;
             self.reply(id).await
         }
-    }
-
-    /// A state with a running stand-in session `id` whose scratch directory is under `run`.
-    struct Running {
-        state: Arc<AppState>,
-        id: &'static str,
-        run: crate::test_support::ScratchDir,
-        /// The stand-in process, which ends before the directories it lives in go.
-        _live: Box<dyn std::any::Any>,
-        _dir: crate::test_support::ScratchDir,
-    }
-
-    fn running_session() -> Running {
-        use crate::protocol::{AgentId, SessionStatus};
-        let id = "control-upload-session";
-        let (state, dir) = crate::test_support::app_state("control-upload");
-        crate::state::test_support::insert_record(&state, &dir, id, SessionStatus::Working);
-        let run = crate::test_support::ScratchDir::new("control-upload-run");
-        let scratch = run.join(id);
-        std::fs::create_dir_all(&scratch).unwrap();
-        let live =
-            crate::test_support::fake_live_session_in(id, AgentId::CLAUDE, "sleep 30", scratch);
-        state.register_live(live.clone());
-        Running {
-            state,
-            id,
-            run,
-            _live: Box::new(live),
-            _dir: dir,
-        }
-    }
-
-    const PNG: &[u8] = b"\x89PNG\r\n\x1a\n";
-
-    /// A PNG of `size` bytes whose bytes are not all alike, so a part out of place shows.
-    fn png_of(size: usize) -> Vec<u8> {
-        let mut bytes = PNG.to_vec();
-        bytes.extend((0..size - PNG.len()).map(|n| (n % 251) as u8));
-        bytes
-    }
-
-    fn b64(bytes: &[u8]) -> String {
-        use base64::Engine;
-        base64::engine::general_purpose::STANDARD.encode(bytes)
-    }
-
-    fn pasted_in(run: &crate::test_support::ScratchDir, id: &str) -> std::path::PathBuf {
-        run.join(id).join("pasted")
-    }
-
-    async fn created(client: &mut Client, id: &str, session: &str, size: usize) -> String {
-        let reply = client
-            .ask(
-                id,
-                serde_json::json!({"id": id, "type": "create_pasted_image_upload",
-                    "session": session, "size": size}),
-            )
-            .await;
-        assert_eq!(reply["type"], "pasted_image_upload_created", "{reply}");
-        reply["upload"].as_str().unwrap().to_string()
-    }
-
-    #[tokio::test]
-    async fn an_image_uploaded_in_parts_sent_without_waiting_for_acks_is_saved_as_the_file_of_its_bytes(
-    ) {
-        let r = running_session();
-        let port = serve_control_of(r.state.clone(), Heartbeat::STANDARD).await;
-        let mut client = Client::connect(port).await;
-        let bytes = png_of(3000);
-        let upload = created(&mut client, "create", r.id, bytes.len()).await;
-
-        // The parts and the save go out back to back: they are served in the order they came.
-        for (n, part) in bytes.chunks(1000).enumerate() {
-            client
-                .send(
-                    serde_json::json!({"id": format!("part-{n}"), "type": "write_pasted_image_part",
-                    "upload": upload, "offset": n * 1000, "data": b64(part)}),
-                )
-                .await;
-        }
-        client
-            .send(
-                serde_json::json!({"id": "save", "type": "save_pasted_image",
-                "session": r.id, "upload": upload}),
-            )
-            .await;
-        for n in 0..3 {
-            let ack = client.reply(&format!("part-{n}")).await;
-            assert_eq!(ack["type"], "ack", "{ack}");
-        }
-        let saved = client.reply("save").await;
-        assert_eq!(saved["type"], "pasted_image_saved", "{saved}");
-        let path = std::path::PathBuf::from(saved["path"].as_str().unwrap());
-        assert_eq!(std::fs::read(&path).unwrap(), bytes);
-        assert_eq!(path.parent().unwrap(), pasted_in(&r.run, r.id));
-        assert_eq!(path.extension().unwrap(), "png");
-
-        // Saved, the upload is gone.
-        let again = client
-            .ask(
-                "again",
-                serde_json::json!({"id": "again", "type": "save_pasted_image",
-                    "session": r.id, "upload": upload}),
-            )
-            .await;
-        assert_eq!(again["code"], "upload_unavailable", "{again}");
-        assert_eq!(again["params"]["upload"], upload.as_str());
-    }
-
-    #[tokio::test]
-    async fn parts_that_do_not_add_up_are_refused_at_the_save_and_leave_no_file() {
-        let r = running_session();
-        let port = serve_control_of(r.state.clone(), Heartbeat::STANDARD).await;
-        let mut client = Client::connect(port).await;
-        let bytes = png_of(3000);
-        let upload = created(&mut client, "create", r.id, bytes.len()).await;
-        for (n, part) in bytes.chunks(1000).take(2).enumerate() {
-            let ack = client
-                .ask(
-                    &format!("part-{n}"),
-                    serde_json::json!({"id": format!("part-{n}"), "type": "write_pasted_image_part",
-                        "upload": upload, "offset": n * 1000, "data": b64(part)}),
-                )
-                .await;
-            assert_eq!(ack["type"], "ack");
-        }
-        let refused = client
-            .ask(
-                "save",
-                serde_json::json!({"id": "save", "type": "save_pasted_image",
-                    "session": r.id, "upload": upload}),
-            )
-            .await;
-        assert_eq!(refused["type"], "error", "{refused}");
-        assert_eq!(refused["code"], "upload_parts_mismatch");
-        assert_eq!(refused["params"]["expected_offset"], "2000");
-        assert_eq!(refused["params"]["size"], "3000");
-        assert!(!pasted_in(&r.run, r.id).exists());
-
-        let again = client
-            .ask(
-                "again",
-                serde_json::json!({"id": "again", "type": "write_pasted_image_part",
-                    "upload": upload, "offset": 2000, "data": b64(&bytes[2000..])}),
-            )
-            .await;
-        assert_eq!(
-            again["code"], "upload_unavailable",
-            "the refusal discarded it: {again}"
-        );
-    }
-
-    #[tokio::test]
-    async fn a_part_out_of_place_is_refused_and_discards_the_upload() {
-        let r = running_session();
-        let port = serve_control_of(r.state.clone(), Heartbeat::STANDARD).await;
-        let mut client = Client::connect(port).await;
-        let bytes = png_of(2000);
-        let upload = created(&mut client, "create", r.id, bytes.len()).await;
-        let refused = client
-            .ask(
-                "skip",
-                serde_json::json!({"id": "skip", "type": "write_pasted_image_part",
-                    "upload": upload, "offset": 1000, "data": b64(&bytes[1000..])}),
-            )
-            .await;
-        assert_eq!(refused["code"], "upload_parts_mismatch", "{refused}");
-        assert_eq!(refused["params"]["expected_offset"], "0");
-        let save = client
-            .ask(
-                "save",
-                serde_json::json!({"id": "save", "type": "save_pasted_image",
-                    "session": r.id, "upload": upload}),
-            )
-            .await;
-        assert_eq!(save["code"], "upload_unavailable", "{save}");
-        assert!(!pasted_in(&r.run, r.id).exists());
-    }
-
-    #[tokio::test]
-    async fn a_deleted_upload_is_acknowledged_also_when_gone_and_cannot_be_saved() {
-        let r = running_session();
-        let port = serve_control_of(r.state.clone(), Heartbeat::STANDARD).await;
-        let mut client = Client::connect(port).await;
-        let upload = created(&mut client, "create", r.id, 100).await;
-        for id in ["delete", "delete-again"] {
-            let reply = client
-                .ask(
-                    id,
-                    serde_json::json!({"id": id, "type": "delete_pasted_image_upload",
-                        "upload": upload}),
-                )
-                .await;
-            assert_eq!(reply["type"], "ack", "{reply}");
-        }
-        let save = client
-            .ask(
-                "save",
-                serde_json::json!({"id": "save", "type": "save_pasted_image",
-                    "session": r.id, "upload": upload}),
-            )
-            .await;
-        assert_eq!(save["code"], "upload_unavailable", "{save}");
-    }
-
-    #[tokio::test]
-    async fn the_single_frame_save_is_still_served_and_a_save_naming_neither_or_both_is_refused() {
-        let r = running_session();
-        let port = serve_control_of(r.state.clone(), Heartbeat::STANDARD).await;
-        let mut client = Client::connect(port).await;
-        let bytes = png_of(500);
-        let saved = client
-            .ask(
-                "whole",
-                serde_json::json!({"id": "whole", "type": "save_pasted_image",
-                    "session": r.id, "data": b64(&bytes)}),
-            )
-            .await;
-        assert_eq!(saved["type"], "pasted_image_saved", "{saved}");
-        let path = std::path::PathBuf::from(saved["path"].as_str().unwrap());
-        assert_eq!(std::fs::read(&path).unwrap(), bytes);
-
-        let upload = created(&mut client, "create", r.id, bytes.len()).await;
-        let neither = client
-            .ask(
-                "neither",
-                serde_json::json!({"id": "neither", "type": "save_pasted_image", "session": r.id}),
-            )
-            .await;
-        assert_eq!(neither["type"], "error", "{neither}");
-        let both = client
-            .ask(
-                "both",
-                serde_json::json!({"id": "both", "type": "save_pasted_image",
-                    "session": r.id, "data": b64(&bytes), "upload": upload}),
-            )
-            .await;
-        assert_eq!(both["type"], "error", "{both}");
-        let files = std::fs::read_dir(pasted_in(&r.run, r.id)).unwrap().count();
-        assert_eq!(files, 1, "only the single-frame save wrote a file");
-    }
-
-    #[tokio::test]
-    async fn a_third_upload_on_one_connection_is_refused_and_another_connection_has_its_own_two() {
-        let r = running_session();
-        let port = serve_control_of(r.state.clone(), Heartbeat::STANDARD).await;
-        let mut client = Client::connect(port).await;
-        created(&mut client, "one", r.id, 10).await;
-        created(&mut client, "two", r.id, 10).await;
-        let third = client
-            .ask(
-                "three",
-                serde_json::json!({"id": "three", "type": "create_pasted_image_upload",
-                    "session": r.id, "size": 10}),
-            )
-            .await;
-        assert_eq!(third["code"], "limit_exceeded", "{third}");
-        assert_eq!(third["params"]["limit"], "image_uploads");
-        assert_eq!(third["params"]["max"], "2");
-
-        let mut other = Client::connect(port).await;
-        created(&mut other, "other", r.id, 10).await;
-    }
-
-    #[tokio::test]
-    async fn an_upload_for_an_unknown_session_is_refused_as_such() {
-        let r = running_session();
-        let port = serve_control_of(r.state.clone(), Heartbeat::STANDARD).await;
-        let mut client = Client::connect(port).await;
-        let reply = client
-            .ask(
-                "create",
-                serde_json::json!({"id": "create", "type": "create_pasted_image_upload",
-                    "session": "no-such-session", "size": 10}),
-            )
-            .await;
-        assert_eq!(reply["code"], "unknown_session", "{reply}");
-    }
-
-    #[tokio::test]
-    async fn a_connection_that_closes_gives_back_the_bytes_its_uploads_held() {
-        let r = running_session();
-        let port = serve_control_of(r.state.clone(), Heartbeat::STANDARD).await;
-        let budget = r.state.pasted_image_uploads.clone();
-        let full = budget.available();
-        let mut client = Client::connect(port).await;
-        created(&mut client, "create", r.id, 4096).await;
-        assert_eq!(budget.available(), full - 4096);
-        drop(client);
-        let given_back = crate::test_support::within(PATIENCE, {
-            let budget = budget.clone();
-            move || budget.available() == full
-        })
-        .await;
-        assert!(given_back, "the closed connection still holds its upload");
     }
 
     /// A project of one large text file, served over a control connection.
@@ -1594,94 +1180,5 @@ mod tests {
             )
             .await;
         assert_eq!(reply["code"], "reply_part_unavailable", "{reply}");
-    }
-
-    impl Client {
-        /// The reply carrying error `code`, for a reply that has no id of its own to look for.
-        async fn reply_with_code(&mut self, code: &str) -> serde_json::Value {
-            use tokio_tungstenite::tungstenite::Message as Wire;
-            if let Some(at) = self.spare.iter().position(|v| v["code"] == code) {
-                return self.spare.remove(at);
-            }
-            loop {
-                let frame = tokio::time::timeout(PATIENCE, self.socket.next())
-                    .await
-                    .unwrap_or_else(|_| panic!("no {code} reply"))
-                    .expect("the connection stays open")
-                    .unwrap();
-                if let Wire::Text(text) = frame {
-                    let value: serde_json::Value = serde_json::from_str(&text).unwrap();
-                    if value["code"] == code {
-                        return value;
-                    }
-                    self.spare.push(value);
-                }
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn an_upload_request_whose_fields_do_not_read_is_unreadable_and_discards_its_upload() {
-        let r = running_session();
-        let port = serve_control_of(r.state.clone(), Heartbeat::STANDARD).await;
-        let mut client = Client::connect(port).await;
-        let bytes = png_of(2000);
-        let upload = created(&mut client, "create", r.id, bytes.len()).await;
-        client
-            .send(
-                serde_json::json!({"id": "ok", "type": "write_pasted_image_part",
-                "upload": upload, "offset": 0, "data": b64(&bytes[..1000])}),
-            )
-            .await;
-        assert_eq!(client.reply("ok").await["type"], "ack");
-
-        // A valid upload handle, an offset that is not a number.
-        client
-            .send(
-                serde_json::json!({"id": "bad", "type": "write_pasted_image_part",
-                "upload": upload, "offset": "1000", "data": b64(&bytes[1000..])}),
-            )
-            .await;
-        let unreadable = client.reply_with_code("unreadable_request").await;
-        assert_eq!(unreadable["type"], "error", "{unreadable}");
-
-        let after = client
-            .ask(
-                "after",
-                serde_json::json!({"id": "after", "type": "write_pasted_image_part",
-                    "upload": upload, "offset": 1000, "data": b64(&bytes[1000..])}),
-            )
-            .await;
-        assert_eq!(after["code"], "upload_unavailable", "{after}");
-        assert!(!pasted_in(&r.run, r.id).exists());
-    }
-
-    #[tokio::test]
-    async fn an_unreadable_upload_request_that_names_no_upload_is_only_unreadable() {
-        let r = running_session();
-        let port = serve_control_of(r.state.clone(), Heartbeat::STANDARD).await;
-        let mut client = Client::connect(port).await;
-        let upload = created(&mut client, "create", r.id, 100).await;
-        // No upload to name, and one that is not text: nothing to discard.
-        client
-            .send(serde_json::json!({"id": "a", "type": "write_pasted_image_part", "offset": 0}))
-            .await;
-        client.reply_with_code("unreadable_request").await;
-        client
-            .send(
-                serde_json::json!({"id": "b", "type": "write_pasted_image_part",
-                "upload": 5, "offset": 0, "data": ""}),
-            )
-            .await;
-        client.reply_with_code("unreadable_request").await;
-        // The other upload is untouched.
-        let ack = client
-            .ask(
-                "write",
-                serde_json::json!({"id": "write", "type": "write_pasted_image_part",
-                    "upload": upload, "offset": 0, "data": b64(&png_of(100))}),
-            )
-            .await;
-        assert_eq!(ack["type"], "ack", "{ack}");
     }
 }

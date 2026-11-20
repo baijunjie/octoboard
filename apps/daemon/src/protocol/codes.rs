@@ -677,12 +677,14 @@ pub mod error_code {
     /// A `read_reply_part` named a reply the daemon no longer holds: its last part was sent, it
     /// expired, or the connection that asked for it is not this one. Ask for the whole read again.
     pub const REPLY_PART_UNAVAILABLE: Code = Code("reply_part_unavailable");
-    /// A part of a pasted image upload does not continue where the parts before it ended, runs past
-    /// the size the upload was created with, or the parts end short of it. `params` names
-    /// `expected_offset` and `size`. The upload is discarded.
+    /// A part of a pasted image or attachment upload does not continue where the parts before it
+    /// ended, runs past the size the upload was created with, or the parts end short of it at the
+    /// save. `params` names `expected_offset` and `size`. The upload is discarded.
     pub const UPLOAD_PARTS_MISMATCH: Code = Code("upload_parts_mismatch");
-    /// A pasted image upload request named an upload this connection does not hold: never created
-    /// here, already saved or deleted, discarded after a refusal, or expired. Upload again.
+    /// A pasted image or attachment upload request named an upload this connection does not hold:
+    /// never created here, already saved or deleted, discarded after a refusal, expired, or an
+    /// upload of the other family; or a save named another session than the upload's. Upload
+    /// again.
     pub const UPLOAD_UNAVAILABLE: Code = Code("upload_unavailable");
 }
 

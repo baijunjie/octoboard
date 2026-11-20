@@ -917,6 +917,7 @@ mod tests {
             keep_awake_held: false,
             shell_terminals: vec![terminal],
             remote_access: None,
+            attachments: None,
         });
         assert_eq!(snapshot["shell_terminals"], serde_json::json!([record]));
         assert_eq!(

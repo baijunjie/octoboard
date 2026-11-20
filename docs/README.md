@@ -238,6 +238,8 @@ Where to start, by question:
   resuming on selection, the Resume or Reopen card, an archived session's history, and the saved terminal preview.
 - [Pasting an image into a session's terminal](product/pasting-images.md) — which pastes paste a clipboard image, the
   saved file's path that is pasted, where the file is kept and how a failure shows.
+- [Attaching a file to a session](product/attaching-files.md) — how a client with no shared file system uploads any
+  file in parts to a session's scratch directory, its limits, the saved file's name and how a failure shows.
 - [Links in terminal output](product/terminal-links.md) — how web addresses and file paths in terminals become links.
 - [Answers to a program's queries](product/terminal-queries.md) — which terminal queries Octoboard answers itself, the
   colours and sizes a program reads, and the queries the clients answer.

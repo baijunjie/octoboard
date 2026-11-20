@@ -168,7 +168,7 @@ UI build in `packages/ui/dist` (`$OUT_DIR/embedded_ui.rs`, `include_bytes!` of e
 there is no UI build or when `VITE_DAEMON_KEY` or `VITE_DAEMON_PORT` is set. `apps/daemon/package.json` makes the daemon
 the pnpm package `@octoboard/daemon`, only to run that cargo build after the UI's (`build` script, a dependency on
 `@octoboard/ui`); it has no test script. Test-only files (`tests.rs`, `*_tests.rs`, `test_support/` and
-`store/test_support.rs`, and the `layering_tests/` directory) sit beside the code they test, and `apps/daemon/testdata/`
+`store/test_support.rs`, `session/test_support.rs` and the `layering_tests/` directory) sit beside the code they test, and `apps/daemon/testdata/`
 holds the captured agent screens and records tests replay, `testdata/restart_impact_cases.json`, the cases of what a
 restart would interrupt that the restart check's test and the UI's `useAppExit.test.ts` both run, and
 `testdata/self_update/`, a signed test archive and its test key for the self-update's tests. `apps/daemon/dist/` holds hand-written distribution files, not build output
@@ -180,8 +180,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 - `src/server/` — the router of `PROTOCOL.md`, built twice by `mod.rs`: `router` for the loopback TCP port (the launch
   key alone, and no UI on a host with browser sockets) and `browser_router` for the browser's way in (the browser
   socket, and on Windows the browser port and the owner pipe: the launch key or the owner key, and the embedded UI);
-  `control.rs` the control socket (it serves what belongs to one connection itself, in frame order, not through the
-  coordinator: the pasted-image upload requests, with the connection's own `session::pasted_image::upload::Uploads`,
+  `control/` the control socket (`mod.rs` the connection; it serves what belongs to one connection itself, in frame
+  order, not through the coordinator: `uploads.rs` the upload requests of both families, a pasted image's and an
+  attached file's, each with the connection's own `session::upload::Uploads` of its family,
   the browse reads with `browse::lane::Lane`, `read_reply_part` and a request's `part_bytes` included, and the three
   conversation requests, handed to the connection's own worker in `coordinator/conversation_feed.rs`; all are picked
   out by their `type` before the ordinary request path, and the coordinator's arms for those forms only refuse),
@@ -191,7 +192,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   context-window and MCP routes, `access.rs` the Host/Origin/key guard, one `Access` per listener (the rules are
   `request_guard.rs`'s; the key is the daemon's launch key, and on the browser's way in also its owner key,
   `AppState::owner_key`; it lets a GET or HEAD that names an embedded UI file its listener serves through without the
-  key, and marks every admitted request with an `Admission` that `control.rs` and `terminal.rs` watch to close a
+  key, and marks every admitted request with an `Admission` that `control/mod.rs` and `terminal.rs` watch to close a
   connection the owner key admitted once that key is rotated), `keys.rs` the routes about the keys: `GET /key-check`,
   which a page uses to tell a key the daemon refuses from a daemon it cannot reach, and `POST /owner-key/rotate`, which
   the launch key alone may call), `ui.rs` the embedded browser UI, served as the browser router's fallback on the same
@@ -217,7 +218,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   snapshot of the last release in `contracts/protocol/released/` (`release.json` and that release's schema files),
   unless `GENERATION` is raised. `mod.rs` holds the record, the check and the test on the real files, `norm.rs` reads a
   schema node as the values it accepts, `compare.rs` compares two of them by direction, and `release:version` refreshes
-  the snapshot ([`apps/desktop/scripts/`](../../apps/desktop/scripts/README.md)). `conversation.rs` the wire types of the live conversation feed (its entries, tool calls and
+  the snapshot ([`apps/desktop/scripts/`](../../apps/desktop/scripts/README.md)). `attachments.rs` `AttachmentLimits`, the snapshot's `attachments` field whose presence says the daemon takes attached files. `conversation.rs` the wire types of the live conversation feed (its entries, tool calls and
   page limits, and `CONVERSATION_REQUEST_TYPES`, the requests a connection serves itself). `page_content/` is a report page's
   content: the `Component` tree a session pushes with `show_page` and the `Submission` a form on it comes back with.
   `kinds.rs` holds every kind with the JSON Schema `show_page` enforces and `page_guide` hands out, `check.rs` is the
@@ -532,11 +533,22 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   presses on a provider's input box, each seen on the screen before the next, which that clear and an interrupt's
   clearing of the prompt share), `output_pace.rs` (whether the parsed screen shows a whole frame, from the agent's
   recent output), `paste_apart.rs` (submitting a message whose Enter has to wait until the agent has taken its paste;
-  `NotSubmitted`), `pasted_image/` (an image the user pasted into the terminal, written as a file under the process's
-  scratch directory (`PtyCore::scratch_dir`) for the agent to read by path: `mod.rs` the `save_pasted_image` request,
-  answered by `pasted_image_saved`; `upload.rs` the images uploaded in parts first, held in memory per connection
-  (`Uploads`) under a daemon-wide budget (`UploadBudget`, `AppState::pasted_image_uploads`) until the save takes them;
-  the wire is "Uploading a pasted image in parts" in `apps/daemon/PROTOCOL.md`), `swap.rs` (the stash of the draft around a message, the hold on the input while it is
+  `NotSubmitted`), `scratch.rs` (the shared entry to a running session's scratch directory, `scratch_of`, and to a folder
+  made under it without making the scratch directory again, `subdirectory`; `not_running` is the refusal of a session
+  with no process), `upload.rs` (something a client uploads in parts, for a link too slow to send it in one frame:
+  the generic per-connection store `Uploads<B: Body>` of one `Kind`, with its parts, offsets, idle expiry and limits,
+  under a daemon-wide `UploadBudget`; where the parts are kept is the family's `Body`), `pasted_image/` (an image the
+  user pasted into the terminal, written as a file under the process's scratch directory (`PtyCore::scratch_dir`) for
+  the agent to read by path: `mod.rs` the `save_pasted_image` request, answered by `pasted_image_saved`, and
+  `ImageUploads = Uploads<Vec<u8>>`, the images uploaded in parts first, held in memory until the save takes them,
+  under `AppState::pasted_image_uploads`; the wire is "Uploading a pasted image in parts" in
+  `apps/daemon/PROTOCOL.md`), `attachment/` (any file a client that shares no file system with the daemon attached,
+  saved under the session's scratch directory for the agent to read by path: `mod.rs` `AttachmentUploads =
+  Uploads<Spool>`, whose parts go to a spool file on disk as they arrive, `save` which renames it to its name, and
+  `limits()` for the snapshot, under `AppState::attachment_uploads`, and `name.rs` the safe form of the client's name
+  and the numbering of a collision; the wire is "Attaching a file" in `apps/daemon/PROTOCOL.md`), `test_support.rs`
+  (test-only: the running session with a scratch directory that the tests of `pasted_image`, `upload` and `attachment`
+  share), `swap.rs` (the stash of the draft around a message, the hold on the input while it is
   recovered, which a bound ends so that a message is not held without end, and `write_message_input_as`, the queue's
   write of a message under its id), `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the
   `TrustCarrier` interface of a provider that records the trust in a per-session home; `screen.rs` reads a provider's
@@ -940,7 +952,7 @@ them is `docs/README.md`, "Coding conventions".
 
 - A new control-socket request: its types in `src/protocol/` (and `PROTOCOL.md`), its handler under `src/coordinator/`
   reached from the dispatcher in `mod.rs`; a request that works on state one connection holds (an upload, a held browse
-  reply) is served by `src/server/control.rs` instead, and the coordinator's arm for it only refuses; regenerate `packages/ui/src/protocol.generated.ts` and the schema in
+  reply) is served by `src/server/control/` instead (the upload requests of both families in `uploads.rs`), and the coordinator's arm for it only refuses; regenerate `packages/ui/src/protocol.generated.ts` and the schema in
   `contracts/protocol/` as `docs/conventions/protocol-and-contracts.md`, "Wire types and generated files" says, and
   follow its "The envelope and field conventions".
 - A new code the daemon names a failure or notice by: a `pub const` of the matching module in `src/protocol/codes.rs`
@@ -1070,6 +1082,8 @@ helper list; the rules for using them, including the ones that go beyond "use it
 | How a provider's CLI is installed and updated; the installed and latest version of a CLI, and its update | `AgentProvider::cli_packaging` (`CliPackaging`, `src/adapter/mod.rs`), read only by `src/agents/cli/` |
 | Read a page a session pushed, or a form's submission, against the page's kinds | `PageContent::parse` and `PageContent::check_submission` (`src/protocol/page_content/mod.rs`); a refusal is a `PageContentError` naming the path and the kind's schema |
 | Read a session's conversation as feed entries, or follow it live | `RecordStore::feed_reader` and `FeedReader` (`src/records/feed/mod.rs`) for what one provider's lines mean; `ConversationFeeds::join` (`src/state/conversation_feeds.rs`) for the entries a following connection reads; a connection reaches both only through `coordinator::conversation_feed::Connection` |
+| A running session's scratch directory, or a folder under it, for files Octoboard keeps for its agent (pasted images, attached files) | `session::scratch` (`src/session/scratch.rs`): `scratch_of` (refused with `unknown_session` or `session_not_running`) and `subdirectory`, which makes only the folder and never the scratch directory above it, so a process that ended meanwhile is `session_not_running` and nothing is left orphaned; `not_running` is that refusal |
+| Take something a client uploads in parts, held until its save | `session::upload::Uploads<B: Body>` with a `Kind` and an `UploadBudget` (`src/session/upload.rs`), one per family on a connection; a family supplies its `Body` (in memory, or a spool file) |
 | Name a failure or notice on the wire | `Code` in `src/protocol/codes.rs`; failure to `error` reply through `src/protocol/errors.rs` |
 
 The wire contract is held by five checks: `protocol::bindings` (the generated TypeScript must match the Rust types),

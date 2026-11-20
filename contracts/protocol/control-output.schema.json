@@ -645,6 +645,28 @@
       ],
       "description": "One model an agent offers, as `list_agent_models` reports it."
     },
+    "AttachmentLimits": {
+      "type": "object",
+      "properties": {
+        "max_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "The largest file taken, in bytes."
+        },
+        "max_part_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "The most one `write_attachment_part` carries, in bytes decoded."
+        }
+      },
+      "required": [
+        "max_bytes",
+        "max_part_bytes"
+      ],
+      "description": "The limits of an attachment upload (`create_attachment_upload`). A daemon that sends this in its\n`snapshot` takes attachments; one that predates them sends no `attachments`, and a client then\noffers no way to attach a file."
+    },
     "Availability": {
       "type": "string",
       "enum": [
@@ -4201,6 +4223,10 @@
               ],
               "description": "Remote access to this daemon (Allow remote access), where the daemon follows the\ndesktop application on a host with a way in for the browser (the owner socket on Linux\nand macOS, a loopback port of its own on Windows); null elsewhere: a daemon that runs\non its own (the server form) serves its browser as it always does."
             },
+            "attachments": {
+              "description": "The limits of a file a client attaches to a session (`create_attachment_upload`), sent\nby every daemon that takes attachments; absent from one that predates them, and a client\nthen offers no way to attach a file.",
+              "$ref": "#/$defs/AttachmentLimits"
+            },
             "type": {
               "type": "string",
               "const": "snapshot"
@@ -5443,6 +5469,54 @@
             "upload"
           ],
           "description": "The reply to `create_pasted_image_upload`: `upload` is the handle its parts and its\n`save_pasted_image` name, valid on this connection only."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "attachment_saved"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "path"
+          ],
+          "description": "The reply to `save_attachment`: the absolute path, on the daemon host, of the file the\nattachment was saved as."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "upload": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "attachment_upload_created"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "upload"
+          ],
+          "description": "The reply to `create_attachment_upload`: `upload` is the handle its parts and its\n`save_attachment` name, valid on this connection only."
         },
         {
           "type": "object",

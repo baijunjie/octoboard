@@ -2584,7 +2584,7 @@
             "session",
             "size"
           ],
-          "description": "Starts uploading a pasted image of `size` bytes (1 to 10 MiB) in parts, for a running\nsession; served on the control connection, which holds the parts. Answered with\n`pasted_image_upload_created`. Refused with `unknown_session`, `session_not_running`, or\n`limit_exceeded` (`image_uploads`, `image_upload_bytes`). See\n`crate::session::pasted_image::upload`."
+          "description": "Starts uploading a pasted image of `size` bytes (1 to 10 MiB) in parts, for a running\nsession; served on the control connection, which holds the parts. Answered with\n`pasted_image_upload_created`. Refused with `unknown_session`, `session_not_running`, or\n`limit_exceeded` (`image_uploads`, `image_upload_bytes`). See\n`crate::session::upload`."
         },
         {
           "type": "object",
@@ -2629,6 +2629,99 @@
             "upload"
           ],
           "description": "Discards an upload. Answered with `ack`, also for an upload this connection no longer holds."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "description": "The file's name where it came from; the saved file is named after a safe form of it."
+            },
+            "size": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "create_attachment_upload"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "name",
+            "size"
+          ],
+          "description": "Starts uploading a file of `size` bytes (1 to 100 MiB), called `name` where it came from, in\nparts, to attach it to a running session; served on the control connection, which holds the\nupload. Answered with `attachment_upload_created`. Refused with `unknown_session`,\n`session_not_running`, or `limit_exceeded` (`attachment_uploads`,\n`attachment_upload_bytes`). See `crate::session::attachment`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "upload": {
+              "type": "string"
+            },
+            "offset": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "data": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "write_attachment_part"
+            }
+          },
+          "required": [
+            "type",
+            "upload",
+            "offset",
+            "data"
+          ],
+          "description": "Adds the next part of an attachment upload: `data` is base64, at most 1 MiB decoded, and\n`offset` the bytes received before it. Answered with `ack`. Refused with\n`upload_unavailable`, `upload_parts_mismatch` or `limit_exceeded` (`upload_part_bytes`),\ndiscarding the upload."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "upload": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "save_attachment"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "upload"
+          ],
+          "description": "Saves the file an attachment upload of this connection holds, for the session's agent to\nread by path. Answered with `attachment_saved`. Refused with `unknown_session`,\n`session_not_running`, `upload_unavailable` or `upload_parts_mismatch`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "upload": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "delete_attachment_upload"
+            }
+          },
+          "required": [
+            "type",
+            "upload"
+          ],
+          "description": "Discards an attachment upload. Answered with `ack`, also for an upload this connection no\nlonger holds."
         },
         {
           "type": "object",

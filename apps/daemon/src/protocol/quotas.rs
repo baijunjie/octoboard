@@ -206,6 +206,7 @@ mod tests {
             keep_awake_held: false,
             shell_terminals: vec![],
             remote_access: None,
+            attachments: None,
         })
         .unwrap();
         assert_eq!(snapshot["account_quotas"][0]["plan"], "max");

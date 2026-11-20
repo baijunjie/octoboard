@@ -6,6 +6,7 @@
 mod accounts;
 mod agent_cli;
 mod agents;
+mod attachments;
 mod browse;
 mod codes;
 mod configuration;
@@ -35,6 +36,7 @@ mod version;
 pub use accounts::*;
 pub use agent_cli::*;
 pub use agents::*;
+pub use attachments::*;
 pub use browse::*;
 pub use codes::*;
 pub use configuration::*;

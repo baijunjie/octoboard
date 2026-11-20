@@ -409,6 +409,22 @@ export type AgentModel = {
 };
 
 /**
+ * The limits of an attachment upload (`create_attachment_upload`). A daemon that sends this in its
+ * `snapshot` takes attachments; one that predates them sends no `attachments`, and a client then
+ * offers no way to attach a file.
+ */
+export type AttachmentLimits = {
+  /**
+   * The largest file taken, in bytes.
+   */
+  max_bytes: number,
+  /**
+   * The most one `write_attachment_part` carries, in bytes decoded.
+   */
+  max_part_bytes: number,
+};
+
+/**
  * Whether an agent's binary resolves on the user's login shell `PATH`, the only test an agent is
  * held to: whether its config directory holds a login is not Octoboard's business (see
  * `crate::agents::availability`'s module doc). Three states, not two:
@@ -2084,6 +2100,12 @@ export type Event = {
    * on its own (the server form) serves its browser as it always does.
    */
   remote_access: RemoteAccess | null,
+  /**
+   * The limits of a file a client attaches to a session (`create_attachment_upload`), sent
+   * by every daemon that takes attachments; absent from one that predates them, and a client
+   * then offers no way to attach a file.
+   */
+  attachments?: AttachmentLimits,
 }
 | {
   "type": "agent_availability_updated",
@@ -2423,6 +2445,16 @@ export type Event = {
 }
 | {
   "type": "pasted_image_upload_created",
+  id: string | null,
+  upload: string,
+}
+| {
+  "type": "attachment_saved",
+  id: string | null,
+  path: string,
+}
+| {
+  "type": "attachment_upload_created",
   id: string | null,
   upload: string,
 }
@@ -4586,6 +4618,30 @@ export type Request = {
   upload: string,
 }
   | {
+  "type": "create_attachment_upload",
+  session: string,
+  /**
+   * The file's name where it came from; the saved file is named after a safe form of it.
+   */
+  name: string,
+  size: number,
+}
+  | {
+  "type": "write_attachment_part",
+  upload: string,
+  offset: number,
+  data: string,
+}
+  | {
+  "type": "save_attachment",
+  session: string,
+  upload: string,
+}
+  | {
+  "type": "delete_attachment_upload",
+  upload: string,
+}
+  | {
   "type": "interrupt_session",
   session: string,
 }
@@ -5524,6 +5580,30 @@ export type RequestBody = {
 }
 | {
   "type": "delete_pasted_image_upload",
+  upload: string,
+}
+| {
+  "type": "create_attachment_upload",
+  session: string,
+  /**
+   * The file's name where it came from; the saved file is named after a safe form of it.
+   */
+  name: string,
+  size: number,
+}
+| {
+  "type": "write_attachment_part",
+  upload: string,
+  offset: number,
+  data: string,
+}
+| {
+  "type": "save_attachment",
+  session: string,
+  upload: string,
+}
+| {
+  "type": "delete_attachment_upload",
   upload: string,
 }
 | {

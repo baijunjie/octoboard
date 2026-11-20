@@ -9,6 +9,7 @@ use serde::Serialize;
 use super::accounts::{AccountLogin, AccountSharing, AccountTrashOutcome};
 use super::agent_cli::AgentCliStatus;
 use super::agents::AgentId;
+use super::attachments::AttachmentLimits;
 use super::browse::{
     BranchInfo, BrowseEntry, ChangeEntry, ChangeGroup, CommitChanges, ComparisonEndpoint,
     ContentMatch, ContentSearchStop, ContentSource, FileContent, ProjectSourceInfo, SideRead,
@@ -239,6 +240,12 @@ pub enum Event {
         /// and macOS, a loopback port of its own on Windows); null elsewhere: a daemon that runs
         /// on its own (the server form) serves its browser as it always does.
         remote_access: Option<RemoteAccess>,
+        /// The limits of a file a client attaches to a session (`create_attachment_upload`), sent
+        /// by every daemon that takes attachments; absent from one that predates them, and a client
+        /// then offers no way to attach a file.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        attachments: Option<AttachmentLimits>,
     },
     /// Availability or a default account's resolved directory changed for one or more agents —
     /// the whole three-entry list, like every other upsert. Broadcast when the daemon's one-time
@@ -610,6 +617,18 @@ pub enum Event {
     /// The reply to `create_pasted_image_upload`: `upload` is the handle its parts and its
     /// `save_pasted_image` name, valid on this connection only.
     PastedImageUploadCreated {
+        id: Option<String>,
+        upload: String,
+    },
+    /// The reply to `save_attachment`: the absolute path, on the daemon host, of the file the
+    /// attachment was saved as.
+    AttachmentSaved {
+        id: Option<String>,
+        path: String,
+    },
+    /// The reply to `create_attachment_upload`: `upload` is the handle its parts and its
+    /// `save_attachment` name, valid on this connection only.
+    AttachmentUploadCreated {
         id: Option<String>,
         upload: String,
     },

@@ -256,8 +256,11 @@ pub struct AppState {
     /// many bytes their replies may hold before they are written.
     pub browse_gate: Arc<crate::browse::lane::Gate>,
     /// The bytes every connection's pasted image uploads may hold in memory together; see
-    /// `crate::session::pasted_image::upload`.
-    pub pasted_image_uploads: crate::session::pasted_image::upload::UploadBudget,
+    /// `crate::session::upload`.
+    pub pasted_image_uploads: crate::session::upload::UploadBudget,
+    /// The declared bytes every connection's attachment uploads may hold on disk together; see
+    /// `crate::session::attachment`.
+    pub attachment_uploads: crate::session::upload::UploadBudget,
     /// The `request_session` and `request_resume_session` calls waiting for the user's answer; see
     /// `crate::session_request`.
     /// Held in memory only: no caller outlives the daemon.
@@ -492,7 +495,8 @@ impl AppState {
             consoles_dir,
             handoff_dir,
             browse_gate: Arc::new(crate::browse::lane::Gate::with_budget()),
-            pasted_image_uploads: Default::default(),
+            pasted_image_uploads: crate::session::upload::UploadBudget::images(),
+            attachment_uploads: crate::session::upload::UploadBudget::attachments(),
             session_requests: Default::default(),
             agent_models: Default::default(),
             account_quotas: Default::default(),

@@ -17,8 +17,10 @@
 //! message whose Enter has to wait until the agent has taken its paste, and `usage_limit` holds
 //! where the process stands with the hold on Octoboard's writes after a turn stopped on its
 //! account's usage limit. `pasted_image` keeps an image the user pasted as a file in its scratch
-//! directory, for the agent to read by path.
+//! directory, for the agent to read by path, and `attachment` any file a client attached, both
+//! taken in parts through `upload` from a client on a slow link.
 
+pub(crate) mod attachment;
 pub(crate) mod dialogs;
 mod draft;
 mod draft_clear;
@@ -30,13 +32,17 @@ mod output_pace;
 mod paste_apart;
 pub(crate) mod pasted_image;
 mod program_status;
+pub(crate) mod scratch;
 pub(crate) mod screen;
 mod swap;
 pub(crate) mod term;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub(crate) mod title_activity;
 pub(crate) mod title_interrupt;
 pub(crate) mod trust;
 mod turn_reading;
+pub(crate) mod upload;
 pub(crate) mod usage_limit;
 pub(crate) mod wait;
 

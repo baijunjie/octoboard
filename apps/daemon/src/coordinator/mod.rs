@@ -950,6 +950,12 @@ async fn handle_inner(
         | RequestBody::DeletePastedImageUpload { .. } => {
             bail!("an image upload is served on a control connection")
         }
+        RequestBody::CreateAttachmentUpload { .. }
+        | RequestBody::WriteAttachmentPart { .. }
+        | RequestBody::SaveAttachment { .. }
+        | RequestBody::DeleteAttachmentUpload { .. } => {
+            bail!("an attachment upload is served on a control connection")
+        }
 
         RequestBody::InterruptSession { session } => {
             let crate::session::interrupt::Interrupted {

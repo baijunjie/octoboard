@@ -745,7 +745,7 @@ pub enum RequestBody {
     /// session; served on the control connection, which holds the parts. Answered with
     /// `pasted_image_upload_created`. Refused with `unknown_session`, `session_not_running`, or
     /// `limit_exceeded` (`image_uploads`, `image_upload_bytes`). See
-    /// `crate::session::pasted_image::upload`.
+    /// `crate::session::upload`.
     CreatePastedImageUpload {
         session: String,
         size: u64,
@@ -760,6 +760,38 @@ pub enum RequestBody {
     },
     /// Discards an upload. Answered with `ack`, also for an upload this connection no longer holds.
     DeletePastedImageUpload {
+        upload: String,
+    },
+    /// Starts uploading a file of `size` bytes (1 to 100 MiB), called `name` where it came from, in
+    /// parts, to attach it to a running session; served on the control connection, which holds the
+    /// upload. Answered with `attachment_upload_created`. Refused with `unknown_session`,
+    /// `session_not_running`, or `limit_exceeded` (`attachment_uploads`,
+    /// `attachment_upload_bytes`). See `crate::session::attachment`.
+    CreateAttachmentUpload {
+        session: String,
+        /// The file's name where it came from; the saved file is named after a safe form of it.
+        name: String,
+        size: u64,
+    },
+    /// Adds the next part of an attachment upload: `data` is base64, at most 1 MiB decoded, and
+    /// `offset` the bytes received before it. Answered with `ack`. Refused with
+    /// `upload_unavailable`, `upload_parts_mismatch` or `limit_exceeded` (`upload_part_bytes`),
+    /// discarding the upload.
+    WriteAttachmentPart {
+        upload: String,
+        offset: u64,
+        data: String,
+    },
+    /// Saves the file an attachment upload of this connection holds, for the session's agent to
+    /// read by path. Answered with `attachment_saved`. Refused with `unknown_session`,
+    /// `session_not_running`, `upload_unavailable` or `upload_parts_mismatch`.
+    SaveAttachment {
+        session: String,
+        upload: String,
+    },
+    /// Discards an attachment upload. Answered with `ack`, also for an upload this connection no
+    /// longer holds.
+    DeleteAttachmentUpload {
         upload: String,
     },
     /// Stops the turn the session's agent is running, keeping its process and conversation; see
@@ -1570,7 +1602,11 @@ impl RequestBody {
             | Self::SavePastedImage { .. }
             | Self::CreatePastedImageUpload { .. }
             | Self::WritePastedImagePart { .. }
-            | Self::DeletePastedImageUpload { .. } => false,
+            | Self::DeletePastedImageUpload { .. }
+            | Self::CreateAttachmentUpload { .. }
+            | Self::WriteAttachmentPart { .. }
+            | Self::SaveAttachment { .. }
+            | Self::DeleteAttachmentUpload { .. } => false,
         }
     }
 }

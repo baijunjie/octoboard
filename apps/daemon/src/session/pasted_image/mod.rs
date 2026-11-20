@@ -7,8 +7,9 @@
 //! window pastes the path it is answered with. The file goes away with the scratch directory, when
 //! the session's process ends; the agent has read the image into its conversation by then.
 //!
-//! On a slow link the image can instead come in parts (`upload`), so that no single frame takes
-//! longer than the control socket's silence limit to arrive.
+//! On a slow link the image can instead come in parts (`crate::session::upload`), so that no
+//! single frame takes longer than the control socket's silence limit to arrive; the parts are held
+//! in memory and nothing reaches the disk before the save.
 //!
 //! The name is made only of characters a path detection in an agent does not split on: no space,
 //! and an extension that says what the bytes are, which is what an agent goes by.
@@ -20,16 +21,53 @@ use anyhow::{bail, Context, Result};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 
+use super::scratch::{scratch_of, subdirectory};
+use super::upload::{Kind, UploadBudget, Uploads};
 use crate::hostfs::replace::{replace_beside, Permissions};
-use crate::protocol::{error_code, CodedError};
 use crate::state::AppState;
-
-pub mod upload;
 
 /// The largest image taken, in bytes. The single-frame request carries it base64-encoded in one
 /// frame, which a WebSocket message holds at most 16 MiB of, so this stays under three quarters of
 /// that; an upload in parts is held to the same limit.
 pub const MAX_BYTES: usize = 10 * 1024 * 1024;
+
+/// The declared sizes of every connection's image uploads together, held in memory until each is
+/// saved or dropped.
+pub const MAX_UPLOAD_BYTES: usize = 64 * 1024 * 1024;
+
+/// What sets image uploads apart.
+static IMAGE: Kind = Kind {
+    noun: "image",
+    max_bytes: MAX_BYTES,
+    handle_prefix: "upload",
+    uploads_limit: "image_uploads",
+    bytes_limit: "image_upload_bytes",
+};
+
+/// One connection's image uploads, their parts held in memory.
+pub type ImageUploads = Uploads<Vec<u8>>;
+
+impl Uploads<Vec<u8>> {
+    /// A connection's image uploads, under the daemon's image budget `budget`.
+    pub fn images(budget: UploadBudget) -> Self {
+        Self::of_kind(&IMAGE, budget)
+    }
+
+    /// Starts an image upload of `size` bytes for the running session `session_id`; see
+    /// [`Uploads::create_with`].
+    pub fn create(&self, state: &AppState, session_id: &str, size: u64) -> Result<String> {
+        self.create_with(state, session_id, size, |_| {
+            Ok(Vec::with_capacity(size as usize))
+        })
+    }
+}
+
+impl UploadBudget {
+    /// The daemon's budget of image uploads, [`MAX_UPLOAD_BYTES`].
+    pub fn images() -> Self {
+        Self::new(MAX_UPLOAD_BYTES)
+    }
+}
 
 /// The directory under a session's scratch directory the images go in.
 const DIRECTORY: &str = "pasted";
@@ -60,24 +98,6 @@ pub fn save_bytes(state: &AppState, session_id: &str, bytes: &[u8]) -> Result<Pa
     write_image(session_id, &scratch, bytes)
 }
 
-/// The running session's own scratch directory, which is gone once its process has ended.
-/// Refused with `unknown_session` or `session_not_running`.
-pub(crate) fn scratch_of(state: &AppState, session_id: &str) -> Result<PathBuf> {
-    state.session_record(session_id)?;
-    state
-        .live_session(session_id)
-        .and_then(|live| live.scratch_dir())
-        .ok_or_else(|| not_running(session_id))
-}
-
-fn not_running(session_id: &str) -> anyhow::Error {
-    CodedError::raised(
-        error_code::SESSION_NOT_RUNNING,
-        "this session is not running",
-        &[("session", session_id)],
-    )
-}
-
 /// Writes `bytes` as an image file under `scratch`, the session's scratch directory.
 fn write_image(session_id: &str, scratch: &std::path::Path, bytes: &[u8]) -> Result<PathBuf> {
     if bytes.len() > MAX_BYTES {
@@ -86,19 +106,7 @@ fn write_image(session_id: &str, scratch: &std::path::Path, bytes: &[u8]) -> Res
     let Some(extension) = extension_of(bytes) else {
         bail!("the image is not a PNG, JPEG, GIF or WebP file");
     };
-    // Only this directory is created, never the scratch directory above it: the process may end
-    // and have it removed after the check above, and making it again would leave it orphaned.
-    let directory = scratch.join(DIRECTORY);
-    match std::fs::create_dir(&directory) {
-        Ok(()) => {}
-        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            return Err(not_running(session_id))
-        }
-        Err(err) => {
-            return Err(err).with_context(|| format!("creating {}", directory.display()));
-        }
-    }
+    let directory = subdirectory(session_id, scratch, DIRECTORY)?;
     let path = directory.join(format!(
         "paste-{}-{}.{extension}",
         crate::time::now_millis(),
@@ -128,61 +136,22 @@ fn extension_of(bytes: &[u8]) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
-    use std::sync::Arc;
 
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
 
     use super::{save, save_bytes, MAX_BYTES};
-    use crate::protocol::{error_code, AgentId, Event, RequestBody, SessionStatus};
-    use crate::state::test_support::insert_record;
-    use crate::state::AppState;
-    use crate::test_support::{app_state, code_of, fake_live_session_in, ScratchDir};
+    use crate::protocol::{error_code, Event, RequestBody};
+    use crate::session::test_support::{fixture, pasted_directory, Fixture, PNG};
+    use crate::test_support::code_of;
 
-    pub(super) const PNG: &[u8] = b"\x89PNG\r\n\x1a\nrest of the image";
-    pub(super) const JPEG: &[u8] = b"\xff\xd8\xff\xe0rest of the image";
+    const JPEG: &[u8] = b"\xff\xd8\xff\xe0rest of the image";
     const GIF_87: &[u8] = b"GIF87arest of the image";
     const GIF_89: &[u8] = b"GIF89arest of the image";
     const WEBP: &[u8] = b"RIFF\x10\x00\x00\x00WEBPVP8 rest";
 
-    pub(super) struct Fixture {
-        pub(super) state: Arc<AppState>,
-        pub(super) id: String,
-        /// The stand-in process, which ends before the directory its state lives in goes.
-        live: Option<Box<dyn std::any::Any>>,
-        _dir: ScratchDir,
-        /// The directory of the sessions' scratch directories.
-        pub(super) run: ScratchDir,
-    }
-
-    /// A state with a stored session record, running when `running`.
-    pub(super) fn fixture(running: bool) -> Fixture {
-        let id = "pasted-image-session".to_string();
-        let (state, dir) = app_state("pasted-image");
-        insert_record(&state, &dir, &id, SessionStatus::Working);
-        let run = ScratchDir::new("pasted-image-run");
-        let live = running.then(|| {
-            let scratch = run.join(&id);
-            std::fs::create_dir_all(&scratch).unwrap();
-            let live = fake_live_session_in(&id, AgentId::CLAUDE, "sleep 30", scratch);
-            state.register_live(live.clone());
-            Box::new(live) as Box<dyn std::any::Any>
-        });
-        Fixture {
-            state,
-            id,
-            live,
-            _dir: dir,
-            run,
-        }
-    }
-
-    pub(super) fn encoded(bytes: &[u8]) -> String {
+    fn encoded(bytes: &[u8]) -> String {
         STANDARD.encode(bytes)
-    }
-
-    pub(super) fn pasted_directory(f: &Fixture, id: &str) -> PathBuf {
-        f.run.join(id).join("pasted")
     }
 
     fn extension(path: &Path) -> String {
@@ -529,11 +498,29 @@ mod tests {
             RequestBody::DeletePastedImageUpload {
                 upload: "upload-0".to_string(),
             },
+            RequestBody::CreateAttachmentUpload {
+                session: f.id.clone(),
+                name: "report.pdf".to_string(),
+                size: 100,
+            },
+            RequestBody::WriteAttachmentPart {
+                upload: "attachment-0".to_string(),
+                offset: 0,
+                data: encoded(PNG),
+            },
+            RequestBody::SaveAttachment {
+                session: f.id.clone(),
+                upload: "attachment-0".to_string(),
+            },
+            RequestBody::DeleteAttachmentUpload {
+                upload: "attachment-0".to_string(),
+            },
         ];
         for body in bodies {
             let result = handled(&f, body).await;
             assert!(result.is_err(), "{result:?}");
         }
         assert!(!pasted_directory(&f, &f.id).exists());
+        assert!(!f.run.join(&f.id).join("attachments").exists());
     }
 }
