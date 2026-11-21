@@ -11,9 +11,10 @@ use super::{
 use crate::coordinator::handle;
 use crate::platform::proc::ProcessIdentity;
 use crate::processes::ledger::AGENT_CONSOLE_OVERRIDE;
+#[cfg(unix)]
+use crate::protocol::UnkeepableReason;
 use crate::protocol::{
     error_code, AgentId, CodedError, Event, ProcessTarget, ProcessTree, RequestBody, SessionStatus,
-    UnkeepableReason,
 };
 use crate::state::AppState;
 #[cfg(windows)]

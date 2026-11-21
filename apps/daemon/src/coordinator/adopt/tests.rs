@@ -1706,10 +1706,14 @@ async fn an_adopted_host_rendered_codex_terminal_does_not_start_at_its_title() {
     found[0].tail = b"loading\x1b]2;codex.exe\x07".to_vec();
     adopt_in_blocking(&state, found, run_dir).await;
 
-    let refused =
-        crate::coordinator::messages::send_message(&state, "s1", "do not type this".to_string())
-            .await
-            .expect_err("the host title does not say Codex is ready");
+    let refused = crate::coordinator::messages::send_message(
+        &state,
+        "s1",
+        "do not type this".to_string(),
+        Vec::new(),
+    )
+    .await
+    .expect_err("the host title does not say Codex is ready");
     assert_eq!(
         refused
             .downcast_ref::<crate::protocol::CodedError>()

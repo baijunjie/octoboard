@@ -1669,7 +1669,6 @@ async fn a_read_error_is_retried_at_the_next_look_without_a_replacement() {
 }
 
 /// Runs `restore` when dropped.
-#[cfg(unix)]
 fn scopeguard<F: FnOnce()>(restore: F) -> impl Drop {
     struct Guard<F: FnOnce()>(Option<F>);
     impl<F: FnOnce()> Drop for Guard<F> {
