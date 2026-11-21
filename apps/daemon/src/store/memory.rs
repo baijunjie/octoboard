@@ -7,7 +7,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 
 use super::{Result, Store};
 use crate::protocol::{
-    CodedError, MemoryDraft, MemoryEntry, MemoryIndexEntry, MemoryScope, MemoryTarget,
+    AgentId, CodedError, MemoryDraft, MemoryEntry, MemoryIndexEntry, MemoryScope, MemoryTarget,
     MemoryWriter, OrphanedMemory, MEMORY_ID_LENGTH,
 };
 
@@ -25,7 +25,7 @@ pub enum MemorySave {
 }
 
 const MEMORY_COLUMNS: &str = "console_id, host_id, path, id, summary, content, local, created_at, \
-                              updated_at, updated_by, version";
+                              updated_at, updated_by, updated_by_agent, version";
 
 /// The condition that picks one memory's rows, its three columns bound to `?1`, `?2` and `?3`.
 const IN_SCOPE: &str = "console_id = ?1 AND host_id = ?2 AND path = ?3";
@@ -120,7 +120,7 @@ impl Store {
         let mut conn = self.lock();
         let tx = conn.transaction()?;
         let (console_id, host_id, path) = scope_columns(scope);
-        let writer_kind = writer_text(writer);
+        let (writer_kind, writer_agent) = writer_columns(writer);
         let place = matches!(scope, MemoryScope::Place { .. });
         if !place {
             let exists = tx
@@ -159,8 +159,8 @@ impl Store {
                 let local = !place && draft.local.unwrap_or(false);
                 tx.execute(
                     "INSERT INTO memories (console_id, host_id, path, id, summary, content, local,
-                         created_at, updated_at, updated_by, version)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, 1)",
+                         created_at, updated_at, updated_by, updated_by_agent, version)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?10, 1)",
                     params![
                         console_id,
                         host_id,
@@ -171,6 +171,7 @@ impl Store {
                         local,
                         now,
                         writer_kind,
+                        writer_agent,
                     ],
                 )?;
                 id
@@ -187,7 +188,7 @@ impl Store {
                     &format!(
                         "UPDATE memories
                          SET summary = ?5, content = ?6, local = ?7, updated_at = ?8,
-                             updated_by = ?9, version = ?10
+                             updated_by = ?9, updated_by_agent = ?10, version = ?11
                          WHERE {IN_SCOPE} AND id = ?4"
                     ),
                     params![
@@ -200,6 +201,7 @@ impl Store {
                         local,
                         now,
                         writer_kind,
+                        writer_agent,
                         version + 1,
                     ],
                 )?;
@@ -245,7 +247,8 @@ impl Store {
         let conn = self.lock();
         let (console_id, host_id, path) = scope_columns(scope);
         let mut stmt = conn.prepare(&format!(
-            "SELECT id, summary, local, created_at, updated_at, updated_by, version
+            "SELECT id, summary, local, created_at, updated_at, updated_by, updated_by_agent,
+                    version
              FROM memories WHERE {IN_SCOPE} {MEMORY_ORDER}"
         ))?;
         let rows = stmt
@@ -257,7 +260,7 @@ impl Store {
                     created_at: row.get(3)?,
                     updated_at: row.get(4)?,
                     updated_by: writer_from(row, 5)?,
-                    version: row.get(6)?,
+                    version: row.get(7)?,
                 })
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -382,19 +385,26 @@ fn memory_in(
     .optional()
 }
 
-/// The writer as its column keeps it.
-fn writer_text(writer: &MemoryWriter) -> &'static str {
+/// The writer as its two columns keep it: `updated_by`, the kind, and `updated_by_agent`, the
+/// agent's id for an agent, `NULL` for the user.
+fn writer_columns(writer: &MemoryWriter) -> (&'static str, Option<&'static str>) {
     match writer {
-        MemoryWriter::User => "user",
-        MemoryWriter::Agent => "agent",
+        MemoryWriter::User => ("user", None),
+        MemoryWriter::Agent { agent } => ("agent", agent.map(AgentId::wire_name)),
     }
 }
 
-/// The writer kept in column `index`.
+/// The writer kept in columns `index` (the kind) and `index + 1` (the agent's id). An agent's id
+/// that no registered provider has any more is kept as text and read as an agent with none.
 fn writer_from(row: &Row<'_>, index: usize) -> rusqlite::Result<MemoryWriter> {
     let writer_kind: String = row.get(index)?;
     Ok(match writer_kind.as_str() {
-        "agent" => MemoryWriter::Agent,
+        "agent" => {
+            let agent: Option<String> = row.get(index + 1)?;
+            MemoryWriter::Agent {
+                agent: agent.as_deref().and_then(AgentId::from_wire_name),
+            }
+        }
         _ => MemoryWriter::User,
     })
 }
@@ -410,7 +420,7 @@ fn read_memory(row: &Row<'_>) -> rusqlite::Result<MemoryEntry> {
         created_at: row.get(7)?,
         updated_at: row.get(8)?,
         updated_by,
-        version: row.get(10)?,
+        version: row.get(11)?,
     })
 }
 
@@ -477,7 +487,7 @@ mod tests {
     }
 
     fn agent() -> MemoryWriter {
-        MemoryWriter::Agent
+        MemoryWriter::agent(AgentId::CODEX)
     }
 
     fn saved(outcome: Result<MemorySave>) -> MemoryEntry {
@@ -978,5 +988,65 @@ mod tests {
             .map(|place| (place.host_id, place.updated_at))
             .collect();
         assert_eq!(listed, [("b".to_string(), 2), ("a".to_string(), 1)]);
+    }
+
+    /// An agent's writer keeps its agent's id, which a later save by another agent replaces and a
+    /// save by the user clears; an id no registered provider has any more reads as an agent with
+    /// none, rather than losing the entry.
+    #[test]
+    fn the_writers_agent_is_kept_with_the_entry() {
+        let (store, _dir) = temp_store("memory-writer-agent");
+        let console = store.test_console("c");
+        let first = saved(store.create(&console, "about a", "one", 10));
+        assert_eq!(first.updated_by, MemoryWriter::agent(AgentId::CODEX));
+        let by_claude = saved(store.save_memory(
+            &console,
+            &update(&first.id, 1),
+            &draft("about a", "two"),
+            &MemoryWriter::agent(AgentId::CLAUDE),
+            20,
+            MAX,
+        ));
+        assert_eq!(by_claude.updated_by, MemoryWriter::agent(AgentId::CLAUDE));
+        assert_eq!(
+            store.memory_index(&console).unwrap()[0].updated_by,
+            MemoryWriter::agent(AgentId::CLAUDE)
+        );
+        saved(store.save_memory(
+            &console,
+            &update(&first.id, 2),
+            &draft("about a", "three"),
+            &MemoryWriter::User,
+            30,
+            MAX,
+        ));
+        let cleared: Option<String> = store
+            .lock()
+            .query_row(
+                "SELECT updated_by_agent FROM memories WHERE id = ?1",
+                params![first.id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(cleared, None);
+
+        store
+            .lock()
+            .execute(
+                "UPDATE memories SET updated_by = 'agent', updated_by_agent = 'retired'
+                 WHERE id = ?1",
+                params![first.id],
+            )
+            .unwrap();
+        let retired = MemoryWriter::Agent { agent: None };
+        assert_eq!(
+            store
+                .get_memory(&console, &first.id)
+                .unwrap()
+                .unwrap()
+                .updated_by,
+            retired
+        );
+        assert_eq!(store.memory_index(&console).unwrap()[0].updated_by, retired);
     }
 }

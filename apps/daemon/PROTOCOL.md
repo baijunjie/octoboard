@@ -5575,8 +5575,9 @@ directory.
   and never given to another of its entries, a deleted one's included), a one-line `summary` (one sentence summing up
   its content), its only label, which need not be unique (1 to 200 characters after trimming), a Markdown `content`
   (not blank, at most 16,384 bytes), `created_at` and `updated_at` (milliseconds), `updated_by`, who wrote it last
-  (`{ "kind": "agent" }` for a session's memory tools, `{ "kind": "user" }` for a client's request; nothing more of
-  either) and a `version`, 1 when created and raised by every update; a console's entry also has
+  (`{ "kind": "agent", "agent" }` for a session's memory tools, `agent` the id of the session's agent, left out only
+  for an entry whose agent no registered provider has any more; `{ "kind": "user" }` for a client's request) and a
+  `version`, 1 when created and raised by every update; a console's entry also has
   `local`, whether it holds only on this machine. A memory holds at most 200 entries. `save_memory` takes `id?`,
   `version?`, `summary`, `content` and, for a console session only, `local?` (false for a new entry when left out,
   unchanged on an update): without `id` and `version` it creates an entry; with both, it updates the entry `id`, and

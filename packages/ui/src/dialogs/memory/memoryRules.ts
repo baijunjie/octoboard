@@ -28,7 +28,7 @@ export function memoryContentBytes(content: string): number {
   return new TextEncoder().encode(content).length;
 }
 
-/** Who wrote an entry last: an agent (any session of any agent) or the user. */
+/** Who wrote an entry last: an agent (a session's memory tools; `writerAgent` says which agent) or the user. */
 export type ShownWriter = "agent" | "user";
 
 /** `writer` as a `ShownWriter`, or `undefined` for a kind this client does not know (a newer daemon's), whose entry is
@@ -37,4 +37,10 @@ export type ShownWriter = "agent" | "user";
 export function shownWriter(writer: MemoryWriter): ShownWriter | undefined {
   const kind: string = writer.kind;
   return kind === "user" || kind === "agent" ? kind : undefined;
+}
+
+/** The id of the agent whose session wrote an entry last, `undefined` for the user, or for an agent's entry that names
+ * none (one whose agent the daemon no longer has). */
+export function writerAgent(writer: MemoryWriter): string | undefined {
+  return writer.kind === "agent" ? writer.agent : undefined;
 }

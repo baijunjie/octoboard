@@ -621,7 +621,7 @@ async fn a_project_sessions_launch_carries_the_setting_and_its_places_index() {
                     content: "x".to_string(),
                     local: None,
                 },
-                &MemoryWriter::Agent,
+                &MemoryWriter::agent(crate::protocol::AgentId::CODEX),
             )
             .unwrap()
             .unwrap()

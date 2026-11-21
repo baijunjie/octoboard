@@ -601,7 +601,7 @@ mod tests {
         }
 
         fn session() -> MemoryWriter {
-            MemoryWriter::Agent
+            MemoryWriter::agent(crate::protocol::AgentId::CODEX)
         }
 
         fn console_state(name: &str) -> (Arc<AppState>, crate::test_support::ScratchDir) {

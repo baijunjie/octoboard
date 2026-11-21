@@ -61,7 +61,7 @@ async fn memory_travels_with_its_console_but_for_the_local_entries() {
     let (source, source_dir) = app_state("import-memory-source");
     let exported_console = crate::test_support::console(&source_dir);
     source.store.insert_console(&exported_console).unwrap();
-    let writer = MemoryWriter::Agent;
+    let writer = MemoryWriter::agent(crate::protocol::AgentId::CODEX);
     for (subject, local, content) in [
         ("web-routing", false, "web goes to `site`"),
         ("prefers-brevity", false, "Short replies.\n"),

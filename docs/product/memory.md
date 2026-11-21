@@ -95,7 +95,7 @@ project's memory" in `docs/product/removing-projects.md`), and what no project i
 | content | The entry's body, in Markdown. Not blank, at most 16,384 bytes of UTF-8; stored as written. |
 | local | A console entry's only: whether it holds only on this machine. A new entry is not local unless it says so, and an update that leaves it out keeps the entry's value. Given for a project memory's entry, it is ignored, not refused. |
 | created, updated | When it was created and last updated. |
-| updated by | Who wrote it last: **an agent** (any session's memory tools) or **the user** (the window). Nothing more of either is recorded. |
+| updated by | Who wrote it last: **an agent**, through a session's memory tools, recorded with that session's agent (Claude Code, Codex, ...), or **the user** (the window). Neither the session nor the account is recorded. The memory index given to sessions does not carry it. |
 | version | 1 when created, raised by every update. |
 
 Entries have no type. A memory holds **at most 200 entries**; a new entry past that is refused. Everywhere entries are
@@ -120,7 +120,8 @@ project session its project's place's. The tool descriptions are worded for the 
 | `read_memory` | `id` | One entry in full, its content and version included. |
 | `delete_memory` | `id` | Deletes one entry for good, and answers `deleted`, its id. |
 
-Times are milliseconds since the Unix epoch, and `updated_by` is `{"kind": "agent"}` or `{"kind": "user"}`. A refused
+Times are milliseconds since the Unix epoch, and `updated_by` is `{"kind": "agent", "agent": "<id>"}`, the id of the
+saving session's agent (such as `"codex"`), or `{"kind": "user"}`. A refused
 call is a tool error carrying the reason in prose, as the other tools' refusals are, and saves nothing:
 
 - a memory tool while the memory is turned off at the time of the call;
@@ -211,8 +212,9 @@ the project's own documents.
 
 - **The list**: one row an entry, most recently updated first. Its summary is on one line, faded where it is clipped,
   with the whole of it in a tooltip then; after it, for a local console entry, a **This machine only** tag that never wraps
-  or shrinks. Under the summary, when and by whom it was last updated: "Updated 5 minutes ago by an agent" or "… by
-  you", and "Updated just now …" within its first minute, kept current as time passes. Pressing a row opens the entry;
+  or shrinks. Under the summary, when and by whom it was last updated: "Updated 5 minutes ago by Codex", naming the
+  agent as the app names it elsewhere ("… by an agent" for an agent the app does not know), or "… by you", and
+  "Updated just now …" within its first minute, kept current as time passes. Pressing a row opens the entry;
   the row's action menu has **View**, **Edit** and **Delete**.
 - **While it loads** it says so; **a failure to load** is shown in its place with the means to try again.
 - **With no entry**, it says there is no memory yet and that sessions save what they learn there as they work, with no

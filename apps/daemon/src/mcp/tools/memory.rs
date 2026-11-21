@@ -82,7 +82,7 @@ pub(in crate::mcp) fn save_memory(
              leave both out to create an entry"
         ),
     };
-    let writer = MemoryWriter::Agent;
+    let writer = MemoryWriter::agent(session.agent);
     let id = match &target {
         MemoryTarget::Update { id, .. } => id.clone(),
         MemoryTarget::Create => String::new(),

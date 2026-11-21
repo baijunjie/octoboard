@@ -2,14 +2,15 @@ import { consoleOf, minutesAgo, sessionOf, snapshotState } from "../../fixtures/
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import type { Ui } from "../../fixtures/interact";
 import type { FixtureError } from "../../fixtures/sampleFiles";
-import { deletedEvent, entryOf, savedEvent } from "../../fixtures/memoryBuilders";
+import { byAgent, deletedEvent, entryOf, savedEvent } from "../../fixtures/memoryBuilders";
 import type { MemoryEntry } from "../../protocol";
 import type { Scenario } from "../scenario";
 
 const GROUP = "Consoles";
 
 const console_ = consoleOf("c-1", "Main");
-// A console session, so the console has one; the entries name no session, only the user or an agent.
+// A console session, so the console has one; the entries name no session, only the user or the agent whose session
+// wrote them.
 const hub = sessionOf("s-hub", console_.id, undefined, "Fix search", "idle");
 // Memory is shown only while its setting is on.
 const state = snapshotState({ consoles: [console_], projects: [], sessions: [hub], settings: { ...DEFAULT_SETTINGS, memory_enabled: true } });
@@ -19,8 +20,6 @@ const state = snapshotState({ consoles: [console_], projects: [], sessions: [hub
 function entry(id: string, minutes: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   return entryOf(id, { created_at: minutesAgo(minutes + 600), updated_at: minutesAgo(minutes), ...extra });
 }
-
-const byAgent = { kind: "agent" } as const;
 
 const CHECKLIST = [
   "Before a release, in this order:",
@@ -35,7 +34,7 @@ const CHECKLIST = [
 const checklist = entry("c4q8x1ma", 5, {
   summary: "The steps the user wants followed before every release",
   content: CHECKLIST,
-  updated_by: byAgent,
+  updated_by: byAgent("codex"),
 });
 
 // The longest summary an entry has (200 characters is the most), which a row clips with a fade and the view shows in full.
@@ -43,23 +42,23 @@ const longRelease = entry("r7k2m9qa", 70, {
   summary: "Before any release, follow the user's checklist in order: verify in the release worktree, read the changelog aloud, wait for a go-ahead, and tag from main only; never publish without asking.",
   local: true,
   content: CHECKLIST,
-  updated_by: byAgent,
+  updated_by: byAgent("claude"),
 });
 
 // An entry that holds only on this machine, which the edit form shows with its checkbox checked.
 const staging = entry("e1v7b4tz", 60 * 30, { summary: "The staging environment is at staging.example.com behind the VPN", local: true });
 
-/** Entries of both writers, the user and an agent; one
+/** Entries of both writers, the user and agents of three kinds, and one by an agent this client cannot name; one
  * summary long enough to be clipped, two entries marked as holding only on this machine, and two that share a summary, since it is the only label and is not
  * unique. */
 const mixedEntries: MemoryEntry[] = [
   checklist,
   entry("p2j5n8wd", 40, { summary: "Replies in Japanese, in short sentences", updated_by: { kind: "user" } }),
   longRelease,
-  entry("f9d3h6ke", 95, { summary: "Do not summarise the diff at the end of a reply", updated_by: byAgent }),
+  entry("f9d3h6ke", 95, { summary: "Do not summarise the diff at the end of a reply", updated_by: byAgent("grok") }),
   staging,
-  entry("a8s2g5ur", 60 * 24 * 3, { summary: "Where the public API is documented", updated_by: byAgent }),
-  entry("u6m3y9cn", 60 * 24 * 12, { summary: "Replies in Japanese, in short sentences", updated_by: byAgent }),
+  entry("a8s2g5ur", 60 * 24 * 3, { summary: "Where the public API is documented", updated_by: { kind: "agent" } }),
+  entry("u6m3y9cn", 60 * 24 * 12, { summary: "Replies in Japanese, in short sentences", updated_by: byAgent("claude") }),
 ];
 
 /** The most entries a console holds, the most recent first. */
@@ -100,7 +99,7 @@ export const consoleMemoryScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Console memory with entries",
-    description: "A quiet count at the start of the footer, level with the buttons at its end, counts the entries against the limit (7 of 200 entries). Entries are listed most recently updated first. Each row is its summary on one line, which fades where it is clipped (the long one at the third place), then a \"This machine only\" tag where the entry is marked so (the long one and the staging one), then when and by whom it was updated: by you or by an agent. The last two entries share a summary, which is not unique.",
+    description: "A quiet count at the start of the footer, level with the buttons at its end, counts the entries against the limit (7 of 200 entries). Entries are listed most recently updated first. Each row is its summary on one line, which fades where it is clipped (the long one at the third place), then a \"This machine only\" tag where the entry is marked so (the long one and the staging one), then when and by whom it was updated: by you, or by the agent whose session saved it, named (Codex, Claude Code, Grok Build), or by an agent where its agent is not one the app knows (the second from the end). The last two entries share a summary, which is not unique.",
     state,
     memory: { entries: mixedEntries },
     steps: openMemory,

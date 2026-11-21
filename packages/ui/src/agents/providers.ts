@@ -11,8 +11,13 @@ export { PROVIDER_CODES, providerPlanName } from "../providers/registry";
  * message; any other by the label the daemon serves of it in `providers`, else by its id (a provider the daemon does
  * not serve). `providers` is required so that no caller can leave the served label out. */
 export function providerLabel(t: Translate, providers: readonly ProviderInfo[], id: string): string {
-  const key = `provider.${id}.label`;
+  const key = providerLabelKey(id);
   return isMessageKey(key) ? t(key as PlainMessageKey) : (servedProvider(providers, id)?.label ?? id);
+}
+
+/** The key of the message that names provider `id` in full, which only a provider with a presentation module has. */
+function providerLabelKey(id: string): string {
+  return `provider.${id}.label`;
 }
 
 /** The shorter name of provider `id` ("Claude" for "Claude Code"), as the menu bar icon's menu uses it. A provider
@@ -21,6 +26,12 @@ export function providerLabel(t: Translate, providers: readonly ProviderInfo[], 
 export function providerShortName(t: Translate, providers: readonly ProviderInfo[], id: string): string {
   const key = `provider.${id}.shortName`;
   return isMessageKey(key) ? t(key as PlainMessageKey) : (servedProvider(providers, id)?.short_name ?? id);
+}
+
+/** Whether provider `id` has a name of its own to be shown by (see `providerLabel`): a presentation module's, or the
+ * label the daemon serves of it; not a provider known only by its bare id. */
+export function hasProviderName(providers: readonly ProviderInfo[], id: string): boolean {
+  return isMessageKey(providerLabelKey(id)) || isKnownAgent(providers, id);
 }
 
 /** Whether `id` is the id of a provider the daemon serves. */

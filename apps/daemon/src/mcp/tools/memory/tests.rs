@@ -17,6 +17,13 @@ fn memory_state(
     (state, dir)
 }
 
+/// The writer `updated_by` names for a save by session `session`: an agent's, with that session's
+/// agent.
+fn written_by(state: &std::sync::Arc<crate::state::AppState>, session: &str) -> Value {
+    let agent = state.store.require_session(session).unwrap().agent;
+    json!({ "kind": "agent", "agent": agent.wire_name() })
+}
+
 /// The arguments of a `save_memory` that creates an entry summarized `summary` holding
 /// `content`.
 fn entry(summary: &str, content: &str) -> Value {
@@ -78,7 +85,7 @@ async fn console_sessions_of_one_console_share_its_memory() {
     assert_eq!(saved["version"], 1);
     assert_eq!(saved["local"], false);
     assert!(saved.get("content").is_none(), "{saved}");
-    assert_eq!(saved["updated_by"], json!({ "kind": "agent" }));
+    assert_eq!(saved["updated_by"], written_by(&state, "a"));
 
     let listed = ok(&state, "b", "list_memories", json!({})).await;
     assert_eq!(
@@ -107,7 +114,7 @@ async fn console_sessions_of_one_console_share_its_memory() {
     assert_eq!(updated["summary"], "updated");
     assert!(updated.get("content").is_none(), "{updated}");
     assert_eq!(updated["created_at"], saved["created_at"]);
-    assert_eq!(updated["updated_by"], json!({ "kind": "agent" }));
+    assert_eq!(updated["updated_by"], written_by(&state, "b"));
 
     assert_eq!(
         ok(&state, "a", "delete_memory", json!({ "id": id })).await,
@@ -277,7 +284,8 @@ async fn a_console_sessions_change_is_told_to_every_client() {
     };
     assert_eq!(json!(saved.id), id);
     assert_eq!(saved.content, "x");
-    assert_eq!(saved.updated_by, MemoryWriter::Agent);
+    let agent = state.store.require_session("a").unwrap().agent;
+    assert_eq!(saved.updated_by, MemoryWriter::agent(agent));
     ok(&state, "b", "delete_memory", json!({ "id": id })).await;
     assert!(matches!(
         events.try_recv().unwrap(),
@@ -553,4 +561,39 @@ async fn turning_memory_off_deletes_nothing() {
             .len(),
         1
     );
+}
+
+/// A save records the agent of the session that made it, each session its own: an update by a
+/// session of another agent names that agent, in the answer, the index and the full entry.
+#[tokio::test]
+async fn a_save_records_the_agent_of_its_session() {
+    use crate::protocol::AgentId;
+    let (state, _dir) = memory_state("memory-writer-agent");
+    let first_agent = state.store.require_session("a").unwrap().agent;
+    let other_agent = AgentId::ALL
+        .into_iter()
+        .find(|agent| *agent != first_agent)
+        .expect("more than one provider is registered");
+    state
+        .store
+        .insert_session(&Session {
+            agent: other_agent,
+            ..console_session("other-hub")
+        })
+        .unwrap();
+    let saved = ok(&state, "a", "save_memory", entry("routing", "x")).await;
+    assert_eq!(saved["updated_by"], written_by(&state, "a"));
+    let updated = ok(
+        &state,
+        "other-hub",
+        "save_memory",
+        update(&saved["id"], 1, "y"),
+    )
+    .await;
+    let by_other = json!({ "kind": "agent", "agent": other_agent.wire_name() });
+    assert_eq!(updated["updated_by"], by_other);
+    let listed = ok(&state, "a", "list_memories", json!({})).await;
+    assert_eq!(listed["memories"][0]["updated_by"], by_other);
+    let read = ok(&state, "a", "read_memory", json!({ "id": saved["id"] })).await;
+    assert_eq!(read["updated_by"], by_other);
 }

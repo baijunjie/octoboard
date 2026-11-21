@@ -10,6 +10,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::AgentId;
+
 /// The most entries one memory holds.
 pub const MEMORY_MAX_ENTRIES: usize = 200;
 /// The most bytes of UTF-8 one entry's content holds.
@@ -34,12 +36,25 @@ pub enum MemoryScope {
 }
 
 /// Who wrote an entry last: the user, in a window, or an agent, through a session's memory tools.
+/// An agent's writer names the agent of the session that saved it, its id as data; `agent` is left
+/// out only for an entry whose agent no registered provider has any more.
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MemoryWriter {
     User,
-    Agent,
+    Agent {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        agent: Option<AgentId>,
+    },
+}
+
+impl MemoryWriter {
+    /// The writer of a save made through the memory tools of a session of `agent`.
+    pub fn agent(agent: AgentId) -> MemoryWriter {
+        MemoryWriter::Agent { agent: Some(agent) }
+    }
 }
 
 /// The fields of an entry its writer gives; the rest the store keeps. `local` says whether a
@@ -143,7 +158,7 @@ mod tests {
             local: true,
             created_at: 1,
             updated_at: 2,
-            updated_by: MemoryWriter::Agent,
+            updated_by: MemoryWriter::agent(AgentId::CODEX),
             version: 3,
         }
     }
@@ -158,7 +173,8 @@ mod tests {
     }
 
     /// An entry goes over the wire with its scope tagged by kind, a console's by its id and a
-    /// place's by host and path, its `local`, and its writer as a kind alone, the user or an agent.
+    /// place's by host and path, its `local`, and its writer by kind, an agent's with its agent's id
+    /// (left out only where no registered provider has it).
     #[test]
     fn an_entry_is_serialized_as_clients_read_it() {
         assert_eq!(
@@ -171,7 +187,7 @@ mod tests {
                 "local": true,
                 "created_at": 1,
                 "updated_at": 2,
-                "updated_by": { "kind": "agent" },
+                "updated_by": { "kind": "agent", "agent": "codex" },
                 "version": 3,
             })
         );
@@ -184,8 +200,13 @@ mod tests {
             json!({ "kind": "user" })
         );
         assert_eq!(
-            serde_json::from_value::<MemoryWriter>(json!({ "kind": "agent" })).unwrap(),
-            MemoryWriter::Agent
+            serde_json::from_value::<MemoryWriter>(json!({ "kind": "agent", "agent": "grok" }))
+                .unwrap(),
+            MemoryWriter::agent(AgentId::GROK)
+        );
+        assert_eq!(
+            serde_json::to_value(MemoryWriter::Agent { agent: None }).unwrap(),
+            json!({ "kind": "agent" })
         );
     }
 

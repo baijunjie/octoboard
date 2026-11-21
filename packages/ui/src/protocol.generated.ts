@@ -3588,12 +3588,15 @@ export type MemoryScope = {
 
 /**
  * Who wrote an entry last: the user, in a window, or an agent, through a session's memory tools.
+ * An agent's writer names the agent of the session that saved it, its id as data; `agent` is left
+ * out only for an entry whose agent no registered provider has any more.
  */
 export type MemoryWriter = {
   "kind": "user"
 }
 | {
-  "kind": "agent"
+  "kind": "agent",
+  agent?: Agent,
 };
 
 /**

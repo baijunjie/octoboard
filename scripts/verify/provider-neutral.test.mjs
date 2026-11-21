@@ -24,6 +24,8 @@ test("rejects reintroduced agent-id branches and provider facts in generic code"
     'const name = "Grok";',
     "const id = `codex`;",
     'const variable = "CODEX_V2_SESSION";',
+    'let text = "the agent (such as `\\"claude\\"`)";',
+    "let text = 'an id like \\'grok\\'';",
   ]) assert.equal(violations(DAEMON, source).length, 1, source);
   assert.equal(violations(UI, 'if (agent === "codex") act();').length, 1);
   assert.equal(violations(DAEMON, "provider(agent).screen().interrupt()").length, 0);

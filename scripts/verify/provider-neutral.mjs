@@ -67,7 +67,7 @@ export function productionSource(source, rust = false, structureOnly = false, cs
   return chars.join("");
 }
 
-const KNOWLEDGE = /AgentId\s*::\s*(?:CLAUDE|CODEX|GROK)\b|["'`](?:claude(?:-code)?|codex|grok(?:-build)?)["'`]|(?:\bClaude\b|\bGrok\b|\bCodex\b)|\.(?:claude|codex|grok)\b|(?:CLAUDE|AGENTS)\.md|\b(?:CLAUDECODE|(?:CLAUDE|CODEX|GROK)_[A-Z0-9_]+)\b|(?:--permission-mode|--approval-policy|--ask-for-approval|--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox)|(?:codex|claude|grok):\/\/|\b(?:PreToolUse|PostToolUse|UserPromptSubmit|StopCancelled|idle_prompt)\b|\b(?:config\.toml|auth\.json)\b/g;
+const KNOWLEDGE = /AgentId\s*::\s*(?:CLAUDE|CODEX|GROK)\b|["'`](?:claude(?:-code)?|codex|grok(?:-build)?)\\?["'`]|(?:\bClaude\b|\bGrok\b|\bCodex\b)|\.(?:claude|codex|grok)\b|(?:CLAUDE|AGENTS)\.md|\b(?:CLAUDECODE|(?:CLAUDE|CODEX|GROK)_[A-Z0-9_]+)\b|(?:--permission-mode|--approval-policy|--ask-for-approval|--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox)|(?:codex|claude|grok):\/\/|\b(?:PreToolUse|PostToolUse|UserPromptSubmit|StopCancelled|idle_prompt)\b|\b(?:config\.toml|auth\.json)\b/g;
 
 export function violations(file, source, exceptions = EXCEPTIONS) {
   const production = productionSource(source, file.endsWith(".rs"), false, file.endsWith(".css"));

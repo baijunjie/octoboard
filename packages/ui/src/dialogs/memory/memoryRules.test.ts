@@ -8,6 +8,7 @@ import {
   MEMORY_MAX_ENTRIES,
   memoryContentBytes,
   shownWriter,
+  writerAgent,
 } from "./memoryRules";
 
 it("takes a summary of one line of 1 to 200 characters", () => {
@@ -26,6 +27,12 @@ it("reads a writer the client knows, and nothing for a newer daemon's", () => {
   expect(shownWriter({ kind: "user" })).toBe("user");
   expect(shownWriter({ kind: "agent" })).toBe("agent");
   expect(shownWriter({ kind: "somebody" } as never)).toBeUndefined();
+});
+
+it("reads the agent an agent's entry names, and none for the user or an agent's entry that names none", () => {
+  expect(writerAgent({ kind: "agent", agent: "codex" })).toBe("codex");
+  expect(writerAgent({ kind: "agent" })).toBeUndefined();
+  expect(writerAgent({ kind: "user" })).toBeUndefined();
 });
 
 it("holds the limits the daemon holds an entry to ", () => {

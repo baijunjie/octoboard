@@ -1,7 +1,7 @@
 // The memory entries, scopes and changes the memory tests and the gallery's memory scenarios are built from; no
 // rendering, so a pure test may import them.
 import { projectOf } from "./builders";
-import type { MemoryEntry, MemoryScope } from "../protocol";
+import type { MemoryEntry, MemoryScope, MemoryWriter } from "../protocol";
 import type { EntryChangeEvent } from "../dialogs/memory/memoryState";
 
 /** The scope of console `c-1`'s memory. */
@@ -25,6 +25,9 @@ export function entryOf(id: string, extra: Partial<MemoryEntry> = {}): MemoryEnt
     ...extra,
   };
 }
+
+/** The writer of an entry saved through the memory tools of a session of `agent`, an agent's id. */
+export const byAgent = (agent: string): MemoryWriter => ({ kind: "agent", agent });
 
 export const savedEvent = (entry: MemoryEntry): EntryChangeEvent => ({ type: "memory_saved", entry });
 export const deletedEvent = (memories: string[], scope: MemoryScope = CONSOLE_SCOPE): EntryChangeEvent => ({ type: "memories_deleted", scope, memories });

@@ -94,8 +94,8 @@ pub(super) const CONSOLE_READ_MEMORY: ToolDef = ToolDef {
         "One entry of this console's memory in full, by its id: `id`, `summary`, `content`, \
          `local`, `version` (the one `save_memory` takes to update it), `created_at` and \
          `updated_at` (milliseconds since the epoch), and ",
-        "`updated_by`, who wrote it last: `{\"kind\": \"agent\"}` for a session's memory tools, \
-         `{\"kind\": \"user\"}` for the user."
+        "`updated_by`, who wrote it last: `{\"kind\": \"agent\", \"agent\": <id>}` for a session's \
+         memory tools, naming the session's agent by its id, `{\"kind\": \"user\"}` for the user."
     ),
     schema: || object_schema(json!({ "id": id_schema("The entry's id.") }), &["id"]),
 };
@@ -154,8 +154,8 @@ pub(super) const PROJECT_READ_MEMORY: ToolDef = ToolDef {
         "One entry of this project's memory in full, by its id: `id`, `summary`, `content`, \
          `version` (the one `save_memory` takes to update it), `created_at` and `updated_at` \
          (milliseconds since the epoch), and ",
-        "`updated_by`, who wrote it last: `{\"kind\": \"agent\"}` for a session's memory tools, \
-         `{\"kind\": \"user\"}` for the user."
+        "`updated_by`, who wrote it last: `{\"kind\": \"agent\", \"agent\": <id>}` for a session's \
+         memory tools, naming the session's agent by its id, `{\"kind\": \"user\"}` for the user."
     ),
     schema: || object_schema(json!({ "id": id_schema("The entry's id.") }), &["id"]),
 };

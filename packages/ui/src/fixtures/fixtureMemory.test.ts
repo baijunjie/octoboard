@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 
-import { CONSOLE_SCOPE, deletedEvent, entryOf, placeScope, PROJECT, PROJECT_SCOPE, savedEvent } from "./memoryBuilders";
+import { byAgent, CONSOLE_SCOPE, deletedEvent, entryOf, placeScope, PROJECT, PROJECT_SCOPE, savedEvent } from "./memoryBuilders";
 import type { MemoryChangeEvent } from "../store";
 import { afterQueuedWork } from "../test/clock";
 import { consoleOf, projectOf, snapshotState } from "./builders";
@@ -112,7 +112,7 @@ describe("the fixture daemon's console memory", () => {
 
   it("applies a change a session made to what it holds and delivers it", async () => {
     const { daemon, heard } = daemonOf();
-    const entry = entryOf("sess0000", { updated_by: { kind: "agent" } });
+    const entry = entryOf("sess0000", { updated_by: byAgent("codex") });
     daemon.deliverMemoryChange(savedEvent(entry));
     expect(heard).toEqual([savedEvent(entry)]);
     expect((await daemon.request({ type: "read_memory", console: "c-1", memory: "sess0000" })).entry).toEqual(entry);

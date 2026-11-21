@@ -8838,6 +8838,9 @@
         {
           "type": "object",
           "properties": {
+            "agent": {
+              "$ref": "#/$defs/Agent"
+            },
             "kind": {
               "type": "string",
               "const": "agent"
@@ -8848,7 +8851,7 @@
           ]
         }
       ],
-      "description": "Who wrote an entry last: the user, in a window, or an agent, through a session's memory tools."
+      "description": "Who wrote an entry last: the user, in a window, or an agent, through a session's memory tools.\nAn agent's writer names the agent of the session that saved it, its id as data; `agent` is left\nout only for an entry whose agent no registered provider has any more."
     },
     "ModelChangeOutcome": {
       "oneOf": [

@@ -2,12 +2,20 @@
 import { act } from "react";
 import { beforeEach, expect, it } from "vitest";
 
+import { providerLabel } from "../../agents/providers";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
+import { translatorFor } from "../../i18n/catalog";
 import { fakeTimers, runPendingTimers } from "../../test/clock";
 import { buttons, click, inputLabelled, type } from "../../test/dom";
 import { daemonError } from "../../test/daemonError";
+import { TEST_PROVIDERS } from "../../test/testProviders";
 import { indexLine } from "./memoryState";
 import { deletedEvent, entryOf, renderMemory, savedEvent, settled } from "./memoryTestSupport";
+
+/** Two providers the daemon serves, each with a name of its own, and how the window names one. */
+const named = TEST_PROVIDERS[0]!;
+const other = TEST_PROVIDERS[1]!;
+const nameOf = (id: string) => providerLabel(translatorFor("en"), TEST_PROVIDERS, id);
 
 beforeEach(() => fakeTimers());
 
@@ -47,9 +55,11 @@ it("lists each entry with its summary, the machine-only tag where it has one, an
   const now = Date.now();
   renderMemory({
     entries: [
-      entryOf("preferred-language", { summary: "Replies in Japanese", local: true, updated_at: now - 3 * 3600_000, updated_by: { kind: "agent" } }),
+      entryOf("preferred-language", { summary: "Replies in Japanese", local: true, updated_at: now - 3 * 3600_000, updated_by: { kind: "agent", agent: named.id } }),
       entryOf("odd", { updated_by: { kind: "somebody" } as never }),
       entryOf("mine", { updated_by: { kind: "user" } }),
+      entryOf("unnamed", { updated_at: now - 3 * 3600_000, updated_by: { kind: "agent" } }),
+      entryOf("retired", { updated_at: now - 3 * 3600_000, updated_by: { kind: "agent", agent: "retired-agent" } }),
     ],
   });
   await settle();
@@ -57,8 +67,14 @@ it("lists each entry with its summary, the machine-only tag where it has one, an
   expect(first).toContain("Replies in Japanese");
   expect(first).toContain("This machine only");
   expect(row("About mine").textContent).not.toContain("This machine only");
-  expect(first).toContain("Updated 3 hours ago by an agent");
+  // The agent whose session wrote it is named as the app names it, as a reference within the sentence.
+  expect(first).toContain(`Updated 3 hours ago by ${nameOf(named.id)}`);
+  expect([...row("Replies in Japanese").querySelectorAll('[data-slot="chip"]')].map((chip) => chip.textContent)).toContain(nameOf(named.id));
   expect(row("About mine").textContent).toContain("by you");
+  // An agent's entry that names no agent, or one this client cannot name, says an agent wrote it.
+  expect(row("About unnamed").textContent).toContain("Updated 3 hours ago by an agent");
+  expect(row("About retired").textContent).toContain("Updated 3 hours ago by an agent");
+  expect(row("About retired").textContent).not.toContain("retired-agent");
   // A writer this client does not know is left out, not shown raw.
   expect(row("About odd").textContent).toMatch(/Updated .* ago$/);
 });
@@ -378,10 +394,17 @@ it("still edits an entry in a memory that holds 200", async () => {
 });
 
 it("says an entry updated within the last minute was updated just now, by whom", async () => {
-  renderMemory({ entries: [entryOf("a", { updated_at: Date.now() }), entryOf("b", { updated_at: Date.now(), updated_by: { kind: "agent" } })] });
+  renderMemory({
+    entries: [
+      entryOf("a", { updated_at: Date.now() }),
+      entryOf("b", { updated_at: Date.now(), updated_by: { kind: "agent" } }),
+      entryOf("c", { updated_at: Date.now(), updated_by: { kind: "agent", agent: other.id } }),
+    ],
+  });
   await settle();
   expect(row("About a").textContent).toContain("Updated just now by you");
   expect(row("About b").textContent).toContain("Updated just now by an agent");
+  expect(row("About c").textContent).toContain(`Updated just now by ${nameOf(other.id)}`);
 });
 
 it("reads the entry again when the daemon refuses the edit as changed, so the form shows the entry as it now stands", async () => {

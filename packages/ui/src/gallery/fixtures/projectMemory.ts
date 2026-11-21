@@ -1,7 +1,7 @@
 import { consoleOf, minutesAgo, sessionOf, snapshotState } from "../../fixtures/builders";
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import type { Ui } from "../../fixtures/interact";
-import { entryOf, PROJECT, PROJECT_SCOPE } from "../../fixtures/memoryBuilders";
+import { byAgent, entryOf, PROJECT, PROJECT_SCOPE } from "../../fixtures/memoryBuilders";
 import type { MemoryEntry } from "../../protocol";
 import type { Scenario } from "../scenario";
 
@@ -17,9 +17,9 @@ function entry(id: string, minutes: number, extra: Partial<MemoryEntry> = {}): M
 }
 
 const entries: MemoryEntry[] = [
-  entry("b3n7q2xk", 12, { summary: "The dev server listens on port 4100, not the default", updated_by: { kind: "agent" } }),
+  entry("b3n7q2xk", 12, { summary: "The dev server listens on port 4100, not the default", updated_by: byAgent("codex") }),
   entry("h5w8d1zt", 60 * 5, { summary: "Run the integration tests with the local Postgres from docker compose up" }),
-  entry("m9c4v6jr", 60 * 26, { summary: "The checkout of the sibling repository is at /work/shared-ui", updated_by: { kind: "agent" } }),
+  entry("m9c4v6jr", 60 * 26, { summary: "The checkout of the sibling repository is at /work/shared-ui", updated_by: byAgent("claude") }),
 ];
 
 const openProjectMemory = [
@@ -33,7 +33,7 @@ export const projectMemoryScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project memory with entries",
-    description: "The project's own memory, opened from the project row's menu: the introduction says it holds what agents working in the project need to know about the machine the project is on, such as local paths, ports, tools and account setup, shared by every agent working in the project. Rows have no tag, since every entry of a project's memory is machine-only, and show when and by whom each was updated: by an agent or by you. Console memory has the same list with its \"This machine only\" tag on marked entries.",
+    description: "The project's own memory, opened from the project row's menu: the introduction says it holds what agents working in the project need to know about the machine the project is on, such as local paths, ports, tools and account setup, shared by every agent working in the project. Rows have no tag, since every entry of a project's memory is machine-only, and show when and by whom each was updated: by the agent whose session saved it, named (Codex, Claude Code), or by you. Console memory has the same list with its \"This machine only\" tag on marked entries.",
     state,
     memory: { entries },
     steps: openProjectMemory,

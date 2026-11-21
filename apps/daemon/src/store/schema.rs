@@ -95,6 +95,7 @@ pub(super) const MIGRATIONS: &[&str] = &[
          created_at         INTEGER NOT NULL,
          updated_at         INTEGER NOT NULL,
          updated_by         TEXT NOT NULL CHECK (updated_by IN ('user', 'agent')),
+         updated_by_agent   TEXT,
          version            INTEGER NOT NULL,
          PRIMARY KEY (console_id, host_id, path, id)
      );
@@ -485,8 +486,9 @@ CREATE TABLE held_terminals (
 -- or a place's (`console_id` empty, `host_id` and `path` the host and stored path of the projects
 -- there), which the project sessions of every project at the place keep and which outlives them.
 -- `id` is the daemon's, unique within the memory. `local` marks a console's entry that holds only
--- on this machine. `updated_by` says who wrote the entry last, the user or an agent. `version`
--- starts at 1 and is raised by every update, which names the version it read.
+-- on this machine. `updated_by` says who wrote the entry last, the user or an agent, and
+-- `updated_by_agent` the agent's id for an agent (`NULL` for the user). `version` starts at 1 and
+-- is raised by every update, which names the version it read.
 CREATE TABLE memories (
     console_id         TEXT NOT NULL DEFAULT '',
     host_id            TEXT NOT NULL DEFAULT '',
@@ -498,6 +500,7 @@ CREATE TABLE memories (
     created_at         INTEGER NOT NULL,
     updated_at         INTEGER NOT NULL,
     updated_by         TEXT NOT NULL CHECK (updated_by IN ('user', 'agent')),
+    updated_by_agent   TEXT,
     version            INTEGER NOT NULL,
     PRIMARY KEY (console_id, host_id, path, id)
 );
