@@ -400,7 +400,7 @@ it("lists a failed folder again from Try again, opened with Right then Enter, an
   expect(retry).not.toBeUndefined();
   press(retry, "Enter");
   expect(retried).toHaveBeenCalledTimes(1);
-  expect(container.querySelector('svg.lucide-loader-circle[aria-hidden="true"]')).not.toBeNull();
+  expect(container.querySelector('[data-slot=spinner][aria-hidden="true"]')).not.toBeNull();
   await vi.waitFor(() => expect(document.activeElement).toBe(container.querySelector(`[role=row][data-key="${rowKey("src")}"]`)));
   expect(container.querySelector("button[aria-label='Could not list this folder']")).toBeNull();
 });

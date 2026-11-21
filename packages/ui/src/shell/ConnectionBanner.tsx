@@ -1,12 +1,11 @@
 import { Unplug } from "lucide-react";
 import React, { useEffect, useState } from "react";
 
-import { ReconnectingIcon } from "../components/status/ReconnectingIcon";
 import type { ConnectionState } from "../daemon-client";
 import { useT } from "../i18n/react";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useBottomStrip } from "../components/panel/useBottomStrip";
-import { Button, topLayerProps } from "../primitives";
+import { Button, Spinner, topLayerProps } from "../primitives";
 
 /** The CSS custom property this banner publishes its own height to. `style.css` exposes it as
  * `--bottom-chrome-height`, the offset that everything overlaying the content area ends above, so
@@ -108,7 +107,7 @@ export function ConnectionBanner({
           {state === "closed" ? (
             <Unplug className="size-3.5 shrink-0" />
           ) : (
-            <ReconnectingIcon size="compact" inBanner />
+            <Spinner size="compact" color="current" />
           )}
           <span aria-hidden="true">{message}</span>
           {(state === "closed" || retryWhileReconnecting) && (

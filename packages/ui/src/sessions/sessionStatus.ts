@@ -137,7 +137,9 @@ export function sessionShownStatusKind(
  * reconnecting session is none of Done, Idle or Waiting for you there. */
 export const SUMMARY_STATUSES = ["waiting_user", "paused", "done", "idle"] as const satisfies readonly ShownStatusKind[];
 
-export function isSummaryStatus(status: ShownStatusKind): boolean {
+export type SummaryStatus = (typeof SUMMARY_STATUSES)[number];
+
+export function isSummaryStatus(status: string): status is SummaryStatus {
   return SUMMARY_STATUSES.some((kind) => kind === status);
 }
 

@@ -459,8 +459,11 @@ it("asks to probe the apps for the rows it lists as it opens, and again for only
   const { container } = renderArchiveView(undefined, undefined, listed, { restore: { shown: 1, scrollTop: 0 }, onRefreshNativeApps });
 
   expect(onRefreshNativeApps).toHaveBeenCalledExactlyOnceWith([listed[0].id]);
-  const waiting = container.querySelector('[role="status"][aria-label="Loading more…"]');
-  expect(waiting?.querySelector('svg.lucide-loader-circle[aria-hidden="true"]')).not.toBeNull();
+  // Named where it stands for a reader who reaches the end of the list, and not a live region.
+  const waiting = container.querySelector('[role="img"][aria-label="Loading more…"]');
+  expect(waiting?.querySelector('[data-slot=spinner][aria-hidden="true"]')).not.toBeNull();
+  expect(container.querySelector('[role="status"][aria-label="Loading more…"]')).toBeNull();
+  expect(waiting?.closest("[role=status], [aria-live]")).toBeNull();
 
   act(() => loadMore());
 

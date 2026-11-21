@@ -33,7 +33,7 @@ one group, with no divider between them.
   saved as (see `docs/product/pasting-images.md`); one holding neither is pasted as an empty paste rather than refused.
   It is disabled without clipboard reading support, saying under its name that the clipboard is unavailable, and while
   the selected session cannot accept input, with no reason given (the terminal itself shows why, by its reconnecting
-  arc, its disconnected notice or the cover of a process that cannot be reached).
+  cover, its disconnected notice or the cover of a process that cannot be reached).
 - **Select all** selects the terminal's contents, including its available scrollback, for copying.
 
 The clipboard is read only when Paste is chosen, so merely opening the menu does not request clipboard access. If

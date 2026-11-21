@@ -56,8 +56,8 @@ with no console at all. To assistive technology it is named Remote devices.
 
 - **Its header** reads **Remote devices**, with a **+** button, Add remote daemon.
 - **One row for each saved remote daemon**, in the order they were saved: a server glyph, its name, and where it is
-  connected a coloured status glyph. A green chain link means **Connected**, a green browser window means
-  **Opened in browser**, and an amber arc means **Reconnecting**. The arc turns once every two seconds when motion is allowed.
+  connected a status glyph. A green chain link means **Connected**, a green browser window means
+  **Opened in browser**, and the grey spinner means **Reconnecting**. The spinner holds still with reduced motion.
   Hovering over the glyph shows the status in words. The glyphs follow connections as they are made, dropped and ended.
   The row of the device the content area shows is marked as the selected one, and choosing a row shows that device.
 - **A row's ⋮ menu**, also opened by a right-click on the row, holds **Connect** (**Open** for one that is connected)
@@ -74,8 +74,8 @@ dimmed area behind the drawer is named Close remote devices.
 
 The content area shows the selected device under a header holding its name, as the page's heading, the badge of its
 connection where it is connected, its SSH destination as `user@host:port`, read left to right in every language, and
-**Connect** (**Open** for one that is connected; see "Connecting from the page" below). The **Reconnecting** badge
-pairs the same amber arc with its status text. Under the header is the device's form (see "The form" below), and under
+**Connect** (**Open** for one that is connected; see "Connecting from the page" below). The **Reconnecting** badge, a
+warning badge, pairs a spinner in the badge's text colour with its status text. Under the header is the device's form (see "The form" below), and under
 the form, in a card of its own, the **Remove remote daemon** row with **Remove**.
 
 **Remove**, from this row or from the row's menu in the sidebar, asks first, in a confirmation saying the daemon is

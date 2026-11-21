@@ -150,11 +150,11 @@ describe("an account's actions menu", () => {
     const said = () => region.textContent?.replace(/[\u2068\u2069]/g, "");
     // Seen only: the visible line is not a second voice.
     expect(dialog.textContent).toContain("Logging in to Claude Code account claude-work…");
-    // Nothing else in the progress row is exposed either: the arc, however it is wrapped, is hidden from assistive tech.
+    // Nothing else in the progress row is exposed either: the spinner, however it is wrapped, is hidden from assistive tech.
     const row = region.parentElement!;
-    const arcs = [...row.querySelectorAll("svg")];
-    expect(arcs.length).toBeGreaterThan(0);
-    for (const arc of arcs) expect(arc.closest('[aria-hidden="true"]')).not.toBeNull();
+    const icons = [...row.querySelectorAll("svg")];
+    expect(icons.length).toBeGreaterThan(0);
+    for (const icon of icons) expect(icon.closest('[aria-hidden="true"]')).not.toBeNull();
     expect(said()).toBe("");
     act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
     expect(said()).toBe("");

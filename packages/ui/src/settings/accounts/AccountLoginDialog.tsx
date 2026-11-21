@@ -25,7 +25,7 @@ import { ringForAutomaticFocus } from "../../input/lastInput";
 import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
 import { useAccountLoginActions } from "./AccountLogin";
 import { raiseError } from "../../components/alerts/raiseError";
-import { Button, ModalStatusIcon, WaitingIcon } from "../../primitives";
+import { Button, ModalStatusIcon, Spinner } from "../../primitives";
 import { knownValues } from "../../values/knownValue";
 
 const isLoginStatus = knownValues<LoginStatus>({ starting: true, waiting: true, succeeded: true, failed: true, cancelled: true, timed_out: true });
@@ -208,8 +208,8 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
     >
       <p><Message id="settings.accounts.login.intro" params={{ agent: agentChip, name: who }} /></p>
       <div className="mt-2 flex items-start gap-2 text-sm">
-        <MarkLineBox size="text-sm"><WaitingIcon className="text-accent" /></MarkLineBox>
-        {/* While the login starts, the intro line above already says "Logging in…", so the arc stands alone. */}
+        <MarkLineBox size="text-sm"><Spinner size="sm" /></MarkLineBox>
+        {/* While the login starts, the intro line above already says "Logging in…", so the spinner stands alone. */}
         {login?.status === "waiting" && (
           <span aria-hidden>
             {code

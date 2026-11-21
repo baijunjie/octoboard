@@ -52,6 +52,34 @@ it.each([
   expect(glyph.classList.contains(colour)).toBe(true);
 });
 
+it.each([
+  ["starting", "Starting"],
+  ["switching", "Switching account"],
+  ["reconnecting", "Reconnecting"],
+] as const)("draws %s as the grey spinner, decorative inside a slot that names the status", (status, name) => {
+  for (const [small, size] of [[false, "size-4"], [true, "size-3.5"]] as const) {
+    const container = mountForTooltip(<StatusIcon status={status} small={small} />);
+    const slot = container.querySelector("[role=img]")!;
+    expect(slot.getAttribute("aria-label")).toBe(name);
+    expect(slot.className).toContain(size);
+    const spinner = slot.querySelector("[data-slot=spinner]")!;
+    expect(spinner).not.toBeNull();
+    expect(spinner.getAttribute("aria-hidden")).toBe("true");
+    expect(spinner.classList.contains("text-app-muted")).toBe(true);
+    expect(spinner.classList.contains("spinner--sm")).toBe(true);
+    if (small) expect(spinner.classList.contains("size-3.5")).toBe(true);
+    // Nothing amber and no rotation of its own: the labels alone tell the three apart.
+    expect(container.innerHTML).not.toMatch(/animate-spin|tint-warning-fg/);
+  }
+});
+
+it("draws starting, switching and reconnecting alike, apart from the name they carry", () => {
+  // The spinner's gradient ids come from `useId`, so they differ per mount; they are not part of what is drawn.
+  const drawn = (status: "starting" | "switching" | "reconnecting") => mountForTooltip(<StatusIcon status={status} decorative />).innerHTML.replace(/ id="[^"]*"|url\(#[^)]*\)/g, "");
+  expect(drawn("switching")).toBe(drawn("starting"));
+  expect(drawn("reconnecting")).toBe(drawn("starting"));
+});
+
 it("draws a status this client does not know as a neutral dashed circle, still", () => {
   const container = mountForTooltip(<StatusIcon status="unknown" />);
   const slot = container.querySelector("[role=img]")!;
@@ -126,9 +154,9 @@ it.each([
   }
 });
 
-it("moves the bubble and the hand a little on their grid, and no other glyph, the turning arc included", () => {
+it("moves the bubble and the hand a little on their grid, and no other glyph", () => {
   const viewBox = (status: ShownStatusKind) => mountForTooltip(<StatusIcon status={status} decorative />).querySelector("svg")!.getAttribute("viewBox");
   expect(viewBox("idle")).toBe(shiftedViewBox(BUBBLE_SHIFT));
   expect(viewBox("waiting_user")).toBe(shiftedViewBox(HAND_SHIFT));
-  for (const status of ["starting", "switching", "reconnecting", "dormant", "paused", "done", "interrupted"] as const) expect(viewBox(status)).toBe("0 0 24 24");
+  for (const status of ["dormant", "paused", "done", "interrupted"] as const) expect(viewBox(status)).toBe("0 0 24 24");
 });

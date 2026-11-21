@@ -3,13 +3,12 @@ import React, { useEffect, useId, type RefObject } from "react";
 
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { LoadingState } from "../components/panel/LoadingState";
-import { ReconnectingIcon } from "../components/status/ReconnectingIcon";
 import { useT } from "../i18n/react";
-import { useFocusVisibleProps } from "../primitives";
+import { Spinner, useFocusVisibleProps } from "../primitives";
 
 /**
  * What covers a terminal that has nothing live to show, over the view's `--terminal-background`:
- * the disconnected state with its Reconnect (offered only when `canReconnect`), or an activity glyph and
+ * the disconnected state with its Reconnect (offered only when `canReconnect`), or a spinner and
  * a sentence, hidden from assistive technology (the caller speaks `text` from a `StatusAnnouncer`;
  * the disconnected one is not hidden, so that its button stays reachable).
  *
@@ -18,7 +17,7 @@ import { useFocusVisibleProps } from "../primitives";
  * is in the view (`rootRef`, on the terminal), it takes focus. Focus elsewhere in the window is
  * left alone: a background failure must not pull it.
  *
- * `pending` is the cover of a terminal whose process cannot be reached: a reconnecting arc, a title and a line
+ * `pending` is the cover of a terminal whose process cannot be reached: a spinner, a title and a line
  * saying what it means, with no button, since the daemon alone retries. Its element is a region that
  * can take focus (`tabIndex={-1}`) and draws its own ring, which the caller's `usePendingFocus` hands focus
  * to. It is named by what it is, `label` (the session's or terminal's name), not by the title it holds,
@@ -32,7 +31,7 @@ export function TerminalCover({
   rootRef,
   held,
   text,
-  state,
+  disconnected,
   canReconnect,
   onReconnect,
   pending,
@@ -42,7 +41,9 @@ export function TerminalCover({
   rootRef: RefObject<HTMLElement | null>;
   held: { onFocus: (event: React.FocusEvent) => void; onBlur: (event: React.FocusEvent) => void };
   text: string;
-  state: "loading" | "waiting" | "reconnecting" | "disconnected";
+  /** The connection is given up on: the cover shows the disconnected state (its Reconnect only when `canReconnect`)
+   * in place of the spinner. */
+  disconnected: boolean;
   canReconnect: boolean;
   onReconnect: () => void;
   pending?: { label: string; title: string; body: string };
@@ -79,21 +80,16 @@ export function TerminalCover({
     >
       {pending ? (
         <div className="flex max-w-sm flex-col items-center gap-3 px-6 text-center">
-          <ReconnectingIcon size="cover" />
+          <Spinner size="md" />
           <h2 id={titleId} className="text-base font-semibold text-foreground">{pending.title}</h2>
           <p id={bodyId}>{pending.body}</p>
         </div>
-      ) : state === "disconnected" ? (
+      ) : disconnected ? (
         // The reconnect its button starts moves focus to the terminal, and `held` covers the
         // button vanishing some other way.
         <EmptyPanel icon={Unplug} message={text} action={canReconnect ? { label: t("terminal.reconnect"), onPress: onReconnect } : undefined} />
-      ) : state === "reconnecting" ? (
-        <div aria-hidden="true" className="flex min-h-0 flex-1 flex-col items-center justify-center-safe gap-3">
-          <ReconnectingIcon size="cover" />
-          {text}
-        </div>
       ) : (
-        <LoadingState size="md" label={text} indicator={state === "waiting" ? "waiting" : "spinner"} />
+        <LoadingState size="md" label={text} />
       )}
     </div>
   );

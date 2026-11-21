@@ -58,4 +58,3 @@ export { ToggleButton, ToggleButtonGroup } from "./ToggleButton";
 export { Tooltip, useTooltipHover, TOOLTIP_OFFSET, TOOLTIP_PLACEMENT } from "./Tooltip";
 export { tooltipSurfaceClassName } from "./tooltipParts";
 export { scrollTreeAndRender, Tree, TreeCollection, TreeExpandButton, TreeHeader, TreeItem, TreeSection } from "./Tree";
-export { WaitingIcon } from "./WaitingIcon";

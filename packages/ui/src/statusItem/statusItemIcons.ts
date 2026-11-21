@@ -1,10 +1,8 @@
-import { DELEGATED_DOT_PX, DELEGATED_RING_PX } from "../components/status/delegatedGlyph";
 import { BUBBLE_SHIFT, HAND_SHIFT, shiftedTransform, type OpticalShift } from "../components/status/opticalCentring";
-import { SLEEP_PATHS } from "../components/status/sleepGlyph";
 import { resolveCssColour, type Appearance } from "../preferences/cssColour";
 import { providerColour, providerMark } from "../providers/registry";
 import type { StatusItemIcon, StatusItemMenu, StatusItemSubmenuDraftItem, StatusItemSubmenuItem } from "../platform";
-import type { ShownStatusKind } from "../sessions/sessionStatus";
+import { isSummaryStatus, type SummaryStatus } from "../sessions/sessionStatus";
 import type { StatusItemMenuDraft } from "./statusItemMenu";
 
 /** What the shell's menu shows beside a line: the mark of a session's agent, and a heading's status
@@ -19,9 +17,9 @@ import type { StatusItemMenuDraft } from "./statusItemMenu";
 const SIZE = 18;
 const SCALE = 2;
 
-/** lucide's `Hand`, `MessageCircleMore`, `CircleCheck`, `CirclePause`, `LoaderCircle` and `Pause`, and the
- * dormant "zz" (`SLEEP_PATHS`), the glyphs `StatusIcon` draws for the statuses that are not a dot.
- * `CircleCheck`, `CirclePause` and `Pause` have shapes that are not all paths, so they are given as markup. */
+/** lucide's `Hand`, `MessageCircleMore`, `CircleCheck` and `CirclePause`, the glyphs `StatusIcon` draws for the
+ * statuses the menu lists. `CircleCheck` and `CirclePause` have shapes that are not all paths, so they are given as
+ * markup. */
 const HAND = [
   "M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2",
   "M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2",
@@ -37,10 +35,6 @@ const BUBBLE = [
 
 const PAUSED = "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"10\" x2=\"10\" y1=\"15\" y2=\"9\"/><line x1=\"14\" x2=\"14\" y1=\"15\" y2=\"9\"/>";
 
-const ARC = ["M21 12a9 9 0 1 1-6.219-8.56"];
-
-const PAUSE = "<rect x=\"14\" y=\"3\" width=\"5\" height=\"18\" rx=\"1\"/><rect x=\"5\" y=\"3\" width=\"5\" height=\"18\" rx=\"1\"/>";
-
 const CHECK = "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m16 9-5.5 5.5L8 12\"/>";
 
 /** The glyph's strokes, moved by `shift` where the glyph is one whose ink is lopsided (the same shift `StatusIcon` gives it). */
@@ -50,55 +44,23 @@ function stroked(paths: string[] | string, colour: string, shift?: OpticalShift)
   return `<g${moved} fill="none" stroke="${colour}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</g>`;
 }
 
-/** The glyph's units per CSS pixel of the sidebar's glyphs: the working dot's 8px is drawn with r="5". */
-const MENU_UNITS_PER_PX = 1.25;
-
-/** The glyph colours are the ones the session list draws these statuses in (`StatusIcon`): HeroUI's soft
- * foreground of the status's colour, read from the stylesheet in the system's appearance rather than
- * written down here. Every status but unknown and archived has one; `undefined` also stands for a colour the
- * stylesheet cannot resolve. */
-export function statusGlyph(status: ShownStatusKind, appearance: Appearance): string | undefined {
+/** The glyph of a status the menu lists under a heading (`SUMMARY_STATUSES`). Its colours are the ones the session
+ * list draws these statuses in (`StatusIcon`): HeroUI's soft foreground of the status's colour, read from the
+ * stylesheet in the system's appearance rather than written down here; `undefined` stands for a colour the stylesheet
+ * cannot resolve. */
+export function statusGlyph(status: SummaryStatus, appearance: Appearance): string | undefined {
   const colour = (token: string) => resolveCssColour(`var(--${token}-soft-foreground)`, appearance);
-  const accent = colour("accent");
   const success = colour("success");
   const warning = colour("warning");
-  // `StatusIcon`'s `text-app-muted`, the ink of the arc and of interrupted's pause sign.
-  const muted = resolveCssColour("var(--app-muted)", appearance);
   switch (status) {
-    // The accent dot of `WorkingDot`, without the ping that cannot be drawn here.
-    case "working":
-      return accent && `<circle cx="12" cy="12" r="5" fill="${accent}"/>`;
-    // `WorkingDot`'s background ring: the dot's size, hollow, in idle's green.
-    case "background":
-      return success && `<circle cx="12" cy="12" r="3.75" fill="none" stroke="${success}" stroke-width="2.5"/>`;
-    // `WorkingDot`'s delegated glyph: a ring in idle's green around a dot, at the scale the working dot is
-    // drawn here (its 8px as 10 units), the ring's line thickened to 2 units to read at menu size.
-    case "delegated": {
-      const outer = (DELEGATED_RING_PX * MENU_UNITS_PER_PX) / 2;
-      const dot = (DELEGATED_DOT_PX * MENU_UNITS_PER_PX) / 2;
-      return success && `<circle cx="12" cy="12" r="${outer - 1}" fill="none" stroke="${success}" stroke-width="2"/><circle cx="12" cy="12" r="${dot}" fill="${success}"/>`;
-    }
     case "waiting_user":
       return warning && stroked(HAND, warning, HAND_SHIFT);
-    case "dormant":
-      return warning && stroked([...SLEEP_PATHS], warning);
     case "paused":
       return success && stroked(PAUSED, success);
     case "idle":
       return success && stroked(BUBBLE, success, BUBBLE_SHIFT);
     case "done":
       return success && stroked(CHECK, success);
-    // Still, as a menu cannot turn it: switching account and reconnecting show the same arc as starting.
-    case "starting":
-    case "switching":
-    case "reconnecting":
-      return muted && stroked(ARC, muted);
-    case "interrupted":
-      return muted && stroked(PAUSE, muted);
-    // Neither is listed under a heading: the menu lists the summary statuses only (`SUMMARY_STATUSES`).
-    case "unknown":
-    case "archived":
-      return undefined;
   }
 }
 
@@ -110,7 +72,7 @@ function glyphOf(key: string, appearance: Appearance): { svg: string; template: 
     const template = mark.fill === "currentColor";
     return { svg: `<path d="${mark.d}" fill="${template ? "#000" : mark.fill}" fill-rule="evenodd"/>`, template };
   }
-  const svg = kind === "status" ? statusGlyph(name as ShownStatusKind, appearance) : undefined;
+  const svg = kind === "status" && isSummaryStatus(name) ? statusGlyph(name, appearance) : undefined;
   return svg ? { svg, template: false } : undefined;
 }
 

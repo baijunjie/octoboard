@@ -106,14 +106,15 @@ it.each(["reconnecting", "closed"] as const)("defers an initial %s status in an 
   if (state === "closed") expect(hidden(strip.querySelector("button"))).toBe(null);
 });
 
-it("draws a compact arc in the banner foreground while reconnecting and an unplugged cord when closed", () => {
+it("draws a spinner in the banner's own text colour while reconnecting and an unplugged cord when closed", () => {
   const { container, render } = announcementBanner("reconnecting");
   const strip = container.querySelector('[data-region="banner"]')!;
-  const icon = strip.querySelector("svg.lucide-loader-circle")!;
-  expect(icon.getAttribute("aria-hidden")).toBe("true");
-  expect([...icon.classList]).toEqual(expect.arrayContaining(["size-3.5", "text-inherit", "motion-safe:animate-spin-slow"]));
+  const spinner = strip.querySelector("[data-slot=spinner]")!;
+  expect(spinner.getAttribute("aria-hidden")).toBe("true");
+  expect(spinner.classList.contains("size-3.5")).toBe(true);
+  expect(spinner.classList.contains("text-app-muted")).toBe(false);
   render("closed");
-  expect(strip.querySelector("svg.lucide-loader-circle")).toBeNull();
+  expect(strip.querySelector("[data-slot=spinner]")).toBeNull();
   expect(strip.querySelector("svg.lucide-unplug")).not.toBeNull();
 });
 

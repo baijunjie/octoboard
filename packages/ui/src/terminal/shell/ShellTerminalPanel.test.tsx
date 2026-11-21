@@ -187,7 +187,7 @@ it("shows a start in flight instead of the empty state, which would offer a seco
     started = startShellTerminal(panel.daemon, "p", { ifNone: true });
   });
   expect(panel.container.textContent).toContain("Starting terminal");
-  expect(panel.container.querySelector("svg.lucide-loader-circle.size-6")).not.toBeNull();
+  expect(panel.container.querySelector("[data-slot=spinner]")).not.toBeNull();
   expect(panel.container.textContent).not.toContain("No terminals");
   await act(async () => {
     release();

@@ -27,7 +27,7 @@ import { NESTED_ROW_CLASS, TreeRow } from "../components/rows/TreeRow";
 import { useListMotion } from "../components/motion/useListMotion";
 import { sessionRowModel } from "../sessions/sessionRowModel";
 import { ringForAutomaticFocus } from "../input/lastInput";
-import { Button, WaitingIcon } from "../primitives";
+import { Button, Spinner } from "../primitives";
 
 /** How many rows the list adds each time its end scrolls into view. */
 const PAGE = 30;
@@ -272,8 +272,10 @@ export function ArchiveView({
             ))}
             {more && (
               <li ref={sentinelRef} className="flex justify-center py-4">
-                <span role="status" aria-label={t("archive.loadingMore")}>
-                  <WaitingIcon className="text-accent" />
+                {/* Named where it stands, not a live region: more rows come from the reader's own scrolling, and a region
+                    that holds no text announces nothing. */}
+                <span role="img" aria-label={t("archive.loadingMore")}>
+                  <Spinner size="sm" />
                 </span>
               </li>
             )}

@@ -132,7 +132,7 @@ export const remoteDaemonsScenarios: Scenario[] = [
     category: "normal",
     title: "Remote devices page with saved remote daemons",
     description:
-      "The Remote devices page, a page of the main window like a console's sessions: the rail's button is drawn as the current item, a filled circle (a console button shows the current one the same way, behind its avatar), and the top bar's breadcrumb reads Remote devices, then the selected device. The sidebar lists the saved remote daemons as session-style rows: the Server glyph, the name and, where one is connected, a status glyph with a tooltip (a green chain link for Connected, a green browser window for Opened in browser, and a slowly turning amber arc for Reconnecting); the long-named relay is cut off at the row's end. The first, Staging, is selected, with its settings form in the content area: the header with its name, badge, address in monospace and Open (it is connected), the form in three cards, Connection (details, name, then user, host and SSH port on one row), Sign-in (this computer's key as its authentication) and Advanced (the path of octoboardd, the pinned host key with Clear), then Save and Revert, which stay disabled until something is changed, and a Remove card at the bottom. Choose a narrow width to see the sidebar become a drawer that the top bar's toggle opens.",
+      "The Remote devices page, a page of the main window like a console's sessions: the rail's button is drawn as the current item, a filled circle (a console button shows the current one the same way, behind its avatar), and the top bar's breadcrumb reads Remote devices, then the selected device. The sidebar lists the saved remote daemons as session-style rows: the Server glyph, the name and, where one is connected, a status glyph with a tooltip (a green chain link for Connected, a green browser window for Opened in browser, and a grey spinner for Reconnecting); the long-named relay is cut off at the row's end. The first, Staging, is selected, with its settings form in the content area: the header with its name, badge, address in monospace and Open (it is connected), the form in three cards, Connection (details, name, then user, host and SSH port on one row), Sign-in (this computer's key as its authentication) and Advanced (the path of octoboardd, the pinned host key with Clear), then Save and Revert, which stay disabled until something is changed, and a Remove card at the bottom. Choose a narrow width to see the sidebar become a drawer that the top bar's toggle opens.",
     state,
     desktopApp: true,
     remoteDaemons: { entries: SAVED, status: [...CONNECTED] },
@@ -434,7 +434,7 @@ export const remoteDaemonsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Reconnecting remote device",
-    description: "Build server is selected. Its page header pairs the amber arc with Reconnecting in the soft status badge. The sidebar row shows the same arc with a status tooltip. Both arcs hold still with reduced motion.",
+    description: "Build server is selected. Its page header pairs a spinner in the badge's text colour with Reconnecting in the soft status badge. The sidebar row shows a grey spinner with a status tooltip. Both spinners hold still with reduced motion.",
     state,
     desktopApp: true,
     remoteDaemons: { entries: SAVED, status: [...CONNECTED] },

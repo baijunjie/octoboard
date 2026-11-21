@@ -410,8 +410,8 @@ body {
 @import "./components/controls/CopyButton.css";
 
 @theme {
-  /* A spinning glyph showing work in progress (`ConnectionBanner.tsx`, `GitBadge.tsx`,
-     `ProjectBrowser.tsx`): the stock spin, slower. Defined as a whole animation because
+  /* A spinning glyph showing work in progress (`GitBadge.tsx`, `ProjectBrowser.tsx`,
+     `AccountMcpInventory.tsx`): the stock spin, slower. Defined as a whole animation because
      `animate-spin` is a shorthand that resets any duration set beside it. */
   --animate-spin-slow: spin 2s linear infinite;
   --animate-status-wave: status-wave 2.4s ease-in-out infinite;

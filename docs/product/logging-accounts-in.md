@@ -35,7 +35,7 @@ address to open by hand.
 ## The login dialog
 
 Log in opens a modal dialog titled "Log in" and starts the login at once. Its first line names the agent and the
-account ("Logging in to Codex account Work…"). Under it is a turning arc, alone while the login starts, then beside it
+account ("Logging in to Codex account Work…"). Under it is the grey spinner, alone while the login starts, then beside it
 that the dialog is waiting for the user to authorize in the browser — for Grok Build, the code to confirm instead. Its
 buttons are **Open the page again**, while the page's address is known, and **Cancel login**. While the login runs,
 where it is is announced to assistive technology as it changes. Its first announcement comes about 1.5 seconds after

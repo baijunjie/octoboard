@@ -9,14 +9,13 @@ import { PANE_HEADER_FRAME_CLASS } from "../components/panel/paneHeaderFrame";
 import { RowIconButton } from "../components/rows/RowIconButton";
 import { RowLabel, TreeRow } from "../components/rows/TreeRow";
 import { FadedScroller } from "../components/scroll/scrollFade";
-import { ReconnectingIcon } from "../components/status/ReconnectingIcon";
 import { StatusSlot } from "../components/status/statusGlyphs";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { RemoteDaemonEntry } from "../platform";
 import { CONNECTION_STATE_WORDS, connectionState, type ConnectionState } from "./connectionState";
 import { useRemoteDevices } from "./RemoteDevices";
-import { Tooltip } from "../primitives";
+import { Spinner, Tooltip } from "../primitives";
 
 /** The sidebar's content while the Remote devices page shows: a header with the page's title and Add remote daemon, and
  * below it the saved devices in the order they were saved, one row each: the server glyph, the name, where the device
@@ -118,7 +117,7 @@ function ConnectionStatusIcon({ state, label }: { state: ConnectionState; label:
     <Tooltip trigger="mark" content={label} className="inline-flex shrink-0" touchPopover={false}>
       <StatusSlot aria-hidden="true">
         {state === "reconnecting"
-          ? <ReconnectingIcon />
+          ? <Spinner size="sm" />
           : <ConnectedIcon className="size-4 text-[var(--tint-success-fg)]" />}
       </StatusSlot>
     </Tooltip>

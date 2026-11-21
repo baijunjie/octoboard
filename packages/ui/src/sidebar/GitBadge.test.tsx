@@ -65,7 +65,9 @@ function mountOver(status: GitStatus, view: React.ReactElement): HTMLElement {
 }
 
 /** The badge's trigger: the box around the state glyph that gives way when the row is squeezed. */
-const badgeOf = (container: HTMLElement, glyph: string): HTMLElement => container.querySelector(`svg.lucide-${glyph}`)!.closest<HTMLElement>(".grid")!;
+/** The selector of a state glyph: a pull or push in flight is the grey spinner, `"spinner"`, every other state a Lucide icon. */
+const glyphSelector = (glyph: string): string => (glyph === "spinner" ? "[data-slot=spinner]" : `svg.lucide-${glyph}`);
+const badgeOf = (container: HTMLElement, glyph: string): HTMLElement => container.querySelector(glyphSelector(glyph))!.closest<HTMLElement>(".grid")!;
 
 /** A failed check: the mark stands in for the idle glyph, so the badge's box is found by its branch. */
 const RAW = "fatal: unable to access 'https://example.com/repo.git/': Could not resolve host";
@@ -110,8 +112,8 @@ const BRANCH = isolate("main");
 // the text the badge's tooltip shows end to end, glyph and all.
 const ALL_STATES: Array<[string, Partial<GitStatus>, string, string]> = [
   ["checking", { activity: "checking" }, "refresh-cw", `Checking branch ${BRANCH}`],
-  ["pulling", { activity: "pulling", behind: 2 }, "loader-circle", `Pulling branch ${BRANCH}, 2 commits behind`],
-  ["pushing", { activity: "pushing", ahead: 3 }, "loader-circle", `Pushing branch ${BRANCH}, 3 commits ahead`],
+  ["pulling", { activity: "pulling", behind: 2 }, "spinner", `Pulling branch ${BRANCH}, 2 commits behind`],
+  ["pushing", { activity: "pushing", ahead: 3 }, "spinner", `Pushing branch ${BRANCH}, 3 commits ahead`],
   ["on a branch", {}, "git-branch", `Branch ${BRANCH}`],
   ["detached", { branch: "a1b2c3d", detached: true }, "git-commit-horizontal", `Detached at ${isolate("a1b2c3d")}`],
   ["ahead", { ahead: 1 }, "git-branch", `Branch ${BRANCH}, 1 commit ahead`],
@@ -156,7 +158,18 @@ function stubOverflow(): void {
 // counts alike.
 it.each(ALL_STATES)("says its whole state in one tooltip: %s", (_, extra, glyph, sentence) => {
   const badge = PLACEMENTS[0].mount(gitStatusOf(web.id, extra), glyph);
-  expect(hoverAndRead(badge.querySelector(`svg.lucide-${glyph}`)!)).toBe(sentence.replace(/[\u2068\u2069]/g, ""));
+  expect(hoverAndRead(badge.querySelector(glyphSelector(glyph))!)).toBe(sentence.replace(/[\u2068\u2069]/g, ""));
+});
+
+it.each([
+  ["pulling", { activity: "pulling" }],
+  ["pushing", { activity: "pushing" }],
+] as const)("draws a %s in flight as the grey 14px spinner, decorative", (_, extra) => {
+  const container = PLACEMENTS[0].render(gitStatusOf(web.id, extra));
+  const spinner = container.querySelector("[data-slot=spinner]")!;
+  expect(spinner.classList.contains("text-app-muted")).toBe(true);
+  expect(spinner.classList.contains("size-3.5")).toBe(true);
+  expect(spinner.closest("[aria-hidden=true]")).not.toBeNull();
 });
 
 for (const placement of PLACEMENTS) {

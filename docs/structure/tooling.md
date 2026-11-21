@@ -23,7 +23,7 @@ scripts, the checks, the dependencies and the single sources of configuration ar
   `scripts/eslint/` apply as follows: `lucide/lucide-aria-hidden` to `packages/ui/**/*.{ts,tsx}`; the class-name,
   `title` and modifier-key rules to `packages/ui/src/**/*.{ts,tsx}` minus tests, `test/`, `gallery/`, `fixtures/` and
   `website-preview/`. The same block bans `navigator.userAgent` / `platform` / `userAgentData` (also through `window`,
-  `globalThis` and `self`) and `React.lazy` with core `no-restricted-syntax`; the `@tauri-apps/*` and `lazy` import bans
+  `globalThis` and `self`), `React.lazy`, and the import of a `Loader*` glyph from `lucide-react` (a wait is the layer's `Spinner`) with core `no-restricted-syntax`; the `@tauri-apps/*` and `lazy` import bans
   are `@typescript-eslint/no-restricted-imports` blocks in `packages/ui/eslint.layers.mjs` over `packages/ui/src` minus
   tests and `test/` (`@tauri-apps/*` is allowed in `platform/`, and `gallery/`, `fixtures/` and `website-preview/` are
   outside the application-source blocks). `pnpm format` runs it with `--fix --fix-type layout` and `cargo fmt`.

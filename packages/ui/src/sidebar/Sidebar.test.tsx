@@ -293,8 +293,10 @@ it("names a row whose process cannot be reached Reconnecting, ranked by the stat
     `${isolate("Watch the build")} session, ${isolate(`${isolate("Claude Code")} (${isolate("Default")})`)}, Reconnecting, Default model`,
     `${isolate("Tidy the changelog")} session, ${isolate(`${isolate("Claude Code")} (${isolate("Default")})`)}, Interrupted, Default model`,
   ]);
-  const icon = rows[0].querySelector("svg.lucide-loader-circle")!;
-  expect([...icon.classList]).toEqual(expect.arrayContaining(["size-4", "text-[var(--tint-warning-fg)]", "motion-safe:animate-spin-slow"]));
+  const spinner = rows[0].querySelector("[data-slot=spinner]")!;
+  expect(spinner.classList.contains("text-app-muted")).toBe(true);
+  expect(spinner.closest("[aria-hidden=true]")).not.toBeNull();
+  expect(rows[0].innerHTML).not.toMatch(/animate-spin|tint-warning-fg/);
   act(() => root.unmount());
 });
 

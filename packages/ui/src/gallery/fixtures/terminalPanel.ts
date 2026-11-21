@@ -197,7 +197,7 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Terminal panel starting a shell",
     description:
-      "New terminal pressed on the empty panel while the daemon has not yet answered: a muted turning arc and \"Starting terminal…\" take the place of the empty state, which would offer a second start. The first row keeps the Terminal title and panel controls. The second row keeps New terminal fixed at the end while no tabs have appeared yet.",
+      "New terminal pressed on the empty panel while the daemon has not yet answered: a grey spinner and \"Starting terminal…\" take the place of the empty state, which would offer a second start. The first row keeps the Terminal title and panel controls. The second row keeps New terminal fixed at the end while no tabs have appeared yet.",
     state: stateOf([]),
     preferences: TERMINAL_ONLY,
     shellTerminalStart: "pending",
@@ -293,7 +293,7 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "exceptional",
     title: "Shell tab reconnecting",
     description:
-      "The shell is running but its terminal socket never connects: after the first failed attempt the tab is covered by the amber arc and \"Reconnecting the terminal…\", while the agent terminal beside it is unaffected. The tab strip stays usable.",
+      "The shell is running but its terminal socket never connects: after the first failed attempt the tab is covered by a grey spinner and \"Reconnecting the terminal…\", while the agent terminal beside it is unaffected. The tab strip stays usable.",
     state: stateOf(oneShell),
     preferences: TERMINAL_ONLY,
     shellTerminal: "refuse",
@@ -318,7 +318,7 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "exceptional",
     title: "Shell tab whose process cannot be reached",
     description:
-      "The shown git log shell is still running but the daemon cannot reach it: the tab's view is covered by the amber arc, \"Reconnecting to the terminal…\", and a line saying input is unavailable until the connection returns and that reconnection is automatic, with no button. The tab itself is unchanged, and so is the agent terminal beside it. Press zsh or pnpm dev: those shells are reached as usual and show their terminals; press git log again for the cover. \"The daemon reaches the process again\" clears the cover and the shell connects; \"The daemon loses the process again\" covers it once more over the output drawn by then. The pane is widened to 560px so all three tabs show whole.",
+      "The shown git log shell is still running but the daemon cannot reach it: the tab's view is covered by a grey spinner, \"Reconnecting to the terminal…\", and a line saying input is unavailable until the connection returns and that reconnection is automatic, with no button. The tab itself is unchanged, and so is the agent terminal beside it. Press zsh or pnpm dev: those shells are reached as usual and show their terminals; press git log again for the cover. \"The daemon reaches the process again\" clears the cover and the shell connects; \"The daemon loses the process again\" covers it once more over the output drawn by then. The pane is widened to 560px so all three tabs show whole.",
     state: stateOf(outOfReachShells),
     preferences: WIDE_TERMINAL,
     steps: [openWebsite, showTerminal],

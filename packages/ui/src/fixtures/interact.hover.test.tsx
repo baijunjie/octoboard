@@ -30,7 +30,7 @@ import { settleInAct } from "./clockTestSupport";
 import { fakeTimers } from "../test/clock";
 import { createUi, POLL_MS, TIMEOUT_MS, TOOLTIP_DELAY_MS, TOOLTIP_SHOW_MS } from "./interact";
 import { FIXTURE_PROVIDERS } from "./fixtureProviders";
-import { Button, Checkbox, Switch, Tooltip } from "../primitives";
+import { Button, Checkbox, partSelector, Switch, Tooltip } from "../primitives";
 
 /** The tooltip of a Claude Code session's agent mark, drawn by the app's own `SessionAgentTooltip`: the
  * agent's name, then the account the session runs under as a badge or, given `launch`, a list of the
@@ -648,8 +648,8 @@ it.each(["idle", "checking", "pulling", "pushing"] as const)("hoverGitBadge puts
   expect(targets.map((target) => target.tagName.toLowerCase())).toEqual(["svg", "span"]);
   expect(targets[1]!.textContent).toBe("main");
   expect(targets[1]!.getAttribute("dir")).toBe("ltr");
-  const glyph = { idle: "lucide-git-branch", checking: "lucide-refresh-cw", pulling: "lucide-loader-circle", pushing: "lucide-loader-circle" }[activity];
-  expect(targets[0]!.classList.contains(glyph)).toBe(true);
+  const glyph = { idle: "svg.lucide-git-branch", checking: "svg.lucide-refresh-cw", pulling: `${partSelector.spinner} > svg`, pushing: `${partSelector.spinner} > svg` }[activity];
+  expect(targets[0]!.matches(glyph)).toBe(true);
 });
 
 it.each(["checking", "pulling", "pushing"] as const)("hoverGitBadge takes the badge of the %s glyph the status draws", async (activity) => {

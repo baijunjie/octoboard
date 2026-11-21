@@ -740,5 +740,5 @@ it("puts a pending branch list's loading state inside its selector", () => {
   const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
   expect(trigger.textContent).toBe("Loading…");
   expect(trigger.disabled).toBe(true);
-  expect(trigger.querySelector("svg.lucide-loader-circle")).not.toBeNull();
+  expect(trigger.querySelector("[data-slot=spinner]")).not.toBeNull();
 });

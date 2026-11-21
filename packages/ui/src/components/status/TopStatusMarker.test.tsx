@@ -38,16 +38,22 @@ it.each(STATUS_TEXT)("says the %s status in words when the pointer rests on its 
   expect(vi.getTimerCount()).toBe(0);
 });
 
-it("draws every status its own glyph, with only starting and switching account sharing the same appearance", () => {
-  const glyphs = STATUS_TEXT.map(([status]) => trigger(mountForTooltip(<TopStatusMarker status={status} />)).firstElementChild!.outerHTML);
-  expect(new Set(glyphs).size).toBe(STATUS_TEXT.length - 1);
-  expect(glyphs[STATUS_TEXT.findIndex(([status]) => status === "starting")]).toBe(glyphs[STATUS_TEXT.findIndex(([status]) => status === "switching")]);
+const WAITING: ShownStatusKind[] = ["starting", "switching", "reconnecting"];
+
+it("draws every status its own glyph, with only the three waiting ones sharing the same appearance", () => {
+  // The spinner's gradient ids come from `useId`, so they differ per mount; they are not part of what is drawn.
+  const glyphs = STATUS_TEXT.map(([status]) => trigger(mountForTooltip(<TopStatusMarker status={status} />)).firstElementChild!.outerHTML.replace(/ id="[^"]*"|url\(#[^)]*\)/g, ""));
+  expect(new Set(glyphs).size).toBe(STATUS_TEXT.length - (WAITING.length - 1));
+  const waiting = WAITING.map((status) => glyphs[STATUS_TEXT.findIndex(([shown]) => shown === status)]);
+  expect(new Set(waiting).size).toBe(1);
 });
 
-it("draws the compact amber reconnecting arc", () => {
-  const container = mountForTooltip(<TopStatusMarker status="reconnecting" />);
-  const icon = container.querySelector("svg.lucide-loader-circle")!;
-  expect([...icon.classList]).toEqual(expect.arrayContaining(["size-3.5", "text-[var(--tint-warning-fg)]", "motion-safe:animate-spin-slow"]));
+it.each(WAITING)("draws %s as the compact grey spinner, nothing amber", (status) => {
+  const container = mountForTooltip(<TopStatusMarker status={status} />);
+  const spinner = container.querySelector("[data-slot=spinner]")!;
+  expect([...spinner.classList]).toEqual(expect.arrayContaining(["size-3.5", "text-app-muted"]));
+  expect(spinner.getAttribute("aria-hidden")).toBe("true");
+  expect(container.innerHTML).not.toMatch(/animate-spin|tint-warning-fg/);
 });
 
 it("adds nothing to the accessible name of the row or chip the marker sits in", () => {

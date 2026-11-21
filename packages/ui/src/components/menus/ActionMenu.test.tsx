@@ -243,6 +243,30 @@ it("closes only the failed submenu, then reloads when its trigger is opened agai
   expect(document.activeElement?.closest("[role=menu]")).not.toBeNull();
 });
 
+it("fills a lazily loaded submenu with a disabled Loading entry beside the grey spinner until the items arrive", async () => {
+  let resolve!: (result: { items: ActionMenuItem[] }) => void;
+  const load = vi.fn(() => new Promise<{ items: ActionMenuItem[] }>((done) => { resolve = done; }));
+  fakeTimers();
+  await openMenu([{ label: "Switch branch", icon: Trash2, items: [], loadItems: load }]);
+  const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+  await act(async () => {
+    item.focus();
+    item.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+  });
+  const menus = document.querySelectorAll<HTMLElement>("[role=menu]");
+  expect(menus).toHaveLength(2);
+  const loading = menus[1].querySelector<HTMLElement>("[role=menuitem]")!;
+  expect(loading.textContent).toBe("Loading…");
+  expect(loading.getAttribute("aria-disabled")).toBe("true");
+  const spinner = loading.querySelector("[data-slot=spinner]")!;
+  expect(spinner.getAttribute("aria-hidden")).toBe("true");
+  expect(spinner.classList.contains("text-app-muted")).toBe(true);
+  await act(async () => resolve({ items: [{ label: "feature", icon: Trash2, onClick: () => {} }] }));
+  expect(menus[1].querySelector("[data-slot=spinner]")).toBeNull();
+  expect(menus[1].textContent).toContain("feature");
+  expect(menus[1].textContent).not.toContain("Loading");
+});
+
 it("puts the missing-Git explanation and remedy in the trigger's hover tooltip", async () => {
   await tooltipsCooledDown();
   fakeTimers();

@@ -25,6 +25,46 @@ it("leaves a spinner without a label out of the accessibility tree, and names on
   expect(named.hasAttribute("aria-hidden")).toBe(false);
 });
 
+it("draws a spinner muted grey unless it takes the colour of the surface around it, and never in HeroUI's accent", () => {
+  const { container } = mount(
+    <>
+      <Spinner size="sm" />
+      <Spinner size="sm" label="Loading" />
+      <Spinner size="compact" color="current" />
+      <Spinner size="md" />
+    </>,
+  );
+  const [bare, named, onFill, big] = [...container.children];
+  expect(bare.classList.contains("text-app-muted")).toBe(true);
+  expect(named.classList.contains("text-app-muted")).toBe(true);
+  expect(onFill.classList.contains("text-app-muted")).toBe(false);
+  expect(big.classList.contains("text-app-muted")).toBe(true);
+  for (const spinner of [bare, named, onFill, big]) {
+    expect(spinner.classList.contains("spinner--current")).toBe(true);
+    expect(spinner.classList.contains("spinner--accent")).toBe(false);
+  }
+});
+
+it.each([
+  ["md", "spinner--md", undefined],
+  ["sm", "spinner--sm", undefined],
+  ["compact", "spinner--sm", "size-3.5"],
+  ["xs", "spinner--sm", "size-3"],
+] as const)("draws size %s as HeroUI's %s, narrowed to %s where it is smaller", (size, heroSize, narrowed) => {
+  const { container } = mount(<Spinner size={size} />);
+  const spinner = container.firstElementChild!;
+  expect(spinner.classList.contains(heroSize)).toBe(true);
+  expect(spinner.classList.contains(heroSize === "spinner--sm" ? "spinner--md" : "spinner--sm")).toBe(false);
+  for (const narrow of ["size-3.5", "size-3"]) expect(spinner.classList.contains(narrow)).toBe(narrow === narrowed);
+});
+
+it("keeps the narrowed size when the spinner takes the colour around it", () => {
+  const { container } = mount(<Spinner size="xs" color="current" />);
+  const spinner = container.firstElementChild!;
+  expect(spinner.classList.contains("size-3")).toBe(true);
+  expect(spinner.classList.contains("text-app-muted")).toBe(false);
+});
+
 it("hides decorative key caps from assistive technology and leaves the others readable", () => {
   const { container } = mount(
     <>

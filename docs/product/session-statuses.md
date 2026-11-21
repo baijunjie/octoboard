@@ -2,7 +2,7 @@
 
 | Status | Wire value | Glyph | Meaning |
 |---|---|---|---|
-| Starting | `starting` | a grey arc turning | A newly opened session — from the dialog, by an agent's `open_session`, or by an approved session request — whose agent is still being launched; it has no process yet. Once the process is up it becomes *working* for a session started with a brief, *done* for one opened on an existing conversation, and *awaiting instructions* otherwise; it is removed again if the launch fails (see "Starting the session" in `docs/product/opening-sessions.md`). |
+| Starting | `starting` | the grey spinner | A newly opened session — from the dialog, by an agent's `open_session`, or by an approved session request — whose agent is still being launched; it has no process yet. Once the process is up it becomes *working* for a session started with a brief, *done* for one opened on an existing conversation, and *awaiting instructions* otherwise; it is removed again if the launch fails (see "Starting the session" in `docs/product/opening-sessions.md`). |
 | Working | `working` | a solid blue (accent) dot pinging a fading copy of itself outward | The agent is executing a turn. |
 | Waiting for the user | `waiting_user` | an orange (warning) raised hand that waves now and then | The agent is waiting on a permission decision, including its folder-trust confirmation, or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
 | Dormant | `dormant` | an orange (warning) "zz", two Zs rising | The terminal of a running Claude Code session shows one of its views of its background agents, and the session is held there until the user leaves it. See "Dormant" below. |
@@ -11,8 +11,8 @@
 | Awaiting instructions | `idle`, with `has_conversation` false | a green speech bubble | The process is running and sitting at its prompt, and the session has never had a conversation: it waits for its first instruction. |
 | Child sessions working | `idle`, while a session under it is starting, working, waiting for the user, dormant or has work left running in the background | a hollow green ring with a filled green dot in its centre, pinging outward | The process is sitting at its prompt with nothing of its own left running, while work it delegated is in progress in the sessions under it. See "Done, awaiting instructions and child sessions working" below. |
 | Working in background | `idle`, with a non-empty `background_tasks` | a hollow green ring, pinging outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code and Grok Build sessions only; see "Working in background" below. |
-| Switching account | any status except `archived`, with `switching_account` true, or queued in this window's account switch | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). It appears in place of the session's stored status and shares the loading rank with *starting* (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). |
-| Reconnecting | `starting`, `working`, `waiting_user`, `dormant` or `idle`, with `holder_link` `pending` | an amber arc turning once every two seconds | The session's process still runs but Octoboard cannot reach it for now, and retries by itself (see "A holder that cannot be connected to" in `docs/product/process-holders.md`). Worked out by the client alone and shown in place of the session's own status and of *switching account*; the stored status, which may be out of date until the process is reached again, is unchanged, and lists ranked by status sort the session by it. |
+| Switching account | any status except `archived`, with `switching_account` true, or queued in this window's account switch | the *starting* spinner | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). It appears in place of the session's stored status and shares the loading rank with *starting* (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). |
+| Reconnecting | `starting`, `working`, `waiting_user`, `dormant` or `idle`, with `holder_link` `pending` | the *starting* spinner | The session's process still runs but Octoboard cannot reach it for now, and retries by itself (see "A holder that cannot be connected to" in `docs/product/process-holders.md`). Worked out by the client alone and shown in place of the session's own status and of *switching account*; the stored status, which may be out of date until the process is reached again, is unchanged, and lists ranked by status sort the session by it. |
 | Status unknown | any value the window does not know | a dashed empty circle in the muted grey | A status a daemon newer than the window gives the session. The session is still shown, and nothing is decided from its status. See "Status unknown" below. |
 | Interrupted | `interrupted` | a grey pause sign, with no circle | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" in `docs/product/archiving-and-resuming-sessions.md`) and can be reopened. |
@@ -63,23 +63,23 @@ session that needs the person: the hand of *waiting for the user*, waiting for a
 held in a view until the person leaves it. Green is the session at its prompt, where it can be talked to: the circled
 pause of *paused*, the check mark of *done*, the speech bubble of *awaiting instructions*, the ring with a centre dot of
 *child sessions working* and the hollow ring of *working in background*. Blue is the session itself busy: the solid dot
-of *working*. The muted grey is a session that cannot be talked to now: the bare pause of *interrupted*, and the turning
-arc that *starting* and *switching account* share. *Reconnecting* is a slowly turning amber arc. *Status unknown* is a
-dashed empty circle, a shape of its own, not the help tips' "?". *Archived* is an archive box. The ring of *child
+of *working*. The muted grey is a session that cannot be talked to now: the bare pause of *interrupted*, and the spinner
+that *starting*, *switching account* and *reconnecting* share, the same grey spinner every wait in the app shows. *Status
+unknown* is a dashed empty circle, a shape of its own, not the help tips' "?". *Archived* is an archive box. The ring of *child
 sessions working* is larger than the other dots, and its ping reaches less far, ending within the glyph's own slot.
 
 **Every glyph sits in a box of one size, whatever the status**: 16 px on rows, cards, the breadcrumb and a
 confirmation's list, 14 px in a status marker (see "The top status" below), so glyphs in a column share one centre line.
 The raised hand and the speech bubble, whose ink leans to one side, are moved slightly within the box so that they read
-centred; the turning arc turns about the box's centre.
+centred; the spinner turns about the box's centre.
 
 **Dormant's still "zz"** has a small Z at the bottom left and a larger Z at the top right. Where motion is allowed, a
 small Z enters at the bottom left and grows as it drifts towards the top right, where it leaves. Each Z takes about
 2.4 seconds to cross, with the next starting a third of a cycle behind. The glyph's box clips the letters at its edges.
 
-The waving hand, the pings, the turning arcs and the rising Zs stand still where the system asks for reduced motion.
-The glyphs distinguish most statuses by shape, and the dashed circle of *status unknown* differs from every other. The
-arc's label distinguishes *reconnecting*, *starting* and *switching account* when their shapes match.
+The waving hand, the pings, the spinner and the rising Zs stand still where the system asks for reduced motion.
+The glyphs distinguish most statuses by shape, and the dashed circle of *status unknown* differs from every other.
+*Reconnecting*, *starting* and *switching account* share one glyph, and only its label tells them apart.
 
 **How the status reaches a user who does not read the glyph** differs by placement:
 
@@ -482,8 +482,8 @@ mark uses the chosen session's own label. A session shown as *reconnecting* rank
 during an account switch, and is marked as *reconnecting* when chosen. Pins and the sort chosen in Settings have no
 effect on the choice (see "Choosing the sort" in `docs/product/order-of-projects-and-sessions.md`).
 
-Every status but *archived* has its own glyph there, as "Status glyphs" above describes, so the mark always says exactly
-which status it is; there is a mark whenever any of the sessions is not archived. The accessible name of the row or
+Every status but *archived* has a glyph there, as "Status glyphs" above describes, and the statuses that share one are
+told apart by its label, so the mark always says exactly which status it is; there is a mark whenever any of the sessions is not archived. The accessible name of the row or
 chip is its own name followed by that status ("Name, Working"; for a pinned project, "Name, pinned, Working"). Where
 each is drawn is in "Project rows" in `docs/product/sidebar-project-rows.md` and "The switch strip" in
 `docs/product/focus-mode.md`.
@@ -535,7 +535,7 @@ A *dormant* session raises none of this: it notifies nobody and is in neither co
 for it (see "Dormant" above).
 
 A session shown *reconnecting* is not shown waiting either, even when its stored status is *waiting for the user*: its
-row shows the turning arc, it is in neither the Dock badge nor the rail's count, pressing the rail's count never selects
+row shows the spinner, it is in neither the Dock badge nor the rail's count, pressing the rail's count never selects
 it, and the menu bar icon neither lists it nor lights its dot for it. Once its process is reached again it counts by its
 status as before. The system notification follows the stored status alone: it fires as that status enters *waiting for
 the user*, whatever is shown, and a session whose process is reached again does not notify again for a wait it already

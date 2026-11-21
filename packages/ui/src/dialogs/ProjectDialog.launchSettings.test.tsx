@@ -423,7 +423,7 @@ it.each([0, FIRST_WRITE_DELAY_MS])("offers the stored model alone and the reason
     const trigger = pickerNamed(setting) as HTMLButtonElement;
     expect(trigger.disabled).toBe(true);
     expect(trigger.getAttribute("aria-busy")).toBe("true");
-    expect(trigger.querySelector("svg.lucide-loader-circle")).not.toBeNull();
+    expect(trigger.querySelector("[data-slot=spinner]")).not.toBeNull();
     expect(trigger.closest("[data-slot=select]")!.querySelector("[data-slot=description]")).toBeNull();
   }
   expect(pickerNamed("Model").textContent).toBe("retired");

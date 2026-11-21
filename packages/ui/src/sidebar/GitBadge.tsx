@@ -17,7 +17,7 @@ import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../git/gitS
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { GitStatus } from "../protocol";
 import { useDaemon } from "../store";
-import { Button, Tooltip, WaitingIcon } from "../primitives";
+import { Button, Spinner, Tooltip } from "../primitives";
 import type { GitRetried } from "./useGitRetryAnnouncement";
 
 function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React.ReactElement {
@@ -78,7 +78,7 @@ function GitNotFoundMark({ project, error, onRetried }: { project: string; error
  *
  * The glyph differs by `activity` and against the idle glyph, since motion alone is never the only
  * cue for a state: idle is a branch glyph (a commit glyph instead for a detached `HEAD`, so that is
- * told apart without reading the accessible name), a spinning `RefreshCw` while checking, and a turning arc while a pull
+ * told apart without reading the accessible name), a spinning `RefreshCw` while checking, and the spinner while a pull
  * or push runs. The ahead count's arrow scrolls upward during a push, and the behind count's arrow scrolls downward
  * during a fast-forward. Both scroll inside a fixed count-arrow-sized clip.
  * The ahead/behind counts are likewise never colour alone.
@@ -160,7 +160,7 @@ export function GitBadge({
       {Glyph === undefined ? (
         status.activity === "checking"
           ? <RefreshCw className="size-3.5 shrink-0 motion-safe:animate-spin-slow" />
-          : <WaitingIcon size="compact" />
+          : <Spinner size="compact" />
       ) : (
         Glyph && <Glyph className="size-3.5 shrink-0" />
       )}

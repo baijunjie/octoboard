@@ -15,7 +15,7 @@ import Screenshot from "../../../../components/Screenshot.astro";
 
 - <strong>状态看得见，需要你时会叫你，随时能进去处理。</strong>每个会话的状态显示在你本来就会看的地方，在等你的会话容易找到，并会通知你一次；你打开的会话就是实时的智能体，介入就是直接输入。
 - <strong>状态来自智能体自己，不是猜的。</strong>{productName} 在每次启动时给智能体加上钩子，于是 Claude Code、Codex 和 Grok Build 会报告一轮工作何时开始、何时请求权限、何时停下。有些情形智能体什么也不报告，{productName} 就读它的终端，比如 Codex 需要你时显示的标题。
-- <strong>颜色表示会话对你有什么要求。</strong>橙色表示它需要你（<strong>等你回应</strong>、<strong>已休眠</strong>）；绿色表示它停在提示符处，可以和它对话（<strong>已暂停</strong>、<strong>已完成</strong>、<strong>等待指示</strong>、<strong>子会话工作中</strong>、<strong>后台工作中</strong>）；蓝色表示它正忙（<strong>工作中</strong>）；灰色表示现在无法和它对话（<strong>启动中</strong>、<strong>账户切换中</strong>、<strong>已中断</strong>）。<strong>正在重连</strong>是缓缓转动的琥珀色弧线，<strong>状态未知</strong>是虚线空心圆，表示一个本窗口不认识的状态。
+- <strong>颜色表示会话对你有什么要求。</strong>橙色表示它需要你（<strong>等你回应</strong>、<strong>已休眠</strong>）；绿色表示它停在提示符处，可以和它对话（<strong>已暂停</strong>、<strong>已完成</strong>、<strong>等待指示</strong>、<strong>子会话工作中</strong>、<strong>后台工作中</strong>）；蓝色表示它正忙（<strong>工作中</strong>）；灰色表示现在无法和它对话（<strong>启动中</strong>、<strong>账户切换中</strong>、<strong>正在重连</strong>、<strong>已中断</strong>）。<strong>状态未知</strong>是虚线空心圆，表示一个本窗口不认识的状态。
 - <strong>等待中的会话不只是被标出来，还容易找到。</strong>它那一行会显示一只举起的手；它所在的项目折叠起来时也会显示，它所属控制台在左侧栏上的头像也会显示。会话开始等待时，{productName} 还会弹出一次系统通知。
 - <strong>介入就是输入。</strong>会话的终端是实时的：按键直接发给智能体，和普通终端一样。你在提问的地方回答权限提示或问题，也可以通过给运行中的会话发一条消息来调整它的要求，无论这个会话是你启动的还是控制台会话启动的。
 - <strong>中断一轮工作用的是智能体自己的按键。</strong>窗口里没有停止按钮；在终端里按智能体的中断键即可。会话保留它的进程和对话，状态变为<strong>已暂停</strong>，等你的下一条消息。控制台会话，或启动过其他会话的会话，也能用同样的方式中断它名下的会话。这和<strong>已中断</strong>不同：<strong>已中断</strong>表示会话的进程已经结束，选中这样的会话那一行就会恢复它。

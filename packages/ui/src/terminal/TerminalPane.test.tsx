@@ -179,10 +179,10 @@ it("keeps the cover up past the loading limit while the connection is failing", 
   expect(status(container)).toBe("Reconnecting the terminal…");
   act(() => void vi.advanceTimersByTime(LOADING_LIMIT_MS + 1));
   expect(status(container)).toBe("Reconnecting the terminal…");
-  const icon = container.querySelector("svg.lucide-loader-circle")!;
-  expect(icon.closest('[aria-hidden="true"]')).not.toBeNull();
-  expect([...icon.classList]).toEqual(expect.arrayContaining(["size-6", "text-[var(--tint-warning-fg)]", "motion-safe:animate-spin-slow"]));
-  expect(container.querySelector("[data-slot=spinner]")).toBeNull();
+  // A wait on the terminal is the grey spinner.
+  const spinner = container.querySelector("[data-slot=spinner]")!;
+  expect(spinner.closest('[aria-hidden="true"]')).not.toBeNull();
+  expect(spinner.classList.contains("text-app-muted")).toBe(true);
 });
 
 it("still lets a silent, connected terminal go bare after the loading limit", () => {
@@ -511,8 +511,7 @@ it("covers the terminal with the switching state, inert and ahead of a failing c
   speak();
   expect(status(container)).toBe("Switching account");
   expect(terminal().hasAttribute("inert")).toBe(true);
-  expect(container.querySelector("svg.lucide-loader-circle.size-6")).not.toBeNull();
-  expect(container.querySelector("[data-slot=spinner]")).toBeNull();
+  expect(container.querySelector("[data-slot=spinner]")).not.toBeNull();
   FakeController.last.settle("closed");
   expect(status(container)).toBe("Switching account");
   render(root, session);
@@ -542,8 +541,7 @@ it("covers a starting session with its own message and attaches only once it is 
   expect(controller.attaches).toBe(0);
   speak();
   expect(status(container)).toBe("Starting session…");
-  expect(container.querySelector("svg.lucide-loader-circle.size-6")).not.toBeNull();
-  expect(container.querySelector("[data-slot=spinner]")).toBeNull();
+  expect(container.querySelector("[data-slot=spinner]")).not.toBeNull();
   // No process to connect to, so no error cover, no Reconnect and no unavailable message.
   act(() => void vi.advanceTimersByTime(LOADING_LIMIT_MS + 1));
   expect(status(container)).toBe("Starting session…");
@@ -679,7 +677,7 @@ it("covers the history with the loading state while a reopen is under way", asyn
   expect(container.querySelector("[inert] section")).not.toBeNull();
   const statuses = [...container.querySelectorAll("[role=status]")].map((node) => node.textContent);
   expect(statuses).toContain("Resuming session…");
-  expect(container.querySelector("svg.lucide-loader-circle.size-6")).not.toBeNull();
+  expect(container.querySelector("[data-slot=spinner]")).not.toBeNull();
 });
 
 it("moves focus held inside the pane to the history when the session on screen becomes archived", async () => {
@@ -1301,9 +1299,9 @@ describe("a session whose process the daemon cannot reach", () => {
     expect(cover.getAttribute("aria-describedby")!.split(" ").map((id) => document.getElementById(id)!.textContent)).toEqual([TITLE, BODY]);
     expect(cover.querySelector("h2")!.textContent).toBe(TITLE);
     expect(terminal(container).hasAttribute("inert")).toBe(true);
-    const icon = cover.querySelector("svg.lucide-loader-circle.size-6")!;
-    expect(icon.getAttribute("aria-hidden")).toBe("true");
-    expect(cover.querySelector("[data-slot=spinner]")).toBeNull();
+    const spinner = cover.querySelector("[data-slot=spinner]")!;
+    expect(spinner.getAttribute("aria-hidden")).toBe("true");
+    expect(spinner.classList.contains("text-app-muted")).toBe(true);
     expect(buttons(container)).toEqual([]);
     expect(container.textContent).not.toContain("Not running");
     act(() => void vi.advanceTimersByTime(PAST_ANY_RETRY_MS));

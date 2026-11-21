@@ -134,7 +134,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Folder listing in progress",
-    description: "The expanded src folder shows a turning arc in its loading row while its listing is pending.",
+    description: "The expanded src folder shows a spinner in its loading row while its listing is pending.",
     state,
     filesByProject: { [web.id]: { ...SAMPLE_FILES, src: { dir: true, pending: true } } },
     steps: [...openFiles, (ui) => ui.press("src")],

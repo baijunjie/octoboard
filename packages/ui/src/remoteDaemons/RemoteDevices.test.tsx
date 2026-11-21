@@ -639,10 +639,10 @@ it("lists the saved devices in the order saved, each with its state where it is 
 });
 
 it.each([
-  ["connected", "window", "Connected", "lucide-link", "text-[var(--tint-success-fg)]"],
-  ["connected", "browser", "Opened in browser", "lucide-app-window", "text-[var(--tint-success-fg)]"],
-  ["reconnecting", "window", "Reconnecting", "lucide-loader-circle", "text-[var(--tint-warning-fg)]"],
-] as const)("shows the %s connection via %s as a glyph with a tooltip and names it on the row", async (state, via, label, glyph, color) => {
+  ["connected", "window", "Connected", "lucide-link"],
+  ["connected", "browser", "Opened in browser", "lucide-app-window"],
+  ["reconnecting", "window", "Reconnecting", undefined],
+] as const)("shows the %s connection via %s as a glyph with a tooltip and names it on the row", async (state, via, label, glyph) => {
   list.mockResolvedValue([KEYED, STAGING]);
   status.mockResolvedValue([{ id: "staging", state, via }]);
   const container = await mount();
@@ -653,16 +653,29 @@ it.each([
 
   const trigger = row.querySelector("[role=presentation]")!;
   expect((trigger as HTMLElement).tabIndex).toBe(-1);
-  const icon = trigger.querySelector(`svg.${glyph}`)!;
-  expect(icon.closest('[aria-hidden="true"]')).not.toBeNull();
-  expect(icon.classList.contains(color)).toBe(true);
-  expect(icon.classList.contains("size-4")).toBe(true);
-  expect(icon.classList.contains("motion-safe:animate-spin-slow")).toBe(state === "reconnecting");
+  if (glyph !== undefined) {
+    const icon = trigger.querySelector(`svg.${glyph}`)!;
+    expect(icon.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(icon.classList.contains("text-[var(--tint-success-fg)]")).toBe(true);
+    expect(icon.classList.contains("size-4")).toBe(true);
+    expect(trigger.querySelector("[data-slot=spinner]")).toBeNull();
+  }
 
   fakeTimers({ beforeDrain: closeOpenTooltip });
   enter(trigger);
   runOutTimers();
   expect(openTooltip()?.textContent).toBe(label);
+});
+
+it("draws a reconnecting device's row with the grey spinner, nothing amber", async () => {
+  list.mockResolvedValue([KEYED, STAGING]);
+  status.mockResolvedValue([{ id: "staging", state: "reconnecting", via: "window" }]);
+  const container = await mount();
+  const trigger = rowNamed(container, "Staging").querySelector("[role=presentation]")!;
+  const spinner = trigger.querySelector("[data-slot=spinner]")!;
+  expect(spinner.closest('[aria-hidden="true"]')).not.toBeNull();
+  expect(spinner.classList.contains("text-app-muted")).toBe(true);
+  expect(trigger.innerHTML).not.toContain("tint-warning-fg");
 });
 
 it("marks the selected device's row, and a press on another row shows that device in its place", async () => {
@@ -682,7 +695,7 @@ it("names where the shown device connects to and how it is connected in its head
   const header = container.querySelector("header")!;
   expect(header.querySelector("h1")!.textContent).toBe("Staging");
   expect(header.textContent).toContain("Connected");
-  expect(header.querySelector("svg.lucide-loader-circle")).toBeNull();
+  expect(header.querySelector("[data-slot=spinner]")).toBeNull();
   expect(header.textContent).toContain("deploy@staging.example.com:22");
   // A device that is not held has no state to name.
   list.mockResolvedValue([KEYED]);
@@ -691,14 +704,15 @@ it("names where the shown device connects to and how it is connected in its head
   expect(idle.querySelector("header")!.textContent).not.toContain("Connected");
 });
 
-it("keeps the reconnecting label in a warning badge beside the compact arc", async () => {
+it("keeps the reconnecting label in a warning badge beside a spinner that takes the badge's own text colour", async () => {
   status.mockResolvedValue([{ id: "staging", state: "reconnecting", via: "window" }]);
   const container = await mount();
   const badge = container.querySelector('header [data-color="warning"][data-variant="soft"]')!;
   expect(badge.textContent).toBe("Reconnecting");
-  const icon = badge.querySelector("svg.lucide-loader-circle")!;
-  expect(icon.getAttribute("aria-hidden")).toBe("true");
-  expect([...icon.classList]).toEqual(expect.arrayContaining(["size-3.5", "text-[var(--tint-warning-fg)]", "motion-safe:animate-spin-slow"]));
+  const spinner = badge.querySelector("[data-slot=spinner]")!;
+  expect(spinner.getAttribute("aria-hidden")).toBe("true");
+  expect(spinner.classList.contains("size-3.5")).toBe(true);
+  expect(spinner.classList.contains("text-app-muted")).toBe(false);
 });
 
 it("connects one device at a time: the shown device's Connect is unavailable while another connects, and pending on the one that does", async () => {

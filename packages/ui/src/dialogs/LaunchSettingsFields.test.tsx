@@ -488,7 +488,7 @@ it("shows loading inside all four console launch selectors without a note below 
     expect(trigger.textContent).toBe("Loading…");
     expect(trigger.disabled).toBe(true);
     expect(trigger.getAttribute("aria-busy")).toBe("true");
-    expect(trigger.querySelector("svg.lucide-loader-circle")).not.toBeNull();
+    expect(trigger.querySelector("[data-slot=spinner]")).not.toBeNull();
   }
   for (const field of container.querySelectorAll("[data-slot=select]")) expect(field.querySelector("[data-slot=description]")).toBeNull();
 });

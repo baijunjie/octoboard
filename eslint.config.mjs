@@ -123,6 +123,10 @@ export default defineConfig(
           message: "Behaviour or words that depend on the operating system read the host: `usePlatform()` / `useHost()` for the client's, `useHostPaths()` for the daemon machine's (docs/conventions/ui-code.md, \"Behaviour or words that depend on the operating system read the host, never `navigator`\").",
         },
         { selector: "MemberExpression[computed=false][object.name='React'][property.name='lazy']", message: LAZY_MESSAGE },
+        {
+          selector: "ImportDeclaration[source.value='lucide-react'] > ImportSpecifier[imported.name=/^Loader/]",
+          message: "A wait is drawn with the layer's `Spinner`, never a lucide loader glyph (docs/conventions/ui-standard.md, \"Icon vocabulary\").",
+        },
       ],
     },
   },

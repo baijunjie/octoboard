@@ -205,7 +205,7 @@ export function ShellTerminalView({
           rootRef={rootRef}
           held={held}
           text={troubleText}
-          state={trouble ?? "loading"}
+          disconnected={trouble === "disconnected"}
           canReconnect={canReconnect}
           onReconnect={reconnectNow}
           pending={pendingCover}

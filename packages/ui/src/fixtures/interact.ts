@@ -600,14 +600,15 @@ export interface Ui {
  * the archive view, which session is selected) rather than in the store. */
 export type Step = (ui: Ui) => Promise<void>;
 
-/** The icon the badge's tooltip trigger draws for `status`, by the name lucide gives its class (`GitBadge.tsx`
- * chooses it: a check, pull or push in flight, a detached `HEAD`, else a branch). A failed check that is idle draws
- * none there: the failure mark (`openGitFailure`) stands in for it outside the trigger. */
+/** A selector for the icon the badge's tooltip trigger draws for `status` (`GitBadge.tsx` chooses it: a check, a pull
+ * or push in flight, a detached `HEAD`, else a branch): the lucide icon by the name it gives its class, or the layer's
+ * spinner's drawing for a transfer. A failed check that is idle draws none there: the failure mark
+ * (`openGitFailure`) stands in for it outside the trigger. */
 function gitGlyphOf(status: GitStatus): string | undefined {
-  if (status.activity === "checking") return "refresh-cw";
-  if (status.activity !== "idle") return "loader-circle";
+  if (status.activity === "checking") return "svg.lucide-refresh-cw";
+  if (status.activity !== "idle") return `${partSelector.spinner} > svg`;
   if (gitFailureShown(status)) return undefined;
-  return status.detached ? "git-commit-horizontal" : "git-branch";
+  return status.detached ? "svg.lucide-git-commit-horizontal" : "svg.lucide-git-branch";
 }
 
 /** What react-aria marks `data-exiting` while it plays an element's exit transition, and removes the
@@ -1517,7 +1518,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
       const glyph = gitGlyphOf(status);
       if (over === "glyph" && !glyph) throw new Error("The git badge has no glyph to hover: its failure mark stands in for it, outside the tooltip (openGitFailure)");
       // The branch line, or the counts, are the badge's own LTR parts; the status marker beside it has none.
-      const own = (element: HTMLElement) => (glyph ? element.querySelector(`svg.lucide-${glyph}`) : element.querySelector("[dir=ltr]")) !== null;
+      const own = (element: HTMLElement) => (glyph ? element.querySelector(glyph) : element.querySelector("[dir=ltr]")) !== null;
       await hover(
         () => {
           let trigger: HTMLElement | undefined;
@@ -1544,7 +1545,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
           }
           if (!trigger || !own(trigger)) return undefined;
           // The branch has its own LTR line; upstream counts stay outside its fade and marquee.
-          const part = over === "glyph" ? trigger.querySelector(`svg.lucide-${glyph}`) : trigger.querySelector("[dir=ltr]");
+          const part = over === "glyph" ? trigger.querySelector(glyph!) : trigger.querySelector("[dir=ltr]");
           // Found, so waiting would not change it: the badge has no line, only its glyph.
           if (!part) throw new Error(`The git badge has no ${over} to hover`);
           return part as HTMLElement;

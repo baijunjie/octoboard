@@ -124,7 +124,7 @@ export const connectionScenarios: Scenario[] = [
     group: STARTUP_AND_CONNECTION,
     category: "exceptional",
     title: "Reconnecting",
-    description: "The connection banner along the bottom over the last known state shows a turning arc in the banner foreground, with no Try again while the automatic attempts last. A remote daemon's window offers Try again here too: see `remote-window-reconnecting`.",
+    description: "The connection banner along the bottom over the last known state shows a spinner in the banner's text colour, with no Try again while the automatic attempts last. A remote daemon's window offers Try again here too: see `remote-window-reconnecting`.",
     state: connected("reconnecting"),
     steps: [pickSession],
   },
@@ -419,7 +419,7 @@ export const connectionScenarios: Scenario[] = [
     group: TERMINAL,
     category: "normal",
     title: "Terminal of a session still starting",
-    description: "The selected session's agent is still being launched: the terminal is covered by a muted turning arc and \"Starting session…\", with no Reconnect button. Its sidebar row shows the muted turning arc.",
+    description: "The selected session's agent is still being launched: the terminal is covered by a grey spinner and \"Starting session…\", with no Reconnect button. Its sidebar row shows the grey spinner.",
     state: snapshotState({ consoles: [console_], projects: [project], sessions: [...sessions, starting] }),
     steps: [pickSessionTitled(starting.title)],
   },
@@ -428,7 +428,7 @@ export const connectionScenarios: Scenario[] = [
     group: TERMINAL,
     category: "normal",
     title: "Terminal of a session switching its account",
-    description: "The selected session's account switch is running, as the daemon reports it: its process is down meanwhile, so the session reads interrupted, yet the terminal is covered by a muted turning arc and \"Switching account\" and takes no input, with no \"Not running\" bar or Resume offered. In the sidebar row and the title bar's breadcrumb the interrupted pause sign gives way to the muted turning arc, whose tooltip reads \"Switching account\"; Hub, in the same batch, shows it too.",
+    description: "The selected session's account switch is running, as the daemon reports it: its process is down meanwhile, so the session reads interrupted, yet the terminal is covered by a grey spinner and \"Switching account\" and takes no input, with no \"Not running\" bar or Resume offered. In the sidebar row and the title bar's breadcrumb the interrupted pause sign gives way to the grey spinner, whose tooltip reads \"Switching account\"; Hub, in the same batch, shows it too.",
     state: switchingAccount(
       snapshotState({
         consoles: [console_],
@@ -495,7 +495,7 @@ export const connectionScenarios: Scenario[] = [
     group: TERMINAL,
     category: "exceptional",
     title: "Terminal reconnecting",
-    description: "The session is live but its terminal socket never connects: after the first failed attempt the terminal stays covered by the amber arc and \"Reconnecting the terminal…\".",
+    description: "The session is live but its terminal socket never connects: after the first failed attempt the terminal stays covered by a grey spinner and \"Reconnecting the terminal…\".",
     terminal: "refuse",
     state: connected("open"),
     steps: [pickSession, (ui) => ui.wait(1500)],
@@ -517,7 +517,7 @@ export const connectionScenarios: Scenario[] = [
     category: "exceptional",
     title: "Session whose process cannot be reached",
     description:
-      "The selected session's process is still running but the daemon cannot reach it, so its terminal is covered by an amber arc, \"Reconnecting to the session…\", and a line saying input is unavailable until the connection returns and that reconnection is automatic; there is no button and no way to type. In the top bar's breadcrumb and in the sidebar rows, the status glyph is the amber turning arc, named Reconnecting in its tooltip, in place of the stored status (Working here, Waiting for you on the other pending row, which is not selected); with reduced motion the arc holds still. \"The daemon reaches the process again\" among the \"Live changes\" buttons clears the cover: the terminal connects and draws, and the glyph returns to the stored status, with focus not pulled from where it was. \"The daemon loses the process again\" covers it once more, now over the output already drawn, which is no longer shown as live.",
+      "The selected session's process is still running but the daemon cannot reach it, so its terminal is covered by a grey spinner, \"Reconnecting to the session…\", and a line saying input is unavailable until the connection returns and that reconnection is automatic; there is no button and no way to type. In the top bar's breadcrumb and in the sidebar rows, the status glyph is the grey spinner, named Reconnecting in its tooltip, in place of the stored status (Working here, Waiting for you on the other pending row, which is not selected); with reduced motion the spinner holds still. \"The daemon reaches the process again\" among the \"Live changes\" buttons clears the cover: the terminal connects and draws, and the glyph returns to the stored status, with focus not pulled from where it was. \"The daemon loses the process again\" covers it once more, now over the output already drawn, which is no longer shown as live.",
     state: snapshotState({ consoles: [console_], projects: [project], sessions: [...sessions, pending, pendingWaiting] }),
     steps: [pickSessionTitled(pending.title)],
     liveChanges: holderLinkChanges(pending.id),
@@ -528,7 +528,7 @@ export const connectionScenarios: Scenario[] = [
     category: "exceptional",
     title: "Session out of reach whose display was also recovered",
     description:
-      "Both flags are on the selected session: the note mark of a rebuilt display sits in the top bar right after the session's title, as in the recovered-display scenario, and the status glyph after it is the turning arc of Reconnecting. The two say different things and stay side by side; the terminal has the one cover. \"The daemon reaches the process again\" clears the cover and the arc while the note stays, and \"The daemon loses the process again\" brings them back.",
+      "Both flags are on the selected session: the note mark of a rebuilt display sits in the top bar right after the session's title, as in the recovered-display scenario, and the status glyph after it is the grey spinner of Reconnecting. The two say different things and stay side by side; the terminal has the one cover. \"The daemon reaches the process again\" clears the cover and the spinner while the note stays, and \"The daemon loses the process again\" brings them back.",
     state: snapshotState({ consoles: [console_], projects: [project], sessions: [...sessions, pendingRecovered] }),
     steps: [pickSessionTitled(pendingRecovered.title)],
     liveChanges: holderLinkChanges(pendingRecovered.id),

@@ -91,14 +91,13 @@ recipe for a role that has a token, or overrides a HeroUI component's semantic c
 | Meaning | Glyph |
 | --- | --- |
 | A refresh that re-fetches data (Git status, Files, MCP inventory), and reloading the page | Lucide `RefreshCw`, rotating `motion-safe:animate-spin-slow` |
-| A wait for a state to complete (starting or switching a session, signing in, loading menu items) | Lucide `LoaderCircle`, rotating, muted |
-| Reconnecting | The shared `ReconnectingIcon`, full opacity, the warning tint or the banner's foreground |
-| The operation begun from this button is still running | The `pending` button's HeroUI spinner |
+| Every wait other than a refresh (a session starting, switching account or reconnecting, a pane or list loading, a terminal's cover, signing in, loading menu items or a select's options, a device or the daemon reconnecting, the operation a `pending` button began) | The layer's HeroUI `Spinner`, muted grey; on a surface with a fill of its own (a button, a tinted badge, a status strip) it takes that surface's text colour (`color="current"`) |
 | A menu entry that opens a settings dialog | Lucide `Settings2` (the gear `Settings` is only the rail's Settings button) |
 | Restart to apply an installed update | Lucide `Power` |
 
 Activity glyphs are 14px in compact markers, the device badge and the connection banner, 16px in regular status slots
-and 24px in terminal covers, and every rotating glyph holds still with reduced motion.
+and beside a line of text, and 24px in a state that takes a whole pane, and every rotating glyph holds still with
+reduced motion.
 
 ## Controls
 
@@ -135,7 +134,7 @@ and 24px in terminal covers, and every rotating glyph holds still with reduced m
 - **A date or a time is entered in the application's segmented fields** (`TimeField`, `DatePicker`), never the
   browser's native picker, whose look differs by platform.
 - **Every select is an `OptionSelect`**, which owns the option layout; a caller never sets an option's height or
-  padding. A select whose options load shows it inside the control (the waiting arc for the chevron, `aria-busy`, a
+  padding. A select whose options load shows it inside the control (the spinner for the chevron, `aria-busy`, a
   chosen value kept), never as a line below.
 - **A field's clear action is `FieldClearButton`**, beside a select's trigger, never inside it.
 - **A disclosure folding away something rarely needed uses `QuietDisclosureTrigger` and `FlushDisclosureContent`**,

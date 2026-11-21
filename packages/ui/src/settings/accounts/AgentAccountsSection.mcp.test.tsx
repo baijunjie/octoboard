@@ -935,7 +935,12 @@ it("shows the wait for the browser in the row's Details and Cancel beside Sign i
   press(buttonNamed(dialog, `Sign in to ${isolate("jira")}`)!);
   const { cells } = rowOf(tableOf(dialog, "Local MCP servers"), "jira");
   expect(cells[3].textContent).toContain("Waiting for the sign-in in your browser…");
-  expect(cells[3].querySelector('svg.lucide-loader-circle[aria-hidden="true"]')).not.toBeNull();
+  const spinner = cells[3].querySelector('[data-slot=spinner][aria-hidden="true"]')!;
+  expect(spinner).not.toBeNull();
+  // The spinner stands beside the first line of the text when it wraps, not centred on the whole block: a one-line-high box in a top-aligned row.
+  expect(spinner.parentElement!.classList.contains("h-[1lh]")).toBe(true);
+  expect(spinner.parentElement!.parentElement!.classList.contains("items-start")).toBe(true);
+  expect(spinner.parentElement!.parentElement!.textContent).toContain("Waiting for the sign-in in your browser…");
   expect([...cells[4].querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Cancel", "Sign in"]);
 });
 

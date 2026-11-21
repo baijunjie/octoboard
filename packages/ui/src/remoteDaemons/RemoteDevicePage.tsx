@@ -6,12 +6,11 @@ import { MODAL_OPEN } from "../components/focus/selectors";
 import { ContentMain } from "../components/panel/ContentMain";
 import { CenteredEmptyPanel } from "../components/panel/EmptyPanel";
 import { FadedScroller, useFadeRegion } from "../components/scroll/scrollFade";
-import { ReconnectingIcon } from "../components/status/ReconnectingIcon";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { ringForAutomaticFocus } from "../input/lastInput";
-import { Button } from "../primitives";
+import { Button, Spinner } from "../primitives";
 import { SettingRow } from "../settings/SettingRow";
 import { CONNECTION_STATE_WORDS, connectionState } from "./connectionState";
 import { FormCard } from "../components/card/FormCard";
@@ -86,7 +85,7 @@ export function RemoteDevicePage({ drawerOpen = false }: { drawerOpen?: boolean 
                   <StatusBadge color={state === "reconnecting" ? "warning" : "success"} variant="soft">
                     {state === "reconnecting" ? (
                       <span className="inline-flex items-center gap-1 align-top">
-                        <ReconnectingIcon size="compact" />
+                        <Spinner size="compact" color="current" />
                         {t(CONNECTION_STATE_WORDS[state])}
                       </span>
                     ) : t(CONNECTION_STATE_WORDS[state])}

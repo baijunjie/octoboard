@@ -22,6 +22,8 @@ export const partSelector = {
   selectTrigger: "[data-slot=select-trigger]",
   /** The clear button of a `Select` (`SelectClearButton`). */
   selectClearButton: "[data-slot=select-clear-button]",
+  /** The layer's `Spinner`. */
+  spinner: "[data-slot=spinner]",
   /** A `Disclosure`, and its trigger. */
   disclosure: "[data-slot=disclosure]",
   disclosureTrigger: "[data-slot=disclosure-trigger]",

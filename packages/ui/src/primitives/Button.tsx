@@ -174,7 +174,7 @@ export function Button(props: ButtonBaseProps & {
     element?.setAttribute("aria-busy", "true");
     return () => element?.removeAttribute("aria-busy");
   }, [pending, ref]);
-  const indicator = pending && (pendingIndicator ?? <Spinner color="current" size={size === "lg" ? "md" : "sm"} className={size === "xs" ? "size-3" : undefined} />);
+  const indicator = pending && (pendingIndicator ?? <Spinner color="current" size={size === "lg" ? "md" : size === "xs" ? "xs" : "sm"} />);
   const contentId = useId();
   const why = useUnavailable(unavailable);
   useOwnTooltipGuard("Button");

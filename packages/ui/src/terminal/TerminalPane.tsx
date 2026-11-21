@@ -409,8 +409,6 @@ export function TerminalPane({
   const barSaid = useHeldWhileHidden(noProcessBar?.sentence ?? uploadSentence, modalOpen || !exposed);
   const pendingCover = livePending && session ? { label: sessionDisplayTitle(t, session), title: t("terminal.holderPending.title"), body: t("terminal.holderPending.body") } : undefined;
   const pendingSaid = useAnnouncedWhilePending(session?.id, livePending, t("terminal.holderPending.sentence"), coverHasFocus);
-  const waitingForProcess = isStarting || resuming;
-  const coverState = switching && trouble !== "disconnected" ? "waiting" : trouble ?? (waitingForProcess ? "waiting" : "loading");
   const coverText = pendingCover
     ? pendingCover.title
     : switching
@@ -478,7 +476,7 @@ export function TerminalPane({
           rootRef={rootRef}
           held={held}
           text={coverText}
-          state={coverState}
+          disconnected={trouble === "disconnected"}
           canReconnect={canReconnect}
           onReconnect={reconnectNow}
           pending={pendingCover}

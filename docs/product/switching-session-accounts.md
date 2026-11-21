@@ -106,7 +106,7 @@ While a session is shown as switching:
   reached, when they show *reconnecting* over both;
 - where sessions are ranked by status, it shares the loading rank with *starting*. If shown as *reconnecting* during
   the switch, it ranks by its stored status (see "The status order" in `docs/product/order-of-projects-and-sessions.md`);
-- its terminal shows a cover with a turning arc and a message that the session is switching its account,
+- its terminal shows a cover with the grey spinner and a message that the session is switching its account,
   whatever state its connection passes through meanwhile, and takes no input: no key reaches the session's process.
   The terminal offers no Resume. When the session stops being shown as switching, the cover gives way to whatever the
   terminal would show otherwise, and keyboard focus that was in the terminal when the cover came goes back to it,

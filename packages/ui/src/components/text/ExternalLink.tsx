@@ -124,7 +124,7 @@ export function ExternalLink({ href, appearance = "text", size, variant = "secon
   const action = useExternalLinkAction({ href, onOpen, onFailure, isPending });
   const unfollowable = useBusy();
   if (!action.address) return <span>{children}</span>;
-  const spinner = appearance === "button" && action.busy && <Spinner size="sm" color="current" className={size === "xs" ? "size-3" : undefined} />;
+  const spinner = appearance === "button" && action.busy && <Spinner size={size === "xs" ? "xs" : "sm"} color="current" />;
   const label = <>{spinner}{children}<ExternalLinkIcon className={appearance === "button" ? "size-3.5" : "ms-1 size-[0.85em]"} /></>;
   return (
     <a

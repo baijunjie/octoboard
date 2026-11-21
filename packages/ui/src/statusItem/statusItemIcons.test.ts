@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { StatusItemSubmenuDraftItem } from "../platform";
 import type { StatusItemMenuDraft } from "./statusItemMenu";
 import { resolveCssColour } from "../preferences/cssColour";
-import type { ShownStatusKind } from "../sessions/sessionStatus";
+import { SUMMARY_STATUSES } from "../sessions/sessionStatus";
 import { BUBBLE_SHIFT, HAND_SHIFT, shiftedTransform } from "../components/status/opticalCentring";
 import { statusGlyph, withIcons } from "./statusItemIcons";
 
@@ -74,33 +74,38 @@ const COLOURS: Record<string, string> = {
   "var(--app-muted)": "#777777",
 };
 
-const GLYPH_STATUSES: ShownStatusKind[] = ["waiting_user", "dormant", "paused", "done", "idle", "delegated", "background", "working", "starting", "switching", "reconnecting", "interrupted"];
-
-it("draws every status a glyph of its own in the colour the sidebar draws it in, starting, switching account and reconnecting sharing the arc", () => {
+it("draws each status the menu lists a glyph of its own in the colour the sidebar draws it in", () => {
   vi.mocked(resolveCssColour).mockImplementation((expression) => COLOURS[expression]);
-  const glyphs = GLYPH_STATUSES.map((status) => statusGlyph(status, "light"));
+  const glyphs = SUMMARY_STATUSES.map((status) => statusGlyph(status, "light"));
   expect(glyphs.every((glyph) => glyph !== undefined)).toBe(true);
-  expect(new Set(glyphs).size).toBe(GLYPH_STATUSES.length - 2);
-  expect(statusGlyph("starting", "light")).toBe(statusGlyph("switching", "light"));
-  expect(statusGlyph("starting", "light")).toBe(statusGlyph("reconnecting", "light"));
-  expect(statusGlyph("starting", "light")).toContain("#777777");
-  expect(statusGlyph("interrupted", "light")).toContain("#777777");
-  expect(statusGlyph("interrupted", "light")).toContain("<rect");
-  expect(statusGlyph("archived", "light")).toBeUndefined();
+  expect(new Set(glyphs).size).toBe(SUMMARY_STATUSES.length);
+  expect(statusGlyph("waiting_user", "light")).toContain("#aa5500");
+  for (const status of ["paused", "done", "idle"] as const) expect(statusGlyph(status, "light")).toContain("#00aa00");
 });
 
 it("draws no glyph for a colour the stylesheet cannot resolve", () => {
   vi.mocked(resolveCssColour).mockReturnValue(undefined);
-  for (const status of GLYPH_STATUSES) expect(statusGlyph(status, "dark")).toBeUndefined();
+  for (const status of SUMMARY_STATUSES) expect(statusGlyph(status, "dark")).toBeUndefined();
 });
 
 it("moves the bubble and the hand by the shifts the sidebar's glyphs take, and no other glyph", () => {
   vi.mocked(resolveCssColour).mockImplementation((expression) => COLOURS[expression]);
   expect(statusGlyph("idle", "light")).toContain(`<g transform="${shiftedTransform(BUBBLE_SHIFT)}"`);
   expect(statusGlyph("waiting_user", "light")).toContain(`<g transform="${shiftedTransform(HAND_SHIFT)}"`);
-  for (const status of ["starting", "switching", "reconnecting", "dormant", "paused", "done", "interrupted"] as const) expect(statusGlyph(status, "light")).not.toContain("transform");
+  for (const status of ["paused", "done"] as const) expect(statusGlyph(status, "light")).not.toContain("transform");
 });
 
+it("leaves out the icon of a status key that names no status the menu lists, as it does one whose colour cannot be resolved", async () => {
+  vi.mocked(resolveCssColour).mockImplementation((expression) => COLOURS[expression]);
+  const keys = ["status:starting", "status:switching", "status:reconnecting", "status:working", "status:dormant", "status:interrupted", "status:archived", "status:unknown", "status:nonsense"];
+  const menu = await withIcons({
+    ...draft,
+    submenus: [],
+    sections: [{ heading: "Sessions", icon: keys[0], items: keys.map((icon) => ({ label: icon, icon })) }],
+  }, "light");
+  for (const key of keys) expect(menu.icons).not.toHaveProperty(key);
+  expect(menu.icons).toEqual({});
+});
 
 it.each(["light", "dark"] as const)("uses the shared warning badge palette with alpha for the native exhausted quota tag in %s", async (appearance) => {
   vi.mocked(resolveCssColour).mockImplementation((expression, theme, alpha) => {

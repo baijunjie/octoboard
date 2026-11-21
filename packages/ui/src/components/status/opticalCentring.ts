@@ -1,8 +1,7 @@
 /** How far the drawing of a lucide glyph whose ink is lopsided by design is moved on its 24-unit grid, so that it
  * reads centred in its slot: the speech bubble's tail and the hand's thumb pull the ink's weight to one side, though the ink's bounding box sits on the slot's centre. Each shift is half of the distance between the
  * ink's weighted centre and the slot's, which leaves the weighted centre and the bounding box's centre each within half a
- * pixel of the slot's centre at every size the glyph is drawn at (the gallery's rest pose, measured). The turning arc of starting
- * and switching account is not moved: its circle's centre stays on the slot's centre, so it turns in place. */
+ * pixel of the slot's centre at every size the glyph is drawn at (the gallery's rest pose, measured). */
 export type OpticalShift = readonly [x: number, y: number];
 
 export const BUBBLE_SHIFT: OpticalShift = [0.3, -0.3];

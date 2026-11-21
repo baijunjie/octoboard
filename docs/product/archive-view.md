@@ -38,7 +38,7 @@ submenu. Focus mode's preview rows are described in "What both views show" in `d
   while there is at least one, and a **Close** button. Which project, console session or console it is for is shown in
   the top bar's breadcrumb (see "The top bar" in `docs/product/window-layout.md`).
 - The list is in the order the sessions were archived, most recent first. It shows 30 rows and adds 30 more each time
-  its end is scrolled into view. A turning arc marks the end while more rows are available. Each row shows the
+  its end is scrolled into view. A spinner marks the end while more rows are available. Each row shows the
   session's agent's icon, its title and, under the title, its **model
   line**, followed by its context-size chip when the context size is known and above zero (see "The context-size chip"
   in `docs/product/session-context.md`). The model line reads as a focus mode session card's does — the account the

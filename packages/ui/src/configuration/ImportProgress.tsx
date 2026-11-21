@@ -4,7 +4,7 @@ import React, { useId } from "react";
 import { providerLabel } from "../agents/providers";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useT } from "../i18n/react";
-import { Label, ProgressBar, ProgressBarTrack, WaitingIcon } from "../primitives";
+import { Label, ProgressBar, ProgressBarTrack, Spinner } from "../primitives";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useProviders } from "../store";
 import { knownValues } from "../values/knownValue";
@@ -33,7 +33,7 @@ function ItemState({ item }: { item: ItemProgress }): React.ReactElement {
   if (item.state === "creating" || item.state === "cloning") {
     return (
       <StatusLine label={WORKING_LABEL[item.state]}>
-        <WaitingIcon />
+        <Spinner size="sm" />
       </StatusLine>
     );
   }

@@ -1,4 +1,4 @@
-import { CircleAlert, LoaderCircle, TriangleAlert, type LucideIcon } from "lucide-react";
+import { CircleAlert, TriangleAlert, type LucideIcon } from "lucide-react";
 import React, { useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 
 import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
@@ -20,7 +20,7 @@ import { MODAL_DIALOG, TABBABLE } from "../focus/selectors";
 import { useResolvedMenuEntries } from "./useResolvedMenuEntries";
 import { MenuShortcutScope } from "./menuShortcutScope";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuLoadResult, ActionMenuPanel, ActionMenuPanelContext, ActionMenuSubmenu } from "./menuEntries";
-import { activateMenuItem, containsText, Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSection, MenuSeparator, Submenu, SubmenuIndicator, Tooltip, useCloseSubmenu, useKeyboardModality, useMenuFiltered, useSubmenuPanel, useTooltipHover } from "../../primitives";
+import { activateMenuItem, containsText, Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSection, MenuSeparator, Spinner, Submenu, SubmenuIndicator, Tooltip, useCloseSubmenu, useKeyboardModality, useMenuFiltered, useSubmenuPanel, useTooltipHover } from "../../primitives";
 
 /** HeroUI's menu item label ignores the pointer, and its content inherits that, so a clipped label never sees
  * the hover that opens its tooltip. The label's content takes the pointer back, a disabled item's too (see
@@ -351,7 +351,7 @@ function LoadedMenuItems({ load, onStatus }: {
   return (
     <div ref={root} className="contents">
       <StatusAnnouncer text={result ? undefined : t("menu.loading")} />
-      <MenuItems entries={result?.items ?? [{ label: t("menu.loading"), icon: LoaderCircle, iconClassName: "motion-safe:animate-spin", disabled: true, onClick: () => {} }]} />
+      <MenuItems entries={result?.items ?? [{ label: t("menu.loading"), icon: <Spinner size="sm" />, disabled: true, onClick: () => {} }]} />
     </div>
   );
 }

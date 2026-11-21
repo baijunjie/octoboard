@@ -2,7 +2,7 @@ import { Select as HeroSelect } from "@heroui/react";
 import React, { createContext, useContext, useEffect } from "react";
 
 import { useObjectRef } from "./focus";
-import { WaitingIcon } from "./WaitingIcon";
+import { Spinner } from "./Spinner";
 import { useDisabled } from "./busy";
 import { FieldClearContext, type FieldVariant, LOCKED_FIELD_CLASS, OutsideFieldParts } from "./Field";
 import { type DataAttributes, definedProps } from "./props";
@@ -92,7 +92,7 @@ export function SelectTrigger({ ref: forwarded, value, valueClassName, className
       {/* HeroUI supplies the indicator's positioning and slot to the element around the glyph. */}
       {loading ? (
         <HeroSelect.Indicator className="size-4">
-          <span><WaitingIcon /></span>
+          <span className="flex"><Spinner size="sm" /></span>
         </HeroSelect.Indicator>
       ) : <HeroSelect.Indicator />}
     </HeroSelect.Trigger>

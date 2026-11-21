@@ -23,23 +23,23 @@ function Field({ loading = false, disabled = false, invalid = false, onChange = 
   );
 }
 
-it("keeps the loading arc in the indicator container and exposes busy state while options load", () => {
+it("keeps the loading spinner in the indicator container and exposes busy state while options load", () => {
   const { container, render } = mount(<Field loading />);
   const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
   expect(trigger.disabled).toBe(true);
   expect(trigger.textContent).toBe("Saved model");
   expect(trigger.getAttribute("aria-busy")).toBe("true");
-  const arc = trigger.querySelector("svg.lucide-loader-circle")!;
-  expect(arc.getAttribute("aria-hidden")).toBe("true");
+  const spinner = trigger.querySelector("[data-slot=spinner]")!;
+  expect(spinner.getAttribute("aria-hidden")).toBe("true");
   const indicator = trigger.querySelector("[data-slot=select-indicator]")!;
   expect(indicator).not.toBeNull();
-  expect(arc.parentElement).toBe(indicator);
+  expect(spinner.parentElement).toBe(indicator);
   expect(indicator.parentElement).toBe(trigger);
   expect(trigger.querySelector("[data-slot=select-default-indicator]")).toBeNull();
   render(<Field />);
   expect(trigger.disabled).toBe(false);
   expect(trigger.hasAttribute("aria-busy")).toBe(false);
-  expect(trigger.querySelector("svg.lucide-loader-circle")).toBeNull();
+  expect(trigger.querySelector("[data-slot=spinner]")).toBeNull();
   expect(trigger.querySelector("[data-slot=select-indicator]")).toBeNull();
   expect(trigger.querySelector("[data-slot=select-default-indicator]")).not.toBeNull();
   render(<Field disabled />);

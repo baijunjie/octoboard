@@ -17,7 +17,7 @@ import { RowActions } from "../RowActions";
 import { FileIcon } from "./FileIcon";
 import type { TreeNode } from "../tree";
 import { BrowserListMotion, useBrowserListMotion } from "../useBrowserListMotion";
-import { Tree, TreeCollection, TreeItem, WaitingIcon } from "../../primitives";
+import { Spinner, Tree, TreeCollection, TreeItem } from "../../primitives";
 import { collectionIndex } from "../collectionIndex";
 import { DirectoryRow, IGNORED_ROW_CLASS, ROW_CLASS, ROW_HEIGHT, RowContent, RowName } from "../treeRow";
 
@@ -344,7 +344,7 @@ function StatusItem({ node }: { node: Extract<TreeNode, { type: "status" }> }): 
       className={ROW_CLASS}
       content={
         <RowContent>
-          {node.status === "loading" ? <WaitingIcon className="text-accent" /> : <span className="size-4 shrink-0" />}
+          {node.status === "loading" ? <Spinner size="sm" /> : <span className="size-4 shrink-0" />}
           <FadeOverflow as="span" className="min-w-0 flex-1 text-app-muted italic" titleWhenClipped={text}>
             {text}
           </FadeOverflow>
