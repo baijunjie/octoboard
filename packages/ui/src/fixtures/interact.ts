@@ -1180,14 +1180,20 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon | Fi
         const type = SEGMENT_TYPES.find((one) => blank.matches(segmentSelector(one))) ?? "unknown";
         throw new Error(`The field labelled ${label} was left with its ${type} segment blank after filling it with ${value}`);
       }
-      // The first letter picks the first of AM and PM that starts with it, so a language whose two words share it
-      // (Korean 오전 and 오후, as some engines write them) would silently enter AM: the day period shown must be the asked one.
       const period = segmentOf("dayPeriod");
       if (period && entered.hour !== undefined) {
-        const expected = dayPeriodWord(language, entered.hour >= 12);
-        const shown = withoutFormatting(period.textContent ?? "").trim();
+        const pm = entered.hour >= 12;
+        const expected = dayPeriodWord(language, pm);
+        const shownPeriod = () => withoutFormatting(period.textContent ?? "").trim();
+        let shown = shownPeriod();
+        // AM and PM can start with the same letter. If typing selected the other period, use the segment's arrow key.
+        if (shown !== expected && shown === dayPeriodWord(language, !pm)) {
+          period.focus();
+          await this.key(pm ? "ArrowUp" : "ArrowDown");
+          shown = shownPeriod();
+        }
         if (shown !== expected) {
-          throw new Error(`The field labelled ${label} shows ${shown} as its day period after filling it with ${value}, not ${expected}: typing the first letter of ${expected} did not choose it`);
+          throw new Error(`The field labelled ${label} shows ${shown} as its day period after filling it with ${value}, not ${expected}`);
         }
       }
     },
