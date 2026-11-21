@@ -23,7 +23,7 @@ import type { ProcessJump } from "../process/processJump";
 import { useArchivedOwnerSessions, useConsoleStatus, useConsoleStatusCounts, useDaemonStore } from "../store";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { AvatarStatusBadge } from "../components/status/TopStatusMarker";
-import { ChromeButton } from "./ChromeButton";
+import { CHROME_BUTTON_FILLS, CHROME_CURRENT_FILLS, ChromeButton } from "./ChromeButton";
 import { ConsoleAvatar } from "./ConsoleAvatar";
 import { NotificationsBell } from "./NotificationsBell";
 import { useListMotion } from "../components/motion/useListMotion";
@@ -55,19 +55,7 @@ export function focusNewConsole(): void {
   (document.getElementById(NEW_CONSOLE_ID) ?? document.getElementById(REMOTE_DEVICES_BUTTON_ID))?.focus();
 }
 
-/** A console avatar's ring: the avatar fills its 32px button, as large as the circle a rail button's fill draws, so the
- * button's own fill would be hidden under it. The current console and the pointer's or a press's tint are drawn instead
- * (by the user's decision, in place of HeroUI's fills)
- * as a ring just outside the avatar, from the same chrome tints, in an `::after` that takes no room (it stays within the
- * 4px the console scroller's padding leaves for overhang) and leaves the button's box shadow to the keyboard focus ring.
- * Hover and press follow React Aria's states as well as the CSS ones, as HeroUI's own fills do, so a keyboard press shows
- * too; the hovered tint gives way while pressed. */
-const AVATAR_RING_FRAME =
-  "[--button-bg:transparent] [--button-bg-hover:transparent] [--button-bg-pressed:transparent] after:pointer-events-none after:absolute after:-inset-[3px] after:rounded-full after:border-2 after:content-['']";
-const AVATAR_RING = `${AVATAR_RING_FRAME} after:border-transparent hover:after:border-(--chrome-hover) ui-hovered:not-ui-pressed:not-active:after:border-(--chrome-hover) active:after:border-(--chrome-active) ui-pressed:after:border-(--chrome-active)`;
-const AVATAR_CURRENT_RING = `${AVATAR_RING_FRAME} after:border-(--chrome-current)`;
-
-/** One console on the rail: its avatar, marked with what is going on in it, and the current one ringed. The tooltip and accessible name count the console's sessions by shown status.
+/** One console on the rail: its avatar, marked with what is going on in it, and the current one on the current fill. The tooltip and accessible name count the console's sessions by shown status.
  * The decorative badge has no tooltip of its own. A right-click offers the console's own actions, from a menu whose trigger is not drawn: the
  * sidebar's header has the same menu on a visible button. */
 const ConsoleTile = memo(function ConsoleTile({
@@ -137,9 +125,11 @@ const ConsoleTile = memo(function ConsoleTile({
           focusOnPress={false}
           onPress={onSelect}
           onMouseHoverChange={onHoverChange}
-          className={`size-8 min-w-0 rounded-full p-0 ${current ? AVATAR_CURRENT_RING : AVATAR_RING}`}
+          // Round, with the avatar 4px inside it, so the fill shows around the avatar as it shows around a rail button's
+          // glyph and the current console's circle matches the current page button's (by the user's decision).
+          className={`size-8 min-w-0 rounded-full p-0 ${current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS}`}
         >
-          <ConsoleAvatar name={thisConsole.name} icon={thisConsole.icon} className="size-8" />
+          <ConsoleAvatar name={thisConsole.name} icon={thisConsole.icon} className="size-6" />
         </Button>
         <AvatarStatusBadge status={status} />
       </BadgeAnchor>

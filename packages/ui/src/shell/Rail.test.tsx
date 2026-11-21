@@ -12,6 +12,7 @@ import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { RemoteDevicesTestHost } from "../remoteDaemons/remoteDevicesTestSupport";
 import { FIXED_SMALL_ICON_BUTTONS_CLASS } from "../primitives";
+import { CHROME_BUTTON_FILLS, CHROME_CURRENT_FILLS } from "./ChromeButton";
 import { Rail } from "./Rail";
 import { enter, leave, mountForTooltip, openTooltip } from "../components/hint/tooltipTestSupport";
 import { BROWSER_HOST, MAC_HOST } from "../test/hosts";
@@ -346,7 +347,6 @@ it.each([true, false])("offers Memory in a console avatar's context menu only wh
 
 const avatarButton = (container: HTMLElement) => container.querySelector<HTMLButtonElement>("[data-sidebar-peek-keep]")!;
 const classesOf = (element: Element) => element.className.split(/\s+/);
-const RING_CURRENT = "after:border-(--chrome-current)";
 
 it("puts every rail button under the fixed small icon-button size, and gives the stack 8px above and below", () => {
   const nav = mountRail().querySelector("nav")!;
@@ -361,44 +361,44 @@ it("puts every rail button under the fixed small icon-button size, and gives the
   expect(nav.contains(avatarButton(nav))).toBe(true);
 });
 
-it("rings the current console's avatar instead of filling its button, and fills the button with the avatar", () => {
+it("draws the current console's avatar on the current fills, in a round button with the avatar inside it", () => {
   const avatar = avatarButton(mountRail());
   expect(avatar.getAttribute("aria-current")).toBeTruthy();
-  expect(classesOf(avatar)).toContain(RING_CURRENT);
-  // The current fill behind the avatar is gone, and the button draws no background in any state.
-  expect(avatar.className).not.toContain("--button-bg:var(--chrome-current)");
-  expect(avatar.className).not.toContain("--button-bg-hover:var(--chrome-current)");
-  expect(avatar.className).not.toContain("--button-bg-pressed:var(--chrome-current)");
-  for (const state of ["--button-bg", "--button-bg-hover", "--button-bg-pressed"]) {
-    expect(classesOf(avatar)).toContain(`[${state}:transparent]`);
-  }
-  // A round button the avatar fills edge to edge.
+  // The same fills as the rail's current page buttons and the top bar's open panel toggles.
+  for (const fill of CHROME_CURRENT_FILLS.split(" ")) expect(classesOf(avatar)).toContain(fill);
+  // Literal, so the check holds if the constant loses its resting fill: the current tint at rest.
+  expect(classesOf(avatar)).toContain("[--button-bg:var(--chrome-active)]");
+  // Not the interactive fills' own: a hover tint, which a current console does not take.
+  expect(classesOf(avatar)).not.toContain("[--button-bg-hover:var(--chrome-hover)]");
+  // No ring is drawn.
+  expect(avatar.className).not.toContain("after:");
+  // A round 32px button around a 24px avatar, so the fill shows as a 4px band.
   expect(classesOf(avatar)).toContain("size-8");
   expect(classesOf(avatar)).toContain("rounded-full");
-  // The default avatar (a span) is the button's content, round and as large as the button.
   const face = avatar.querySelector("span[aria-hidden='true']")!;
-  expect(classesOf(face)).toContain("size-8");
+  expect(classesOf(face)).toContain("size-6");
+  expect(classesOf(face)).not.toContain("size-8");
   expect(classesOf(face)).toContain("rounded-full");
 });
 
-it("leaves a console that is not current with a ring that only the pointer and a press tint", () => {
+it("leaves a console that is not current on the chrome's hover and pressed fills", () => {
   const avatar = avatarButton(mountRail({ props: { currentConsoleId: "c-other" } }));
   expect(avatar.hasAttribute("aria-current")).toBe(false);
-  expect(classesOf(avatar)).not.toContain(RING_CURRENT);
-  expect(classesOf(avatar)).toContain("after:border-transparent");
-  expect(classesOf(avatar)).toContain("hover:after:border-(--chrome-hover)");
-  expect(classesOf(avatar)).toContain("active:after:border-(--chrome-active)");
-  // A keyboard press and React Aria's hover show the same tints, the hovered one giving way while pressed.
-  expect(classesOf(avatar)).toContain("ui-hovered:not-ui-pressed:not-active:after:border-(--chrome-hover)");
-  expect(classesOf(avatar)).toContain("ui-pressed:after:border-(--chrome-active)");
-  // The same transparent background, so the avatar is the whole of what the button draws.
-  for (const state of ["--button-bg", "--button-bg-hover", "--button-bg-pressed"]) {
-    expect(classesOf(avatar)).toContain(`[${state}:transparent]`);
-  }
+  for (const fill of CHROME_BUTTON_FILLS.split(" ")) expect(classesOf(avatar)).toContain(fill);
+  // No resting fill, which is the current one's.
+  expect(classesOf(avatar)).not.toContain("[--button-bg:var(--chrome-active)]");
+  // A pointer press and a keyboard press show the pressed fill, not the hover one HeroUI's rule order would keep.
+  expect(classesOf(avatar)).toContain("active:[--button-bg-hover:var(--chrome-active)]");
+  expect(classesOf(avatar)).toContain("ui-pressed:[--button-bg-hover:var(--chrome-active)]");
+  expect(avatar.className).not.toContain("after:");
+  expect(classesOf(avatar)).toContain("size-8");
+  expect(classesOf(avatar)).toContain("rounded-full");
+  const face = avatar.querySelector("span[aria-hidden='true']")!;
+  expect(classesOf(face)).toContain("size-6");
 });
 
-it("rings no console while the Scheduled tasks page shows", () => {
+it("marks no console as current while the Scheduled tasks page shows", () => {
   const avatar = avatarButton(mountRail({ props: { scheduledTasksShown: true } }));
   expect(avatar.hasAttribute("aria-current")).toBe(false);
-  expect(classesOf(avatar)).not.toContain(RING_CURRENT);
+  expect(classesOf(avatar)).not.toContain("[--button-bg:var(--chrome-active)]");
 });

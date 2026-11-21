@@ -4,9 +4,11 @@ This is how the console the sidebar shows (see `docs/product/sidebar.md`) is pic
 
 The consoles are switched from the top of the rail, at the window's left edge (see "The rail" in
 `docs/product/window-layout.md`): one avatar per console (see "Avatar" in `docs/product/consoles.md`), in
-the order the consoles were created, followed by **New console**. Each avatar fills its round 32 px button. The console
-the sidebar shows is the **current console**; it is marked by a thin ring just outside its avatar and announced as the
-current one, while any other avatar shows a fainter ring only under the pointer and while pressed. (A sidebar floating
+the order the consoles were created, followed by **New console**. Each avatar is **24 px**, centred in its round 32 px
+button as a glyph is in the rail's other buttons. The console the sidebar shows is the **current console**; its button
+is drawn with a filled circle behind the avatar, the same circle and fill as the rail's current page button (see "The
+rail" in `docs/product/window-layout.md`), and it is announced as the current one. Any other avatar's button takes the chrome's
+hover and pressed fills (see "Pressing the chrome's controls" in `docs/product/window-layout.md`). (A sidebar floating
 in to preview another console is the one exception, see "Previewing a console from the rail" below.) Pressing another avatar makes
 that console the current one, its view fading in (see "How the sidebar's view changes" in `docs/product/sidebar.md`);
 pressing it with the mouse leaves keyboard focus where it was. A console created from this window — by the rail's New
@@ -94,7 +96,7 @@ on its avatar is a **preview**:
 - It shows the console's own view — the header, its console sessions and its projects — never a focus mode, which
   belongs to the current console only. Resting on the current console's avatar shows the sidebar as it is, focus mode
   included. Moving from one avatar to another fades the new console's view in, as switching console does.
-- **Hovering changes nothing**: the current console, its ring on the rail, the remembered console and the window's
+- **Hovering changes nothing**: the current console, its mark on the rail, the remembered console and the window's
   history all stay as they were.
 - **A press anywhere inside the floating sidebar**, with any mouse button, makes the previewed console the current one,
   and the press then goes on to do what it does there — select a row, open a menu, start a dialog. Pressing the avatar

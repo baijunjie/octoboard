@@ -62,8 +62,8 @@ function LeftInset(): React.ReactElement | null {
 }
 
 /** The name of the daemon the window shows, in a window opened on a daemon elsewhere (`remoteDaemonName`), so that
- * windows of several daemons are told apart; nothing in the local daemon's window. A small chip, filled as a control
- * is so that it stands off the title bar, apart from the breadcrumb, as it marks the machine and is no level of the
+ * windows of several daemons are told apart; nothing in the local daemon's window. A small chip, on a fill of its own (`bg-default`) that it always shows,
+ * so that it stands off the title bar, apart from the breadcrumb, as it marks the machine and is no level of the
  * path; it keeps its width while the breadcrumb beside it fades first, and a name too long for its fixed width fades,
  * runs as a marquee on hover and shows in full in a tooltip. */
 function RemoteDaemonName(): React.ReactElement | null {

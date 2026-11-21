@@ -2,12 +2,12 @@
    - Window chrome (the top bar and the left rail) holds only icons, avatars and one line of
      breadcrumb text. In the macOS app it is the native translucent material and paints nothing
      (`--window-background` in `style.css`); in a browser it is `--chrome`. Glyphs on it use the theme's
-     `--foreground`, secondary text on it `--chrome-muted`, and `--chrome-hover` / `--chrome-active`
-     / `--chrome-current` are the tints a control, a pressed control and the rail's current item (a page button's fill, a
-     console avatar's ring) take on it: translucent, so they read on the material and on `--chrome`. At 768px and below the rail is inside the sidebar drawer's card and sits on `--panel-sidebar`
+     `--foreground`, secondary text on it `--chrome-muted`, and `--chrome-hover` and `--chrome-active` are
+     the only two tints the top bar's and the rail's buttons take on it, the first under the pointer and the second while pressed and as the current
+     item (the current console, the open page or panel; by the user's choice a press looks like the current state): translucent, so they read on the material and on `--chrome`. At 768px and below the rail is inside the sidebar drawer's card and sits on `--panel-sidebar`
      instead, where the current item stands apart just as well. The current item is the one that has to be found at a
-     glance, so it is the strongest of the three tints on the material and on `--chrome` in both appearances, with
-     `--chrome-hover` and `--chrome-active` fainter steps.
+     glance, so it is the stronger tint on the material and on `--chrome` in both appearances, with `--chrome-hover` a
+     fainter step.
    - The content panel is always opaque, since text-heavy UI must never sit on the material.
      `--panel` is the main area and has to equal the terminal's own background (`XTERM_THEMES` in
      `terminal/xtermThemes.ts`) so the terminal does not look like a box inside a box;
@@ -25,9 +25,8 @@
 :root {
   --chrome: oklch(0.93 0.004 286);
   --chrome-muted: oklch(0.46 0.0138 285.94);
-  --chrome-hover: oklch(0 0 0 / 0.06);
-  --chrome-active: oklch(0 0 0 / 0.12);
-  --chrome-current: oklch(0 0 0 / 0.2);
+  --chrome-hover: oklch(0 0 0 / 0.1);
+  --chrome-active: oklch(0 0 0 / 0.2);
   --panel: #fafafa;
   --panel-sidebar: oklch(0.965 0.002 286);
   --panel-hover: oklch(0 0 0 / 0.04);
@@ -72,9 +71,8 @@
 [data-theme="dark"] {
   --chrome: oklch(0.17 0.005 286);
   --chrome-muted: oklch(0.85 0.01 286);
-  --chrome-hover: oklch(1 0 0 / 0.08);
-  --chrome-active: oklch(1 0 0 / 0.15);
-  --chrome-current: oklch(1 0 0 / 0.22);
+  --chrome-hover: oklch(1 0 0 / 0.12);
+  --chrome-active: oklch(1 0 0 / 0.22);
   --panel: #1e1f22;
   --panel-sidebar: oklch(0.27 0.006 286);
   --panel-hover: oklch(1 0 0 / 0.045);

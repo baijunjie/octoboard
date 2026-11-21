@@ -2,16 +2,21 @@ import React from "react";
 
 import { BadgedControl, Button, type ButtonPress } from "../primitives";
 
-/** The hover and pressed fills of a control on the window chrome: translucent tints (`styles/surfaces.css`), so
- * they read on the native material as well as on the browser's opaque chrome colour. HeroUI's button
- * takes its fills from these custom properties. */
-export const CHROME_BUTTON_FILLS = "[--button-bg-hover:var(--chrome-hover)] [--button-bg-pressed:var(--chrome-active)]";
+/** The hover and pressed fills of a control on the window chrome (the rail's avatars and buttons, the top bar's
+ * buttons and panel toggles), from the chrome's two tints (`styles/surfaces.css`), translucent so they read on the native
+ * material as well as on the browser's opaque chrome colour: `--chrome-hover` under the pointer, and while pressed
+ * `--chrome-active`, the tint a current item also takes. Every button of the top bar and the rail takes its fills from here or
+ * `CHROME_CURRENT_FILLS`, so they cannot drift apart (the breadcrumb's marks keep their own). HeroUI's button takes its fills from these custom properties, and its hover rule comes
+ * after its pressed one, so a pointer press would keep the hover fill; while pressed the hover fill is the pressed one
+ * too, so a press shows the pressed fill whichever input made it. */
+export const CHROME_BUTTON_FILLS =
+  "[--button-bg-hover:var(--chrome-hover)] [--button-bg-pressed:var(--chrome-active)] active:[--button-bg-hover:var(--chrome-active)] ui-pressed:[--button-bg-hover:var(--chrome-active)]";
 
 /** The fills of the rail's current page button (Scheduled tasks, Remote devices), and of a toggle whose panel is
- * open, in the tint the current console's avatar ring takes (`Rail.tsx`): its resting fill is also what it keeps under the pointer and while pressed, so pointing at it never
+ * open, as the current console's avatar is (`Rail.tsx`): its resting fill is also what it keeps under the pointer and while pressed, so pointing at it never
  * makes it paler. */
 export const CHROME_CURRENT_FILLS =
-  "[--button-bg:var(--chrome-current)] [--button-bg-hover:var(--chrome-current)] [--button-bg-pressed:var(--chrome-current)]";
+  "[--button-bg:var(--chrome-active)] [--button-bg-hover:var(--chrome-active)] [--button-bg-pressed:var(--chrome-active)]";
 
 /** A press on any of the window chrome's controls (the top bar's, the rail's) must leave keyboard
  * focus on the terminal, so every one of them is built from this. Its `tooltip` is its tooltip;
