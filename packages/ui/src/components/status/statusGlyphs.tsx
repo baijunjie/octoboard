@@ -47,9 +47,9 @@ export function WorkingDot({ small, kind = "working" }: { small?: boolean; kind?
 
 /** The "zz" of a dormant session (`SLEEP_PATHS`), drawn as a lucide icon is: `currentColor` strokes on
  * the 24-unit grid, sized by `className`. Where the system allows motion, three copies of the large Z drift up the
- * diagonal to the top right, shrinking as they rise (`status-scroll`, each a third of a period behind the last),
+ * diagonal to the top right, growing as they rise (`status-scroll`, each a third of a period behind the last),
  * so a new one enters at the bottom left as the top one leaves; the svg clips them to its own box, so none leaves
- * the slot, and they stay at full opacity, so the glyph keeps the contrast of its colour at every frame. Where the
+ * the slot, and they stay at full opacity, so the motion adds no fade. Where the
  * system asks for reduced motion the still pair, `SLEEP_PATHS` as it is, is drawn instead: the two are in groups
  * that each hide where the other shows. The motion moves only `transform`, and the svg is laid out apart from its
  * slot (`contain-layout`). */

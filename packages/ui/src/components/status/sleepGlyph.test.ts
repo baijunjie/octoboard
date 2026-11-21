@@ -34,6 +34,13 @@ it("draws the 'zz' with its ink's box centred on the grid's centre, 12 and 12", 
   expect((y[0] + y[1]) / 2).toBe(12);
 });
 
+it("places the smaller Z below and to the left of the larger Z in the still glyph", () => {
+  const [left, right] = SLEEP_PATHS.map((path) => extent([path])).sort((a, b) => a.x[0] - b.x[0]);
+  expect(left.x[1]).toBeLessThan(right.x[0]);
+  expect(left.y[0]).toBeGreaterThan(right.y[1]);
+  expect(left.x[1] - left.x[0]).toBeLessThan(right.x[1] - right.x[0]);
+});
+
 type Point = [number, number];
 type Pose = { tx: number; ty: number; scale: number };
 
@@ -108,17 +115,22 @@ it("has every scrolling Z wholly outside the grid at both ends of its run, so th
   }
 });
 
-it("shrinks by the same ratio in equal times, with no knee, and keeps each Z's offset in step with its size", () => {
+it("moves each Z up and right as it grows at an even ratio in equal times", () => {
   expect(STOPS.length).toBeGreaterThanOrEqual(21);
   const step = STOPS[1].at - STOPS[0].at;
   const ratio = STOPS[1].scale / STOPS[0].scale;
   const offsetPerScale = (STOPS[1].tx - STOPS[0].tx) / (STOPS[1].scale - STOPS[0].scale);
   for (let index = 1; index < STOPS.length; index++) {
-    expect(STOPS[index].at - STOPS[index - 1].at).toBeCloseTo(step, 6);
-    expect(STOPS[index].scale / STOPS[index - 1].scale).toBeCloseTo(ratio, 3);
+    const previous = STOPS[index - 1];
+    const current = STOPS[index];
+    expect(current.scale).toBeGreaterThan(previous.scale);
+    expect(current.tx).toBeGreaterThan(previous.tx);
+    expect(current.ty).toBeLessThan(previous.ty);
+    expect(current.at - previous.at).toBeCloseTo(step, 6);
+    expect(current.scale / previous.scale).toBeCloseTo(ratio, 3);
     // The keyframes are rounded to a thousandth, which this ratio of differences magnifies.
-    expect(Math.abs((STOPS[index].tx - STOPS[index - 1].tx) / (STOPS[index].scale - STOPS[index - 1].scale) - offsetPerScale)).toBeLessThan(0.7);
-    expect(STOPS[index].ty).toBeCloseTo(-STOPS[index].tx, 3);
+    expect(Math.abs((current.tx - previous.tx) / (current.scale - previous.scale) - offsetPerScale)).toBeLessThan(0.7);
+    expect(current.ty).toBeCloseTo(-current.tx, 3);
   }
 });
 

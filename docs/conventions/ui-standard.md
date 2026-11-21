@@ -31,12 +31,11 @@ One such kept shortfall is the Stop button's label on a process card in the dark
 rest and 4.2:1 with Stop hovered); see "Hand-built rows and cards". The card is a hand-built surface, so it is a shortfall
 of application-authored styling that the user chose to keep, not an approved departure from a HeroUI component's look.
 
-Another is the dormant session's rising "zz" (`@keyframes status-scroll` in `packages/ui/src/components/status/statusGlyphs.css`). Each Z's
-stroke shrinks with the letter as it rises, so on a 1x display a Z in the upper half of its rise (below about 0.8 times
-the large Z, 3–5px tall at 16px) renders at 2–2.7:1, under the 3:1 a state indicator needs, and it fades below that as
-it dwindles to the exit speck; on a 2x display only that last speck does. The large Z entering at the bottom left is
-always at full contrast, and the static glyph shown under reduced motion is unaffected. Keeping the stroke at full
-weight instead would change the look the user confirmed. (Source: user decision.)
+Another is the dormant session's rising "zz" (`@keyframes status-scroll` in `packages/ui/src/components/status/statusGlyphs.css`).
+Each Z's stroke grows with the letter as it rises. On a 1x display, the small Z entering at the bottom left renders below
+the 3:1 reference for a state indicator until it grows to about 0.8 times the large Z (about 5px tall in a 16px slot).
+On a 2x display only the smallest part of the entrance falls below that reference. Keeping the stroke at full weight
+throughout would change the look the user confirmed. (Source: user decision.)
 
 An override is the selected tab of the Settings dialog's narrow section strip (at the `tablet` breakpoint and below)
 while a search is on (`packages/ui/src/settings/SettingsDialog.tsx`).

@@ -73,10 +73,9 @@ confirmation's list, 14 px in a status marker (see "The top status" below), so g
 The raised hand and the speech bubble, whose ink leans to one side, are moved slightly within the box so that they read
 centred; the turning arc turns about the box's centre.
 
-**Dormant's "zz"** is a large Z at the bottom left with a smaller one stepping up to its top right. Where motion is
-allowed, Zs drift up that diagonal instead, shrinking as they rise, a new one entering at the bottom left as the top one
-leaves at the top right; each takes about 2.4 seconds to cross, the next a third of that behind, and none is drawn
-outside the glyph's box.
+**Dormant's still "zz"** has a small Z at the bottom left and a larger Z at the top right. Where motion is allowed, a
+small Z enters at the bottom left and grows as it drifts towards the top right, where it leaves. Each Z takes about
+2.4 seconds to cross, with the next starting a third of a cycle behind. The glyph's box clips the letters at its edges.
 
 The waving hand, the pings, the turning arcs and the rising Zs stand still where the system asks for reduced motion.
 The glyphs distinguish most statuses by shape, and the dashed circle of *status unknown* differs from every other. The
