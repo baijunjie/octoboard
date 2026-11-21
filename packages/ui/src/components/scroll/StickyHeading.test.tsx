@@ -46,3 +46,10 @@ it("keeps list controls and inline content outside its heading and gives a setti
   expect(view.textContent).toContain("Filtered");
   expect(view.querySelector("h3#general")?.textContent).toBe("General");
 });
+
+it("rules a settings group's heading with the flat hairline the rows below take, not the groove", () => {
+  const view = mount(<StickyHeading variant="group" id="general">General</StickyHeading>);
+  const pinned = view.querySelector("#general")!.closest<HTMLElement>("[data-sticky-heading]")!;
+  expect(pinned.classList.contains("hairline-b")).toBe(true);
+  expect(pinned.className).not.toContain("groove");
+});

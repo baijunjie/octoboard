@@ -213,7 +213,7 @@ export function OtherComputersGroup({ remoteAccess, loginOn, announce }: { remot
       {tabbed ? (
         <Tabs variant="underline" selectedKey={shownTab} disabledKeys={disabledTabs} onSelectionChange={(key) => setTab(key as WayIn)} className="gap-0">
           <TextTabStrip
-            underline
+            underline="hairline"
             label={t("settings.remoteAccess.tabs.label")}
             tabs={[
               { id: "app", label: t("settings.remoteAccess.tabs.app") },

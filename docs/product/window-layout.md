@@ -87,14 +87,27 @@ level with the line under the headers docked beside it. The text in a card's hea
 theirs above 768 px, and 2 px lower at 768 px and below.
 
 **The lines that divide a pane's parts are grooves**: the line under every pane header, and the lines that divide
-parts and rows elsewhere in the window — under the project pane's filter bar, the Git mode's worktree selector bar and
-Compare's From and To row, above a note under a pane's list, between Settings' rows and sections, in the configuration
-import's lists, and in the welcome screen's list of agents. On a display of 2× pixel density
-or more a groove is two 0.5 px lines, a dark one above a light one, so that it reads as pressed into the surface; below
-2× it is a single 1 px dark line. Either way it takes 1 px. In the light appearance, on a surface that is white or
-nearly so — a dialog such as Settings, or the archive view — the light line cannot show, and the groove reads as a
-single 0.5 px dark line. The borders of controls and of a selected item, the session tree's connectors, the dashed
-outline of an empty column in the file viewer and the lines a rendered document draws are not grooves.
+the window's other dimensional parts — under the project pane's filter bar, the Git mode's worktree selector bar and
+Compare's From and To row, above a note under a pane's list, between the Settings dialog's column of sections and the
+selected section above 768 px, and in the welcome screen's list of agents. On a display of 2× pixel density or more a
+groove is two 0.5 px lines, a dark one above a light one, so that it reads as pressed into the surface; below 2× it is
+a single 1 px dark line. Either way it takes 1 px. In the light appearance, on a surface that is white or nearly so — a dialog such
+as Settings, or the archive view — the light line cannot show, and the groove reads as a single 0.5 px dark line.
+
+**The lines that divide flat rows are hairlines**: a flat card, a table or a list of rows on a dialog's own surface or
+in Settings, and a heading over those rows, take a single plain line instead of a groove — 0.5 px on a display of 2×
+pixel density or more and 1 px below that, in the faint colour of a panel card's hairline edge. This covers the lines
+between Settings' rows and around a section's leading rows, under a Settings group's heading while it is pinned, the
+Agent accounts table's lines (under its column headers, between its rows, under its strip of agent tabs and at the
+start of its pinned actions column), under the Access section's failure alert and its Octoboard app and Browser tabs, between the sections of a confirmation
+that shows more than one, between the rows of the third-party licenses list and of the Add agent list, and in the
+configuration import's cards. Such a card is outlined by the same hairline, with rounded corners and no shadow; the
+lines between its rows and parts stop short of its sides by the card's padding, and its header and heading bands are
+set apart by their fill, with no line of their own. Within one list, table or card, and the heading over it, all
+lines are of one kind.
+
+The borders of controls and of a selected item, the session tree's connectors, the dashed outline of an empty column
+in the file viewer and the lines a rendered document draws are neither grooves nor these hairlines.
 
 **Panel cards take a light card shadow; whatever else floats over the content is raised by a large shadow; what lies
 in the layout takes the soft one.** The panel cards — the floating sidebar (see "A hidden pane floats in on hover"

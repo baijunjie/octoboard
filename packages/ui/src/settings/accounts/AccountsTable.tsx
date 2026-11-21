@@ -24,11 +24,11 @@ import { AccountLoginButton, type ReturnLoginFocus } from "./AccountLoginButton"
 import { useAccountDisabled } from "./useAccountDisabled";
 import { useProviders } from "../../store";
 
-/** The pinned cell's start edge while the table scrolls: a hairline, as a shadow since a cell's border is the
- * groove's. */
-const PINNED_EDGE = "group-data-[overflowing]/accounts:shadow-[inset_1px_0_0_var(--separator)] group-data-[overflowing]/accounts:rtl:shadow-[inset_-1px_0_0_var(--separator)]";
+/** The pinned cell's start edge while the table scrolls: the hairline the rows' dividers take, as a shadow since a
+ * cell's border is the row divider's. */
+const PINNED_EDGE = "group-data-[overflowing]/accounts:shadow-[inset_var(--hairline-width)_0_0_var(--panel-hairline)] group-data-[overflowing]/accounts:rtl:shadow-[inset_calc(-1*var(--hairline-width))_0_0_var(--panel-hairline)]";
 
-const HEADER = "px-2 py-2 align-middle text-start text-xs font-medium whitespace-nowrap text-app-muted groove-b";
+const HEADER = "px-2 py-2 align-middle text-start text-xs font-medium whitespace-nowrap text-app-muted hairline-b";
 
 /** One agent's accounts as a table, a row for each account (`AccountTableRow`, as `children`) under column headers said
  * once: the account (name, plan and email), its usage, its status (login state, with the Log in icon while it is signed
@@ -87,7 +87,7 @@ export function rowActionsTrigger(row: string): HTMLElement | null {
   return document.querySelector<HTMLElement>(`[data-account-row="${CSS.escape(row)}"] [data-row-actions] button`);
 }
 
-const CELL = "px-2 py-3 align-middle groove-b group-last/row:border-b-0";
+const CELL = "px-2 py-3 align-middle hairline-b group-last/row:border-b-0";
 
 /** One account's row (`account` null for the agent's default account): its `name` with the plan and, under them, the
  * email it is signed in with (the row's header cell, with the name muted while its quota is used up), a compact usage

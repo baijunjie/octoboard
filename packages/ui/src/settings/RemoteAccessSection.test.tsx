@@ -625,6 +625,23 @@ it("words a browser port that is the daemon's own port", async () => {
   expect(container.textContent).toContain("The browser port is the port the app itself uses.");
 });
 
+it("rules the failure alert with the flat hairline the rows round it take, never the groove", async () => {
+  const { container } = await mount(remoteAccessOf({ allowed: true, state: "failed", failure: { reason: "pipe_failed", detail: "Access is denied" } }), WINDOWS);
+  const ruled = [...container.querySelectorAll<HTMLElement>(".hairline-b")].filter((node) => node.textContent!.includes("could not open the named pipe"));
+  expect(ruled.length).toBeGreaterThan(0);
+  expect(ruled.at(-1)!.className).not.toContain("groove");
+});
+
+it("rules the App and Browser tab strip, shown once there is a browser port, with the flat hairline, never the groove", async () => {
+  const { container } = await mount(remoteAccessOf({ ...SERVING, browser_port: 3369 }));
+  const tablist = container.querySelector('[role="tablist"]')!;
+  expect(tablist).not.toBeNull();
+  const strip = tablist.parentElement!.closest<HTMLElement>("[class*='h-10']")!;
+  expect(strip.classList.contains("hairline-b")).toBe(true);
+  expect(strip.className).not.toContain("groove");
+  expect(container.querySelectorAll("[class*='groove']")).toHaveLength(0);
+});
+
 it("words a key failure for a browser", async () => {
   const { container } = await mount(remoteAccessOf({ browser_port: 3369, browser_allowed: true, browser_state: "failed", browser_failure: { reason: "owner_key_failed", detail: "d" } }));
   expect(container.textContent).toContain("The key that signs a browser in could not be created or read.");

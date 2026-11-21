@@ -744,6 +744,13 @@ it("puts Add agent and Add account at the end of the tab row as icon-only button
   expect(document.body.querySelector<HTMLSelectElement>('select[aria-label="Agent"]')!.value).toBe("codex");
 });
 
+it("rules the pinned tab strip with the flat hairline the rows below take, never the groove", () => {
+  const { container } = mount("Codex");
+  const strip = container.querySelector('[role="tablist"]')!.closest<HTMLElement>(".sticky")!;
+  expect(strip.classList.contains("hairline-b")).toBe(true);
+  expect(strip.className).not.toContain("groove");
+});
+
 it("keeps keyboard focus on the tab that was moved, not on the Settings section entry", async () => {
   const { container } = mount();
   const tabOf = (name: string) => [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find((el) => el.textContent === name)!;

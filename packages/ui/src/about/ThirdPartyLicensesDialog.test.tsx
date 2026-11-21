@@ -159,3 +159,14 @@ it("announces the loading line from a status region that already exists, after t
   await act(() => vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(status()).toBe("Loading licenses…");
 });
+
+it("divides the package rows with the flat hairline, never the groove, and resets it on the last row", () => {
+  const container = mount(licenses);
+  const items = Array.from(container.querySelectorAll("li"));
+  expect(items).toHaveLength(3);
+  for (const item of items) {
+    expect(item.classList.contains("hairline-b")).toBe(true);
+    expect(item.className).not.toContain("groove");
+    expect(item.classList.contains("last:border-b-0")).toBe(true);
+  }
+});

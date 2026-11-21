@@ -10,7 +10,5 @@ export function SettingsLead({ children }: { children: React.ReactNode }): React
  * draws no rule under itself either, so where more of the section follows (`ruledBelow`) the wrapper draws that one.
  * `hidden` takes it away, rules and all, while a search in Settings hides every row in it. */
 export function LeadRows({ ruledBelow = false, hidden = false, children }: { ruledBelow?: boolean; hidden?: boolean; children: React.ReactNode }): React.ReactElement {
-  // Two grooves on one element would share one `border-image`, drawing only one of them. The inner element is there
-  // either way, so that `ruledBelow` changing (as a search shows and hides what follows) does not remount the rows.
-  return <div className="groove-t" hidden={hidden}><div className={ruledBelow ? "groove-b" : undefined}>{children}</div></div>;
+  return <div className={ruledBelow ? "hairline-t hairline-b" : "hairline-t"} hidden={hidden}>{children}</div>;
 }

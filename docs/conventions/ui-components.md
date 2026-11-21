@@ -200,10 +200,10 @@ The helper for each need is in `docs/structure/ui.md`, "Shared entry points"; th
 - **Horizontal padding or margin that places content against the sidebar's or right pane's edge uses `--pane-inset`,
   `--row-fill-inset` and `--row-content-inset`** (`styles/layout.css`), never a literal `px-2/3/4`; layered values are a
   `calc` of the token; vertical padding keeps its own value.
-- **A line that divides a pane's parts or rows is a groove utility (`groove-b` and siblings), never a bare `border-*`**;
-  a flat card or a table divides with `hairline-b` instead (`docs/conventions/ui-standard.md`, "Cards, grooves and
-  hairlines"). `--separator` stays for HeroUI components and composite frames. A card takes no decorative outline: a
-  card in the layout takes `shadow-(--panel-shadow)`, a floating non-panel surface keeps `shadow-lg` / `shadow-xl` minus
+- **A line that divides parts or rows is a groove (`groove-b` and siblings) or a hairline (`hairline-b` and siblings)
+  as `docs/conventions/ui-standard.md`, "Cards, grooves and hairlines" assigns them, never a bare `border-*`**.
+  `--separator` stays for HeroUI components and composite frames. A card takes no decorative outline: a card in the
+  layout takes `shadow-(--panel-shadow)`, a floating non-panel surface keeps `shadow-lg` / `shadow-xl` minus
   the outline, a panel card takes `PANEL_CARD_CLASS`. A surface meant to look like an existing one reuses that surface's
   class or tokens.
 - **Every CSS rule written or generated keeps a tag, class or id in its rightmost compound** (`:where()` around

@@ -63,3 +63,12 @@ it("takes every press when the change starts no save", () => {
   act(() => input.click());
   expect(onChange).toHaveBeenCalledTimes(2);
 });
+
+it("divides its rows with the flat hairline, never the groove, and resets it on the last row", () => {
+  const container = mount(<SettingRow label="Appearance" />);
+  const row = container.firstElementChild!;
+  expect(row.classList.contains("hairline-b")).toBe(true);
+  expect(row.className).not.toContain("groove");
+  // The last row (no shown row after it) draws no rule under itself.
+  expect(row.className).toContain("border-b-0");
+});

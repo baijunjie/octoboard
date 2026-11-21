@@ -109,3 +109,14 @@ it("closes from its Close button", () => {
   act(() => [...document.querySelectorAll("button")].find((b) => b.textContent === "Close")!.click());
   expect(onClose).toHaveBeenCalled();
 });
+
+it("divides the agent rows with the flat hairline, never the groove, and resets it on the last row", () => {
+  render({ claude: "available", codex: "unavailable" }, ["claude"]);
+  const items = rows();
+  expect(items.length).toBeGreaterThan(1);
+  for (const item of items) {
+    expect(item.classList.contains("hairline-b")).toBe(true);
+    expect(item.className).not.toContain("groove");
+    expect(item.classList.contains("last:border-b-0")).toBe(true);
+  }
+});

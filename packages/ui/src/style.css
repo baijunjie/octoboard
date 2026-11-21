@@ -173,10 +173,7 @@ html {
    line on the left and never mirror under right-to-left, whichever side of the box they are on:
    `groove-l` and `groove-r` name the physical side, `groove-s` and `groove-e` the inline start and
    end, whose side and slice swap under `rtl:` while the colour order stays put. The sides are
-   physical borders, so `last:border-b-0` and the like still reset them. A table's groove goes on
-   its cells, with the table in `border-separate border-spacing-0`: `border-image` draws nothing on
-   rows or cells under `border-collapse: collapse`, which the preflight gives every table, and a row
-   draws no border at all once the table is separate. */
+   physical borders, so `last:border-b-0` and the like still reset them. */
 @utility groove-b {
   border-bottom: 1px solid var(--groove-dark);
   border-image: linear-gradient(to top, var(--groove-light) calc(1px - var(--groove-span)), var(--groove-dark) calc(1px - var(--groove-span)) 1px, transparent 1px) 0 0 1 0;
@@ -213,15 +210,15 @@ html {
   }
 }
 
-/* A divider on a flat surface (a card framed as a table, a table): one plain hairline in the colour of a
-   panel card's outline (`panel-edge`), where a raised surface takes a groove. It is a border-bottom of
-   `--hairline-width`, so `border-b-0` and the like still reset it. */
+/* A divider on a flat surface (a flat card, a table, a list of rows or a heading over them in a dialog or on a Settings
+   page): one plain hairline in the colour of a panel card's outline (`panel-edge`), where a raised surface takes a
+   groove. It is a border-bottom of `--hairline-width`, so `border-b-0` and the like still reset it. */
 @utility hairline-b {
   border-bottom: var(--hairline-width) solid var(--panel-hairline);
 }
 
 /* The same hairline on the top edge and on the inline-start edge (the side that follows the reading direction), for a
-   divider between stacked or side-by-side parts of a flat card. */
+   divider between stacked or side-by-side parts of a flat surface. */
 @utility hairline-t {
   border-top: var(--hairline-width) solid var(--panel-hairline);
 }

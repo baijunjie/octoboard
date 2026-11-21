@@ -22,7 +22,7 @@ export function AccessFailureAlert({ id, title, failure, way, announce }: {
   const reasonKey: PlainMessageKey | undefined = failureReasonKey(way, failure.reason);
   return (
     <SettingsSearchBlock id={id}>
-      <div className="groove-b py-4">
+      <div className="hairline-b py-4">
         <ErrorAlert announce={announce} title={title} details={<DiagnosticBlock>{failure.detail}</DiagnosticBlock>}>
           {reasonKey && <Message id={reasonKey} />}
         </ErrorAlert>

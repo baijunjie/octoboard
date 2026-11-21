@@ -55,7 +55,7 @@ export function SettingRow({
       data-list-motion={motionKey ?? searchId}
       data-settings-search-id={searchId}
       hidden={searchId !== undefined && !shows(searchId)}
-      className="flex flex-col gap-3 groove-b py-4 [&:not(:has(~:not([data-list-motion-exit],[hidden])))]:border-b-0"
+      className="flex flex-col gap-3 hairline-b py-4 [&:not(:has(~:not([data-list-motion-exit],[hidden])))]:border-b-0"
     >
       <div className={compact ? "flex items-center justify-between gap-4 tablet:gap-6" : "flex flex-col items-start gap-3 tablet:flex-row tablet:items-center tablet:justify-between tablet:gap-6"}>
         <div className="min-w-0">

@@ -34,7 +34,7 @@ async function mountWith(status?: AgentCliStatus) {
   const mounted = await mountAgentVersion("Claude Code");
   const put = (next: AgentCliStatus) => mounted.set({ agentCliStatuses: new Map<Agent, AgentCliStatus>([...mounted.store.getState().agentCliStatuses, [next.agent, next]]) });
   if (status) put(status);
-  const row = () => mounted.container.querySelector("[aria-label='About updating']")?.closest<HTMLElement>(".groove-b") ?? undefined;
+  const row = () => mounted.container.querySelector("[aria-label='About updating']")?.closest<HTMLElement>(".hairline-b") ?? undefined;
   const text = () => row()?.textContent ?? "";
   const update = () => buttonNamed(mounted.container, "Update");
   return { ...mounted, put, text, update, row };

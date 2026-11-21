@@ -21,7 +21,7 @@ function PackageRow({ entry, texts }: { entry: LicensedPackage; texts: readonly 
   const t = useT();
   const [open, setOpen] = useState(false);
   return (
-    <li className="groove-b py-2 last:border-b-0">
+    <li className="hairline-b py-2 last:border-b-0">
       <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)} className="group min-w-0">
         <summary className="flex cursor-pointer items-baseline gap-2 text-sm [&::-webkit-details-marker]:hidden">
           <ChevronRight className="size-4 shrink-0 translate-y-0.5 self-start text-app-muted group-open:hidden rtl:-scale-x-100" />

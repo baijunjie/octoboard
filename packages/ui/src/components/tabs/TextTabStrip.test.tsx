@@ -11,7 +11,7 @@ import { TextTabStrip } from "./TextTabStrip";
 
 const TABS = [{ id: "a", label: "First" }, { id: "b", label: "Second" }];
 
-function mount(underline?: boolean) {
+function mount(underline?: "hairline" | "groove") {
   return mountHost(
     <Tabs variant={underline ? "underline" : undefined} defaultSelectedKey="a">
       <TextTabStrip label="Ways in" tabs={TABS} underline={underline} />
@@ -31,19 +31,27 @@ it("draws one tab per entry, in order, in a tab list named by its label", () => 
 });
 
 it("selects a tab on a press and shows its panel", async () => {
-  const container = mount(true);
+  const container = mount("hairline");
   await click(tabs(container)[1]);
   expect(tabs(container).map((tab) => tab.getAttribute("aria-selected"))).toEqual(["false", "true"]);
   expect(container.querySelector('[role="tabpanel"]')?.textContent).toBe("panel b");
   await act(async () => {});
 });
 
-it("is a strip drawn as Agent accounts' with a divider across the whole row only when underlined", () => {
-  const underlined = mount(true);
-  const row = underlined.querySelector('[role="tablist"]')!.parentElement!.closest<HTMLElement>("[class*='groove-b']");
+const rowOf = (container: HTMLElement) => container.querySelector('[role="tablist"]')!.parentElement!.closest<HTMLElement>("[class*='h-10']");
+
+it.each([["hairline", "groove"], ["groove", "hairline"]] as const)("draws the %s kind of divider across the whole row when underlined, and not the %s", (kind, other) => {
+  const row = rowOf(mount(kind));
   expect(row).not.toBeNull();
+  expect(row!.classList.contains(`${kind}-b`)).toBe(true);
+  expect(row!.className).not.toContain(`${other}-b`);
   expect(row!.className).toContain("h-10");
   expect(row!.className).toContain("w-full");
-  const filled = mount(false);
+});
+
+it("draws no divider and no row height without an underline", () => {
+  const filled = mount();
   expect(filled.querySelector("[class*='groove-b']")).toBeNull();
+  expect(filled.querySelector("[class*='hairline-b']")).toBeNull();
+  expect(rowOf(filled)).toBeNull();
 });

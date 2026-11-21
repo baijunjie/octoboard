@@ -298,8 +298,8 @@ export function AgentAccountsSection(): React.ReactElement {
           />
         ) : (
           /* This is the underline strip, unlike the filled tabs that switch the sections. Its list drops the padding
-              the focus ring needs, so it is given back here, and its underline is drawn as a groove like the rows'
-              dividers instead of HeroUI's plain border. The strip pins itself to the top of the section's scroller
+              the focus ring needs, so it is given back here, and its underline is drawn as the hairline the rows'
+              dividers take instead of HeroUI's plain border. The strip pins itself to the top of the section's scroller
               over the rows, opaque on the dialog's own surface and flush with the scroller's edge
               (`--section-padding` is the padding the Settings dialog gives the section). */
           <Tabs variant="underline" className="gap-0" selectedKey={selected} onSelectionChange={(key) => setChosen(key as Agent)}>
@@ -332,7 +332,7 @@ export function AgentAccountsSection(): React.ReactElement {
               notInstalledTip={(agent) => added !== null && isAgentUnavailable(availability, agent) && (
                 <Message id="settings.accounts.notInstalledTip" params={{ agent: <ProviderName agent={agent} />, ...PATH_VAR_PARAMS }} />
               )}
-              className={`sticky top-[calc(-1*var(--section-padding))] z-3 h-10 w-full groove-b bg-overlay ${pinnedFocus.className}`}
+              className={`sticky top-[calc(-1*var(--section-padding))] z-3 h-10 w-full hairline-b bg-overlay ${pinnedFocus.className}`}
             />
             {agents.map((agent) => (
               <AgentAccountsPanel

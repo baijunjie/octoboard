@@ -133,3 +133,32 @@ describe("the accounts table", () => {
     expect(container.querySelectorAll('thead button[aria-label="About disabling an account"]')).toHaveLength(1);
   });
 });
+
+describe("the accounts table's dividers", () => {
+  it("rules every header and cell with the flat hairline, never the groove, and resets it on the last row", () => {
+    const { container } = mount("Codex");
+    const table = container.querySelector("table")!;
+    const headers = [...table.querySelectorAll("thead th")];
+    expect(headers).toHaveLength(6);
+    for (const header of headers) expect(header.classList.contains("hairline-b")).toBe(true);
+    const cells = [...table.querySelectorAll("tbody td, tbody th")];
+    expect(cells.length).toBeGreaterThan(0);
+    for (const cell of cells) {
+      expect(cell.classList.contains("hairline-b")).toBe(true);
+      expect(cell.classList.contains("group-last/row:border-b-0")).toBe(true);
+    }
+    expect(table.querySelectorAll("[class*='groove']")).toHaveLength(0);
+  });
+
+  it("draws the pinned actions cell's start edge in the panel hairline, as a shadow, not the separator", () => {
+    const { container } = mount("Codex");
+    const table = container.querySelector("table")!;
+    const pinned = [...table.querySelectorAll("thead tr, tbody tr")].map((row) => row.lastElementChild!.className);
+    expect(pinned).toHaveLength(3);
+    for (const className of pinned) {
+      expect(className).toContain("--panel-hairline");
+      expect(className).toContain("--hairline-width");
+      expect(className).not.toContain("--separator");
+    }
+  });
+});

@@ -216,11 +216,12 @@ it("puts an agent's default account changes, then its settings, then its account
   expect(order[1]).toMatch(/^DIV:The default account/);
   expect(order.some((entry) => entry.startsWith("H4:Accounts"))).toBe(true);
   expect(claude.querySelectorAll("h4")).toHaveLength(1);
-  // The subheading is a filled band of its own: no groove at its edges, nor on the block above it.
+  // The subheading is a filled band of its own: no rule at its edges, nor on the block above it.
   const subheading = claude.querySelector("h4")!;
   expect(subheading.className).toContain("bg-(--control-fill)");
-  expect(subheading.className).not.toContain("groove");
-  expect(subheading.previousElementSibling!.className).not.toContain("groove-b");
+  expect(subheading.className).not.toMatch(/groove|hairline/);
+  expect(subheading.previousElementSibling!.classList.contains("hairline-b")).toBe(false);
+  expect(subheading.previousElementSibling!.classList.contains("groove-b")).toBe(false);
   expect(subheading.nextElementSibling?.tagName).toBe("UL");
 });
 

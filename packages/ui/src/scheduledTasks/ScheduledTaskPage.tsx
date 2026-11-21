@@ -194,7 +194,7 @@ function TaskView({ titleId, task, view, onViewChange, consoleId, consoles, proj
     <>
       <TaskHeader titleId={titleId} task={task} runs={runs.runs} />
       <Tabs variant="underline" selectedKey={view} onSelectionChange={(key) => onViewChange(key as TaskViewKey)} className="gap-6">
-        <TextTabStrip underline label={t("scheduledTasks.view.label")} tabs={[{ id: "settings", label: t("scheduledTasks.view.settings") }, { id: "runs", label: t("scheduledTasks.view.runs") }]} />
+        <TextTabStrip underline="groove" label={t("scheduledTasks.view.label")} tabs={[{ id: "settings", label: t("scheduledTasks.view.settings") }, { id: "runs", label: t("scheduledTasks.view.runs") }]} />
         <TabPanel id="settings" className="mt-0 flex flex-col gap-6 p-0">
           <ScheduledTaskForm draft={draft} consoles={consoles} projects={projects} actionBar={actionBar} />
           <FormCard>

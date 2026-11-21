@@ -100,7 +100,7 @@ it("offers nothing for a permission that is granted, and shows a success badge a
   const badges = Array.from(container.querySelectorAll('[data-color="success"][data-variant="soft"]'));
   expect(badges.map((badge) => badge.textContent)).toEqual(["Granted", "Granted"]);
   // The badge is the granted state, so the description no longer repeats it.
-  expect(container.querySelector(".groove-t")!.textContent).not.toContain("Granted.");
+  expect(container.querySelector(".hairline-t")!.textContent).not.toContain("Granted.");
 });
 
 it("offers Grant for one that is not, and asks for it on press", async () => {
@@ -254,7 +254,7 @@ it("says a grant picked up on the way back from System Settings a moment after t
   attend(true);
   await act(async () => {});
   // The rows show it at once; only the region waits.
-  expect(container.querySelector(".groove-t")!.textContent).not.toContain("Not granted.");
+  expect(container.querySelector(".hairline-t")!.textContent).not.toContain("Not granted.");
   expect(statuses(container)).toEqual(["Screen Recording is not granted. Accessibility is granted."]);
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(statuses(container)).toEqual(["Screen Recording is not granted. Accessibility is granted."]);

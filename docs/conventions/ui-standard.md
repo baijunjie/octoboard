@@ -185,7 +185,9 @@ showing one piece of content in a modal layer (the file viewer) keeps that conte
   line of their own, so a caller writes no divider, inset or fill class.
 - **A groove (`groove-b` and its other sides) is only for the dimensional parts**: panes, panel headers and toolbars,
   the rail and sidebar, a floating panel with a shadow, a sticky heading over a pane's list, a section band in a pane.
-  A flat card, a table or a list of rows in a dialog or a Settings page divides with `hairline-b`.
+  A flat card, a table or a list of rows in a dialog or a Settings page divides with a hairline (`hairline-b` and its
+  other sides), and a heading over those rows (a Settings group's sticky heading, a tab strip) takes the same hairline:
+  the lines of one list, table or card and the heading over it are of one kind.
 
 ### Tab strips
 
@@ -196,7 +198,7 @@ showing one piece of content in a modal layer (the file viewer) keeps that conte
 
 - **A Settings section of more than one block puts each in a `SettingsGroup` with its own heading**, spaced only by the
   group and its rows; groups are ordered by how often each is used, the section's ungrouped rows first.
-- **Within a Settings page, tabs are the underline strip** (`AgentTabList`, `TextTabStrip` with `underline`); the filled
+- **Within a Settings page, tabs are the underline strip** (`AgentTabList`, `TextTabStrip` with `underline="hairline"`); the filled
   strip is the Settings dialog's own sections at narrow widths and tabs inside a dialog's frame.
 
 ### Menus

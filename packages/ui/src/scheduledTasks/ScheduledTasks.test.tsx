@@ -466,6 +466,13 @@ it("shows the task's schedule, next run with a countdown and last run in its hea
   expect(figures(second.container)).toEqual([["Next run", "None"], ["Last run", "Never"]]);
 });
 
+it("rules the Settings and Run history strip with the pane's groove, not a hairline", async () => {
+  const { container } = await mount();
+  const strip = page(container)!.querySelector('[role="tablist"]')!.parentElement!.closest<HTMLElement>("[class*='h-10']")!;
+  expect(strip.classList.contains("groove-b")).toBe(true);
+  expect(strip.className).not.toContain("hairline-b");
+});
+
 it("pins Save and Revert below the form's scroll, and Save and Cancel for a new task, and gives a new task no Run history", async () => {
   const { container } = await mount();
   const bar = (): HTMLElement => buttonNamed(page(container)!, "Save")!.parentElement!.parentElement!;

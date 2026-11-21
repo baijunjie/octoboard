@@ -592,7 +592,7 @@ it("heads each topic of an archive as a labelled group, with a divider only betw
   const dialog = document.querySelector("[role=alertdialog]")!;
   const groups = [...dialog.querySelectorAll("[role=group]")].filter((group) => group.querySelector(":scope > h3"));
   expect(groups.map((group) => group.querySelector("h3")?.textContent)).toEqual(["Archived with it (1)", "Worktrees and branches", "Background processes"]);
-  expect(dialog.querySelectorAll(".groove-t")).toHaveLength(2);
+  expect(dialog.querySelectorAll(".hairline-t")).toHaveLength(2);
   expect(groups[1].textContent).toContain("Also permanently deletes");
   expect(groups[2].textContent).toContain("1 process will be stopped.");
 });
@@ -656,7 +656,7 @@ it("shows no section, and no divider, for an archive with nothing to list", asyn
   await act(async () => {});
   const dialog = document.querySelector("[role=alertdialog]")!;
   expect([...dialog.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["Background processes"]);
-  expect(dialog.querySelector(".groove-t")).toBeNull();
+  expect(dialog.querySelector(".hairline-t")).toBeNull();
 });
 
 it("preserves process choices through another inspection and selects newly found trees for stopping", async () => {
@@ -873,7 +873,7 @@ it("lists the project processes a console's deletion stops, one request per proj
   const group = [...dialog.querySelectorAll("[role=group]")].find((candidate) => candidate.querySelector(":scope > h3")?.textContent === "Project processes")!;
   expect(group.querySelectorAll("button[aria-expanded]")).toHaveLength(3);
   expect(group.textContent).toContain("3 processes will be stopped.");
-  expect(dialog.querySelectorAll(".groove-t")).toHaveLength(0);
+  expect(dialog.querySelectorAll(".hairline-t")).toHaveLength(0);
 });
 
 it("shows no project processes section in a console's deletion when none of its projects has any", async () => {
@@ -956,7 +956,7 @@ it("heads a project's removal by its running sessions, its folder and its projec
   const dialog = document.querySelector("[role=alertdialog]")!;
   const headings = () => [...dialog.querySelectorAll("[role=group] > h3")].map((h) => h.textContent);
   expect(headings()).toEqual(["Sessions that will be ended (1)", "Project folder", "Project processes"]);
-  expect(dialog.querySelectorAll(".groove-t")).toHaveLength(2);
+  expect(dialog.querySelectorAll(".hairline-t")).toHaveLength(2);
   expect(dialog.textContent).not.toContain("will also be stopped");
 });
 
@@ -965,7 +965,7 @@ it("shows only the project folder section for a project with nothing running", a
   await act(async () => {});
   const dialog = document.querySelector("[role=alertdialog]")!;
   expect([...dialog.querySelectorAll("[role=group] > h3")].map((h) => h.textContent)).toEqual(["Project folder"]);
-  expect(dialog.querySelectorAll(".groove-t")).toHaveLength(0);
+  expect(dialog.querySelectorAll(".hairline-t")).toHaveLength(0);
 });
 
 it("shows no Project processes section when the project has none", async () => {

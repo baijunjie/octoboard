@@ -26,7 +26,7 @@ export const STICKY_HEADING_HEIGHT = { list: 38, group: 40 } as const satisfies 
  * scroller has vertical padding (`--section-padding`), which a `group` heading takes negated as its `top`. */
 const PINNED: Record<StickyHeadingVariant, string> = {
   list: "top-0 flow-root bg-panel-sidebar",
-  group: "top-[calc(-1*var(--section-padding))] mt-4 flex h-[40px] items-center groove-b bg-overlay text-base font-semibold",
+  group: "top-[calc(-1*var(--section-padding))] mt-4 flex h-[40px] items-center hairline-b bg-overlay text-base font-semibold",
   category: "top-0 -mx-(--pane-inset) flex shrink-0 flex-col gap-1 bg-panel-sidebar px-(--pane-inset) py-2",
   subcategory: "-mx-(--pane-inset) shrink-0 bg-panel-sidebar px-(--pane-inset) text-sm font-medium",
 };

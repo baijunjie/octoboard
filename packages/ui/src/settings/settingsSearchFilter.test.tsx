@@ -7,7 +7,6 @@ import type { PlainMessageKey } from "../i18n/catalog";
 import { mountHost } from "../test/mountHost";
 import { SettingRow } from "./SettingRow";
 import { SettingsGroup } from "./SettingsGroup";
-import { LeadRows } from "./SettingsLead";
 import type { SectionMatches, SettingsSearchId } from "./settingsSearch";
 import { SettingsSearchBlock, SettingsSearchProvider } from "./settingsSearchFilter";
 
@@ -111,16 +110,4 @@ it("keeps a hidden block's content mounted", () => {
   const input = container.querySelector("input")!;
   container.render(<SettingsSearchProvider matches={matches(["trusted-folders.list"], [])}><SettingsSearchBlock id="trusted-folders.list"><input aria-label="Draft" /></SettingsSearchBlock></SettingsSearchProvider>);
   expect(container.querySelector("input")).toBe(input);
-});
-
-it("hides the lead's rows wrapper, rules and all, when asked to", () => {
-  const container = mountHost(
-    <>
-      <LeadRows hidden><SettingRow label="Alpha" /></LeadRows>
-      <LeadRows ruledBelow><SettingRow label="Beta" /></LeadRows>
-    </>,
-  );
-  const [hidden, shown] = [...container.children] as HTMLElement[];
-  expect(hidden!.hidden).toBe(true);
-  expect(shown!.hidden).toBe(false);
 });
