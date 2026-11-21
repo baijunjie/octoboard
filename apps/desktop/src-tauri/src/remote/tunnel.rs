@@ -373,14 +373,15 @@ pub async fn serve(listener: TcpListener, link: Arc<Link>, stop: watch::Receiver
     serve_checking(listener, link, stop, LIVE_CHECK).await;
 }
 
-/// `serve`, looking at the SSH connection every `every`.
+/// `serve`, looking at the SSH connection every `every`, the first time once `every` has passed: the link is
+/// handed over with its connection just made, so there is nothing to look at before.
 async fn serve_checking(
     listener: TcpListener,
     link: Arc<Link>,
     mut stop: watch::Receiver<bool>,
     every: Duration,
 ) {
-    let mut check = tokio::time::interval(every);
+    let mut check = tokio::time::interval_at(tokio::time::Instant::now() + every, every);
     loop {
         tokio::select! {
             _ = check.tick() => {
@@ -410,6 +411,7 @@ mod tests {
     use super::super::ssh::test_server::{answer, Behaviour, TestServer};
     use super::super::ssh::Secret;
     use super::*;
+    use crate::test_support::ClosedPort;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     fn target(server: &TestServer) -> Target {
@@ -515,7 +517,7 @@ mod tests {
         let mut live = running.link.live();
         assert!(*live.borrow_and_update());
         dropped(&running, &server).await;
-        // Seen dropped at the next look the serving loop takes.
+        // Seen dropped at a look at the connection, which the serving loop takes every interval.
         running.link.note_live();
         assert!(!*live.borrow_and_update());
         assert_eq!(echo(running.port, b"two").await, b"two");
@@ -528,10 +530,14 @@ mod tests {
     #[tokio::test]
     async fn the_port_stays_held_while_the_host_cannot_be_reached() {
         let server = TestServer::start(Behaviour::default()).await;
-        let running = run(&server).await;
-        let fingerprint = server.fingerprint.clone();
-        drop(server);
-        // Nothing listens at the host's port any more: the window's connection is closed at once.
+        let closed = ClosedPort::new();
+        let nowhere = Target {
+            port: closed.port(),
+            ..target(&server)
+        };
+        let running = run_with(&server, nowhere, Duration::from_secs(3600)).await;
+        dropped(&running, &server).await;
+        // Nothing listens at the host's port: the window's connection is closed at once.
         let mut stream = TcpStream::connect(("127.0.0.1", running.port))
             .await
             .unwrap();
@@ -542,7 +548,6 @@ mod tests {
             std::net::TcpListener::bind(("127.0.0.1", running.port)).is_err(),
             "the port is still the application's"
         );
-        assert!(!fingerprint.is_empty());
     }
 
     #[tokio::test]
@@ -718,12 +723,11 @@ mod tests {
     #[tokio::test]
     async fn an_unreachable_host_is_asked_again_after_the_growing_pause() {
         let server = TestServer::start(Behaviour::default()).await;
-        let closed = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let closed = ClosedPort::new();
         let nowhere = Target {
-            port: closed.local_addr().unwrap().port(),
+            port: closed.port(),
             ..target(&server)
         };
-        drop(closed);
         let running = run_with(&server, nowhere, Duration::from_secs(3600)).await;
         dropped(&running, &server).await;
         assert!(running

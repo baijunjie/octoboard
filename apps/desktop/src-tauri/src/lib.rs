@@ -44,6 +44,8 @@ mod sidecar;
 // login items.
 #[cfg(target_os = "macos")]
 mod system_settings;
+#[cfg(test)]
+mod test_support;
 mod tray;
 mod updater;
 mod window_factory;

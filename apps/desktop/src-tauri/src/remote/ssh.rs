@@ -539,6 +539,7 @@ mod tests {
     use super::test_server::{Behaviour, Methods, TestServer, ENCRYPTED_USER_KEY};
     use super::*;
     use crate::config_dir::test_support::Scratch;
+    use crate::test_support::ClosedPort;
 
     fn target(server: &TestServer, secret: Secret, pinned: Option<String>) -> Target {
         Target {
@@ -665,12 +666,10 @@ mod tests {
 
     #[tokio::test]
     async fn a_host_that_is_not_listening_is_unreachable() {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        drop(listener);
+        let closed = ClosedPort::new();
         let refused = connect(&Target {
             host: "127.0.0.1".into(),
-            port,
+            port: closed.port(),
             user: "owner".into(),
             secret: password("right"),
             pinned: None,

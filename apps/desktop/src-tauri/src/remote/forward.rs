@@ -648,6 +648,7 @@ mod tests {
     use super::super::ssh::test_server::{Behaviour, TestServer};
     use super::super::ssh::{Secret, Target as SshTarget};
     use super::*;
+    use crate::test_support::{ClosedPort, PATIENCE};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -712,15 +713,6 @@ mod tests {
             "https://localhost:7000/"
         );
         assert_eq!(rewrite("http://localhost:3000/", 80), "http://localhost/");
-    }
-
-    /// A port nothing on this computer listens on, for the moment.
-    fn free_port() -> u16 {
-        std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
-            .unwrap()
-            .local_addr()
-            .unwrap()
-            .port()
     }
 
     /// A listener that sends back what it is sent, and its port.
@@ -834,14 +826,12 @@ mod tests {
         }
     }
 
-    /// How long a wait on a real socket's teardown lasts at most: a machine under load can stall for seconds.
-    const PATIENCE: Duration = Duration::from_secs(30);
-
     #[tokio::test]
     async fn bytes_are_carried_both_ways_on_both_loopback_addresses_at_the_remote_port_s_number() {
         let echo = echo_server().await;
         let running = run(Some(echo)).await;
-        let remote = free_port();
+        let closed = ClosedPort::new();
+        let remote = closed.port();
         let opened = open(&running, &format!("http://localhost:{remote}/p"))
             .await
             .unwrap();
@@ -885,7 +875,8 @@ mod tests {
         }
         let echo = echo_server().await;
         let running = run(Some(echo)).await;
-        let remote = free_port();
+        let closed = ClosedPort::new();
+        let remote = closed.port();
         let _held = std::net::TcpListener::bind((Ipv6Addr::LOCALHOST, remote));
         let Ok(_held) = _held else { return };
         let opened = open(&running, &format!("http://localhost:{remote}/"))
@@ -898,7 +889,8 @@ mod tests {
     async fn two_openings_of_a_port_make_one_forward_whatever_the_address() {
         let echo = echo_server().await;
         let running = run(Some(echo)).await;
-        let remote = free_port();
+        let closed = ClosedPort::new();
+        let remote = closed.port();
         let first = open(&running, &format!("http://localhost:{remote}/a"))
             .await
             .unwrap();
@@ -915,8 +907,8 @@ mod tests {
 
     #[tokio::test]
     async fn nothing_listening_forwarding_refused_and_a_dropped_connection_are_told_apart() {
-        let closed = free_port();
-        let running = run(Some(closed)).await;
+        let closed = ClosedPort::new();
+        let running = run(Some(closed.port())).await;
         let failure = open(&running, "http://localhost:4321/").await.unwrap_err();
         assert_eq!(
             (failure.kind, failure.port),
@@ -944,7 +936,8 @@ mod tests {
     async fn a_forward_carries_again_after_the_connection_is_made_again_with_no_new_call() {
         let echo = echo_server().await;
         let running = run(Some(echo)).await;
-        let remote = free_port();
+        let closed = ClosedPort::new();
+        let remote = closed.port();
         let opened = open(&running, &format!("http://localhost:{remote}/"))
             .await
             .unwrap();
@@ -964,7 +957,8 @@ mod tests {
     async fn the_list_follows_the_order_made_and_says_when_it_changes() {
         let echo = echo_server().await;
         let running = run(Some(echo)).await;
-        let (a, b) = (free_port(), free_port());
+        let (closed_a, closed_b) = (ClosedPort::new(), ClosedPort::new());
+        let (a, b) = (closed_a.port(), closed_b.port());
         assert_eq!(running.changes.load(Ordering::SeqCst), 0);
         open(&running, &format!("http://localhost:{a}/"))
             .await
@@ -1019,7 +1013,8 @@ mod tests {
             ("http://[::]", both),
             ("http://app.localhost", both),
         ] {
-            let url = format!("{url}:{}/", free_port());
+            let closed = ClosedPort::new();
+            let url = format!("{url}:{}/", closed.port());
             let before = running.server.forwarded().len();
             open(&running, &url).await.unwrap();
             assert_eq!(sorted(asked_since(&running, before)), hosts, "{url}");
@@ -1052,7 +1047,8 @@ mod tests {
             ..Behaviour::default()
         })
         .await;
-        let remote = free_port();
+        let closed = ClosedPort::new();
+        let remote = closed.port();
         let opened = open(&running, &format!("http://localhost:{remote}/"))
             .await
             .unwrap();
@@ -1069,9 +1065,9 @@ mod tests {
 
     #[tokio::test]
     async fn nothing_listening_is_told_where_the_host_confirms_then_closes_every_channel() {
-        let closed = free_port();
+        let closed = ClosedPort::new();
         let running = run_on(Behaviour {
-            forward_to: Some(closed),
+            forward_to: Some(closed.port()),
             confirms_then_closes: true,
             shell: Shell::PowerShell,
             ..Behaviour::default()
@@ -1100,7 +1096,8 @@ mod tests {
             ..Behaviour::default()
         })
         .await;
-        let remote = free_port();
+        let closed = ClosedPort::new();
+        let remote = closed.port();
         let opened = open(&running, &format!("http://localhost:{remote}/"))
             .await
             .unwrap();
@@ -1127,7 +1124,8 @@ mod tests {
         .await;
         // OpenSSH on Unix refuses a channel to where nothing listens, so a confirmed one is taken as it is: no wait
         // for the close tells this host apart from a Windows one, which says nothing listens.
-        open(&running, &format!("http://localhost:{}/", free_port()))
+        let closed = ClosedPort::new();
+        open(&running, &format!("http://localhost:{}/", closed.port()))
             .await
             .unwrap();
     }
@@ -1145,8 +1143,9 @@ mod tests {
     #[tokio::test]
     async fn nothing_listening_on_either_family_is_told_after_one_refusal_s_time_not_two() {
         for (shell, confirms_then_closes) in [(Shell::Posix, false), (Shell::Cmd, true)] {
+            let closed = ClosedPort::new();
             let running = run_on(Behaviour {
-                forward_to: Some(free_port()),
+                forward_to: Some(closed.port()),
                 not_listening_on: vec!["127.0.0.1".into(), "::1".into()],
                 refusal_delay: REFUSAL_DELAY,
                 confirms_then_closes,
@@ -1179,7 +1178,8 @@ mod tests {
             ..Behaviour::default()
         })
         .await;
-        let (took, opened) = timed(&running, &format!("http://localhost:{}/", free_port())).await;
+        let closed = ClosedPort::new();
+        let (took, opened) = timed(&running, &format!("http://localhost:{}/", closed.port())).await;
         assert!(took < REFUSAL_DELAY, "took {took:?}");
         // `::1` answered first, and is where the connections go.
         let local = (Ipv4Addr::LOCALHOST, port_of(&opened.unwrap())).into();
@@ -1200,7 +1200,8 @@ mod tests {
             ..Behaviour::default()
         })
         .await;
-        let remote = free_port();
+        let closed = ClosedPort::new();
+        let remote = closed.port();
         let opened = open(&running, &format!("http://localhost:{remote}/"))
             .await
             .unwrap();
@@ -1227,7 +1228,8 @@ mod tests {
             ..Behaviour::default()
         })
         .await;
-        let opened = open(&running, &format!("http://localhost:{}/", free_port()))
+        let closed = ClosedPort::new();
+        let opened = open(&running, &format!("http://localhost:{}/", closed.port()))
             .await
             .unwrap();
         let before = running.server.forwarded().len();
@@ -1258,7 +1260,8 @@ mod tests {
     async fn a_user_name_and_password_are_not_kept_or_listed() {
         let echo = echo_server().await;
         let running = run(Some(echo)).await;
-        let remote = free_port();
+        let closed = ClosedPort::new();
+        let remote = closed.port();
         let opened = open(&running, &format!("http://me:secret@localhost:{remote}/x"))
             .await
             .unwrap();
@@ -1279,7 +1282,8 @@ mod tests {
     async fn a_slow_opening_of_one_port_does_not_hold_up_another() {
         let echo = echo_server().await;
         let running = run(Some(echo)).await;
-        let (a, b) = (free_port(), free_port());
+        let (closed_a, closed_b) = (ClosedPort::new(), ClosedPort::new());
+        let (a, b) = (closed_a.port(), closed_b.port());
         let lock = running
             .forwards
             .opening
@@ -1301,7 +1305,8 @@ mod tests {
     async fn stopping_frees_the_port_and_cuts_a_connection_passing_through() {
         let echo = echo_server().await;
         let running = run(Some(echo)).await;
-        let remote = free_port();
+        let closed = ClosedPort::new();
+        let remote = closed.port();
         let opened = open(&running, &format!("http://localhost:{remote}/"))
             .await
             .unwrap();
@@ -1324,7 +1329,8 @@ mod tests {
     async fn stopping_a_forward_drops_its_ports_opening_lock() {
         let echo = echo_server().await;
         let running = run(Some(echo)).await;
-        let remote = free_port();
+        let closed = ClosedPort::new();
+        let remote = closed.port();
         open(&running, &format!("http://localhost:{remote}/"))
             .await
             .unwrap();
@@ -1338,7 +1344,8 @@ mod tests {
     async fn a_failed_opening_drops_its_ports_opening_lock() {
         // No server behind the link's forwards: nothing answers at the remote port.
         let running = run(None).await;
-        let remote = free_port();
+        let closed = ClosedPort::new();
+        let remote = closed.port();
         let failed = open(&running, &format!("http://localhost:{remote}/")).await;
         assert!(failed.is_err());
         assert_eq!(running.forwards.opening.lock().unwrap().len(), 0);
@@ -1348,7 +1355,8 @@ mod tests {
     async fn closing_the_window_lets_every_port_go() {
         let echo = echo_server().await;
         let running = run(Some(echo)).await;
-        let remote = free_port();
+        let closed = ClosedPort::new();
+        let remote = closed.port();
         let opened = open(&running, &format!("http://localhost:{remote}/"))
             .await
             .unwrap();

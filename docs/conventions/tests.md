@@ -3,8 +3,9 @@
 How unit and integration tests are written in every end, and the code-level rules for the UI state gallery and its
 fixtures. How a test is written from the requirement is in the `agent-unit-test` skill and the `test-writer` agent
 definition; which test helper to use for what is in the "Shared entry points" tables of the structure docs
-([`../structure/ui.md`](../structure/ui.md), [`../structure/daemon.md`](../structure/daemon.md)); how to write and run
-gallery scenarios is in `packages/ui/src/gallery/README.md`.
+([`../structure/ui.md`](../structure/ui.md), [`../structure/daemon.md`](../structure/daemon.md),
+[`../structure/desktop.md`](../structure/desktop.md)); how to write and run gallery scenarios is in
+`packages/ui/src/gallery/README.md`.
 
 ## General principles
 
@@ -242,6 +243,8 @@ collection say on their doc comments when a test needs them.
   under `#[cfg(test)]` (`command_line` in `remote/device_key.rs`), and a test that takes a file lock and asserts on its
   release holds the guard for the whole test. A process forked while another test has a locked file open inherits it
   until the exec, so the lock appears held and the test fails now and then.
+- **A test takes a free port from `crate::test_support::ClosedPort`**, kept in a local and named through
+  `closed.port()`, never by binding port 0 and dropping the listener, as in "Daemon tests".
 
 ## Windows and Linux runs
 
