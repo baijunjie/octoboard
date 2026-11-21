@@ -23,13 +23,13 @@ import type { ProcessJump } from "../process/processJump";
 import { useArchivedOwnerSessions, useConsoleStatus, useConsoleStatusCounts, useDaemonStore } from "../store";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { AvatarStatusBadge } from "../components/status/TopStatusMarker";
-import { CHROME_BUTTON_FILLS, CHROME_CURRENT_FILLS, ChromeButton } from "./ChromeButton";
+import { ChromeButton } from "./ChromeButton";
 import { ConsoleAvatar } from "./ConsoleAvatar";
 import { NotificationsBell } from "./NotificationsBell";
 import { useListMotion } from "../components/motion/useListMotion";
 import { HeadedTooltip } from "../components/hint/HeadedTooltip";
 import { FadedScroller } from "../components/scroll/scrollFade";
-import { BadgeAnchor, Button } from "../primitives";
+import { BadgeAnchor, Button, FIXED_SMALL_ICON_BUTTONS_CLASS } from "../primitives";
 
 const TOOLTIP_STATUSES: readonly ShownStatusKind[] = ["waiting_user", "dormant", "paused", "done", "idle", "delegated", "background", "working", "starting", "switching", "reconnecting", "unknown", "interrupted"];
 
@@ -55,8 +55,19 @@ export function focusNewConsole(): void {
   (document.getElementById(NEW_CONSOLE_ID) ?? document.getElementById(REMOTE_DEVICES_BUTTON_ID))?.focus();
 }
 
-/** One console on the rail: its avatar, marked with what is going on in it, and the current one on a
- * tile of its own. The tooltip and accessible name count the console's sessions by shown status.
+/** A console avatar's ring: the avatar fills its 32px button, as large as the circle a rail button's fill draws, so the
+ * button's own fill would be hidden under it. The current console and the pointer's or a press's tint are drawn instead
+ * (by the user's decision, in place of HeroUI's fills)
+ * as a ring just outside the avatar, from the same chrome tints, in an `::after` that takes no room (it stays within the
+ * 4px the console scroller's padding leaves for overhang) and leaves the button's box shadow to the keyboard focus ring.
+ * Hover and press follow React Aria's states as well as the CSS ones, as HeroUI's own fills do, so a keyboard press shows
+ * too; the hovered tint gives way while pressed. */
+const AVATAR_RING_FRAME =
+  "[--button-bg:transparent] [--button-bg-hover:transparent] [--button-bg-pressed:transparent] after:pointer-events-none after:absolute after:-inset-[3px] after:rounded-full after:border-2 after:content-['']";
+const AVATAR_RING = `${AVATAR_RING_FRAME} after:border-transparent hover:after:border-(--chrome-hover) ui-hovered:not-ui-pressed:not-active:after:border-(--chrome-hover) active:after:border-(--chrome-active) ui-pressed:after:border-(--chrome-active)`;
+const AVATAR_CURRENT_RING = `${AVATAR_RING_FRAME} after:border-(--chrome-current)`;
+
+/** One console on the rail: its avatar, marked with what is going on in it, and the current one ringed. The tooltip and accessible name count the console's sessions by shown status.
  * The decorative badge has no tooltip of its own. A right-click offers the console's own actions, from a menu whose trigger is not drawn: the
  * sidebar's header has the same menu on a visible button. */
 const ConsoleTile = memo(function ConsoleTile({
@@ -126,9 +137,9 @@ const ConsoleTile = memo(function ConsoleTile({
           focusOnPress={false}
           onPress={onSelect}
           onMouseHoverChange={onHoverChange}
-          className={`size-8 min-w-0 rounded-lg p-0 ${current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS}`}
+          className={`size-8 min-w-0 rounded-full p-0 ${current ? AVATAR_CURRENT_RING : AVATAR_RING}`}
         >
-          <ConsoleAvatar name={thisConsole.name} icon={thisConsole.icon} className="size-7" />
+          <ConsoleAvatar name={thisConsole.name} icon={thisConsole.icon} className="size-8" />
         </Button>
         <AvatarStatusBadge status={status} />
       </BadgeAnchor>
@@ -194,8 +205,10 @@ interface RailProps extends ConsoleMenuHandlers {
  * the waiting count, the notifications bell (browser only, while the permission is undecided), the
  * account quota entry and Settings. It sits at the reading direction's start, like the sidebar, and
  * holds only glyphs and avatars. Everything in it is an item of one stack: every tile and button is a
- * 32px box (`size-8`), a separator is an item of its own, and the nav's single `gap-2` is the only space
- * between any two neighbours; a count badge floats over its item's corner and takes no room. At the tablet boundary
+ * 32px box at every width (`size-8`; the nav pins its icon buttons, which HeroUI otherwise grows to 36px below its
+ * `md` breakpoint), a separator is an item of its own, and the nav's single `gap-2` is the only space
+ * between any two neighbours; the nav keeps the same 8px (`py-2`) above the first item and below the last as beside
+ * every item in the 48px rail. A count badge floats over its item's corner and takes no room. At the tablet boundary
  * and below an `onDemand` rail leaves the row and comes in with the sidebar's drawer (`ON_DEMAND_FRAME`).
  */
 export function Rail({
@@ -239,7 +252,7 @@ export function Rail({
       // `inert` rather than `aria-hidden` and `tabindex`: it takes the whole subtree out of the focus
       // order and the accessibility tree at once, which `invisible` does only once the exit is over.
       inert={away}
-      className={`flex w-(--rail-width) shrink-0 flex-col items-center gap-2 pt-1 pb-2 select-none ${onDemand ? `${ON_DEMAND_FRAME} ${away ? ON_DEMAND_AWAY : ON_DEMAND_OPEN}` : ""}`}
+      className={`flex w-(--rail-width) shrink-0 flex-col items-center gap-2 py-2 select-none ${FIXED_SMALL_ICON_BUTTONS_CLASS} ${onDemand ? `${ON_DEMAND_FRAME} ${away ? ON_DEMAND_AWAY : ON_DEMAND_OPEN}` : ""}`}
     >
       {offline ? (
         // Only what needs no daemon: the daemon is not there to give consoles, sessions, accounts or settings.

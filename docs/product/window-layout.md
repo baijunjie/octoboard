@@ -337,12 +337,13 @@ in `docs/product/right-pane-panels.md`.
 ## The rail
 
 The rail runs from under the top bar to the window's bottom (or the connection banner). It is one column of items, each
-tile and button **32 px** square and every two neighbours **8 px** apart; a separator between two groups is an item of
-its own, as wide as the tiles, with that same gap above and below it, and a count badge floats over its item's corner
-without taking room. Its two ends hold:
+avatar and button **32 px** square at every window width and every two neighbours **8 px** apart, with the same **8 px**
+above the first item and below the last as on either side of an avatar or button; a separator between two groups is an
+item of its own, as wide as the avatars and buttons, with that same gap above and below it, and a count badge floats
+over its item's corner without taking room. Its two ends hold:
 
 - **At the top, the consoles**: one avatar per console, in the order the consoles were created, the current console
-  marked by a tile behind its avatar, then **New console**, which opens the new-console dialog (see
+  marked by a thin ring just outside its avatar, then **New console**, which opens the new-console dialog (see
   `docs/product/consoles.md`). Choosing a console, what each avatar's badge says and what a right-click on one
   offers are in "The console switcher" in `docs/product/console-switcher.md`. While the docked sidebar is hidden,
   resting the mouse on an avatar floats the sidebar in showing that console (see "A hidden pane floats in on hover"
@@ -350,7 +351,8 @@ without taking room. Its two ends hold:
   drawn — so the fade at the column's edge is the only sign there are more (see "The edge that hides content fades"
   in `docs/product/scrolling-surfaces.md`); New console stays below them.
 - **Under the consoles, after a separator, the buttons of the window's pages**, each opening its page; while a page
-  shows, its button is marked as the current item and no console's avatar is:
+  shows, its button is marked as the current item with a filled circle behind its glyph and no console's avatar is
+  ringed as current:
   - **Scheduled tasks**, in every window, a clock with the number of scheduled tasks running in a green badge placed as
     the waiting count's, shown only while at least one is (99+ beyond 99) (see "Opening and leaving the page" in
     `docs/product/scheduled-tasks-page.md`);

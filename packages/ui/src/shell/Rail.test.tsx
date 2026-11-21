@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, type ReactElement } from "react";
 import { expect, it, vi } from "vitest";
 
 import { consoleOf, sessionOf } from "../fixtures/builders";
@@ -11,6 +11,7 @@ import type { Session, SessionStatus } from "../protocol";
 import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { RemoteDevicesTestHost } from "../remoteDaemons/remoteDevicesTestSupport";
+import { FIXED_SMALL_ICON_BUTTONS_CLASS } from "../primitives";
 import { Rail } from "./Rail";
 import { enter, leave, mountForTooltip, openTooltip } from "../components/hint/tooltipTestSupport";
 import { BROWSER_HOST, MAC_HOST } from "../test/hosts";
@@ -33,6 +34,54 @@ const EXTRAS: Partial<Record<Case, Partial<Session>>> = {
   reconnecting: { holder_link: "pending" },
 };
 
+type RailProps = Parameters<typeof Rail>[0];
+
+/** Mounts the rail with one console current and every handler a no-op, over a browser platform and a default daemon unless
+ * given others; `props` override the rail's props, and `wrap` puts a host around it. */
+function mountRail({
+  props,
+  platform = { kind: "browser", host: BROWSER_HOST },
+  daemon = testDaemon(),
+  wrap = (rail) => rail,
+}: {
+  props?: Partial<RailProps>;
+  platform?: PlatformAdapter;
+  daemon?: ReturnType<typeof testDaemon>;
+  wrap?: (rail: ReactElement) => ReactElement;
+} = {}): HTMLElement {
+  return mountForTooltip(
+    <PlatformProvider value={platform}>
+      <DaemonProvider value={daemon}>
+        {wrap(
+          <Rail
+            consoles={[main]}
+            currentConsoleId={main.id}
+            onSelectConsole={() => {}}
+            onConsoleEnter={() => {}}
+            onConsoleLeave={() => {}}
+            hoverOpensSidebar={false}
+            remoteDevicesShown={false}
+            onOpenRemoteDevices={() => {}}
+            onOpenScheduledTasks={() => {}}
+            onOpenDialog={() => {}}
+            onSelectSession={() => {}}
+            onOpenArchive={() => {}}
+            waitingCount={0}
+            onNextWaiting={() => {}}
+            onOpenProcesses={() => true}
+            onOpenSettings={() => {}}
+            onOpenSettingsAt={() => {}}
+            focusTerminal={() => {}}
+            onDemand={false}
+            away={false}
+            {...props}
+          />,
+        )}
+      </DaemonProvider>
+    </PlatformProvider>,
+  );
+}
+
 /** Mounts a rail with one console, holding a session in each of `statuses`, whose avatar's pointer
  * hover floats the hidden sidebar in when `hoverOpensSidebar`. Returns the console's avatar button. */
 function avatarOf(statuses: Case[], hoverOpensSidebar = false, otherSessions: Session[] = []): HTMLButtonElement {
@@ -42,34 +91,7 @@ function avatarOf(statuses: Case[], hoverOpensSidebar = false, otherSessions: Se
     return status === "delegated" ? [own, sessionOf(`s-${index}-child`, main.id, undefined, `Child ${index}`, "working", { bound_to: own.id })] : [own];
   });
   const daemon = testDaemon({ state: { sessions: new Map([...sessions, ...otherSessions].map((session) => [session.id, session])) } });
-  const container = mountForTooltip(
-    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
-      <DaemonProvider value={daemon}>
-        <Rail
-          consoles={[main]}
-          currentConsoleId={main.id}
-          onSelectConsole={() => {}}
-          onConsoleEnter={() => {}}
-          onConsoleLeave={() => {}}
-          hoverOpensSidebar={hoverOpensSidebar}
-          remoteDevicesShown={false}
-          onOpenRemoteDevices={() => {}}
-          onOpenScheduledTasks={() => {}}
-          onOpenDialog={() => {}}
-          onSelectSession={() => {}}
-          onOpenArchive={() => {}}
-          waitingCount={0}
-          onNextWaiting={() => {}}
-          onOpenProcesses={() => true}
-          onOpenSettings={() => {}}
-          onOpenSettingsAt={() => {}}
-          focusTerminal={() => {}}
-          onDemand={false}
-          away={false}
-        />
-      </DaemonProvider>
-    </PlatformProvider>,
-  );
+  const container = mountRail({ daemon, props: { hoverOpensSidebar } });
   return container.querySelector<HTMLButtonElement>("[data-sidebar-peek-keep]")!;
 }
 
@@ -214,36 +236,7 @@ async function railWithRemoteDaemons(connected: RemoteDaemonStatus[]): Promise<H
   };
   let container!: HTMLElement;
   await act(async () => {
-    container = mountForTooltip(
-      <PlatformProvider value={platform}>
-        <DaemonProvider value={testDaemon()}>
-          <RemoteDevicesTestHost capability={platform.remoteDaemons}>
-            <Rail
-              consoles={[main]}
-              currentConsoleId={main.id}
-              onSelectConsole={() => {}}
-              onConsoleEnter={() => {}}
-              onConsoleLeave={() => {}}
-              hoverOpensSidebar={false}
-              remoteDevicesShown={false}
-              onOpenRemoteDevices={() => {}}
-              onOpenScheduledTasks={() => {}}
-              onOpenDialog={() => {}}
-              onSelectSession={() => {}}
-              onOpenArchive={() => {}}
-              waitingCount={0}
-              onNextWaiting={() => {}}
-              onOpenProcesses={() => true}
-              onOpenSettings={() => {}}
-              onOpenSettingsAt={() => {}}
-              focusTerminal={() => {}}
-              onDemand={false}
-              away={false}
-            />
-          </RemoteDevicesTestHost>
-        </DaemonProvider>
-      </PlatformProvider>,
-    );
+    container = mountRail({ platform, wrap: (rail) => <RemoteDevicesTestHost capability={platform.remoteDaemons}>{rail}</RemoteDevicesTestHost> });
   });
   return container;
 }
@@ -327,34 +320,7 @@ it("puts the Forwarded ports button of a remote window above the settings, only 
   const forwards = { list: async () => [{ remotePort: 3000, localPort: 3000, address: "http://localhost:3000/", localAddress: "http://localhost:3000/" }], stop: async () => {}, onChange: () => () => {} };
   let container!: HTMLElement;
   await act(async () => {
-    container = mountForTooltip(
-      <PlatformProvider value={{ kind: "tauri", host: BROWSER_HOST, remoteForwards: forwards }}>
-        <DaemonProvider value={testDaemon()}>
-          <Rail
-            consoles={[main]}
-            currentConsoleId={main.id}
-            onSelectConsole={() => {}}
-            onConsoleEnter={() => {}}
-            onConsoleLeave={() => {}}
-            hoverOpensSidebar={false}
-            remoteDevicesShown={false}
-            onOpenRemoteDevices={() => {}}
-            onOpenScheduledTasks={() => {}}
-            onOpenDialog={() => {}}
-            onSelectSession={() => {}}
-            onOpenArchive={() => {}}
-            waitingCount={0}
-            onNextWaiting={() => {}}
-            onOpenProcesses={() => true}
-            onOpenSettings={() => {}}
-            onOpenSettingsAt={() => {}}
-            focusTerminal={() => {}}
-            onDemand={false}
-            away={false}
-          />
-        </DaemonProvider>
-      </PlatformProvider>,
-    );
+    container = mountRail({ platform: { kind: "tauri", host: BROWSER_HOST, remoteForwards: forwards } });
   });
   const button = container.querySelector<HTMLElement>("#rail-forwards")!;
   expect(button.getAttribute("aria-label")).toBe("1 port is forwarded. Show it.");
@@ -370,37 +336,69 @@ it("puts the Forwarded ports button of a remote window above the settings, only 
 it.each([true, false])("offers Memory in a console avatar's context menu only while the memory setting is on (on: %s)", (on) => {
   fakeTimers();
   const daemon = testDaemon({ state: { settings: { ...DEFAULT_SETTINGS, memory_enabled: on } } });
-  const container = mountForTooltip(
-    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
-      <DaemonProvider value={daemon}>
-        <Rail
-          consoles={[main]}
-          currentConsoleId={main.id}
-          onSelectConsole={() => {}}
-          onConsoleEnter={() => {}}
-          onConsoleLeave={() => {}}
-          hoverOpensSidebar={false}
-          remoteDevicesShown={false}
-          onOpenRemoteDevices={() => {}}
-          onOpenScheduledTasks={() => {}}
-          onOpenDialog={() => {}}
-          onSelectSession={() => {}}
-          onOpenArchive={() => {}}
-          waitingCount={0}
-          onNextWaiting={() => {}}
-          onOpenProcesses={() => true}
-          onOpenSettings={() => {}}
-          onOpenSettingsAt={() => {}}
-          focusTerminal={() => {}}
-          onDemand={false}
-          away={false}
-        />
-      </DaemonProvider>
-    </PlatformProvider>,
-  );
+  const container = mountRail({ daemon });
   const tile = container.querySelector<HTMLElement>("[data-sidebar-peek-keep]")!.closest<HTMLElement>("[data-list-motion]")!;
   act(() => void tile.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 4, clientY: 4 })));
   const labels = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((el) => el.querySelector(".label")?.textContent ?? el.textContent);
   expect(labels).toContain("Console settings");
   expect(labels.includes("Memory")).toBe(on);
+});
+
+const avatarButton = (container: HTMLElement) => container.querySelector<HTMLButtonElement>("[data-sidebar-peek-keep]")!;
+const classesOf = (element: Element) => element.className.split(/\s+/);
+const RING_CURRENT = "after:border-(--chrome-current)";
+
+it("puts every rail button under the fixed small icon-button size, and gives the stack 8px above and below", () => {
+  const nav = mountRail().querySelector("nav")!;
+  // HeroUI grows a small icon-only button to 36px below its `md` breakpoint; the nav holds them all at 32px.
+  expect(classesOf(nav)).toContain(FIXED_SMALL_ICON_BUTTONS_CLASS);
+  expect(classesOf(nav)).toContain("py-2");
+  expect(classesOf(nav)).not.toContain("pt-1");
+  // The buttons the pin is meant for are inside the nav.
+  for (const name of ["New console", "Scheduled tasks", "Settings"]) {
+    expect(nav.querySelector(`button[aria-label='${name}']`)).not.toBeNull();
+  }
+  expect(nav.contains(avatarButton(nav))).toBe(true);
+});
+
+it("rings the current console's avatar instead of filling its button, and fills the button with the avatar", () => {
+  const avatar = avatarButton(mountRail());
+  expect(avatar.getAttribute("aria-current")).toBeTruthy();
+  expect(classesOf(avatar)).toContain(RING_CURRENT);
+  // The current fill behind the avatar is gone, and the button draws no background in any state.
+  expect(avatar.className).not.toContain("--button-bg:var(--chrome-current)");
+  expect(avatar.className).not.toContain("--button-bg-hover:var(--chrome-current)");
+  expect(avatar.className).not.toContain("--button-bg-pressed:var(--chrome-current)");
+  for (const state of ["--button-bg", "--button-bg-hover", "--button-bg-pressed"]) {
+    expect(classesOf(avatar)).toContain(`[${state}:transparent]`);
+  }
+  // A round button the avatar fills edge to edge.
+  expect(classesOf(avatar)).toContain("size-8");
+  expect(classesOf(avatar)).toContain("rounded-full");
+  // The default avatar (a span) is the button's content, round and as large as the button.
+  const face = avatar.querySelector("span[aria-hidden='true']")!;
+  expect(classesOf(face)).toContain("size-8");
+  expect(classesOf(face)).toContain("rounded-full");
+});
+
+it("leaves a console that is not current with a ring that only the pointer and a press tint", () => {
+  const avatar = avatarButton(mountRail({ props: { currentConsoleId: "c-other" } }));
+  expect(avatar.hasAttribute("aria-current")).toBe(false);
+  expect(classesOf(avatar)).not.toContain(RING_CURRENT);
+  expect(classesOf(avatar)).toContain("after:border-transparent");
+  expect(classesOf(avatar)).toContain("hover:after:border-(--chrome-hover)");
+  expect(classesOf(avatar)).toContain("active:after:border-(--chrome-active)");
+  // A keyboard press and React Aria's hover show the same tints, the hovered one giving way while pressed.
+  expect(classesOf(avatar)).toContain("ui-hovered:not-ui-pressed:not-active:after:border-(--chrome-hover)");
+  expect(classesOf(avatar)).toContain("ui-pressed:after:border-(--chrome-active)");
+  // The same transparent background, so the avatar is the whole of what the button draws.
+  for (const state of ["--button-bg", "--button-bg-hover", "--button-bg-pressed"]) {
+    expect(classesOf(avatar)).toContain(`[${state}:transparent]`);
+  }
+});
+
+it("rings no console while the Scheduled tasks page shows", () => {
+  const avatar = avatarButton(mountRail({ props: { scheduledTasksShown: true } }));
+  expect(avatar.hasAttribute("aria-current")).toBe(false);
+  expect(classesOf(avatar)).not.toContain(RING_CURRENT);
 });

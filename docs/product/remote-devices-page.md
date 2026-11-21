@@ -14,7 +14,7 @@ The page is opened by:
 - the rail's **Remote devices** button, under the Scheduled tasks button (see "The rail" in
   `docs/product/window-layout.md`). The
   button only opens the page: pressed while the page shows, it does nothing. While the page shows, the button is drawn
-  as the current console's tile is and tells assistive technology it is the current item, and no console's avatar is
+  with a filled circle behind its glyph and tells assistive technology it is the current item, and no console's avatar is
   marked current. Its tooltip, and its name, are Remote devices, followed while any connection is held by how many
   are connected;
 - the **Remote Devices** item of the application's menus (see "Where remote daemons are reached from" in

@@ -19,6 +19,12 @@
   width: 100%;
 }
 
+/* `FIXED_SMALL_ICON_BUTTONS_CLASS`: HeroUI's small icon-only size above its `md` breakpoint, at every width. */
+.app-buttons--fixed-sm-icon .button--icon-only.button--sm {
+  width: 2rem;
+  height: 2rem;
+}
+
 .app-button--xs svg:not([data-slot="spinner"] svg, [data-slot="link-icon"] svg) {
   width: 14px;
   height: 14px;

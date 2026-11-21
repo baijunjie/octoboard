@@ -158,7 +158,8 @@ toggles while a console session does, and none while nothing owns it (see "The t
 
 - **The label says what pressing it will do**, and is also its tooltip.
 - **The icon stays the same whatever the state.** A toggle whose panel is on screen is drawn with the pressed fill, the
-  same fill the current console's tile has on the rail, which it keeps under the pointer and while pressed.
+  same fill the rail's Scheduled tasks or Remote devices button has while its page shows, which it keeps under the
+  pointer and while pressed.
 - It tells assistive technology whether its panel is expanded: expanded while the panel is on screen.
 
 A panel counts as **on screen** while docked, maximized, in a revealed floating group, or floating alone at 768 px and

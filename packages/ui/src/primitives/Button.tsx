@@ -43,6 +43,10 @@ export function buttonClassName({ variant, size }: { variant?: ButtonVariant; si
 /** The extra-small size on top of HeroUI's small one; the unlayered `.app-button--xs` rules extend HeroUI's scale. */
 const XS_CLASS = "app-button--xs";
 
+/** On a container: its small icon-only buttons keep HeroUI's 32px desktop size at every width, where HeroUI grows them to
+ * 36px below its `md` breakpoint, for a column of controls that must stay one size (the rail). `Button.css`. */
+export const FIXED_SMALL_ICON_BUTTONS_CLASS = "app-buttons--fixed-sm-icon";
+
 /** What a plain button and a toggle button share: its name and description, and how it takes focus. */
 export interface ButtonBaseProps extends DataAttributes {
   id?: string;

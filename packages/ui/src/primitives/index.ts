@@ -4,7 +4,15 @@
 export { Alert, AlertContent, AlertDescription, AlertIndicator, type AlertStatus, AlertTitle } from "./Alert";
 export { Badge, BadgeAnchor, BadgedControl } from "./Badge";
 export { useBusy } from "./busy";
-export { BareButton, Button, type ButtonBlur, type ButtonPress, type ButtonProps, buttonClassName } from "./Button";
+export {
+  BareButton,
+  Button,
+  type ButtonBlur,
+  type ButtonPress,
+  type ButtonProps,
+  buttonClassName,
+  FIXED_SMALL_ICON_BUTTONS_CLASS,
+} from "./Button";
 export { Card } from "./Card";
 export { Checkbox } from "./Checkbox";
 export { Chip, ChipLabel } from "./Chip";

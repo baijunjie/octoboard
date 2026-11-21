@@ -7,8 +7,8 @@ import { BadgedControl, Button, type ButtonPress } from "../primitives";
  * takes its fills from these custom properties. */
 export const CHROME_BUTTON_FILLS = "[--button-bg-hover:var(--chrome-hover)] [--button-bg-pressed:var(--chrome-active)]";
 
-/** The fills of the current console's tile on the rail, and of a toggle whose panel is open: its
- * resting fill is also what it keeps under the pointer and while pressed, so pointing at it never
+/** The fills of the rail's current page button (Scheduled tasks, Remote devices), and of a toggle whose panel is
+ * open, in the tint the current console's avatar ring takes (`Rail.tsx`): its resting fill is also what it keeps under the pointer and while pressed, so pointing at it never
  * makes it paler. */
 export const CHROME_CURRENT_FILLS =
   "[--button-bg:var(--chrome-current)] [--button-bg-hover:var(--chrome-current)] [--button-bg-pressed:var(--chrome-current)]";
@@ -62,8 +62,8 @@ export function ChromeButton({
   /** The button shows something that is on, such as a panel that is open: it keeps the fills of a
    * pressed button. */
   selected?: boolean;
-  /** The button is the current item of a set (the rail's Remote devices while its page shows, as the current console's
-   * tile is): `aria-current`, drawn on the current tile's fills. */
+  /** The button is the current item of a set (the rail's Scheduled tasks or Remote devices while its page shows):
+   * `aria-current`, drawn with `CHROME_CURRENT_FILLS`. */
   current?: boolean;
   onBlur?: () => void;
   buttonRef?: React.Ref<HTMLButtonElement>;

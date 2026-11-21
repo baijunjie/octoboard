@@ -3,9 +3,9 @@
      breadcrumb text. In the macOS app it is the native translucent material and paints nothing
      (`--window-background` in `style.css`); in a browser it is `--chrome`. Glyphs on it use the theme's
      `--foreground`, secondary text on it `--chrome-muted`, and `--chrome-hover` / `--chrome-active`
-     / `--chrome-current` are the tints a control, a pressed control and the current console's tile
-     take on it: translucent, so they read on the material and on `--chrome`. At 768px and below the rail is inside the sidebar drawer's card and sits on `--panel-sidebar`
-     instead, where the current tile stands apart just as well. The current tile is the one that has to be found at a
+     / `--chrome-current` are the tints a control, a pressed control and the rail's current item (a page button's fill, a
+     console avatar's ring) take on it: translucent, so they read on the material and on `--chrome`. At 768px and below the rail is inside the sidebar drawer's card and sits on `--panel-sidebar`
+     instead, where the current item stands apart just as well. The current item is the one that has to be found at a
      glance, so it is the strongest of the three tints on the material and on `--chrome` in both appearances, with
      `--chrome-hover` and `--chrome-active` fainter steps.
    - The content panel is always opaque, since text-heavy UI must never sit on the material.

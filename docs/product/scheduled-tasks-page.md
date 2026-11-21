@@ -15,7 +15,7 @@ The page is opened by:
 
 - the rail's **Scheduled tasks** button, a clock, directly above the Remote devices button where the window has one
   (see "The rail" in `docs/product/window-layout.md`). The button only opens the page: pressed while the page shows, it
-  does nothing. While the page shows, the button is drawn as the current console's tile is and tells assistive
+  does nothing. While the page shows, the button is drawn with a filled circle behind its glyph and tells assistive
   technology it is the current item, and no console's avatar is marked current. **A green badge counts the tasks that
   are running** — those with a session one of their kept runs started that the window holds and that is starting or
   working (see "Run records" in `docs/product/scheduled-tasks.md`) — placed as the waiting count's and shown only while
