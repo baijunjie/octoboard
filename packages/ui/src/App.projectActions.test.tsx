@@ -544,7 +544,7 @@ it("opens several held merge confirmations one after another in the order their 
   expect(document.querySelector("[role=dialog]")).toBeNull();
 });
 
-it("says a truncated branch list is limited, as a muted note after the branches and not a failure", async () => {
+it("shows a warning on Switch branch for a truncated list and still lets the user choose a returned branch", async () => {
   const { daemon, project } = mountApp();
   await act(async () => daemon.store.setState((state) => ({
     gitStatuses: new Map(state.gitStatuses).set(project.id, {
@@ -560,13 +560,17 @@ it("says a truncated branch list is limited, as a muted note after the branches 
   await openProjectMenu(project.name);
   await press("Git");
   await press("Switch branch");
-  const notice = Array.from(document.querySelectorAll("[role=menuitem]")).find((item) => controlName(item).startsWith("There are more branches"))!;
-  expect(controlName(notice)).toBe("There are more branches than this list can show. The others are not listed.");
-  expect(notice.getAttribute("aria-disabled")).toBe("true");
-  // The last item, with no glyph of the branches' kind.
-  expect(notice.querySelector("svg")).toBeNull();
-  expect([...notice.closest("[role=menu]")!.querySelectorAll("[role^=menuitem]")].at(-1)).toBe(notice);
-  expect(menuHas("Some branches could not be listed")).toBe(false);
+  const parent = [...document.querySelectorAll("[role=menuitem]")].find((item) => controlName(item) === "Switch branch");
+  expect(parent?.querySelector("svg.lucide-triangle-alert")).not.toBeNull();
+  expect(parent?.querySelector("svg.lucide-circle-alert")).toBeNull();
+  const warning = "There are more branches than this list can show. The others are not listed.";
+  expect(parent!.getAttribute("aria-describedby")?.split(/\s+/).some((id) => document.getElementById(id)?.textContent === warning)).toBe(true);
+  const alpha = [...document.querySelectorAll<HTMLElement>("[role=menuitemradio]")].find((item) => controlName(item) === "alpha");
+  expect(alpha).toBeDefined();
+  const branchMenu = alpha!.closest("[role=menu]")!;
+  expect([...branchMenu.querySelectorAll("[role^=menuitem]")].map(controlName)).toEqual(["alpha", "beta"]);
+  await act(async () => alpha!.click());
+  expect(daemon.request).toHaveBeenCalledWith({ type: "switch_project_branch", project: project.id, branch: "alpha" });
   // Asked by the person opening the menu, so the daemon looks again for a Git it found missing.
   for (const type of ["list_project_branches", "get_project_source"]) {
     expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type, asked_by_person: true }));

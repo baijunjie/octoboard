@@ -6,10 +6,9 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { CodedError } from "../../errors/codedError";
+import { daemonError } from "../../test/daemonError";
 import { errorAlerts } from "../alerts/errorAlerts";
-import { detailsButton } from "../alerts/detailsTestSupport";
-import { closeOpenTooltip, tooltipsCooledDown } from "../hint/tooltipTestSupport";
+import { closeOpenTooltip, CONTROL_TOOLTIP_DELAY_MS, enter, leave, openTooltip, tooltipsCooledDown } from "../hint/tooltipTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
 import { ActionMenu } from "./ActionMenu";
 import { filterField, holdExitAnimations, openBy, pressInFilter, SUBMENU_HOVER_DELAY_MS, typeInFilter } from "./menuTestSupport";
@@ -195,93 +194,125 @@ it.each(["keyboard", "pointer"])("runs a third-level branch action exactly once 
   expect(wrong).not.toHaveBeenCalled();
 });
 
-it("loads a submenu on open and retries its failed load without closing", async () => {
-  const load = vi.fn().mockRejectedValueOnce(new Error("repository unavailable")).mockResolvedValueOnce([
-    { label: "feature", icon: Trash2, onClick: () => {} },
-  ]);
+function descriptions(element: Element): string[] {
+  return (element.getAttribute("aria-describedby") ?? "").split(/\s+/).flatMap((id) => {
+    const text = document.getElementById(id)?.textContent;
+    return text ? [text] : [];
+  });
+}
+
+it("closes only the failed submenu, then reloads when its trigger is opened again", async () => {
+  const detail = "fatal: unable to read refs/heads";
+  const load = vi.fn().mockRejectedValueOnce(daemonError("git_failed", { detail })).mockResolvedValueOnce({
+    items: [{ label: "feature", icon: Trash2, onClick: () => {} }],
+  });
   fakeTimers();
   await openMenu([{ label: "Switch branch", icon: Trash2, items: [], loadItems: load }]);
   expect(load).not.toHaveBeenCalled();
-  // The last input was a pointer, so the ring is shown only if the handoff sets the modality.
-  act(() => setInteractionModality("pointer"));
-  await act(async () => {
-    const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
-    item.focus();
-    item.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-  });
+  const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+  const openBranches = async () => {
+    await act(async () => {
+      item.focus();
+      item.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+    });
+  };
+  await openBranches();
   expect(load).toHaveBeenCalledTimes(1);
-  // The failure is one Alert in the submenu's popover holding the application's sentence, the system's
-  // text behind Details, and Try again, not a disabled item; the raw text is not in the visible copy.
-  const alert = document.querySelector('[data-slot="alert-root"]')!;
-  expect(alert.querySelector('[data-slot="alert-title"]')?.textContent).toBe("Could not load the items");
-  expect(alert.querySelector('[data-slot="alert-description"]')?.textContent).not.toContain("repository unavailable");
-  expect(detailsButton(alert)).toBeDefined();
-  const retry = [...alert.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
-  expect(retry).toBeDefined();
-  expect([...document.querySelectorAll("[role=menuitem]")].some((item) => item.textContent?.includes("repository unavailable"))).toBe(false);
-  // Focus that was in the submenu moves to Try again instead of falling to the page, with its ring
-  // shown, and the failure is not an error alert dialog. The alert announces itself once that focus
-  // move is past, not at the moment it mounts.
-  expect(errorAlerts.getSnapshot()).toEqual([]);
-  expect(document.activeElement).toBe(retry);
-  expect(getInteractionModality()).toBe("keyboard");
-  expect(alert.querySelector("[role=alert]")).toBeNull();
-  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
-  expect(alert.querySelector("[role=alert]")?.textContent).toContain("Could not load the items");
-  await act(async () => retry.click());
-  expect(load).toHaveBeenCalledTimes(2);
+  expect(item.querySelector("svg.lucide-circle-alert")).not.toBeNull();
+  expect(descriptions(item)).toEqual([expect.stringContaining("could not read this")]);
+  expect(document.querySelectorAll("[role=menu]")).toHaveLength(1);
+  expect(document.querySelectorAll("[role=dialog]")).toHaveLength(1);
   expect(document.querySelector('[data-slot="alert-root"]')).toBeNull();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+  expect(document.activeElement).toBe(item);
+  expect(openTooltip()?.textContent).toContain("Could not load the items");
+  expect(openTooltip()?.textContent).toContain("Git could not read this.");
+  expect(openTooltip()?.textContent).toContain(detail);
+
+  const announced = () => [...document.querySelectorAll("[role=alert]")].some((region) => region.textContent?.includes("could not read this"));
+  expect(announced()).toBe(false);
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  expect(announced()).toBe(true);
+
+  await openBranches();
+  expect(load).toHaveBeenCalledTimes(2);
+  expect(item.querySelector("svg.lucide-circle-alert")).toBeNull();
+  expect(descriptions(item)).toEqual([]);
   expect(document.querySelectorAll("[role=menu]")).toHaveLength(2);
   expect(document.body.textContent).toContain("feature");
-  // ... and from there into the menu that took its place.
-  expect(document.activeElement).not.toBe(document.body);
   expect(document.activeElement?.closest("[role=menu]")).not.toBeNull();
 });
 
-it.each([
-  ["a mouse press", "pointer", () => new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0, width: 1, height: 1 })],
-  ["a key", "keyboard", () => new KeyboardEvent("keydown", { key: "F1", bubbles: true })],
-] as const)("shows the ring on the Try again that a failed load hands focus to only after a key, not after a press: %s", async (_, modality, input) => {
-  let fail!: (error: Error) => void;
-  const load = vi.fn(() => new Promise<ActionMenuEntry[]>((_, reject) => (fail = reject)));
+it("puts the missing-Git explanation and remedy in the trigger's hover tooltip", async () => {
+  await tooltipsCooledDown();
+  fakeTimers();
+  const load = vi.fn().mockRejectedValue(daemonError("binary_not_found", { binary: "git" }));
   await openMenu([{ label: "Switch branch", icon: Trash2, items: [], loadItems: load }]);
+  const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
   await act(async () => {
-    const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
-    item.focus();
-    item.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    item.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
+    item.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerType: "mouse" }));
+    await vi.advanceTimersByTimeAsync(SUBMENU_HOVER_DELAY_MS);
   });
   expect(load).toHaveBeenCalledTimes(1);
-  expect(document.activeElement?.closest("[role=menu]")).not.toBeNull();
-
-  // The last input before the load fails, the way the user was last interacting with the open menu.
-  act(() => void document.activeElement!.dispatchEvent(input()));
-  await act(async () => fail(new Error("repository unavailable")));
-  const retry = [...document.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
-  expect(document.activeElement).toBe(retry);
-  expect(getInteractionModality()).toBe(modality);
-  expect(retry.hasAttribute("data-focus-visible")).toBe(modality === "keyboard");
+  expect(document.querySelectorAll("[role=menu]")).toHaveLength(1);
+  expect(document.querySelectorAll("[role=dialog]")).toHaveLength(1);
+  expect(descriptions(item)).toEqual([expect.stringMatching(/Git.*is not installed, or it is not on.*PATH/)]);
+  expect(openTooltip()).toBeNull();
+  const mark = item.querySelector("svg.lucide-circle-alert")!;
+  enter(mark);
+  await act(async () => void vi.advanceTimersByTime(CONTROL_TOOLTIP_DELAY_MS));
+  expect(openTooltip()?.textContent).toMatch(/Git.*is not installed, or it is not on.*PATH/);
+  expect(openTooltip()?.textContent).toContain("and make sure it is on");
+  leave(mark);
+  expect(openTooltip()).toBeNull();
 });
 
-it("offers Download Git before Try again in a submenu whose load found no Git", async () => {
-  const load = vi.fn().mockRejectedValueOnce(new CodedError("`git` was not found", "binary_not_found", { binary: "git" })).mockResolvedValueOnce([
-    { label: "feature", icon: Trash2, onClick: () => {} },
-  ]);
+it("announces a submenu warning after opening, and shows it when keyboard focus returns to the parent item", async () => {
+  const warning = "There are more branches than this list can show.";
+  const load = vi.fn().mockResolvedValue({
+    items: [{ label: "feature", icon: Trash2, onClick: () => {} }],
+    warning,
+  });
+  fakeTimers();
   await openMenu([{ label: "Switch branch", icon: Trash2, items: [], loadItems: load }]);
+  const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
   await act(async () => {
-    const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
     item.focus();
     item.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
   });
-  const alert = document.querySelector<HTMLElement>('[data-slot="alert-root"]')!;
-  expect(alert.textContent).toContain("Git is not installed, or it is not on PATH.");
-  const controls = [...alert.querySelectorAll("a, button")].map((control) => control.textContent);
-  expect(controls.slice(-2)).toEqual([expect.stringContaining("Download Git"), "Try again"]);
-  expect(alert.querySelector("a")?.getAttribute("href")).toBe("https://git-scm.com/downloads");
-  // Try again is the last control, which the failure's focus move lands on.
-  expect(document.activeElement).toBe([...alert.querySelectorAll("button")].find((button) => button.textContent === "Try again"));
-  await act(async () => (document.activeElement as HTMLElement).click());
-  expect(load).toHaveBeenCalledTimes(2);
-  expect(document.body.textContent).toContain("feature");
+  const announced = () => [...document.querySelectorAll("[role=status]")].some((region) => region.textContent === warning);
+  expect(announced()).toBe(false);
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  expect(announced()).toBe(true);
+  expect(document.activeElement).not.toBe(item);
+  await act(async () => {
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
+  });
+  runOutTimers();
+  expect(document.activeElement).toBe(item);
+  expect(openTooltip()?.textContent).toBe(warning);
+});
+
+it("keeps the warning on the trigger when an incomplete submenu has no choices to show", async () => {
+  const warning = "There are more branches than this list can show.";
+  const load = vi.fn().mockResolvedValue({ items: [], warning });
+  fakeTimers();
+  await openMenu([{ label: "Switch branch", icon: Trash2, items: [], loadItems: load }]);
+  const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+  await act(async () => {
+    item.focus();
+    item.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+  });
+  expect(load).toHaveBeenCalledTimes(1);
+  expect(item.querySelector("svg.lucide-triangle-alert")).not.toBeNull();
+  expect(descriptions(item)).toEqual([warning]);
+  expect(document.querySelectorAll("[role=menu]")).toHaveLength(1);
+  expect(document.querySelectorAll("[role=dialog]")).toHaveLength(1);
+  expect(document.activeElement).toBe(item);
+  expect(openTooltip()?.textContent).toBe(warning);
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  expect([...document.querySelectorAll("[role=status]")].some((region) => region.textContent === warning)).toBe(true);
 });
 
 /** Content that puts focus on its own first control as it mounts when asked to, as a list box does. */
@@ -370,51 +401,6 @@ describe("a panel entry", () => {
     await act(async () => item().focus());
     await press(item(), "ArrowRight");
     expect(document.activeElement).toBe(button("first"));
-  });
-});
-
-describe("a note", () => {
-  it("is a muted line with no glyph that stays in the arrow-key walk, is read there, and cannot run anything", async () => {
-    const onClick = vi.fn();
-    await openMenu([
-      { label: "Main", icon: Trash2, onClick },
-      { label: "There are more than this list can show.", note: true },
-    ]);
-    const menu = document.querySelector<HTMLElement>("[role=menu]")!;
-    const items = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")];
-    const note = items.find((el) => el.textContent === "There are more than this list can show.")!;
-    expect(note.querySelector("svg")).toBeNull();
-    // Drawn as quiet text, not as a faded (disabled) item.
-    expect(note.className).toContain("ui-disabled:opacity-100");
-    expect(note.querySelector("label, span:not([aria-hidden])")?.className).toContain("text-app-muted");
-    expect(note.querySelector('[data-slot="label"]')?.className).toContain("opacity-100");
-    expect(note.getAttribute("aria-disabled")).toBe("true");
-    await act(async () => void menu.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true })));
-    await act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true })));
-    expect(document.activeElement).toBe(note);
-    await act(async () => void note.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })));
-    expect(onClick).not.toHaveBeenCalled();
-    expect(document.querySelector("[role=menu]")).not.toBeNull();
-  });
-});
-
-describe("a note in a menu of choices", () => {
-  const noteOf = () => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent === "There are more than this list can show.")!;
-
-  it("reserves the check indicator's column too, so its text lines up with the labels", async () => {
-    await openMenu([
-      { label: "main", icon: Trash2, onClick: vi.fn(), selected: true },
-      { label: "There are more than this list can show.", note: true },
-    ]);
-    expect(noteOf().className).toContain("ps-7");
-  });
-
-  it("keeps the plain indent in a menu with none", async () => {
-    await openMenu([
-      { label: "Main", icon: Trash2, onClick: vi.fn() },
-      { label: "There are more than this list can show.", note: true },
-    ]);
-    expect(noteOf().className).not.toContain("ps-7");
   });
 });
 

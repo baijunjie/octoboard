@@ -1,7 +1,7 @@
 import { Dropdown, Separator } from "@heroui/react";
 import { dropdownVariants } from "@heroui/styles";
-import React, { useEffect, useId, useRef } from "react";
-import { Header, MenuContext, useSlottedContext } from "react-aria-components";
+import React, { useContext, useEffect, useId, useRef } from "react";
+import { Header, MenuContext, OverlayTriggerStateContext, useSlottedContext } from "react-aria-components";
 
 import { useDisabled } from "./busy";
 import { setKeyboardModality } from "./focus";
@@ -131,11 +131,13 @@ export function MenuList({ label, onAction, autoFocus, className, children }: {
  * `activateMenuItem`); in a filtered menu no key runs an item, so none is announced. `expanded` marks an item that
  * opens its content in place (`aria-expanded`, which react-aria filters out too), open or closed; left out, the item
  * says nothing of it. `danger` draws a destructive item; `closeOnSelect={false}` keeps the menu open after it runs. */
-export function MenuItem({ ref, id, textValue, label, shortcut, expanded, danger, disabled, closeOnSelect, className, children, ...data }: DataAttributes & {
+export function MenuItem({ ref, id, textValue, label, describedBy, onFocusChange, shortcut, expanded, danger, disabled, closeOnSelect, className, children, ...data }: DataAttributes & {
   ref?: React.Ref<HTMLDivElement>;
   id: string;
   textValue: string;
   label?: string;
+  describedBy?: string;
+  onFocusChange?: (focused: boolean) => void;
   shortcut?: string;
   expanded?: boolean;
   danger?: boolean;
@@ -163,7 +165,7 @@ export function MenuItem({ ref, id, textValue, label, shortcut, expanded, danger
       ref={mergeRefs(ref, patchItemAria)}
       id={id}
       textValue={textValue}
-      {...definedProps({ "aria-label": label, className: classes, isDisabled: disabled, shouldCloseOnSelect: closeOnSelect })}
+      {...definedProps({ "aria-label": label, "aria-describedby": describedBy, onFocusChange, className: classes, isDisabled: disabled, shouldCloseOnSelect: closeOnSelect })}
       variant={danger ? "danger" : "default"}
     >
       {children as React.ReactElement}
@@ -237,6 +239,12 @@ export function MenuSeparator({ className }: { className?: string }): React.Reac
 /** HeroUI's submenu trigger: `children` are the `MenuItem` that opens it and the `MenuPopover` it opens. */
 export function Submenu({ children }: { children: React.ReactNode }): React.ReactElement {
   return <Dropdown.SubmenuTrigger>{children as React.ReactElement[]}</Dropdown.SubmenuTrigger>;
+}
+
+/** Closes the current submenu, leaving its parent menu open. Read from inside the submenu's popover. */
+export function useCloseSubmenu(): () => void {
+  const state = useContext(OverlayTriggerStateContext);
+  return () => state?.close();
 }
 
 /** HeroUI's chevron at the end of the item that opens a `Submenu`. */

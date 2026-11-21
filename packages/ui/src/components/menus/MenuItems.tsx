@@ -1,22 +1,26 @@
-import { LoaderCircle, type LucideIcon } from "lucide-react";
+import { CircleAlert, LoaderCircle, TriangleAlert, type LucideIcon } from "lucide-react";
 import React, { useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 
 import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
 import { isolate } from "../../i18n/isolate";
-import { FailureAlert } from "../alerts/FailureAlert";
+import { NO_RECORDS } from "../../errors/daemonMessage";
+import { failureSummaryText, rawFailureText } from "../../errors/errorText";
+import { DaemonErrorMessage } from "../alerts/DaemonErrorMessage";
+import { errorRemedy } from "../alerts/errorParts";
+import { useAlertAnnouncement } from "../announce/useAlertAnnouncement";
+import { HeadedTooltip } from "../hint/HeadedTooltip";
 import { ReasonText } from "../text/ReasonText";
 import { reasonText } from "../../format/reason";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../announce/StatusAnnouncer";
-import { useT } from "../../i18n/react";
+import { useCurrentLanguage, useT } from "../../i18n/react";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { registerMenuCommand } from "./menuCommands";
 import { useLatest } from "../hooks/useLatest";
-import { ringForAutomaticFocus } from "../../input/lastInput";
 import { MODAL_DIALOG, TABBABLE } from "../focus/selectors";
 import { useResolvedMenuEntries } from "./useResolvedMenuEntries";
 import { MenuShortcutScope } from "./menuShortcutScope";
-import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanelContext } from "./menuEntries";
-import { activateMenuItem, containsText, Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSection, MenuSeparator, Submenu, SubmenuIndicator, useMenuFiltered, useSubmenuPanel } from "../../primitives";
+import type { ActionMenuEntry, ActionMenuItem, ActionMenuLoadResult, ActionMenuPanel, ActionMenuPanelContext, ActionMenuSubmenu } from "./menuEntries";
+import { activateMenuItem, containsText, Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSection, MenuSeparator, Submenu, SubmenuIndicator, Tooltip, useCloseSubmenu, useKeyboardModality, useMenuFiltered, useSubmenuPanel, useTooltipHover } from "../../primitives";
 
 /** HeroUI's menu item label ignores the pointer, and its content inherits that, so a clipped label never sees
  * the hover that opens its tooltip. The label's content takes the pointer back, a disabled item's too (see
@@ -33,19 +37,6 @@ function labelPointerClass(disabled: boolean): string {
  * pointer is on that content, so HeroUI's hover fill and press shrink are cancelled on it; it stays at full
  * opacity too (see `renderItem`). */
 const DISABLED_ROW_CLASS = "ui-disabled:opacity-100 ui-disabled:hover:bg-transparent ui-disabled:active:transform-none";
-
-/** A line of a menu that only says something: disabled so that it cannot be chosen, yet drawn at full opacity as the
- * quiet text it is, not as a branch that is off (HeroUI's fade of the row and of its `Label` cancelled, by the user's
- * decision); the spacer holds the place of the glyph the items have, and `indented` that of the check indicator a menu
- * with choices reserves at the start of each of its items (HeroUI's `ps-7` for them). */
-export function MenuNote({ id, label, indented = false }: { id: string; label: string; indented?: boolean }): React.ReactElement {
-  return (
-    <MenuItem id={id} textValue={label} disabled className={`cursor-default ui-disabled:opacity-100 ${indented ? "ps-7" : ""}`}>
-      <span aria-hidden="true" className="size-4 shrink-0" />
-      <Label className="min-w-0 flex-1 text-sm whitespace-normal text-app-muted opacity-100" dir="auto">{label}</Label>
-    </MenuItem>
-  );
-}
 
 /** Whether an item cannot be chosen: it is disabled, or it gives a reason it cannot be. */
 function isDisabledItem(entry: ActionMenuItem): boolean {
@@ -69,7 +60,7 @@ function ItemIcon({
 }
 
 function isLeaf(entry: ActionMenuEntry | undefined): entry is ActionMenuItem {
-  return entry !== undefined && entry !== "separator" && !("items" in entry) && !("panel" in entry) && !("note" in entry) && !("heading" in entry);
+  return entry !== undefined && entry !== "separator" && !("items" in entry) && !("panel" in entry) && !("heading" in entry);
 }
 
 function isChoice(entry: ActionMenuEntry | undefined): entry is ActionMenuItem {
@@ -220,28 +211,8 @@ export function MenuItems({ entries: source, autoFocus, noMatch }: { entries: Ac
           {group.map((i) => renderItem(entries[i] as ActionMenuItem, i))}
         </MenuSection>,
       );
-    } else if ("note" in entry) {
-      nodes.push(<MenuNote key={index} id={itemId(index)} label={entry.label} indented={entries.some(isChoice)} />);
     } else if ("items" in entry || "panel" in entry) {
-      nodes.push(
-        <Submenu key={index}>
-          {/* HeroUI gives submenu triggers ps-2, while Dropdown items use px-2.5. Keep their leading edges aligned. */}
-          <MenuItem id={itemId(index)} textValue={entry.label} data-marquee-scope className="ps-2.5!">
-            <ItemIcon icon={entry.icon} className={entry.iconClassName} />
-            <Label className={`min-w-0 flex-1 text-clip ${labelPointerClass(false)}`}>
-              <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>
-            </Label>
-            {/* HeroUI's indicator is a chevron that always points right, while the submenu opens
-                towards the start of the line in a right-to-left interface; a flip points it towards
-                the submenu. */}
-            <SubmenuIndicator className="rtl:-scale-x-100" />
-          </MenuItem>
-          {/* The submenu's menu is named after its trigger item, so its dialog goes without. */}
-          <MenuPopover className="max-w-72">
-            {"panel" in entry ? <PanelBody>{entry.panel}</PanelBody> : entry.loadItems ? <LoadedMenuItems load={entry.loadItems} /> : <MenuItems entries={entry.items} />}
-          </MenuPopover>
-        </Submenu>,
-      );
+      nodes.push(<SubmenuEntry key={`${index}:${entry.label}`} entry={entry} id={itemId(index)} />);
     } else {
       nodes.push(renderItem(entry, index));
     }
@@ -282,67 +253,117 @@ function NoMatchLine({ message, nothingMatches }: { message: string; nothingMatc
   );
 }
 
-/** A submenu whose items are loaded as it opens. A failed load is an Alert holding the application's
- * sentence for the failure, the system's own text behind Details, and Try again, which announces itself since it arrives after the menu opened, so the status region
- * speaks the loading only. It comes with the focus move to Try again (or with the menu's own opening
- * when the load is quick), so its announcement waits that out. Focus that was inside the menu goes
- * with the change: to Try again when the load fails, and to the menu again when the retry has
- * started, rather than falling to the page. */
-function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): React.ReactElement {
+type SubmenuStatus = { warning: string } | { error: ErrorPresentation };
+
+function SubmenuEntry({ entry, id }: { entry: ActionMenuSubmenu | ActionMenuPanel; id: string }): React.ReactElement {
   const t = useT();
-  const [entries, setEntries] = useState<ActionMenuEntry[]>();
-  const [error, setError] = useState<ErrorPresentation>();
-  const sequence = useRef(0);
+  const language = useCurrentLanguage();
+  const [status, setStatus] = useState<SubmenuStatus>();
+  const [statusAttempt, setStatusAttempt] = useState(0);
+  const [focused, setFocused] = useState(false);
+  const keyboardFocus = useKeyboardModality() && focused;
+  const anchor = useRef<HTMLSpanElement>(null);
+  const trigger = useRef<HTMLDivElement>(null);
+  const { hoverProps, isHovered } = useTooltipHover({});
+  const descriptionId = useId();
+  const error = status && "error" in status ? status.error : undefined;
+  const warning = status && "warning" in status ? status.warning : undefined;
+  const summary = error === undefined ? warning : failureSummaryText(t, language, error, NO_RECORDS);
+  const remedy = error === undefined ? undefined : errorRemedy(error);
+  const diagnostic = error === undefined ? undefined : error instanceof Error && error.cause instanceof Error ? error.message : rawFailureText(error);
+  // The pointer cannot scroll a tooltip. Keep a short excerpt and retain the full text in the description.
+  const diagnosticExcerpt = diagnostic?.slice(0, 400).split("\n").slice(0, 4).join("\n");
+  return (
+    <Submenu>
+      {/* HeroUI gives submenu triggers ps-2, while Dropdown items use px-2.5. */}
+      <MenuItem ref={trigger} id={id} textValue={entry.label} describedBy={summary ? descriptionId : undefined} onFocusChange={setFocused} data-marquee-scope className="ps-2.5!">
+        <ItemIcon icon={entry.icon} className={entry.iconClassName} />
+        <Label className={`min-w-0 flex-1 text-clip ${labelPointerClass(false)}`}>
+          <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>
+        </Label>
+        {summary && <span id={descriptionId} className="sr-only">{summary}{remedy && <> {remedy}</>}{diagnostic && <> {diagnostic}</>}</span>}
+        {error !== undefined && <SubmenuFailureAnnouncement key={String(statusAttempt)} summary={summary} />}
+        {warning && <StatusAnnouncer text={warning} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} element="span" />}
+        {status && (
+          <>
+            <span {...hoverProps} ref={anchor} role="img" aria-label={t(error === undefined ? "mark.tone.warning" : "mark.tone.danger")} className="flex shrink-0">
+              {error === undefined
+                ? <TriangleAlert className="size-3.5 text-warning-soft-foreground" />
+                : <CircleAlert className="size-3.5 text-danger-soft-foreground" />}
+            </span>
+            <Tooltip trigger="anchored" anchor={anchor} hovered={isHovered || keyboardFocus} immediate={keyboardFocus} key={String(keyboardFocus)} content={error === undefined ? warning : (
+              <HeadedTooltip heading={t("menu.loadFailed")}>
+                <p><DaemonErrorMessage error={error} part="summary" /></p>
+                {remedy && <div>{remedy}</div>}
+                {diagnosticExcerpt && <p dir="auto" className="font-mono whitespace-pre-line [overflow-wrap:anywhere]">{diagnosticExcerpt}{diagnosticExcerpt !== diagnostic ? "…" : ""}</p>}
+              </HeadedTooltip>
+            )} />
+          </>
+        )}
+        {/* The chevron points toward the submenu in either reading direction. */}
+        <SubmenuIndicator className="rtl:-scale-x-100" />
+      </MenuItem>
+      <MenuPopover className={error === undefined ? "max-w-72" : "max-w-72 opacity-0 pointer-events-none"}>
+        {"panel" in entry ? <PanelBody>{entry.panel}</PanelBody> : entry.loadItems ? (
+          <LoadedMenuItems load={entry.loadItems} onStatus={(next, restoreFocus) => {
+            setStatus(next);
+            if (next && "error" in next) setStatusAttempt((attempt) => attempt + 1);
+            if (restoreFocus) trigger.current?.focus();
+          }} />
+        ) : <MenuItems entries={entry.items} />}
+      </MenuPopover>
+    </Submenu>
+  );
+}
+
+/** The list is read afresh on open. Failed loads close only this submenu and leave their explanation on its trigger. */
+function LoadedMenuItems({ load, onStatus }: {
+  load: () => Promise<ActionMenuLoadResult>;
+  onStatus: (status: SubmenuStatus | undefined, restoreFocus?: boolean) => void;
+}): React.ReactElement {
+  const t = useT();
+  const closeSubmenu = useCloseSubmenu();
+  const [result, setResult] = useState<ActionMenuLoadResult>();
   const root = useRef<HTMLDivElement>(null);
-  // Where focus is to be put once the next render has replaced what held it.
-  const focusNext = useRef<"retry" | "menu" | undefined>(undefined);
-  const inside = () => root.current?.contains(document.activeElement) ?? false;
-  const refresh = () => {
-    const asked = ++sequence.current;
-    if (inside()) focusNext.current = "menu";
-    setEntries(undefined);
-    setError(undefined);
+  useEffect(() => {
+    let current = true;
+    const closeWithStatus = (status: SubmenuStatus) => {
+      const restoreFocus = root.current?.contains(document.activeElement) ?? false;
+      closeSubmenu();
+      onStatus(status, restoreFocus);
+    };
     load().then(
-      (items) => { if (asked === sequence.current) setEntries(items); },
+      (loaded) => {
+        if (!current) return;
+        const warning = loaded.warning ? { warning: loaded.warning } : undefined;
+        if (warning && !loaded.items.length) closeWithStatus(warning);
+        else {
+          setResult(loaded);
+          onStatus(warning);
+        }
+      },
       (err: unknown) => {
-        if (asked !== sequence.current) return;
-        if (inside()) focusNext.current = "retry";
-        setError(errorPresentation(err));
+        if (current) closeWithStatus({ error: errorPresentation(err) });
       },
     );
-  };
-  useEffect(() => {
-    refresh();
-    return () => { sequence.current += 1; };
+    return () => { current = false; };
   }, []);
-  useEffect(() => {
-    const next = focusNext.current;
-    focusNext.current = undefined;
-    if (next === "retry") {
-      // The render took the focused control away, not a press, and the last input was often a
-      // pointer: the ring follows that input, so only a key's shows where focus went.
-      ringForAutomaticFocus();
-      // The recovery action stands last, at the trailing edge, after Details.
-      [...(root.current?.querySelectorAll<HTMLElement>(TABBABLE) ?? [])].at(-1)?.focus();
-    } else if (next === "menu") root.current?.querySelector<HTMLElement>("[role=menu]")?.focus();
-  }, [error]);
-  return <>
-    <StatusAnnouncer text={entries || error !== undefined ? undefined : t("menu.loading")} />
-    {/* A menu holds only items, so the failure is a panel in the submenu's popover; it unmounts as the
-        retry starts and the menu takes its place. The wrapper is one element for both, so it tells
-        where focus was. */}
+  return (
     <div ref={root} className="contents">
-      {error !== undefined && !entries ? (
-        <PanelBody>
-          {() => (
-            <FailureAlert title={t("menu.loadFailed")} message={error} announce announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} onRetry={refresh} />
-          )}
-        </PanelBody>
-      ) : (
-        <MenuItems entries={entries ?? [{ label: t("menu.loading"), icon: LoaderCircle, iconClassName: "motion-safe:animate-spin", disabled: true, onClick: () => {} }]} />
-      )}
+      <StatusAnnouncer text={result ? undefined : t("menu.loading")} />
+      <MenuItems entries={result?.items ?? [{ label: t("menu.loading"), icon: LoaderCircle, iconClassName: "motion-safe:animate-spin", disabled: true, onClick: () => {} }]} />
     </div>
-  </>;
+  );
+}
+
+function SubmenuFailureAnnouncement({ summary }: { summary?: string }): React.ReactElement {
+  const t = useT();
+  const announcement = useAlertAnnouncement(true, undefined, AFTER_FOCUS_MOVE_DELAY_MS);
+  return (
+    <span key={announcement.key} role={announcement.role} className="sr-only">
+      {t("menu.loadFailed")}{t("common.sentenceSeparator")}{summary}
+    </span>
+  );
 }
 
 function MenuShortcut({ letter }: { letter: string }): React.ReactElement {

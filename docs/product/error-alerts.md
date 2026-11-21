@@ -7,6 +7,7 @@ Where a failure, a warning or a note is shown follows from how it arises, not fr
 | A failure of the user's own action, once it has been sent: a submitted form, a Save or a confirm, a switch, a menu or row action, copying, opening, and daemon and connection failures reported in reply | The **error alert**, a dialog that requires acknowledgement (see "The error alert" below). A submit or a save that fails inside a dialog opens it over that dialog, which keeps what was entered |
 | An error located at one input field: the form's own validation (a field left empty, a malformed or too long value, a duplicate of a name the window knows); a lookup the form makes on its own that finds the field's value wrong (a path that does not exist or is not a directory, a conversation ID found nowhere); a value the field holds that cannot be used (an account turned off, not logged in or having its sharing changed, or, where a session is switched or handed off onto it, used up) | Under its field, which is marked invalid (see "Errors under a field" below) |
 | An important failure of automatic behaviour — a load, a refresh, a lookup a form makes on its own that could not run — one that blocks what follows, or that a component cannot do its job without | On that screen: in place of a whole page, pane, panel or list that could not be loaded, an empty-state failure; among other content, a compact alert (see "Failures shown on the screen" below) |
+| A submenu that could not load its choices or could load only part of the list | A warning or error icon on the item that opens the submenu, with its explanation in a tooltip. A failed read closes the submenu (see "Switching the local branch" in `docs/product/project-git-actions.md`) |
 | A warning about the consequence of a choice the user is making: an option of a dialog that, selected, makes what the dialog does riskier; or the reason an option, selected, cannot be carried out | A warning alert directly under that option, only while it is selected, never a mark (see "Warnings about a choice being made" below). A warning about the state of what an option acts on is a mark beside it, as below |
 | A failure or a warning about the state of something that does not block what follows, and a note | A mark at the point it concerns — a row, a table cell, a field, a checkbox, a setting, a list section's heading, a page's heading or a pane's or view's title, a line naming what it is about, a spot in a rendered document; one with no point to be located at is a compact alert in a shared place, the top of a dialog's body or of a section (see "Failures, warnings and notes marked at their point" below) |
 | A result view showing a failed result | In that view: a part that failed as a whole is a compact alert, such as a configuration import's application settings that could not be applied; an item of the result that failed has its outcome and its reason written out in its row, such as a console, project or account of a configuration import (see "The import result" in `docs/product/configuration-import-progress-and-result.md`) |
@@ -236,7 +237,7 @@ for an address that does not open the daemon and for a UI that failed take this 
 (see "The window chrome and the content panel" in `docs/product/window-layout.md`).
 
 **A compact alert** is a component-level error shown among other content — one that blocks what the user is doing,
-or one a component cannot do its job without: in a form dialog, a settings section, a popover or a submenu, or above
+or one a component cannot do its job without: in a form dialog, a settings section or a popover, or above
 content still shown. It is red, with the danger glyph. It always has a title, with its sentences under it, and at its
 trailing end its buttons, in the alert's own colour: **Details**, where there is more to show, then the link its remedy
 offers, where it has one (**Download Git** for a missing Git, see "Recovery and unexpected errors" below), then the
@@ -283,8 +284,6 @@ The places with a compact alert:
   list, with **Try again** (see "What the list says instead" in `docs/product/project-pane-git-change-list.md`);
 - the directory browser's listing made as it opens, when it fails; a navigation the user then starts that fails, its
   **Try again** included, opens the error alert instead (see "Browsing directories" in `docs/product/projects.md`);
-- a submenu whose items are read as it opens, which is the project menu's Switch branch (see "Switching the local
-  branch" in `docs/product/project-git-actions.md`), titled that the items could not be loaded;
 - Settings' Permissions section when the grants could not be read (see "Permissions" in `docs/product/settings.md`);
 - an account's connectors and MCP servers that could not be read, in place of them in the account's Connectors and MCP
   dialog, with **Try again** where reading again can help (see "The Connectors and MCP dialog" in
@@ -466,8 +465,7 @@ project image or a formula inside a paragraph in the text, where the mark takes 
 the document like a link, and one inside a link is drawn right after the link rather than in it, so pressing it does
 not follow the link (see "Notices and stand-ins" in `docs/product/file-viewer.md`).
 
-A menu has no room for a mark: a limit the menu hit is said by a last item of muted text, with no glyph, lined up with
-the items' labels, that cannot be chosen and is not worded as a failure (see "Switching the local branch" in
+A submenu's load status belongs to the item that opens it and uses a tooltip (see "Switching the local branch" in
 `docs/product/project-git-actions.md`).
 
 ## Names and diagnostic details
@@ -482,7 +480,7 @@ retain usable plain wording with the same names or fallback IDs.
 
 **Raw text is never part of a sentence.** A message passed through from the operating system, the daemon, Git or an
 agent, a stack trace and raw entries never appear inside an alert's body, a failure's sentence on the screen, a mark's
-name or the sentence in its popover, a tooltip, or an accessible name; only the names and references the wording cites
+name or the sentence in its popover or tooltip, or an accessible name; only the names and references the wording cites
 on purpose — a path, a branch name, an address — appear inside it. Raw text is shown on its own, as selectable code: in
 an error alert under **Error details**, in a compact alert behind **Details**, on an empty-state failure's details
 surface, and in a mark's popover as the last thing in it. That includes known raw output from Git and agent commands,
@@ -495,7 +493,7 @@ surface of its own rather than directly on what holds it, with whatever names it
 outside that surface. The whole surface, including its copy control, is at most 40% of the window's height. Long lines
 scroll horizontally, and content beyond the available height scrolls vertically within the block. The scrolling text
 is a region the keyboard can reach when it overflows, named by its disclosure or heading where there is one, and
-otherwise "Error details". These rules are the same for every error source and presentation.
+otherwise "Error details". A submenu's failure tooltip may show a short diagnostic excerpt on its own line.
 
 Each block has a muted **Copy** icon button floating over its upper-right corner. It stays in view while either axis
 scrolls, remains at the right in right-to-left layouts, and stays clear of a visible vertical scrollbar. Its opaque
@@ -714,17 +712,17 @@ step in the alert's body then says only what to do, such as adding the agent and
 Git** in the footer, a link in the shape of a secondary button with the external-link glyph, before the acknowledgement
 button. Pressing it opens Git's download page, `https://git-scm.com/downloads`, in the browser, and does not acknowledge
 the alert; a page that does not open is reported as any other link that does not open, in an alert of its own
-(described below). The same
-link stands wherever else a missing Git is reported, before **Try again** where there is one: among a compact alert's
-buttons, at the end of a failure mark's popover (see "Failures shown on the screen" and "Failures, warnings and notes
-marked at their point" above), and in an empty-state failure's row. Those places show the missing Git's sentence and
-remedy as the error alert does. They include the branch badge's failure mark (see "The branch badge" in
+(described below). The same link stands before **Try again** where there is one among a compact alert's buttons,
+at the end of a failure mark's popover (see "Failures shown on the screen" and "Failures, warnings and notes marked
+at their point" above), or in an empty-state failure's row. Those places show the missing Git's sentence and remedy as
+the error alert does. They include the branch badge's failure mark (see "The branch badge" in
 `docs/product/project-git-status.md`), the project pane's Git mode (see "The repository and its worktrees" in
-`docs/product/project-pane-git-mode.md`), the Switch branch submenu (see "Switching the local branch" in
-`docs/product/project-git-actions.md`), the add-project form's check of a repository URL (see "Associating a project" in
+`docs/product/project-pane-git-mode.md`), the add-project form's check of a repository URL (see "Associating a project" in
 `docs/product/projects.md`), the handoff dialog's check of the branches that move (see "Handing off from the window" in
 `docs/product/handing-off-sessions.md`) and a project removal's mark for what goes with the folder (see "With a
-project's folder moved to the Trash" in `docs/product/branch-and-worktree-cleanup.md`).
+project's folder moved to the Trash" in `docs/product/branch-and-worktree-cleanup.md`). If opening **Switch branch**
+finds no Git, its status icon's tooltip explains the remedy (see "Switching the local branch" in
+`docs/product/project-git-actions.md`).
 
 **A model-change remedy has a Change model button** when the alert identifies its session: an unsupported launch setting
 returned by Change model (`invalid_launch_setting`), or a restart that did not come up (`model_change_did_not_come_up`).

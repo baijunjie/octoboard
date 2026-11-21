@@ -4,7 +4,7 @@ import { listLane } from "../browse/budget";
 import { useStableHandler } from "../components/hooks/useLatest";
 import { useResolveAbsolutePath } from "../components/host/useResolveAbsolutePath";
 import { useCopyWithNotice } from "../components/host/useCopyWithNotice";
-import type { ActionMenuEntry, ActionMenuItem } from "../components/menus/menuEntries";
+import type { ActionMenuItem, ActionMenuLoadResult } from "../components/menus/menuEntries";
 import { reportExternalLinkFailure } from "../components/text/ExternalLink";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { useT } from "../i18n/react";
@@ -66,7 +66,7 @@ export function useRowRequests(openDialogWhenFree: (dialog: DialogRequest) => vo
       .catch(alertFailure({ title: t("sidebar.project.pushFailedTitle") }));
   };
 
-  const loadProjectBranches = async (project: Project): Promise<ActionMenuEntry[]> => {
+  const loadProjectBranches = async (project: Project): Promise<ActionMenuLoadResult> => {
     // Asked once as the menu opens, by the person opening it: a Git installed since the daemon last looked is found.
     const [reply, source] = await Promise.all([
       listLane.send(() => request({ type: "list_project_branches", project: project.id, asked_by_person: true })),
@@ -74,7 +74,7 @@ export function useRowRequests(openDialogWhenFree: (dialog: DialogRequest) => vo
     ]);
     const git = source.source.git;
     const currentBranch = git?.worktrees.find((worktree) => worktree.id === git.worktree)?.branch;
-    const entries: ActionMenuEntry[] = reply.branches.map((branch) => {
+    const items: ActionMenuItem[] = reply.branches.map((branch) => {
       const name = displayWirePath(branch.name);
       const current = currentBranch === branch.name;
       return {
@@ -89,9 +89,8 @@ export function useRowRequests(openDialogWhenFree: (dialog: DialogRequest) => vo
         },
       };
     });
-    if (!entries.length) entries.push({ label: t("sidebar.project.noBranches"), icon: GitBranch, disabled: true, onClick: () => {} });
-    if (!reply.complete) entries.push({ label: t("sidebar.project.branchesBeyondList"), note: true });
-    return entries;
+    if (!items.length && reply.complete) items.push({ label: t("sidebar.project.noBranches"), icon: GitBranch, disabled: true, onClick: () => {} });
+    return { items, warning: reply.complete ? undefined : t("sidebar.project.branchesBeyondList") };
   };
 
   const setSessionColour = (session: Session, colour: ConsoleSessionColour) => {

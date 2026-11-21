@@ -1,4 +1,4 @@
-import type { ActionMenuEntry, ActionMenuItem } from "../components/menus/menuEntries";
+import type { ActionMenuItem, ActionMenuLoadResult } from "../components/menus/menuEntries";
 import type { DialogRequest, NewSessionRequest } from "../dialogs/dialogRequest";
 import type { PanelKind } from "../layout/panelKind";
 import type { Console, ConsoleSessionColour, Project, Session } from "../protocol";
@@ -57,7 +57,7 @@ export interface SidebarHandlers {
    * setting says. */
   onPullProjectBranch: (project: Project) => void;
   /** Loads the local branch choices for this project's Switch branch submenu. */
-  onLoadProjectBranches: (project: Project) => Promise<ActionMenuEntry[]>;
+  onLoadProjectBranches: (project: Project) => Promise<ActionMenuLoadResult>;
   /** Pushes the project's current branch. */
   onPushProjectBranch: (project: Project) => void;
   /** Sets the colour of a console session. */

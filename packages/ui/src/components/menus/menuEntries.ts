@@ -52,7 +52,12 @@ export interface ActionMenuSubmenu {
   iconClassName?: string;
   items: ActionMenuEntry[];
   /** Loads fresh items when this submenu opens. */
-  loadItems?: () => Promise<ActionMenuEntry[]>;
+  loadItems?: () => Promise<ActionMenuLoadResult>;
+}
+
+export interface ActionMenuLoadResult {
+  items: ActionMenuEntry[];
+  warning?: string;
 }
 
 /** What a panel is given to be part of the menu it opens from. */
@@ -78,17 +83,7 @@ export interface ActionMenuPanel {
   panel: (context: ActionMenuPanelContext) => React.ReactNode;
 }
 
-/** A line of muted text at the menu's end that says something about the items above it (a limit the list
- * hit): it carries no glyph, its text lines up with the items' labels (past the check indicator of a menu with
- * choices too), and it cannot be chosen. It stays in
- * the arrow-key walk, so it is reached and read from the keyboard. */
-export interface ActionMenuNote {
-  /** The note's text. */
-  label: string;
-  note: true;
-}
-
-/** The heading of a group of items: the plain items that follow it (no submenu, panel, note or choice) are a section
+/** The heading of a group of items: the plain items that follow it (no submenu, panel or choice) are a section
  * under it, which names the group for assistive technology; the section ends at the first entry of any other kind,
  * and a heading with no plain item after it is left out. It is not an item and takes no focus. */
 export interface ActionMenuHeading {
@@ -97,4 +92,4 @@ export interface ActionMenuHeading {
   heading: true;
 }
 
-export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | ActionMenuPanel | ActionMenuNote | ActionMenuHeading | "separator";
+export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | ActionMenuPanel | ActionMenuHeading | "separator";

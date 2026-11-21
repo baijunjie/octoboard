@@ -219,14 +219,19 @@ existing local branches. Remote-only branches are not offered. The list is read 
 in byte order of branch names, with the project's own worktree's current branch checked. Selecting that branch
 closes the menu without requesting a switch.
 
-While the list is being read, the submenu shows a loading state. No local branches produces an unavailable empty
-item. A failed read shows, in the submenu in place of its items, one alert with its reason and **Try again**, which
-reloads without closing the menu; it opens no error alert. Keyboard focus inside the submenu moves to Try again when the
-read fails, and back to the submenu when the reload starts. At most 10,000
-branches, or as many as 2 MiB of encoded names hold, are listed; a truncated list ends with a note, after the
-branches, saying that there are more branches than the list can show and the others are not listed. The note is muted
-text with no glyph, lined up with the branches' names; it is reached and read with the arrow keys like the items, but
-choosing it does nothing and it is not worded as a failure.
+While the list is first being read, the submenu shows a loading state. A complete list with no local branches shows
+an unavailable empty item. At most 10,000 branches, or as many as 2 MiB of encoded names hold, are listed. A truncated
+list keeps the returned branches available and shows an amber warning triangle on the **Switch branch** row, just
+before its submenu chevron. If truncation leaves no branches to show, the submenu closes and the warning remains.
+A failed read shows a red circled `!` in the same place.
+
+Resting the pointer on the icon or moving keyboard focus to **Switch branch** opens its tooltip. The warning explains
+why only some branches are shown. The error explains the failure, with the remedy and a short diagnostic preview
+where available. Assistive technology hears the status when the read settles and as the row's description when focused.
+
+A failed read closes the branch submenu. If focus was inside it, focus returns to **Switch branch**. The icon remains
+on that row while its menu is open. Opening **Switch branch** again rereads the list, and a complete read clears the
+icon.
 
 Selecting another branch closes the menus and switches immediately, without confirmation. It changes the project's
 own worktree, including a linked worktree, regardless of which worktree the Git pane is reviewing. It never creates
@@ -240,12 +245,10 @@ underneath them. Other Git operations are not serialized with the switch.
 The directory must contain its own `.git` entry, as for the badge. A missing project is `unknown_project`, a
 directory that is not a repository under that rule is `not_a_git_repository`, a `git` that cannot be found is
 `binary_not_found` (see "Where `git` is found" in `docs/product/project-git-status.md`), and an invalid or vanished local
-branch or a Git failure is `git_switch_failed`, with the reason as `detail`. With no `git`, the submenu's read of the
-branches fails too: its alert says that Git is not installed or not on `PATH`, with the remedy to install it and try
-again, and offers **Download Git** before **Try again** (see "Recovery and unexpected errors" in
-`docs/product/error-alerts.md`); Try again, still the control focus moves to, then finds a Git installed since. Each Git call uses the filtered,
-non-interactive environment described in "The environment a check runs `git` in" in
-`docs/product/project-git-status.md` and has at most two minutes.
+branch or a Git failure is `git_switch_failed`, with the reason as `detail`. If the submenu's read cannot find Git,
+the tooltip explains how to install it and put it on `PATH`. Opening **Switch branch** again can find a Git installed
+since the failed read. Each Git call uses the filtered, non-interactive environment described in "The environment a
+check runs `git` in" in `docs/product/project-git-status.md` and has at most two minutes.
 
 Success raises no notice. The local branch and upstream counts are read again for the badge in every window,
 without fetching; an earlier remote-check warning stays unless that read itself fails. A failed status re-read

@@ -342,9 +342,11 @@ choices, a project's name and absolute directory path, **Copy session ID** in a 
 
 ## Tooltips on indicators
 
-A few marks that are not controls carry a tooltip too. They are not tab stops, so their tooltip shows only while the
-mouse rests on them, never on keyboard focus; what it says reaches assistive technology through the name of the row or
-badge they sit in, or the text beside them, and where nothing around a mark says it, through the mark's own name.
+Some indicators carry their own tooltip. They are not tab stops themselves. Their tooltip shows while the mouse
+rests on them. The warning or error icon for a submenu's load also shows its tooltip when the parent menu item takes
+keyboard focus (see "Switching the local branch" in `docs/product/project-git-actions.md`). The content reaches
+assistive technology through the name or description of the row or badge, the text beside it, or the indicator's own
+name.
 
 Carrying a tooltip makes none of them a control. A mouse press on such a mark does nothing of its own and takes no
 keyboard focus; where the mark sits in something that answers a press, the press goes on to that and does what a press
@@ -361,8 +363,8 @@ hover, across at least 24 by 24 pixels, even where it is drawn smaller. A mark i
 the status glyph, agent icon, context-size chip and binding badge on a sidebar row, a focus mode card or archived row
 and an archive view row, the relative time on a focus mode card or archived row and on an item of a View archive
 submenu, the branch badge on a project's sidebar row, the status marker, and the responsible-session badge in the Git
-mode's branch lists. A touch has no route to what such a mark's tooltip says; assistive technology has it in the
-accessible name of what holds the mark.
+mode's branch lists. A tap on a submenu's status icon acts on the parent menu item, which reads the list again when
+it opens. The icon's explanation reaches assistive technology through the parent item's description.
 
 These are:
 

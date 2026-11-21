@@ -164,6 +164,7 @@ const switchFixture = {
   } } },
 };
 const openSwitch = [...openGitSubmenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("sidebar.project.switchBranch")), (ui: Ui) => ui.wait(300)];
+const showSwitchStatus = [...openSwitch, (ui: Ui) => ui.hoverIndicator(ui.t("sidebar.project.switchBranch"))];
 
 const hostState = snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id, { ahead: 2 })] });
 const divergedState = snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id, { ahead: 2, behind: 3 })] });
@@ -305,26 +306,26 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-switch-branch-list-error", group: "Projects", category: "exceptional",
     title: "Local branches could not be read",
-    description: "The third menu is replaced by a danger Alert in the popover holding the title Could not load the items, Git's own sentence for the failure, a Details button for Git's diagnostic and Try again at the trailing edge, with no menu items.",
+    description: "The branch submenu closes when the list fails to load. The error icon beside the Switch branch chevron shows Git's diagnostic in a tooltip. Opening Switch branch again reads the list again.",
     ...switchFixture,
     projectBranches: { [restoreProject.id]: { code: "git_failed", params: { detail: "fatal: unable to read refs/heads" }, message: "Unable to list local branches" } },
-    steps: openSwitch,
+    steps: showSwitchStatus,
   },
   {
     id: "git-switch-branch-no-git", group: "Projects", category: "exceptional",
     title: "Local branches could not be read, Git missing",
-    description: "The third menu is replaced by a danger Alert in the popover holding the title Could not load the items, the sentence that Git is not installed or not on PATH and the remedy to install it where sessions run and try again, with no Details button, then Download Git (external-link icon) and Try again at the trailing edge, wrapping onto two lines where the language's labels are wider, with no menu items.",
+    description: "The branch submenu closes when Git is unavailable. The error icon beside the Switch branch chevron opens a tooltip explaining how to make Git available where sessions run.",
     ...switchFixture,
     projectBranches: { [restoreProject.id]: { code: "binary_not_found", params: { binary: "git" }, message: "git was not found on the login shell's PATH" } },
-    steps: openSwitch,
+    steps: showSwitchStatus,
   },
   {
     id: "git-switch-branch-cut-short", group: "Projects", category: "exceptional",
     title: "Local branches, the list cut off",
-    description: "The branch menu lists the four branches the daemon returned, then a last item that is a muted note with no glyph, its text lined up with the branch labels: \"There are more branches than this list can show. The others are not listed.\" It cannot be pressed, though the arrow keys stop on it.",
+    description: "A warning icon sits beside the Switch branch chevron. Its tooltip explains why some branches are missing. The submenu still offers the available branches.",
     ...switchFixture,
     git: { ...switchGit, branchesCut: true },
-    steps: openSwitch,
+    steps: showSwitchStatus,
   },
   {
     id: "git-restore-confirm",

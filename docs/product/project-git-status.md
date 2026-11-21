@@ -360,8 +360,8 @@ environment" in `docs/product/launching-agents.md`. Which capture depends on who
   the `git` found there. The fresh capture becomes the one Octoboard holds, so the repeating work finds that `git` from
   then on too. So installing Git, or putting it on `PATH`, and then retrying works without restarting anything. That is
   **Pull current branch** and **Try again** on the branch badge's failure mark (see "Checking again after Git was not
-  found" above), **Push current branch**, **Switch branch** — the list of branches read as its submenu opens, its Try
-  again, and the switch — and **Restore file changes** (see `docs/product/project-git-actions.md`), adding a single
+  found" above), **Push current branch**, **Switch branch** including each opening of its list and the switch
+  itself, and **Restore file changes** (see `docs/product/project-git-actions.md`), adding a single
   directory that does not exist yet, cloning a git URL and **Try again** on the form's failed check of one (see
   "Associating a project" in `docs/product/projects.md`; a clone looks first in the capture a session launch would
   use), the confirmations to archive, delete or hand off sessions and to remove a project as they look up what goes

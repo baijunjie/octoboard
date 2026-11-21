@@ -206,8 +206,10 @@ showing one piece of content in a modal layer (the file viewer) keeps that conte
 - **Copy actions are top-level items in a group of their own**; a text-editing menu keeps Copy, Paste and Select all
   together. A menu shows at once, and an item awaiting data stays disabled without a reason until it arrives (a failed
   lookup leaves it disabled with one).
-- **A limit a menu hit is its last item, a note in the menu's muted text on the labels' column with no glyph**, saying
-  why the rest is missing, never worded as a failure.
+- **A submenu list that is incomplete or failed to load puts one status glyph on its trigger**, after the label and
+  before the chevron. A truncated list uses a warning triangle and still offers the returned choices. A failed
+  list uses a circled error mark and closes the submenu. The glyph's tooltip explains the status on hover and
+  whenever the trigger takes keyboard focus. Opening the submenu again reads the list anew.
 
 ### External links
 

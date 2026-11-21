@@ -7,6 +7,9 @@ import { usePrimitiveLabels } from "./labels";
 import { FloatingPopover } from "./Popover";
 import { TooltipContent, TooltipRoot, TooltipTrigger, tooltipSurfaceClassName, useTooltipState } from "./tooltipParts";
 
+// Hover wiring for a mark whose tooltip is anchored independently of its keyboard focus.
+export { useHover as useTooltipHover };
+
 /** Where a tooltip opens relative to what it belongs to, and how far from it. Both are HeroUI's own defaults for a
  * tooltip with no arrow, spelled out so the popovers drawn as a tooltip (the touch popover, the hover popover) take the
  * same ones. */
