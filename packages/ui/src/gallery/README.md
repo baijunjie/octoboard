@@ -221,6 +221,10 @@ status, viewport and viewing conditions, baseline and current captures, and a di
 marked red. Pixel counts, percentages and difference bounds describe the comparison. `results.json` records the
 origins, selection, threshold, timing, completion state and per-case results; the PNG files sit beside both reports.
 
+The toolbar stays at the top while you scroll. The report opens in descending order by changed-pixel percentage,
+with ascending and original order also available. Enter a minimum such as `1500` pixels or `1%` to hide cases
+below it. Clear the field to show all cases. Cases without a pixel comparison stay visible.
+
 With no scenario arguments the command compares the union of both catalogs, reporting scenarios present only in the
 current catalog as added and those present only in the baseline as removed. Prefer selecting the cases relevant to
 the change: repeat ids or quoted `*` patterns, or use `--group <text>` to select a group substring on either side.

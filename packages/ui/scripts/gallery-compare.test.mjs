@@ -1,4 +1,5 @@
-import { expect, test } from "vitest";
+import { JSDOM } from "jsdom";
+import { expect, onTestFinished, test } from "vitest";
 import { comparePixels, renderReport, selectScenarios, viewportOf } from "./gallery-compare-report.mjs";
 import { parseOptions } from "./gallery-compare.mjs";
 
@@ -34,8 +35,66 @@ test("report escapes untrusted titles/errors and exposes incomplete/error result
   expect(html).toContain("&lt;script&gt;");
   expect(html).toContain("&lt;svg onload=alert(1)&gt;");
   expect(html).toContain('src="00001.current.png"');
-  expect(html).not.toContain("<script>");
+  const { window } = new JSDOM(html);
+  onTestFinished(() => window.close());
+  expect(window.document.querySelectorAll("script")).toHaveLength(1);
+  const result = window.document.querySelector("article");
+  expect(result).not.toBeNull();
+  expect(result.querySelector("script, svg")).toBeNull();
   expect(html).not.toContain("<img>");
+});
+
+function openReportWithMixedResults() {
+  const viewing = { language: "en", theme: "light", viewport: { width: 329, height: 456 } };
+  const results = [
+    { id: "added", status: "added" },
+    { id: "below", status: "changed", pixels: 1499, percent: 1499 * 100 / (329 * 456) },
+    { id: "at-threshold", status: "changed", pixels: 1500, percent: 1500 * 100 / (329 * 456) },
+    { id: "high-percent", status: "changed", pixels: 1498, percent: 1.1984, viewport: { width: 250, height: 500 } },
+    { id: "failed", status: "error" },
+    { id: "same", status: "unchanged", pixels: 0, percent: 0 },
+  ].map((result) => ({ ...viewing, ...result }));
+  const html = renderReport({ results, complete: true, threshold: 8 });
+  const { window } = new JSDOM(html, { runScripts: "dangerously", url: "file:///gallery-report/index.html" });
+  onTestFinished(() => window.close());
+  const { document } = window;
+  const order = document.querySelector("#case-order");
+  const minimum = document.querySelector("#minimum-change");
+  const status = document.querySelector("#filter-status");
+  const visibleCases = () => [...document.querySelectorAll("#cases article:not([hidden]) summary strong")].map((label) => label.textContent);
+  const changeOrder = (value) => {
+    order.value = value;
+    order.dispatchEvent(new window.Event("change"));
+  };
+  const inputMinimum = (value) => {
+    minimum.value = value;
+    minimum.dispatchEvent(new window.Event("input"));
+  };
+  return { changeOrder, inputMinimum, status, visibleCases };
+}
+
+test("report sorts by changed-pixel percentage and can restore the capture order", () => {
+  const { changeOrder, visibleCases } = openReportWithMixedResults();
+  expect(visibleCases()).toEqual(["high-percent", "at-threshold", "below", "same", "added", "failed"]);
+  changeOrder("low");
+  expect(visibleCases()).toEqual(["same", "below", "at-threshold", "high-percent", "added", "failed"]);
+  changeOrder("original");
+  expect(visibleCases()).toEqual(["added", "below", "at-threshold", "high-percent", "failed", "same"]);
+});
+
+test("report filters by pixel count or displayed percentage and preserves the last valid filter", () => {
+  const { changeOrder, inputMinimum, status, visibleCases } = openReportWithMixedResults();
+  inputMinimum("1500");
+  expect(visibleCases()).toEqual(["at-threshold", "added", "failed"]);
+  inputMinimum("1%");
+  expect(visibleCases()).toEqual(["high-percent", "at-threshold", "added", "failed"]);
+  changeOrder("low");
+  expect(visibleCases()).toEqual(["at-threshold", "high-percent", "added", "failed"]);
+  inputMinimum("101%");
+  expect(status.textContent).toMatch(/pixel count.*percentage/i);
+  expect(visibleCases()).toEqual(["at-threshold", "high-percent", "added", "failed"]);
+  inputMinimum("");
+  expect(visibleCases()).toEqual(["same", "below", "at-threshold", "high-percent", "added", "failed"]);
 });
 
 const required = ["--base-url", "http://localhost:5192", "--url", "http://localhost:5191", "--output", "/tmp/gallery-compare-test"];
@@ -72,7 +131,12 @@ test("CLI writes report and artifacts, preserves errors, and refuses overwrites"
       }
       if (mode.endsWith("close-hang")) expect(JSON.stringify(report)).toContain("closing browser page timed out");
       expect(result.stdout).toContain("closed browser");
-      expect(readFileSync(path.join(output, "index.html"), "utf8")).toContain("Gallery comparison");
+      const html = readFileSync(path.join(output, "index.html"), "utf8");
+      expect(html).toContain("Gallery comparison");
+      if (mode === "normal") {
+        expect(html).toContain('id="case-order"');
+        expect(html).toContain('id="minimum-change"');
+      }
       const again = spawnSync(process.execPath, args, { encoding: "utf8", timeout: 10_000 });
       expect(again.status).toBe(2);
       expect(again.stdout).not.toContain("opened browser");
