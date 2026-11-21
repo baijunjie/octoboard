@@ -2,7 +2,7 @@
 defineProps<{ feature: string }>();
 const { t } = useSiteCopy();
 const { locale } = useI18n();
-const appViews = ["managedAccounts", "usageMonitor", "startUsageWindows", "keepAwake", "sessionIntervention", "nativeProjectSessions", "reviewChanges", "processMonitoring", "openAgentApp"];
+const appViews = ["managedAccounts", "usageMonitor", "startUsageWindows", "keepAwake", "sessionIntervention", "scheduledTasks", "nativeProjectSessions", "reviewChanges", "processMonitoring", "openAgentApp", "sharedMemory"];
 const sharingTools = [["code", "featureVisualSkills"], ["coordinator", "featureVisualPlugins"], ["branch", "featureVisualMcp"]] as const;
 const ids = ["A", "B", "C"];
 const providers = ["Claude Code", "Codex", "Grok Build"];

@@ -53,17 +53,19 @@ The sidebar has four groups, in this order. The Features group holds three subgr
 | Features › Context and continuity | Context usage and fresh sessions | `features/fresh-session/` |
 | Features › Context and continuity | Agent handoff | `features/agent-handoff/` |
 | Features › Context and continuity | Open in the agent's app | `features/open-in-agent-app/` |
+| Features › Context and continuity | Shared memory | `features/shared-memory/` |
 | Features › Agents and projects | Cross-project coordination | `features/cross-project-work/` |
 | Features › Agents and projects | Native project sessions | `features/native-project-sessions/` |
 | Features › Agents and projects | Session status and intervention | `features/session-intervention/` |
+| Features › Agents and projects | Scheduled tasks | `features/scheduled-tasks/` |
 | Features › Agents and projects | Process monitoring | `features/process-monitoring/` |
 | Features › Agents and projects | Prevent sleep | `features/keep-awake/` |
 | Features › Agents and projects | Reviewing changes | `features/review-changes/` |
 
 Group and subgroup labels are translated; each page's entry is its title in the language being read. The Features group
 and its three subgroups carry, in every language, the same words as the website's Features navigation label and the
-titles of its feature wall's three groups (see "Homepage and navigation" in `docs/product/website.md`), and its 15
-pages follow the feature wall's 15 cards in the same order. The website does not link to the Features pages. The pages
+titles of its feature wall's three groups (see "Homepage and navigation" in `docs/product/website.md`), and its 17
+pages follow the feature wall's 17 cards in the same order. The website does not link to the Features pages. The pages
 cover:
 
 - **Introduction**: what Octoboard is, that it runs the user's own coding agents rather than including one, and which
@@ -99,12 +101,21 @@ cover:
     handoff record, and the compatibility switches that let one agent load another's setup.
   - **Open in the agent's app**: opening a session's conversation in the Claude or Codex desktop app on the computer
     that runs the daemon.
+  - **Shared memory**: the console memory and project memory that sessions of every agent and account read and save,
+    the setting being off by default, sessions starting from an index of entry summaries, the agent's own memory being
+    turned off while it is on, the limits of an entry and of a memory, saves that conflict, a project's memory belonging
+    to its folder and what happens to removed projects' memory, and viewing, adding, editing and deleting entries.
   - **Cross-project coordination**: giving one request to a console session, which starts a session in each project it
     touches, follows them and brings their reports together.
   - **Native project sessions**: each session being the agent's own command-line program in one project, so the
     project's instructions, skills, hooks and MCP servers load as usual.
   - **Session status and intervention**: telling which sessions are working, waiting or at rest, being called to the
     ones waiting for the user, and typing straight into their terminal.
+  - **Scheduled tasks**: what a task holds and the schedules it can run on, times being read on the computer that runs
+    the daemon, missed runs being caught up once, the run history and the notification for a failed run, which
+    sessions can read and change tasks, that reading needs no approval while every change waits for the user's answer
+    in a dialog unless automatic approval is on, what that dialog shows and the check made again at approval, the
+    limits, and creating, running by hand, enabling or disabling and deleting a task, or asking a session to do it.
   - **Process monitoring**: the processes agents start, with their memory, ports and local web links, and stopping
     them when a session ends unless they are kept.
   - **Prevent sleep**: keeping the computer that runs the daemon awake, and where the system allows it its display from
@@ -163,7 +174,7 @@ selectors.
 Each page names its own canonical address and has language alternates for all 17 languages plus an `x-default`
 alternate, the English page; the language values are the language tags. The docs publish their own sitemap index,
 `/docs/sitemap-index.xml`, listing every page in every language, including the pages shown in English as not
-translated yet (17 × 23 = 391 addresses), and none of the redirect pages; the website's `robots.txt` names it (see
+translated yet (17 × 25 = 425 addresses), and none of the redirect pages; the website's `robots.txt` names it (see
 "Search indexing and agent-readable copies" in `docs/product/website-search-indexing.md`). The docs have no Markdown
 copies or `llms.txt` of their own; the website's agent-readable files link to their pages.
 

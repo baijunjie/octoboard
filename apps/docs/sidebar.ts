@@ -180,7 +180,7 @@ export const sidebar: NonNullable<StarlightUserConfig["sidebar"]> = [
       {
         label: contextAndContinuity.en,
         translations: contextAndContinuity,
-        items: ["features/fresh-session", "features/agent-handoff", "features/open-in-agent-app"],
+        items: ["features/fresh-session", "features/agent-handoff", "features/open-in-agent-app", "features/shared-memory"],
       },
       {
         label: agentsAndProjects.en,
@@ -189,6 +189,7 @@ export const sidebar: NonNullable<StarlightUserConfig["sidebar"]> = [
           "features/cross-project-work",
           "features/native-project-sessions",
           "features/session-intervention",
+          "features/scheduled-tasks",
           "features/process-monitoring",
           "features/keep-awake",
           "features/review-changes",

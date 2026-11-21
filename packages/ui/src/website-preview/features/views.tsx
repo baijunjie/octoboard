@@ -6,25 +6,45 @@ import { AgentIcon } from "../../components/icons/AgentIcon";
 import { ExternalLink } from "../../components/text/ExternalLink";
 import { StatusIcon } from "../../components/status/StatusIcon";
 import { createFixtureDaemon } from "../../fixtures/fixtureDaemon";
-import { snapshotState } from "../../fixtures/builders";
+import { consoleOf, minutesAgo, projectOf, snapshotState } from "../../fixtures/builders";
+import { scheduledTaskOf } from "../../fixtures/scheduledTaskBuilders";
 import { quotaOf, quotaWindow } from "../../fixtures/quotas";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import { AccountQuotaSummary, LoginStateBadge } from "../../quota/AccountQuotaSummary";
 import { Button } from "../../primitives";
 import { OptionSelect } from "../../components/form/OptionSelect";
 import { KEEP_AWAKE_WHEN_LABEL } from "../../configuration/keepAwakeWhen";
-import type { KeepAwakeWhen } from "../../protocol";
 import { SettingRow, SwitchSettingRow } from "../../settings/SettingRow";
+import { MemoryRow } from "../../dialogs/memory/MemoryRow";
+import type { KeepAwakeWhen, MemoryIndexEntry, ScheduledTask } from "../../protocol";
+import { TaskRow } from "../../scheduledTasks/ScheduledTasksSidebar";
 import { DaemonProvider } from "../../store";
 import { RenderedDiff, useRendererScope } from "../../viewer/code/codeRenderer";
 import { ready } from "./main";
 
-const daemon = createFixtureDaemon({ state: snapshotState({}) });
+const workspace = consoleOf("feature-console", "Workspace");
+const daemon = createFixtureDaemon({ state: snapshotState({ consoles: [workspace], projects: [projectOf("feature-api", workspace.id, "api")] }) });
 const accounts = [
   { name: "Claude Code", quota: quotaOf("claude", "work", "max", [quotaWindow("session", 38, 117)]) },
   { name: "Codex", quota: quotaOf("codex", "personal", "plus", []) },
 ];
 const processPort = 3000;
+const tasks: ScheduledTask[] = [
+  scheduledTaskOf("feature-task-checks", workspace.id, {
+    project_id: "feature-api",
+    launch: { title: "Nightly API checks", compatibility: {} },
+    schedule: { kind: "daily", time: { hour: 2, minute: 0 } },
+  }),
+  scheduledTaskOf("feature-task-report", workspace.id, {
+    launch: { title: "Weekly progress report", compatibility: {} },
+    schedule: { kind: "weekly", days: ["friday"], time: { hour: 17, minute: 0 } },
+  }),
+];
+const memories: MemoryIndexEntry[] = [
+  { id: "a1b2c3d4", summary: "API tests run with pnpm test:api", local: false, created_at: minutesAgo(600), updated_at: minutesAgo(5), updated_by: { kind: "agent", agent: "codex" }, version: 2 },
+  { id: "e5f6g7h8", summary: "Staging deploys need review", local: false, created_at: minutesAgo(3000), updated_at: minutesAgo(60 * 3), updated_by: { kind: "agent", agent: "claude" }, version: 1 },
+];
+const noop = (): void => undefined;
 
 const patch = `diff --git a/src/orders.ts b/src/orders.ts
 --- a/src/orders.ts
@@ -73,6 +93,16 @@ export function FeatureView({ feature }: { feature: string }): React.ReactElemen
           <OptionSelect<KeepAwakeWhen> inline label={t("settings.keepAwake.when.label")} options={[{ value: "working", label: t(KEEP_AWAKE_WHEN_LABEL.working) }]} value="working" onChange={() => undefined} />
         </SettingRow>
       </section>;
+      break;
+    case "scheduledTasks":
+      content = <ul className="feature-surface preview-list task-view">{tasks.map((task) => (
+        <li key={task.id}><TaskRow task={task} selected={task.id === tasks[0].id} running={false} onSelect={noop} onRunNow={noop} onSetEnabled={noop} onDelete={noop} /></li>
+      ))}</ul>;
+      break;
+    case "sharedMemory":
+      content = <ul className="feature-surface preview-list memory-view">{memories.map((line) => (
+        <MemoryRow key={line.id} line={line} flagged={false} onView={noop} onEdit={noop} onDelete={noop} />
+      ))}</ul>;
       break;
     case "sessionIntervention":
       content = <ul className="feature-surface preview-list">

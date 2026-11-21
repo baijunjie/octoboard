@@ -32,3 +32,15 @@ export function scheduledTaskOf(id: string, consoleId: string, extra: Partial<Sc
 export function scheduledRunOf(id: string, taskId: string, minutes: number, outcome: ScheduledRunOutcome, extra: Partial<ScheduledTaskRun> = {}): ScheduledTaskRun {
   return { id, task_id: taskId, ran_at: minutesAgo(minutes), due_at: null, trigger: "run_now", outcome, ...extra };
 }
+
+/** The latest moment at or before `now` that is `hour:minute` on a day `onDay` accepts (a weekday number, Sunday 0), in the
+ * window's own time zone, which is the zone the fixture daemon reads schedules in; `earlier` more such moments back. */
+export function lastOccurrence(now: number, hour: number, minute: number, onDay: (weekday: number) => boolean, earlier = 0): number {
+  const at = new Date(now);
+  at.setHours(hour, minute, 0, 0);
+  let skipped = 0;
+  // Stepping back by calendar days, so a change of daylight saving time moves no run to another hour.
+  for (let candidate = at.getTime(); ; candidate = new Date(new Date(candidate).setDate(new Date(candidate).getDate() - 1)).getTime()) {
+    if (candidate <= now && onDay(new Date(candidate).getDay()) && skipped++ === earlier) return candidate;
+  }
+}

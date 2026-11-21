@@ -1,19 +1,7 @@
 import type { ScheduledTask, ScheduledTaskRun } from "../protocol";
 import type { ScheduledTasksFixture } from "../fixtures/fixture";
-import { scheduledRunOf, scheduledTaskOf } from "../fixtures/scheduledTaskBuilders";
+import { lastOccurrence, scheduledRunOf, scheduledTaskOf } from "../fixtures/scheduledTaskBuilders";
 import type { previewCopy as english } from "./locales/en";
-
-/** The latest moment at or before `now` that is `hour:minute` on a day `onDay` accepts (a weekday number, Sunday 0), in the
- * visitor's own time zone, which is the zone the preview's daemon reads schedules in; `earlier` more such moments back. */
-function lastOccurrence(now: number, hour: number, minute: number, onDay: (weekday: number) => boolean, earlier = 0): number {
-  const at = new Date(now);
-  at.setHours(hour, minute, 0, 0);
-  let skipped = 0;
-  // Stepping back by calendar days, so a change of daylight saving time moves no run to another hour.
-  for (let candidate = at.getTime(); ; candidate = new Date(new Date(candidate).setDate(new Date(candidate).getDate() - 1)).getTime()) {
-    if (candidate <= now && onDay(new Date(candidate).getDay()) && skipped++ === earlier) return candidate;
-  }
-}
 
 /** The scheduled tasks the demo's workspace holds, over the sessions and projects it already has: three tasks of three
  * schedule kinds, the nightly check of the order API with a few runs behind it, one of which could not start. Each time is

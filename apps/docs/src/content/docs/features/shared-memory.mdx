@@ -1,0 +1,56 @@
+---
+title: "Shared memory"
+description: "Let sessions of any agent keep what they learn in one memory that later sessions read, and read and correct it yourself."
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+Each agent keeps a memory of its own, split by agent and by account, so a session on another agent or account never sees what an earlier one learned. {productName} keeps a memory that every agent shares: a session saves what is worth keeping, and later sessions start knowing it, whatever their agent or account. You can read it and correct it any time.
+
+<Screenshot id="memory-dialog" alt="The “Console memory” dialog, listing entries with a one-line summary each, when and by whom each was updated, and “Add entry” and “Delete all” buttons." />
+
+## Why it works this way
+
+- <strong>What one session learns should help the next, on any agent.</strong> There are two memories. A console's memory is read and written by every console session of that console: your preferences and corrections, which kind of request belongs to which project, facts about the machine for work that touches no project. A project's memory is read and written by every session working in the project: what agents need to know about the machine the project is on, such as local paths, ports and how a local tool behaves there. Anything else about a project belongs in the project's own documents.
+- <strong>It is off to begin with, and you turn it on.</strong> <strong>Let sessions share {productName}'s memory</strong> in <strong>Settings › Memory</strong> is off by default. While it is off, sessions behave as if there were no memory. Turning it off later deletes nothing.
+- <strong>Sessions start with an index, and open entries as they need them.</strong> Each entry has a one-sentence summary, and a new session is given the list of summaries, most recently updated first, then reads an entry in full only when its summary matters to the work. A session saves without asking you, and a console session says in its reply what it saved, so you can correct it.
+- <strong>Its own memory is turned off, so nothing is learned twice.</strong> While the shared memory is on, each session {productName} launches has its agent's own memory turned off for that launch, so it keeps what it learns in the shared one. Nothing is written into the agent's configuration, and what the agent wrote before is left alone.
+- <strong>An entry is a short note you can read.</strong> It is a summary of up to 200 characters and Markdown content of up to 16,384 bytes, with when it was last updated and by whom: you, or an agent such as Codex. A memory holds at most 200 entries.
+- <strong>Nobody overwrites a change they never saw.</strong> A save that edits an entry is refused when the entry was saved by someone else since it was read, and nothing is lost: the session, or your form, gets the current entry to merge and save again.
+- <strong>A project's memory belongs to the folder, not to the project.</strong> Every project at the same place on the same computer shares it, and removing a project keeps its memory unless you tick <strong>Also delete this project’s memory</strong> in the removal confirmation, so adding the project again at the same folder finds it again.
+
+<Aside type="caution" title="Limits">
+- The setting reaches only sessions launched after you change it. A session already running keeps what it started with.
+- A session's index is a snapshot from when it started; it can ask for the current one, which includes what other sessions saved since.
+- Memory is background, not instructions: it ranks below your instructions, the project's own conventions and what you say in the conversation, and a session checks it before relying on it.
+- An entry in a console's memory can be marked <strong>This machine only</strong>, for what holds only on the computer that runs the daemon, {productName}'s background program. A configuration export carries a console's memory without those entries, and never carries a project's memory or the setting itself.
+- Deleting a console deletes its memory.
+</Aside>
+
+## How to use it
+
+<Steps>
+
+1. Open <strong>Settings › Memory</strong> and switch on <strong>Let sessions share {productName}'s memory</strong>. Sessions you launch from then on read and save the memory.
+2. Open a console's action menu and choose <strong>Memory</strong>, or a project's action menu and choose <strong>Memory</strong>. The dialog is titled <strong>Console memory</strong> or <strong>Project memory</strong>, and its entries are what its sessions saved, and what you added. The item is there only while the setting is on.
+3. Choose a row to read an entry in full. The row's menu has <strong>View</strong>, <strong>Edit</strong> and <strong>Delete</strong>.
+4. To add one yourself, choose <strong>Add entry</strong> and fill in <strong>Summary</strong> and <strong>Content</strong>. A console's form also has the <strong>This machine only</strong> checkbox.
+5. To clear a memory, choose <strong>Delete all</strong> and confirm by typing the word the dialog asks for.
+
+</Steps>
+
+<Screenshot id="memory-entry-edit" alt="The “Edit memory entry” dialog, with “Summary” and “Content” filled in and the “This machine only” checkbox ticked." />
+
+You'll know it worked when the entries sessions save appear in the dialog without reopening it, and an entry you add shows <strong>Updated just now by you</strong>.
+
+When a project is removed, its memory is kept unless you ticked <strong>Also delete this project’s memory</strong> in the removal confirmation. Under <strong>Memory of removed projects</strong> in <strong>Settings › Memory</strong>, <strong>Manage</strong> lists each folder whose memory is left behind, with its machine, how many entries it holds and when it was last updated, and lets you delete one folder's memory or all of it.
+
+<Screenshot id="memory-setting" alt="The “Memory” section of Settings, with the sharing switch on and “Memory of removed projects” showing a count of folders and a “Manage” button." />
+
+## Next
+
+- [Cross-project coordination](../cross-project-work/): the console sessions and project sessions whose memories these are.
+- [Agent handoff](../agent-handoff/): carry a task over to another agent, which reads the same memory.
+- [Context usage and fresh sessions](../fresh-session/): start a new session that begins from the shared memory.

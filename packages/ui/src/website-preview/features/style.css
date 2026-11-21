@@ -7,6 +7,9 @@ html { color-scheme: dark; }
 .compact-view { display: grid; gap: 15px; padding: 21px; font-size: 17px; white-space: nowrap; }
 .setting-view { padding: 4px 8px; }
 .preview-list { list-style: none; padding: 0; margin: 0; }
+.task-view { padding: 8px; }
+.memory-view { padding: 12px 19px; font-size: 14px; }
+.memory-view > li + li { border-top: 1px solid var(--separator); }
 .preview-row, .preview-line { display: flex; align-items: center; gap: 11px; min-width: 0; white-space: nowrap; }
 .preview-row { min-height: 62px; padding: 12px 19px; font-size: 16px; }
 .preview-row + .preview-row { border-top: 1px solid var(--separator); }

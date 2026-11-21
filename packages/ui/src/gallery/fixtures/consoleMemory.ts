@@ -61,6 +61,29 @@ const mixedEntries: MemoryEntry[] = [
   entry("u6m3y9cn", 60 * 24 * 12, { summary: "Replies in Japanese, in short sentences", updated_by: byAgent("claude") }),
 ];
 
+// The entry the plain edit scenario opens: one that holds only on this machine, with a few lines of content.
+const portDatabase = entry("d3n6w2xs", 60 * 3, {
+  summary: "The local database listens on port 5433",
+  local: true,
+  content: [
+    "The development Postgres runs in Docker on this machine, on port 5433 instead of the default 5432.",
+    "",
+    "Start it with `docker compose up db`.",
+    "It holds throwaway data, so reset it freely.",
+  ].join("\n"),
+  updated_by: byAgent("codex"),
+});
+
+/** Five entries whose summaries each fit a row whole beside their tag, by the user and by three agents, two of them
+ * holding only on this machine, most recent first. */
+const plainEntries: MemoryEntry[] = [
+  entry("v4k8q1ze", 12, { summary: "Run pnpm verify before every release", updated_by: byAgent("claude") }),
+  entry("m7t2b9ha", 55, { summary: "Reply in Japanese, in short sentences" }),
+  portDatabase,
+  entry("g5r1c6yj", 60 * 26, { summary: "Keep pull requests under 400 changed lines", updated_by: byAgent("grok") }),
+  entry("w9e3p4lf", 60 * 24 * 3, { summary: "Projects are checked out under ~/work", local: true }),
+];
+
 /** The most entries a console holds, the most recent first. */
 const fullEntries: MemoryEntry[] = Array.from({ length: 200 }, (_, index) =>
   entry(`note${String(index + 1).padStart(4, "0")}`, index + 1, { summary: `Note number ${index + 1}`, local: index % 7 === 0 }),
@@ -105,6 +128,16 @@ export const consoleMemoryScenarios: Scenario[] = [
     steps: openMemory,
   },
   {
+    id: "console-memory-list-plain",
+    group: GROUP,
+    category: "normal",
+    title: "Console memory with five entries that fit their rows",
+    description: "Five entries, most recently updated first, each summary whole on its row: by an agent (Claude Code), by you, by Codex, by Grok Build and by you, with two of them carrying the \"This machine only\" tag. The count at the start of the footer reads 5 of 200 entries. Unlike Console memory with entries, no summary is clipped, none is repeated and no agent is unnamed.",
+    state,
+    memory: { entries: plainEntries },
+    steps: openMemory,
+  },
+  {
     id: "console-memory-full",
     group: GROUP,
     category: "normal",
@@ -143,6 +176,16 @@ export const consoleMemoryScenarios: Scenario[] = [
     state,
     memory: { entries: mixedEntries },
     steps: [...openMemory, ...editEntry(staging.summary)],
+  },
+  {
+    id: "console-memory-edit-plain",
+    group: GROUP,
+    category: "normal",
+    title: "Edit a memory entry with real content",
+    description: "The entry The local database listens on port 5433 open for editing: Summary whole on one line and Content a few lines of Markdown, with the \"This machine only\" checkbox checked under them. Unlike Edit a memory entry, the summary is not cut and the content is not placeholder text.",
+    state,
+    memory: { entries: plainEntries },
+    steps: [...openMemory, ...editEntry(portDatabase.summary)],
   },
   {
     id: "console-memory-delete",

@@ -8,10 +8,10 @@ export const featureGroups = [
     "managedAccounts", "accountContinuity", "quotaScheduling", "usageMonitor", "startUsageWindows", "sharedConfiguration",
   ] },
   { id: "feature-context", key: "featureContextTitle", icon: "chat-circle-dots", features: [
-    "freshSession", "agentHandoff", "openAgentApp",
+    "freshSession", "agentHandoff", "openAgentApp", "sharedMemory",
   ] },
   { id: "feature-collaboration", key: "featureCollaborationTitle", icon: "tree-structure", features: [
-    "crossProjectWork", "nativeProjectSessions", "sessionIntervention", "processMonitoring", "keepAwake", "reviewChanges",
+    "crossProjectWork", "nativeProjectSessions", "sessionIntervention", "scheduledTasks", "processMonitoring", "keepAwake", "reviewChanges",
   ] },
 ] as const;
 

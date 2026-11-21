@@ -92,7 +92,8 @@ export function ScheduledTasksSidebar(): React.ReactElement {
   );
 }
 
-function TaskRow({ task, selected, running, onSelect, onRunNow, onSetEnabled, onDelete }: {
+/** One task's row, which the feature views of the website show on their own. */
+export function TaskRow({ task, selected, running, onSelect, onRunNow, onSetEnabled, onDelete }: {
   task: ScheduledTask;
   selected: boolean;
   running: boolean;

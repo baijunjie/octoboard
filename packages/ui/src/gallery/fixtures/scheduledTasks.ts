@@ -1,6 +1,6 @@
-import { SAMPLE, minutesAgo, snapshotState } from "../../fixtures/builders";
+import { SAMPLE, minutesAgo, sessionOf, snapshotState } from "../../fixtures/builders";
 import { describing, type Ui } from "../../fixtures/interact";
-import { scheduledRunOf, scheduledTaskOf } from "../../fixtures/scheduledTaskBuilders";
+import { lastOccurrence, scheduledRunOf, scheduledTaskOf } from "../../fixtures/scheduledTaskBuilders";
 import type { Schedule, ScheduledTask, ScheduledTaskRun } from "../../protocol";
 import { weekdayName } from "../../scheduledTasks/scheduleText";
 import type { Scenario } from "../scenario";
@@ -139,6 +139,95 @@ const RUNS: ScheduledTaskRun[] = [
   ),
 ];
 
+/** The plain task's schedule is Monday, Wednesday and Friday at 9:30: when it last came due and the time before, so its
+ * runs agree with it. */
+const onPlainDay = (weekday: number) => weekday === 1 || weekday === 3 || weekday === 5;
+const LATEST_PLAIN_RUN = lastOccurrence(Date.now(), 9, 30, onPlainDay);
+const EARLIER_PLAIN_RUN = lastOccurrence(Date.now(), 9, 30, onPlainDay, 1);
+/** A Run now on the day of the earlier occurrence, in the afternoon, so it falls between the two scheduled runs. */
+const MANUAL_PLAIN_RUN = EARLIER_PLAIN_RUN + 5 * 3_600_000;
+
+/** The window the plain scenarios open on: the same console and projects, with the two sessions the plain task's runs
+ * started (idle, so no running badge sits on the rail). */
+const plainSessions = [
+  consoleSession,
+  sessionOf("s-deps-1", console_.id, web.id, "Dependency review", "idle", { bound_to: consoleSession.id, started_at: LATEST_PLAIN_RUN }),
+  sessionOf("s-deps-2", console_.id, web.id, "Bump the Astro and Vite versions", "idle", { bound_to: consoleSession.id, started_at: MANUAL_PLAIN_RUN }),
+];
+const plainState = snapshotState({ consoles: [console_], projects: [web, api], sessions: plainSessions });
+
+/** Tomorrow at `hour`:00 in the window's zone, to the minute as the form holds it. */
+function tomorrowAt(hour: number): number {
+  const day = new Date();
+  day.setDate(day.getDate() + 1);
+  day.setHours(hour, 0, 0, 0);
+  return day.getTime();
+}
+
+/** Six tasks with names and second lines that fit a row whole: a project task that reports to the console session (the
+ * first, which the page shows), console tasks, a weekdays, a daily, an hourly and a one-off schedule, and one that is
+ * off. */
+const PLAIN_TASKS: ScheduledTask[] = [
+  scheduledTaskOf("t-plain-deps", console_.id, {
+    project_id: web.id,
+    launch: { title: "Dependency review", agent: "claude", compatibility: {}, bound_to: consoleSession.id },
+    prompt: "Review the open dependency updates and open a pull request for the safe ones.\nList the ones that need a decision.",
+    schedule: { kind: "weekly", time: { hour: 9, minute: 30 }, days: ["monday", "wednesday", "friday"] },
+    last_run_at: LATEST_PLAIN_RUN,
+  }),
+  scheduledTaskOf("t-plain-morning", console_.id, {
+    launch: { title: "Morning summary", compatibility: {} },
+    prompt: "Summarise yesterday's commits across every project and post the summary as a page.",
+    schedule: { kind: "daily", time: { hour: 8, minute: 0 } },
+    last_run_at: minutesAgo(60 * 9),
+  }),
+  scheduledTaskOf("t-plain-index", console_.id, {
+    project_id: api.id,
+    launch: { title: "Index health check", compatibility: {} },
+    prompt: "Check the search index health and report anything that looks stale.",
+    schedule: { kind: "hourly", minute: 15 },
+    last_run_at: minutesAgo(40),
+  }),
+  scheduledTaskOf("t-plain-wrap", console_.id, {
+    launch: { title: "Wrap-up notes", compatibility: {} },
+    prompt: "Write today's wrap-up notes from the sessions that ran.",
+    schedule: { kind: "weekdays", time: { hour: 17, minute: 30 } },
+    last_run_at: minutesAgo(60 * 22),
+  }),
+  scheduledTaskOf("t-plain-release", console_.id, {
+    project_id: web.id,
+    launch: { title: "Release notes draft", compatibility: {} },
+    prompt: "Draft the release notes for the version that goes out tomorrow.",
+    schedule: { kind: "once", run_at: tomorrowAt(10) },
+  }),
+  scheduledTaskOf("t-plain-backup", console_.id, {
+    launch: { title: "Nightly backup check", compatibility: {} },
+    prompt: "Confirm last night's backup finished and report its size.",
+    schedule: { kind: "daily", time: { hour: 6, minute: 0 } },
+    enabled: false,
+    last_run_at: minutesAgo(60 * 80),
+  }),
+];
+
+/** What the plain task's runs hold, most recent first: a scheduled run that started a session, a Run now that started
+ * one, and a scheduled run that failed because the account was not signed in. */
+const PLAIN_RUNS: ScheduledTaskRun[] = [
+  scheduledRunOf("r-plain-latest", "t-plain-deps", 0, { kind: "started", session: "s-deps-1", started_independent: false }, { trigger: "scheduled", ran_at: LATEST_PLAIN_RUN, due_at: LATEST_PLAIN_RUN }),
+  scheduledRunOf("r-plain-manual", "t-plain-deps", 0, { kind: "started", session: "s-deps-2", started_independent: false }, { trigger: "run_now", ran_at: MANUAL_PLAIN_RUN }),
+  scheduledRunOf(
+    "r-plain-signed-out",
+    "t-plain-deps",
+    0,
+    {
+      kind: "failed",
+      code: "account_not_signed_in",
+      params: { account: "Work", agent: "Claude Code" },
+      message: "Work (Claude Code) is not logged in, so a session cannot be opened on it.",
+    },
+    { trigger: "scheduled", ran_at: EARLIER_PLAIN_RUN, due_at: EARLIER_PLAIN_RUN },
+  ),
+];
+
 /** Closes the sidebar's drawer that pressing the rail button leaves up in a narrow window, which would hide the page the
  * scenario shows; a docked sidebar is left alone. */
 const closeDrawer = (ui: Ui) => ui.closeDrawer();
@@ -172,6 +261,18 @@ export const scheduledTasksScenarios: Scenario[] = [
     remoteDaemons: { entries: [staging, production] },
     scheduledTasks: { tasks: TASKS, runs: { "t-deps": RUNS } },
     steps: [showPage],
+  },
+
+  {
+    id: "scheduled-tasks-list-plain",
+    group: GROUP,
+    category: "normal",
+    title: "Scheduled tasks page, six tasks that fit their rows",
+    description:
+      "The page with six tasks whose names and second lines each fit their row whole: a weekly, a daily, an hourly, a weekdays and a one-off schedule, one task that is off, and both kinds of target (the project's name, or the console's own). The first, Dependency review, is selected on its Settings tab: its header shows Next run and a Last run with a success mark. Unlike Scheduled tasks page with several tasks, no name is cut and no task has a long prompt.",
+    state: plainState,
+    scheduledTasks: { tasks: PLAIN_TASKS, runs: { "t-plain-deps": PLAIN_RUNS } },
+    steps: [showPage, closeDrawer],
   },
 
   {
@@ -223,6 +324,18 @@ export const scheduledTasksScenarios: Scenario[] = [
   },
 
   {
+    id: "scheduled-tasks-runs-plain",
+    group: GROUP,
+    category: "normal",
+    title: "Scheduled task run history, three ordinary runs",
+    description:
+      "The Run history view of Dependency review, most recent first: a scheduled run that started a session, a Run now that started one, and a run that failed because the account is not logged in, which shows Could not start a session and a Details button. The sidebar beside it lists six tasks whose names fit. Unlike Scheduled task with its run history, no run is independent, none refers to a session that is gone and none failed for an unforeseen reason.",
+    state: plainState,
+    scheduledTasks: { tasks: PLAIN_TASKS, runs: { "t-plain-deps": PLAIN_RUNS } },
+    steps: [showPage, closeDrawer, (ui) => ui.press(ui.t("scheduledTasks.view.runs"))],
+  },
+
+  {
     id: "scheduled-tasks-runs-empty",
     group: GROUP,
     category: "normal",
@@ -267,6 +380,18 @@ export const scheduledTasksScenarios: Scenario[] = [
     state,
     scheduledTasks: { tasks: TASKS },
     steps: [showPage, (ui) => ui.press(ui.t("scheduledTasks.new"))],
+  },
+
+  {
+    id: "scheduled-tasks-new-plain",
+    group: GROUP,
+    category: "normal",
+    title: "New scheduled task form beside six tasks that fit their rows",
+    description:
+      "The blank New scheduled task form, with no task selected in the sidebar, which lists six tasks whose names fit their rows. Unlike New scheduled task form, no task has a long name or a long second line.",
+    state: plainState,
+    scheduledTasks: { tasks: PLAIN_TASKS, runs: { "t-plain-deps": PLAIN_RUNS } },
+    steps: [showPage, closeDrawer, (ui) => ui.press(ui.t("scheduledTasks.new"))],
   },
 
   {

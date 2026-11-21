@@ -1,0 +1,64 @@
+---
+title: "Scheduled tasks"
+description: "Have the application start a session at set times, once or on a repeating schedule, and hand it a prompt to work on; agents can set tasks up for you, with your approval."
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { productName } from "../../../commands.ts";
+import Screenshot from "../../../components/Screenshot.astro";
+
+Some work comes round on a timetable: a nightly check, a Monday summary, a month-end close. A scheduled task has {productName} start a session for you at the times you choose, once or on a repeating schedule, and hand it a prompt to work on, so the session comes up already working and you do not have to open it yourself.
+
+<Screenshot id="scheduled-tasks-page" alt="The “Scheduled tasks” page, with a list of tasks in the sidebar and the selected task's settings beside it, under its next and last run." />
+
+## Why it works this way
+
+- <strong>Recurring work should start without you.</strong> A task holds what to start (a console session in a console, or a project session in a project), the launch settings of the session dialog (name, agent, account, model and the rest), a required <strong>Prompt</strong> that each session is handed as its opening task, and a schedule. A setting you leave open is decided at each run as it is for a session you open with defaults.
+- <strong>The schedules are the ones people use, with no cron expressions.</strong> <strong>Once</strong>, <strong>Every hour</strong> (at a minute past the hour), <strong>Every day</strong>, <strong>Weekdays</strong>, <strong>Every week</strong> (on the days you tick), <strong>Every month</strong> (on one day; a month without that day runs on its last day) and <strong>Manual only</strong>, which never runs on its own.
+- <strong>Times are read on the computer that runs the tasks.</strong> A task runs by the clock and time zone of the computer that runs the daemon, {productName}'s background program, not of the window you look at. When the two zones differ, the page names the zone its times are in.
+- <strong>A run is a session you could have opened yourself.</strong> It starts as the session dialog would open it, with the same rules, and the session is yours like any other. A task for a project can also have its sessions report to a console session, as in [cross-project coordination](../cross-project-work/).
+- <strong>Runs missed while {productName} was off or the computer slept are caught up once.</strong> When the daemon starts, each enabled task that came due while it was not running runs once for its most recent missed time, if that was no more than 24 hours ago. A time the running daemon reaches more than two minutes late, as after the computer slept, is caught up the same way. Several missed times never make more than one run. A disabled task does not run on its schedule and is not caught up.
+- <strong>An agent can set tasks up for you, and you approve each change.</strong> A console session can read and change the tasks of its own console. A project session that can start sessions of its own, one you opened yourself or one a console session started, can read and change only the tasks that start sessions in its own project. A session that another project session started to do one piece of work cannot read or change any task. A session can list tasks and their runs, and create, change, enable or disable, delete or run a task; it is told to make a change only when you asked for it. Reading needs no approval. Unless you have turned on automatic approval, described below, every change waits for your answer in a dialog that names the session, the task and what would change, with the prompt the session wrote folded away under it, because that text is the agent's own words. You approve or refuse the request as it stands; you cannot edit it in the dialog. The sessions such a task starts are still yours, and report to you unless the task names a console session in <strong>Report to</strong>.
+- <strong>Every run is recorded.</strong> <strong>Run history</strong> keeps the last 50 runs of each task: when each ran, what started it (<strong>Scheduled</strong>, <strong>Catch-up</strong> or <strong>Run now</strong>) and what came of it. A run that cannot start a session is recorded as failed, and also raises a system notification naming the task and the reason; choosing the notification opens the task. A run that does start its session raises none: the session simply appears in the sidebar.
+
+<Aside type="caution" title="Limits">
+- Tasks run only while the daemon runs, so a computer that is off or asleep runs nothing then, though what it missed is caught up afterwards as described above; see [Prevent sleep](../keep-awake/).
+- A run that comes due while the session an earlier run started is still working starts another session: overlapping runs are not skipped.
+- If the account a task uses is turned off, has used up its quota or is not logged in when it runs, the task falls back to another account only while <strong>Automatically select an account</strong> is on; otherwise the run fails with the account's reason.
+- If the console session a task reports to is archived, deleted or still starting at that moment, the session starts anyway, reporting to no one, and the run's record says so.
+- When the computer's time zone changes, the next run already worked out keeps the old zone's time; the runs after it follow the new zone.
+- A change a session asks for is checked again when you approve it. If the task was deleted or moved out of the session's reach meanwhile, a project was removed, or a one-off time has passed, the approval fails and nothing changes. The same happens if the account the task names has been turned off since the request was made. A request the application would refuse on the page anyway, such as a blank prompt, is refused before you are asked. A request waits up to 8 minutes for your answer.
+- Tasks are kept in the daemon's own data and do not travel in a configuration export. Deleting a console, or removing a project, deletes its tasks.
+</Aside>
+
+## How to use it
+
+<Steps>
+
+1. Choose <strong>Scheduled tasks</strong>, the clock button on the rail, then <strong>New scheduled task</strong> (the <strong>+</strong> in the sidebar's header). It needs a console to start its session in.
+2. In the <strong>Session</strong> card, choose the <strong>Console</strong> and, for a project task, the <strong>Project</strong> (<strong>None (console session)</strong> makes a console task). Give it a <strong>Name</strong> if you like, choose the <strong>Agent</strong> and its account, and, for a project task, a console session in <strong>Report to</strong>.
+3. Write the <strong>Prompt</strong>: it is handed to each session as its opening task.
+4. In the <strong>Schedule</strong> card, choose <strong>Runs</strong>, then fill in the fields that schedule needs: <strong>Date and time</strong>, <strong>Minute past the hour</strong>, <strong>Time</strong>, <strong>Days</strong> or <strong>Day of month</strong>. Leave <strong>Enabled</strong> on.
+5. Choose <strong>Save</strong>.
+
+</Steps>
+
+<Screenshot id="scheduled-task-new" alt="The new scheduled task form, with the “Session” card above the “Schedule” card and the “Save” and “Cancel” buttons pinned below." />
+
+You'll know it worked when the task appears in the sidebar with its schedule and a countdown to its next run. To try it at once, choose <strong>Run now</strong>: it runs the task one time, whatever its schedule and whether it is enabled, and leaves the schedule as it is. A row's menu (the ⋮ button, or a right-click) also offers <strong>Enable</strong> or <strong>Disable</strong>, and <strong>Delete</strong>, which stops the task and keeps the sessions it already started.
+
+To see what a task has done, open its <strong>Run history</strong> tab. A started run links to its session; a failed one shows <strong>Could not start a session</strong> and a <strong>Details</strong> button with the reason.
+
+<Screenshot id="scheduled-task-runs" alt="A task's “Run history”, listing runs with when they ran, what started them and the session each started." />
+
+To have a session do it instead, ask it in plain words, for example to run a dependency audit every Monday and Thursday at 10:00. The session shows as <strong>Waiting for you</strong>, and a dialog titled <strong>Create a scheduled task?</strong> opens. Read the sentence and the list of what the task would be saved with; the prompt the session wrote is in the folded <strong>Prompt written by the session</strong>. Choose <strong>Create task</strong>, or <strong>Refuse</strong>. The other changes ask the same way, in dialogs titled <strong>Change a scheduled task?</strong>, <strong>Enable a scheduled task?</strong>, <strong>Disable a scheduled task?</strong>, <strong>Delete a scheduled task?</strong> and <strong>Run a scheduled task?</strong>.
+
+<Screenshot id="scheduled-task-request" alt="The “Create a scheduled task?” dialog, naming the session that asks and the task it would create, with the task's schedule, agent and other settings listed, a folded “Prompt written by the session”, and the “Refuse” and “Create task” buttons." />
+
+To skip the question, turn on <strong>Automatically approve scheduled task changes</strong> in <strong>Settings › Agent behavior</strong>. It is off to begin with, and only you can change it; while it is on, a session's changes are made at once, with no dialog.
+
+## Next
+
+- [Cross-project coordination](../cross-project-work/): console sessions that dispatch work to projects, and the sessions that report back.
+- [Session status and intervention](../session-intervention/): finding the session a run started when it waits for you.
+- [Prevent sleep](../keep-awake/): keep the computer awake so tasks can run while you are away.

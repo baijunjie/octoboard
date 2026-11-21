@@ -82,7 +82,7 @@ that page's language, published by the person.
 
 A homepage also includes an FAQ page and a software application. The FAQ page is that page's canonical
 URL plus `#webpage`, about the software application. It contains the nine questions and, as part of that page, an item
-list of all 15 localized feature titles, in feature-wall order. The software application is the origin plus
+list of all 17 localized feature titles, in feature-wall order. The software application is the origin plus
 `#app` on every language. Its category is `DeveloperApplication`, its operating system is `macOS, Windows, Linux`, and
 its URL is the deployment root, the English homepage, not the localized homepage. Its download URLs are the four fixed
 download addresses, as absolute URLs, in the order macOS, Windows, Linux x86_64, Linux aarch64 (see
@@ -137,7 +137,7 @@ GitHub privacy statement, and email — stay on those targets.
 
 The Markdown carries the page's localized wording in the same section order. The homepage copy's remote connections
 overview ends with its link to the documentation site's Connect over SSH guide in that language. The homepage copy includes all
-three feature groups and their 15 titles and descriptions, the statement that Octoboard is free and open source under the MIT License, the
+three feature groups and their 17 titles and descriptions, the statement that Octoboard is free and open source under the MIT License, the
 preview scene names and sample-data explanation, and every workflow node's task and report. The developer's motivation
 follows the remote connections overview in the homepage Markdown, including its title, opening, three subsections,
 product purpose, invitation, and byline. It does not include the embedded application's sample screens. The homepage
