@@ -8858,12 +8858,12 @@
         {
           "type": "string",
           "const": "unchanged",
-          "description": "The session had those values already: nothing was written or restarted."
+          "description": "The session had those values already and `reapply` was not sent: nothing was written or\nrestarted."
         },
         {
           "type": "string",
           "const": "recorded",
-          "description": "The session had no process: the values were recorded for its next resume."
+          "description": "The session had no process: the values were recorded for its next resume, and the model\nand effort its records showed it running forgotten. Also when `reapply` repeats values an\ninterrupted session already held."
         },
         {
           "type": "string",

@@ -433,6 +433,21 @@ fn an_envelope_id_never_shadows_what_a_request_acts_on() {
     }
 }
 
+/// `reapply` of a model change is false when absent, and carried when given.
+#[test]
+fn set_session_model_reapply_defaults_to_false_and_is_carried() {
+    let reapply = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+        RequestBody::SetSessionModel { reapply, .. } => reapply,
+        other => panic!("parsed as {other:?}"),
+    };
+    assert!(!reapply(
+        r#"{"type":"set_session_model","session":"s","model":"opus"}"#
+    ));
+    assert!(reapply(
+        r#"{"type":"set_session_model","session":"s","model":"opus","reapply":true}"#
+    ));
+}
+
 #[test]
 fn open_path_link_parses_with_and_without_a_project() {
     let request: Request = serde_json::from_str(

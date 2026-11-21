@@ -531,8 +531,8 @@ pub enum RequestBody {
     /// choice: each absent keeps what the session has, an explicit `null` (or blank) leaves it to
     /// the agent, a string pins it; at least one is given. A running session is restarted on its
     /// account, resuming its conversation with them, as an account switch does without moving it;
-    /// an interrupted one only has them recorded for its next resume. Answered with
-    /// `session_model_set`. See `coordinator::model_change::set_session_model`.
+    /// an interrupted one has them recorded for its next resume, the model and effort its records
+    /// showed it running forgotten. Answered with `session_model_set`. See `coordinator::model_change::set_session_model`.
     SetSessionModel {
         session: String,
         #[serde(default, deserialize_with = "present_option")]
@@ -549,6 +549,14 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         compatibility: Option<BTreeMap<String, Option<bool>>>,
+        /// Treats values the session already holds as a change: a session with a process is
+        /// restarted as a change restarts it, its stored choices left as they are, for a process
+        /// whose agent was switched to other values from inside (the records show them as
+        /// `observed_model` and `observed_effort`); an interrupted session has them recorded
+        /// again, answered `recorded`, with those observations forgotten. Absent is false.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        reapply: bool,
         /// See `OpenSession::terminal_appearance`.
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]

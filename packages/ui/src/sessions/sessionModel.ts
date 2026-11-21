@@ -1,4 +1,4 @@
-import { effortLevels, shownModel } from "../agents/agentLaunchSettings";
+import { effortLevels, shownModel, type LaunchOverrides } from "../agents/agentLaunchSettings";
 import { providerModelDisplay } from "../agents/providers";
 import { consoleProjectLaunch, inheritedSessionLaunch, launchWithOverrides } from "../agents/agents";
 import type { Translate } from "../i18n/catalog";
@@ -78,6 +78,11 @@ export function runningLaunch(session: Session, launch: Launch, models: AgentMod
   const offered = observedEffort !== undefined && effortLevels(models, model ?? defaultModel).levels.includes(observedEffort);
   return { ...launch, model, effort: launch.effort !== null && offered ? observedEffort : launch.effort };
 }
+
+/** What a confirmed change of a session's model sends: the `LaunchOverrides` to change, and `reapply` where they are to
+ * be applied to the running process even if the session already holds them (it runs what its records show, which differs
+ * from its launch values). */
+export type SessionModelChange = LaunchOverrides & { reapply?: true };
 
 /** The model's short name and the effort as separate values, for the labelled list of a session's
  * agent tooltip. A value not known reads as the default. */

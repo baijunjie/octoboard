@@ -266,10 +266,12 @@ a change of switches alone included — each untouched model or effort the picke
 from the launch value is sent too and becomes the session's own, so the restart gives what the dialog showed; an
 untouched value equal to the launch value is not sent and keeps its choice or inheritance. The dialog's note says that
 changes are kept for the session from then on, and that a model or effort shown because the session runs with it is
-kept as well. A change of switches alone restarts the session as a change of model does. Where the only change is
-choosing a model or effort the session already holds as its own choice while the agent runs a different one (switched
-inside the agent), the session is given the choices it already has, so the change is answered as unchanged and the
-session is not restarted.
+kept as well. A change of switches alone restarts the session as a change of model does. Where the dialog showed a
+model or effort from the records that differs from the launch value, a confirmed change also asks the daemon to apply
+the values again (`reapply`), so the session is changed even where the values sent are the ones it already holds as
+its own — for example, a session whose own model is Fable, switched to Opus inside the agent, with Fable picked again:
+a running session is restarted on those values and an interrupted one has them recorded again, its stored choices
+staying as they are (the outcomes are under the window's `session_model_set` reply below).
 
 A session that becomes starting or switches accounts while the dialog is open temporarily disables Confirm, with a
 warning explaining that the user must wait for it to finish. A session deleted or archived while it is open instead
@@ -298,7 +300,9 @@ restart ended" in `docs/product/background-processes.md`). What is queued for th
 restarted process, behind its prompt to continue when it is sent one, and dropped when the restart fails after ending
 the process (see "What is queued crosses an account switch or a model change" in `docs/product/message-delivery.md`).
 An interrupted session is not started: the choices are recorded for its next
-resume. The values sent become the session's own choices, persisting as described at the top of this document. The
+resume, and the model and effort its records last showed it running with are forgotten as a restart forgets them (see
+"The model and effort a session is shown running with" below), so it is shown, and a reopened dialog starts, on what it
+will next launch with. The values sent become the session's own choices, persisting as described at the top of this document. The
 user can change a session waiting for the user too; the dialog explains that restarting ends the prompt it was showing.
 For a dormant session it explains instead that the session is showing its background agents and restarting closes that
 view (see "Dormant" in `docs/product/session-statuses.md`).
@@ -312,7 +316,9 @@ the session's own value. `compatibility` is an object of the agent's switches, e
 or `null` to follow again, a switch left out keeping what the session has; a switch the session's agent does not
 declare is refused. Only values actually being changed are checked against what the agent offers under the session's account, under
 "The Advanced section" above. Giving the choices it already has succeeds without restarting or checking them again, even
-when the current list no longer offers them. This no-change answer does not bypass another model change already in
+when the current list no longer offers them, and even where the agent's records show the session running other values:
+the tool has no way to apply values again, so an owner repeating them never cuts a session's turn, and only the user's
+Confirm in the Change model dialog can force that restart. This no-change answer does not bypass another model change already in
 progress: a repeated request is refused while that change holds the session. Giving an inherited value explicitly makes
 it the session's own choice, even if it resolves to the same value.
 
@@ -335,7 +341,12 @@ stay as they were (`model_change_did_not_stop`). If the restart is refused, fail
 (`model_change_did_not_come_up`), the session is left interrupted with its earlier choices, its switches included.
 
 The window's `session_model_set` reply distinguishes `outcome: unchanged`, `recorded` and `restarted`; only a restarted
-result carries `continued`, saying whether a continuation prompt was sent. The window announces a recorded change as
+result carries `continued`, saying whether a continuation prompt was sent. `unchanged` means the session already held
+the values and the request did not ask to apply them again: nothing was written or restarted, whatever the session's
+status. With `reapply` (an optional boolean on the request, absent meaning false), values the session already holds
+are treated as a change: a running session is restarted exactly as for any change, with the same refusals, and answered
+`restarted`; an interrupted one is answered `recorded`, its observed model and effort forgotten. With values that differ
+from what the session holds, `reapply` changes nothing. The window announces a recorded change as
 settings saved for the next resume and a restarted change as a completed restart; unchanged choices produce no success
 announcement. The session name is read again when the reply arrives. These announcements, and successful account-switch
 announcements, wait until the window is visible and focused and no modal covers their status region, including an error
@@ -388,9 +399,10 @@ named. They are collected alongside the context size and as often (see "When the
 `docs/product/session-context.md`), kept through archiving and restarting Octoboard, and cleared when the session moves
 to a different native conversation, until the new one shows its own. They are reported on the session as
 `observed_model` and `observed_effort`, separate from the session's launch choices `model` and `effort`. A model-change
-restart clears the earlier observations once the old process has stopped. Until the restarted agent records its new
-model and effort, the display falls back to its launch choices as above: older records, including an unread tail of the
-previous process's conversation, cannot restore the earlier model or effort. This remains true across a daemon restart,
+restart clears the earlier observations once the old process has stopped, and a model change recorded for an
+interrupted session clears them when it is recorded. Until the agent, once launched again, records its new model and
+effort, the display falls back to its launch choices as above: older records, including an unread tail of the previous
+process's conversation, cannot restore the earlier model or effort. This remains true across a daemon restart,
 a copy of the same conversation to another account, and Codex unpacking its conversation records before the agent
 records the new values. Moving or recreating the same records does not make their earlier model or effort a new
 observation.

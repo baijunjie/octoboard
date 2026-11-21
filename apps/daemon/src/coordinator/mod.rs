@@ -748,6 +748,7 @@ async fn handle_inner(
             model,
             effort,
             compatibility,
+            reapply,
             terminal_appearance,
         } => {
             let change = set_session_model(
@@ -756,6 +757,7 @@ async fn handle_inner(
                 model,
                 effort,
                 compatibility.unwrap_or_default(),
+                reapply,
                 terminal_appearance,
             )
             .await?;

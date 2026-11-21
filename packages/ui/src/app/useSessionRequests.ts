@@ -3,12 +3,12 @@ import { type Dispatch, type SetStateAction, useRef, useState } from "react";
 import { runAccountSwitchBatch } from "../dialogs/accountSwitchBatch";
 import { CodedError } from "../errors/codedError";
 import type { ConfirmLaunch } from "../dialogs/useConfirmIncompleteLaunch";
-import type { LaunchOverrides } from "../agents/agentLaunchSettings";
 import { modelChangeRecovery } from "../errors/errorRecovery";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { ALREADY_RUNNING_CODES } from "../errors/codes";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
+import type { SessionModelChange } from "../sessions/sessionModel";
 import { raiseError } from "../components/alerts/raiseError";
 import { useDaemon, type AlertOptions } from "../store";
 import { useOctoboardTheme } from "../preferences/theme";
@@ -84,8 +84,8 @@ export function useSessionRequests({ confirmLaunch, announce }: { confirmLaunch:
    * tells: a restart, or values only recorded for the next resume. A session that had the values already
    * changed nothing, so nothing is announced. A model the agent does not offer points back to Change model,
    * not to launch settings. */
-  const changeSessionModel = (sessionId: string, edits: LaunchOverrides): void => {
-    request({ type: "set_session_model", session: sessionId, ...edits, terminal_appearance: appearance })
+  const changeSessionModel = (sessionId: string, change: SessionModelChange): void => {
+    request({ type: "set_session_model", session: sessionId, ...change, terminal_appearance: appearance })
       .then((reply) => {
         // Named as it is now: it may have been renamed while the change was out, and is gone if deleted since.
         const session = store.getState().sessions.get(sessionId);

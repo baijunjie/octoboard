@@ -4844,6 +4844,14 @@ export type Request = {
     [key in string]: boolean | null
   },
   /**
+   * Treats values the session already holds as a change: a session with a process is
+   * restarted as a change restarts it, its stored choices left as they are, for a process
+   * whose agent was switched to other values from inside (the records show them as
+   * `observed_model` and `observed_effort`); an interrupted session has them recorded
+   * again, answered `recorded`, with those observations forgotten. Absent is false.
+   */
+  reapply?: boolean,
+  /**
    * See `OpenSession::terminal_appearance`.
    */
   terminal_appearance?: TerminalAppearance,
@@ -5997,6 +6005,14 @@ export type RequestBody = {
   compatibility?: {
     [key in string]: boolean | null
   },
+  /**
+   * Treats values the session already holds as a change: a session with a process is
+   * restarted as a change restarts it, its stored choices left as they are, for a process
+   * whose agent was switched to other values from inside (the records show them as
+   * `observed_model` and `observed_effort`); an interrupted session has them recorded
+   * again, answered `recorded`, with those observations forgotten. Absent is false.
+   */
+  reapply?: boolean,
   /**
    * See `OpenSession::terminal_appearance`.
    */

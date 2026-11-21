@@ -27,9 +27,12 @@ use super::validate::field_required;
 /// What [`set_session_model_with`] did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ModelChange {
-    /// The session already had that model and effort as its own: nothing was written or restarted.
+    /// The session already had that model and effort as its own and `reapply` was not asked:
+    /// nothing was written or restarted.
     Unchanged,
-    /// The session had no process: the model and effort were recorded for its next resume.
+    /// The session had no process: the model and effort were recorded for its next resume, and
+    /// what its records showed it running forgotten. Also when `reapply` repeats values an
+    /// interrupted session already held.
     Recorded,
     /// The session's process was ended and relaunched with them, resuming its conversation.
     /// `continued` says whether it was sent the prompt to carry on with a turn the restart cut
@@ -39,13 +42,14 @@ pub(crate) enum ModelChange {
 
 /// Changes the model and reasoning effort of a session that is not archived, as the user asks from
 /// the window: see [`set_session_model_with`]. `model`, `effort` and `compatibility` are as
-/// `open_session` takes them, each absent to keep what the session has.
+/// `open_session` takes them, each absent to keep what the session has; `reapply` is as in [`ModelAsker::User`].
 pub async fn set_session_model(
     state: &Arc<AppState>,
     id: &str,
     model: Option<Option<String>>,
     effort: Option<Option<String>>,
     compatibility: BTreeMap<String, Option<bool>>,
+    reapply: bool,
     terminal_appearance: Option<TerminalAppearance>,
 ) -> Result<ModelChange> {
     set_session_model_with(
@@ -56,7 +60,7 @@ pub async fn set_session_model(
             effort,
             compatibility,
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply },
         terminal_appearance,
         env_shell::launch_snapshot,
         term::launch,
@@ -68,7 +72,11 @@ pub async fn set_session_model(
 #[derive(Clone, Copy)]
 pub(crate) enum ModelAsker<'a> {
     /// The user, from the window, who owns nothing to check and can see what the session waits on.
-    User,
+    /// With `reapply`, values the session already holds are treated as a change: a session with a
+    /// process is restarted on them and an interrupted one has them recorded again (see
+    /// [`set_session_model_with`]). Only the user can ask for it, so an owner repeating values a
+    /// session holds never cuts its turn.
+    User { reapply: bool },
     /// The owner whose id this is, over MCP: the session must still be bound to it once the change
     /// holds its claim, and a session waiting for the user or dormant is refused
     /// (`session_waiting_for_user`), since the restart would end the prompt the user alone answers
@@ -99,8 +107,12 @@ pub(crate) enum ModelAsker<'a> {
 ///
 /// Values the session already has are answered [`ModelChange::Unchanged`] with nothing done,
 /// before anything else can refuse them, except while another change of its model is under way,
-/// which claims the session (`session_already_starting`). An interrupted session only has the
-/// values recorded, for its next resume. Refused, with nothing changed: no value given
+/// which claims the session (`session_already_starting`), and except with `reapply` (of [`ModelAsker::User`]), which treats
+/// them as a change whose values are the ones held: a session with a process is restarted as a
+/// change restarts it, for a process the agent was switched inside to other values, and an
+/// interrupted one has them recorded again. An interrupted session only has the values recorded,
+/// for its next resume, and the model and effort its records showed forgotten, the way a restart
+/// forgets them (the observation boundary is set from the records as they stand). Refused, with nothing changed: no value given
 /// (`field_required`), an archived session (`session_archived`; reopening one with another model is
 /// `resume_session`'s), one being launched, resumed, switched, handed off or otherwise claimed
 /// (`session_already_starting`) or shown starting, a value the agent does not offer, and a change
@@ -125,6 +137,7 @@ pub(crate) async fn set_session_model_with(
     if edit.model.is_none() && edit.effort.is_none() && edit.compatibility.is_empty() {
         return Err(field_required("model"));
     }
+    let reapply = matches!(asker, ModelAsker::User { reapply: true });
     let compatibility = edit.compatibility;
     let (model, effort) = (
         normalize_session_launch_setting(edit.model),
@@ -148,15 +161,22 @@ pub(crate) async fn set_session_model_with(
                 .then_some((model, effort, held)),
         )
     };
-    if changed(&state.session_record(id)?)?.is_none() && !state.is_changing_model(id) {
+    if changed(&state.session_record(id)?)?.is_none() && !reapply && !state.is_changing_model(id) {
         return Ok(ModelChange::Unchanged);
     }
     // Held until this function returns, as a switch holds its own: nothing else launches,
     // resumes, switches or deletes the session while its process is down or being watched.
     let claim = state.begin_switch(id)?;
     let before = state.session_record(id)?;
-    let Some((model, effort, compatibility)) = changed(&before)? else {
-        return Ok(ModelChange::Unchanged);
+    // What the session would have; what it has already, which only `reapply` carries on with.
+    let (model, effort, compatibility) = match changed(&before)? {
+        Some(values) => values,
+        None if reapply => (
+            before.model.clone(),
+            before.effort.clone(),
+            before.compatibility.clone(),
+        ),
+        None => return Ok(ModelChange::Unchanged),
     };
     if state.status_for_model_change(&before) == SessionStatus::Starting {
         return Err(CodedError::raised(
@@ -192,12 +212,25 @@ pub(crate) async fn set_session_model_with(
         return Err(session_archived(id));
     }
     if current.status.has_no_process() {
+        // What the records showed the process running is forgotten with the same boundary a
+        // restart sets, since the values recorded are the ones its next launch takes.
+        let shell_env = if record_needs_shell_env(&current) {
+            Some(tokio::task::spawn_blocking(snapshot).await??)
+        } else {
+            None
+        };
+        let reading_state = state.clone();
+        let boundary = tokio::task::spawn_blocking(move || {
+            crate::records::collector::observed_boundary(&reading_state, &current, shell_env)
+        })
+        .await?;
+        let boundary = serde_json::to_string(&boundary)?;
         if !state.store.set_session_launch_unless_archived(
             id,
             &model,
             &effort,
             &compatibility,
-            None,
+            Some(&boundary),
         )? {
             return Err(session_archived(id));
         }

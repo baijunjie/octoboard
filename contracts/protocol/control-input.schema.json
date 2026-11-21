@@ -2109,6 +2109,10 @@
               },
               "description": "The compatibility switches (provider settings declaring `compatibility_with`) the\nsession holds its own value for, by setting id, with the rule `effort` has: absent for a\nswitch leaves what the session has, `true` or `false` holds that value, `null` goes back\nto following the project's (else the console's, else the agent's). An unknown setting,\nor one a launch cannot hold, is refused with `unreadable_request`."
             },
+            "reapply": {
+              "type": "boolean",
+              "description": "Treats values the session already holds as a change: a session with a process is\nrestarted as a change restarts it, its stored choices left as they are, for a process\nwhose agent was switched to other values from inside (the records show them as\n`observed_model` and `observed_effort`); an interrupted session has them recorded\nagain, answered `recorded`, with those observations forgotten. Absent is false."
+            },
             "terminal_appearance": {
               "description": "See `OpenSession::terminal_appearance`.",
               "$ref": "#/$defs/TerminalAppearance"
@@ -2122,7 +2126,7 @@
             "type",
             "session"
           ],
-          "description": "Changes the model and reasoning effort of a session that is not archived, as its own\nchoice: each absent keeps what the session has, an explicit `null` (or blank) leaves it to\nthe agent, a string pins it; at least one is given. A running session is restarted on its\naccount, resuming its conversation with them, as an account switch does without moving it;\nan interrupted one only has them recorded for its next resume. Answered with\n`session_model_set`. See `coordinator::model_change::set_session_model`."
+          "description": "Changes the model and reasoning effort of a session that is not archived, as its own\nchoice: each absent keeps what the session has, an explicit `null` (or blank) leaves it to\nthe agent, a string pins it; at least one is given. A running session is restarted on its\naccount, resuming its conversation with them, as an account switch does without moving it;\nan interrupted one has them recorded for its next resume, the model and effort its records\nshowed it running forgotten. Answered with `session_model_set`. See `coordinator::model_change::set_session_model`."
         },
         {
           "type": "object",

@@ -69,6 +69,8 @@ pub(in crate::mcp) async fn set_session_model(
                 &state,
                 &target_id,
                 edit,
+                // Only the user's own Confirm in the window can ask for a reapply (`ModelAsker::User`
+                // alone carries it), so an owner repeating values a session holds never cuts its turn.
                 ModelAsker::Owner(&caller.id),
                 // An owner asks over MCP, which has no window appearance to match.
                 None,
@@ -400,6 +402,46 @@ mod tests {
         assert!(launches.lock().unwrap().is_empty(), "nothing was launched");
     }
 
+    /// The tool never reapplies: values a running session holds are answered as nothing changed,
+    /// though its process may run others, and the session is not restarted.
+    #[tokio::test]
+    async fn the_values_a_running_session_holds_are_not_applied_again() {
+        let (state, dir) = shared_console_state("model-running-unchanged");
+        let _ = prepare(&state, &dir, "of-a");
+        let record = state.session_record("of-a").unwrap();
+        assert!(state
+            .store
+            .set_session_launch_unless_archived(
+                "of-a",
+                &Some(Some("opus".to_string())),
+                &record.effort,
+                &record.compatibility,
+                None,
+            )
+            .unwrap());
+        let _caller = running(&state, "a");
+        let original = live_and_watched(&state, "of-a");
+        let (launches, started): (Launches, Started) = Default::default();
+
+        let result = set_session_model(
+            &state,
+            &state.session_record("a").unwrap(),
+            &arguments(json!({ "session": "of-a", "model": "opus" })),
+            || Ok(HashMap::new()),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result["restarted"], false);
+        assert!(result["note"]
+            .as_str()
+            .unwrap()
+            .contains("nothing was changed"));
+        assert!(!original.poll_exit(), "its process was left running");
+        assert!(launches.lock().unwrap().is_empty(), "nothing was launched");
+    }
+
     /// The status of the last `session_upserted` for `id` among the events waiting in `events`.
     fn last_published_status(
         events: &mut tokio::sync::broadcast::Receiver<crate::protocol::Event>,
@@ -430,7 +472,7 @@ mod tests {
                 model: Some(Some("sonnet".to_string())),
                 effort: None,
             },
-            ModelAsker::User,
+            ModelAsker::User { reapply: false },
             None,
             snapshot,
             launch,
@@ -504,7 +546,7 @@ mod tests {
                     model: Some(Some("opus".to_string())),
                     effort: None,
                 },
-                ModelAsker::User,
+                ModelAsker::User { reapply: false },
                 None,
                 || Ok(HashMap::new()),
                 |_| panic!("the second change launches nothing"),
@@ -930,7 +972,7 @@ mod tests {
                     model: Some(Some(model.to_string())),
                     effort: None,
                 },
-                ModelAsker::User,
+                ModelAsker::User { reapply: false },
                 None,
                 || Ok(HashMap::new()),
                 |_| panic!("nothing is launched"),
@@ -981,7 +1023,7 @@ mod tests {
                     model: Some(Some(model.to_string())),
                     effort: None,
                 },
-                ModelAsker::User,
+                ModelAsker::User { reapply: false },
                 None,
                 || Ok(HashMap::new()),
                 |_| panic!("nothing is launched"),

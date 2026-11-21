@@ -337,7 +337,22 @@ it("starts on the model the session is running when it differs from the project'
   expect(confirm().disabled).toBe(false);
   await act(async () => confirm().click());
 
-  expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { model: "opus" });
+  expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { model: "opus", reapply: true });
+});
+
+it("applies picking the session's own model again when the records show it running another", async () => {
+  // The session is launched with Fable, not the project's Opus, and the agent was switched to Opus from inside.
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { model: "fable", observed_model: "claude-opus-5-5" });
+  const { onChangeModel } = await mount(session, "versioned");
+
+  expect(picker("Model").textContent).toContain("Opus");
+  expect(confirm().disabled).toBe(true);
+
+  await pickOption("Model", (text) => text.startsWith("Fable"));
+  expect(confirm().disabled).toBe(false);
+  await act(async () => confirm().click());
+
+  expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { model: "fable", reapply: true });
 });
 
 it("takes picking back the model shown from the records for no edit", async () => {
@@ -361,7 +376,7 @@ it("sends the untouched effort shown from the records along with a changed model
   await pickOption("Model", (text) => text === "Sonnet");
   await act(async () => confirm().click());
 
-  expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { model: "sonnet", effort: "low" });
+  expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { model: "sonnet", effort: "low", reapply: true });
 });
 
 it("sends the untouched model shown from the records along with a changed effort", async () => {
@@ -371,7 +386,7 @@ it("sends the untouched model shown from the records along with a changed effort
   await pickOption("Reasoning effort", (text) => text === "max");
   await act(async () => confirm().click());
 
-  expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { model: "fable", effort: "max" });
+  expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { model: "fable", effort: "max", reapply: true });
 });
 
 it("takes a session running what it is launched with as it did before the records were read", async () => {

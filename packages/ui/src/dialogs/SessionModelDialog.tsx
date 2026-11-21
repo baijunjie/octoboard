@@ -17,7 +17,7 @@ import { Message, useT } from "../i18n/react";
 import type { Launch, Session } from "../protocol";
 import type { AcknowledgementView } from "../components/alerts/errorAlerts";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
-import { runningLaunch } from "../sessions/sessionModel";
+import { runningLaunch, type SessionModelChange } from "../sessions/sessionModel";
 import { isLive } from "../sessions/sessionStatus";
 import { useAccountSwitchHeld, useDaemonStore, useProviders } from "../store";
 import { Dialog } from "../components/dialog/Dialog";
@@ -39,10 +39,13 @@ function changedFrom(shown: Launch, picked: LaunchOverrides): LaunchOverrides {
 
 /** What a confirmed change sends: the user's `edits`, and with them each untouched model or effort the pickers show
  * (`shown`) that is not what the session is launched with (`launched`), so the restart gives every value the dialog
- * showed rather than a launch value it never did. Nothing is sent from the records without an edit. */
-function sentWith(launched: Launch, shown: Launch, edits: LaunchOverrides): LaunchOverrides {
+ * showed rather than a launch value it never did, and `reapply` when any is shown from the records, so that an edit
+ * back to a launch value is applied to the process too. Nothing is sent from the records without an edit. */
+function sentWith(launched: Launch, shown: Launch, edits: LaunchOverrides): SessionModelChange {
   if (Object.keys(edits).length === 0) return edits;
   return {
+    // The session's process runs what the records show, so a pick of the launch value still has to reach it.
+    ...(shown.model !== launched.model || shown.effort !== launched.effort ? { reapply: true as const } : {}),
     ...(shown.model !== launched.model ? { model: shown.model } : {}),
     ...(shown.effort !== launched.effort ? { effort: shown.effort } : {}),
     ...edits,
@@ -74,9 +77,9 @@ export function SessionModelDialog({
 }: {
   session: Session;
   onClose: () => void;
-  /** Starts changing the model and effort of the session `sessionId` to `edits` in the background and
+  /** Starts changing the model and effort of the session `sessionId` to `change` in the background and
    * returns at once; the outcome is announced, or reported as an error alert, where the session is shown. */
-  onChangeModel: (sessionId: string, edits: LaunchOverrides) => void;
+  onChangeModel: (sessionId: string, change: SessionModelChange) => void;
 }): React.ReactElement | null {
   const t = useT();
   const stored = useDaemonStore((s) => s.sessions.get(opened.id));
@@ -117,7 +120,7 @@ function SessionModelForm({
   followLabel: PlainMessageKey;
   failure: AcknowledgementView | undefined;
   onClose: () => void;
-  onChangeModel: (sessionId: string, edits: LaunchOverrides) => void;
+  onChangeModel: (sessionId: string, change: SessionModelChange) => void;
 }): React.ReactElement {
   const t = useT();
   const painted = useHasPainted();

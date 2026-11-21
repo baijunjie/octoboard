@@ -152,14 +152,18 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       const chosen = (value: string | null | undefined, kept: string | null | undefined) => (value === undefined ? kept : value?.trim() || null);
       const [model, effort] = [chosen(body.model, session.model), chosen(body.effort, session.effort)];
       const compatibility = applyCompatibility(session.compatibility, body.compatibility);
-      if (model === session.model && effort === session.effort && sameValue(compatibility, session.compatibility)) return { type: "session_model_set", id: null, session: session.id, outcome: "unchanged" };
+      // Values the session already holds are `unchanged` with nothing touched, except that `reapply` carries on: a session
+      // with a process is restarted all the same, for a process whose agent was switched to other values from inside, and
+      // one with none has the values recorded.
+      const holds = model === session.model && effort === session.effort && sameValue(compatibility, session.compatibility);
+      if (holds && !body.reapply) return { type: "session_model_set", id: null, session: session.id, outcome: "unchanged" };
+      // The model and effort the records showed are forgotten once the process is down, or when there is none.
+      const { observed_model: _model, observed_effort: _effort, ...forgotten } = session;
       if (session.status === "interrupted") {
-        applyDaemonEvent(store, { type: "session_upserted", session: { ...session, model, effort, compatibility } });
+        applyDaemonEvent(store, { type: "session_upserted", session: { ...forgotten, model, effort, compatibility } });
         return { type: "session_model_set", id: null, session: session.id, outcome: "recorded" };
       }
-      // The daemon shows the session starting from the moment the restart is decided; once the process is down the
-      // model and effort its records showed are forgotten.
-      const { observed_model: _model, observed_effort: _effort, ...forgotten } = session;
+      // The daemon shows the session starting from the moment the restart is decided.
       const reply = scenario.sessionModelChanges?.[body.session];
       if (reply === "pending") {
         applyDaemonEvent(store, { type: "session_upserted", session: { ...forgotten, status: "starting" } });

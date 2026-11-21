@@ -22,7 +22,7 @@ import { HandoffDialog } from "./HandoffDialog";
 import { ProjectDialog } from "./ProjectDialog";
 import { SessionDialog } from "./SessionDialog";
 import { SessionModelDialog } from "./SessionModelDialog";
-import type { LaunchOverrides } from "../agents/agentLaunchSettings";
+import type { SessionModelChange } from "../sessions/sessionModel";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
 
 /** The session dialog over the console's console sessions, read from the store: the owners it offers.
@@ -56,7 +56,7 @@ export function RequestedDialog({
   onSwitchAccounts: (sessionIds: string[], account: string | null, accountName: string) => void;
   /** Starts changing a session's model and reasoning effort in the background and returns at once; the
    * outcome, a success announced or a failure reported as an error alert, comes once it is known. */
-  onChangeSessionModel: (sessionId: string, edits: LaunchOverrides) => void;
+  onChangeSessionModel: (sessionId: string, change: SessionModelChange) => void;
   /** Resumes a session the session dialog found, an archived one (reopening it) or an interrupted one;
    * rejects with the reason when it did not happen. */
   onResumeSession: (sessionId: string) => Promise<void>;

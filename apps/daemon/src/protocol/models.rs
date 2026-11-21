@@ -11,9 +11,12 @@ use super::errors::{params, Params};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelChangeOutcome {
-    /// The session had those values already: nothing was written or restarted.
+    /// The session had those values already and `reapply` was not sent: nothing was written or
+    /// restarted.
     Unchanged,
-    /// The session had no process: the values were recorded for its next resume.
+    /// The session had no process: the values were recorded for its next resume, and the model
+    /// and effort its records showed it running forgotten. Also when `reapply` repeats values an
+    /// interrupted session already held.
     Recorded,
     /// The session's process was ended and relaunched with the values.
     Restarted,

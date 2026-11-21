@@ -84,5 +84,5 @@ it("sends the model and effort the pickers show from the records along with an e
   expect(confirm().disabled).toBe(true);
   await pick("On");
   await click(confirm());
-  expect(changed).toHaveBeenCalledExactlyOnceWith(session.id, { compatibility: { [first.id]: true }, model: "fable", effort: "low" });
+  expect(changed).toHaveBeenCalledExactlyOnceWith(session.id, { compatibility: { [first.id]: true }, model: "fable", effort: "low", reapply: true });
 });

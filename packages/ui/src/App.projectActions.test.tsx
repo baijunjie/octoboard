@@ -20,7 +20,7 @@ import { accountOf, consoleOf, projectOf, sessionOf, snapshotState } from "./fix
 import { isolate } from "./i18n/isolate";
 import { PlatformProvider } from "./platform/react";
 import type { PlatformAdapter } from "./platform";
-import type { Project } from "./protocol";
+import type { Project, Session } from "./protocol";
 import { DaemonProvider, type Daemon } from "./store";
 import { testDaemon, withEmptyReplies } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
@@ -829,10 +829,13 @@ it("opens the project repository through the platform and reports an opening fai
 });
 
 /** Opens Change model on the idle session `s-archive`, which the daemon lists two models for, and picks Sonnet. */
-async function pickSonnetInChangeModel(answer: (body: { type: string }) => unknown) {
+async function pickSonnetInChangeModel(answer: (body: { type: string }) => unknown, sessionRecord: Partial<Session> = {}) {
   // The status region's waits are on the clock from before the window mounts and arms them.
   fakeTimers();
   const mounted = mountApp(false, undefined, true);
+  await act(async () => mounted.daemon.store.setState((state) => ({
+    sessions: new Map(state.sessions).set("s-archive", { ...state.sessions.get("s-archive")!, ...sessionRecord }),
+  })));
   vi.mocked(mounted.daemon.request).mockImplementation((async (body: { type: string; agent?: string }) => {
     if (body.type === "list_agent_models") {
       return { type: "agent_models", id: null, agent: body.agent, account: null, unavailable: null, models: [
@@ -867,6 +870,14 @@ it("sends only the edited values when a model is changed, and announces the rest
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS);
   expect(said()).toContain("restarted with its new launch settings");
   expect(errorAlerts.getSnapshot()).toEqual([]);
+});
+
+it("asks for the values to be applied again when the pickers showed what the records say the session runs", async () => {
+  windowAttention();
+  const { daemon } = await pickSonnetInChangeModel(() => ({ type: "session_model_set", id: null, session: "s-archive", outcome: "restarted", continued: false }), { model: "opus", effort: "high", observed_effort: "low" });
+  expect(sentOf(daemon, "set_session_model")).toEqual([[
+    { type: "set_session_model", session: "s-archive", model: "sonnet", effort: "low", reapply: true, terminal_appearance: expect.stringMatching(/^(light|dark)$/) },
+  ]]);
 });
 
 it("announces values recorded for the next resume after the focus move", async () => {

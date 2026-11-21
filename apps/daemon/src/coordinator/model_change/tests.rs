@@ -74,7 +74,9 @@ async fn an_owner_cannot_change_the_model_of_a_session_showing_its_background_ag
         refused.to_string().contains("background-agents view"),
         "{refused}"
     );
-    assert!(refuse_if_owner_must_wait(&state, ModelAsker::User, &session()).is_ok());
+    assert!(
+        refuse_if_owner_must_wait(&state, ModelAsker::User { reapply: false }, &session()).is_ok()
+    );
 
     // A hand a hook raised wins over the view: the refusal is the plain wait for the user.
     let mut waiting = session();
@@ -87,7 +89,9 @@ async fn an_owner_cannot_change_the_model_of_a_session_showing_its_background_ag
         refused.to_string().contains("waiting for the user"),
         "{refused}"
     );
-    assert!(refuse_if_owner_must_wait(&state, ModelAsker::User, &session()).is_ok());
+    assert!(
+        refuse_if_owner_must_wait(&state, ModelAsker::User { reapply: false }, &session()).is_ok()
+    );
 }
 
 /// A launch that must never run, for a change that records or refuses.
@@ -110,6 +114,7 @@ async fn a_model_change_is_checked_and_an_interrupted_session_only_records_it() 
             .store
             .insert_session(&Session {
                 model: Some(Some("sonnet".to_string())),
+                observed_model: Some("opus".to_string()),
                 ..project_session(id, AgentId::CLAUDE, status)
             })
             .unwrap();
@@ -123,7 +128,7 @@ async fn a_model_change_is_checked_and_an_interrupted_session_only_records_it() 
                 model: model.map(|model| Some(model.to_string())),
                 effort: None,
             },
-            ModelAsker::User,
+            ModelAsker::User { reapply: false },
             None,
             shell_env(&dir),
             no_launch,
@@ -153,6 +158,10 @@ async fn a_model_change_is_checked_and_an_interrupted_session_only_records_it() 
         change("down", Some("sonnet")).await.unwrap(),
         ModelChange::Unchanged
     );
+    // Nothing changed, so what its records showed is kept.
+    let kept = state.store.get_session("down").unwrap().unwrap();
+    assert_eq!(kept.observed_model.as_deref(), Some("opus"));
+    assert!(state.store.observed_boundary("down").unwrap().is_none());
     assert_eq!(
         change("down", Some("opus")).await.unwrap(),
         ModelChange::Recorded
@@ -160,6 +169,9 @@ async fn a_model_change_is_checked_and_an_interrupted_session_only_records_it() 
     let after = state.store.get_session("down").unwrap().unwrap();
     assert_eq!(after.model, Some(Some("opus".to_string())));
     assert_eq!(after.status, SessionStatus::Interrupted);
+    // What its records showed it running is forgotten with the change, as a restart forgets it.
+    assert_eq!(after.observed_model, None);
+    assert!(state.store.observed_boundary("down").unwrap().is_some());
 }
 
 /// The control request is answered with what the change did.
@@ -180,6 +192,7 @@ async fn a_set_session_model_request_is_answered_with_its_outcome() {
         session: "s".to_string(),
         model: Some(Some("opus".to_string())),
         effort: None,
+        reapply: false,
         terminal_appearance: None,
     };
     let outcome = |reply: Option<Event>| match reply {
@@ -221,7 +234,7 @@ async fn an_unchanged_model_no_longer_in_the_catalogue_is_not_revalidated() {
             model: Some(Some(" retired-model ".to_string())),
             effort: None,
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply: false },
         None,
         shell_env(&dir),
         no_launch,
@@ -238,7 +251,7 @@ async fn an_unchanged_model_no_longer_in_the_catalogue_is_not_revalidated() {
             model: Some(Some("sonnet".to_string())),
             effort: None,
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply: false },
         None,
         shell_env(&dir),
         no_launch,
@@ -273,7 +286,7 @@ async fn an_interrupted_session_archived_during_model_validation_is_not_changed(
             model: Some(Some("sonnet".to_string())),
             effort: None,
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply: false },
         None,
         shell_env(&dir),
         no_launch,
@@ -322,7 +335,7 @@ async fn a_model_change_whose_relaunch_does_not_come_up_keeps_the_model_it_had()
             model: Some(Some("opus".to_string())),
             effort: None,
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply: false },
         None,
         shell_env(&dir),
         launch,
@@ -366,7 +379,7 @@ async fn a_model_change_carries_what_the_process_started_over_to_the_relaunch() 
             model: Some(Some("opus".to_string())),
             effort: None,
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply: false },
         None,
         shell_env(&dir),
         stand_in_launch(&started, &launches, || {}),
@@ -421,7 +434,7 @@ async fn a_model_change_writes_what_was_queued_into_the_relaunched_process() {
             model: Some(Some("opus".to_string())),
             effort: None,
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply: false },
         None,
         shell_env(&dir),
         stand_in_launch(&started, &launches, || {}),
@@ -472,7 +485,7 @@ async fn a_model_change_that_relaunches_nothing_drops_the_queue_quietly() {
             model: Some(Some("opus".to_string())),
             effort: None,
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply: false },
         None,
         shell_env(&dir),
         launch,
@@ -543,7 +556,7 @@ async fn a_model_change_tells_the_session_which_trees_it_ended() {
                 model: Some(Some("opus".to_string())),
                 effort: None,
             },
-            ModelAsker::User,
+            ModelAsker::User { reapply: false },
             None,
             shell_env(&dir),
             stand_in_launch(&started, &launches, || {}),
@@ -615,7 +628,7 @@ async fn a_model_change_that_fails_keeps_what_the_process_started_under_its_proj
             model: Some(Some("opus".to_string())),
             effort: None,
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply: false },
         None,
         shell_env(&dir),
         |_| Err(anyhow::anyhow!("the agent could not be started")),
@@ -655,7 +668,7 @@ async fn a_console_session_whose_model_change_fails_stops_what_its_process_start
             model: Some(Some("opus".to_string())),
             effort: None,
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply: false },
         None,
         shell_env(&dir),
         |_| Err(anyhow::anyhow!("the agent could not be started")),
@@ -704,7 +717,7 @@ async fn compatibility_only_session_changes_hold_either_boolean() {
                 compatibility: [("claude_compatibility".into(), value)].into(),
                 ..LaunchEdit::default()
             },
-            ModelAsker::User,
+            ModelAsker::User { reapply: false },
             None,
             shell_env(&dir),
             no_launch,
@@ -749,7 +762,7 @@ async fn compatibility_only_unchanged_session_switch_does_not_restart() {
             compatibility: [("claude_compatibility".into(), value)].into(),
             ..LaunchEdit::default()
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply: false },
         None,
         shell_env(&dir),
         no_launch,
@@ -789,7 +802,7 @@ async fn compatibility_only_session_switch_can_return_to_following() {
             compatibility: [("claude_compatibility".into(), value)].into(),
             ..LaunchEdit::default()
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply: false },
         None,
         shell_env(&dir),
         no_launch,
@@ -828,7 +841,7 @@ async fn compatibility_invalid_session_changes_are_refused_without_partial_write
                 .into(),
                 ..LaunchEdit::default()
             },
-            ModelAsker::User,
+            ModelAsker::User { reapply: false },
             None,
             shell_env(&dir),
             no_launch,
@@ -873,7 +886,7 @@ async fn compatibility_only_change_relaunches_running_session_and_failure_restor
             compatibility: [("claude_compatibility".into(), Some(true))].into(),
             ..LaunchEdit::default()
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply: false },
         None,
         shell_env(&dir),
         move |request| {
@@ -1007,7 +1020,7 @@ async fn a_subagent_revived_after_a_model_change_shows_as_background_work() {
             model: Some(Some("opus".to_string())),
             effort: None,
         },
-        ModelAsker::User,
+        ModelAsker::User { reapply: false },
         None,
         shell_env(&dir),
         crate::test_support::stand_in_launch(&started, &launches, || {}),
@@ -1162,4 +1175,140 @@ async fn a_subagent_revived_after_a_model_change_shows_as_background_work() {
     stop_process(&state, state.live_session("s").unwrap())
         .await
         .unwrap();
+}
+
+/// A session whose stored model is the one asked for, with a process running another model that
+/// the agent was switched to from inside: `reapply` has it restarted as a change restarts it, its
+/// stored values left as they were.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_reapply_restarts_a_session_with_a_process_though_it_holds_the_values() {
+    use crate::test_support::{stand_in_launch, Launched, StandIn};
+    let (state, dir) = console_with_project_and_accounts("coordinator-model-reapply");
+    crate::test_support::offer_models(
+        &state,
+        AgentId::CLAUDE,
+        &[("opus", &["high"]), ("sonnet", &["low"])],
+    );
+    state
+        .store
+        .insert_session(&Session {
+            model: Some(Some("sonnet".to_string())),
+            effort: Some(Some("low".to_string())),
+            ..project_session("s", AgentId::CLAUDE, SessionStatus::Idle)
+        })
+        .unwrap();
+    let first = crate::test_support::running(&state, "s");
+    crate::coordinator::exit_watch::watch_exit(&state, first.clone());
+    let started = Arc::new(std::sync::Mutex::new(Vec::<StandIn>::new()));
+    let launches = Arc::new(std::sync::Mutex::new(Vec::<Launched>::new()));
+
+    let outcome = set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            compatibility: Default::default(),
+            model: Some(Some("sonnet".to_string())),
+            effort: None,
+        },
+        ModelAsker::User { reapply: true },
+        None,
+        shell_env(&dir),
+        stand_in_launch(&started, &launches, || {}),
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(outcome, ModelChange::Restarted { .. }),
+        "{outcome:?}"
+    );
+    assert!(first.poll_exit(), "its process was ended");
+    assert_eq!(launches.lock().unwrap().len(), 1, "relaunched once");
+    let relaunched = state.live_session("s").expect("relaunched");
+    assert_ne!(relaunched.launch_id, first.launch_id);
+    let after = state.session_record("s").unwrap();
+    assert_eq!(after.model, Some(Some("sonnet".to_string())));
+    assert_eq!(after.effort, Some(Some("low".to_string())));
+    assert!(after.compatibility.is_empty());
+    assert!(!state.is_changing_model("s"));
+    stop_process(&state, relaunched).await.unwrap();
+}
+
+/// Values the session holds are a change only with `reapply`: one with no process records them
+/// again and forgets what its records showed, and the refusals of a change stand for it.
+#[tokio::test]
+async fn a_reapply_is_what_makes_held_values_a_change() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-model-reapply-others");
+    crate::test_support::offer_models(
+        &state,
+        AgentId::CLAUDE,
+        &[("opus", &["high"]), ("sonnet", &["low"])],
+    );
+    for (id, status) in [
+        ("running", SessionStatus::Idle),
+        ("down", SessionStatus::Interrupted),
+        ("starting", SessionStatus::Starting),
+    ] {
+        state
+            .store
+            .insert_session(&Session {
+                model: Some(Some("sonnet".to_string())),
+                observed_model: Some("opus".to_string()),
+                ..project_session(id, AgentId::CLAUDE, status)
+            })
+            .unwrap();
+    }
+    let live = crate::test_support::running(&state, "running");
+    let ask = |id: &'static str, model: Option<&str>, reapply: bool| {
+        set_session_model_with(
+            &state,
+            id,
+            LaunchEdit {
+                compatibility: Default::default(),
+                model: model.map(|model| Some(model.to_string())),
+                effort: None,
+            },
+            ModelAsker::User { reapply },
+            None,
+            shell_env(&dir),
+            no_launch,
+        )
+    };
+
+    for id in ["running", "down"] {
+        assert_eq!(
+            ask(id, Some("sonnet"), false).await.unwrap(),
+            ModelChange::Unchanged,
+            "{id}"
+        );
+    }
+    assert!(!live.poll_exit(), "its process was left running");
+    let untouched = state.session_record("down").unwrap();
+    assert_eq!(untouched.observed_model.as_deref(), Some("opus"));
+    assert!(state.store.observed_boundary("down").unwrap().is_none());
+
+    assert_eq!(
+        ask("down", Some("sonnet"), true).await.unwrap(),
+        ModelChange::Recorded
+    );
+    let recorded = state.session_record("down").unwrap();
+    assert_eq!(recorded.model, Some(Some("sonnet".to_string())));
+    assert_eq!(recorded.observed_model, None);
+    assert!(state.store.observed_boundary("down").unwrap().is_some());
+
+    let err = ask("running", None, true).await.expect_err("nothing given");
+    assert_eq!(code_of(&err), error_code::FIELD_REQUIRED);
+    assert!(err.to_string().contains("`model` is required"), "{err}");
+    let err = ask("starting", Some("sonnet"), true)
+        .await
+        .expect_err("starting");
+    assert_eq!(code_of(&err), error_code::SESSION_ALREADY_STARTING);
+    // The refusal of the status check, not of another claim on the session.
+    assert!(
+        err.to_string()
+            .contains("this session is already being started"),
+        "{err}"
+    );
+    let after = state.session_record("starting").unwrap();
+    assert_eq!(after.observed_model.as_deref(), Some("opus"));
 }
