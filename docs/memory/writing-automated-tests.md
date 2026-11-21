@@ -1,8 +1,9 @@
 # Writing automated tests
 
-The rules for writing tests (lean cases, breaking the rule a test is named for, races, the fourth provider, replayed
-captures, jsdom teardown and window-wide state, lazy surfaces, dialog focus, the load proof, fixtures) are in
-`docs/conventions/tests.md`. What follows is how to carry some of them out, and how to read the failures they prevent.
+The rules for writing tests (lean cases, breaking the rule a test is named for, races, the fourth provider, real runs
+and captures, time, jsdom teardown and window-wide state, fixtures) are in `docs/conventions/tests.md`; the helpers for
+lazy surfaces and dialog focus say on their doc comments when to use them. What follows is how to carry some of them
+out, and how to read the failures they prevent.
 
 ## Produce another tool's failure for real against a throwaway target
 
@@ -13,9 +14,10 @@ failure, and build the fixture from that output with the tool's version beside i
 
 ## The load proof
 
-A shape that has worked for a `packages/ui` test: the file run alone, three copies of it run at once with
-`--sequence.shuffle=true --maxWorkers=4`, and a run with real time injected (a busy loop or `Atomics.wait` on a
-`SharedArrayBuffer`) just before the assertion.
+Inject the delay before the assertion as a busy loop or `Atomics.wait` on a `SharedArrayBuffer`, never a `setTimeout`:
+on a fake clock that never fires, so the test hangs instead of showing anything. Write `--sequence.shuffle=true` with
+its value when file filters follow. A shape that has worked for a `packages/ui` test: the file run alone, three copies
+of it run at once with `--sequence.shuffle=true --maxWorkers=4`, and a run with the delay.
 
 ## `fakeTimers()` fakes animation frames too
 

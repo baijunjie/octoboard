@@ -68,6 +68,8 @@ export const MAX_FRAMES_TO_WAIT_FOR_CLOSE = 30;
  * user did not aim focus there, so by default the ring follows the last input; with `ring` false the move is a restore
  * of what the user opened the dialog from, and the ring follows the input that closed it. Returns what drops it while
  * it still waits; the second try after it lands still runs, and does nothing once the target has left the document.
+ * `find` answers the first of its candidates that passes `canTakeFocus` (`.find` over them), never a `??` chain: a
+ * detached element is not null, and the chain would stop on it.
  */
 function handFocusOnceClosed(find: () => HTMLElement | null | undefined, { ring = true } = {}): () => void {
   return tryEachFrame(() => {

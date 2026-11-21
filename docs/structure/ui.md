@@ -387,12 +387,16 @@ is `docs/README.md`, "Coding conventions".
   provider's presentation module; Settings does not show a setting whose provider has no heading copy for it, while the
   configuration import review still lists such a setting in its agent's card, named by `idWords` of the setting's id.
   Text that names a provider sets its name apart through `ProviderName` (`src/components/text/`). What generic code may
-  and may not do about it is in `docs/conventions/provider-neutral-core.md`, "UI".
+  and may not do about it is in `docs/conventions/provider-neutral-core.md`, "General principles" and "UI".
 - A new provider: its presentation module `src/providers/<id>.ts` (mark, colour, its messages in every language, the
   record and wording of each code it declares, with the code's recovery copy `provider.<id>.<code>.remedy`, the copy of
   each of its settings, `planNames`, `params`), added to `BUILT_IN` in `src/providers/registry.ts`, whose keys type the
   catalogs. `providers/agentMarks.ts` and the website's marks are outside this bar (see
   `docs/conventions/provider-neutral-core.md`, "UI").
+- A per-agent difference the daemon now declares (a capability, a descriptor fact): read from the provider info the
+  daemon serves (generated into `protocol.generated.ts`) through `src/agents/providers.ts`, never copied into a table
+  keyed by id; its copy and codes go in the presentation module `src/providers/<id>.ts`, and its test uses the test
+  provider `src/providers/testAgent.ts`.
 - A settings control that saves a field the daemon versions, and a dialog that edits a console, a project or an account,
   write through `useSettingsWrite` and `useCheckedEdit` (`docs/conventions/protocol-and-contracts.md`, "The envelope and
   field conventions"); a field a form edits has its path in the daemon's versioned paths (see the daemon structure doc).
@@ -457,6 +461,7 @@ are the helper list; the rules that go beyond "use helper X" are in `docs/conven
 | Read the clipboard's text on a user's press | `PasteButton` (`src/components/controls/PasteButton.tsx`) over the platform's `clipboard.readText` |
 | A block of code shown as text | `CodeBlock`, or `SurfaceCodeBlock` for a wrapping block on its own surface (`src/components/text/CodeBlock.tsx`); a flush `CodeBlock` built on a surface of its own, such as inside a scroller as `DiagnosticBlock` does, puts `CODE_SURFACE_CLASS` (the classes of the secondary `Surface` it sits on) on that surface |
 | Open an external address with the platform adapter and shared failure handling | `ExternalLink` (`src/components/text/ExternalLink.tsx`) for application links; `useExternalLinkAction` from the same module for document-owned link markup, and, through its `activate`, for a control that is not an anchor (an icon button) and wants the same open, double-press guard and failure alert |
+| Words that say where keyboard shortcuts apply (the desktop app or this browser) | `useShortcutScopeDescription` (`src/components/hooks/useShortcutScopeDescription.ts`), from the platform adapter's `kind`, independently of where sessions run |
 | A settings section's lead paragraph and the rows under it | `SettingsLead` and `LeadRows` (`src/settings/SettingsLead.tsx`) |
 | A new row, or a block of a section's own, in Settings | `SettingRow` / `SwitchSettingRow` with a `searchId`, or `SettingsSearchBlock` around the block, and its entry in `SETTINGS_SEARCH_INDEX` (`src/settings/settingsSearch.ts`); a group's `SettingsGroup` `title` is a message key; `LeadRows` takes `hidden`. `src/settings/settingsSearch.test.tsx` fails when a row and the index drift apart; what the entry must carry is in `docs/conventions/ui-components.md`, "Shared components to reuse" |
 | An on/off switch in Settings that saves | `SettingSwitch` or `SwitchSettingRow` (`src/settings/SettingRow.tsx`); the `onChange` may return the save, so the switch ignores presses until it settles; `DaemonSwitchSetting` and `GitSection` return nothing and rely on `useSettingsWrite`'s version guard instead |

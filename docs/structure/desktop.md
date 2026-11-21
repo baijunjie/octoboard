@@ -88,10 +88,13 @@ only counterpart of this surface.
 
 ## Where new code goes
 
-- A new native capability the UI needs: a module in `src-tauri/src/`, with its command, permission file and adapter
-  capability as `docs/conventions/desktop-shell.md`, "What the shell carries" lists; the same section covers a
-  difference by OS the UI must know of (a field of `host_facts.rs` and `HostFacts`) and what does not belong in the
-  shell (a command that carries daemon data).
+- A new native capability the UI needs goes in four places: a module in `src-tauri/src/`, its command registered in
+  `lib.rs`, a permission file in `src-tauri/permissions/` with its entry in `src-tauri/capabilities/default.json`, and
+  the capability in the UI's platform adapter (`packages/ui/src/platform/`). A command a remote window may call is also
+  listed in `capabilities/remote.json`, the remote windows' general allowlist (`remote-window.json` holds only port
+  forwarding and file copies). What the shell may carry, and a difference by OS the UI must know of (a field of
+  `host_facts.rs` and `HostFacts`), are in `docs/conventions/desktop-shell.md`, "General principles" and "What the
+  shell carries".
 - Menu bar icon work stays inside `src/tray/`: parse in `model.rs`, build in `items.rs`, pictures in `icon.rs`, the
   words daemons are named by in `names.rs`, native-only finishing in `macos/` (`windows.rs` for its counterpart, the
   Windows flyout in `flyout.rs`, what it draws in `flyout_model.rs`, the tabs in `tabs.rs`).

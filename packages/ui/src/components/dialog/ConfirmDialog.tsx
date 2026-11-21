@@ -61,7 +61,8 @@ export interface ConfirmDialogProps {
   size?: "sm" | "md" | "lg";
   /** For an action that cannot be undone and loses a lot: the word the user has to type before
    * Confirm is enabled, shown in capitals. What is typed shows in capitals too, and is compared
-   * ignoring case, so a script without case (Chinese) works unchanged. */
+   * ignoring case, so a script without case (Chinese) works unchanged. The one string is both the prompt's word and
+   * what is compared, so the two cannot drift apart: a caller never passes a second copy for either. */
   typeToConfirm?: string;
   /** May reject — the shared error alert reports the failure and this dialog stays open, so the
    * caller does not need its own try/catch around the request. */

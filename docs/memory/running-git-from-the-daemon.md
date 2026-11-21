@@ -2,7 +2,7 @@
 
 The rules (every `git` through `git/run.rs` with a family `Runner`, the pace, remote commands with an
 `SshConfiguration`, the deadline, browse decorations, `--ignore-submodules`, `<revision>:<path>` operands, full ref
-names, one Unicode form, a `-c` in a write `Policy`) are in `docs/conventions/daemon-processes-and-io.md`, "Git from the
+names, one Unicode form) are in `docs/conventions/daemon-processes-and-io.md`, "Git from the
 daemon"; the fixture rules (stale stat with a positive control, Git 2.36 commands) in `docs/conventions/tests.md`,
 "Daemon tests". What they leave out:
 

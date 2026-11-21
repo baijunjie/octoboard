@@ -4,7 +4,9 @@ import { onTestFinished, vi } from "vitest";
  * Removing a focused element fires no blur in WebKit and jsdom, and focus falls to `<body>` only afterwards, so what a
  * handoff sees is decided by where focus was when the removal began: a fold that moves focus first has it on a row that
  * stays by then, one that moves it afterwards still has it on the element being removed. Returns a getter that gives
- * `undefined` until the removal has happened. */
+ * `undefined` until the removal has happened. A test of a row leaving a React Aria collection asserts with this, or
+ * runs inside a `useFocusHandoff` host, and gives a virtualized list `sizedElements`
+ * (`project-browser/browserTestSupport.tsx`) so rows scrolled out of view are not rendered. */
 export function focusAtRemoval(element: Element): () => Element | null | undefined {
   let seen: Element | null | undefined;
   const original = Node.prototype.removeChild;

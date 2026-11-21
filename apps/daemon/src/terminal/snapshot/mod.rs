@@ -325,7 +325,10 @@ impl TerminalSnapshot {
     }
 
     /// Whether bracketed paste is on now, read off the parsed state so that a sequence split
-    /// across reads counts.
+    /// across reads counts. A gate on a mode the agent sets reads it as of the latest output at
+    /// the point that counts, never as "seen on once": an agent can switch a mode on and straight
+    /// off while it probes the terminal. A test of such a gate splits the toggle across two reads,
+    /// each held longer than the watcher's poll interval.
     pub fn bracketed_paste_on(&self) -> bool {
         self.terminal.mode().contains(TermMode::BRACKETED_PASTE)
     }

@@ -134,6 +134,9 @@ pub(crate) fn start_update(
     tracing::info!(agent = %prepared.agent, command = %prepared.command.display(), "updating the agent's CLI");
     let state = state.clone();
     let output = output_dir.join(format!("{}.log", prepared.agent));
+    // On the blocking pool, unlike other work that can run for minutes, which runs on a thread of
+    // its own so a stop need not wait for it: a stop waits for an update rather than cut it off
+    // (see the module doc of `super`). It is the only such work.
     tokio::task::spawn_blocking(move || {
         run_update(&state, claim, prepared, timeout, registry, refresh, &output)
     });

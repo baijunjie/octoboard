@@ -4,7 +4,10 @@
 const TOP_LAYER = "data-react-aria-top-layer";
 
 /** Props that mark an element a top layer when `on`, for an element that stays in the page while a modal hides the
- * rest, as a modal's overlay does (`Modal`'s `topLayer`). */
+ * rest, as a modal's overlay does (`Modal`'s `topLayer`). A non-modal surface that stays usable while a dialog is open
+ * carries them on an element already in the DOM before the dialog opens (kept mounted when empty, or portalled to
+ * `body`): `ariaHideOutside` ignores later additions inside subtrees it has hidden. Lower the dialog's backdrop rather
+ * than raise the surface, which would land over popover rows and swallow their presses. */
 export function topLayerProps(on: boolean | undefined): { "data-react-aria-top-layer"?: "true" } {
   return on ? { [TOP_LAYER]: "true" } : {};
 }

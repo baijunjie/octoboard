@@ -20,8 +20,10 @@ export function sessionChoiceTitle(t: Translate, session: Session): string {
   return titleText(t, session, (value) => value);
 }
 
-/** The agent's current task, when the session shows one beside the name the user gave it: the
- * terminal title, unless it is empty or the same as that name. */
+/** The agent's current task, when the session shows one beside the name the user gave it: the terminal title, unless it
+ * is empty or the same as that name. The daemon strips an agent's leading activity glyph before it stores the title, so
+ * nothing here matches spinner glyphs; one that slips through is added to the daemon's list in
+ * `apps/daemon/src/terminal/title.rs`. */
 export function sessionTask(session: Pick<Session, "title" | "terminal_title">): string | undefined {
   const task = session.terminal_title?.trim();
   return task && task !== session.title.trim() ? task : undefined;

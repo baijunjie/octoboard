@@ -2,9 +2,8 @@
 
 ## Reproduce a daemon failure with a real daemon on a throwaway `HOME` before keying a remedy or fixture to it
 
-The routes, titles and remedies are in `docs/conventions/error-codes.md`, "Raising a failure in the UI", and
-`docs/conventions/ui-code.md`, "Raising error alerts"; the rule to settle a daemon failure against a real daemon first
-is in `docs/conventions/tests.md`, "What a test asserts". How:
+The routes, titles and remedies are in `docs/conventions/error-codes.md`, "Raising a failure in the UI"; the rule to
+settle a daemon failure against a real daemon first is in `docs/conventions/tests.md`, "What a test asserts". How:
 
 - Run `cargo run -p octoboardd` with `HOME` set to a throwaway directory: it keeps its data and its port file under
   `$HOME/.octoboard`. Make the data folder read-only for denied access, or place it on a small volume for a full disk

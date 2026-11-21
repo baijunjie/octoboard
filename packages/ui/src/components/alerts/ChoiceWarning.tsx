@@ -4,8 +4,8 @@ import { ErrorAlert } from "./ErrorAlert";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
 
 /**
- * A warning about the consequence of a choice the user is making ("On the screen: an Alert when it matters, a mark at
- * its point otherwise" in `docs/conventions/ui-standard.md`). The caller mounts it only while the option is selected
+ * A warning about the consequence of a choice the user is making (rule 4 of "Where an error is
+ * shown" in `docs/conventions/ui-standard.md`). The caller mounts it only while the option is selected
  * and puts its `id` in the option's `aria-describedby`. It is announced as it mounts, after
  * `AFTER_FOCUS_MOVE_DELAY_MS`, because the tick has VoiceOver speaking the checkbox's new state at that moment.
  */

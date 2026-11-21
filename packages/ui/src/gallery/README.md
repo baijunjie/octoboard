@@ -96,10 +96,18 @@ teaching it a new reply, are in [`../fixtures/README.md`](../fixtures/README.md)
 
 ## Writing scenarios
 
-The rules for writing a scenario (what one shows, where it lives, how its state and steps are written, widths, copy,
-daemon errors) are in `docs/conventions/tests.md`, "The UI state gallery and its fixtures". What the fields do in the
-gallery:
+The code-level rules (typed state and mocks, daemon error codes, what the fixture daemon answers, what loads before
+`prepare.ts`, what `preview/` files import) are in `docs/conventions/tests.md`, "The UI state gallery and its fixtures";
+which scenarios to write against copy, form-control values and viewing conditions is in the "Project conventions" of
+`.claude/skills/agent-gallery/SKILL.md`. What a scenario shows and what the fields do in the gallery:
 
+- **One settled view.** A scenario shows one identifiable view and, once initialised, stays there until someone
+  interacts. Presentation and verification are separate: behavioural assertions go into tests, and a few more
+  assertions are no reason for a new scenario. Initialise straight to the target: a declarative initial state where
+  possible, otherwise the shortest `steps`, without visiting unrelated views or regression assertions.
+- **Docs screenshots.** A scenario a docs screenshot needs (`docs/conventions/docs-site.md`, "Screenshots") may repeat
+  another scenario's UI with plainer data, or without its hover or focus; its description names what it leaves out and
+  the scenario it differs from.
 - **Category and group.** `group` is one of the titles in `GROUPS` (`fixtures/groups.ts`); a new group gets the icon its
   heading carries. The required `category` is `"normal"` (expected UI, including empty, loading and platform-limited
   views) or `"exceptional"` (deliberate failures, validation errors, refusals, conflicts), chosen by the view being
@@ -112,6 +120,10 @@ gallery:
   `ui.tapTopBarStatus`, `ui.swipe`, `ui.hoverStatusMark`, `ui.touchPressStatusMark`, `ui.openGitFailure`,
   `ui.showPanel`, `ui.closeDrawer`, `ui.pressWithModifier`, and so on) are documented on the `Ui` interface in
   `fixtures/interact.ts`. A raw-text disclosure of an error alert is opened with `ui.press(ui.t("error.diagnostics"))`.
+  A step waits on a condition (the `Ui` helpers, which wait for the control they act on; `waitForControl`,
+  `waitForText` and `waitUntil` for a state with nothing to act on), not on time; a fixed `ui.wait(ms)` only with a
+  comment saying why the UI shows nothing to wait on (a timer inside the page), written once where a shared step list
+  (such as `openFiles` in `fixtures/projectFiles.ts`) is defined, not at each scenario that spreads it.
 - **Widths.** Steps run at any width the page's width control picks (the frame reloads at the chosen width). A session
   row or rail control that sits only in the sidebar's closed drawer (inert while the sidebar floats for the rows, at
   768px and narrower for the rail) makes the lookup press the drawer's toggle first. A panel of the right pane is not
@@ -119,14 +131,17 @@ gallery:
   presses a control in one calls `ui.showPanel("files" | "terminal" | "report")` after selecting the session. Where a
   session pick leaves the drawer up over the terminal area the target is in (the floating sidebar, above 768 px while it
   cannot dock or is hidden), follow the pick with `ui.closeDrawer()`.
-- **Width and height fields.** The page opens at 1440 unless a scenario writes a `width`. `minWidth` is the narrowest
-  window the scenario exists in (a card floated in by hovering a toggle, above 768 px; a docked pane's width grip and
-  Maximize panel, from the width its visible panes need), which a width chosen with the control or by `--width` is
-  raised to; a scenario carries one or the other. A chosen width stays on scenarios that carry none, and is dropped on
+- **Width and height fields.** The page opens at 1440 unless a scenario writes a `width`, which it does only where the
+  window itself is part of the scenario: the target can be reached only in a band of widths the default is outside of,
+  and steps cannot get there at whatever width the control picks (a swipe, or the open drawer card itself); the title
+  or description says what it buys. `minWidth` is the narrowest window the scenario exists in (a card floated in by
+  hovering a toggle, above 768 px; a docked pane's width grip and Maximize panel, from the width its visible panes
+  need), which a width chosen with the control or by `--width` is raised to, with a comment beside it saying why; a
+  scenario carries one or the other. A chosen width stays on scenarios that carry none, and is dropped on
   picking one that carries its own. A `height` is for a step that needs the window too short for a dialog's body, which
   then scrolls (`ui.tabToRegion` finds none in a tall window).
-- **Held modifier.** `held: true` opens a scenario with the shortcut modifier held, for a view that exists only while it
-  is held: the new-session "+" buttons' quick form. The viewer can still choose Released with the page's Modifier
+- **Held modifier.** `held: true` opens a scenario with the shortcut modifier held, only for a view that exists only
+  while it is held: the new-session "+" buttons' quick form. The viewer can still choose Released with the page's Modifier
   control; like a width, that choice stays on scenarios that carry none and is dropped on picking one that carries its
   own. The modifier is pressed after the steps, so they find those buttons by their plain names; `held: "from-start"`
   presses it before them, for a menu the steps open (it locks its quick or plain form as it opens); the steps then
@@ -134,8 +149,12 @@ gallery:
   matcher accepting the plain and the quick one), so the scenario still opens.
 - **Markdown style.** The style chosen with the Markdown style control carries over to viewer scenarios that set no
   `preferences.markdownStyle` and is dropped on picking a viewer scenario that sets its own.
-- **Live changes.** The builders in `fixtures/liveChanges.ts` are `accountAdded`, `accountRemoved`, `agentAvailability`,
-  `terminalOpened`, `terminalClosed`, `pagePushed`, `latestPageDeleted` and `allPagesDeleted`.
+- **Live changes.** Written with the builders in `fixtures/liveChanges.ts` (`accountAdded`, `accountRemoved`,
+  `agentAvailability`, `terminalOpened`, `terminalClosed`, `pagePushed`, `latestPageDeleted` and `allPagesDeleted`), not
+  raw `daemonEvents` steps; another kind of collection gets a builder of its own.
+- **Change presentations.** A scenario for a new change presentation is shown in the "Project pane: Git" group: the File
+  viewer group carries no loader for expanding collapsed diff lines, and `frame.tsx` wires viewer contexts for that
+  branch alone.
 - **Copy.** Steps name a control in the language the window is in: controls through `ui.t`, a session row through
   `ui.session`, a change row through `ui.changeRow`. `fixtures/fixtures.test.ts` fails a step that names a control by
   the English text of a message another language's catalog translates, bare or filled, and a test of the name that takes
@@ -150,7 +169,7 @@ gallery:
 
 ## Sweeping the gallery
 
-`pnpm gallery:sweep [ids or patterns]` (`packages/ui/scripts/gallery-sweep.mjs`) loads the selected scenarios (all by
+`pnpm gallery:sweep [ids or patterns]` (`packages/ui/scripts/gallery-sweep.mjs`, run only as `pnpm gallery:sweep`) loads the selected scenarios (all by
 default) in a headless browser and fails on any gallery failure; `pnpm gallery:sweep --help` lists the flags (`--group`,
 `--lang`, `--theme`, `--width`, `--jobs`, `--list`, `--url`, `--playwright`, `--chromium`). It loads the scenarios it is
 given, every time; when to run it is set by `CLAUDE.md`'s "This project", and on which scenarios, widths, languages and
@@ -179,7 +198,7 @@ waiting lines up behind it.
 
 ## Comparing gallery screenshots
 
-`pnpm gallery:compare` (`packages/ui/scripts/gallery-compare.mjs`) compares two already served galleries and writes a
+`pnpm gallery:compare` (`packages/ui/scripts/gallery-compare.mjs`, run only as `pnpm gallery:compare`) compares two already served galleries and writes a
 static HTML difference report, JSON results and PNG images. It runs only when invoked explicitly; automatic checks
 do not invoke it. Start each checkout's gallery yourself on a different free port, with dependencies installed and
 Chromium available as described in "Sweeping the gallery". The command starts no servers, builds or worktrees.

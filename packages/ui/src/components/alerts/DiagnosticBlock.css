@@ -6,7 +6,9 @@
   --diagnostic-copy-gap: calc(var(--spacing) * 3 + 0.5lh - var(--diagnostic-copy-size) / 2);
 }
 
-/* The floating copy control sits above the recessed code surface in both themes. */
+/* The floating copy control sits above the recessed code surface in both themes: in light its fill is `--surface` at
+   rest and `--background` hovered or pressed, an approved local exception to the tertiary button's fills, so the
+   button stays lighter than the code surface; dark keeps the tertiary fills. */
 .diagnostic-copy-button {
   --button-bg: light-dark(var(--surface), var(--default));
   --button-bg-hover: light-dark(var(--background), var(--default-hover));

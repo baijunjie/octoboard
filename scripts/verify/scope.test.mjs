@@ -38,6 +38,7 @@ const CASES = [
   ["apps/desktop/src-tauri/Cargo.toml", RUST],
   ["rust-toolchain.toml", RUST],
   ["rustfmt.toml", RUST],
+  ["clippy.toml", RUST],
   [".cargo/config.toml", RUST],
   ["pnpm-lock.yaml", JS, ["ui"]],
   ["pnpm-workspace.yaml", JS],

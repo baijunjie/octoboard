@@ -8,6 +8,11 @@
 //!
 //! The modules, the IPC surface and where new code goes are in `docs/structure/desktop.md`.
 
+// A diagnostic is written with `diagnostic!`, so that it reaches `desktop.log` as well as stderr
+// (`docs/conventions/desktop-shell.md`, "Write a diagnostic with `diagnostic!`"). A lint here rather than
+// `disallowed_macros`: the root `clippy.toml` is shared by both crates, and the daemon prints to stderr legitimately.
+#![deny(clippy::print_stderr)]
+
 mod app_settings;
 #[cfg(target_os = "macos")]
 mod apple_event;

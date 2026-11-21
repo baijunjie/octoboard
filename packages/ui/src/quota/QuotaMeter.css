@@ -3,7 +3,7 @@
    `--provider-fill-dark`, the way `.session-colour-dot` takes its pair; a provider without a colour sets neither, and
    its bars take the foreground, as its mark does. Claude's is its provider colour, an orange darkened to keep 3:1
    against every track it is drawn on at full opacity, lightened on the dark tracks, though the bar is decorative and
-   not held to it (see docs/conventions/ui-standard.md, "A colour mark whose meaning is in words"); Codex's is a blue.
+   not held to it (see docs/conventions/ui-accessibility.md, "Not by colour alone"); Codex's is a blue.
    Inside `.control-fills` (Settings, the dialogs, the rail panel) `--default` is `--control-fill`, and the compact
    bar's dark track lightens that a step (see `.quota-bar-track`): the lightest dark track, and the one that sets
    Claude's dark value. From the module colours, light then dark: the compact bar on `--control-fill` (a table cell, a

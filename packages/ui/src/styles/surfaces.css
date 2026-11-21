@@ -148,8 +148,8 @@
    `--default`, would give a field edges that do not match its fill.
 
    A tooltip or popover is portalled to the end of `<body>`, outside the pane or dialog that carries
-   this class, so the shared tooltip and popover components carry it themselves (see "Confirmed
-   visual choices" in docs/conventions/ui-standard.md). Everything a dialog, the pane or such a tooltip or
+   this class, so the shared tooltip and popover components carry it themselves (see "One definition
+   per semantic colour" in docs/conventions/ui-standard.md). Everything a dialog, the pane or such a tooltip or
    popover draws from `--default` takes the fills: a secondary button, a tab list, a ghost button's
    hover, a toggle button, a search field and a select in their secondary variant (a control on the
    pane itself takes the default variant, which does not draw from these), and the file viewer's
@@ -164,7 +164,9 @@
 
 /* The fills of a card on the content panel (`FormCard`), in dark only: HeroUI's own secondary field and radio there are
    darker than the card, hardly a step off it, where the control fill is lighter than the card, as a field in a dialog
-   is. Light keeps HeroUI's own fills, which the card's white already sets off. */
+   is. Light keeps HeroUI's own fills, which the card's white already sets off. A field's `--danger` error text on these
+   cards is 3.16:1 in dark and 3.57:1 in light, HeroUI's own colour on the card surface, a shortfall the user accepted
+   as for the floating surfaces. */
 :is(.dark, [data-theme="dark"]) .card-fills {
   --default: var(--control-fill);
   --default-hover: var(--control-fill-hover);

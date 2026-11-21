@@ -3,7 +3,9 @@ import { act } from "react";
 import { onTestFinished, vi } from "vitest";
 
 /** Puts the window in or out of the user's attention for one test, through its focus: jsdom's `hasFocus()` answers
- * from whether anything in the document was ever focused, not from the window. Starts attended. */
+ * from whether anything in the document was ever focused, not from the window. Starts attended. A test using it
+ * imports `input/focusGuard` first, and recognises the events sent to the window with `!(event.target instanceof
+ * Node)`, never `event.target === window`. */
 export function windowAttention(): (attended: boolean) => void {
   let focused = true;
   const spy = vi.spyOn(document, "hasFocus").mockImplementation(() => focused);

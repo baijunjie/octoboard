@@ -62,6 +62,7 @@ export function useIssueReport(failures: readonly ReportableFailure[] | undefine
     ? issueReportUrl(issueUrl, {
       failures,
       known: options.known,
+      // eslint-disable-next-line no-restricted-syntax -- The user agent is reported as it is; no behaviour or wording depends on it.
       environment: { version, daemonVersion, platform: platform?.kind, userAgent: typeof navigator === "undefined" ? undefined : navigator.userAgent, daemonHost, language },
       context: { names, homeDir },
     })

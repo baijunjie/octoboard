@@ -28,7 +28,7 @@ function AlertMessage({ textId, title, announce, announceKey, announceDelayMs, c
 /**
  * Durable failure or warning content shown among other content: one that blocks (a lookup a form makes), one about a
  * whole area laid out top down, or one about the whole view; never a whole subject that failed (`EmptyPanel`) or one at
- * a point (`StatusMark`). It is shown here and nowhere else. The Alert is compact ("Errors shown among other content"
+ * a point (`StatusMark`). It is shown here and nowhere else. The Alert is compact ("Alerts and marks"
  * in `docs/conventions/ui-standard.md`): the `title`, required, saying what happened; `children`, the one short
  * description, which says why rather than repeating the title (inline content only, since `AlertDescription` is a
  * `span`); then `remedy`, the one main thing to do about it, also always visible and also inline content, so the

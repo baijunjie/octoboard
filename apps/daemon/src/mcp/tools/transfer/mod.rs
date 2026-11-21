@@ -4,7 +4,8 @@
 //!
 //! What the two share is here: the two sessions read under their claims (`Parties`), telling them
 //! what moved, and refusing a `from` in the middle of a turn. So are the checks on the branches
-//! named, which `open_session` and `request_session` make too.
+//! named, which `open_session` and `request_session` make too. Both tools go through these rather
+//! than steps of their own, so a check added for one holds for the other.
 
 use std::path::Path;
 use std::sync::Arc;

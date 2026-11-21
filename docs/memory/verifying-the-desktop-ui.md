@@ -19,8 +19,8 @@ Hunting a UI defect across the whole app (text landing on half pixels, a style t
 reason to render everything: find the candidates by reading the code first, then render or measure only those, one
 scenario each, a few pages at a time. Rendering every gallery scenario in two languages with six browser pages at once
 has eaten several GB of memory and left orphaned processes behind, and the user asked why it was not done by code
-analysis. What a brief handing such work to a subagent must name is in `docs/conventions/tests.md`, "The UI state
-gallery and its fixtures"; "walk the gallery's scenarios" is read as all of them.
+analysis. What a brief handing such work to a subagent must name is in `CLAUDE.md`, "This project"; "walk the gallery's
+scenarios" is read as all of them.
 
 Changing a shared component's markup, layout or timing widens what the change touches to every surface already
 using it, so those surfaces are inside this narrow scope rather than outside it: making `MarkedPath`'s root a `span`
@@ -65,8 +65,8 @@ build-only Vite plugin changes are not settled there either: the gallery runs Vi
 (`pnpm build:app`). For UI the app does not render yet, build that from a temporary detached worktree
 (`git worktree add --detach`) whose `main.tsx` renders the gallery's scenarios in place of the app.
 
-A new change presentation is shown in the "Project pane: Git" group (`docs/conventions/tests.md`, "The UI state gallery
-and its fixtures"). That group also stands in for the app around the viewer, and only running its pages shows a
+A new change presentation is shown in the "Project pane: Git" group (`packages/ui/src/gallery/README.md`, "Writing
+scenarios"). That group also stands in for the app around the viewer, and only running its pages shows a
 mismatch: a viewer component that starts calling a hook needing a context the app provides (anything that reaches the
 daemon, a toast included) throws on mount in every scenario of the group, with the type check and the unit tests still
 green, and its subjects are literals, so a field the project browser's hooks fill only under a condition (a
@@ -132,8 +132,8 @@ through `page.mouse` rather than a click dispatched from script. A gallery step'
 pointer events at all (a virtual press), and a jsdom test dispatches its events by hand, so neither shows what a change
 to a press's pointer handling does to a real mouse press: a field focused early on `pointerdown` passed both and closed
 the list it opened on every real click. The same holds for where focus scrolls a scroller: the engines' focus scrolls
-differ in timing and in what CSS they honour (see the "Focus scrolled to the edge of a scroller that fades there"
-section of `docs/conventions/ui-standard.md`), so a `scroll-margin` fix that holds a list still in Chrome can leave it
+differ in timing and in what CSS they honour (see the scroll padding rule under "Focus" in
+`docs/conventions/ui-accessibility.md`), so a `scroll-margin` fix that holds a list still in Chrome can leave it
 jumping in WebKit. Playwright is a pinned devDependency of `packages/ui`, so `pnpm install` is all such a check needs
 from the repository; the dependency downloads no browser of its own, and the browser is fetched explicitly with
 `pnpm exec playwright install webkit`, run from `packages/ui` — from the workspace root `pnpm exec playwright` resolves
@@ -146,7 +146,7 @@ the display's native resolution, allowing for its scale factor (a Retina display
 and settle a question of overlap or reachability with a real click at the measured point, since a capture only ever
 shows what is on top. Colours read off such a capture carry the display's own profile, so a contrast ratio measured from
 one differs from the ratio the tokens give by a few tenths, either way: it is good for confirming which side of a
-threshold a pair lands on, and never for correcting a token-derived ratio recorded in the stylesheet or the UI standard.
+threshold a pair lands on, and never for correcting a token-derived ratio recorded in a stylesheet's comment.
 
 When an installed app shows a paint defect that a verification clone does not, compare in the same packaged native
 shell, on the same display and at the same window size before treating the difference as a code result. First
@@ -168,7 +168,7 @@ setting.
 
 A jsdom test and a gallery step dispatch touch or pointer events straight at an element (`ui.swipe` in
 `packages/ui/src/fixtures/interact.ts` sends plain `Event`s), so neither goes through the browser's gesture handling,
-which is where a gesture breaks (how to detect one is `docs/conventions/ui-code.md`, "Key handling in code").
+which is where a gesture breaks (how to detect one is `docs/conventions/ui-accessibility.md`, "Keyboard").
 
 To verify a gesture, drive the gallery page in Playwright's Chromium with a context created with
 `isMobile: true, hasTouch: true`. Send the touch over CDP: `Input.dispatchTouchEvent` with `touchStart`, several

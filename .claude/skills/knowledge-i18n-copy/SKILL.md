@@ -485,17 +485,18 @@ are now wrong or it leaves out one thing, the meaning has changed.
   `vi`, `zh-CN` (Simplified), `zh-TW` (Traditional); all 17 have complete catalogs.
   (`packages/ui/src/i18n/languages.ts`; `docs/product/language.md`, "What is translated so far")
 - **Chinese tags**: the generic sections' `zh-Hans` and `zh-Hant` mean this project's `zh-CN` and `zh-TW`.
-- **Catalogs and how code uses them**: the English catalog is the source every other language is translated from, a
-  language without a catalog or a message a catalog lacks renders in English, and the catalog files, keys,
-  placeholders, plurals, the `useT`, `Translate` and `<Message>` lookups and `common.sentenceSeparator` are code
-  rules in `docs/conventions/i18n-in-code.md`: "What is translated, and where it lives", "Looking messages up", "Keys"
-  and "Placeholders, numbers and plurals". Copy is written to fit them: a sentence with a variable part is one message,
-  and two whole sentences in a paragraph are written to be joined by the separator.
+- **Catalogs**: copy is written to fit `docs/conventions/i18n-in-code.md`: a sentence with a variable part is one
+  message, and two whole sentences in a paragraph are written to be joined by the separator.
 - **Glossary**: zh-CN follows Apple's zh-Hans macOS terminology with the fixed terms 控制台 console, 会话 session,
   控制台会话 console session, 项目会话 project session, 智能体 agent, 移交 handoff, 转移 transfer (of branches, process
   trees or a parent), one half-width space between Chinese and Latin text,
   numbers or placeholders, and full-width punctuation in Chinese sentences, parentheses included (`（{detail}）`).
   (`packages/ui/src/i18n/messages/zh-CN.ts`, the catalog's doc comment)
+  - A Codex account's usage limit resets follow Codex's own wording rather than terms of our own: "usage limit
+    reset(s)" for the credit, "Redeem reset" for the command and the confirmation's title, "Use reset" for its Confirm,
+    "Usage reset" once used; zh-CN 用量限额重置, 兑换重置, 使用重置, 用量已重置. The title and Confirm deliberately use
+    different verbs, as Codex does, overriding the "Destructive actions" rule above that they share the trigger's
+    word. (the user's decision; `packages/ui/src/i18n/messages/en.ts`, `quota.resetCredits`)
 - **Prompts and requests**: three things English may all call a prompt or a request each have a noun of their own in
   every language, never shared: the user's prompt (what is sent to the agent as a turn), a prompt the agent is waiting
   on (a permission prompt or a question in its terminal, `Session.interaction`), and a session request (a session
@@ -515,12 +516,22 @@ are now wrong or it leaves out one thing, the meaning has changed.
   keeps プロンプト, the established word, for the user's prompt. (the user's decision; `packages/ui/src/i18n/messages/`
   `zh-CN.ts`, `zh-TW.ts`, `ja.ts`, `ko.ts`: `daemon.queued_messages_lost.*`, `daemon.interaction_*`,
   `settings.autoApproveSession.label`)
-- **App name and other app-level facts**: copy writes the product name as the global placeholder `{appName}`, never as
-  a literal, and never translates it; how the placeholder is filled is in `docs/conventions/i18n-in-code.md`,
-  "Placeholders, numbers and plurals". (`docs/product/language.md`, "What follows the language")
-- **Exempt text**: text aimed at the agents — the console session's instructions, tool descriptions and replies,
-  prompts injected into a launch — stays English and is not UI copy; a report page is content the console session's
-  model wrote and is not localized. (`docs/product/language.md`, "What follows the language")
+- **App name**: copy writes the product name as `{appName}`, never a literal, and never translates it.
+- **Naming the application**: copy does not name the application where a generic reference says the same thing: "the
+  app", "this app", or a reference that leaves the subject implicit ("Restart to finish updating"), in every catalog
+  alike. The name stays only where a generic reference would mislead or be ambiguous: where the application is set
+  beside other software (an agent, a browser, the system's own settings, another computer's copy of it), where the user
+  must recognise the name elsewhere (a system settings list, a notification's sender, a command such as `octoboardd`),
+  and in the product's own titles (the About dialog, the window title). The daemon is "the daemon", and a command names
+  its executable. (the user's decision)
+- **Machine and platform perspective**: wording holds both in the desktop app and in a browser connected to a server.
+  Describe the operation, scope or consequence without saying where a service runs when that does not help the user
+  act. When location matters, tell the environment where sessions run (installation and project-directory
+  instructions) from the interface the user is viewing (clipboard, downloads, notifications, keyboard-shortcut
+  preferences); never an unqualified "this machine" or "your device" for server-side files or tools. A section that
+  exists only in the desktop window (Access) may say "this computer"; a console memory entry's "This machine only" means
+  the machine running the daemon, where the console lives (the user's decision), and project memory, whose project may
+  be on a remote host, says "the machine the project is on". Every translation keeps the same scope.
 - **Capitalization**: the UI is a web UI and uses sentence case (Close sessions, Try again); the macOS application
   menu's items follow Apple's Title Case (Hide Others, Select All). (`packages/ui/src/i18n/messages/en.ts`)
 - **Ellipsis**: this replaces the command guidance under "Ellipsis" above — its criterion, its platform defaults and its
@@ -544,15 +555,35 @@ are now wrong or it leaves out one thing, the meaning has changed.
   pronoun or role would be ambiguous — two things of the same kind on the screen that the sentence must tell apart — and
   never just to restate what an earlier sentence already named. This narrows "Reference and scope" above for this
   project. (the user's decision)
-- **Input placeholders**: an optional input names the default or empty state it takes when left empty, and a
-  multi-value field's input, once its list holds an item, invites adding another; neither is an example. This
-  replaces "Input placeholders" above for those inputs. (the "Input placeholders" section of
-  `docs/conventions/ui-standard.md`)
+- **Input placeholders**: these replace "Input placeholders" above. Every editable text input has a non-empty
+  placeholder, including one whose current value hides it, except a report page's fields, whose content is the
+  agent's. The placeholder is a hint, never an initial value or a stand-in for the label, accessible name, description
+  or validation. (the user's decision)
+  - A required input shows a valid example with the example prefix (`例如：XXX`, `Ex. XXX`), format examples (paths,
+    URLs, email addresses) included.
+  - An optional input names the default that takes effect when it is left empty, without a prefix, derived from the
+    current context and updated with it (a session title from its project's name, a project name from the directory
+    or repository name): a fixed sample is not a default. Where empty means an inherited setting or no value, name that
+    state rather than inventing a value, and a default that belongs to each item of a batch is never shown as one
+    shared value.
+  - A multi-value field's input (the Tags field) names the empty state while its list is empty ("No tags") and invites
+    adding another once it holds an item ("Add a tag").
+  - A search field (a `SearchField`, a filter or find field) takes the standard word "Search" in each language (zh-CN
+    搜索) through the one key `common.search`, with no example and no default; its accessible label names what is
+    searched ("Search settings").
+  - A field that takes a syntax of its own, with no visible label to say what it is, names itself and gives an example
+    of exactly what the daemon accepts ("File mask, such as *.ts, !*.test.ts"), its description saying the rest; the
+    example is laid out to show in full at every supported width and language.
 - **Empty-state copy**: an empty state's title carries no punctuation at all, a comma inside it included, which is
   stricter than the "Empty-state titles" rule above; what the title cannot hold goes in the line under it, and a
   state said in one breath somewhere else — a notice over content shown anyway, a live region speaking for a panel
-  hidden from screen readers — is a `.sentence` message of its own rather than the two joined in code. (the "An empty
-  state is a glyph, a heading, and what fills it" section of `docs/conventions/ui-standard.md`)
+  hidden from screen readers — is a `.sentence` message of its own rather than the two joined in code.
+- **Loading text with a trailing indicator**: a loading status with a spinner, waiting arc or rotating refresh icon
+  right after its text takes no trailing ellipsis, in any language (the account MCP dialog's refreshing status); a
+  select whose value and loading indicator sit at opposite ends keeps its "Loading…". (the user's decision)
+- **Changing existing copy**: before shortening or replacing a message, grep the catalog for the fact it carries and
+  read the product doc of the surface: a clause may be the UI's only statement of a fact; keep it, or move it into copy
+  the surface shows anyway.
 - **Per-language rules beyond the generic tables**: these extend "Register per language" (its "Button form" column),
   "Simplified Chinese" and "Pitfalls in other languages" above.
   - ko: requests use 해 주세요 only in explanatory sentences, never on a button (buttons are nouns, per the "Button form"
@@ -580,37 +611,19 @@ are now wrong or it leaves out one thing, the meaning has changed.
   | es | del, al; the pronoun él does not contract (de él, a él) |
 
   (the user's decision)
-- **Confirmation, error and search copy**: these add to "Destructive actions", "In-progress states", "Errors" and
-  "Input placeholders" above.
+- **Confirmation and error copy**: these add to "Destructive actions", "In-progress states" and "Errors" above.
   - A confirmation body that has to say what is not affected first says what is removed; it does not open with
     "<X> is not affected". The "Consequence" row of the pattern table under "Destructive actions" is scoped to Chinese;
     this extends it to every language.
-  - An error alert's opening sentence, the cause "Errors" asks of the body, is optional: it is there only for what the
-    title leaves unexplained and never says the title again in other words; when the title says it all, the body
-    starts with the remedy (see "The error alert" in `docs/product/error-alerts.md`).
   - An error alert states the error and its cause, and nothing unrelated to it: no guidance that assumes what the
     user wants to do instead (removing without the option they chose, choosing another folder), and no step that
     does not follow from the cause itself. A confirmation, by contrast, may say how to proceed, such as what has to
     happen first for its disabled confirm button to become available.
   - An error with a way out plus Cancel makes the way out the default action.
-  - A load failure also carries a warning icon; its wording is the one "Errors" above already gives.
-  - A button never takes in-progress text: while its action runs it keeps its own label and shows a spinner before it
-    (an icon-only button's spinner replaces its icon), so "In-progress states" applies to status lines and banners
-    only, and no catalog carries a pending variant of a button's label (`docs/conventions/ui-standard.md`, "Buttons").
-  - A search field's placeholder is the standard word "Search" in each language (zh-CN 搜索), shared through the one
-    catalog key `common.search`; its accessible label names what is searched ("Search settings").
+  - A button never takes in-progress text, so "In-progress states" applies to status lines and banners only (the
+    button side is `docs/conventions/ui-standard.md`, "Buttons").
 
   (the user's decision)
-- **Destructive confirmations**: the destructive Confirm is the form's submit button, so Enter triggers it — no design
-  choice permanently removes Return, and copy must not claim otherwise. Only the heaviest loss adds a type-to-confirm
-  word, which disables Confirm, and Enter with it, until the word matches; this project prompts and compares the same
-  single string, so the "two strings to change together" warning under "Capitalization" has nothing to match here. The
-  optional control under the message settles what Confirm does rather than gating it, and Enter submits even from that
-  control, so the Confirm label and the control's own label must each read correctly with it left untouched.
-  (`packages/ui/src/components/dialog/ConfirmDialog.tsx`; `docs/conventions/ui-standard.md`, "Keyboard")
-- **Codex usage limit resets**: the copy for a Codex account's usage limit resets follows Codex's own wording rather
-  than terms of our own: "usage limit reset(s)" for the credit, "Redeem reset" for the command and the confirmation's
-  title, "Use reset" for its Confirm, "Usage reset" once used. The title and Confirm deliberately use different verbs,
-  as Codex does, overriding the "Destructive actions" rule above that they share the trigger's word. zh-CN keeps the
-  same split: 用量限额重置, 兑换重置, 使用重置, 用量已重置. (the user's decision; `packages/ui/src/i18n/messages/en.ts`,
-  `quota.resetCredits`)
+- **Destructive confirmations**: the optional control under a confirmation's message settles what Confirm does rather
+  than gating it, so the Confirm label and the control's own label must each read correctly with the control left
+  untouched. (`packages/ui/src/components/dialog/ConfirmDialog.tsx`)

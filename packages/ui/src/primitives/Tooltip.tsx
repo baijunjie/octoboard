@@ -125,11 +125,13 @@ export type TooltipProps = ControlTooltipProps | MarkTooltipProps | AnchoredTool
  *   what a trigger element does on the pointer's way in and out. So the wait before it shows is the app's, one tooltip
  *   at a time still holds across the window, and every path react-aria closes a tooltip on applies, above all the one
  *   that closes it when something under it scrolls. Driving `isOpen` from the hover flag instead would silently disable
- *   them all. Once it has closed, what re-opens it is the pointer leaving and coming back, which is what unmounts and
- *   mounts this again, or the caller's `key` changing. Hover is the way in, as the anchor is usually no tab stop; the
- *   caller of an anchor that is a tab stop may report its keyboard focus through `hovered` as well, and `immediate` then
- *   skips the wait. Nothing links the tooltip to the anchor for assistive technology: what it says has to reach a screen
- *   reader another way (the text it belongs to, the name of the row it is in, the control's own name).
+ *   them all. That close is also why the anchor is never an element the UI itself scrolls (a marquee): the tooltip
+ *   would close as soon as it opened. Once it has closed, what re-opens it is the pointer leaving and coming back,
+ *   which is what unmounts and mounts this again, or the caller's `key` changing. Hover is the way in, as the anchor is
+ *   usually no tab stop; the caller of an anchor that is a tab stop may report its keyboard focus through `hovered` as
+ *   well, and `immediate` then skips the wait. Nothing links the tooltip to the anchor for assistive technology: what
+ *   it says has to reach a screen reader another way (the text it belongs to, the name of the row it is in, the
+ *   control's own name).
  *
  * A tooltip is a label, not a surface to interact with: it shows on hover and on keyboard focus, closes the instant the
  * pointer leaves (`--tooltip-close-delay: 0s` in `styles/layout.css`, where HeroUI's default lingers), and is

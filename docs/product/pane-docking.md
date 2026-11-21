@@ -92,6 +92,8 @@ The handles work the same way:
   is drawn as a solid accent-coloured bar with a focus ring around it, and a grip shows with a focus ring around the
   handle. Pressing the handle with the mouse does not take keyboard focus off the terminal, and while it is dragged
   the pointer shows the resize cursor wherever it is.
+- The separators between stacked panel cards take 24 px for the pointer, centred on their gap and reaching into the
+  cards' edges where the gap is narrower.
 
 The sidebar's handle is available while docked and while floating, including a hover preview or an automatically
 floating sidebar. Its pointer target is 6 px wide immediately to the physical right of its inner seam while docked and

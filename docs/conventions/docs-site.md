@@ -1,10 +1,14 @@
 # Documentation site conventions
 
-The rules for the Starlight documentation site (`apps/docs/`, `@octoboard/docs`): its pages, snippets, quoted values,
-sidebar and styling. Where a file lives, what it imports and the shared entry points are in `docs/structure/docs.md`;
-how copy is worded and translated is in the `knowledge-i18n-copy` skill; the Nuxt website, which links into the docs,
-follows `docs/conventions/website.md`. Paths below are relative to `apps/docs/` unless they start with `apps/`,
-`packages/`, `scripts/` or `docs/`.
+The rules for the Starlight documentation site (`apps/docs/`). Placement and the shared entry points are in
+`docs/structure/docs.md`; how copy is worded and translated is in the `knowledge-i18n-copy` skill. Paths below are
+relative to `apps/docs/` unless they start with `apps/`, `packages/`, `scripts/` or `docs/`.
+
+## General principles
+
+- **The site keeps Starlight's own components and look.** The accent comes only from the `--sl-color-accent*` tokens in
+  `src/styles/theme.css`, which may also carry narrow readability fixes (a minimum width for table cells, say), and the
+  header changes only through the `SiteTitle` override (`src/components/SiteTitle.astro`).
 
 ## Quoted values and names
 
@@ -52,27 +56,10 @@ follows `docs/conventions/website.md`. Paths below are relative to `apps/docs/` 
   scenario is added for it.
 - **A page shows a capture with `<Screenshot id alt />` (`src/components/Screenshot.astro`), never a Markdown image:**
   the component draws it at its width over the entry's `scale`, the size the UI really has, and never enlarges it.
-- **A clipped capture is the element alone over transparency, with a margin around it** so its rounded corners and
-  shadow show whole; cutting at the element's box leaves pieces of the backdrop behind the corners. A floating part the
-  picture needs (a card or popover portaled outside the clipped element) is named in the entry's `keep`; look at the
-  capture to check it is there.
-- **A scenario a screenshot uses runs with the frame's `input=mouse`**, as the screenshot command loads it: presses act
-  as a mouse's, so a step that presses a control a mouse click does not open (a status mark, which opens on hover)
-  fails there; such a step hovers it instead. Only the screenshot command checks this;
-  the gallery's sweep and quick check load frames without it.
 
 ## Look and feel
 
-- **The site keeps Starlight's own components and look.** The accent comes only from the `--sl-color-accent*` tokens in
-  `src/styles/theme.css`, which may also carry narrow readability fixes (a minimum width for table cells, say), and the
-  header changes only through the `SiteTitle` override (`src/components/SiteTitle.astro`).
-- **`docs/conventions/ui-standard.md` binds the site in part:** its contrast thresholds ("Contrast", held as references,
-  per "Conformance level and exceptions"), pointer target size (24 by 24 CSS pixels, "Pointer target size") and text
-  direction rules ("Text direction") apply to the site's own styling and markup; its component rules are for
-  `packages/ui`.
-
-## Copies of the website's decisions
-
-- **A copy the docs keep of a website decision is compared with the website's module by `webParity.test.ts`**, and the
-  website modules and files that test reads are declared in `scripts/verify/scope.mjs` as `docs/conventions/tooling.md`,
-  "Scripts", requires.
+- **The UI conventions bind the site in part:** the contrast thresholds of `docs/conventions/ui-standard.md` (held as
+  references, "Conformance level and exceptions"), and the pointer target size (24 by 24 CSS pixels, "Pointer target
+  size") and text direction rules ("Text direction") of `docs/conventions/ui-accessibility.md` apply to the site's own
+  styling and markup; their component rules are for `packages/ui`.

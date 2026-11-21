@@ -105,8 +105,8 @@ export function useSettingsDialog({
   };
 
   // Read through a ref so the subscription is made once. `byKey` is the page's own handling of the key, which draws the
-  // ring on what Settings focuses, as a keyboard handler that moves focus does (`docs/conventions/ui-standard.md`, "A
-  // keyboard handler that moves focus itself"), and only once the dialog will open.
+  // ring on what Settings focuses, as a keyboard handler that moves focus does (`docs/conventions/ui-accessibility.md`,
+  // "Focus"), and only once the dialog will open.
   const requestFromMenuRef = useLatest((byKey = false) => {
     if (!ready || open || otherModalOpen || isActionMenuOpen()) return;
     if (byKey) setKeyboardModality();

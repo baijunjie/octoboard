@@ -83,7 +83,10 @@ export type CommandId = (typeof REBINDABLE)[number]["id"];
  * `viewer/find/useFind.ts`), held to this entry by a test; the Settings dialog matches it from here. */
 export const FIND_BINDING: Binding = primary("KeyF");
 
-/** The keys the window, the native menu or one view owns, listed but not changeable. */
+/** The keys the window, the native menu or one view owns, listed but not changeable. Every other key is matched through
+ * `matchesCommand`; only a key here that a view outside `shortcuts/` owns is compared by hand (Find in `viewer/`, F6 in
+ * `layout/`, which may not import `shortcuts/`), and its test builds the key press from this entry so the two cannot
+ * part. */
 const FIXED = [
   { id: "nextRegion", label: "settings.shortcuts.command.nextRegion", group: "navigation", binding: { code: "F6" }, availability: "always" },
   { id: "previousRegion", label: "settings.shortcuts.command.previousRegion", group: "navigation", binding: { code: "F6", shift: true }, availability: "always" },

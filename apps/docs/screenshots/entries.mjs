@@ -19,14 +19,17 @@
 //             at the window's edge takes `padding: 0`, since the window has no room for a margin there.
 //   keep      With a `clip`: a Playwright selector, or an array of them, naming the floating layers (a tooltip drawn in
 //             its own portal, outside the clipped element) that stay visible with their contents, since the picture
-//             is of them. Each matches at least one element, which the script checks. Nothing else outside the
-//             clipped element is kept.
+//             is of them. Each matches at least one element, which the script checks, but only the capture shows
+//             whether the layer is in the picture: look at it. Nothing else outside the clipped element is kept.
 //   scale     The device pixel ratio the page is captured at: 2 (default, crisp on high-density screens) or 1. The
 //             terminal's GPU renderer draws its glyphs at twice their size in headless Chromium at 2, so a
 //             scenario showing terminal content takes 1.
 //   hover     A Playwright selector matching exactly one visible element: before the capture the mouse is moved to its
 //             centre, for what shows only under the pointer (a row's buttons).
-// Every capture presses as a mouse does (`input=mouse`, see `frameUrl`), so no keyboard focus ring shows.
+// Every capture presses as a mouse does (`input=mouse`, see `frameUrl`), so no keyboard focus ring shows. A scenario's
+// step that presses a control a mouse click does not open (a status mark, which opens on hover) therefore fails here, so
+// a scenario a screenshot uses hovers such a control instead. Only this command loads frames that way: the gallery's
+// sweep and quick check do not catch such a step.
 /** The manifest modules, one per feature group. */
 export const GROUPS = ["accounts", "context", "collaboration"];
 

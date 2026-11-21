@@ -36,6 +36,10 @@ pub fn lexical_key(path: &Path) -> OsString {
 }
 
 /// `path` made absolute with every link resolved, as the file system spells it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the platform layer is where the OS call is made; `hostfs::canonical` is its answer"
+)]
 pub fn canonical(path: &Path) -> io::Result<PathBuf> {
     std::fs::canonicalize(path)
 }

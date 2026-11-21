@@ -21,8 +21,9 @@ function sendInput(modality: ReturnType<typeof getInteractionModality>): void {
 }
 
 /** Sets react-aria's interaction modality for the test and restores the previous one when it finishes, even the
- * initial null, which react-aria accepts at runtime despite its setter's type. Call it before `fakeTimers()`, so the
- * restore runs after the clock's drain. The keyboard's and the pointer's modality also send the input that makes
+ * initial null, which react-aria accepts at runtime despite its setter's type. A test whose outcome depends on the
+ * modality sets it here rather than inheriting one: a virtual click leaves the window at `virtual`, where a dialog puts
+ * its opening focus a frame late. Call it before `fakeTimers()`, so the restore runs after the clock's drain. The keyboard's and the pointer's modality also send the input that makes
  * them (see `sendInput`); that input stays after the test. */
 export function withModality(modality: ReturnType<typeof getInteractionModality>): void {
   const previous = getInteractionModality();
@@ -45,7 +46,11 @@ const IN_TICK_ZERO_DELAY_MS = 1;
 
 /**
  * Call right after a dialog mounts. Returns what a test awaits before a step whose focus it asserts,
- * so that the step cannot straddle `useDialog`'s mount timer.
+ * so that the step cannot straddle `useDialog`'s mount timer. Not on a fake clock, where it never
+ * resolves: there the test asserts the opening focus before anything runs the timers out. For a
+ * dialog or popover opened by a virtual press, use `framesAsTimers()` with
+ * `fakeTimersKeepingFrames()`, await `settleFrames()` after the open and assert focus is inside the
+ * overlay before the next step, so the order does not depend on test speed.
  *
  * That timer moves focus on its own: focus passing through `<body>`, as it does from a closing
  * select's list on its way back to the trigger, is taken to the dialog instead, and a focused dialog

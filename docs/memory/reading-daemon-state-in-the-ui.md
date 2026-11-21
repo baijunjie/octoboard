@@ -1,8 +1,10 @@
 # Reading daemon state in the UI
 
-The rules (resolved values in dependencies, the narrowest selector, records kept as the daemon sent them, skipping a set
-that changes nothing, the `hosts` and snapshot gates, reply and broadcast in either order, counters over clocks) are in
-`docs/conventions/ui-code.md`, "Reading daemon state". Two things they leave out:
+The rules are in `docs/conventions/ui-code.md`, "Reading daemon state". What they leave out:
+
+## Prove a component stayed idle by counting its executions, not by its DOM
+
+Unchanged DOM does not show a component did not run again; count its executions, as `App.renderCounts.test.tsx` does.
 
 ## When `App.renderCounts.test.tsx` breaks after a change that only moved memoization, look for an unguarded set first
 

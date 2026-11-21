@@ -24,7 +24,10 @@ export function focusRow(list: HTMLElement | null, key: string): void {
 }
 
 /** Moves keyboard focus to the row `key` names in `list` ahead of a fold that takes away the row
- * holding it, and keeps that row in view across the fold. Call it before the fold.
+ * holding it, and keeps that row in view across the fold. Call it in the handler, before the state
+ * change: react-aria's focused-key reset re-aims focus at the nearest surviving row two renders
+ * later and undoes a handoff made after it. Delaying the move instead is only for a destination
+ * that is not a row; a row's menu returns focus from `ActionMenu`'s `onClosed` (`focusRowControl`).
  *
  * Focus moves at once, so the collection and the region's focus handoff both see it on a row that
  * stays: in WebKit a removed element gives focus to `<body>` without a blur, and the handoff would

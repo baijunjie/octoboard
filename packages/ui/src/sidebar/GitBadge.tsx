@@ -83,7 +83,7 @@ function GitNotFoundMark({ project, error, onRetried }: { project: string; error
  * during a fast-forward. Both scroll inside a fixed count-arrow-sized clip.
  * The ahead/behind counts are likewise never colour alone.
  *
- * A failed check is a failure mark (`StatusMark`, "How a mark is drawn and opened" in
+ * A failed check is a failure mark (`StatusMark`, "Alerts and marks" in
  * `docs/conventions/ui-standard.md`) at the badge's start, standing in for the idle glyph: a button named in the
  * application's own words, whose popover holds the reason, the remedy and, last, Git's or the system's own text, which
  * is shown nowhere else. A failure the daemon gives a code (`error_code`: a `git` that cannot be found) is worded as

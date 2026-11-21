@@ -1,0 +1,6 @@
+# Clippy's configuration for both crates (it finds this file from each crate's manifest directory upwards).
+# A call that is allowed where it is the implementation says so with `#[allow(clippy::disallowed_methods)]` and a reason.
+disallowed-methods = [
+    { path = "tokio::task::block_in_place", reason = "blocking work in a handler runs on `tokio::task::spawn_blocking` and is awaited: `block_in_place` panics on the current-thread runtime of a plain `#[tokio::test]` (docs/conventions/daemon-processes-and-io.md, \"Blocking work and shutdown\")" },
+    { path = "std::fs::canonicalize", reason = "resolve a path with `hostfs::canonical`: on Windows `canonicalize` gives the verbatim `\\\\?\\C:\\…` form and the runner's TEMP is an 8.3 short path (docs/conventions/tests.md, \"Windows and Linux runs\")" },
+]

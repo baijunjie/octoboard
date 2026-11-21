@@ -386,6 +386,10 @@ export function ShellTerminalPanel({
   );
 }
 
+/** A Terminal panel tab: an approved departure from HeroUI's tab look, by the user's decision, for this panel only —
+ * compact rectangular tabs with modest rounding and always-visible close marks, the selected one in an accent-soft fill
+ * with an accent outline, the hovered one in the default fill. The fill is drawn on the tab (`ui-selected:`), with no
+ * `Tabs.Indicator`, as the strip adds and selects a tab at once. */
 const TAB_CLASS = `${INACTIVE_VEIL_CLASS} h-8 w-auto flex-none scroll-mx-1.5 gap-2 rounded-md border border-transparent px-2 whitespace-nowrap after:-m-px after:rounded-md hover:bg-default hover:text-foreground ui-selected:border-accent ui-selected:bg-accent-soft ui-selected:text-(--tint-accent-fg) data-closing:after:bg-panel-sidebar/55`;
 
 /** A tab's classes. Built from whole class names, none of them glued to an interpolation, which

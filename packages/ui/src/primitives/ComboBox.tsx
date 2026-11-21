@@ -113,7 +113,8 @@ function ComboBoxStateRef({ onCommit }: { onCommit: (state: ComboBoxStateValue) 
  * focus is kept from scrolling again, and the list that scroll closes is opened again as the close is committed, before
  * it is painted.
  *
- * A mouse or pen press starts on the primary button's pointerdown; a touch press, and a screen reader's, is the click. */
+ * A mouse or pen press starts on the primary button's pointerdown; a touch press, and a screen reader's, is the click.
+ * A gallery step or test that scrolls the control into view before pressing hides the defect this guards against. */
 function useRevealOnTriggerPress(group: React.RefObject<HTMLDivElement | null>): {
   onStateCommit: (state: ComboBoxStateValue) => void;
   groupProps: RevealHandlers;

@@ -60,9 +60,9 @@ export function MenuTrigger({ ref, label, describedBy, hidden, focusOnPress, cla
  *
  * `filtered` is for a popover that holds a `MenuFilter`: the field's row sticks to the top of the popover, which is the
  * scroller, so the popover keeps the row's height (and a few pixels) clear at its top for the highlighted item the
- * arrow keys scroll to; the usual few pixels would leave it under the row (see "Focus scrolled to the edge of a
- * scroller that fades there" in `docs/conventions/ui-standard.md`). Its content is an unfiltered menu unless it holds a
- * `MenuFilter` itself, so a submenu's popover is not narrowed by the filter of the menu it opens from. */
+ * arrow keys scroll to; the usual few pixels would leave it under the row (see the scroll padding rule under "Focus" in
+ * `docs/conventions/ui-accessibility.md`). Its content is an unfiltered menu unless it holds a `MenuFilter` itself, so
+ * a submenu's popover is not narrowed by the filter of the menu it opens from. */
 export function MenuPopover({ at, filtered, className, children }: {
   at?: { x: number; y: number };
   filtered?: boolean;

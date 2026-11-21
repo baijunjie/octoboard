@@ -10,7 +10,7 @@ import { EmptyPanel } from "../panel/EmptyPanel";
 import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
 
 /** A pane's whole subject that could not be read, in its place: the empty-state shape in the danger tone,
- * centred in the pane (see "A whole subject that failed" in `docs/conventions/ui-standard.md`). `title` is the
+ * centred in the pane (see "Empty states" in `docs/conventions/ui-standard.md`). `title` is the
  * heading saying what could not be loaded; the line under it is `summary`, or the failure's own sentence
  * when `message` is given; under it goes the one main thing to do, `remedy` or what `message` holds of
  * it, and the rest (further explanation, then raw text) on a surface under them: `details`, or what

@@ -23,6 +23,7 @@ project, stop and ask the user to rerun the installer that installed this skill,
 why.
 
 - Coding conventions:
+  - `docs/conventions/principles.md`
   - `docs/conventions/provider-neutral-core.md`
   - `docs/conventions/daemon.md`
   - `docs/conventions/daemon-processes-and-io.md`
@@ -31,6 +32,7 @@ why.
   - `docs/conventions/ui-code.md`
   - `docs/conventions/ui-components.md`
   - `docs/conventions/ui-standard.md`
+  - `docs/conventions/ui-accessibility.md`
   - `docs/conventions/i18n-in-code.md`
   - `docs/conventions/desktop-shell.md`
   - `docs/conventions/website.md`
@@ -40,10 +42,11 @@ why.
   - `docs/conventions/tooling.md`
   - `.claude/skills/knowledge-i18n-copy/SKILL.md`
 
-  The UI conventions are `docs/conventions/ui-standard.md` (the whole document), `docs/conventions/ui-components.md`,
-  `docs/conventions/ui-code.md`, `docs/conventions/i18n-in-code.md`, `docs/conventions/website.md`,
-  `docs/conventions/docs-site.md`, the UI sections of `docs/conventions/provider-neutral-core.md`, and the UI copy
-  conventions in `.claude/skills/knowledge-i18n-copy/SKILL.md`.
+  The UI conventions are `docs/conventions/ui-standard.md` and `docs/conventions/ui-accessibility.md` (the whole
+  documents), `docs/conventions/ui-components.md`, `docs/conventions/ui-code.md`, `docs/conventions/i18n-in-code.md`,
+  `docs/conventions/website.md`, `docs/conventions/docs-site.md`, the UI sections of
+  `docs/conventions/provider-neutral-core.md`, and the UI copy conventions in
+  `.claude/skills/knowledge-i18n-copy/SKILL.md`.
 - UI code:
   - `packages/ui/`
   - `apps/web/`

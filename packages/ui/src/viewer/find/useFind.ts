@@ -100,8 +100,10 @@ function useDrawnTextVersion(contentRef: React.RefObject<HTMLElement | null>, wa
  * Escape while the bar is up: `keyboardDismissHeld`); a control with its popup open keeps the key,
  * and a tooltip that is open is dismissed by that press, as anywhere else. Both keys are handled by a
  * listener on the dialog element, before React's handlers, as Left and Right are
- * (`useNavigationFocus`); the capture-phase listeners on `document` (react-aria's tooltip and its
- * tracking of keyboard input) still see them. The header's toggle closes the bar too, and takes focus
+ * (`useNavigationFocus`), which stops the Escape it takes; the capture-phase listeners on `document`
+ * (react-aria's tooltip and its tracking of keyboard input) still see them. Not a `window` capture
+ * listener, which would hide the key from both, and not a yield to `defaultPrevented`, which would
+ * depend on the order listeners were added in. The header's toggle closes the bar too, and takes focus
  * back; a bar that goes with the text it searched hands its focus to the code (`useFocusHandoff`).
  *
  * The bar and its query outlive the subject: moving to another file searches it for the same

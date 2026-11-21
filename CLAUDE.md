@@ -243,9 +243,10 @@ the test-adding subagent runs as its definition says, do not count).
   guessing it from the remote HEAD.
 - UI copy: where `docs/conventions/ui-standard.md` and the `knowledge-i18n-copy` skill disagree, the UI standard wins (a
   name referenced within copy is an `InlineReference`, not quoted). Whoever writes or translates UI copy reads both.
-- Within "Documentation update": `docs/conventions/ui-standard.md`, the UI standard, has no writer subagent of its own —
-  you maintain it yourself, from what the change turned up and from what a writer subagent hands back as belonging to
-  it. Skip it when this round's changes touch nothing it states.
+- Within "Documentation update": `docs/conventions/ui-standard.md` and `docs/conventions/ui-accessibility.md`, the UI
+  standard and its accessibility half, have no writer subagent of their own — you maintain them yourself, from what the
+  change turned up and from what a writer subagent hands back as belonging to them. Skip them when this round's changes
+  touch nothing they state.
 - Timing override for "Formatting and checks", including the pre-merge flow and other skills' verification baselines: by
   the user's explicit workflow choice, routine development completion and local merges do not run the full checks.
   Before a local merge only, once the branch is aligned with its target branch and right before merging, run the quick
@@ -273,6 +274,9 @@ the test-adding subagent runs as its definition says, do not count).
   (`branch.<name>.targetBranch`, else the local branch it tracks, else the local branch the remote HEAD names), so the
   target's own commits, pushed or not, are not counted; with no local target, or when the branch is the target itself,
   it falls back to the remote target branch (or remote HEAD), as a new branch is at push.
+- A brief that hands gallery or browser work to a subagent names which scenarios, how many, and the most pages open at
+  once, and requires every browser or server it started to be stopped; never overwrite, stop or uninstall a service
+  this working copy did not start.
 - Within "Gallery" and "UI preview": continue gallery maintenance and previews at their existing steps, but defer
   the automated gallery quick check and sweep to before pushing, when the UI changes call for them; do not run
   them again at routine development completion or local merge. The agent runs them via the `agent-gallery` skill

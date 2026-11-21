@@ -64,9 +64,9 @@ export const FILTERED_ITEM_CLASS = "ui-focused:bg-(--default) ui-focused:hover:b
  * The pointer moves the highlight too, so that one row is filled at a time: react-aria leaves a hovered item alone
  * while the keyboard was the last input, which would leave the highlighted row and the hovered one filled alike.
  *
- * The items do not move as the text changes: the list's motion ("Dynamic collections") is left out, the user's
- * confirmed decision. A filtered menu takes no single-letter shortcuts, since react-aria hands each key typed in the
- * field on to the highlighted item; its items show and announce none, and the caller runs none. Escape
+ * The items do not move as the text changes: the list's motion ("Motion" in `docs/conventions/ui-standard.md`) is left
+ * out, the user's confirmed decision. A filtered menu takes no single-letter shortcuts, since react-aria hands each key
+ * typed in the field on to the highlighted item; its items show and announce none, and the caller runs none. Escape
  * clears the text first, and closes the menu the second time. */
 export function MenuFilter({ query, onQueryChange, label, placeholder, clearButton, fieldMode, children }: {
   query: string;

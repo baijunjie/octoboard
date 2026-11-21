@@ -15,8 +15,8 @@ import { UNAVAILABLE_BUTTON_CLASS, useUnavailable } from "./unavailable";
 export type ButtonVariant = "primary" | "secondary" | "tertiary" | "outline" | "ghost" | "danger" | "danger-soft";
 
 /** HeroUI's button sizes, and `xs`: the project's extra-small size for compact actions
- * (`docs/conventions/ui-standard.md`, "Pointer target size"), 24px high, a 24px square when icon-only, with 12px text
- * and 14px icons (`.app-button--xs`, `Button.css`). */
+ * (`docs/conventions/ui-accessibility.md`, "Pointer target size"), 24px high, a 24px square when icon-only, with 12px
+ * text and 14px icons (`.app-button--xs`, `Button.css`). */
 export type ButtonSize = "xs" | "sm" | "md" | "lg";
 
 /** A press of a button: what pressed it, so a caller can tell a keyboard activation from a pointer's. */

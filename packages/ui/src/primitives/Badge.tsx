@@ -5,8 +5,10 @@ import React from "react";
 export type BadgePlacement = "top-right" | "top-left" | "bottom-right" | "bottom-left";
 
 /** HeroUI's badge, filled, on the corner of the `BadgeAnchor` around it: a dot, or a count or glyph given as
- * `children`. It is decorative, inert and hidden from assistive technology: what it marks is said by its anchor's own
- * name. `dir` is for content that reads the same in every language (a count with an overflow sign). */
+ * `children`, with HeroUI's own typography, border and colours (process counts `success`, waiting counts `warning`). It
+ * is decorative, inert and hidden from assistive technology: what it marks is said by its anchor's own name, and being
+ * inert it never takes a press meant for the control under it. `dir` is for content that reads the same in every
+ * language (a count with an overflow sign). */
 export function Badge({ color, size = "sm", placement, dir, children }: {
   color: "accent" | "success" | "warning";
   /** `xs` is a 10px notification dot; the other sizes keep HeroUI's scale. Defaults to `sm`. */
@@ -22,7 +24,9 @@ export function Badge({ color, size = "sm", placement, dir, children }: {
   );
 }
 
-/** What a `Badge` is placed on: the element it sits on and the badge, together. */
+/** What a `Badge` is placed on: the element it sits on and the badge, together. It wraps the whole control, with the
+ * badge beside the button rather than inside it, so the badge takes neither the button's pressed scale nor its icon
+ * styles. */
 export function BadgeAnchor({ children }: { children: React.ReactNode }): React.ReactElement {
   return <HeroBadge.Anchor>{children}</HeroBadge.Anchor>;
 }

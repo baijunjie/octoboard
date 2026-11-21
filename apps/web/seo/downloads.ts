@@ -96,6 +96,8 @@ type FetchLike = (
   json(): Promise<unknown>;
 }>;
 
+// The release and the stable manifest names (`resolveDownloads`) are the ones `apps/desktop/scripts/release-manifest.mjs`
+// publishes under; a change to its names changes them here in the same change.
 const MANIFEST_RELEASE_TAG = "updater";
 const SEMVER =
   /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;

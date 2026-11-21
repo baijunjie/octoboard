@@ -883,8 +883,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 Enforced by the test `layering_tests::every_top_level_module_depends_only_downward_or_as_listed` in
 `src/layering_tests/` (`pnpm test:rust -p octoboardd layering_tests`). Its `LAYERS` and `UPWARD` constants
 (`layering_tests/mod.rs`; the scanner is `layering_tests/scan.rs`) are the source of truth; the two tables below keep in
-step with them. The rule and what to do with an edge that must point upward are in `docs/conventions/daemon.md`,
-"Modules and entry points".
+step with them. An edge that must point upward goes into `UPWARD` and the table below together, with its reason
+(`docs/conventions/daemon.md`, "Modules and entry points").
 
 The rule: every top-level module sits in one layer, and a module may use its own layer and the layers below it. An edge
 (a `crate::` path in production code, in a `use` or inline, from the module the file sits in to the module the path
@@ -901,11 +901,12 @@ holds only in tests (`cfg(test)`, `cfg(all(test, …))`, `cfg(any(test, all(test
 lexical: comments and literals are blanked; a name a `use` brings in is followed through the file, but a child module's
 `use super::*` inheriting a parent's import is not; a glob import counts as the import of its module; what a macro
 expands to is not seen; a module's file is found only as `<name>.rs` or `<name>/mod.rs` and `#[path = …]` is not
-followed, so a `#[path]` module's file is reported as unreached and fails the test on every OS (the form a per-host
-alternative takes instead is in `docs/conventions/daemon.md`, "Modules and entry points"); methods and fields reached
-through a value are not paths and are not seen, so an entry for a type admits everything the type exposes; and a
-test-only field of a tuple struct or variant whose type holds a comma inside angle brackets (`HashMap<K, V>`) is cut
-short at that comma, so the rest of its type is read as production code, which can only add an edge, never hide one.
+followed, so a `#[path]` module's file is reported as unreached and fails the test on every OS (a per-host alternative
+is declared `mod x_stub;` and renamed with `use x_stub as x;` under `cfg` instead, as the failure says); methods and
+fields reached through a value are not paths and are not seen, so an entry for a type admits everything the type
+exposes; and a test-only field of a tuple struct or variant whose type holds a comma inside angle brackets
+(`HashMap<K, V>`) is cut short at that comma, so the rest of its type is read as production code, which can only add an
+edge, never hide one.
 
 `platform` is a foundation module that uses nothing else in the crate: the same test fails on an edge from it to any other
 top-level module or to an item of the crate root, whatever the layer of the target. The OS-token rule below reads the
@@ -941,8 +942,9 @@ same scan.
 Enforced by the test `layering_tests::os_tokens_appear_only_in_the_platform_layer` (the check is
 `layering_tests/os_tokens.rs`, the scan is the same `layering_tests/scan.rs` pass, so "production code" means exactly
 what it means for the dependency rule). The test fails on an OS-specific token anywhere in production code outside
-`src/platform/`; the rule and its reasons are in `docs/conventions/daemon-processes-and-io.md`, "Platform differences".
-The tokens, by the kind name the test reports:
+`src/platform/`, and its failure names the way out: the site moves behind a platform function, and business code
+branches on a declared fact instead (`docs/conventions/daemon-processes-and-io.md`, "Platform differences"). The tokens,
+by the kind name the test reports:
 
 | Kind | Token |
 |---|---|
@@ -968,17 +970,19 @@ The test has no allow-list: a site outside `platform` fails with its `file:line`
 
 Tests in `src/layering_tests/` (the checks are `layering_tests/source_rules.rs`) that read every `.rs` file under `src`,
 test sources included, with comments removed and string literals kept (the shell scripts tests run are literals). Each
-names the sanctioned place for what it bans and has no allow-list of sites; a violation fails with its `file:line`. The
-rule each one holds and its sanctioned form are in `docs/conventions/daemon-processes-and-io.md`, "Processes" (the first
-two) and "Paths and files" (the third).
+names the sanctioned place for what it bans and has no allow-list of sites; a violation fails with its `file:line`,
+why the rule holds and the sanctioned form.
 
 - `a_window_change_trap_is_written_only_in_the_test_support_helper`: a shell `trap` for `WINCH` (the word on a line
   after `trap `, as in a script a test runs) appears only in `test_support/resize.rs`; a mention of `SIGWINCH` in Rust
-  code is not one and passes.
+  code is not one and passes. A script reports a size with `test_support::resize::reports_size`: Bash 5 loses a resize
+  that arrives while a working trap runs.
 - `a_process_is_ended_on_windows_only_where_it_is_then_waited_for`: `TerminateProcess(` is called only in
-  `platform/proc/windows.rs` and `platform/proc/crash/windows.rs`.
+  `platform/proc/windows.rs` and `platform/proc/crash/windows.rs`, the paths of `platform::proc` that then wait for the
+  handle to be signalled.
 - `a_temporary_file_is_named_after_the_whole_name_of_the_file_it_becomes`: no `with_extension("partial")`, `"tmp"`,
-  `"temp"`, `"new"`, `"staging"` and no `with_extension` given the process id.
+  `"temp"`, `"new"`, `"staging"` and no `with_extension` given the process id; a temporary file beside `path` is
+  `platform::names::with_suffix(path, ".partial")`, so `starter.plain` and `starter.background` never share one.
 
 ## Where new code goes
 
@@ -987,9 +991,12 @@ them is `docs/README.md`, "Coding conventions".
 
 - A new control-socket request: its types in `src/protocol/` (and `PROTOCOL.md`), its handler under `src/coordinator/`
   reached from the dispatcher in `mod.rs`; a request that works on state one connection holds (an upload, a held browse
-  reply) is served by `src/server/control/` instead (the upload requests of both families in `uploads.rs`), and the coordinator's arm for it only refuses; regenerate `packages/ui/src/protocol.generated.ts` and the schema in
-  `contracts/protocol/` as `docs/conventions/protocol-and-contracts.md`, "Wire types and generated files" says, and
-  follow its "The envelope and field conventions".
+  reply) is served by `src/server/control/` instead (the upload requests of both families in `uploads.rs`), and the
+  coordinator's arm for it only refuses; regenerate `packages/ui/src/protocol.generated.ts` and the schema in
+  `contracts/protocol/` with `OCTOBOARD_WRITE_BINDINGS=1 pnpm test:rust -p octoboardd bindings` and
+  `... protocol::schema` (the same tests fail while either is stale), and follow
+  `docs/conventions/protocol-and-contracts.md`, "Wire types and generated files" and "The envelope and field
+  conventions".
 - A new code the daemon names a failure or notice by: a `pub const` of the matching module in `src/protocol/codes.rs`
   (the only place a core `Code` is made); a code only one provider raises is a `ProviderCode` const in
   `src/providers/<id>.rs`, listed in that descriptor's `codes`. The UI's record and wording go in the same change (the
@@ -998,8 +1005,18 @@ them is `docs/README.md`, "Coding conventions".
 - A new provider: its descriptor in `src/providers/<id>.rs` and its behavior in `src/adapter/<id>/`, plus one line in
   each registry (`REGISTRY` in `src/providers/mod.rs`, `PROVIDERS` in `src/adapter/mod.rs`); everything keyed by
   provider (`protocol::PerAgent`, the store's per-provider tables) covers the new one without a change, and the UI adds
-  its presentation module (see the UI structure doc). The rule is in `docs/conventions/provider-neutral-core.md`, "The
-  rule".
+  its presentation module (see the UI structure doc). The rule is in `docs/conventions/provider-neutral-core.md`,
+  "General principles".
+- A per-agent difference the code has no capability or interface method for yet: a fact (a yes/no or small value) is a
+  field of `Capabilities`, or of the descriptor beside the other facts, in `src/providers/mod.rs`, with a doc comment
+  saying what it means, set in every provider's `DESCRIPTOR` (the compiler lists the ones missed), and read by generic
+  code as `agent.descriptor().capabilities.<field>`; a fact many places want goes on the descriptor, not in one adapter,
+  so the UI can read what the daemon serves. A behaviour is a method of `AgentProvider` (`src/adapter/mod.rs`) or of the
+  trait it hands out for that kind of thing (`HookInterpreter`, `ScreenReader`, `RecordStore`, `AccountOps`,
+  `ModelCatalogue`, `StatusLine`, `CompatibilitySource`, `TrustCarrier`), with a default that claims nothing,
+  implemented in each `src/adapter/<id>/` that has the behaviour and called on `adapter::provider(agent)`. Its test goes
+  through the test provider (`src/adapter/test_provider.rs`, `src/providers/test_provider.rs`), which declares the
+  capability or overrides the method.
 - A new setting of one provider: declared in the provider's descriptor (`settings`) and read by the provider from
   `LaunchSpec.settings`; the store (`src/store/provider_settings.rs`), the wire (`provider_settings`,
   `set_provider_setting`), the configuration document, the MCP `get_settings` tool and the UI's provider settings read
@@ -1023,9 +1040,10 @@ them is `docs/README.md`, "Coding conventions".
   UI structure doc).
 - A new table or column: `SCHEMA` in `src/store/schema.rs`, in the file of its table family, and, for each released
   version, `src/store/schema/v{N}.sql` with its step in `MIGRATIONS` (the migration tests build a database from every
-  past one); when each is touched is in `docs/conventions/protocol-and-contracts.md`, "Versions and compatibility" and
-  "Store schema", which also say where per-provider data and a plain boolean setting go. A database at an older version
-  is backed up as `octoboard.db.pre-v{N}` and migrated; `PRAGMA application_id` marks Octoboard's databases.
+  past one); when each is touched is in `docs/conventions/protocol-and-contracts.md`, "Versions and compatibility", and
+  where per-provider data goes in its "Store schema". A plain boolean application setting is one line of the
+  `bool_settings!` table (`src/store/settings.rs`). A database at an older version is backed up as
+  `octoboard.db.pre-v{N}` and migrated; `PRAGMA application_id` marks Octoboard's databases.
 - State derived at run time from sessions, claims and processes: on `AppState` (`src/state/`), not in a stored record
   (which state may live there is in `docs/conventions/daemon.md`, "State").
 - A record that a form edits (the settings, a console, a project, an account in the settings): versioned in
@@ -1046,9 +1064,10 @@ them is `docs/README.md`, "Coding conventions".
 
 ## Shared entry points
 
-New code uses these rather than a second implementation. None is enforced by a check unless stated. The rows are the
-helper list; the rules for using them, including the ones that go beyond "use it", are in `docs/conventions/daemon.md`,
-"Modules and entry points" and the convention docs it points to.
+New code uses these rather than a second implementation (`docs/conventions/principles.md`, P2). None is enforced by a
+check unless stated. The rows are the helper list; the rules that go beyond "use it" are in the convention docs
+(`docs/conventions/daemon.md`, "Modules and entry points", and `docs/conventions/daemon-processes-and-io.md`) and in the
+helpers' doc comments.
 
 | Need | Entry point |
 |---|---|

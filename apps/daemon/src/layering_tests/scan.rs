@@ -137,7 +137,10 @@ pub(super) fn scan_crate() -> Scan {
     assert!(
         unreached.is_empty(),
         "the dependency-direction scan did not reach these files through `mod` declarations from \
-         main.rs, so it cannot tell whether they are production code: {unreached:?}"
+         main.rs, so it cannot tell whether they are production code: {unreached:?}\n\nThe scan \
+         finds a module's file only as `<name>.rs` or `<name>/mod.rs` and does not follow \
+         `#[path]`: declare a per-host alternative `mod x_stub;` and rename it with \
+         `use x_stub as x;` under `cfg`, as `src/platform/proc/mod.rs` does for `cgroup_stub`."
     );
     Scan {
         modules,

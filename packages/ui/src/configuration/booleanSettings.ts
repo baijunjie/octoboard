@@ -53,7 +53,10 @@ type Copy<F extends BooleanField> = Omit<BooleanSetting<F>, "field" | "section">
 };
 
 /** The copy and the place of each switch, complete by type: a boolean setting added to `DocumentSettings` or
- * `DocumentAgentSettings` fails to compile until it has an entry, which gives it its section and so its group below. */
+ * `DocumentAgentSettings` fails to compile until it has an entry, which gives it its section and so its group below.
+ * The settings page, the import review and the import result all render a switch from its entry, drawn by
+ * `DaemonSwitchSetting`, never by a switch of its own; its `consequence` is a
+ * `configuration.import.settings.consequence.<name>` message in every catalog. */
 const COPY: { [F in BooleanField]: Copy<F> } = {
   auto_close_idle_shell_terminals: {
     section: "general",

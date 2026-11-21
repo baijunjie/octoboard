@@ -68,7 +68,8 @@ pub(crate) fn project_git(state: &AppState, pace: Pace) -> anyhow::Result<Runner
 /// `err`, the failure to have a `git` at all ([`project_git`]), as an action that words its other
 /// failures with `failed` replies it: one that cannot be found keeps `binary_not_found`, which a
 /// client words as Git not being installed, and any other (a shell snapshot that failed or timed
-/// out) is the action's own failure, with the text as its detail.
+/// out) is the action's own failure, with the text as its detail. The error reaches it as it was
+/// raised, never flattened to a string first, or the code is lost.
 pub(crate) fn no_git_or(
     err: anyhow::Error,
     failed: impl FnOnce(&str) -> anyhow::Error,

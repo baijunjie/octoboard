@@ -85,7 +85,7 @@ const ROOT_PRODUCTION_IMPORT = { regex: "^\\./(?:fixtures|gallery)(?:/|$)", mess
 const notIntoApp = (depth) => ({ ...notInto(depth, ["app"], APP_MESSAGE), caseSensitive: true });
 
 // The third-party UI libraries that reach the application only through the wrapper layer, `src/primitives/`
-// (docs/conventions/ui-standard.md, "Third-party UI components come through the wrapper layer"). The rule is
+// (docs/conventions/ui-components.md, "The wrapper layer"). The rule is
 // typescript-eslint's `no-restricted-imports`, not the core one the blocks above replace among themselves, so it holds
 // alongside them. Like them it sees import and export declarations, not `import("…")` calls or type expressions. Tests
 // and test support, the gallery, the shared fixtures and the website preview are not application source and may import
@@ -95,6 +95,12 @@ const WRAPPED_LIBRARIES = [
   "react-aria-components", "react-aria-components/*", "react-aria", "react-aria/*",
   "@react-aria/*", "@react-stately/*", "@react-types/*",
 ];
+// `@tauri-apps/*` is the platform layer's alone, which hides whether the page is in the desktop shell or a browser behind
+// PlatformAdapter (docs/conventions/ui-code.md, "Reach native capabilities only through `PlatformAdapter`").
+const TAURI_PATTERN = { group: ["@tauri-apps/*"], message: "Reach native capabilities through PlatformAdapter (src/platform/): `@tauri-apps/*` is imported only by the platform layer." };
+export const LAZY_MESSAGE = "Use retryableLazy from components/hooks, not React.lazy: a failed chunk then retries instead of staying failed (docs/conventions/ui-code.md, \"Lazy components use `retryableLazy`\").";
+const LAZY_PATHS = [{ name: "react", importNames: ["lazy"], message: LAZY_MESSAGE }];
+const importBans = (patterns) => ["error", { paths: LAZY_PATHS, patterns }];
 const WRAPPED_MESSAGE = "Third-party UI components, hooks and utilities reach the application only through the wrapper layer: import them from primitives, adding a wrapper there if it lacks one.";
 
 export default [
@@ -201,7 +207,19 @@ export default [
   },
   {
     files: [`${UI_SRC}/**/*.{ts,tsx}`],
-    ignores: [...UI_TESTS, `${UI_SRC}/{primitives,gallery,fixtures,website-preview,test}/**`],
-    rules: { "@typescript-eslint/no-restricted-imports": ["error", { patterns: [{ group: WRAPPED_LIBRARIES, message: WRAPPED_MESSAGE }] }] },
+    ignores: [...UI_TESTS, `${UI_SRC}/{primitives,platform,gallery,fixtures,website-preview,test}/**`],
+    rules: { "@typescript-eslint/no-restricted-imports": importBans([{ group: WRAPPED_LIBRARIES, message: WRAPPED_MESSAGE }, TAURI_PATTERN]) },
+  },
+  {
+    // The platform layer is where `@tauri-apps/*` is imported.
+    files: [`${UI_SRC}/platform/**/*.{ts,tsx}`],
+    ignores: UI_TESTS,
+    rules: { "@typescript-eslint/no-restricted-imports": importBans([{ group: WRAPPED_LIBRARIES, message: WRAPPED_MESSAGE }]) },
+  },
+  {
+    // The wrapper layer is where the third-party UI libraries are imported.
+    files: [`${UI_SRC}/primitives/**/*.{ts,tsx}`],
+    ignores: UI_TESTS,
+    rules: { "@typescript-eslint/no-restricted-imports": importBans([TAURI_PATTERN]) },
   },
 ];

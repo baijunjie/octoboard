@@ -236,7 +236,8 @@ pub(crate) fn receiving_request(
 /// starting, mid-turn, waiting for the user or running work in the background, or owning a session
 /// that can still send it something ([`child_can_still_send`]); then one locked, and a receiving
 /// agent that is its own. A session whose turn stopped on its account's usage limit is at rest:
-/// the dialog it shows is no wait.
+/// the dialog it shows is no wait. The `handoff_session` request and the MCP tool of the same name
+/// both ask this, so they refuse alike.
 pub(crate) fn refuse_unless_it_can_be_handed_off(
     state: &AppState,
     original: &Session,

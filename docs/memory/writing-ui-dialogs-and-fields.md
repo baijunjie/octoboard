@@ -1,15 +1,16 @@
 # Writing UI dialogs and fields
 
-The rules for dialogs and fields (`ConfirmDialog`, `DiagnosticBlock`, destructive confirmations, empty choices, trimmed
-fields, field errors, `Description`, HeroUI typography inside a field, option notes, `Dialog`'s body) are in
-`docs/conventions/ui-components.md`, "Shared components to reuse" and "Dialogs and fields". Two checks they call for:
+The rules for dialogs and fields are in `docs/conventions/ui-components.md`, "Shared components to reuse" and "Dialogs
+and fields". What they call for checking:
 
-## Find which fields throw on HeroUI typography by grepping react-aria, not by memory
+## Keep HeroUI typography out of a react-aria field, and find which fields those are by grepping react-aria
 
-A react-aria field that offers description and error slots puts a slotted `TextContext` over its whole subtree, which
-makes an unslotted `Text` (HeroUI's `Paragraph`, `Heading`, `Typography`, `Code`, the dialogs' `Path` helper) throw. The
-list is more than the obvious fields (list, grid and menu items, `TagGroup`, `Toast` among them); it is what
-`grep -rl "description: descriptionProps" packages/ui/node_modules/react-aria-components/dist/private/` answers.
+HeroUI typography inside a field's label or subtree throws; use a plain element with the same classes, or wrap it in
+`<TextContext.Provider value={{}}>`. A react-aria field that offers description and error slots puts a slotted
+`TextContext` over its whole subtree, which makes an unslotted `Text` (HeroUI's `Paragraph`, `Heading`, `Typography`,
+`Code`, the dialogs' `Path` helper) throw. The list is more than the obvious fields (list, grid and menu items,
+`TagGroup`, `Toast` among them); it is what this answers:
+`grep -rl "description: descriptionProps" packages/ui/node_modules/react-aria-components/dist/private/`.
 
 ## Verify a late-appearing `Select` note through absent, present and absent again
 

@@ -174,6 +174,8 @@ impl Policy {
 
     /// `leading` goes ahead of everything else on the command line but the base options, the
     /// read-only guard's `-c` included, so a `-c` in it stands before the subcommand as it has to.
+    /// A `-c` in a policy used for writes reaches the user's hooks that write runs (through
+    /// `GIT_CONFIG_PARAMETERS`), so it goes here only where those hooks may see it.
     pub const fn new(
         leading: &'static [&'static str],
         env: &'static [(&'static str, &'static str)],

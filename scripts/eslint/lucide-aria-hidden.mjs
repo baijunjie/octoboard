@@ -1,7 +1,7 @@
-// An ESLint rule for the UI's rule that a `lucide-react` icon is given no redundant `aria-hidden` (see "Accessible
-// names" in docs/conventions/ui-standard.md). Lucide sets `aria-hidden="true"` itself only while the icon has no
-// children and no `role`, `title` or other `aria-*` prop, so the attribute is reported, and removed by the fix, only
-// where it adds nothing: its value is absent, `"true"` or `{true}`, the element has no children, no spread and no other
+// An ESLint rule for the UI's rule that a `lucide-react` icon is given no redundant `aria-hidden` (see "Names,
+// roles and states" in docs/conventions/ui-accessibility.md). Lucide sets `aria-hidden="true"` itself only while the icon
+// has no children and no `role`, `title` or other `aria-*` prop, so the attribute is reported, and removed by the fix,
+// only where it adds nothing: its value is absent, `"true"` or `{true}`, the element has no children, no spread and no other
 // `aria-*`, `role` or `title` attribute. Anywhere else it may change what assistive technology gets, and is left alone.
 //
 // An icon is known by resolving the element's name through scope to an import from `lucide-react`: a named import

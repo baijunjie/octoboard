@@ -26,6 +26,10 @@ macro_rules! diagnostic {
 }
 pub(crate) use diagnostic;
 
+#[allow(
+    clippy::print_stderr,
+    reason = "this is the one place a diagnostic reaches stderr"
+)]
 pub fn record(message: &str) {
     eprintln!("octoboard: {message}");
     let Some(dir) = logs_dir() else {

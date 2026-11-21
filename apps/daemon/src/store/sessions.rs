@@ -738,6 +738,9 @@ impl Store {
         self.write_session_launch_overrides(id, model, effort, None, true, boundary)
     }
 
+    /// The one statement that writes a session's held launch values (model, effort, compatibility
+    /// switches); every write of them goes through a `set_session_launch*` method over it, so the
+    /// archived guard and the observation boundary are kept in one place.
     fn write_session_launch_overrides(
         &self,
         id: &str,

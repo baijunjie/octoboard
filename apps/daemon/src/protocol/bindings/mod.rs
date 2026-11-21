@@ -309,7 +309,7 @@ fn committed_bindings_are_current() {
     if committed != rendered {
         panic!(
             "packages/ui/src/protocol.generated.ts is out of date with the wire types; regenerate \
-             it with `{WRITE_VARIABLE}=1 cargo test -p octoboardd bindings` and commit it.\n{}",
+             it with `{WRITE_VARIABLE}=1 pnpm test:rust -p octoboardd bindings` and commit it.\n{}",
             line_diff(&committed, &rendered)
         );
     }

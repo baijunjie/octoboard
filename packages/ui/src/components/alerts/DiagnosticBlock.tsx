@@ -41,6 +41,7 @@ export function DiagnosticBlock({ children, labelledBy, dir = "ltr", wrap = fals
         dir="ltr"
         ref={scrollRef}
         region={region}
+        // eslint-disable-next-line ui-class-names/no-physical-direction -- The block is left to right and the copy control sits at its physical right.
         className="min-w-0 max-w-full max-h-[40vh] overflow-auto rounded-md [&>.app-code-block]:pr-[calc(var(--diagnostic-copy-gap)+var(--diagnostic-copy-size))]"
       >
         <CodeBlock dir={dir} wrap={wrap} flush>{children}</CodeBlock>

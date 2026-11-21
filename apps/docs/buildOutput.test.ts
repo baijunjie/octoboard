@@ -10,7 +10,9 @@ import { docsTitles, docsWords } from "./siteTitle.ts";
 // page ids that keep a locale directory's case (`src/content.config.ts`), the 404 page's language alternates
 // (`src/routeData.ts`), the redirect pages at the retired Chinese addresses (`redirects.ts`) and the localized site
 // title (`siteTitle.ts`, `src/components/SiteTitle.astro`). None of these runs
-// outside the Astro build, so each test skips itself until a build exists.
+// outside the Astro build, so each test skips itself until a build exists. The assertions take no origin or base path for
+// granted (they match any, or read it from the page), never the production defaults, since the Pages build CI runs
+// them on has other ones.
 
 const dist = new URL("./dist/", import.meta.url);
 const skip = existsSync(new URL("index.html", dist)) ? false : "run pnpm --filter @octoboard/docs build first";

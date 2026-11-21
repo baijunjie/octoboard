@@ -1,3 +1,5 @@
+// The Markdown copies of the pages and the `llms*.txt` files, rendered from the catalogs. It reads the catalogs with
+// `node:fs`, which does not run in the browser, so only `nuxt.config.ts` and Node tests import it, never Vue code.
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {

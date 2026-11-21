@@ -33,8 +33,8 @@ export const FIRST_ANNOUNCEMENT_DELAY_MS = AFTER_FOCUS_MOVE_DELAY_MS;
 export type NoticeTone = "explained" | "warned" | "failed";
 
 /** What a tone is drawn as: `StatusMark`'s tones, whose glyphs differ in shape (the circled `i`, the
- * warning triangle, the circled `!`) and not only in colour (`docs/conventions/ui-standard.md`, "Not by colour
- * alone"). */
+ * warning triangle, the circled `!`) and not only in colour (`docs/conventions/ui-accessibility.md`, "Not by
+ * colour alone"). */
 export const MARK_TONES = { explained: "note", warned: "warning", failed: "danger" } as const;
 
 type Slots = Record<NoticeTone, HTMLElement | null>;

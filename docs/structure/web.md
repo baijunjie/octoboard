@@ -28,7 +28,8 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
 
 ## Dependency direction
 
-The rules behind these edges are in `docs/conventions/website.md`, "Imports and dependencies".
+The rules behind these edges are in `docs/conventions/website.md`, "General principles" and "Imports and
+dependencies".
 
 - The website depends on `@octoboard/ui` (`workspace:*`) and imports from it, by package name, only what its `exports`
   map names: the language list (`@octoboard/ui/languages`), the language matcher (`@octoboard/ui/match-language`), the
@@ -73,7 +74,7 @@ The rules behind these edges are in `docs/conventions/website.md`, "Imports and 
 ## Shared entry points
 
 The rows are the helper list; the rule to use them in place of the lower level is in `docs/conventions/website.md`,
-"Where content is defined".
+"General principles".
 
 | Need | Entry point |
 |---|---|

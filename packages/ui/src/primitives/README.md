@@ -2,9 +2,10 @@
 
 The one place in the application that imports `@heroui/react`, `@heroui/styles`, `react-aria-components`, `react-aria`
 and the `@react-aria/*`, `@react-stately/*` and `@react-types/*` packages. Everything else — feature code and the
-project's own composite components alike — uses what this layer exports. The rule is in
-`docs/conventions/ui-components.md`, "The wrapper layer" (its reasons in `docs/conventions/ui-standard.md`, "Third-party
-UI components come through the wrapper layer"); lint enforces it (`packages/ui/eslint.layers.mjs`).
+project's own composite components alike — uses what this layer exports, whether or not the project changes anything
+about a component, so a treatment every instance needs is made once, in its wrapper, and no call site can miss it. The
+rule is in `docs/conventions/ui-components.md`, "General principles" and "The wrapper layer"; lint enforces it
+(`packages/ui/eslint.layers.mjs`).
 
 It is the bottom layer of `src/`: every other directory, the pure layers included, may import it, and it imports
 nothing else of the application — only the third-party libraries and React. What a wrapper needs from the application
@@ -97,4 +98,4 @@ such a part itself (a tag drawn outside a tag group, a group's error message), t
   (`focus.ts`), which `Menu.tsx` and `MenuFilter.tsx` use between themselves.
 
 The exemptions from the import rule (tests and test support, the gallery, the shared fixtures and the website preview)
-are listed in `docs/conventions/ui-components.md`, "The wrapper layer".
+are listed in `packages/ui/eslint.layers.mjs`.

@@ -30,7 +30,8 @@ pub const CREDIT_WINDOW: usize = 512 * 1024;
 /// How many bytes of output may wait unsent for one client before they are discarded and replaced
 /// with a fresh paint of the screen: past this a client is so far behind that catching up byte by
 /// byte would only show it what is no longer on screen. The reader never waits on a client, so
-/// one slow client neither throttles the program nor holds up the other clients.
+/// one slow client neither throttles the program nor holds up the other clients; nor does it feed
+/// a bounded channel, which fills within a fraction of a second under heavy output.
 pub const BACKLOG_CAP: usize = 4 * 1024 * 1024;
 
 /// The terminal's size as the clients are told it: its rows and columns, and whether any attached

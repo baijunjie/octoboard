@@ -3,7 +3,7 @@
 ## Read the case rules before claiming a VoiceOver match
 
 The rule (pick a passing case in `docs/voiceover-cases.md` before building, name it in the plan) is
-`docs/conventions/ui-code.md`, "Reviewing announcements and focus moves against recorded cases". Announcing covers a
+`docs/conventions/ui-accessibility.md`, "General principles". Announcing covers a
 `StatusAnnouncer` or `AttendedStatusAnnouncer` write's text, timing, attention or modal gating, and whether the region
 is exposed; moving focus covers an automatic move, a handoff after the focused element is removed, and focus return.
 

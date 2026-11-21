@@ -1,7 +1,7 @@
 /* HeroUI's date picker sheet sets its popover's month buttons' chevrons to no rotation, which drops the mirroring its
    calendar sheet gives them under a right-to-left language and leaves the previous button pointing away from the
-   previous month ("An icon mirrors only when its meaning is a direction", docs/conventions/ui-standard.md, "Text
-   direction"). */
+   previous month (docs/conventions/ui-accessibility.md, "Text direction": an icon mirrors only when its meaning is a
+   direction). */
 .date-picker__popover .calendar__nav-button-icon:where([dir="rtl"] *) {
   rotate: 180deg;
 }

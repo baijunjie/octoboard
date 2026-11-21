@@ -63,9 +63,9 @@ function keepHeadingFocus(band: HTMLButtonElement | null): void {
  *
  * The button covers the label and its free space rather than only the chevron, which settles three things at once:
  * a press anywhere before the trailing controls folds the section, the pointer target is the band itself rather
- * than a 14-pixel glyph (the "Pointer target size" section of `docs/conventions/ui-standard.md`), and the
+ * than a 14-pixel glyph (the "Pointer target size" section of `docs/conventions/ui-accessibility.md`), and the
  * name assistive technology announces is the band's own text, so no label of its own has to repeat
- * the count beside the section's name (the same document's "Accessible names"). It is a react-aria
+ * the count beside the section's name (the same document's "Names, roles and states"). It is a react-aria
  * button rather than HeroUI's because HeroUI's brings a fill, a size and a padding of its own, where
  * this one has to be the band. It carries no tooltip, the band saying in text what a folder row's
  * icon needs one for; which state it is in reaches assistive technology through `aria-expanded` and
@@ -122,8 +122,8 @@ export function ChangeSectionHeading({
       next.add(key);
       // Folding takes every row of the section away, and one of them may hold keyboard focus. It
       // goes to the heading, which stands whenever its rows do, and the ring follows how the press
-      // came, this press being the trigger ("Focus moved by a change the user did not make" in
-      // `docs/conventions/ui-standard.md`). `handFocusOff` is given the band rather than the button itself,
+      // came, this press being the trigger ("Focus" in
+      // `docs/conventions/ui-accessibility.md`). `handFocusOff` is given the band rather than the button itself,
       // whose tab index is -1, so that it reaches the button inside it.
       handFocusOff(button.current?.closest("[role=rowgroup]"), button.current?.closest<HTMLElement>("[role=row]"), false);
       keepHeadingFocus(button.current);

@@ -95,19 +95,21 @@ export function TabList({ label, fit, ref, className, children }: {
 /** Kept on every tab, whichever strip it is in. A hovered tab keeps full opacity where HeroUI dims it, matching both of
  * HeroUI's hover selectors: react-aria's `data-hovered` outlives `:hover` by a frame when the pointer leaves, and
  * dimming in that frame starts an opacity transition that has WKWebView repaint the whole masked strip, shaking every
- * tab's icon and label (an approved exception, `docs/conventions/ui-standard.md`'s "Confirmed visual choices"). And
- * every tab keeps its own composited layer, so WKWebView does not shift its rasterized icon and label between pixel
- * rows while the selection indicator moves inside the strip's masked scroller; HeroUI's tab is already `position:
- * relative; z-index: 1`, so the transform's only other effect is that the tab contains its `position: fixed`
- * descendants. */
+ * tab's icon and label (an approved exception by the user's decision, `docs/conventions/ui-standard.md`, "Conformance
+ * level and exceptions"). And every tab keeps its own composited layer, so WKWebView does not shift its rasterized icon
+ * and label between pixel rows while the selection indicator moves inside the strip's masked scroller; HeroUI's tab is
+ * already `position: relative; z-index: 1`, so the transform's only other effect is that the tab contains its
+ * `position: fixed` descendants. */
 // The new indicator stays in its selected tab's stacking context. SharedElement moves it over other tabs on the way
 // forward, so keep that whole context below the unselected tabs and their labels.
 const TAB_CLASS = "[&:not([data-selected=true]):not([data-disabled=true]):is(:hover,[data-hovered=true])]:opacity-100 transform-[translateZ(0)] ui-selected:z-0";
 
-/** One tab, keyed `id`, with the selection indicator inside it unless `indicator` is false; `indicatorClassName` moves
- * the indicator (an underline strip's to its list's edge). `size` is a text strip's tab (see `TabList`'s `fit`):
- * `content` at its content's width, `compact` for a strip in a pane header. `label` replaces the accessible name its
- * content gives it. */
+/** One tab, keyed `id`, with the selection indicator inside it unless `indicator` is false. A strip whose tab set
+ * changes while shown (one that adds and selects a tab at once, as the Terminal panel's does) passes
+ * `indicator={false}` and draws the fill on the tab with `ui-selected:` classes: the indicator's shared-element
+ * transition sticks otherwise. `indicatorClassName` moves the indicator (an underline strip's to its list's edge).
+ * `size` is a text strip's tab (see `TabList`'s `fit`): `content` at its content's width, `compact` for a strip in a
+ * pane header. `label` replaces the accessible name its content gives it. */
 export function Tab({ id, label, size, indicator = true, indicatorClassName, ref, className, onHoverChange, onFocus, onBlur, children, ...data }: DataAttributes & {
   id: string;
   label?: string;

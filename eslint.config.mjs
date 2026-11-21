@@ -5,12 +5,17 @@ import reactHooks from "eslint-plugin-react-hooks";
 import vue from "eslint-plugin-vue";
 import globals from "globals";
 import tseslint from "typescript-eslint";
-import uiLayers, { UI_TESTS } from "./packages/ui/eslint.layers.mjs";
+import uiLayers, { LAZY_MESSAGE, UI_TESTS } from "./packages/ui/eslint.layers.mjs";
 import lucide from "./scripts/eslint/lucide-aria-hidden.mjs";
+import nativeTitle from "./scripts/eslint/native-title.mjs";
+import primaryModifier from "./scripts/eslint/primary-modifier.mjs";
+import uiClassNames from "./scripts/eslint/ui-class-names.mjs";
 
 const javascript = ["**/*.{js,mjs,cjs}"];
 const typescript = ["**/*.{ts,tsx,mts,cts}", "**/*.vue"];
 const source = [...javascript, ...typescript];
+
+const NULLISH_ASSIGNMENT = { selector: "AssignmentExpression[operator='??=']", message: "The React Compiler cannot lower `??=`: write `x = x ?? y`, an `if`, or a getter for a module-level value made on first use (docs/conventions/ui-code.md, \"The React Compiler\")." };
 
 const unusedVariables = ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" }];
 
@@ -89,12 +94,38 @@ export default defineConfig(
     files: ["packages/ui/src/**/*.{ts,tsx}"],
     ignores: [...UI_TESTS, "packages/ui/src/test/**"],
     rules: {
-      "no-restricted-syntax": ["error", { selector: "AssignmentExpression[operator='??=']", message: "The React Compiler cannot lower `??=`: write `x = x ?? y`, an `if`, or a getter for a module-level value made on first use (docs/conventions/ui-code.md, \"The React Compiler\")." }],
+      "no-restricted-syntax": ["error", NULLISH_ASSIGNMENT],
     },
   },
   ...uiLayers,
-  // A lucide-react icon carries `aria-hidden` itself (see "Accessible names" in docs/conventions/ui-standard.md).
+  // A lucide-react icon carries `aria-hidden` itself (see "Names, roles and states" in
+  // docs/conventions/ui-accessibility.md).
   { files: ["packages/ui/**/*.{ts,tsx}"], plugins: { lucide }, rules: { "lucide/lucide-aria-hidden": "error" } },
+  {
+    // The UI's rules about class names, the native `title`, the Cmd/Ctrl test and `navigator`
+    // (docs/conventions/ui-standard.md, ui-accessibility.md, ui-components.md, ui-code.md). Tests assert on class names
+    // and stub the browser, and the gallery, the shared fixtures and the website preview are not application source
+    // (their scenario text is prose).
+    files: ["packages/ui/src/**/*.{ts,tsx}"],
+    ignores: [...UI_TESTS, "packages/ui/src/{test,gallery,fixtures,website-preview}/**"],
+    plugins: { "ui-class-names": uiClassNames, "native-title": nativeTitle, "primary-modifier": primaryModifier },
+    rules: {
+      "ui-class-names/no-focus-visible": "error",
+      "ui-class-names/no-ellipsis": "error",
+      "ui-class-names/no-physical-direction": "error",
+      "ui-class-names/no-border-divider": "error",
+      "native-title/native-title": "error",
+      "primary-modifier/primary-modifier": "error",
+      // A later block's options replace an earlier one's, so the `??=` selector above is restated here.
+      "no-restricted-syntax": ["error", NULLISH_ASSIGNMENT,
+        {
+          selector: "MemberExpression[computed=false][property.name=/^(?:userAgent|platform|userAgentData)$/]:matches([object.name='navigator'], [object.object.name=/^(?:window|globalThis|self)$/][object.property.name='navigator'])",
+          message: "Behaviour or words that depend on the operating system read the host: `usePlatform()` / `useHost()` for the client's, `useHostPaths()` for the daemon machine's (docs/conventions/ui-code.md, \"Behaviour or words that depend on the operating system read the host, never `navigator`\").",
+        },
+        { selector: "MemberExpression[computed=false][object.name='React'][property.name='lazy']", message: LAZY_MESSAGE },
+      ],
+    },
+  },
   {
     files: source,
     plugins: { "@stylistic": stylistic },

@@ -139,6 +139,7 @@ function DocumentLink({
       // Native, not the app's tooltip, which is the rule everywhere else: on a link `title` is also its
       // accessible description, which a tooltip shown on hover alone cannot give a screen reader.
       // It shows where the link goes before it is followed.
+      // eslint-disable-next-line native-title/native-title -- The sanctioned native title: a link in a Markdown document.
       title={title}
       style={image ? { ...attributes.style, textDecoration: "none" } : attributes.style}
       {...focus}
@@ -168,6 +169,7 @@ function DocumentExternalLink({ href, image, onOpen, children }: {
     <a
       {...focus}
       href={action.address}
+      // eslint-disable-next-line native-title/native-title -- The sanctioned native title: a link in a Markdown document.
       title={href}
       target={action.target}
       rel="noopener noreferrer"

@@ -1,8 +1,9 @@
 # Writing text into a session
 
-The rules for text and keys the daemon writes into a session (openings, headers, gated single keys, the input box, the
-per-message bound, terminal-mode gates) are in `docs/conventions/daemon-processes-and-io.md`, "Writing text into a
-session". What they leave out:
+The rules for text and keys the daemon writes into a session (openings, headers, gated single keys, the log) are in
+`docs/conventions/daemon-processes-and-io.md`, "Writing text into a session"; the input box's protocol and its
+per-message bound are in the module docs of `apps/daemon/src/session/draft_clear.rs` and
+`apps/daemon/src/session/composer.rs`. What they leave out:
 
 ## Where the per-message bound does not apply
 

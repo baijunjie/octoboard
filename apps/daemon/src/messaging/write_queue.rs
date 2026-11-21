@@ -727,7 +727,10 @@ impl AppState {
     /// Pauses the session's queue for as long as the guard lives: messages are accepted and queued,
     /// none is written, and the drain it lets go of is started when the guard drops. Unlike
     /// [`Self::hold_outbox`] it is no hold a client or a caller is told of: it lasts the few seconds
-    /// an interrupt types into the session (`crate::session::interrupt`).
+    /// an interrupt types into the session (`crate::session::interrupt`). Every step that reads or
+    /// clears the agent's input box with keys of its own takes it from before its first key until it
+    /// is done, so no message of Octoboard's lands in the box meanwhile; a step typed from inside the
+    /// queue's own write (`crate::session::draft_clear`) needs none, holding the drain already.
     pub fn pause_outbox(self: &Arc<Self>, id: &str) -> OutboxPause {
         self.outbox.pause(id);
         OutboxPause {

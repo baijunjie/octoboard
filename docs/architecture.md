@@ -292,11 +292,11 @@ confirmations, settings and sessions would each need an owner and an authorizati
 The desktop form runs on macOS and Windows and the server form on Linux, from one daemon code base. These decisions keep
 it that way, with the reasons that are not visible in the code.
 
-- **OS-specific code is gathered in one place.** The rule is in `docs/conventions/daemon-processes-and-io.md`, "Platform
-  differences". Scattered OS code cannot be audited, and a rule a test can check cannot erode. The Windows port was
-  built by moving each piece behind a neutral signature on macOS first with behaviour unchanged, so the existing suites
-  verified each extraction on a platform that already worked, and with a Windows compile check from the first step, so
-  the signatures were shaped against a real second target before any Windows code was written.
+- **OS-specific code is gathered in one place.** The rule is in `docs/structure/daemon.md`, "OS-specific tokens".
+  Scattered OS code cannot be audited, and a rule a test can check cannot erode. The Windows port was built by moving
+  each piece behind a neutral signature on macOS first with behaviour unchanged, so the existing suites verified each
+  extraction on a platform that already worked, and with a Windows compile check from the first step, so the signatures
+  were shaped against a real second target before any Windows code was written.
 - **Business code reads a declared fact rather than the OS** (`docs/conventions/daemon-processes-and-io.md`, "Platform
   differences"). Where behaviour must differ by host, the platform layer states a fact and business code reads it, as
   providers already do with declared capabilities: `HostFacts` (the host's OS, path style, file links and the words it
@@ -329,8 +329,8 @@ it that way, with the reasons that are not visible in the code.
   Nothing was measured on Windows 10 or on x64 hardware. Windows builds are x64 only, and on Windows on Arm the app and
   the daemon run under emulation. Git for Windows is a requirement, since both Claude Code and Codex need it for their
   own shell tooling and Octoboard's git hooks run under its `sh`.
-- **Windows is checked from a Mac and on a Windows runner.** The local commands are in `docs/conventions/tooling.md`,
-  "Running tests, lint and checks", and the hosted jobs in `docs/structure/tooling.md`, "Hosted Windows checks". Spikes
+- **Windows is checked from a Mac and on a Windows runner.** The local command is `pnpm check:windows` (`CLAUDE.md`,
+  "Repository checks"; what it covers in `docs/structure/tooling.md`), and the hosted jobs in `docs/structure/tooling.md`, "Hosted Windows checks". Spikes
   and debugging run in a Windows 11 virtual machine, and a native x64 machine is what a release is spot-checked on.
 
 ### The two Windows console hosts
@@ -503,10 +503,9 @@ Each has an established solution unless noted; any outstanding manual verificati
   started from inside an agent session would hand that session's identity to every agent it launches. On Claude Code
   that silently turns transcript saving off and makes `--permission-mode` not apply. Stripping the markers does not
   disturb authentication, which lives in the macOS Keychain. The markers are enumerated, never matched by prefix, and
-  stripped regardless of which agent is being launched; how the list is built is in
-  `docs/conventions/daemon-processes-and-io.md`, "Processes".
+  stripped regardless of which agent is being launched (`docs/conventions/daemon-processes-and-io.md`, "Processes").
 - **Terminal data does not go through Tauri IPC.** High-frequency output would pay serialization overhead, and it would
-  break the constraint above (`docs/conventions/desktop-shell.md`, "What the shell carries").
+  break the constraint above (`docs/conventions/desktop-shell.md`, "General principles").
 - **Sidecar signing.** The bundled daemon must be signed and notarized with the application or Gatekeeper blocks it.
   Credential access is not a concern: an agent launched from the bundle reaches the user's Keychain login normally,
   because a Keychain ACL is evaluated against the agent binary's own signature rather than its parent's.

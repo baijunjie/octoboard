@@ -20,7 +20,10 @@ const TOOLTIP_COOLDOWN_MS = 500;
  * delay is missing under jsdom. Recheck it on an upgrade. */
 export const CONTROL_TOOLTIP_DELAY_MS = 1500;
 
-/** Closes an open tooltip while its trigger is still mounted, arming react-stately's global warm-up cooldown. */
+/** Closes an open tooltip while its trigger is still mounted, arming react-stately's global warm-up cooldown. A test
+ * that can leave a tooltip open calls it first in its teardown (or mounts with `mountForTooltip`, which does): the
+ * warm-up is window-wide, so a tooltip left open makes a later test's tooltip open at once, and that test passes alone
+ * and fails after this one. */
 export function closeOpenTooltip(): void {
   if (openTooltip()) act(() => void document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
 }

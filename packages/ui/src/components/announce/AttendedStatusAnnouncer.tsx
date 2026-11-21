@@ -5,7 +5,7 @@ import { useWindowAttended } from "./useWindowAttended";
 
 /**
  * A `StatusAnnouncer` for a status that can arrive while the user is out of the window, or as focus moves onto the
- * surface it belongs to (see "Announcing a change" in `docs/conventions/ui-standard.md`). A status that is there from
+ * surface it belongs to (see "Announcements" in `docs/conventions/ui-accessibility.md`). A status that is there from
  * the region's first render, or written within about 300 ms of a focus move, is not said; and on the way back into the
  * window VoiceOver speaks the control focus is on, so a status written meanwhile is not said either. So every text, the
  * first included, is written `AFTER_FOCUS_MOVE_DELAY_MS` of attended time after it arrived, the wait started over each

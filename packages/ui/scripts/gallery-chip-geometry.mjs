@@ -108,8 +108,8 @@ try {
       }
       await open("configuration-import-review", language, 1440);
       // The review shows a project's path or URL lines (exported path, placed in, clone from and into) as labelled
-      // values on lines of their own: plain monospace text, not chips (docs/conventions/ui-standard.md's "References in
-      // copy use `InlineReference`" section). The first assertion requires the search-api group of the scenario's
+      // values on lines of their own: plain monospace text, not chips (docs/conventions/ui-standard.md's "Badge,
+      // reference or plain name" section). The first assertion requires the search-api group of the scenario's
       // fixture, which shows its exported path together with the directory it is placed in; the checks below it apply
       // to every group.
       const EXPORTED = "/Users/ana/work/search-api";

@@ -61,6 +61,10 @@ fn euid() -> u32 {
     unsafe { libc::geteuid() }
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the platform layer is where the OS call is made"
+)]
 pub(super) fn check_private_tree(dir: &Path) -> io::Result<()> {
     let me = euid();
     let metadata = std::fs::metadata(dir)?;

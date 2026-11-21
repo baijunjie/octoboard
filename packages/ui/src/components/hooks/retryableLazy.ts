@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- The one use of `lazy`: this wrapper retries a failed chunk.
 import { createElement, lazy, useLayoutEffect, type ComponentProps, type ComponentType } from "react";
 import { committedLazyLoad, failedLazyLoad } from "./lazyReadiness";
 

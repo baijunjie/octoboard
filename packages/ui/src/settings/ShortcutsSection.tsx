@@ -252,8 +252,8 @@ function ShortcutRow({
               data-shortcut-change=""
               size="sm"
               variant="ghost"
-              // An approved departure from HeroUI (`docs/conventions/ui-standard.md`, "Do not change how a HeroUI
-              // component looks"): the ghost button draws no fill of its own, so only the key caps show; hover and
+              // An approved departure from HeroUI (`docs/conventions/ui-standard.md`, "Conformance level and
+              // exceptions"): the ghost button draws no fill of its own, so only the key caps show; hover and
               // press darken the caps themselves.
               className="h-auto min-h-6 min-w-0 justify-self-end rounded-md p-0 whitespace-normal [--button-bg-hover:transparent] [--button-bg-pressed:transparent]"
               label={actionLabel}

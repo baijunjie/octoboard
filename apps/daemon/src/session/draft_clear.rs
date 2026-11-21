@@ -38,7 +38,10 @@ const UNSEEN_CLEAR_HOLD: Duration = Duration::from_secs(30);
 /// may be sent together with that text. A message is never to wait without end on a box Octoboard
 /// cannot empty; the stash and the clear are tried first on every attempt meanwhile. A message
 /// left unsent that waits for the user holds later ones as long, and a message held by a box that
-/// may be hidden behind a view only the user can close has the user told after as long.
+/// may be hidden behind a view only the user can close has the user told after as long. A new
+/// refusal or hold on a message's path gets this same bound, kept per message under
+/// [`LiveSession::message_key`], never under its text, per session or per process; a test of a
+/// forced write also sends the next message and asserts it waits out its own grace and bound.
 pub(super) const UNCLEARABLE_DRAFT_WAIT: Duration = Duration::from_secs(30);
 
 /// What a message's wait on the box is for, as its log names it ([`LiveSession::wait_on_box`]).
@@ -422,7 +425,9 @@ impl LiveSession {
 
     /// Tells every client about the session that a message went into its input box with `held`,
     /// the text the box showed before the write (`None` where it showed none or could not be
-    /// read), so the two may be sent together; `kind` says what that text was.
+    /// read), so the two may be sent together; `kind` says what that text was. A write into the box
+    /// as it stands tells exactly one notice, this one with the box read before any clear or
+    /// `draft_discarded`, so the user's text is never lost unseen nor reported twice.
     pub(super) fn report_sent_with_draft(&self, held: Option<&str>, kind: Held) {
         tracing::warn!(
             session = %self.id,

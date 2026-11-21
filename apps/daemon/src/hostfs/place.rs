@@ -119,7 +119,8 @@ pub enum Stuck {
     /// afresh: the earlier look's answer is lost with its thread, so it cannot be used. The path is
     /// absent if the earlier look has not ended by then, or no time is left to look. Paths that are
     /// not stuck are looked at at once, with the whole deadline. The time left is a target, not a
-    /// hard bound: a look may also wait for a permit of the shared cap on looks at once.
+    /// hard bound: a look may also wait for a permit of the shared cap on looks at once. Taken by a
+    /// decision that must not be cut short by an earlier look's stall.
     Wait,
 }
 

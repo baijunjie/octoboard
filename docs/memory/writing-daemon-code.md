@@ -3,8 +3,8 @@
 The rules (where session state lives, derived state, store transactions, timing and claims, provider defaults) are in
 `docs/conventions/daemon.md` and `docs/conventions/provider-neutral-core.md`, "Daemon"; versions and migrations in
 `docs/conventions/protocol-and-contracts.md`, "Versions and compatibility"; platform rules in
-`docs/conventions/daemon-processes-and-io.md`, "Platform differences"; lint in `docs/conventions/tooling.md`, "Running
-tests, lint and checks". Two failures they lead to that look like defects and are not:
+`docs/conventions/daemon-processes-and-io.md`, "Platform differences"; lint in `CLAUDE.md`, "Repository checks". Two
+failures they lead to that look like defects and are not:
 
 ## A developer database left behind by an amended unreleased schema step is moved aside, and the user told
 

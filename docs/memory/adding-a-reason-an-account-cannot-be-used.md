@@ -41,10 +41,12 @@ The rule, a new reason checked at every place that picks or accepts an account i
 
 ## Re-measure a reading in scratch homes before it refuses work
 
-The rule (re-measure against every sign-in kind, gate only on a reply that tells them apart, an unmatched reply is
-unknown) is `docs/conventions/daemon.md`, "Agent accounts". Measure in scratch homes holding each kind of sign-in the
-agent supports: fake keys and fake credential files cover most of them, with no real login. Gate on the agent's own
-account state rather than its quota: a refused or empty quota request is what API-key, cloud-provider and
+A reading that only labelled a state (a quota probe's reply, say) and is to become a reason an account cannot be used is
+re-measured first against every sign-in kind the agent supports. Gate only on a reply that tells the kinds apart, and
+count a reply that matches no measured marker as unknown, not as the refusing reason: an API-key or custom-provider
+account answers a quota probe like a signed-out one and still works. Measure in scratch homes holding each kind of
+sign-in the agent supports: fake keys and fake credential files cover most of them, with no real login. Gate on the
+agent's own account state rather than its quota: a refused or empty quota request is what API-key, cloud-provider and
 custom-provider accounts answer too. What each agent answered, and what could not be measured, is in
 `docs/agent-cli-reference.md`, "Signing in a config directory without a terminal" (its paragraph "Before a login, on the
 quota path").

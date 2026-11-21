@@ -10,7 +10,7 @@ import type React from "react";
  * `labelled` is for a select whose label stands beside it (`OptionSelect`'s `besideLabel`), which draws its label and
  * trigger as two cells of its parent's grid: the row becomes that grid, the label's column sized to the label and the
  * trigger's taking the rest, and what follows the select takes a column of its own, sized to it, at the same gap. See
- * "Pointer target size" in `docs/conventions/ui-standard.md`. */
+ * "Pointer target size" in `docs/conventions/ui-accessibility.md`. */
 export function FieldRow({ labelled = false, className, children }: { labelled?: boolean; className?: string; children: React.ReactNode }): React.ReactElement {
   const layout = labelled ? "grid grid-cols-[auto_minmax(0,1fr)] grid-flow-col" : "flex";
   return <div className={`${layout} min-w-0 items-center gap-(--field-row-gap) ${className ?? ""}`}>{children}</div>;

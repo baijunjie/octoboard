@@ -1,7 +1,7 @@
-// Tests a page's `pattern` against a value in a Web Worker, with a time limit. The pattern is the agent's, so the window's
-// own thread never runs it: a test that does not finish within `PATTERN_TIMEOUT_MS` counts as unchecked, the worker that
-// is stuck on it is ended, and the next test gets a new one. A window that cannot start a worker leaves every test
-// unchecked.
+// Tests a page's `pattern` against a value in a Web Worker, with a time limit. The pattern is the agent's and can hang
+// a regular-expression engine, so the window's own thread never runs it, and nothing else tests a pattern: a test that
+// does not finish within `PATTERN_TIMEOUT_MS` counts as unchecked, the worker that is stuck on it is ended, and the
+// next test gets a new one. A window that cannot start a worker leaves every test unchecked.
 import type { PatternReply, PatternRequest } from "./patternWorker";
 import type { PatternVerdict } from "./patternTest";
 

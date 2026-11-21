@@ -50,6 +50,10 @@ pub fn lexical_key(path: &Path) -> OsString {
 /// dropped where the rest is a drive or UNC path the plain form spells the same (see
 /// `windows_rules::without_verbatim_prefix`). The daemon is long-path aware (its manifest), so the
 /// plain form reaches past `MAX_PATH` too.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the platform layer is where the OS call is made; `hostfs::canonical` is its answer"
+)]
 pub fn canonical(path: &Path) -> io::Result<PathBuf> {
     std::fs::canonicalize(path).map(plain_form)
 }

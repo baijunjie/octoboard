@@ -123,7 +123,9 @@ export function TreeItem({ ref, id, textValue, label, expandable, className, con
 }
 
 /** The control in a `TreeItem`'s content that opens or closes it, named `label` (react-aria appends the row's name).
- * It has none of HeroUI's button look: a hover fill or a press shrink would mark it apart from the row it belongs to. */
+ * It has none of HeroUI's button look: a hover fill or a press shrink would mark it apart from the row it belongs to.
+ * It takes no 24-pixel hit box, relying on WCAG 2.5.8's *Equivalent* exception: a press anywhere on the row expands or
+ * folds it as well, and Enter or Left / Right on the row does the same, so it needs no tooltip or tab stop either. */
 export function TreeExpandButton({ label, className, children }: { label: string; className?: string; children: React.ReactNode }): React.ReactElement {
   return (
     <AriaButton slot="chevron" aria-label={label} isDisabled={useDisabled()} {...definedProps({ className })}>

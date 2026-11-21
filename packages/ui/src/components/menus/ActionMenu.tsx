@@ -121,7 +121,7 @@ export function ActionMenu({
   // The text of the menu's filter field; each opening starts it empty.
   const [query, setQuery] = useState("");
   // How the filter field takes focus as the menu opens: for browsing after a tap, since the field's on-screen keyboard
-  // would cover the list (see "Focus moved by a change the user did not make" in `docs/conventions/ui-standard.md`).
+  // would cover the list (see "Focus" in `docs/conventions/ui-accessibility.md`).
   const [fieldMode, setFieldMode] = useState<"typing" | "browsing">("typing");
   // Set only for a pointer-opened menu: react-aria returns focus to the trigger when a menu closes,
   // which is right for the keyboard but would pull it off the terminal for the mouse.

@@ -137,7 +137,10 @@ impl SavedBackground {
 
 impl AppState {
     /// Reads the file at `path`, which the entries are written to from now on. Called at start,
-    /// before anything is adopted. **Blocks** on the file.
+    /// right after [`AppState::begin_adoption`] and before anything is adopted, for every session at
+    /// once rather than per session as each is adopted: the holders' relayed reports can arrive
+    /// before a session's adoption, and a copy seeded there would overwrite them with older state.
+    /// **Blocks** on the file.
     pub fn load_saved_background(&self, path: &Path) {
         let sessions = match std::fs::read(path) {
             Ok(content) => match serde_json::from_slice::<SavedFile>(&content) {

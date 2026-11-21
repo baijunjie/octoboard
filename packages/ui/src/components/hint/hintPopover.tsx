@@ -175,7 +175,22 @@ interface HoverPopoverTrigger {
  * `data-escape-topmost`); a mouse click opens nothing; a tap, a pen, assistive technology and the keyboard
  * open it with focus inside (modal), and such a press on a hover-opened surface turns it into that form.
  * After any close but the grace's own, a pointer still resting on the trigger does not open it again until
- * it has left and come back. What each says is in `docs/conventions/ui-standard.md`.
+ * it has left and come back. No press takes focus on its own (`focusOnPress={false}`), so a tap does not pull focus off
+ * the terminal or an editor before the surface decides where focus goes.
+ *
+ * The hover form is `aria-modal="false"` because the window's check for an open modal matches every dialog without
+ * it, and would hold F6, window shortcuts, Back / Forward and floating panes while the surface is merely open. It is
+ * focusable without being a tab stop (`tabIndex={-1}`), so a mouse press on its text leaves focus in it rather than on
+ * the page, where a focus-containing dialog under it would take focus back a frame later and end the drag selecting
+ * the text. Holding no focus, it leaves Escape to where focus is: not taken in a terminal, a text field holding text,
+ * or while an input method composes. The press form is a modal popover, Escape and an outside press closing it.
+ *
+ * A surface that holds others (the rail's quota panel holds status marks) tags the popovers it opens with
+ * `PopoverOwnerContext`: a press inside one is not outside the panel, the panel stays open while the pointer crosses
+ * into it, Escape goes to the popover first where it would take it, and while one is open the hover form stays open
+ * whatever the pointer does (a modal one makes the panel inert, and the browser then reports a pointer leave the user
+ * never made), closing a short grace after it unless the pointer rests on the panel or its trigger. The dialog is named
+ * by what the surface is, never by the text it holds.
  *
  * Props:
  * - `trigger` draws the trigger from the wiring it is handed.

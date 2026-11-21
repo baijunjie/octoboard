@@ -483,6 +483,10 @@ pub fn sync_directory(_dir: &Path) -> io::Result<()> {
 }
 
 /// Whether `a` and `b` lead to the same file: their resolved paths are equal.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the platform layer is where the OS call is made; `hostfs::canonical` is its answer"
+)]
 pub fn same_file(a: &Path, b: &Path) -> bool {
     match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
         (Ok(a), Ok(b)) => a == b,

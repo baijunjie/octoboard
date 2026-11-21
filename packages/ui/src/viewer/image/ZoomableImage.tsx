@@ -191,7 +191,9 @@ export function ZoomableImage({ url, name, onError }: { url: string; name: strin
     if (!scroller) return;
     const onWheel = (event: WheelEvent) => {
       // A pinch arrives with Ctrl held; ⌘ is macOS's own modifier for zooming with a wheel. Without either, the wheel
-      // scrolls, as in any other view of the viewer.
+      // scrolls, as in any other view of the viewer. So this is the one test that takes either modifier rather than
+      // `isPrimaryModifier`.
+      // eslint-disable-next-line primary-modifier/primary-modifier -- The one place that takes either modifier, a pinch included.
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
       actions.current.zoomByFactor(wheelFactor(event), { anchor: event });

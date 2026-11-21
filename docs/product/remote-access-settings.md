@@ -18,7 +18,7 @@ application, and that it works only while the application runs here: quitting it
 browser port (it is the macOS and Windows applications' that has one), the paragraph speaks of another computer's
 application alone and does not mention the browser, and the section has no This computer's browser group and no tabs below.
 
-The rows are in three groups, by where they are used (headings as in "Settings groups" in
+The rows are in three groups, by where they are used (headings as in "Settings pages" in
 `docs/conventions/ui-standard.md`): **This computer's browser**, **Other computers** and **Key**. Searching in Settings
 finds each row under the section's name and its group's heading.
 
@@ -79,7 +79,7 @@ description says to open the address in a browser on this computer and that the 
 
 The SSH server comes first, above the tabs, since both ways in from another computer log in over it. Under it, where
 the daemon has a browser port, two tabs, one per way in, in the underline strip every Settings page's tabs take (see
-"Within a Settings page" in `docs/conventions/ui-standard.md`): **Octoboard app**, selected to begin with, and
+"Settings pages" in `docs/conventions/ui-standard.md`): **Octoboard app**, selected to begin with, and
 **Browser**. The tab chosen is not remembered when Settings is opened again. Where the daemon has no browser port there
 are no tabs, just the application's rows. A search in Settings that finds rows in one tab only shows that tab, whichever
 was selected, and the other tab cannot be chosen until the search is over or finds something in both; while it finds

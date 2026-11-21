@@ -106,6 +106,7 @@ function ResultRow({ match, showFolder }: { match: ContentMatch; showFolder: boo
     >
       {/* Code reads left to right whatever the interface's direction, and keeps its spaces. A line of the file is not a
           label: it is cut before its match with an ellipsis rather than faded, so the match stays in view. */}
+      {/* eslint-disable-next-line ui-class-names/no-ellipsis -- An excerpt of a file is outside the FadeOverflow rule. */}
       <span ref={textRef} dir="ltr" className="min-w-0 flex-1 truncate font-mono text-xs whitespace-pre">
         {clippedStart && "…"}
         {segments.map((segment, i) =>

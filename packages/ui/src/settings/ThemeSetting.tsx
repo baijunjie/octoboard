@@ -16,6 +16,11 @@ const OPTIONS = [
  * The Light / Dark / System choice. A `ToggleButtonGroup` in single-selection, no-empty-selection
  * mode is HeroUI's segmented control, the natural fit for a three-way choice where one option is
  * always current. Each choice is shown by its icon, named and given a tooltip by its label.
+ *
+ * A shortfall kept on purpose, by the user's decision: the selected button differs from the others by its fill colour
+ * alone. Which one is selected is also carried by its position and by `aria-pressed`, and the fill difference meets
+ * WCAG 1.4.11's 3:1 for a state (3.67:1 light, 4.58:1 dark, from the tokens). A two-state choice does not belong in
+ * such a group: an `IconToggle` carries its state in its icon, with no shortfall to accept.
  */
 export function ThemeSetting(): React.ReactElement {
   const t = useT();

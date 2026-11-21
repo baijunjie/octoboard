@@ -480,7 +480,13 @@ async fn watch_daemon(
                 // Forwarded to this process' own stderr, which `pnpm tauri dev` shows; a packaged
                 // application launched from the Finder has none, and the daemon's own log file
                 // (`daemon.log`) is where its output is kept.
-                eprintln!("octoboardd: {}", text.trim_end());
+                #[allow(
+                    clippy::print_stderr,
+                    reason = "the daemon's own output, not the shell's diagnostic"
+                )]
+                {
+                    eprintln!("octoboardd: {}", text.trim_end());
+                }
             }
             CommandEvent::Terminated(payload) => {
                 exited.store(true, Ordering::SeqCst);

@@ -213,10 +213,10 @@ fn os_tokens_appear_only_in_the_platform_layer() {
     os_tokens::check(&scan, &mut problems);
     assert!(
         problems.is_empty(),
-        "OS-specific tokens outside the platform layer, or an allow-list out of step with them:\n  \
-         {}\n\nOS-specific code belongs under `src/platform/` ({RULE_DOC}). Move the site there; \
-         the allow-list in {OS_TOKENS_FILE} is transitional and only shrinks, so a new entry is \
-         not the way out, and a stale one is removed.",
+        "OS-specific tokens outside the platform layer:\n  \
+         {}\n\nOS-specific code belongs under `src/platform/` ({RULE_DOC}). Move the site there \
+         behind a platform function, and have business code branch on a declared fact \
+         (`HostFacts`, `TermFacts`) rather than on the OS; {OS_TOKENS_FILE} has no allow-list.",
         problems.join("\n  ")
     );
 }

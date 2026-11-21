@@ -6,10 +6,10 @@ Claude Code, Codex and Grok Build.
 ## Problem
 
 Octoboard's rule is that a new agent is a descriptor, an adapter directory, a presentation module and one line in each
-registry (`docs/conventions/provider-neutral-core.md`, "The rule"). That rule has only ever been exercised by three
-agents that look alike: each reports through hooks whose payload names its event, each has one variable that names its
-configuration directory, each signs in to one subscription through a browser, and each has a plan quota its CLI can be
-asked for. The five new CLIs break those likenesses:
+registry (`docs/conventions/provider-neutral-core.md`, "General principles"). That rule has only ever been exercised by
+three agents that look alike: each reports through hooks whose payload names its event, each has one variable that names
+its configuration directory, each signs in to one subscription through a browser, and each has a plan quota its CLI can
+be asked for. The five new CLIs break those likenesses:
 
 - **Pi** has no hooks; it reports its state through OSC 7501 by itself, and takes an extension file per launch.
 - **OpenCode** has no hooks either; a plugin inside its process sees its events. It keeps conversations in a SQLite

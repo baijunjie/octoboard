@@ -77,8 +77,8 @@ export function fakeTimers(options: { now?: number | Date; toFake?: NonNullable<
  * One real 0 ms macrotask: it runs after every microtask already queued, so a chain of `await`s of any length, in the
  * code under test and in a mocked daemon's replies, has run to its end by then. It is an ordering yield, not a stretch
  * of time, for code that finishes on promise chains alone; anything that waits on a timer or a frame needs a fake clock
- * (`fakeTimers`) or its own wait. Not wrapped in `act`; `flushPromises` is, for what renders. It still returns where
- * the clock is faked.
+ * (`fakeTimers`) or its own wait, and where a positive assertion follows, the test waits on that instead. Not wrapped
+ * in `act`; `flushPromises` is, for what renders. It still returns where the clock is faked.
  */
 export function afterQueuedWork(): Promise<void> {
   return new Promise<void>((resolve) => realSetTimeout(resolve, 0));
@@ -91,7 +91,12 @@ export function flushPromises(): Promise<void> {
 
 /**
  * Waits `ms` of real time plus `REAL_CLOCK_MARGIN_MS`. Only for the named helpers that wait out a library delay the
- * test cannot fake (see "Tests that depend on time" in the agent-unit-test skill); a test calls those, not this.
+ * test cannot fake (see "Tests that depend on time" in the agent-unit-test skill); a test calls those, not this. They
+ * are `trackMountRefocus` and `settleFrames` (`components/dialog/dialogTestSupport.ts`), the touch-hover suppression
+ * in `press` and `tooltipsCooledDown` (`components/hint/tooltipTestSupport.ts`), `settleLazyImport`
+ * (`test/lazyImport.ts`) and `firstWriteDelayPassed` (`components/announce/statusAnnouncerTestSupport.ts`), plus
+ * `afterQueuedWork` and `flushPromises` here, whose one 0 ms macrotask is an ordering yield; a new one is added only as
+ * such a helper, saying why its delay cannot be faked.
  */
 export function waitOnRealClock(ms: number): Promise<void> {
   return new Promise<void>((resolve) => realSetTimeout(resolve, ms + REAL_CLOCK_MARGIN_MS));

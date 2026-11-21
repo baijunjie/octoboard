@@ -152,7 +152,9 @@ export function agentTagsValues(t: Translate, language: Language, agent: Agent, 
 }
 
 /** A key combination at the size of the muted text it sits in: the key caps' own size is for a row of their own,
- * and would stand out of a line of small text. */
+ * and would stand out of a line of small text. By the user's decision only the size changes (20px tall, 12px text, a
+ * 6px radius in place of HeroUI's 24px, 14px and 8px), HeroUI's colours staying; the lines holding them are 24px
+ * tall, so a wrapped line of caps never touches the next. */
 function SmallKbd({ binding }: { binding: Binding }): React.ReactElement {
   return <BindingKbd binding={binding} className="h-5 rounded-md px-1.5 align-middle text-xs" />;
 }

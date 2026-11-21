@@ -444,7 +444,8 @@ fn committed_schema_is_current() {
     if !stale.is_empty() {
         panic!(
             "the committed schema is out of date with the wire types; regenerate it with \
-             `{REGENERATE}` and commit it.\n{}",
+             `{}=1 pnpm test:rust -p octoboardd protocol::schema` and commit it.\n{}",
+            super::bindings::WRITE_VARIABLE,
             stale.join("\n")
         );
     }

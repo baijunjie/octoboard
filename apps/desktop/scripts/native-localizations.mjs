@@ -8,7 +8,10 @@ const xml = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").re
 
 /** The catalogs are named by Octoboard's language tags; a bundle's `.lproj` directory is named by Apple's localization
  * identifier, which Xcode and the App Store recognise, and which for Chinese is the script tag rather than the region
- * tag Octoboard uses. This is the one place generation maps the two. */
+ * tag Octoboard uses. This is the one place generation maps the two; everywhere else a language is its tag in
+ * `packages/ui/src/i18n/languages.ts`. `src-tauri/Info.template.plist` and `src-tauri/tauri.macos.conf.json` name the
+ * Apple identifiers too, held to this map by `native-localizations.test.mjs` and
+ * `packages/ui/src/i18n/bundleLocalizations.test.ts`. */
 const APPLE_LOCALIZATIONS = new Map([["zh-CN", "zh-Hans"], ["zh-TW", "zh-Hant"]]);
 
 /** The Apple localization identifier of one of Octoboard's language tags. */

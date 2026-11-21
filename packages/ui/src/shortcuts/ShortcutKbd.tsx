@@ -13,7 +13,7 @@ import { useBinding } from "./store";
  * where those symbols mean nothing to the user. `dir` holds the caps in the order the shortcut is written
  * in: the notation is the same sequence in every language, and a right-to-left interface would
  * otherwise reverse it. Its accessible name is the combination as `describeBinding` says it, each key named in the UI's
- * language (see "Keyboard" in `docs/conventions/ui-standard.md`).
+ * language (the notation in `docs/product/keyboard-shortcuts.md`).
  */
 export function BindingKbd({ binding, className, slot }: { binding: Binding; className?: string; slot?: string }): ReactElement {
   const host = useHost();

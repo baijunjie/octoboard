@@ -1,11 +1,17 @@
 # Error code conventions
 
-Everything the daemon tells a person (a failed request, a notice about a session) travels as a stable code with params,
-and the UI words and handles it from a record per code. This doc covers declaring codes in the daemon, giving each its
-record, wording and remedy in the UI, and raising the UI's own failures. Where an error is shown visually (alerts,
-inline errors, titles) is in `docs/conventions/ui-standard.md`; the wire shape of `error` and `session_notice` is in
-`apps/daemon/PROTOCOL.md`, "Coded messages"; how a provider's codes relate to the provider is in
-`docs/conventions/provider-neutral-core.md`.
+Declaring codes in the daemon, giving each its record, wording and remedy in the UI, and raising the UI's own failures.
+Where an error is shown is in `docs/conventions/ui-standard.md`; the wire shape of `error` and `session_notice` is in
+`apps/daemon/PROTOCOL.md`, "Coded messages".
+
+## General principles
+
+- **Every failure told to a person is a stable code with params, worded only in the catalogs.** The daemon's English
+  text is for the log and the alert's details, and a code read by every client cannot change meaning.
+- **A refusal the user can fix carries a remedy.** A code whose record gives none is shown as an unexpected failure,
+  which tells the user to file an Issue.
+- **A failure's `cause` is read only through its normaliser.** A daemon newer than the client may send a cause it does
+  not know, and only the normaliser gives every reader the same fallback.
 
 ## Daemon codes
 
@@ -33,11 +39,6 @@ messages". What code must do to meet it:
   outside the store unwraps with `Ok(store.x()?)`. Why: the daemon also opens agents' own SQLite files, whose failures
   must not be reported as Octoboard's data folder. Opening and migrating the store at startup, which has no reply to
   classify for, may wrap errors with context.
-- **Keep a missing `git`'s `binary_not_found` through to the reply or the `GitStatus`** (`project_git::no_git_or`,
-  `StepFailure::no_git`), never flatten the error to a string first.
-- **Look up a known record through `Store::require_*`**, refuse a locked or archived session through
-  `state::refusals::ensure_unlocked` and `refuse_if_archived`, and check a directory with `hostfs::require_directory`,
-  so each failure carries its own code (the list is in `docs/structure/daemon.md`, "Shared entry points").
 
 ## Provider codes
 
@@ -52,17 +53,13 @@ messages". What code must do to meet it:
 
 ## The UI's record of a daemon code
 
-- **A daemon code a window can show gets its record and its words in the same change that adds the code.** The record
-  is one entry per code in `CODES` (`packages/ui/src/errors/codes.ts`), with `origin: "daemon"`; a core code's words are
-  `daemon.<code>` in every message catalog. `packages/ui/src/daemonCodes.test.ts` fails for a code with no record or no
-  words; the rules below are what it cannot check.
+- **A daemon code gets its record (`CODES` in `packages/ui/src/errors/codes.ts`) and its words (`daemon.<code>`) in the
+  change that adds it**, as `packages/ui/src/daemonCodes.test.ts` checks; the rules below are what it cannot check.
 - **Give the record a `recovery`, or say why none.** Reuse an `ErrorRecovery` group or add one with
   `error.recovery.<name>` in every catalog; the group's general remedy goes in that text, never in `daemon.<code>`.
   `causeOnly` is for a refusal whose sentence says why; `unexpected: "<why>"` only where the unexpected alert is right
   (a refusal of a request the window never makes, a failure the daemon did not foresee, or one classified by another
-  code or `cause` it carries). A refusal the user can fix, however rare, gets a `recovery` (`none` where its own
-  sentence says it all). Why: `classifyError` shows a code whose record gives no remedy as an unexpected failure, which
-  tells the user to file an Issue.
+  code or `cause` it carries); `none` for a refusal the user can fix whose own sentence says it all.
 - **An `unexpected` code's message states only what happened** (what was refused or failed), never a remedy or a
   guess at the cause: the unexpected alert already says what to do, and a remedy in the sentence contradicts it.
 - **The daemon's English free text (an `anyhow` message, `message`, a param carrying a system's wording) never goes into
@@ -87,25 +84,17 @@ messages". What code must do to meet it:
   a branch in a component), and so does a reader of a typed protocol field that carries the same vocabulary (the
   `account_sharing` event's `failure.cause`); never a comparison of the raw value, or a list of its values, at the
   reader. A normaliser whose unknown cause is worded by the code's own key returns `undefined`; one with a catch-all
-  cause (`other`) returns that. Why: a daemon newer than this client may send a cause it does not know, which a
-  generated type does not stop at run time, and only the normaliser gives every reader the same fallback.
-- **A record with `detailBlock: true` has a `.summary` key for every variant that could arrive with `detail`** (the
-  normaliser's unknown-cause default included), and such a key is never dropped as unused except for `noSummary` codes.
-- **A `.summary` adds what the alert's title does not say**; where it would repeat the title, the record is
-  `noSummary: true` and the body starts with the remedy. Keep the summary where the code is also shown with no title (a
-  pane's failure, a mark's popover, beside a field), as `models_command_failed` and `quota_command_failed` do.
+  cause (`other`) returns that.
+- **A `.summary` adds what the alert's title does not say.** Where it would repeat the title, the record is
+  `noSummary: true` and the body starts with the remedy; keep it where the code is also shown with no title (a pane's
+  failure, a mark's popover, beside a field), as `models_command_failed` and `quota_command_failed` do. A record with
+  `detailBlock: true` has a `.summary` for every variant that could arrive with `detail` (the normaliser's
+  unknown-cause default included), never dropped as unused unless the code is `noSummary`.
 - **A code of a quota reading, a models list or a login needs only its message facets, no remedy**
   (`models_unavailable_code`, `quota_unavailable_code`, `login_failure_code`). Why: it is shown where it is read, so the
   remedy a `recovery` gives does not apply.
 - **A remedy done in Settings' Agent accounts section gets a case in `recoveryAction`**
   (`packages/ui/src/components/alerts/ErrorGuidance.tsx`), and the recovery text says only what to do there.
-- **Settle what a daemon failure arrives as against a real daemon before designing its remedy or its fixture.** The
-  daemon's failure cannot be read off the system failure underneath (SQLite words denied access and a full disk in its
-  own codes, with no `(os error N)`), nor does a code's name say which route it comes on. A remedy keyed to expected
-  text, and fixtures modelled on it, pass every test and never fire in the app.
-- **`errors/` and `browse/` do not import `daemon-client`**: `CodedError` lives in `errors/codedError.ts`, and the codes
-  the client raises are records in `errors/codes.ts` (enforced by `eslint.layers.mjs`). Error modules do not import each
-  other in a cycle.
 
 ## Raising a failure in the UI
 
@@ -134,9 +123,6 @@ messages". What code must do to meet it:
   `alertAppDataFailure(title)` in a catch handler, `errorRecovery={appDataRecovery}` on `ConfirmDialog` or the third
   argument of `useDialogAction` on every confirm path. Keep the ordinary route where the action also writes to a folder
   the user chose.
-- **A recovery's extra button is a `recoveryAction`** (the `RecoveryAction` union); a link is drawn by `RecoveryLink`;
-  a pane failure takes it as `PaneFailure`'s `linkAction`. A failed browse request is treated with `browseFailure` or
-  `projectBrowseFailure`.
 - **The outcome of a long-running action the user started is raised from window-lifetime code**, not from the surface
   that sent the request (which may be closed by then): record in client store state that this window started it, keyed
   by what tells the run from an earlier one (the status's `started_at`), clear it when the request is refused, raise the

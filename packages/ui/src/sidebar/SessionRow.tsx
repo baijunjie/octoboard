@@ -56,7 +56,8 @@ export const SessionRow = memo(function SessionRow({
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
     >
-      {/* No touch popover on the marks of a pressable row: a tap on one is the row's press. */}
+      {/* No touch popover on the marks of a pressable row: a tap on one is the row's press. What the marks say reaches
+          touch through the row's accessible name alone, a shortfall kept on purpose until a second route is built. */}
       <StatusIcon status={status} decorative withTooltip touchPopover={false} />
       <SessionAgentIcon providers={providers} session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />
       <div className="flex min-w-0 flex-1 items-center gap-(--row-control-gap)">

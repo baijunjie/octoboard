@@ -101,8 +101,8 @@ Why: Gemini CLI's titles start with ✦, ◇, ✋ or ⏲; the first two are alre
 
 **Development notes**
 
-- A new fact follows "Adding a per-agent difference that has no capability or interface method yet" in
-  `docs/conventions/provider-neutral-core.md`: a doc comment that says what the value means, set in every descriptor,
+- A new fact follows `docs/conventions/provider-neutral-core.md`, "General principles" (a fact becomes a capability
+  field): a doc comment that says what the value means, set in every descriptor,
   tested through a test provider.
 - `Capabilities` is a wire type: follow `docs/conventions/protocol-and-contracts.md`, "Wire types and generated
   files", and its rules on compatibility when a field is added.

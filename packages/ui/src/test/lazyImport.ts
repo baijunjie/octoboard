@@ -16,6 +16,10 @@ export const LAZY_IMPORT_TIMEOUT_MS = 10_000;
  * a real 0 ms timer runs after them all. It cannot run under `vi.useFakeTimers()`, so a test on fake
  * timers asserts only on what sits outside the boundary, and the call is not folded into a render
  * helper that such tests share.
+ *
+ * A `lazy` object caches its resolution, so only the first test per `lazy` object ever suspends (two
+ * exports built with `lazy` give a file two first tests): a clean whole-file run does not show that a
+ * test settles its import, so check such a test by running it alone with `-t`.
  */
 export async function settleLazyImport(): Promise<void> {
   if (vi.isFakeTimers()) throw new Error("settleLazyImport needs the real clock: a lazy import cannot be settled under vi.useFakeTimers()");

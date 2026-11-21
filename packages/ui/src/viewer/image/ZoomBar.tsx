@@ -10,9 +10,11 @@ const BAR_BUTTON_CLASS = `row-icon-control ${ROW_ICON_BUTTON_CLASS}`;
 
 /**
  * The zoom bar floating over an image's top trailing corner: Zoom out, the percentage, Zoom in, and the fit button,
- * which goes to actual size while fitted and back to fitted once zoomed. It stands far enough from the trailing edge
- * on a wide window to stay off a scrollbar that takes space. Marked `data-zoom-bar` for a zoom that disables the
- * focused control to hand focus to.
+ * which goes to actual size while fitted and back to fitted once zoomed. The fit button follows the
+ * maximize-and-restore pattern rather than a two-state toggle: its name and icon say what pressing does ("Actual size"
+ * / "Zoom to fit"), since zoomed is a range of scales, not one state to show. The bar is a `floating-surface`, as the
+ * find bar is. It stands far enough from the trailing edge on a wide window to stay off a scrollbar that takes space.
+ * Marked `data-zoom-bar` for a zoom that disables the focused control to hand focus to.
  */
 export function ZoomBar({
   bounds,

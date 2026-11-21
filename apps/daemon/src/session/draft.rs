@@ -392,7 +392,9 @@ impl Draft {
     /// Notes that Octoboard's own keys emptied the input box, as a whole frame showed with nothing
     /// else written since (`crate::session::draft_clear`): whatever was typed before is gone from
     /// it, so it holds nothing any more. Never while a key is still waiting for the rest of its
-    /// bytes, which the clearing refuses.
+    /// bytes, which the clearing refuses. Told in the same step as the write, under the input lock,
+    /// as [`Self::restored_by_agent`] is: told later, messages meanwhile wait on text the box no
+    /// longer holds.
     pub(super) fn cleared_by_octoboard(&mut self) {
         if self.overflowed {
             return;

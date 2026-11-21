@@ -7,7 +7,9 @@ import { FIRST_WRITE_DELAY_MS } from "./StatusAnnouncer";
 
 /**
  * Waits for a region mounted on the real clock to become ready before a later fake-clock operation. Its first-write
- * timer is armed on the real clock at mount, so advancing a fake clock never fires it.
+ * timer is armed on the real clock at mount, so advancing a fake clock never fires it. A test that mounts a component
+ * holding a status region (`App`, `StatusAnnouncer`) fakes the clock before mounting and advances
+ * `FIRST_WRITE_DELAY_MS` instead; only one that must mount on the real clock calls this first.
  */
 export async function firstWriteDelayPassed(): Promise<void> {
   if (vi.isFakeTimers()) {

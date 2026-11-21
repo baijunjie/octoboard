@@ -16,9 +16,25 @@ export type InlineReferenceProps = Omit<React.ComponentProps<typeof Chip>, "size
   startContent?: React.ReactNode;
 };
 
-/** A reference mixed into running copy. It always takes the font of the text it sits in; the sizes differ only in
- * padding, and `xs`, the default, is safe in every line (see `docs/conventions/ui-standard.md`'s "A chip's size follows
- * the line it sits in" section). */
+/** A reference mixed into running copy, where prose would use quotation marks (`docs/conventions/ui-standard.md`,
+ * "Badge, reference or plain name"). It always takes the font of the text it sits in — size, weight, line height and
+ * family, a technical literal keeping its monospace `code` child at the same size — and sits inline on that text's
+ * baseline. The sizes differ only in padding, the tint drawn around the text:
+ *
+ * | Size | Padding (block, inline) | Drawn height |
+ * | --- | --- | --- |
+ * | `xs` | 0, 4px | the text's content area, about 1.2 times its font size |
+ * | `sm` | 1px, 6px | content area + 2px |
+ * | `md` | 2px, 8px | content area + 4px |
+ * | `lg` | 3px, 10px | content area + 6px |
+ *
+ * The drawn height stays below the copy's line height, so chips on wrapped lines never touch and no line is stretched:
+ * 12px text on 16px lines (field errors, secondary descriptions, tooltips) fits only `xs`; 14px on 20px (body copy,
+ * labels, Alert descriptions) up to `sm`; 16px on 24px (dialog headings) up to `md`; 14px on 24px (Alert titles) up to
+ * `lg`. `xs`, the default, is safe in every copy style, and a path's length, font or position never picks a size. An
+ * `unbroken` chip, an `inline-block` as tall as its line box, tightens its own line height to the content area so it
+ * does not touch the next line's. Colours come from the tint tokens shared with `StatusBadge`; inside an Alert the
+ * nearest status context (`CodeToneContext`) wins over an explicit colour. */
 export function InlineReference({
   children,
   size = "xs",

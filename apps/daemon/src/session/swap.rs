@@ -403,6 +403,12 @@ impl LiveSession {
         Ok(InputRoute::Buffered)
     }
 
+    /// The text in the agent's input box as the screen shows it now, read with faint cells blanked
+    /// as every reading of the box is (`screen_text_undimmed`, never a blanking of its own). It is
+    /// only a cheap first look, as is [`Self::settled_composer`]: a decision on a key, or on
+    /// writing because the box is empty, is made from a box read off a whole frame
+    /// (`wait_for_whole_frame`, then `read_box` or `composer_for_draft` under the input lock),
+    /// refused, to be retried, where that reading has no output total.
     fn composer(&self) -> Option<String> {
         self.input_box(&self.screen_text_undimmed())
     }

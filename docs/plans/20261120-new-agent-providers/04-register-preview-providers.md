@@ -145,10 +145,10 @@ corrects them; they are written here so that the five files exist and compile.
 
 **Reference docs**
 
-- `docs/conventions/provider-neutral-core.md`, "The rule" and "Checking a change against this rule"
+- `docs/conventions/provider-neutral-core.md`, "General principles" and "Checking a change against this rule"
 - `docs/structure/daemon.md`, "Where new code goes"
 - `docs/structure/ui.md`, "Where new code goes"
-- `docs/conventions/ui-standard.md`, "Confirmed visual choices" and "A colour mark whose meaning is in words"
+- `docs/conventions/ui-standard.md`, "Colour", and `docs/conventions/ui-accessibility.md`, "Not by colour alone"
 - `docs/conventions/tests.md`, "The UI state gallery and its fixtures"
 - `docs/product/supported-agents.md`, "How an agent is named and marked"
 - `docs/product/account-quotas.md`, "How an account's quota is shown"

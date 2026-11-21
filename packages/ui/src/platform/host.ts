@@ -53,7 +53,9 @@ const TERMS: Record<HostFacts["os"], HostFacts["terms"]> = {
  * with Android identified by the user agent for TalkBack's pointer events.
  */
 export function browserHost(
+  // eslint-disable-next-line no-restricted-syntax -- This is where the client's host is built from the browser.
   platform: string = globalThis.navigator?.platform ?? "",
+  // eslint-disable-next-line no-restricted-syntax -- This is where the client's host is built from the browser.
   userAgent: string = globalThis.navigator?.userAgent ?? "",
 ): HostFacts {
   const os = /Mac|iPhone|iPad/.test(platform) ? "macos" : /Win/.test(platform) ? "windows" : "linux";
