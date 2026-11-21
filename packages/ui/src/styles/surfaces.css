@@ -129,6 +129,18 @@
   --default-soft-hover: var(--sidebar-fill-hover);
 }
 
+/* The fills of HeroUI's `--default` family on the window chrome, for what sits there besides the chrome's own buttons
+   (`CHROME_BUTTON_FILLS`), such as the breadcrumb's status marks: `--default` is all but the chrome's own colour in
+   light (L 0.94 against 0.93), so a ghost button's hover would show no fill. They take the chrome's translucent tints
+   instead, `--chrome-hover` in the resting slot, which a ghost button shows under the pointer and while pressed, so a mark there answers the pointer as the
+   chrome's buttons do. Overridden whole, as `.sidebar-fills` is. */
+.chrome-fills {
+  --default: var(--chrome-hover);
+  --default-hover: var(--chrome-active);
+  --default-soft: var(--chrome-hover);
+  --default-soft-hover: var(--chrome-active);
+}
+
 /* The fills of HeroUI's `--default` family on a surface of the app's own: a dialog, whose surface is
    `--overlay`, and the project pane, whose surface is `--panel-sidebar` (the pane's tabs, header and Git
    mode; the report panel on the same surface takes `.sidebar-fills`). HeroUI tunes `--default` for the

@@ -141,10 +141,11 @@ function Breadcrumb({ session, focusTerminal }: { session: Session; focusTermina
 
 /** A trail of names, the last one emphasised; it fades at its end edge when too long, and what
  * follows it (the status icon) always stays. It sits on the window chrome, so the names before the
- * last take `--chrome-muted`, not the panel's `--app-muted` (`style.css`). */
+ * last take `--chrome-muted`, not the panel's `--app-muted` (`style.css`), and the marks after them
+ * the chrome's fills (`.chrome-fills`). */
 function Trail({ names, children }: { names: string[]; children?: React.ReactNode }): React.ReactElement {
   return (
-    <div className="flex min-w-0 items-center gap-1.5 text-sm">
+    <div className="chrome-fills flex min-w-0 items-center gap-1.5 text-sm">
       <FadeOverflow className="min-w-0" titleWhenClipped={names.join(" › ")}>
         <span className="inline-flex items-center gap-1.5">
           {names.map((name, index) => (

@@ -6,7 +6,7 @@ import { BadgedControl, Button, type ButtonPress } from "../primitives";
  * buttons and panel toggles), from the chrome's two tints (`styles/surfaces.css`), translucent so they read on the native
  * material as well as on the browser's opaque chrome colour: `--chrome-hover` under the pointer, and while pressed
  * `--chrome-active`, the tint a current item also takes. Every button of the top bar and the rail takes its fills from here or
- * `CHROME_CURRENT_FILLS`, so they cannot drift apart (the breadcrumb's marks keep their own). HeroUI's button takes its fills from these custom properties, and its hover rule comes
+ * `CHROME_CURRENT_FILLS`, so they cannot drift apart (the breadcrumb's marks take the chrome's hover tint through `.chrome-fills` instead). HeroUI's button takes its fills from these custom properties, and its hover rule comes
  * after its pressed one, so a pointer press would keep the hover fill; while pressed the hover fill is the pressed one
  * too, so a press shows the pressed fill whichever input made it. */
 export const CHROME_BUTTON_FILLS =

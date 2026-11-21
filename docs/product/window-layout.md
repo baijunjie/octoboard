@@ -399,7 +399,9 @@ Every button of the top bar and the rail — Back, Forward, the sidebar toggle, 
 toggles, the rail's buttons and the consoles' avatars — looks the same under the pointer and while pressed: a faint fill
 behind it under the pointer, and while pressed, whether by mouse or keyboard, the stronger fill that the current
 console, a current page button and a toggle whose panel is open are drawn with. Those keep that fill under the pointer
-and while pressed. The marks in the breadcrumb keep a look of their own.
+and while pressed. The status marks in the breadcrumb keep the look of a status mark (see "Failures, warnings and notes
+marked at their point" in `docs/product/error-alerts.md`), except for their fill: under the pointer and while pressed
+alike, they show the same faint fill the buttons show under the pointer.
 
 Every control in the top bar and on the rail has a tooltip, except the rail's Account usage, Processes and Forwarded
 ports buttons (see "Tooltips on icon-only controls" in `docs/product/labels-and-tooltips.md`); the rail's open toward
