@@ -15,7 +15,7 @@ Chưa chắc đây là cách phù hợp với bạn? Xem [Chọn cách kết n�
 Các bước này chưa được thử đầy đủ. Chúng dựa theo tài liệu Tailscale Serve và các phép kiểm tra của chính {productName}. Các chương trình chuyển tiếp đã được thử trên một máy tính duy nhất, kể cả kết nối trực tiếp của trình duyệt; Tailscale Serve giữa hai thiết bị và chuyển tiếp trên Windows thì chưa được thử.
 </Aside>
 
-<strong>Trình duyệt trên máy tính của bạn</strong> → <strong>chương trình chuyển tiếp trên máy tính của bạn (127.0.0.1)</strong> ⟷ Tailscale ⟷ <strong>chương trình chuyển tiếp trên máy đích (127.0.0.1)</strong> → <strong>{productName}</strong>
+<strong>Trình duyệt trên máy tính của bạn</strong> → <strong>chương trình chuyển tiếp trên máy tính của bạn (127.0.0.1)</strong> ⟷ Tailscale ⟷ <strong>cổng trình duyệt trên máy đích (127.0.0.1)</strong> → <strong>{productName}</strong>
 
 <details>
 <summary>Mới làm quen?</summary>
@@ -32,21 +32,21 @@ Các bước này chưa được thử đầy đủ. Chúng dựa theo tài li�
 
 ## Vì sao cần thêm các bước
 
-Để an toàn, {productName} chỉ nhận một trình duyệt mở nó tại <code dir="ltr">{tunnel.loopback}</code>, một địa chỉ luôn có nghĩa là “chính máy tính này” (còn gọi là loopback). Vì vậy bạn không thể chỉ gõ địa chỉ Tailscale của máy đích vào trình duyệt. Thay vào đó, bạn chạy một chương trình chuyển tiếp nhỏ trên mỗi máy tính: trên máy của bạn, nó làm cho máy đích trông như ở ngay trên máy tại <code dir="ltr">{tunnel.loopback}</code>; trên máy đích, nó chuyển kết nối cho {productName}. Tailscale mang lưu lượng giữa hai bên.
+Để an toàn, {productName} chỉ nhận một trình duyệt mở nó tại <code dir="ltr">{tunnel.loopback}</code>, một địa chỉ luôn có nghĩa là “chính máy tính này” (còn gọi là loopback). Vì vậy bạn không thể chỉ gõ địa chỉ Tailscale của máy đích vào trình duyệt. Thay vào đó, một chương trình chuyển tiếp hoặc chuyển tiếp cổng trên máy của bạn làm cho máy đích trông như ở ngay trên máy tại <code dir="ltr">{tunnel.loopback}</code>, và Tailscale mang lưu lượng giữa hai bên. Trên máy đích, chính {productName} lắng nghe trên một cổng loopback nên không có gì phải chạy ở đó.
 
 ## Trước khi bắt đầu
 
 - <strong>Tailscale trên cả hai máy tính,</strong> đã đăng nhập vào cùng một tailnet. Hãy dùng một tailnet chỉ chứa thiết bị của riêng bạn: mọi thiết bị mà nó cho phép tới máy đích đều tới được cổng bạn chia sẻ.
-- <strong>socat trên mỗi máy tính là Mac hoặc chạy Linux.</strong> Máy tính Windows không cần nó.
+- <strong>socat trên mỗi máy tính Mac hoặc Linux bạn dùng để duyệt web.</strong> Máy đích không bao giờ cần nó, máy tính Windows bạn dùng để duyệt web cũng không cần.
 
-  <Tabs syncKey="host">
+  <Tabs>
   <TabItem label="macOS">
   Hãy cài [Homebrew](https://brew.sh/) trước nếu bạn chưa có (macOS không kèm công cụ nào làm được việc này), rồi chạy lệnh sau trong Terminal:
 
   <Code code={tunnel.installSocatMac} lang="sh" />
   </TabItem>
   <TabItem label="Windows">
-  Không cần cài gì: máy đích Windows đã phục vụ trình duyệt trên một cổng <code dir="ltr">{tunnel.loopback}</code>, còn máy Windows bạn dùng để duyệt web thì dùng một lệnh có sẵn.
+  Không cần cài gì: máy Windows bạn dùng để duyệt web thì dùng một lệnh có sẵn.
   </TabItem>
   <TabItem label="Linux">
   <Code code={tunnel.installSocatLinux} lang="sh" />
@@ -54,7 +54,7 @@ Các bước này chưa được thử đầy đủ. Chúng dựa theo tài li�
   Dùng trình quản lý gói của bản phân phối của bạn (<code dir="ltr">dnf</code>, <code dir="ltr">pacman</code>, v.v.) nếu nó không phải <code dir="ltr">apt</code>.
   </TabItem>
   </Tabs>
-- <strong>Hai hoặc ba cửa sổ để mở</strong> trong lúc làm việc: chương trình chuyển tiếp và Tailscale Serve trên máy đích (trừ chương trình chuyển tiếp trên Windows), và chương trình chuyển tiếp trên máy tính của bạn (trừ trên Windows).
+- <strong>Tối đa hai cửa sổ để mở</strong> trong lúc làm việc: Tailscale Serve trên máy đích, và chương trình chuyển tiếp trên máy tính của bạn (trừ trên Windows).
 
 ## Trên máy đích
 
@@ -67,42 +67,38 @@ Các bước này chưa được thử đầy đủ. Chúng dựa theo tài li�
    <HostBrowserAddress />
    </TabItem>
    <TabItem label="Windows">
-   <HostBrowserAddress windows />
+   <HostBrowserAddress />
    </TabItem>
    <TabItem label="Linux">
-   Chạy lệnh này bằng người dùng mà octoboardd đang chạy, và sao chép địa chỉ nó in ra, bắt đầu bằng <code dir="ltr">{tunnel.addressStart}</code>. Bỏ qua lệnh SSH mà nó in sau đó.
+   Chạy hai lệnh này với tư cách người dùng đang chạy octoboardd. Lệnh đầu mở cổng trình duyệt, chỉ trên <code dir="ltr">127.0.0.1</code> (thêm <code dir="ltr">--port</code> và một số để dùng cổng khác); lệnh sau in ra địa chỉ. Sao chép địa chỉ được in ra, bắt đầu bằng <code dir="ltr">{tunnel.addressStart}</code>, và bỏ qua lệnh SSH được in sau đó.
+
+   <Code code={commands.browserOn} lang="sh" />
 
    <Code code={commands.address} lang="sh" />
    </TabItem>
    </Tabs>
-2. Khởi động chương trình chuyển tiếp trên máy đích, nó nối một cổng trên <code dir="ltr">{tunnel.loopback}</code> của máy đích với {productName}. Cổng này là <strong>cổng của máy đích</strong> trong các bước bên dưới.
+2. Ghi lại cổng mà {productName} lắng nghe tại <code dir="ltr">{tunnel.loopback}</code> trên máy đích. Cổng này là <strong>cổng của máy đích</strong> trong các bước dưới đây.
 
    <Tabs syncKey="host">
    <TabItem label="macOS">
-   Chạy lệnh này trong Terminal và để cửa sổ mở. Nó chỉ lắng nghe tại <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   Cổng của máy đích là <code dir="ltr">{tunnel.bridgePort}</code>.
+   Không cần chạy gì: chính {productName} lắng nghe trên cổng trình duyệt, chỉ tại <code dir="ltr">127.0.0.1</code>. Cổng của máy đích là <strong>Cổng trình duyệt</strong> ({commands.defaultPort} nếu bạn chưa đổi).
    </TabItem>
    <TabItem label="Windows">
    Không cần chạy gì: chính {productName} lắng nghe trên cổng trình duyệt, chỉ tại <code dir="ltr">127.0.0.1</code>. Cổng của máy đích là <strong>Cổng trình duyệt</strong> ({commands.defaultPort} nếu bạn chưa đổi).
    </TabItem>
    <TabItem label="Linux">
-   Chạy lệnh này bằng cùng người dùng, trong một terminal hoặc một phiên <code dir="ltr">tmux</code> được giữ mở. Nó chỉ lắng nghe tại <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   Cổng của máy đích là <code dir="ltr">{tunnel.bridgePort}</code>.
+   Không còn gì phải chạy: chính octoboardd lắng nghe trên cổng trình duyệt, chỉ trên <code dir="ltr">127.0.0.1</code>. Cổng của máy đích là <code dir="ltr">{commands.defaultPort}</code>, hoặc số bạn đưa vào với <code dir="ltr">--port</code>.
    </TabItem>
    </Tabs>
 3. Chia sẻ cổng của máy đích với tailnet của bạn bằng Tailscale Serve, và để cửa sổ mở. Tuyệt đối không dùng Tailscale Funnel, vì nó sẽ đưa cổng này lên internet công khai.
 
    <Tabs syncKey="host">
    <TabItem label="macOS">
-   <Code code={tunnel.serveBridge} lang="sh" />
+   <Code code={tunnel.serveBrowserPort} lang="sh" />
 
    Với ứng dụng Tailscale từ App Store, hãy chạy lệnh bằng <code dir="ltr">{tunnel.macCli}</code> thay cho <code dir="ltr">tailscale</code>. Với ứng dụng bản độc lập, hãy cài lệnh trước từ phần cài đặt của nó, mục CLI integration.
+
+   Dùng cổng của bạn nếu bạn đã đổi <strong>Cổng trình duyệt</strong>.
    </TabItem>
    <TabItem label="Windows">
    Trong PowerShell hoặc Command Prompt:
@@ -112,7 +108,7 @@ Các bước này chưa được thử đầy đủ. Chúng dựa theo tài li�
    Dùng cổng của bạn nếu bạn đã đổi <strong>Cổng trình duyệt</strong>.
    </TabItem>
    <TabItem label="Linux">
-   <Code code={tunnel.serveBridge} lang="sh" />
+   <Code code={tunnel.serveBrowserPort} lang="sh" />
 
    Nếu Tailscale báo bạn không đủ quyền, hãy cho phép người dùng của bạn quản lý nó một lần bằng <code dir="ltr">{tunnel.linuxOperator}</code>, hoặc chạy lệnh với <code dir="ltr">sudo</code>.
    </TabItem>
@@ -157,23 +153,24 @@ Bạn sẽ biết là đã thành công khi {productName} mở trong thẻ trìn
 
 ## Nếu không được
 
-- <strong>Trang không tải:</strong> một trong các cửa sổ đã bị đóng, hoặc lệnh của nó đã dừng. Kiểm tra các chương trình chuyển tiếp và Tailscale Serve vẫn đang chạy, và <code dir="ltr">{tunnel.serveStatus}</code> trên máy đích có liệt kê cổng của máy đích.
+- <strong>Trang không tải:</strong> một cửa sổ đã bị đóng hoặc lệnh của nó đã dừng. Kiểm tra chương trình chuyển tiếp trên máy của bạn và Tailscale Serve vẫn đang chạy, và <code dir="ltr">{tunnel.serveStatus}</code> trên máy đích liệt kê cổng của máy đích.
 - <strong>socat báo “Address already in use”:</strong> cổng đó đã bị chiếm trên máy tính đó. Hãy chọn cổng khác; trên máy tính của bạn, đổi cả trong địa chỉ trình duyệt.
 - <strong>Trang bị từ chối hoặc trống:</strong> kiểm tra bạn đã mở địa chỉ tại <code dir="ltr">{tunnel.loopback}</code>, không phải tên Tailscale của máy đích hay địa chỉ <code dir="ltr">100.x.y.z</code>.
-- <strong>Chương trình chuyển tiếp trên máy đích in “Connection refused” hoặc “No such file or directory” khi bạn mở trang:</strong> <strong>Cho phép truy cập từ xa</strong> đang tắt, hoặc {productName} không chạy trên máy đích (trên Linux, là octoboardd không chạy).
+- <strong>Chương trình chuyển tiếp trên máy của bạn in “Connection refused”, hoặc trang bị từ chối, khi bạn mở nó:</strong> <strong>Cho phép truy cập từ trình duyệt</strong> đang tắt, chương trình khác đang giữ cổng trình duyệt (Cài đặt sẽ báo), hoặc {productName} không chạy trên máy đích (trên Linux, octoboardd không chạy, hoặc chưa chạy <code dir="ltr">{commands.browserOn}</code>).
 
 ## Tắt đi
 
 - <strong>Trên máy tính bạn đã dùng để duyệt web:</strong> dừng socat bằng <kbd>Ctrl</kbd>+<kbd>C</kbd>, hoặc trên Windows thì xóa chuyển tiếp trong PowerShell chạy với quyền quản trị viên:
 
   <Code code={tunnel.visitorForwardWindowsOff} lang="powershell" />
-- <strong>Trên máy đích:</strong> dừng lệnh Tailscale Serve và socat bằng <kbd>Ctrl</kbd>+<kbd>C</kbd>. Dùng <code dir="ltr">{tunnel.serveStatus}</code> để kiểm tra không còn gì được chia sẻ; nếu cổng vẫn còn trong danh sách, gỡ nó bằng <code dir="ltr">{tunnel.serveBridgeOff}</code> (trên Windows là <code dir="ltr">{tunnel.serveBrowserPortOff}</code>).
-- <strong>Trên máy đích Mac hoặc Windows,</strong> tắt <strong>Cho phép truy cập từ xa</strong> khi bạn không cần nữa. Việc này đóng lối vào của trình duyệt và ngắt mọi trang đã mở bằng khóa.
-- <strong>Nếu địa chỉ có thể đã bị lộ,</strong> hãy cấp cho nó một khóa mới bằng <strong>Đổi khóa</strong> trên thẻ <strong>Trình duyệt</strong>, hoặc trên Linux bằng <code dir="ltr">{tunnel.rotate}</code>. Các trang đang mở bằng địa chỉ cũ sẽ bị ngắt.
+- <strong>Trên máy đích:</strong> dừng lệnh Tailscale Serve bằng <kbd>Ctrl</kbd>+<kbd>C</kbd>. Dùng <code dir="ltr">{tunnel.serveStatus}</code> để kiểm tra không còn gì được chia sẻ; nếu cổng vẫn còn trong danh sách, gỡ nó bằng <code dir="ltr">{tunnel.serveBrowserPortOff}</code>.
+- <strong>Trên máy đích Mac hoặc Windows,</strong> tắt <strong>Cho phép truy cập từ trình duyệt</strong> khi bạn không cần nữa. Việc này đóng cổng trình duyệt và ngắt mọi trang đã mở bằng khóa.
+- <strong>Trên máy đích Linux,</strong> chạy <code dir="ltr">{commands.browserOff}</code> khi bạn không cần nữa. Việc này đóng cổng trình duyệt và ngắt mọi trang đã mở bằng khóa.
+- <strong>Nếu địa chỉ có thể đã bị lộ,</strong> hãy cấp cho nó một khóa mới bằng <strong>Đổi khóa</strong> trong <strong>Cài đặt › Truy cập</strong>, hoặc trên Linux bằng <code dir="ltr">{tunnel.rotate}</code>. Các trang đang mở bằng địa chỉ cũ sẽ bị ngắt.
 
 ## Bảo mật
 
 - <strong>Địa chỉ chính là mật khẩu:</strong> khóa của nó cho toàn quyền điều khiển {productName} trên máy đích, kể cả chạy bất kỳ lệnh nào. Nó có hiệu lực cho đến khi bạn đổi khóa. Nó nằm lại trong lịch sử và dấu trang của trình duyệt, đồng thời đồng bộ sang các thiết bị khác của bạn nếu bật đồng bộ trình duyệt.
-- <strong>Ai tới được nó:</strong> bất kỳ ai tới được cổng của máy đích và có khóa. Các chương trình chuyển tiếp chỉ lắng nghe tại <code dir="ltr">127.0.0.1</code>, nên các thiết bị khác trong mạng của máy đích hay mạng của bạn không tới được; Tailscale Serve chỉ làm cho cổng của máy đích tới được từ tailnet của bạn, trong phạm vi các quy tắc truy cập của nó cho phép.
-- <strong>Chỉ dùng trên những máy mà không ai khác đăng nhập:</strong> một tài khoản người dùng khác trên máy đích hoặc trên máy tính của bạn có thể kết nối tới các cổng <code dir="ltr">127.0.0.1</code> này, và khi một chương trình chuyển tiếp không chạy, nó có thể chiếm cổng đó và nhận được khóa khi trình duyệt của bạn kết nối lại. [Kết nối qua SSH](../remote-connections/) không có điểm yếu này trên máy đích Mac hoặc Linux, và máy tính của bạn cũng không có khi dùng ứng dụng máy tính. Nhưng trong trình duyệt, máy tính của bạn vẫn có điểm yếu này, vì chuyển tiếp SSH ở đó cũng lắng nghe trên một cổng <code dir="ltr">127.0.0.1</code>.
+- <strong>Ai tới được nó:</strong> bất kỳ ai tới được cổng của máy đích và có khóa. Cổng trình duyệt và chương trình chuyển tiếp chỉ lắng nghe tại <code dir="ltr">127.0.0.1</code>, nên các thiết bị khác trong mạng của máy đích hay mạng của bạn không tới được; Tailscale Serve chỉ làm cho cổng của máy đích tới được từ tailnet của bạn, trong phạm vi các quy tắc truy cập của nó cho phép.
+- <strong>Chỉ dùng trên những máy mà không ai khác đăng nhập:</strong> một tài khoản người dùng khác trên máy đích hoặc trên máy tính của bạn có thể kết nối tới các cổng <code dir="ltr">127.0.0.1</code> này, và có thể chiếm cổng trình duyệt trên máy đích khi {productName} không chạy hoặc đang khởi động lại, hoặc cổng của chương trình chuyển tiếp trên máy của bạn khi nó không chạy, rồi nhận được khóa khi trình duyệt của bạn kết nối lại. [Kết nối qua SSH](../remote-connections/) không có điểm yếu này trên máy đích Linux đã tắt truy cập từ trình duyệt, cũng như trên máy đích Mac hoặc Windows khi dùng từ ứng dụng máy tính, và máy tính của bạn cũng không có khi dùng ứng dụng máy tính. Nhưng trong trình duyệt, máy tính của bạn vẫn có điểm yếu này, vì chuyển tiếp SSH ở đó cũng lắng nghe trên một cổng <code dir="ltr">127.0.0.1</code>.
 - <strong>Không bao giờ dùng Funnel:</strong> Tailscale Funnel sẽ đưa cổng này lên cả internet.

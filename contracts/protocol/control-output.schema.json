@@ -9958,11 +9958,19 @@
       "properties": {
         "allowed": {
           "type": "boolean",
-          "description": "The Allow remote access setting, as the user left it. Off unless the user turned it on. It\nis the user's alone: no agent's settings tool reads or changes it, and no configuration\nexport carries it."
+          "description": "The Allow remote access setting, as the user left it: whether another computer's\napplication, or a browser forwarding to the socket, may reach this daemon over the owner\nsocket (Linux, macOS) or the owner pipe (Windows). Off unless the user turned it on, and\nalways off in the server form's daemon, whose socket serves whatever the setting. It is the\nuser's alone: no agent's settings tool reads or changes it, and no configuration export\ncarries it."
         },
         "state": {
           "$ref": "#/$defs/RemoteAccessState",
-          "description": "What the daemon does with it right now."
+          "description": "What the daemon does with remote access right now."
+        },
+        "browser_allowed": {
+          "type": "boolean",
+          "description": "The Allow browser access setting, as the user left it: whether the daemon serves the browser\nat the loopback port `browser_port` names. Off unless the user turned it on (on Windows, a\nstore from before the setting began with the value remote access had). False wherever\n`browser_port` is null. Like `allowed`, it is the user's alone."
+        },
+        "browser_state": {
+          "$ref": "#/$defs/RemoteAccessState",
+          "description": "What the daemon does with browser access right now."
         },
         "browser_port": {
           "type": [
@@ -9972,28 +9980,28 @@
           "format": "uint16",
           "minimum": 0,
           "maximum": 65535,
-          "description": "On Windows, whose SSH server cannot forward to a socket, the loopback port the daemon serves\nthe browser at while remote access is on, in place of the owner socket, as the user set it\n(`set_remote_access_port`); set whatever `state` is. Null on every other system, where the\nbrowser goes through the owner socket. Like `allowed`, it is the user's alone."
+          "description": "The loopback port the daemon serves the browser at while browser access is on (Windows,\nmacOS and the server form), as the user set it (`set_remote_access_port`); set whatever\n`browser_state` is. Null where the daemon offers no browser port (Linux's desktop daemon),\nwhere the browser goes through the owner socket. Like `allowed`, it is the user's alone."
         },
         "address": {
           "type": [
             "string",
             "null"
           ],
-          "description": "The address a browser opens, `http://127.0.0.1:<port>/?key=<owner key>`, through the forward\nbelow; set while `state` is `serving`, null otherwise. The port is the one the forward binds\non the browser's machine, which stays the same across launches, so the address can be\nbookmarked."
+          "description": "The address a browser opens, `http://127.0.0.1:<port>/?key=<owner key>`; set while the\nbrowser port serves (the port is `browser_port`, which a browser on this computer opens as\nit is), else while `state` is `serving` and the daemon has an owner socket (the port is the\none the socket's forward binds on the browser's machine, which stays the same across\nlaunches, so the address can be bookmarked); null otherwise."
         },
         "forward_command": {
           "type": [
             "string",
             "null"
           ],
-          "description": "The command the browser's machine forwards the owner socket (on Windows, `browser_port`)\nwith, as `octoboardd address` prints it, the remote host left as `<server>` for the owner to\nfill in; set while `state` is `serving`, null otherwise."
+          "description": "The command the browser's machine forwards a port of its own to the daemon with, as\n`octoboardd address` prints it, the remote host left as `<server>` for the owner to fill in:\nto `browser_port` while the port serves, else to the owner socket; set whenever `address` is,\nnull otherwise."
         },
         "server_addresses": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "What another computer can reach this one by, for the owner to put in the forward's\n`<server>`, in the order Settings offers them: this computer's name (on macOS the Bonjour\n`<name>.local`, elsewhere the host name as the system reports it), then its IPv4 and then\nits IPv6 addresses, each as text that `ssh` takes after `user@` as it is. Loopback, unspecified, multicast and link-local addresses and\n`localhost` names are left out, as are deprecated, tentative and failed addresses where the\nsystem says so (Linux, Windows) and temporary IPv6 addresses on Linux (they are kept on\nmacOS and Windows). Read when the state is; set while `state` is `serving`, empty\notherwise, and empty while the computer reports none."
+          "description": "What another computer can reach this one by, for the owner to put in the forward's\n`<server>`, in the order Settings offers them: this computer's name (on macOS the Bonjour\n`<name>.local`, elsewhere the host name as the system reports it), then its IPv4 and then\nits IPv6 addresses, each as text that `ssh` takes after `user@` as it is. Loopback, unspecified, multicast and link-local addresses and\n`localhost` names are left out, as are deprecated, tentative and failed addresses where the\nsystem says so (Linux, Windows) and temporary IPv6 addresses on Linux (they are kept on\nmacOS and Windows). Read when the state is; set while `state` or `browser_state` is\n`serving`, empty otherwise, and empty while the computer reports none."
         },
         "failure": {
           "anyOf": [
@@ -10004,7 +10012,18 @@
               "type": "null"
             }
           ],
-          "description": "Why the daemon could not serve a browser though the setting is on; set while `state` is\n`failed`, null otherwise."
+          "description": "Why the daemon could not serve remote access though the setting is on; set while `state` is\n`failed`, null otherwise."
+        },
+        "browser_failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RemoteAccessFailure"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why the daemon could not serve the browser port though browser access is on; set while\n`browser_state` is `failed`, null otherwise."
         },
         "connection": {
           "anyOf": [
@@ -10021,14 +10040,17 @@
       "required": [
         "allowed",
         "state",
+        "browser_allowed",
+        "browser_state",
         "browser_port",
         "address",
         "forward_command",
         "server_addresses",
         "failure",
+        "browser_failure",
         "connection"
       ],
-      "description": "Where remote access to a daemon that follows the desktop application stands\n(`snapshot.remote_access`, `remote_access_updated`)."
+      "description": "Where remote access and browser access to a daemon that follows the desktop application stand\n(`snapshot.remote_access`, `remote_access_updated`), and, in the server form's daemon, where\nbrowser access stands."
     },
     "RemoteAccessFailure": {
       "type": "object",
@@ -10045,7 +10067,7 @@
         "reason",
         "detail"
       ],
-      "description": "Why the way in (the owner socket, or on Windows the browser port and the owner pipe) is not\nserved though remote access is on."
+      "description": "Why a way in (the owner socket or owner pipe of remote access, the browser port of browser\naccess) is not served though its setting is on."
     },
     "RemoteAccessFailureReason": {
       "oneOf": [
@@ -10072,12 +10094,17 @@
         {
           "type": "string",
           "const": "port_in_use",
-          "description": "On Windows, `browser_port` is already in use, by another program or another user of the\ncomputer: nothing is served until the port is changed or freed."
+          "description": "`browser_port` is already in use, by another program or another user of the computer: the\nport is not served until it is changed or freed."
+        },
+        {
+          "type": "string",
+          "const": "port_is_daemons",
+          "description": "`browser_port` is the daemon's own TCP port, which never serves the browser: the port is\nnot served until it is changed."
         },
         {
           "type": "string",
           "const": "port_failed",
-          "description": "On Windows, `browser_port` could not be listened on for another reason."
+          "description": "`browser_port` could not be listened on for another reason."
         },
         {
           "type": "string",
@@ -10092,20 +10119,20 @@
         {
           "type": "string",
           "const": "off",
-          "description": "The setting is off: no way in for the browser (owner socket, or on Windows browser port and\nowner pipe), no owner key."
+          "description": "The setting is off: the way in it opens is closed (for remote access the owner socket, or\non Windows the owner pipe; for browser access the browser port). The owner key is refused\nonce both settings are off."
         },
         {
           "type": "string",
           "const": "serving",
-          "description": "The way in is open (the owner socket, or on Windows the browser port and the owner pipe),\nserves the UI, and accepts the owner key."
+          "description": "The way in is open, serves the UI where it is a browser's, and accepts the owner key."
         },
         {
           "type": "string",
           "const": "failed",
-          "description": "The setting is on, but the way in could not be opened or the owner key could not be held\n(`failure` says which): nothing is served, and turning the setting off and on again tries\nagain, as does setting the browser port again on Windows, the same port included."
+          "description": "The setting is on, but its way in could not be opened or the owner key could not be held\n(`failure` or `browser_failure` says which): nothing of it is served, and turning the\nsetting off and on again tries again, as does setting the browser port again for browser\naccess, the same port included."
         }
       ],
-      "description": "What a daemon that follows the application does with remote access."
+      "description": "What a daemon that follows the application does with one of its two settings, remote access\n(`state`) or browser access (`browser_state`)."
     },
     "ResetCredit": {
       "type": "object",

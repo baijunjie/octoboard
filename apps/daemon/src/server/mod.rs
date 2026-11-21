@@ -103,6 +103,7 @@ fn routes(state: Arc<AppState>) -> Router {
         .route("/shutdown", post(callbacks::shutdown))
         .route("/restart", post(callbacks::restart))
         .route("/restart-check", post(callbacks::restart_check))
+        .route("/stop-check", post(callbacks::stop_check))
         .route("/planned-stop", post(callbacks::planned_stop))
         .route("/key-check", get(keys::key_check))
         .route("/owner-key/rotate", post(keys::rotate_owner_key))
@@ -134,6 +135,7 @@ mod tests {
                 "POST /shutdown",
                 "POST /restart",
                 "POST /restart-check",
+                "POST /stop-check",
                 "POST /planned-stop",
                 "GET /key-check",
                 "POST /owner-key/rotate",
@@ -440,6 +442,86 @@ mod tests {
             );
         }
         assert!(!state.stop_asked());
+    }
+
+    /// What `POST /stop-check` lists is what the application's quit confirmation counts: sessions
+    /// starting, working, waiting for the user and dormant, and none of the ones at rest, ended or
+    /// archived; it answers `200`, asks for no stop, and lists no shell terminal where none runs.
+    #[tokio::test]
+    async fn the_stop_check_lists_the_sessions_a_quit_would_ask_about_and_stops_nothing() {
+        use crate::protocol::SessionStatus;
+
+        let (state, dir) = app_state("server-stop-check");
+        for (id, status) in [
+            ("starting", SessionStatus::Starting),
+            ("working", SessionStatus::Working),
+            ("waiting", SessionStatus::WaitingUser),
+            ("dormant", SessionStatus::Dormant),
+            ("idle", SessionStatus::Idle),
+            ("interrupted", SessionStatus::Interrupted),
+            ("archived", SessionStatus::Archived),
+        ] {
+            crate::state::test_support::insert_record(&state, &dir, id, status);
+        }
+        let port = super::test_support::serve_state(state.clone()).await;
+        let answer = tokio::task::spawn_blocking(move || {
+            crate::loopback::post(port, TEST_KEY, "/stop-check", b"{}", PATIENCE)
+        })
+        .await
+        .expect("the request ran")
+        .expect("answered");
+        let impact: crate::coordinator::stop_check::StopImpact =
+            serde_json::from_slice(&answer).expect("the impact as JSON");
+        let mut listed: Vec<(String, String)> = impact
+            .sessions
+            .into_iter()
+            .map(|session| (session.id, session.status))
+            .collect();
+        listed.sort();
+        let pair = |id: &str, status: &str| (id.to_owned(), status.to_owned());
+        assert_eq!(
+            listed,
+            [
+                pair("dormant", "dormant"),
+                pair("starting", "starting"),
+                pair("waiting", "waiting_user"),
+                pair("working", "working"),
+            ]
+        );
+        assert!(impact.shell_terminals.is_empty());
+        assert!(!state.stop_asked(), "the check asked for a stop");
+    }
+
+    /// Nothing at work: the stop check lists nothing, and is empty.
+    #[tokio::test]
+    async fn the_stop_check_of_a_daemon_with_nothing_running_is_empty() {
+        let (state, _dir) = app_state("server-stop-check-empty");
+        let port = super::test_support::serve_state(state).await;
+        let answer = tokio::task::spawn_blocking(move || {
+            crate::loopback::post(port, TEST_KEY, "/stop-check", b"{}", PATIENCE)
+        })
+        .await
+        .expect("the request ran")
+        .expect("answered");
+        let impact: crate::coordinator::stop_check::StopImpact =
+            serde_json::from_slice(&answer).expect("the impact as JSON");
+        assert!(impact.is_empty(), "{impact:?}");
+    }
+
+    /// A daemon that cannot read its sessions does not answer the stop check with none listed:
+    /// `stop` would take that as nothing running and interrupt them.
+    #[tokio::test]
+    async fn the_stop_check_answers_500_where_the_sessions_cannot_be_read() {
+        let (state, _dir) = app_state("server-stop-check-unreadable");
+        state.store.drop_sessions().expect("the table dropped");
+        let port = super::test_support::serve_state(state).await;
+        let host = format!("Host: 127.0.0.1:{port}");
+        let status = tokio::task::spawn_blocking(move || {
+            status_of(port, &keyed("POST /stop-check"), &[&host])
+        })
+        .await
+        .expect("the request ran");
+        assert_eq!(status, 500);
     }
 
     /// The handshake a browser sends: a refusal must come before the upgrade, and an allowed

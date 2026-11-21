@@ -17,7 +17,7 @@
 #
 # Options:
 #   --service             Install the systemd user unit octoboardd.service, enable it and start it.
-#   --port N              The port the unit's daemon listens on (with --service; default: default_port, set below).
+#   --port N              The port the unit's daemon itself listens on (with --service; default: one the system assigns).
 #   --beta                Take the newest beta instead of the newest stable release.
 #   --stable              Take the newest stable release even when the installed beta is newer.
 #   --allow-downgrade     Install the channel's newest release even when it is older than the installed one.
@@ -34,9 +34,6 @@
 set -eu
 
 manifest_base_default="https://github.com/baijunjie/octoboard/releases/download/updater"
-# The port the service listens on without --port, the same as `octoboardd start`'s (`defaultServerPort` in the
-# repository's config/app.json).
-default_port=3369
 # The public half of the update key the release signs every archive with (the desktop application's updater trusts
 # the same key).
 update_pubkey="RWSVMIwih++1gX8lYHjtWtYI6FzRxgcQVkKLHTqLgNw0lz27touOK8GB"
@@ -56,7 +53,7 @@ Usage: install.sh [--service [--port N]] [--beta | --stable] [--allow-downgrade]
                   [--bin-dir DIR]
 
   --service             Install the systemd user unit octoboardd.service, enable it and start it.
-  --port N              The port the service's daemon listens on (default $default_port).
+  --port N              The port the service's daemon itself listens on (default: one the system assigns).
   --beta                Install the newest beta instead of the newest stable release.
   --stable              Install the newest stable release even when the installed beta is newer.
   --allow-downgrade     Install the newest release even when it is older than the installed one.
@@ -256,7 +253,6 @@ main() {
     esac
     { [ "$port" -ge 1 ] && [ "$port" -le 65535 ]; } || fail "--port $port is not a port number."
   fi
-  port=${port:-$default_port}
   # Run as root (`sudo sh`) or with another user's home (sudo keeping HOME), the files would belong to someone else
   # than the user the daemon runs as, who could then neither update nor replace them.
   uid=$(id -u)
@@ -372,7 +368,7 @@ main() {
   elif [ "$running" = true ]; then
     restart_if_safe "A daemon is running from the file this replaced. Run \`$run_as restart\` to move it to $version; its sessions keep running." || :
   else
-    say "Start it with \`$run_as start\` (port $port; \`--port N\` picks another), then run \`$run_as address\`: it prints the address to open and the SSH forward to open it through."
+    say "Start it with \`$run_as start\`, then run \`$run_as address\`: it prints the address to open and the SSH forward to open it through."
   fi
 
   case ":${PATH:-}:" in
@@ -413,30 +409,29 @@ install_service() {
   unit="$unit_dir/octoboardd.service"
   [ -f "$unpacked/octoboardd.service" ] || fail "the archive does not hold octoboardd.service."
   mkdir -p "$unit_dir"
-  exec_start="ExecStart=$binary --port $port --service-managed"
+  exec_start="ExecStart=$binary --service-managed"
+  if [ "$port_given" = true ]; then exec_start="ExecStart=$binary --port $port --service-managed"; fi
   sed "s|^ExecStart=.*|$exec_start|" "$unpacked/octoboardd.service" > "$tmp/octoboardd.service"
   grep -qxF "$exec_start" "$tmp/octoboardd.service" || fail "the archive's octoboardd.service has no ExecStart line."
   changed=false
   if [ -f "$unit" ] && ! cmp -s "$tmp/octoboardd.service" "$unit"; then
     changed=true
-    say "Replaced $unit with the unit of $version for port $port; any changes you made to it are gone."
+    say "Replaced $unit with the unit of $version; any changes you made to it are gone."
   fi
   mv -f "$tmp/octoboardd.service" "$unit"
   systemctl --user daemon-reload || fail "systemctl --user could not reach your user's service manager (log in over SSH rather than with su, so that a user session exists)."
   systemctl --user enable octoboardd.service > /dev/null 2>&1 || fail "could not enable octoboardd.service."
   if systemctl --user is-active --quiet octoboardd.service; then
     if [ "$changed" = true ]; then
-      if restart_if_safe "The service is running from the file and the unit this replaced. Run \`$run_as restart\` to move it to $version and to the new unit, port $port included; its sessions keep running. Then open the address \`$run_as address\` prints."; then
-        say "The new unit's port may differ from the old one: open the address \`$run_as address\` prints."
-      fi
+      restart_if_safe "The service is running from the file and the unit this replaced. Run \`$run_as restart\` to move it to $version and to the new unit; its sessions keep running." || :
     else
       restart_if_safe "The service is running from the file this replaced. Run \`$run_as restart\` to move it to $version; its sessions keep running." || :
     fi
   elif [ "$running" = true ]; then
-    say "Installed and enabled the service, but did not start it: a daemon started outside it is running. Stop that one (\`$run_as stop\`) and run \`systemctl --user start octoboardd\`."
+    say "Installed and enabled the service, but did not start it: a daemon started outside it is running. Stop that one (\`$run_as stop\`, adding \`--force\` if it says it is running work) and run \`systemctl --user start octoboardd\`."
   else
     systemctl --user start octoboardd.service || fail "the service did not start; see \`journalctl --user -u octoboardd\`."
-    say "Started the service on port $port. Run \`$run_as address\`: it prints the address to open and the SSH forward to open it through."
+    say "Started the service. Run \`$run_as address\`: it prints the address to open and the SSH forward to open it through."
   fi
   # Lingering keeps the user's services running after logout and starts them at boot. polkit lets users turn it on for
   # themselves by default, so it is tried here (never asking for a password) and only advised when that is refused.

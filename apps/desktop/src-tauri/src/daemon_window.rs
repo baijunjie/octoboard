@@ -308,12 +308,16 @@ mod tests {
             "request_permission",
             "open_privacy_settings",
             // The updater, the directory picker (the daemon does not share this machine's files)
-            // and the SSH server of this computer (the Remote access section is the local one's).
+            // and the SSH server of this computer (the Access section is the local one's).
             "check_for_update",
             "install_update",
             "pick_directory",
             "remote_login_status",
             "open_remote_login_settings",
+            // The command-line tool of this computer (the General section is the local one's).
+            "command_line_status",
+            "command_line_install",
+            "command_line_remove",
             // The remote daemons, which the Remote devices page of the main window keeps.
             "remote_daemons_list",
             "remote_daemon_save",

@@ -65,10 +65,10 @@ SSH로 이 컴퓨터에서 Linux 서버나 다른 컴퓨터의 {productName}을(
 
 <Steps>
 
-1. 접속하려는 컴퓨터에서 {productName}의 <strong>설정 › 원격 접근</strong>을 여세요.
+1. 접속하려는 컴퓨터에서 {productName}의 <strong>설정 › 접근</strong>을 여세요.
 2. 거기서 <strong>시스템 설정 열기</strong>(macOS) 또는 <strong>설정 열기</strong>(Windows)를 누르고, 해당 항목에 나온 경로를 따라 <strong>원격 로그인</strong>(macOS) 또는 <strong>OpenSSH Server</strong>(Windows)를 켜서 이 컴퓨터가 SSH 로그인을 받게 하세요. 관리자 권한이 필요합니다. {productName}으로 돌아오면 해당 항목에 <strong>켬</strong>이라고 표시됩니다.
 3. <strong>원격 접근 허용</strong>을 켜고 <strong>허용</strong>을 눌러 확인한 다음, {productName}을(를) 계속 실행해 두세요. 종료하면 원격 접근이 멈춥니다.
-4. <strong>{productName} 앱</strong> 탭에서 <strong>연결 정보 복사</strong>를 누르고, 이메일이나 메신저 등으로 다른 컴퓨터에 보내세요.
+4. <strong>연결 정보 복사</strong>를 누르고, 이메일이나 메신저 등으로 다른 컴퓨터에 보내세요.
 5. 작업할 컴퓨터에서 [Linux 서버에 연결하기](#linux-서버에-연결하기)의 2~5단계와 같이 호스트를 추가하되, 보낸 연결 정보를 붙여넣으세요. 호스트의 사용자 이름과 비밀번호로 로그인하세요.
 
 </Steps>
@@ -81,7 +81,7 @@ SSH로 이 컴퓨터에서 Linux 서버나 다른 컴퓨터의 {productName}을(
 
 1. SSH 포워드 명령을 가져오세요.
 
-   - <strong>Mac이나 Windows 호스트라면</strong> 먼저 [다른 컴퓨터를 호스트로 사용하기](#다른-컴퓨터를-호스트로-사용하기)의 1~3단계를 하세요. 그런 다음 <strong>브라우저</strong> 탭의 <strong>1단계: SSH 포워드</strong>를 보세요. 명령에 있는 주소를 눌러 다른 컴퓨터가 이 컴퓨터에 접속할 방법을 고르고(또는 <strong>주소 직접 입력</strong>을 선택하고 나중에 <code dir="ltr">{commands.server}</code>을(를) 직접 바꾸고), <strong>포워딩 명령 복사</strong>를 누르세요. 또 <strong>2단계: 브라우저 주소</strong> 아래의 <strong>주소 복사</strong>도 누르세요.
+   - <strong>Mac이나 Windows 호스트라면</strong> 먼저 [다른 컴퓨터를 호스트로 사용하기](#다른-컴퓨터를-호스트로-사용하기)의 1~2단계를 하세요. 그런 다음 <strong>설정 › 접근</strong>을 열고 <strong>브라우저 접근 허용</strong>을 켠 다음 <strong>허용</strong>을 눌러 확인하세요. <strong>브라우저</strong> 탭의 <strong>1단계: SSH 포워드</strong>를 보세요. 명령에 있는 주소를 눌러 다른 컴퓨터가 이 컴퓨터에 접속할 방법을 고르고(또는 <strong>주소 직접 입력</strong>을 선택하고 나중에 <code dir="ltr">{commands.server}</code>을(를) 직접 바꾸고), <strong>포워딩 명령 복사</strong>를 누르세요. 또 <strong>이 컴퓨터의 브라우저</strong> 아래의 <strong>로컬 주소 복사</strong>도 누르세요.
    - <strong>Linux 서버라면</strong> 서버에서 다음을 실행하세요. 브라우저 주소가 출력되고, 이어서 실행할 SSH 명령이 출력됩니다.
 
      <Code code={commands.address} lang="sh" />

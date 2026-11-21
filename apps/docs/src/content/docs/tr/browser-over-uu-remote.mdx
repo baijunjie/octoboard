@@ -14,7 +14,7 @@ Bu kılavuz {productName} uygulamasını kendi bilgisayarınızdaki bir tarayıc
 Bunun sizin için doğru yol olup olmadığından emin değil misiniz? [Bağlanma yolunu seçin](../choose-how-to-connect/) sayfasına bakın.
 
 <Aside type="caution">
-Bu adımlar henüz iki cihaz arasında sınanmadı. UU Remote’un kendi yardımını izlerler. Mac ana makinesindeki aktarıcı, tarayıcının canlı bağlantısı dahil tek bir bilgisayarda denendi.
+Bu adımlar henüz iki cihaz arasında sınanmadı. UU Remote’un kendi yardımını izlerler.
 </Aside>
 
 <strong>Bilgisayarınızdaki tarayıcı</strong> → <strong>bilgisayarınızdaki 127.0.0.1</strong> ⟷ UU Remote ⟷ <strong>ana makinedeki 127.0.0.1</strong> → <strong>{productName}</strong>
@@ -25,7 +25,6 @@ Bu adımlar henüz iki cihaz arasında sınanmadı. UU Remote’un kendi yardım
 - <strong>127.0.0.1 (loopback):</strong> her zaman “bu aynı bilgisayar” anlamına gelen bir adres.
 - <strong>Bağlantı noktası (port):</strong> bir bilgisayarda tek bir programı seçen, kapı numarası gibi bir sayı. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code>, bu bilgisayardaki {commands.defaultPort} numaralı bağlantı noktasıdır.
 - <strong>Bağlantı noktası eşleme (端口映射):</strong> ana makinedeki bir bağlantı noktasını kendi bilgisayarınızda bir bağlantı noktası olarak gösteren bir UU Remote özelliği.
-- <strong>socat:</strong> bir bağlantıyı bir yerden başka bir yere ileten küçük, ücretsiz bir program. Mac ana makinesinin aktarıcı olarak buna ihtiyacı vardır.
 - <strong>Terminal:</strong> komutları yazdığınız pencere: macOS’te Terminal, Windows’ta PowerShell.
 
 </details>
@@ -37,7 +36,6 @@ UU Remote’un bağlantı noktası eşlemesi, ana makinedeki {productName} uygul
 - <strong>İki bilgisayar da bir Mac veya Windows bilgisayarı.</strong> UU Remote’un Linux için bağlantı noktası eşlemesi yok; bir Linux sunucusuna bunun yerine [Tailscale](../browser-over-tailscale/) veya [SSH](../remote-connections/) ile ulaşın.
 - <strong>İkisinde de UU Remote kurulu ve aynı hesapta oturum açılmış,</strong> Windows’ta 4.21.0 veya sonrası, macOS’te 4.32.0 veya sonrası sürümde. Bağlantı noktası eşleme yalnızca TCP için çalışır; {productName} için gereken de bu kadardır. Yazıldığı sırada UU Remote, bağlantı noktası eşlemeyi ücretsiz özellikleri arasında listeliyor; şüpheniz varsa güncel planlarına bakın.
 - <strong>Ana makine, tarayıcıyı kullanacağınız bilgisayardaki UU Remote’ta Cihazlarım (我的设备) altında görünüyor.</strong>
-- <strong>Mac ana makinesinin ayrıca [Homebrew](https://brew.sh/) gerekir</strong>, aşağıda socat’ı kurmak için.
 
 ## Ana makinede
 
@@ -45,32 +43,10 @@ UU Remote’un bağlantı noktası eşlemesi, ana makinedeki {productName} uygul
 
 1. Tarayıcının oturum açmasını sağlayan anahtarı taşıyan tarayıcı adresini alın.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
    <HostBrowserAddress />
-   </TabItem>
-   <TabItem label="Windows">
-   <HostBrowserAddress windows />
-   </TabItem>
-   </Tabs>
 2. Ana makinenin <code dir="ltr">{tunnel.loopback}</code> adresinde, {productName} uygulamasına çıkan bir bağlantı noktası oluşturun. Bu bağlantı noktası, aşağıdaki adımlarda <strong>ana makine bağlantı noktasıdır</strong>.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
-   Bir Mac tarayıcıyı UU Remote’un eşleyemediği bir biçimde sunar; bu yüzden aktarıcı olarak socat’a ihtiyaç duyar. Terminal’de kurun:
-
-   <Code code={tunnel.installSocatMac} lang="sh" />
-
-   Sonra bunu çalıştırın ve pencereyi açık bırakın. Yalnızca <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> adresini dinler.
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   Ana makine bağlantı noktası <code dir="ltr">{tunnel.bridgePort}</code> değeridir.
-   </TabItem>
-   <TabItem label="Windows">
-   Çalıştırılacak bir şey yok: {productName} tarayıcı bağlantı noktasını kendisi dinler, yalnızca <code dir="ltr">127.0.0.1</code> üzerinde. Ana makine bağlantı noktası, <strong>Tarayıcı</strong> sekmesindeki <strong>Tarayıcı bağlantı noktası</strong> değeridir (değiştirmediyseniz {commands.defaultPort}).
-   </TabItem>
-   </Tabs>
+   Çalıştırılacak bir şey yok: {productName} tarayıcı bağlantı noktasını kendisi dinler, yalnızca <code dir="ltr">127.0.0.1</code> üzerinde. Ana makine bağlantı noktası, <strong>Ayarlar › Erişim</strong> bölümündeki <strong>Tarayıcı bağlantı noktası</strong> değeridir (değiştirmediyseniz {commands.defaultPort}).
 
 </Steps>
 
@@ -112,19 +88,18 @@ UU Remote’un bağlantı noktası eşlemesi, ana makinedeki {productName} uygul
 
 ## Çalışmazsa
 
-- <strong>Eşleme bağlı görünüyor ama sayfa yüklenmiyor:</strong> Mac ana makinesinde socat penceresi kapatılmış ya da komutu durmuş; ya da <strong>Uzaktan erişime izin ver</strong> kapalı veya {productName} ana makinede çalışmıyor.
+- <strong>Eşleme bağlı görünüyor ama sayfa yüklenmiyor:</strong> <strong>Tarayıcı erişimine izin ver</strong> kapalı veya {productName} ana makinede çalışmıyor.
 - <strong>Eşleme kaydedilmiyor veya bağlanmıyor:</strong> yerel bağlantı noktası bu bilgisayarda kullanılıyor olabilir. Başka birini seçin ve tarayıcı adresinde de değiştirin.
 - <strong>Sayfa reddediliyor veya boş:</strong> adresi <code dir="ltr">{tunnel.loopback}</code> üzerinden açtığınızı denetleyin.
 
 ## Kapatın
 
 - <strong>Tarayıcıyı kullandığınız bilgisayarda:</strong> eşlemeyi UU Remote’un bağlantı noktası eşleme panelinde kapatın ya da silin. Paneli kapatmak veya bağlantıyı kesmek de onu durdurur.
-- <strong>Mac ana makinesinde:</strong> socat’ı <kbd>Ctrl</kbd>+<kbd>C</kbd> ile durdurun.
-- <strong>Ana makinede,</strong> artık gerekmediğinde <strong>Uzaktan erişime izin ver</strong> seçeneğini kapatın. Bu, tarayıcı girişini kapatır ve anahtarla açılmış her sayfanın bağlantısını keser.
-- <strong>Adres sızmış olabilirse,</strong> <strong>Tarayıcı</strong> sekmesindeki <strong>Anahtarı yenile</strong> ile ona yeni bir anahtar verin. Eski adresle açık olan sayfaların bağlantısı kesilir.
+- <strong>Ana makinede,</strong> artık gerekmediğinde <strong>Tarayıcı erişimine izin ver</strong> seçeneğini kapatın. Bu, tarayıcı bağlantı noktasını kapatır ve anahtarla açılmış her sayfanın bağlantısını keser.
+- <strong>Adres sızmış olabilirse,</strong> <strong>Ayarlar › Erişim</strong> bölümündeki <strong>Anahtarı yenile</strong> ile ona yeni bir anahtar verin. Eski adresle açık olan sayfaların bağlantısı kesilir.
 
 ## Güvenlik
 
 - <strong>Adres paroladır:</strong> anahtarı, ana makinedeki {productName} uygulamasının tam denetimini verir; her komutu çalıştırmak dahil. Siz yenileyene kadar geçerlidir. Tarayıcının geçmişinde ve yer imlerinde kalır, tarayıcı eşitlemesi açıksa diğer cihazlarınıza da eşitlenir.
 - <strong>Kimler ulaşabilir:</strong> ana makine bağlantı noktasına ulaşan ve anahtara sahip olan herkes. Ana makinede yalnızca <code dir="ltr">127.0.0.1</code> adresini dinler; UU Remote hesabınızı kullanarak ana makineye bağlantı noktası eşleyebilen herkes de ona ulaşabilir, bu yüzden o hesabı güvende tutun.
-- <strong>Yalnızca başka kimsenin oturum açmadığı bilgisayarlarda:</strong> ana makinedeki ya da bilgisayarınızdaki başka bir kullanıcı hesabı bu <code dir="ltr">127.0.0.1</code> bağlantı noktalarına bağlanabilir ve eşleme ya da socat çalışmıyorken bağlantı noktasını alıp tarayıcınız yeniden bağlandığında anahtarı alabilir. [SSH ile bağlanma](../remote-connections/) yöntemi, Mac veya Linux ana makinesinde bu zayıflığa sahip değildir; masaüstü uygulamasını kullandığınızda kendi bilgisayarınızda da yoktur. Ancak tarayıcıda bilgisayarınızda bu zayıflık yine vardır, çünkü orada da SSH yönlendirmesi bir <code dir="ltr">127.0.0.1</code> bağlantı noktasını dinler.
+- <strong>Yalnızca başka kimsenin oturum açmadığı bilgisayarlarda:</strong> ana makinedeki ya da bilgisayarınızdaki başka bir kullanıcı hesabı bu <code dir="ltr">127.0.0.1</code> bağlantı noktalarına bağlanabilir ve ana makinede {productName} çalışmıyorken ya da yeniden başlarken tarayıcı bağlantı noktasını, bilgisayarınızda eşleme çalışmıyorken eşlenen bağlantı noktasını alıp tarayıcınız yeniden bağlandığında anahtarı alabilir. [SSH ile bağlanma](../remote-connections/) yöntemi, tarayıcı erişimi kapalı bir Linux ana makinesinde ve masaüstü uygulamasıyla kullanılan bir Mac veya Windows ana makinesinde bu zayıflığa sahip değildir; masaüstü uygulamasını kullandığınızda kendi bilgisayarınızda da yoktur. Ancak tarayıcıda bilgisayarınızda bu zayıflık yine vardır, çünkü orada da SSH yönlendirmesi bir <code dir="ltr">127.0.0.1</code> bağlantı noktasını dinler.

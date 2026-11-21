@@ -9,6 +9,8 @@ import { windowKind, type PlatformAdapter } from "../platform";
 import type { RemoteAccess, Settings } from "../protocol";
 import { SESSION_ORDER_WORDS } from "../sessions/orderWording";
 import { ALL_COMMANDS, clientCapabilities, isAvailable, SHORTCUT_GROUPS } from "../shortcuts/commands";
+import { anyServing, browserPortFailed, hasBrowserPort, servedBrowserAddress, servedConnection, servedForwardCommand } from "./accessState";
+import { COMMAND_LINE_TOOL } from "./commandLineTool";
 import type { SettingsSectionId } from "./sections";
 import { sshServerNames, sshServerWords } from "./sshServerWords";
 
@@ -18,8 +20,8 @@ export interface SettingsSearchContext {
   platform: PlatformAdapter;
   keepAwake: boolean;
   settings: Settings;
-  /** Where remote access stands, which decides what the Remote access section shows beyond its switch (null where the
-   * daemon offers none, when the section is not listed at all). */
+  /** Where remote access and browser access stand, which decides what the Access section shows
+   * beyond its switches (null where the daemon offers none, when the section is not listed at all). */
   remoteAccess: RemoteAccess | null;
   /** What each read says of the settings that wait on it, as the section decides it (see `searchReads`): a row with
    * no capability to read from is never counted, and one with it is counted from the answer on. */
@@ -66,12 +68,16 @@ function gitWorkflowSwitch<I extends "squash_before_delivery" | "rebase_before_d
 
 const STARTUP: PlainMessageKey = "settings.general.group.startup";
 const WINDOW: PlainMessageKey = "settings.general.group.window";
+const COMMAND_LINE: PlainMessageKey = "settings.general.group.commandLine";
 const POWER: PlainMessageKey = "settings.general.group.power";
 const TERMINALS: PlainMessageKey = "settings.general.group.terminals";
 const REPOSITORY: PlainMessageKey = "settings.git.group.repository";
 const DEVELOPMENT: PlainMessageKey = "settings.git.group.development";
 const PROTECTION: PlainMessageKey = "settings.git.group.protection";
 const SORTING: PlainMessageKey = "settings.sort.group";
+const BROWSER: PlainMessageKey = "settings.remoteAccess.group.browser";
+const OTHER_COMPUTERS: PlainMessageKey = "settings.remoteAccess.group.others";
+const KEY: PlainMessageKey = "settings.remoteAccess.group.key";
 
 /** Whether sessions work on a branch of their own, without which the Git section hides the items that shape it. */
 const ownBranch = ({ settings }: SettingsSearchContext) => settings.git_workflow.development !== "in_place";
@@ -86,14 +92,21 @@ const ownBranch = ({ settings }: SettingsSearchContext) => settings.git_workflow
 const INDEX = {
   general: [
     { id: "language", label: "settings.language.label", description: ["settings.language.sharedDescription"] },
+    ...(["sessions", "activeProjects", "inactiveProjects"] as const).map((part): SettingsSearchEntry<`session-order.${typeof part}`> => ({
+      id: `session-order.${part}`,
+      label: SESSION_ORDER_WORDS[part].label,
+      description: [SESSION_ORDER_WORDS[part].description],
+      group: SORTING,
+    })),
+    daemonSwitch("auto_close_idle_shell_terminals", TERMINALS),
+    daemonSwitch("keep_awake", POWER, ({ keepAwake }) => keepAwake),
     {
-      id: "launch-at-login",
-      label: "settings.launchAtLogin.label",
-      description: ["settings.launchAtLogin.description.on", "settings.launchAtLogin.description.off", "settings.launchAtLogin.description.requiresApproval"],
-      group: STARTUP,
-      shown: ({ platform, reads }) => platform.launchAtLogin !== undefined && reads.launchAtLogin,
+      id: "keep_awake_when",
+      label: "settings.keepAwake.when.label",
+      description: KEEP_AWAKE_WHEN.map((when) => KEEP_AWAKE_WHEN_DESCRIPTION[when]),
+      group: POWER,
+      shown: ({ keepAwake, settings }) => keepAwake && settings.keep_awake,
     },
-    daemonSwitch("resume_sessions_on_start", STARTUP),
     {
       id: "run-in-background",
       label: "settings.background.label",
@@ -108,21 +121,21 @@ const INDEX = {
       group: WINDOW,
       shown: ({ platform }) => platform.statusItem?.setVisible !== undefined,
     },
-    daemonSwitch("keep_awake", POWER, ({ keepAwake }) => keepAwake),
     {
-      id: "keep_awake_when",
-      label: "settings.keepAwake.when.label",
-      description: KEEP_AWAKE_WHEN.map((when) => KEEP_AWAKE_WHEN_DESCRIPTION[when]),
-      group: POWER,
-      shown: ({ keepAwake, settings }) => keepAwake && settings.keep_awake,
+      id: "launch-at-login",
+      label: "settings.launchAtLogin.label",
+      description: ["settings.launchAtLogin.description.on", "settings.launchAtLogin.description.off", "settings.launchAtLogin.description.requiresApproval"],
+      group: STARTUP,
+      shown: ({ platform, reads }) => platform.launchAtLogin !== undefined && reads.launchAtLogin,
     },
-    daemonSwitch("auto_close_idle_shell_terminals", TERMINALS),
-    ...(["sessions", "activeProjects", "inactiveProjects"] as const).map((part): SettingsSearchEntry<`session-order.${typeof part}`> => ({
-      id: `session-order.${part}`,
-      label: SESSION_ORDER_WORDS[part].label,
-      description: [SESSION_ORDER_WORDS[part].description],
-      group: SORTING,
-    })),
+    daemonSwitch("resume_sessions_on_start", STARTUP),
+    {
+      id: "command-line",
+      label: "settings.commandLine.label",
+      description: [(t) => t("settings.commandLine.description", { command: COMMAND_LINE_TOOL })],
+      group: COMMAND_LINE,
+      shown: ({ platform }) => platform.commandLine !== undefined,
+    },
   ],
   appearance: [
     { id: "theme", label: "settings.theme.label", description: ["settings.theme.description"] },
@@ -188,64 +201,110 @@ const INDEX = {
     },
   ],
   // Listed only in the application's window for a daemon that offers it (`remoteAccessOffered`), so the section's own
-  // entries need no `shown` for that; what the daemon is doing decides the rest.
+  // entries need no `shown` for that; the browser port decides the This computer's browser group and the Open in a
+  // browser block, and what the daemon is doing the rest.
   "remote-access": [
+    { id: "remote-access.browser-allow", label: "settings.remoteAccess.browserAccess.label", description: ["settings.remoteAccess.browserAccess.on", "settings.remoteAccess.browserAccess.off"], group: BROWSER, shown: ({ remoteAccess }) => hasBrowserPort(remoteAccess) },
+    // What the section says in place of the address when the browser port could not be served, found by its reasons.
+    {
+      id: "remote-access.browser-failed",
+      label: "settings.remoteAccess.failed.titleBrowser",
+      description: [
+        "settings.remoteAccess.failed.noUi",
+        "settings.remoteAccess.failed.ownerKeyFailed",
+        "settings.remoteAccess.failed.portInUse",
+        "settings.remoteAccess.failed.portIsDaemons",
+        "settings.remoteAccess.failed.portFailed",
+      ],
+      group: BROWSER,
+      shown: ({ remoteAccess }) => remoteAccess?.browser_failure != null,
+    },
+    // The current port is the row's value, not searched.
+    { id: "remote-access.browser-port", label: "settings.remoteAccess.port.label", description: ["settings.browserAccess.port.description"], group: BROWSER, shown: ({ remoteAccess }) => hasBrowserPort(remoteAccess) },
+    // The address for a browser on this computer, shown where the daemon serves the browser at its own port.
+    {
+      id: "remote-access.browser-local",
+      label: "settings.remoteAccess.local.label",
+      description: ["settings.remoteAccess.local.description"],
+      group: BROWSER,
+      shown: ({ remoteAccess }) => servedBrowserAddress(remoteAccess) !== null,
+    },
     // Worded by the system's name for its SSH server; the daemon whose section it is runs on this computer.
     {
       id: "remote-access.remote-login",
       label: (t) => t(sshServerWords(daemonOs()).label),
-      description: [(t) => t(sshServerWords(daemonOs()).description, sshServerNames((key) => t(key)))],
+      // Said for the application alone, or for the application and a browser where the daemon has a browser port.
+      description: [
+        (t) => t(sshServerWords(daemonOs()).description, sshServerNames((key) => t(key))),
+        (t) => t(sshServerWords(daemonOs()).descriptionBoth, sshServerNames((key) => t(key))),
+      ],
+      group: OTHER_COMPUTERS,
     },
-    { id: "remote-access.allow", label: "settings.remoteAccess.allow.label", description: ["settings.remoteAccess.allow.ways.on", "settings.remoteAccess.allow.ways.off"] },
-    // What the section says in place of the address when the daemon could not serve, found by its reasons.
+    { id: "remote-access.allow", label: "settings.remoteAccess.allow.label", description: ["settings.remoteAccess.allow.ways.on", "settings.remoteAccess.allow.ways.off"], group: OTHER_COMPUTERS },
+    // What the section says in place of the connection details when remote access could not serve, found by its reasons.
     {
       id: "remote-access.failed",
       label: "settings.remoteAccess.failed.titleWays",
       description: [
         "settings.remoteAccess.failed.noUi",
-        "settings.remoteAccess.failed.notPrivate",
-        "settings.remoteAccess.failed.socketFailed",
-        "settings.remoteAccess.failed.ownerKeyFailed",
-        "settings.remoteAccess.failed.portInUse",
-        "settings.remoteAccess.failed.portFailed",
+        "settings.remoteAccess.failed.notPrivateApp",
+        "settings.remoteAccess.failed.socketFailedApp",
+        "settings.remoteAccess.failed.ownerKeyFailedApp",
         "settings.remoteAccess.failed.pipeFailed",
       ],
+      group: OTHER_COMPUTERS,
       shown: ({ remoteAccess }) => remoteAccess?.failure != null,
     },
     {
       id: "remote-access.connection",
       label: "settings.remoteAccess.connection.label",
       description: [(t) => t("settings.remoteAccess.connection.description", { addRemoteDaemon: t("remoteDaemons.add"), connectionDetails: t("remoteDaemons.form.details") })],
-      shown: ({ remoteAccess }) => remoteAccess?.state === "serving" && remoteAccess.connection !== null,
+      group: OTHER_COMPUTERS,
+      shown: ({ remoteAccess }) => servedConnection(remoteAccess) !== null,
     },
     {
-      id: "remote-access.forward",
+      id: "remote-access.browser-forward",
       label: "settings.remoteAccess.forward.label",
       // Said with no address token where the daemon lists no address of this computer, with it otherwise.
       description: [
         (t) => t("settings.remoteAccess.forward.description", { server: "<server>" }),
         (t) => t("settings.remoteAccess.forward.descriptionPick", { manual: t("settings.remoteAccess.forward.address.manual"), server: "<server>" }),
       ],
-      shown: ({ remoteAccess }) => remoteAccess?.state === "serving" && remoteAccess.forward_command !== null,
+      group: OTHER_COMPUTERS,
+      shown: ({ remoteAccess }) => servedForwardCommand(remoteAccess) !== null,
     },
+    // Step 2 points at the local address above rather than repeating it.
     {
-      id: "remote-access.address",
-      label: "settings.remoteAccess.address.label",
-      description: ["settings.remoteAccess.address.description"],
-      shown: ({ remoteAccess }) => remoteAccess?.state === "serving" && remoteAccess.address !== null,
+      id: "remote-access.browser-address",
+      label: "settings.remoteAccess.address.labelAbove",
+      description: [(t) => t("settings.remoteAccess.address.descriptionAbove", { localAddress: t("settings.remoteAccess.local.label") })],
+      group: OTHER_COMPUTERS,
+      shown: ({ remoteAccess }) => servedBrowserAddress(remoteAccess) !== null,
     },
-    // The browser port, on Windows alone; the current port is the row's value, not searched.
+    // What the Browser tab says in place of the steps while browser access is on but its port is not open.
     {
-      id: "remote-access.port",
-      label: "settings.remoteAccess.port.label",
-      description: ["settings.remoteAccess.port.description"],
-      shown: ({ remoteAccess }) => remoteAccess?.browser_port != null,
+      id: "remote-access.browser-closed",
+      label: "settings.remoteAccess.browserClosed.label",
+      description: [(t) => t("settings.remoteAccess.browserClosed.description", { allowBrowserAccess: t("settings.remoteAccess.browserAccess.label") })],
+      group: OTHER_COMPUTERS,
+      shown: ({ remoteAccess }) => browserPortFailed(remoteAccess),
     },
+    // What the block says in place of the steps while browser access is off.
+    {
+      id: "remote-access.browser-off",
+      label: "settings.remoteAccess.openInBrowser.label",
+      description: [(t) => t("settings.remoteAccess.openInBrowser.off", { allowBrowserAccess: t("settings.remoteAccess.browserAccess.label") })],
+      group: OTHER_COMPUTERS,
+      shown: ({ remoteAccess }) => hasBrowserPort(remoteAccess) && remoteAccess?.browser_allowed === false,
+    },
+    // The owner key is shared by the two ways in, so the row is there while either serves.
     {
       id: "remote-access.rotate",
       label: "settings.remoteAccess.rotate.label",
-      description: ["settings.remoteAccess.rotate.description"],
-      shown: ({ remoteAccess }) => remoteAccess?.state === "serving",
+      // Said for another computer's app alone where the daemon has no browser port.
+      description: ["settings.remoteAccess.rotate.descriptionShared", "settings.remoteAccess.rotate.descriptionApp"],
+      group: KEY,
+      shown: ({ remoteAccess }) => anyServing(remoteAccess),
     },
   ],
   // Its description is where notifications stand, not what the setting does, so it is not searched.

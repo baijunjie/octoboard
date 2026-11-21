@@ -65,10 +65,10 @@ Ayrı bir {productName} penceresi açılıp sunucunun projelerini ve oturumları
 
 <Steps>
 
-1. Ulaşmak istediğiniz bilgisayarda {productName} içinde <strong>Ayarlar › Uzaktan erişim</strong> bölümünü açın.
+1. Ulaşmak istediğiniz bilgisayarda {productName} içinde <strong>Ayarlar › Erişim</strong> bölümünü açın.
 2. Orada <strong>Sistem Ayarları’nı aç</strong> (macOS) veya <strong>Ayarlar’ı aç</strong> (Windows) düğmesini seçin ve satırın verdiği yolu izleyerek <strong>Uzaktan Oturum Açma</strong> (macOS) veya <strong>OpenSSH Server</strong> (Windows) seçeneğini açın; böylece bu bilgisayar SSH ile oturum açmayı kabul eder. Bunun için yönetici yetkisi gerekir. {productName} uygulamasına döndüğünüzde satır <strong>Açık</strong> gösterir.
 3. <strong>Uzaktan erişime izin ver</strong> seçeneğini açın, onaylamak için <strong>İzin ver</strong> düğmesini seçin ve {productName} uygulamasını açık tutun: kapatırsanız uzaktan erişim durur.
-4. <strong>{productName} uygulaması</strong> sekmesinde <strong>Bağlantı bilgilerini kopyala</strong> düğmesini seçin ve bilgileri diğer bilgisayara, örneğin e-posta veya sohbetle gönderin.
+4. <strong>Bağlantı bilgilerini kopyala</strong> düğmesini seçin ve bilgileri diğer bilgisayara, örneğin e-posta veya sohbetle gönderin.
 5. Çalışacağınız bilgisayarda ana makineyi, [Linux sunucusuna bağlanın](#linux-sunucusuna-bağlanın) bölümünün 2. ile 5. adımlarındaki gibi ekleyin ve gönderdiğiniz bilgileri yapıştırın. Ana makinedeki kullanıcı adınız ve parolanızla oturum açın.
 
 </Steps>
@@ -81,7 +81,7 @@ Ana makinenin projelerini ve oturumlarını gösteren ayrı bir pencere açıld�
 
 1. SSH yönlendirme komutunu alın:
 
-   - <strong>Mac veya Windows ana makinesinde,</strong> önce [Başka bir bilgisayarı ana makine olarak kullanın](#başka-bir-bilgisayarı-ana-makine-olarak-kullanın) bölümünün 1. ile 3. adımlarını uygulayın. Ardından <strong>Tarayıcı</strong> sekmesinde <strong>1. adım: SSH yönlendirmesi</strong> bölümüne bakın. Diğer bilgisayarınızın buna nasıl ulaşacağını seçmek için komuttaki adrese tıklayın (ya da <strong>Adresi kendiniz girin</strong> seçeneğini seçip <code dir="ltr">{commands.server}</code> değerini sonra değiştirin), ardından <strong>Yönlendirme komutunu kopyala</strong> düğmesini seçin. Ayrıca <strong>2. adım: tarayıcı adresi</strong> altındaki <strong>Adresi kopyala</strong> düğmesini seçin.
+   - <strong>Mac veya Windows ana makinesinde,</strong> önce [Başka bir bilgisayarı ana makine olarak kullanın](#başka-bir-bilgisayarı-ana-makine-olarak-kullanın) bölümünün 1. ile 2. adımlarını uygulayın. Ardından <strong>Ayarlar › Erişim</strong> bölümünü açın, <strong>Tarayıcı erişimine izin ver</strong> seçeneğini açıp onaylamak için <strong>İzin ver</strong> düğmesini seçin. <strong>Tarayıcı</strong> sekmesinde <strong>1. adım: SSH yönlendirmesi</strong> bölümüne bakın. Diğer bilgisayarınızın buna nasıl ulaşacağını seçmek için komuttaki adrese tıklayın (ya da <strong>Adresi kendiniz girin</strong> seçeneğini seçip <code dir="ltr">{commands.server}</code> değerini sonra değiştirin), ardından <strong>Yönlendirme komutunu kopyala</strong> düğmesini seçin. Ayrıca <strong>Bu bilgisayarın tarayıcısı</strong> altındaki <strong>Yerel adresi kopyala</strong> düğmesini seçin.
    - <strong>Linux sunucusunda,</strong> bunu sunucuda çalıştırın. Tarayıcı adresini, ardından çalıştırılacak SSH komutunu yazdırır.
 
      <Code code={commands.address} lang="sh" />

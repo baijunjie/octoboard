@@ -5,5 +5,5 @@
 
 [[permission]]
 identifier = "allow-remote-login"
-description = "Allows the frontend to read whether the computer's SSH server (macOS Remote Login, Windows OpenSSH Server) is on, and to open the system's settings where it is turned on (System Settings > General > Sharing on macOS, Settings > Optional features on Windows), for the Remote access section of Settings."
+description = "Allows the frontend to read whether the computer's SSH server (macOS Remote Login, Windows OpenSSH Server) is on, and to open the system's settings where it is turned on (System Settings > General > Sharing on macOS, Settings > Optional features on Windows), for the Access section of Settings."
 commands.allow = ["remote_login_status", "open_remote_login_settings"]

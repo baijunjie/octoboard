@@ -130,7 +130,7 @@ transparent margin so its rounded corners and shadow show whole.
 The commands, addresses and values the guides quote are the ones the website and the application use: the install
 command names the deployment's own address (see "The install script" in `docs/product/installing-the-server-form.md`),
 the download buttons and links use the website's fixed download addresses and releases page (see "Fixed download
-addresses" in `docs/product/website-download-page.md`), and the default port is the daemon's, 3369. Controls the guides
+addresses" in `docs/product/website-download-page.md`), and the default port is the browser port's, 3369. Controls the guides
 name are named by the application's own labels.
 
 The relay guides are written for any host they support: Tailscale for a Mac, a Windows PC or a Linux server, UU Remote

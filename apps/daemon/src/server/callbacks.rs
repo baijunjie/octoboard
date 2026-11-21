@@ -326,6 +326,26 @@ pub(super) async fn restart_check(State(state): State<Arc<AppState>>, body: Byte
     }
 }
 
+/// What `octoboardd stop` asks before it stops the daemon: the sessions and shell terminals the
+/// application's quit confirmation counts, which a stop would interrupt
+/// (`coordinator::stop_check::stop_impact`). Answers `200` with them as JSON and changes nothing;
+/// `500` where the sessions cannot be read, which `stop` takes as a daemon it cannot ask.
+pub(super) async fn stop_check(State(state): State<Arc<AppState>>) -> Reply {
+    match tokio::task::spawn_blocking(move || crate::coordinator::stop_check::stop_impact(&state))
+        .await
+    {
+        Ok(Ok(impact)) => Reply::json(&impact),
+        Ok(Err(err)) => {
+            tracing::error!(%err, "the sessions could not be read for the stop check");
+            Reply::status(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+        Err(err) => {
+            tracing::error!(%err, "the stop check did not finish");
+            Reply::status(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
 /// The request to make a planned stop with no successor: `main` hands every terminal over to its
 /// holder and exits, leaving the sessions to whichever daemon starts next. It answers `202` at once
 /// and does not wait for that; the one refusal, as `restart` answers it, is `holders_in_service`,

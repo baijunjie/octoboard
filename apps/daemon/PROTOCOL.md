@@ -45,13 +45,13 @@ browser's way in alone, the owner key below; each is compared in constant time, 
 refused. On the TCP port the launch key is the only key: the owner key is refused there as any wrong key, and where the
 daemon serves the browser on its socket the `401` body says so (`REFUSED_AT_PORT` in `apps/daemon/src/server/access.rs`:
 a browser reaches this daemon through its own socket, not this port, and `octoboardd address` on the server prints the
-SSH forward to use; for the desktop application's daemon on Windows, its browser port); otherwise the body is
+SSH forward to use; for the desktop application's daemon on Windows and macOS, its browser port, which Allow browser access opens); otherwise the body is
 `missing or wrong key`. The `Host` and `Origin` rules are applied first, so a request that fails them is told `403`
 whatever it carries as a key.
 
 **The owner key** is a second key, accepted in addition to the launch key on the browser's way in and nowhere else: the
-browser socket (see "The browser socket" below), and, in the desktop application's daemon on Windows, the browser port
-and the owner named pipe (see "Remote access"). It is for the owner's browser, so that an address bookmarked in it keeps
+browser socket (see "The browser socket" below), and, in the desktop application's daemon, the browser port on Windows
+and macOS and on Windows the owner named pipe (see "Remote access"), each while its own setting is on. It is for the owner's browser, so that an address bookmarked in it keeps
 working across launches. A daemon that serves the browser keeps it in the owner-only file `~/.octoboard/owner.key`, one
 line of 64 lower-case hex characters, written as `daemon.key` is. The file is trusted only if it is a regular file (not
 followed through a symbolic link) owned by the daemon's user with no permission bit set for group or others; any other
@@ -60,19 +60,22 @@ is not trusted or does not hold one; a daemon that cannot read the file (which i
 it logs a warning, opens no way in and serves no browser, holding no owner key. The key then persists, across launches,
 planned restarts and a service manager's restarts, until it is rotated (`POST /owner-key/rotate` below, or
 `octoboardd address --rotate`). The daemons that serve the browser are the server form's, always, and the one the
-desktop application starts (with `--parent-pid`) while the Allow remote access setting is on (see "Remote access"):
-turning the setting on makes it read or create the file and hold the key, and turning it off makes it refuse the key and
-close every connection the key opened. A daemon that serves no browser never reads, creates or accepts it: the
-desktop application's while the setting is off, one whose build carries no UI, one on a host with no way in for the
+desktop application starts (with `--parent-pid`) while Allow remote access or Allow browser access is on (see "Remote
+access"): turning the first of them on makes it read or create the file and hold the key, and turning the last one off
+makes it refuse the key and close every connection the key opened. A daemon that serves no browser never reads, creates or
+accepts it: the desktop application's while both settings are off, one whose build carries no UI, one on a host with no way in for the
 browser, and one that could not open it. It is the browser's key only: it is never written to `daemon.key`, a helper's
 key file or a holder's record, never put in any argument, environment, log or the startup line, and the launch key
 keeps every other use it has. A daemon that holds it says so in its owner record `daemon.owner` by a token,
 `owner-key`, after the port and the tokens that say whether it follows an application (`application` or `alone`) and
 whether a service manager starts its successor (`service` or `no-service`), and before the tokens naming its systemd
-unit and the daemon it took over from (see `docs/product/files-octoboard-owns.md`); on Windows the desktop
-application's daemon adds `browser-port=<port>` beside it, the loopback port its browser way in listens on. Both are
-read wherever they stand after the port, so the token says that the daemon serves the browser, and a record without it
-is of a daemon that serves none; the record is written again as the setting or the port changes. An earlier build reads
+unit and the daemon it took over from (see `docs/product/files-octoboard-owns.md`); it says that the owner key is taken
+at its owner endpoint, the socket or on Windows the owner pipe (the server form's always, the desktop application's while
+Allow remote access is on). On Windows and macOS the desktop application's daemon while Allow browser access is on, and
+on every host the server form's once `octoboardd browser on` opened one, adds `browser-port=<port>`, the loopback port
+its browser way in listens on (while that port is open), whether or not `owner-key` is there. Both are read wherever they
+stand after the port, so a record with neither is of a daemon that takes the owner key nowhere; the record is written
+again as a setting or the port changes. An earlier build reads
 only the third token of the record and takes a word it does not know there as none, and a build that reads the service
 token anywhere after the port ignores tokens it does not know, so the tokens change nothing either reads.
 
@@ -80,14 +83,15 @@ token anywhere after the port ignores tokens it does not know, so the tokens cha
 daemon's record carries the `owner-key` token and `owner.key` holds a key it trusts, and with the launch key
 otherwise: for a daemon that is an earlier build, and for one that serves the browser but whose file is missing,
 untrusted, unreadable or holds no key, where it says on stderr that the address lasts only until the daemon restarts and
-that `--rotate` makes a lasting one. The `<port>` is the daemon's own port for the server form's daemon, and for the
-desktop application's, whose own port the system assigns at each launch, the fixed port a browser's machine forwards to:
-the server form's default port, the same at every launch, or on Windows the browser port the daemon's record names.
-For the desktop application's daemon while remote access is off there is no address: `address` says so on stderr, with
-exit status 1 and nothing on stdout. On stderr it also says how the address is opened. For a daemon that serves the
-browser it prints the forward of the way in: on Linux and macOS
+that `--rotate` makes a lasting one. The `<port>` is the fixed port a browser's machine forwards to, since the daemon's
+own port is one the system assigns at each start on both forms: the browser port the daemon's record names where it
+serves one, else the default browser port, the same at every start (the daemon's own port for one that takes no owner key).
+For the desktop application's daemon while neither remote access nor browser access is on there is no address:
+`address` says so on stderr, with exit status 1 and nothing on stdout; so it does on Windows while only remote access is
+on, as the owner pipe is no browser's way in. On stderr it also says how the address is opened. For a daemon that serves the
+browser it prints the forward of the way in: where the browser port is not open (Linux, and macOS with browser access off),
 `ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:<port>:<socket> <user>@<server>`, `<socket>` being the socket's real
-path; on Windows, where the SSH server cannot forward to a socket, the forward of the browser port,
+path; where the browser port is open (Windows, macOS, and the server form where it is on), the forward of the browser port,
 `ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:<port>:127.0.0.1:<port> <user>@<server>`. Before that it asks the
 daemon at that way in whether it accepts the key in the address, and warns when the daemon refuses it or nothing
 answers. For a daemon that serves no browser, on a host with Unix sockets, it says instead that the daemon serves no
@@ -96,17 +100,17 @@ browser and that the address is for programs that take its launch key. Neither c
 record carries the token it asks through `POST /owner-key/rotate` with the launch key from `daemon.key`, and reads the
 new key from `owner.key`; a refusal or failure is said on stderr, with exit 1 and nothing on stdout. For a daemon
 whose record lacks the token it replaces the file directly, for the next daemon that serves the browser, prints the
-address with the launch key and exits 0, with a note on stderr; for the desktop application's daemon while remote
-access is off it replaces the file the same way, for when remote access is turned on, and exits 0 with the note and
-nothing on stdout. With no daemon running it replaces the file when the data directory exists, creating nothing
+address with the launch key and exits 0, with a note on stderr; for the desktop application's daemon while neither
+setting is on it replaces the file the same way, for when one is turned on, and exits 0 with the note and nothing on
+stdout. With no daemon running it replaces the file when the data directory exists, creating nothing
 otherwise, and exits 3 as `address` does; a daemon found running once the file is replaced is rotated through as above.
 
-**The browser socket.** A daemon that serves the browser — the server form's, or the desktop application's while remote
-access is on, built with the UI embedded, on a host with Unix sockets, and able to open the socket and hold the owner
+**The browser socket.** A daemon that serves the browser — the server form's, or the desktop application's while Allow
+remote access is on, built with the UI embedded, on a host with Unix sockets, and able to open the socket and hold the owner
 key — listens on a second listener, the
 Unix socket `~/.octoboard/browser.sock` (mode 0600), beside the TCP port. It serves the same routes under the same
-guard, plus the embedded UI below, and with the browser port and owner pipe of the desktop application's daemon on
-Windows (see "Remote access") is the only place that accepts the owner key. It is opened only if the data
+guard, plus the embedded UI below, and with the browser port of the desktop application's daemon on Windows and macOS
+and its owner pipe on Windows (see "Remote access") is the only place that accepts the owner key. It is opened only if the data
 directory is owned by the daemon's user with no permission for group or others (`mode & 077 == 0`) and no directory
 above it lets another user rename it; the data directory is created with mode 0700, and an existing one the user owns
 is tightened to 0700 at start. A socket file a daemon that is gone left at the path is replaced under the instance
@@ -114,7 +118,7 @@ lock; the daemon never removes it at exit. Where it cannot be opened the daemon 
 
 **The embedded browser UI.** A build of the daemon that embeds the UI carries the UI's build inside its binary and
 serves it on the browser's way in, same-origin with the routes of this document: the server form's browser socket, and
-the way in of the desktop application's daemon while remote access is on (see "Remote access"). The TCP port serves no
+the way in of the desktop application's daemon while remote access or browser access is on (see "Remote access"). The TCP port serves no
 UI on a host with Unix sockets, nor in a daemon that follows the desktop application, on any system; a server-form
 daemon on a host without them (Windows) has no browser socket and serves the UI on its TCP port instead. Its files are
 the published application's and hold nothing secret, and the requests a page makes for its scripts, stylesheets and
@@ -368,9 +372,10 @@ The terminal socket has no heartbeat of its own.
 | `check_daemon_update` | — | Checks the release manifest of the daemon's channel for a newer daemon, in the background; see "Daemon updates" below. Answered with `daemon_update_check` once it is known whether a check started; the result follows as `daemon_update_status_updated`, which also announces that the check started. Nothing is started while a check or the download runs, within 30 seconds of the last one, or once an update is installed, and the reply then says so (`started` false). Refused with `daemon_update_unavailable` where `snapshot.daemon_update` is null |
 | `update_daemon` | — | Downloads the update the last check found, checks it and replaces the daemon's own executable with it, in the background; the daemon keeps running the build it started as until `restart_daemon`. Answered with `daemon_update_started` once it has started; its progress and outcome follow as `daemon_update_status_updated`, whose `install.started_at` is the reply's `started_at`. The daemon never does this on its own. Refused: `daemon_update_unavailable`, `daemon_update_running` (a download of this daemon's, or an `octoboardd update`, runs), `daemon_update_installed` (an update has replaced the executable already and awaits the restart), `daemon_update_nothing_to_install` (the last check found none), `daemon_update_not_writable` (the user the daemon runs as may not replace its executable: nothing is downloaded), `daemon_shutting_down` |
 | `restart_daemon` | — | Restarts the daemon in place, the planned restart `octoboardd restart` makes: every session keeps running, with its screen, under the daemon that starts from the file now at the daemon's launch path, on the same address and key; the connection closes and the client reconnects. Answered with `ack`. A client that restarts to run an update asks `handover_check` first, with the status's `installed.holder_floor` and `installed.version`, to tell the user which sessions the restart interrupts. Refused with `daemon_update_unavailable` where `snapshot.daemon_update` is null, with `daemon_update_running` while this daemon downloads an update (a restart would end the download), with `daemon_shutting_down` while a stop, restart or handover is under way (the stop asked for first stays the one made), with `holders_in_service` where the daemon leaves its next start to a service manager and a process holder it started runs inside its own systemd service (as for `planned_stop`), and with `agent_update_running` while an update of an agent's CLI runs (a restart would cut it off mid-install) |
-| `set_remote_access` | `allowed` | Turns Allow remote access on or off for the desktop application's daemon (see "Remote access" below). Answered with `ack` once it has taken effect, and broadcast as `remote_access_updated`, also when the owner socket could not be opened. Refused with `remote_access_unavailable` where `snapshot.remote_access` is null, and with `remote_access_refused_to_browser` on a connection the owner key opened. Not offered to the agents' settings tools, and carried by no configuration export |
-| `rotate_owner_key` | — | Replaces the owner key, as `octoboardd address --rotate` does: every connection the old key opened is closed. Answered with `ack`, and broadcast as `remote_access_updated` with the new address. Refused with `remote_access_unavailable` where `snapshot.remote_access` is null or not `serving`, and with `remote_access_refused_to_browser` on a connection the owner key opened |
-| `set_remote_access_port` | `port` (1–65535; 0 does not read as a request) | Sets the loopback port the desktop application's daemon serves the browser at on Windows (`remote_access.browser_port`, see "Remote access" below). Takes effect at once: while remote access is on, the old port is let go, every connection the owner key opened is closed and the new port is listened on, a port already in use being said as `failure`. Answered with `ack`, and broadcast as `remote_access_updated`. Refused with `remote_access_unavailable` where `snapshot.remote_access` is null or its `browser_port` is, and with `remote_access_refused_to_browser` on a connection the owner key opened. Not offered to the agents' settings tools, and carried by no configuration export |
+| `set_remote_access` | `allowed` | Turns Allow remote access on or off for the desktop application's daemon (see "Remote access" below), as Settings does, apart from browser access. Answered with `ack` once it has taken effect, and broadcast as `remote_access_updated`, also when the owner socket or pipe could not be opened. Refused with `remote_access_unavailable` where `snapshot.remote_access` is null or the daemon is the server form's, and with `remote_access_refused_to_browser` on a connection the owner key opened. Not offered to the agents' settings tools, and carried by no configuration export |
+| `set_browser_access` | `allowed` | Turns Allow browser access on or off: whether the daemon serves the browser at its loopback browser port (see "Remote access" below), apart from remote access, as Settings and `octoboardd browser on` / `off` do. Answered with `ack` once it has taken effect, and broadcast as `remote_access_updated`, also when the port could not be opened. Turning it off closes the port and every connection made through it, and nothing else. Refused with `remote_access_unavailable` where `snapshot.remote_access` is null or its `browser_port` is, and with `remote_access_refused_to_browser` on a connection the owner key opened. Not offered to the agents' settings tools, and carried by no configuration export |
+| `rotate_owner_key` | — | Replaces the owner key, as `octoboardd address --rotate` does: every connection the old key opened is closed. Answered with `ack`, and broadcast as `remote_access_updated` with the new address. Refused with `remote_access_unavailable` where `snapshot.remote_access` is null or neither `state` nor `browser_state` is `serving`, and with `remote_access_refused_to_browser` on a connection the owner key opened |
+| `set_remote_access_port` | `port` (1–65535; 0 does not read as a request) | Sets the loopback port the daemon serves the browser at on Windows and macOS, and in the server form (`remote_access.browser_port`, see "Remote access" below). Takes effect at once: while browser access is on, the old port is let go, every connection made through it is closed and the new port is listened on, a port already in use being said as `browser_failure`. Answered with `ack`, and broadcast as `remote_access_updated`. Refused with `remote_access_unavailable` where `snapshot.remote_access` is null or its `browser_port` is, and with `remote_access_refused_to_browser` on a connection the owner key opened. Not offered to the agents' settings tools, and carried by no configuration export |
 | `update_agent_cli` | `agent` | Updates the agent's installed CLI with the command its install method names, run in the background for at most ten minutes; sessions of the agent that run keep their process, and sessions started afterwards use the new version. Answered with `ack` once the update has started; its progress and outcome follow as `agent_cli_status_updated` (`update`). The daemon never does this on its own. Refused: `agent_not_added`, `provider_unsupported` (`operation` `cli_update`: the agent's provider knows no way to update its CLI), `agent_not_installed`, `shell_environment_timeout`, `agent_cli_update_unsupported` (the install is not recognised, or the tool that updates it, `npm` or `brew`, is not on the shell's `PATH`), `agent_cli_update_running`, `daemon_shutting_down` (the daemon has begun to shut down, or a planned restart has been accepted: no update is started) |
 | `use_reset_credit` | `agent` (the provider the credit is of; one whose `capabilities.reset_credits` is true), `account?` (an account id; absent or null is the agent's default account) | Uses one of the account's rate limit reset credits, for a user who confirmed it; nothing else in the daemon, no MCP tool and no automatic account switch ever does. The credit is the first the held reading lists (`reset_credits`, which expires first), or the one the provider picks when the reading holds no details. The provider's CLI is run as a reading runs it, with a fresh idempotency key (for Codex, `codex app-server` with `account/rateLimitResetCredit/consume`; see "Plan quota" in `docs/agent-cli-reference.md`). Answered with `reset_credit_used` once the provider has answered. The account's quota is read again after every run of the CLI, a failed one included, since a credit may have been used though the answer did not arrive. Refused: `provider_unsupported` (`operation` `reset_credit`: the agent's provider offers no reset credits), `unknown_account` (not an account of the agent), `agent_not_available`, `shell_environment_timeout`, `binary_not_found`, `reset_credit_not_signed_in`, `reset_credit_in_progress` (a use on this account is running), `daemon_shutting_down`, `reset_credit_timed_out`, `reset_credit_failed` |
 | `read_account_mcp_inventory` | `agent`, `account?` (an account id; absent or null is the agent's default account), `refresh?` (default false) | Reads the MCP servers and platform connectors of the account through the agent's own CLI and answers with `account_mcp_inventory_read` once it has answered; it connects to every server, so it can take up to a minute and a quarter (Claude Code checks the sign-in for up to 15 seconds before listing for up to 60; Grok Build lists for up to 15 seconds, then diagnoses for up to 60). `refresh` asks the agent to refetch what it caches (Codex's Apps) instead of reading what it holds; Claude Code and Grok Build have nothing to refetch, so `refresh` changes nothing for them. A request for an account that is already being read joins that reading and gets the same inventory, whatever its `refresh`. Nothing the account holds is written. Refused only with `unknown_account` (not an account of the agent); every other failure is the inventory's `unavailable`. See "Account MCP inventory" below |
@@ -504,7 +509,7 @@ The terminal socket has no heartbeat of its own.
 | `account_login_updated` | `login` — an `AccountLogin`, the account's whole login state, sent when it starts, moves on or ends; see "Account login" below |
 | `agent_cli_status_updated` | `status` — an `AgentCliStatus`, the agent's whole status, sent when a check of its CLI ends and when an update of it starts or ends; see "Agent CLI versions" below |
 | `daemon_update_status_updated` | `status` — a `DaemonUpdateStatus`, the daemon's whole update status, sent when a check starts or ends, when the download makes progress (at most every 256 KiB and about four times a second), ends or fails, and when the executable has been replaced; see "Daemon updates" below. Never sent by a daemon that does not update itself |
-| `remote_access_updated` | `remote_access` — a `RemoteAccess`, where remote access stands, sent when the setting is turned on or off, the browser port is changed, the owner key is rotated, or the owner socket (on Windows, the browser port) failed to open; see "Remote access" below. Never sent by a daemon whose snapshot carries no `remote_access` |
+| `remote_access_updated` | `remote_access` — a `RemoteAccess`, where remote access stands, sent when either setting is turned on or off, the browser port is changed, the owner key is rotated, or a way in failed to open; see "Remote access" below. Never sent by a daemon whose snapshot carries no `remote_access` |
 | `account_sharing` | `account`, `in_use?`, `idle_sessions?`, `progress?`, `failure?` — an account's whole sharing state, sent whenever any of it changes; each field is absent when it has nothing to say. `in_use` is `{sessions, signing_in}`: how many of the account's sessions work under its directory — in the middle of a turn, idle with background work running, waiting for the user's answer (a permission prompt, a question, a session request, or a screen of its agent's that only the user can answer, such as Claude Code's "Resume this conversation?", or a view of its Claude Code background agents), holding a message of Octoboard's that is queued, being written, or was left unsent in its input box (`message_not_sent`), or claimed (being started, resumed, switched or handed off, or having their parent changed) — and whether it is being signed in (its login, or a sign-in to or sign-out of one of its MCP servers is running): what `account_in_use` refuses a change for. `idle_sessions` is how many of its sessions are idle — at their prompt waiting for the user's next message, with nothing running in the background — which a change ends and resumes. `progress` is `{share, phase, done, total, item?}` while a change runs: its direction; `phase`, one of `waiting` (another account of the same agent is changing), `stopping` (ending the idle sessions), `changing` (the entries) and `resuming` (resuming those sessions), in that order, `waiting` and `stopping` left out when there is nothing to wait for or stop and `resuming` when nothing was stopped; the entries processed out of `total`, none before `changing` and all of them once `resuming`; and `item`, the entry being processed (an item of the catalog or, turning sharing off, the agent's id of a conversation being taken back), present only while `changing`, from the first entry on, absent while the change waits for short CLI reads. `failure` is `{share, cause, items, detail}`, the last change that failed since the daemon started (`cause` and `items` as in `account_sharing_failed`, `items` as an array), cleared when the next change records its choice (one refused or stopped before that leaves it). An account the client has been told nothing of is free; see "Sharing the default configuration" below |
 | `settings_updated` | `settings` — the whole `Settings` record, sent when `update_settings` actually changes it, and also whenever the account list changes (`create_account`, `update_account`, `delete_account`, `set_account_disabled`, `set_default_account_name`, `reorder_accounts`, or a console dialog's save that repoints or mints one), and whenever `Settings.added_agents` changes (`add_agent`, `remove_agent`, `reorder_agents`, or the one-time fill described with `Settings.added_agents` under "Records"), and when `set_provider_setting` changes a stored choice |
 | `console_upserted` / `project_upserted` / `session_upserted` | `console` / `project` / `session` — the whole record, under that key |
@@ -638,8 +643,8 @@ A client also branches on some codes, instead of only showing them:
 | `code` | `params` | Meaning |
 |---|---|---|
 | `unreadable_request` | `detail` | The frame is not a request the daemon can read |
-| `remote_access_unavailable` | — | `set_remote_access`, `rotate_owner_key` or `set_remote_access_port` was sent to a daemon that offers no remote access (`snapshot.remote_access` is null), a rotation while remote access is not serving, or a port to a daemon that serves the browser at no port of its own |
-| `remote_access_refused_to_browser` | — | `set_remote_access`, `rotate_owner_key` or `set_remote_access_port` came over a connection the owner key opened: only the application's own window changes remote access |
+| `remote_access_unavailable` | — | `set_remote_access`, `set_browser_access`, `rotate_owner_key` or `set_remote_access_port` was sent to a daemon that offers no remote access (`snapshot.remote_access` is null), remote access to the server form's daemon, a rotation while neither remote access nor browser access is serving, or browser access or a port to a daemon that serves the browser at no port of its own |
+| `remote_access_refused_to_browser` | — | `set_remote_access`, `set_browser_access`, `rotate_owner_key` or `set_remote_access_port` came over a connection the owner key opened: the settings are changed with the launch key, by the application's own window or, for browser access, by `octoboardd browser`; the server form has no window, so there `octoboardd browser` alone changes browser access |
 | `store_write_failed` | `cause`, `detail` | SQLite could not read or write Octoboard's own database (`octoboard.db` in the data folder), for a cause the user can fix; any request that reads or writes a record can be answered with it. `cause`: `access` (the data folder or the file is read-only, or access is denied), `disk_full` (no room to grow the file) or `other` (the file could not be opened, which a disk too full for SQLite's journal also causes; any `SQLITE_IOERR`, the system failing a read, write, sync or lock of the file; or the file moved or deleted while open, `SQLITE_READONLY_DBMOVED`); a client treats a cause it does not know as `other`. `detail` is SQLite's own text, which names no operating-system error. Failures of the agents' own databases are never this code |
 | `internal_error` | `detail` | Any other failure |
 | `unknown_console` / `unknown_project` / `unknown_session` / `unknown_page` / `unknown_shell_terminal` | `console` / `project` / `session` / `page` / `shell_terminal` | The record is not there |
@@ -2476,51 +2481,78 @@ added within the current protocol generation: a client that does not know them i
 
 ### Remote access
 
-A daemon that follows the desktop application, on macOS or Windows, offers remote access: `snapshot.remote_access` is a
-`RemoteAccess`, null in every other daemon. Its `allowed` is the Allow remote access setting, off unless the user turned
-it on, which the daemon stores and applies at its start and at once when `set_remote_access` changes it. While it is on,
-the daemon opens its owner socket (`browser.sock` in the data directory, as the server form's), serves the UI there and
-holds and accepts the owner key (see "Who may connect"); `state` is then `serving`, with the browser's `address`
-(`http://127.0.0.1:<port>/?key=<owner key>`, the port being the server form's default port, which stays the same across
-launches) and the `forward_command` that reaches the socket from another machine, its remote host left as `<server>`,
-with `server_addresses`, what another computer can reach this one by, to put there: this computer's name (on macOS the
-Bonjour name, `<LocalHostName>.local`; on Linux the host name and on Windows the computer name, each as the system
-reports it, since `.local` is an mDNS name those systems may not answer to), then the IPv4 and then the IPv6 addresses of
-its active network interfaces, with loopback, unspecified, multicast and link-local ones (`169.254.0.0/16`,
-`fe80::/10`) and `localhost` names left out, as are deprecated, tentative and failed addresses where the system says so
-(Linux, Windows) and temporary IPv6 addresses on Linux (kept on macOS and Windows); each is text that
-`ssh` takes after `user@` as it is, an IPv6 address too. The list is read whenever the state is built, and is empty
-while `state` is not `serving` or where the computer reports none; a client that finds the field missing, from a daemon
-that predates it, offers none.
-When the socket could not be opened or the key could not be held, `state` is `failed` and `failure` says why (`reason`:
-`no_ui`, `not_private`, `socket_failed` or `owner_key_failed`; `detail`: the system's words, in English). While it is
-off, `state` is `off`: there is no owner socket and no owner key, and turning it off closes the socket, refuses the
-owner key and closes every connection the key opened, as a rotation does. The owner record says whether the daemon takes
-the owner key, so `octoboardd address` prints the address while remote access is on and says it is off otherwise. The
-TCP port of a daemon that follows the application serves no UI, on any system.
+A daemon that follows the desktop application offers two settings of its own, Allow remote access and Allow browser
+access: `snapshot.remote_access` is a `RemoteAccess`, and so is the server form's daemon that serves the browser (the
+build embeds the UI and it opened its socket), where only browser access is a setting; it is null in every other
+daemon. Each is stored by the daemon, off unless the user turned it on (on Windows, a store from before browser access
+was a setting began with browser access equal to the remote access it had), applied at the daemon's start and at once
+when `set_remote_access` or `set_browser_access` changes it; Settings sends them, and `octoboardd browser on` / `off`
+sends `set_browser_access`, the command with the launch key over a control connection. They are independent: either
+can be on without the other, and each one's off closes only its own way in and the connections made through it (a
+connection's handler is told, as one the owner key opened is at a rotation).
 
-On Windows, whose SSH server cannot forward to a socket, the daemon serves the browser at a loopback port of its own in
-place of the owner socket, and that listener alone takes the owner key; the daemon's own TCP port still never does.
-`browser_port` is that port, set whatever `state` is (null on every other system): the server form's default port until
-`set_remote_access_port` changes it, which takes effect at once. The `address` is at that port, and the
-`forward_command` forwards the same port on both ends (`ssh -N -o ExitOnForwardFailure=yes -L
-127.0.0.1:<port>:127.0.0.1:<port> <user>@<server>`). A port already in use is `failure.reason` `port_in_use`, any other
-failure to listen `port_failed`. The owner record names the port (`browser-port=<port>`) while the key is taken there,
-so `octoboardd address` prints the address and forward for it.
+**Allow remote access** (`allowed`, `state`, `failure`) is for another computer reaching this one over SSH. While it is
+on, the daemon opens its owner socket (`browser.sock` in the data directory, as the server form's) on macOS and Linux,
+and on Windows, whose SSH server cannot forward to a socket, its owner pipe, and serves the UI on the socket: another
+computer's application reaches either through `octoboardd proxy`, and a browser on another computer forwards to the
+socket. `state` is then `serving`. When the way in could not be opened or the key could not be held, `state` is
+`failed` and `failure` says why (`reason`: `no_ui`, `not_private`, `socket_failed`, `pipe_failed` or
+`owner_key_failed`; `detail`: the system's words, in English); while it is off, `state` is `off`, and turning it off
+closes the socket or pipe and every connection made through it. The server form has no Allow remote access: its
+`allowed` is false and its `state` `off`, whatever its socket does, and `set_remote_access` is refused with
+`remote_access_unavailable` there.
 
-On Windows the owner endpoint another device's application reaches through `octoboardd proxy` is not that port but a
-named pipe, `\\.\pipe\octoboard-owner-<hash of the data directory>`, opened with the browser's port, serving the same
-and closed when remote access is turned off (a change of port leaves it open): the daemon creates it refusing remote
-clients, owned by and open only to the daemon's user (where the name is taken, it joins only a pipe of its own user),
-and `octoboardd proxy` and `address --json` refuse a pipe of that name owned by anyone else. A pipe that could not be
-opened (its name held by another program or user) is `failure.reason` `pipe_failed`, and nothing is served.
+**Allow browser access** (`browser_allowed`, `browser_state`, `browser_failure`) is the loopback browser port alone, on
+Windows and macOS and in the server form, where it is the only setting (the build embeds the UI and the host has a
+socket): the daemon serves the UI at `127.0.0.1:<browser_port>` while it is on, so that a browser on this computer opens
+the address with no forward run first, and another computer's browser reaches it through an SSH forward to the port.
+`browser_port` is that port, set whatever `browser_state` is (null where the daemon offers no browser port: Linux's
+desktop daemon): the default browser port, 3369, until `set_remote_access_port` changes it, which takes effect at once
+while browser access is on (the old port is let go with every connection made through it, and the new one opened).
+`browser_state` is `serving` while the port is open, `failed` when browser access is on and it could not be opened or
+the key could not be held (`browser_failure`, `reason`: `no_ui`, `port_in_use` where another program or user holds the
+port, `port_is_daemons` for a port equal to the daemon's own TCP port, `port_failed` for any other failure to listen, or
+`owner_key_failed`), and `off` otherwise. Turning it off closes the port and every connection made through it, and
+nothing else: the socket, the owner pipe and the connections made through them stay, and in the server form the socket,
+the owner key and its connections stay as they are. The daemon's own TCP port never takes the owner key.
+
+The daemon holds and accepts the owner key (see "Who may connect") while either way in is open, and refuses it, closing
+every connection it opened, once both are off; the server form's holds it from the start. One way in failing to open does
+not stop the other from serving, each says its own failure, and turning a setting off and on again, or setting the
+port again for browser access (the same port included), tries again.
+
+While anything serves, `address` is the browser's address (`http://127.0.0.1:<port>/?key=<owner key>`) and
+`forward_command` the command that reaches the way in from another machine, its remote host left as `<server>`: while the
+browser port is open, the address is at that port and the command forwards it on both ends (`ssh -N -o
+ExitOnForwardFailure=yes -L 127.0.0.1:<port>:127.0.0.1:<port> <user>@<server>`); otherwise, while remote access serves a
+socket (macOS, Linux), they are the socket's, at the default port, which stays the same across launches so the address
+can be bookmarked. Where remote access serves on Windows with browser access off, neither is set: the owner pipe is
+no browser's way in. Both are null otherwise. `server_addresses` is what another computer can reach this one by, to put in
+`<server>`: this computer's name (on macOS the Bonjour name, `<LocalHostName>.local`; on Linux the host name and on
+Windows the computer name, each as the system reports it, since `.local` is an mDNS name those systems may not answer
+to), then the IPv4 and then the IPv6 addresses of its active network interfaces, with loopback, unspecified, multicast
+and link-local ones (`169.254.0.0/16`, `fe80::/10`) and `localhost` names left out, as are deprecated, tentative and
+failed addresses where the system says so (Linux, Windows) and temporary IPv6 addresses on Linux (kept on macOS and
+Windows); each is text that `ssh` takes after `user@` as it is, an IPv6 address too. The list is read whenever the state
+is built, and is empty while neither state is `serving` or where the computer reports none; a client that finds the
+field missing, from a daemon that predates it, offers none.
+
+The owner record names whether the daemon takes the owner key at its owner endpoint, the socket or on Windows the owner
+pipe (`owner-key`: while remote access serves, and always in the server form), and the browser port while it is open
+(`browser-port=<port>`), so `octoboardd address` prints the browser port's address and forward while it is open, else the
+socket's while remote access serves, and says that neither is on otherwise, and `octoboardd proxy` finds the endpoint
+only while remote access serves. On Windows the owner pipe is `\\.\pipe\octoboard-owner-<hash of the data directory>`: the
+daemon creates it refusing remote clients, owned by and open only to the daemon's user (where the name is taken, it joins
+only a pipe of its own user), and `octoboardd proxy` and `address --json` refuse a pipe of that name owned by anyone else. A
+pipe that could not be opened (its name held by another program or user) is `failure.reason` `pipe_failed`. The TCP port
+of a daemon that follows the application serves no UI, on any system.
 
 While `state` is `serving`, `connection` holds the connection details another device's application sets itself up from
 (`text`, as `octoboardd connection` prints them, with the name this computer announces as the host (the same name
 `server_addresses` starts with, on macOS `<LocalHostName>.local`), the default SSH port, the SSH server's host key
 fingerprint where it can be read and the path of the daemon's own executable; `qr`, the QR code of `text` as rows of `1`
-(dark) and `0` (light) modules, without a quiet zone); it is null otherwise. The desktop application's daemon runs only
-while the application does, so another device reaches it only then.
+(dark) and `0` (light) modules, without a quiet zone); it is null otherwise, browser access alone included. The desktop
+application's daemon runs only while the application does, so another device reaches it only then.
 
 ### Configuration export
 
@@ -4913,7 +4945,7 @@ says why they could not reach it, the reason on stderr:
 | `0` | `address --json` printed its line; `proxy`'s connection ended, by either side |
 | `1` | Anything else that failed: the key in `owner.key` is missing or unusable, or the daemon refuses it; the daemon's answer could not be read (for `address --json`, nothing is printed on stdout); the daemon is running but its record is not yet readable; `proxy`'s connection failed in the middle |
 | `3` | No daemon runs |
-| `4` | The running daemon has no owner endpoint: it takes no owner key (it is an earlier build, its build carries no UI, or its way in could not be opened), or it is the desktop application's daemon with Allow remote access off |
+| `4` | The running daemon has no owner endpoint: it takes no owner key (it is an earlier build, its build carries no UI, or its way in could not be opened), or it is the desktop application's daemon with Allow remote access off (browser access alone opens no owner endpoint) |
 | `5` | The daemon has an owner endpoint but it cannot be connected to |
 | `6` | No daemon runs, and this `octoboardd` is the desktop application's own copy, whose daemon runs only while the application does: the application is not running |
 
@@ -4999,6 +5031,16 @@ its next check (see "Daemon updates"), unless the update lock is held. The answe
 The rule is the one a window applies to `handover_check` before an update restart; the two are kept in step. A daemon
 that predates the route answers `404`, which the command line takes as a daemon that cannot say what the restart would
 interrupt.
+
+## `POST /stop-check` — what a stop would interrupt
+
+What `octoboardd stop` asks before it stops the daemon (or, on the desktop application's own copy, quits the application),
+to refuse when the stop would interrupt work. It takes no body (`{}` is sent), is behind the guard like every route,
+changes nothing, and answers `200` with `{"sessions": [{"id", "title", "status"}], "shell_terminals": [{"id", "title"}]}`.
+It lists what the application's quit confirmation asks about, as the UI's `quitHolders` counts it: the sessions that are
+starting, working, dormant or waiting for the user, or idle with work left running in the background (their `status`
+as a client is shown it), and the shell terminals that are running and busy. Both lists empty means a stop interrupts
+nothing. A daemon that predates the route answers `404`, which the command line takes as a daemon that cannot say.
 
 ## `POST /planned-stop` — a planned stop
 

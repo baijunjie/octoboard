@@ -29,7 +29,8 @@ file of its own that only its user can read, from which `octoboardd address` giv
 holds no owner key (see "Running in the background from the command line" in `docs/product/daemon-command-line.md`, and
 `docs/product/files-octoboard-owns.md`). Nothing
 off the machine reaches loopback except through a tunnel that ends on it, such as an SSH port forward; for the server
-form, `--port` keeps the port the same across starts, and the owner key keeps the key the same (see "The owner key" in
+form, `--port` keeps the daemon's own port the same across starts (without it a start may take another; the browser
+address names the browser port, which stays), and the owner key keeps the key the same (see "The owner key" in
 `docs/product/who-can-reach-the-daemon.md`), so an address can be bookmarked and a tunnel command written once.
 
 A page of the UI given no key — or no port, where its own address cannot be the daemon's — connects to nothing and
@@ -118,6 +119,12 @@ after creating it, so a failed start never leaves a running application with no 
 by then closed into the background stays closed. That fallback is not armed at a launch the system made for **Launch at
 login**, and such a launch starts hidden, as if its window had been closed into the background, while keeping Octoboard
 running in the background is on (see "A launch at login" in `docs/product/launch-at-login.md`).
+
+**A launch from the command line starts in the background.** `octoboardd start` of the application's own copy launches
+the application with `--start-in-background` (see "The application's copy of `octoboardd`" in
+`docs/product/daemon-command-line.md`): its window is never shown and it waits behind its menu bar icon, out of the
+Dock, whatever Keep running in the background says, and the fallback above is not armed. A launch at login or this one
+brings none of the remote windows back.
 
 **Remote windows open at the last quit come back.** As the application starts, it connects again, asking nothing, to
 the remote daemons whose windows were open when it last quit, and may hold the main window hidden for up to 15 seconds
@@ -531,6 +538,12 @@ on a close button is an ordinary gesture and must not end a live session unasked
 Window and `Alt+F4` never take this escape hatch however often they are repeated, and never open it for the gesture
 after them either. `Cmd+Q`, the application menu's Quit, the menu bar icon's Quit (the notification-area icon's on
 Windows) or the Dock icon's Quit — twice — is the way out of that state.
+
+**The command line quits the application without asking.** `octoboardd stop` of the application's own copy sends the
+application `SIGUSR1`, which quits as a confirmed quit does (see "The quit note" below): no confirmation is shown, the
+daemon is stopped with its ordinary stop and every session ends. The copy refuses first where the quit confirmation
+would have asked, unless `--force` is given (see `docs/product/daemon-command-line.md`). Any other signal keeps its
+meaning: a crash or kill still leaves the sessions running (see "Crashes and forced termination").
 
 ## Crashes and forced termination
 

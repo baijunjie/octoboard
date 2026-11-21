@@ -325,9 +325,9 @@ export function daemonUpdateOf(parts: Partial<DaemonUpdateStatus> = {}): DaemonU
   return { phase: "idle", available: null, progress: null, installed: null, last_check: null, install: null, manual: null, updated_from: null, ...parts };
 }
 
-/** Remote access switched off, over which `parts` lay what a scenario differs in. */
+/** Remote access and browser access switched off, over which `parts` lay what a scenario differs in. */
 export function remoteAccessOf(parts: Partial<RemoteAccess> = {}): RemoteAccess {
-  return { allowed: false, state: "off", browser_port: null, address: null, forward_command: null, server_addresses: [], connection: null, failure: null, ...parts };
+  return { allowed: false, state: "off", browser_allowed: false, browser_state: "off", browser_port: null, address: null, forward_command: null, server_addresses: [], connection: null, failure: null, browser_failure: null, ...parts };
 }
 
 /** A connected window's state after its first snapshot, over which a scenario lays what it differs
@@ -352,7 +352,7 @@ export function snapshotState(parts: {
    * platform has no updater. Left out, the daemon does not update itself and the window has nothing to update. */
   daemonUpdate?: DaemonUpdateStatus;
   /** Where remote access stands (`snapshot.remote_access`), for the application's own daemon on a host with owner
-   * sockets. Left out, the daemon offers none and the window has no Remote access section. */
+   * sockets. Left out, the daemon offers none and the window has no Access section. */
   remoteAccess?: RemoteAccess;
   /** The daemon host's own facts and home directory, for a scenario on a machine that is not the Unix one the rest assumes. */
   host?: HostInfo;

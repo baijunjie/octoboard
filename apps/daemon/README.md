@@ -53,22 +53,22 @@ released build, which carries the UI inside it, for your user:
 
 ```sh
 curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh             # Into ~/.local/bin; run again to upgrade.
-curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -- --service  # Also install and start the user unit (port 3369, or --port N).
+curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -- --service  # Also install and start the user unit (--port N sets the daemon's own port).
 ```
 
 or put a build of your own on the server (see "Build and run" above). Then:
 
 ```sh
-octoboardd start                    # Start it in the background on port 3369 (or --port N) and return.
+octoboardd start                    # Start it in the background (on a port the system assigns, or --port N) and return.
 octoboardd status                   # Print its pid and address; exits 3 when none runs.
 octoboardd address                  # Print the browser address with its key; exits 3 when none runs.
-octoboardd restart                  # Restart it on the same address, keeping its sessions running.
-octoboardd stop                     # Stop it, which leaves every session interrupted.
-octoboardd --port 3369              # Run it in the foreground on that port, as a service does.
+octoboardd restart                  # Restart it, keeping its sessions running; the browser address stays the same.
+octoboardd stop                     # Stop it, which leaves every session interrupted; refuses over running work unless --force.
+octoboardd --port 4000              # Run it in the foreground on that port, as a service does.
 ```
 
 `start` refuses while a daemon already runs against the same `~/.octoboard`. A browser reaches the daemon through a
-socket only its user can open, `~/.octoboard/browser.sock`, not through its port. Forward that socket from your own
+socket only its user can open, `~/.octoboard/browser.sock`, not through its port (`octoboardd browser on` also opens a loopback browser port, 3369 by default, off until turned on: on a shared server anyone can take it while the daemon is not running). Forward that socket from your own
 machine, which puts the daemon at `127.0.0.1:3369` there (`octoboardd address` prints this command with the real path):
 
 ```sh

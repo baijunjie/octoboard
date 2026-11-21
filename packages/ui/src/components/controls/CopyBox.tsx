@@ -8,6 +8,9 @@ import { ROW_ICON_BUTTON_CLASS } from "./RowControls";
  * either side. */
 export const COPY_BUTTON_INSET = "pe-9";
 
+/** The end padding that leaves room for the copy button and one more icon button (`action`) beside it. */
+export const COPY_AND_ACTION_INSET = "pe-[4.5rem]";
+
 /** A block's box with its copy button floating over the box's top end corner, centred on the first line. The button is
  * fixed in the corner while a box that scrolls sideways moves under it, so it sits on a backing, drawn in `surface`,
  * the box's own fill, which hides the text scrolled beneath: it reaches the box's end edge and the top, `COPY_BUTTON_INSET`
@@ -17,19 +20,23 @@ export const COPY_BUTTON_INSET = "pe-9";
  * `COPY_BUTTON_INSET` of room at the end of its content for the longest line to be scrolled clear. The box takes `dir`
  * (`auto` follows the text) so that the button sits at the end of the text it copies. `copyText` is the button's name
  * and `failedText` the error alert's title when the copy fails: the caller words both, since what is copied is its own.
+ * `action` is one more icon button for what is done with the text (opening an address), drawn on the same backing
+ * beside the copy button, on its inner side; the box then reserves `COPY_AND_ACTION_INSET` at its end.
  * Copying is not editing, so the button works on a page that is read-only, in history or submitted. */
-export function CopyBox({ text, copyText, failedText, dir, surface, tint, children }: {
+export function CopyBox({ text, copyText, failedText, dir, surface, tint, action, children }: {
   text: string;
   copyText: string;
   failedText: string;
   dir: "auto" | "ltr";
   surface: string;
   tint?: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }): React.ReactElement {
   return (
     <div dir={dir} className="relative">
       {children}
+      {action && <span className="absolute end-9 top-px flex h-9 w-9 items-center justify-center overflow-hidden" style={{ backgroundColor: surface }}>{action}</span>}
       <span className="absolute end-px top-px flex h-9 w-9 items-center justify-center overflow-hidden rounded-se-[7px]" style={{ backgroundColor: surface }}>
         {tint && <span aria-hidden="true" className={`absolute inset-x-0 top-2 h-5 ${tint}`} />}
         <CopyButton
@@ -60,16 +67,17 @@ const SECONDARY = { style: { backgroundColor: "var(--surface-secondary)" }, surf
  * read in full; with `wrap: false` it scrolls sideways instead, in a region named `scrollLabel`. `dir` is the text's
  * (`ltr` for a command). `content` is what the box shows in place of `text` where part of the text is a control of its own;
  * `text` is still what the button copies. */
-export function CopyCommand({ text, content, variant = "secondary", dir = "ltr", copyText, failedText, ...wrapping }: {
+export function CopyCommand({ text, content, variant = "secondary", dir = "ltr", copyText, failedText, action, ...wrapping }: {
   text: string;
   content?: React.ReactNode;
   variant?: CopyCommandVariant;
   dir?: "auto" | "ltr";
   copyText: string;
   failedText: string;
+  action?: React.ReactNode;
 } & ({ wrap?: true } | { wrap: false; scrollLabel: string })): React.ReactElement {
   const { style, surface, boxClass } = variant === "secondary" ? SECONDARY : variant;
-  const textClass = `py-2 ps-3 ${COPY_BUTTON_INSET} align-match-parent font-mono text-xs leading-5`;
+  const textClass = `py-2 ps-3 ${action ? COPY_AND_ACTION_INSET : COPY_BUTTON_INSET} align-match-parent font-mono text-xs leading-5`;
   const box = wrapping.wrap === false
     ? (
       <ScrollBox label={wrapping.scrollLabel} className={boxClass} style={style}>
@@ -81,5 +89,5 @@ export function CopyCommand({ text, content, variant = "secondary", dir = "ltr",
         <pre dir={dir} className={`whitespace-pre-wrap [overflow-wrap:anywhere] ${textClass}`}>{content ?? text}</pre>
       </div>
     );
-  return <CopyBox text={text} copyText={copyText} failedText={failedText} dir={dir} surface={surface}>{box}</CopyBox>;
+  return <CopyBox text={text} copyText={copyText} failedText={failedText} dir={dir} surface={surface} action={action}>{box}</CopyBox>;
 }

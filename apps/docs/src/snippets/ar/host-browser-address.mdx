@@ -1,12 +1,11 @@
 import { productName } from "../../commands.ts";
 
-{/* The host's steps both relay guides share: turning on remote access and copying the browser address. Pass
-`windows` on a Windows host, which also needs the browser port. */}
+{/* The host's steps both browser guides share: turning on browser access and copying the local address. */}
 
-في {productName} افتح <strong>الإعدادات › الوصول عن بُعد</strong>، وشغّل <strong>السماح بالوصول عن بُعد</strong>، ثم اختر <strong>سماح</strong> للتأكيد. يظهر بعد ذلك تبويبان أسفل المفتاح. في تبويب <strong>المتصفح</strong>، اختر <strong>نسخ العنوان</strong> تحت <strong>الخطوة 2: عنوان المتصفح</strong>.{props.windows ? <> دوِّن أيضًا الرقم الظاهر تحت <strong>منفذ المتصفح</strong>.</> : null}
+في {productName} افتح <strong>الإعدادات › الوصول</strong>. شغّل <strong>السماح بالوصول من المتصفح</strong>، ثم اختر <strong>سماح</strong> للتأكيد. تحت <strong>متصفح هذا الكمبيوتر</strong>، اختر <strong>نسخ العنوان المحلي</strong>. دوِّن أيضًا الرقم الظاهر تحت <strong>منفذ المتصفح</strong>.
 
 أوصل العنوان إلى الكمبيوتر الآخر بطريقة لا يراها غيرك، مثل ملاحظة ترسلها إلى نفسك: فهو يعمل عمل كلمة المرور.
 
 تجاوز <strong>الخطوة 1: إعادة توجيه SSH</strong>. تذكر إعدادات التطبيق SSH في أكثر من موضع، ويمكنك تجاهل ذلك هنا، لأن هذا الدليل يستخدم عنوان المتصفح فقط.
 
-أبقِ {productName} قيد التشغيل: إذا أغلقته توقف الوصول عن بُعد.
+أبقِ {productName} قيد التشغيل: إذا أغلقته توقف الوصول من المتصفح.

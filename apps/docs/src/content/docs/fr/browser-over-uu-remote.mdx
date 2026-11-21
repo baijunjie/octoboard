@@ -14,7 +14,7 @@ Ce guide ouvre {productName} dans un navigateur sur votre propre ordinateur. C�
 Vous ne savez pas si c’est la bonne voie pour vous ? Consultez [Choisir comment se connecter](../choose-how-to-connect/).
 
 <Aside type="caution">
-Ces étapes n’ont pas encore été testées entre deux appareils. Elles suivent l’aide d’UU Remote. Le relais sur un hôte Mac a été essayé sur un seul ordinateur, y compris la connexion en direct du navigateur.
+Ces étapes n’ont pas encore été testées entre deux appareils. Elles suivent l’aide d’UU Remote.
 </Aside>
 
 <strong>Navigateur sur votre ordinateur</strong> → <strong>127.0.0.1 sur votre ordinateur</strong> ⟷ UU Remote ⟷ <strong>127.0.0.1 sur l’hôte</strong> → <strong>{productName}</strong>
@@ -25,7 +25,6 @@ Ces étapes n’ont pas encore été testées entre deux appareils. Elles suiven
 - <strong>127.0.0.1 (boucle locale) :</strong> une adresse qui signifie toujours « cet ordinateur-ci ».
 - <strong>Port :</strong> un nombre qui désigne un programme précis sur un ordinateur, comme un numéro de porte. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> est le port {commands.defaultPort} sur cet ordinateur.
 - <strong>Mappage de ports (端口映射) :</strong> une fonction d’UU Remote qui fait apparaître un port de l’hôte comme un port de votre propre ordinateur.
-- <strong>socat :</strong> un petit programme gratuit qui fait passer une connexion d’un endroit à un autre. Un hôte Mac en a besoin comme relais.
 - <strong>Terminal :</strong> la fenêtre dans laquelle vous tapez des commandes : Terminal sur macOS, PowerShell sous Windows.
 
 </details>
@@ -37,7 +36,6 @@ Le mappage de ports d’UU Remote fait apparaître {productName} de l’hôte su
 - <strong>Les deux ordinateurs sont des Mac ou des PC Windows.</strong> UU Remote n’a pas de mappage de ports pour Linux ; atteignez plutôt un serveur Linux par [Tailscale](../browser-over-tailscale/) ou [SSH](../remote-connections/).
 - <strong>Les deux ont UU Remote installé et connecté au même compte,</strong> en version 4.21.0 ou ultérieure sous Windows et 4.32.0 ou ultérieure sous macOS. Le mappage de ports ne fonctionne que pour TCP, ce qui suffit à {productName}. À la date de rédaction, UU Remote range le mappage de ports parmi ses fonctions gratuites ; consultez ses offres actuelles en cas de doute.
 - <strong>L’hôte apparaît sous Mes appareils (我的设备)</strong> dans UU Remote sur l’ordinateur depuis lequel vous naviguerez.
-- <strong>Un hôte Mac a aussi besoin de [Homebrew](https://brew.sh/)</strong>, pour installer socat ci-dessous.
 
 ## Sur l’hôte
 
@@ -45,32 +43,10 @@ Le mappage de ports d’UU Remote fait apparaître {productName} de l’hôte su
 
 1. Obtenez l’adresse du navigateur, qui contient la clé qui connecte le navigateur.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
    <HostBrowserAddress />
-   </TabItem>
-   <TabItem label="Windows">
-   <HostBrowserAddress windows />
-   </TabItem>
-   </Tabs>
 2. Créez un port sur l’adresse <code dir="ltr">{tunnel.loopback}</code> de l’hôte qui mène à {productName}. Ce port est le <strong>port de l’hôte</strong> dans les étapes suivantes.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
-   Un Mac sert le navigateur d’une manière qu’UU Remote ne peut pas mapper, donc il faut socat comme relais. Installez-le dans Terminal :
-
-   <Code code={tunnel.installSocatMac} lang="sh" />
-
-   Exécutez ensuite ceci et laissez la fenêtre ouverte. Il écoute uniquement sur <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   Le port de l’hôte est <code dir="ltr">{tunnel.bridgePort}</code>.
-   </TabItem>
-   <TabItem label="Windows">
-   Rien à exécuter : {productName} écoute lui-même sur le port du navigateur, uniquement sur <code dir="ltr">127.0.0.1</code>. Le port de l’hôte est le <strong>Port du navigateur</strong> dans l’onglet <strong>Navigateur</strong> ({commands.defaultPort} sauf si vous l’avez modifié).
-   </TabItem>
-   </Tabs>
+   Rien à exécuter : {productName} écoute lui-même sur le port du navigateur, uniquement sur <code dir="ltr">127.0.0.1</code>. Le port de l’hôte est le <strong>Port du navigateur</strong> dans <strong>Réglages › Accès</strong> ({commands.defaultPort} sauf si vous l’avez modifié).
 
 </Steps>
 
@@ -112,19 +88,18 @@ Vous saurez que ça a marché quand {productName} s’ouvre dans l’onglet du n
 
 ## Si ça ne marche pas
 
-- <strong>Le mappage s’affiche comme connecté, mais la page ne se charge pas :</strong> sur un hôte Mac, la fenêtre de socat a été fermée ou sa commande s’est arrêtée ; ou <strong>Autoriser l’accès à distance</strong> est désactivé, ou {productName} ne fonctionne pas sur l’hôte.
+- <strong>Le mappage s’affiche comme connecté, mais la page ne se charge pas :</strong> <strong>Autoriser l’accès par navigateur</strong> est désactivé, ou {productName} ne fonctionne pas sur l’hôte.
 - <strong>Le mappage ne s’enregistre pas ou ne se connecte pas :</strong> le port local est peut-être pris sur cet ordinateur. Choisissez-en un autre, et modifiez-le aussi dans l’adresse du navigateur.
 - <strong>La page est refusée ou vide :</strong> vérifiez que vous avez ouvert l’adresse à <code dir="ltr">{tunnel.loopback}</code>.
 
 ## Tout désactiver
 
 - <strong>Sur l’ordinateur depuis lequel vous naviguiez :</strong> désactivez le mappage dans le panneau de mappage de ports d’UU Remote, ou supprimez-le. Fermer le panneau ou se déconnecter l’arrête aussi.
-- <strong>Sur un hôte Mac :</strong> arrêtez socat avec <kbd>Ctrl</kbd>+<kbd>C</kbd>.
-- <strong>Sur l’hôte,</strong> désactivez <strong>Autoriser l’accès à distance</strong> quand vous n’en avez plus besoin. Cela ferme l’entrée du navigateur et déconnecte toutes les pages ouvertes avec la clé.
-- <strong>Si l’adresse a pu fuiter,</strong> donnez-lui une nouvelle clé avec <strong>Renouveler la clé</strong> dans l’onglet <strong>Navigateur</strong>. Les pages ouvertes avec l’ancienne adresse sont déconnectées.
+- <strong>Sur l’hôte,</strong> désactivez <strong>Autoriser l’accès par navigateur</strong> quand vous n’en avez plus besoin. Cela ferme le port du navigateur et déconnecte toutes les pages ouvertes avec la clé.
+- <strong>Si l’adresse a pu fuiter,</strong> donnez-lui une nouvelle clé avec <strong>Renouveler la clé</strong> dans <strong>Réglages › Accès</strong>. Les pages ouvertes avec l’ancienne adresse sont déconnectées.
 
 ## Sécurité
 
 - <strong>L’adresse est le mot de passe :</strong> sa clé donne un contrôle total de {productName} sur l’hôte, y compris l’exécution de n’importe quelle commande. Elle dure jusqu’à ce que vous la renouveliez. Elle reste dans l’historique et les favoris du navigateur, et se synchronise avec vos autres appareils si la synchronisation du navigateur est activée.
 - <strong>Qui peut l’atteindre :</strong> toute personne qui atteint le port de l’hôte et possède la clé. Sur l’hôte, il écoute uniquement sur <code dir="ltr">127.0.0.1</code> ; toute personne qui peut utiliser votre compte UU Remote pour mapper des ports vers l’hôte peut aussi l’atteindre, alors protégez bien ce compte.
-- <strong>Uniquement sur des ordinateurs auxquels personne d’autre ne se connecte :</strong> un autre compte utilisateur sur l’hôte ou sur votre ordinateur peut se connecter à ces ports <code dir="ltr">127.0.0.1</code>, et tant que le mappage ou socat ne tourne pas, il peut prendre le port et recevoir la clé quand votre navigateur se reconnecte. La méthode [Se connecter via SSH](../remote-connections/) n’a pas cette faiblesse sur un hôte Mac ou Linux, et votre propre ordinateur ne l’a pas non plus quand vous utilisez l’app de bureau. Dans un navigateur, votre ordinateur l’a toujours, car la redirection SSH y écoute aussi sur un port <code dir="ltr">127.0.0.1</code>.
+- <strong>Uniquement sur des ordinateurs auxquels personne d’autre ne se connecte :</strong> un autre compte utilisateur sur l’hôte ou sur votre ordinateur peut se connecter à ces ports <code dir="ltr">127.0.0.1</code>, et peut prendre le port du navigateur de l’hôte tant que {productName} ne tourne pas ou redémarre, ou le port mappé de votre ordinateur tant que le mappage ne tourne pas, et recevoir la clé quand votre navigateur se reconnecte. La méthode [Se connecter via SSH](../remote-connections/) n’a pas cette faiblesse sur un hôte Linux dont l’accès par navigateur est désactivé, ni sur un hôte Mac ou Windows utilisé depuis l’app de bureau, et votre propre ordinateur ne l’a pas non plus quand vous utilisez l’app de bureau. Dans un navigateur, votre ordinateur l’a toujours, car la redirection SSH y écoute aussi sur un port <code dir="ltr">127.0.0.1</code>.

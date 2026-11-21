@@ -65,10 +65,10 @@ import { commands, productName } from "../../../commands.ts";
 
 <Steps>
 
-1. 在你要连过去的电脑上，打开 {productName} 的<strong>设置 › 远程访问</strong>。
+1. 在你要连过去的电脑上，打开 {productName} 的<strong>设置 › 访问</strong>。
 2. 点击那里的<strong>打开系统设置</strong>（macOS）或<strong>打开设置</strong>（Windows），按该行给出的路径开启<strong>远程登录</strong>（macOS）或 <strong>OpenSSH 服务器</strong>（Windows），让这台电脑接受 SSH 登录。这一步需要管理员权限。回到 {productName}，该行会显示<strong>已开启</strong>。
 3. 开启<strong>允许远程访问</strong>，点击<strong>允许</strong>确认，并保持 {productName} 运行，退出后远程访问会随之中断。
-4. 在<strong>{productName} 应用</strong>标签页点击<strong>复制连接信息</strong>，再通过邮件或聊天工具发到另一台电脑。
+4. 点击<strong>复制连接信息</strong>，再通过邮件或聊天工具发到另一台电脑。
 5. 在你要用来工作的电脑上，按[连接 Linux 服务器](#连接-linux-服务器)的第 2 到 5 步添加这台主机，粘贴你发过去的信息。用主机上的用户名和密码登录。
 
 </Steps>
@@ -81,7 +81,7 @@ import { commands, productName } from "../../../commands.ts";
 
 1. 获取 SSH 转发命令：
 
-   - <strong>主机是 Mac 或 Windows 电脑时，</strong>先完成[用另一台电脑作为主机](#用另一台电脑作为主机)的第 1 到 3 步。然后在<strong>浏览器</strong>标签页找到<strong>第 1 步：SSH 转发</strong>。点击命令中的地址，选择另一台电脑访问这台电脑所用的地址（或选择<strong>自行输入地址</strong>，稍后自己替换 <code dir="ltr">{commands.server}</code>），然后点击<strong>复制转发命令</strong>。再在<strong>第 2 步：浏览器地址</strong>处点击<strong>复制地址</strong>。
+   - <strong>主机是 Mac 或 Windows 电脑时，</strong>先完成[用另一台电脑作为主机](#用另一台电脑作为主机)的第 1 和 2 步。然后打开<strong>设置 › 访问</strong>，开启<strong>允许浏览器访问</strong>并点击<strong>允许</strong>确认。在<strong>浏览器</strong>标签页中找到<strong>第 1 步：SSH 转发</strong>。点击命令中的地址，选择另一台电脑访问这台电脑所用的地址（或选择<strong>自行输入地址</strong>，稍后自己替换 <code dir="ltr">{commands.server}</code>），然后点击<strong>复制转发命令</strong>。再在<strong>这台电脑的浏览器</strong>下点击<strong>复制本机地址</strong>。
    - <strong>主机是 Linux 服务器时，</strong>在服务器上运行这条命令。它会先输出浏览器地址，再输出要运行的 SSH 命令。
 
      <Code code={commands.address} lang="sh" />

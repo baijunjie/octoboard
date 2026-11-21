@@ -66,7 +66,7 @@ This installs the program, sets it up as a systemd user service and starts it. I
 
 <Code code={commands.linger} lang="sh" />
 
-The default port is <code dir="ltr">{commands.defaultPort}</code>. To use another, add <code dir="ltr">{commands.portOption}</code> to the end of the service command, or to <code dir="ltr">{commands.start}</code>.
+octoboardd picks a port of its own, which you never need to know: the address and the <code dir="ltr">ssh</code> command that <code dir="ltr">{commands.address}</code> prints name port <code dir="ltr">{commands.defaultPort}</code>, the same every time.
 
 ## Upgrade
 

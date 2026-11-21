@@ -418,26 +418,29 @@ function inRemoteWindow() {
 
 it.each([
   ["the application's window, for a daemon that offers it", { remoteAccess: remoteAccessOf(), remoteLogin: true }, true],
+  ["the application's window, for a daemon with a browser port", { remoteAccess: remoteAccessOf({ browser_port: 3369 }), remoteLogin: true }, true],
   ["a browser, whose adapter has none of the shell's capabilities", { remoteAccess: remoteAccessOf() }, false],
   ["a daemon that offers none", { remoteLogin: true }, false],
-] as const)("lists the Remote access section, between Permissions and Notifications, only where it is the application's own: %s", async (_name, updating, listed) => {
+] as const)("lists the Access section, between Permissions and Notifications, only where it is the application's own: %s", async (_name, updating, listed) => {
   mount({ nonce: 1, section: "general", addAgent: false }, 1440, MAC_HOST, updating as Updating);
   await act(async () => {});
   const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
-  expect(tabs.includes("Remote access")).toBe(listed);
+  expect(tabs.includes("Access")).toBe(listed);
+  expect(tabs).not.toContain("Remote access");
+  expect(tabs).not.toContain("Browser access");
   if (listed) {
-    expect(tabs.indexOf("Remote access")).toBe(tabs.indexOf("Permissions") + 1);
-    expect(tabs.indexOf("Notifications")).toBe(tabs.indexOf("Remote access") + 1);
+    expect(tabs.indexOf("Access")).toBe(tabs.indexOf("Permissions") + 1);
+    expect(tabs.indexOf("Notifications")).toBe(tabs.indexOf("Access") + 1);
   }
 });
 
-it("lists neither Remote access nor Permissions in the window of a daemon elsewhere, whose settings are that daemon's alone", async () => {
+it("lists neither Access nor Permissions in the window of a daemon elsewhere, whose settings are that daemon's alone", async () => {
   inRemoteWindow();
   // As the shell gives it: no Remote Login in a remote daemon's window.
-  mount({ nonce: 1, section: "general", addAgent: false }, 1440, MAC_HOST, { remoteAccess: remoteAccessOf() });
+  mount({ nonce: 1, section: "general", addAgent: false }, 1440, MAC_HOST, { remoteAccess: remoteAccessOf({ browser_port: 3369 }) });
   await act(async () => {});
   const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
-  expect(tabs).not.toContain("Remote access");
+  expect(tabs).not.toContain("Access");
   expect(tabs).not.toContain("Permissions");
   expect(tabs).toContain("General");
   expect(tabs).toContain("Notifications");

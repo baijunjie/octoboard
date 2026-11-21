@@ -81,7 +81,9 @@ export interface QuitHolders {
  * session idle but running in the background holds it up too, as the quit would end that
  * work. One at its prompt with nothing left running is in the middle of nothing that is reported, so it does
  * not, though the quit still ends it and leaves it interrupted and resumable like the rest; one whose child
- * sessions are working holds it up only through those sessions. */
+ * sessions are working holds it up only through those sessions. The daemon's `holds_quit`
+ * (`apps/daemon/src/coordinator/stop_check.rs`) applies the same rule for `octoboardd stop`; the cases in
+ * `apps/daemon/testdata/quit_holders_cases.json`, which a test of each runs, keep the two in step. */
 export function quitHolders(sessions: readonly Session[], terminals: readonly ShellTerminal[] = []): QuitHolders {
   return {
     sessions: sessions.some((s) => sessionIsWorking(s) || s.status === "waiting_user"),

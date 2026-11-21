@@ -1,7 +1,8 @@
 # Example systemd user unit for running octoboardd in the background on a Linux server.
 #
-# The binary path and the port below are examples; change them to where octoboardd is installed
-# and to the port you want the daemon to keep.
+# The binary path below is an example; change it to where octoboardd is installed. The daemon
+# listens on a port the system assigns, which only local programs use; add `--port <port>` to keep
+# one.
 #
 # Install:
 #   mkdir -p ~/.config/systemd/user
@@ -19,7 +20,9 @@
 #
 # The daemon runs as that user, so its sessions use that user's ~/.octoboard, agent accounts and
 # keys. It listens on 127.0.0.1 only, and serves the browser on ~/.octoboard/browser.sock; reach it
-# with the SSH forward `octoboardd address` prints, at the address it prints.
+# with the SSH forward `octoboardd address` prints, at the address it prints. `octoboardd browser on`
+# also opens a loopback browser port (3369 unless `--port` names another) for that forward to end
+# at, or for a tool such as `tailscale serve`.
 
 [Unit]
 Description=Octoboard daemon
@@ -29,7 +32,7 @@ Type=simple
 # --service-managed makes a planned restart exit with 75 (see RestartForceExitStatus below)
 # instead of starting the next daemon itself; pass it only with that restart. It also tells the
 # daemon it is this service's main process, which systemd before 248 does not show it otherwise.
-ExecStart=%h/.local/bin/octoboardd --port 3369 --service-managed
+ExecStart=%h/.local/bin/octoboardd --service-managed
 Restart=on-failure
 # A planned restart (`octoboardd restart`, or POST /restart) hands every session over to the
 # holders and exits with 75, so that the next daemon runs in this unit: restart on that status

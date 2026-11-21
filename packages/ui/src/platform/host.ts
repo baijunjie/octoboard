@@ -28,6 +28,8 @@ export type HostFacts = {
   keepAwake: boolean;
   /** The system can open the application when the user logs in. */
   launchAtLogin: boolean;
+  /** The application can link its `octoboardd` into the PATH, which the Settings row for the command-line tool offers. */
+  commandLine: boolean;
   /** The privacy grants section, which the system has only on macOS. */
   permissionsPane: boolean;
   notificationSettings: "system-pane" | "none";
@@ -69,6 +71,7 @@ export function browserHost(
     runInBackground: false,
     keepAwake: false,
     launchAtLogin: false,
+    commandLine: false,
     permissionsPane: false,
     notificationSettings: "none",
     updater: "none",
@@ -108,7 +111,7 @@ export function hostFromQuery(search: string): HostFacts | undefined {
   const valid =
     (Object.keys(OPTIONS) as (keyof typeof OPTIONS)[]).every((key) => oneOf(OPTIONS[key], facts[key])) &&
     (Object.keys(TERM_OPTIONS) as (keyof typeof TERM_OPTIONS)[]).every((key) => oneOf(TERM_OPTIONS[key], terms?.[key])) &&
-    ["translucent", "appMenu", "badge", "runInBackground", "keepAwake", "launchAtLogin", "permissionsPane"].every((key) => typeof facts[key] === "boolean") &&
+    ["translucent", "appMenu", "badge", "runInBackground", "keepAwake", "launchAtLogin", "commandLine", "permissionsPane"].every((key) => typeof facts[key] === "boolean") &&
     (facts.trafficLightInset === undefined || typeof facts.trafficLightInset === "number") &&
     (facts.isAndroid === undefined || typeof facts.isAndroid === "boolean") &&
     (facts.xtermSelectionModifier === undefined || oneOf(["alt", "shift"], facts.xtermSelectionModifier));

@@ -18,11 +18,11 @@ Se você aceita um pouco de atraso nos comandos e uma imagem borrada, não preci
 | --- | --- | --- | --- |
 | Uso a partir de | App para desktop ou navegador | Somente navegador | Somente navegador |
 | Hosts compatíveis | Servidor Linux, Mac, PC com Windows | Servidor Linux, Mac, PC com Windows | Somente Mac ou PC com Windows |
-| No host você ativa ou instala | Login SSH (Login remoto no Mac, OpenSSH Server no Windows; um servidor Linux já o tem) | Tailscale; um host Mac ou Linux também precisa do socat | UU Remote; um host Mac também precisa do socat |
+| No host você ativa ou instala | Login SSH (Login remoto no Mac, OpenSSH Server no Windows; um servidor Linux já o tem) | Tailscale | UU Remote |
 | No seu próprio computador você instala | Nada além do que já tem | Tailscale; também o socat em um computador Mac ou Linux | UU Remote (Mac ou Windows) |
 | O tráfego passa por | Uma conexão direta, sem terceiros | A rede do Tailscale, com a sua conta | O serviço do NetEase UU Remote, com a sua conta |
 | Funciona fora da mesma rede | Só se o host puder ser alcançado: na mesma rede, em um endereço público ou por uma VPN | Sim | Sim |
-| Ideal para | Servidores; o app para desktop completo; hosts Mac e Linux em que outras pessoas também fazem login | Acessar suas próprias máquinas de qualquer lugar sem SSH | Usuários na China continental que já usam o UU Remote |
+| Ideal para | Servidores; o app para desktop completo; hosts Linux em que outras pessoas também fazem login, e hosts Mac ou Windows que você usa pelo app para desktop | Acessar suas próprias máquinas de qualquer lugar sem SSH | Usuários na China continental que já usam o UU Remote |
 
 ## Antes de escolher um retransmissor
 
@@ -33,7 +33,7 @@ Os guias do Tailscale e do UU Remote ainda não foram totalmente testados entre 
 </Aside>
 
 <Aside type="caution" title="Somente em computadores em que ninguém mais faz login">
-Com um retransmissor, outra conta de usuário no host ou no seu próprio computador poderia capturar a chave do navegador. Use o Tailscale ou o UU Remote somente em computadores em que só você faz login. [Conectar por SSH](../remote-connections/) não tem essa fraqueza em um host Mac ou Linux, nem no seu próprio computador quando você usa o app para desktop. No navegador, o seu computador ainda a tem, porque lá o encaminhamento SSH também escuta em uma porta <code dir="ltr">127.0.0.1</code>.
+Com um retransmissor, outra conta de usuário no host ou no seu próprio computador poderia capturar a chave do navegador. Use o Tailscale ou o UU Remote somente em computadores em que só você faz login. [Conectar por SSH](../remote-connections/) não tem essa fraqueza em um host Linux com o acesso pelo navegador desativado, nem em um host Mac ou Windows usado pelo app para desktop, nem no seu próprio computador quando você usa o app para desktop. No navegador, o seu computador ainda a tem, porque lá o encaminhamento SSH também escuta em uma porta <code dir="ltr">127.0.0.1</code>.
 </Aside>
 
 ## Próximo passo

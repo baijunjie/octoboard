@@ -80,6 +80,7 @@ pub mod resume;
 pub mod resume_on_start;
 pub mod scheduled_tasks;
 pub mod settings;
+pub mod stop_check;
 #[cfg(test)]
 mod test_support;
 pub mod unlinked;
@@ -487,6 +488,13 @@ async fn handle_inner(
         RequestBody::SetRemoteAccess { allowed } => {
             let state = state.clone();
             tokio::task::spawn_blocking(move || state.remote_access.set(&state, allowed)).await??;
+            Ok(None)
+        }
+
+        RequestBody::SetBrowserAccess { allowed } => {
+            let state = state.clone();
+            tokio::task::spawn_blocking(move || state.remote_access.set_browser(&state, allowed))
+                .await??;
             Ok(None)
         }
 

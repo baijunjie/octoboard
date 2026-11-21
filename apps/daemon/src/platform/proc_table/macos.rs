@@ -189,6 +189,19 @@ pub(crate) fn environment(pid: i32) -> EnvRead {
     }
 }
 
+/// The path of the executable `pid` runs, or `None` when there is no such process or the system
+/// does not give it out.
+pub(crate) fn image_of(pid: i32) -> Option<PathBuf> {
+    let mut buffer = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
+    // SAFETY: `buffer` is writable for the size given, and the call writes back how many bytes
+    // of path it filled.
+    let filled =
+        unsafe { libc::proc_pidpath(pid, buffer.as_mut_ptr().cast(), buffer.len() as u32) };
+    let filled = usize::try_from(filled).ok().filter(|&filled| filled > 0)?;
+    buffer.truncate(filled);
+    Some(PathBuf::from(std::ffi::OsStr::from_bytes(&buffer)))
+}
+
 /// `pid`'s arguments, or `None` when they cannot be read.
 pub(crate) fn argv(pid: i32) -> Option<Vec<String>> {
     let buffer = procargs(pid)?;

@@ -117,6 +117,8 @@ pub struct HostFacts {
     pub keep_awake: bool,
     /// The system can open the application when the user logs in (`launch_at_login/`).
     pub launch_at_login: bool,
+    /// The application can link its `octoboardd` into the PATH (`command_line/`).
+    pub command_line: bool,
     /// The system has the privacy grants the app lets the user give on purpose.
     pub permissions_pane: bool,
     pub notification_settings: NotificationSettings,
@@ -141,6 +143,7 @@ fn macos() -> HostFacts {
         run_in_background: true,
         keep_awake: true,
         launch_at_login: crate::launch_at_login::supported(),
+        command_line: true,
         permissions_pane: true,
         notification_settings: NotificationSettings::SystemPane,
         updater: Updater::InPlace,
@@ -168,6 +171,7 @@ fn windows() -> HostFacts {
         run_in_background: true,
         keep_awake: true,
         launch_at_login: true,
+        command_line: false,
         permissions_pane: false,
         notification_settings: NotificationSettings::SystemPane,
         updater: Updater::Installer,
@@ -194,6 +198,7 @@ fn linux() -> HostFacts {
         run_in_background: false,
         keep_awake: false,
         launch_at_login: false,
+        command_line: false,
         permissions_pane: false,
         notification_settings: NotificationSettings::None,
         updater: Updater::None,
@@ -230,6 +235,7 @@ pub fn for_remote_window(facts: HostFacts) -> HostFacts {
     HostFacts {
         run_in_background: false,
         launch_at_login: false,
+        command_line: false,
         permissions_pane: false,
         updater: Updater::None,
         ..facts
@@ -257,6 +263,7 @@ mod tests {
             for (key, value) in [
                 ("runInBackground", serde_json::json!(false)),
                 ("launchAtLogin", serde_json::json!(false)),
+                ("commandLine", serde_json::json!(false)),
                 ("permissionsPane", serde_json::json!(false)),
                 ("updater", serde_json::json!("none")),
             ] {
@@ -282,6 +289,7 @@ mod tests {
                 "runInBackground": true,
                 "keepAwake": true,
                 "launchAtLogin": crate::launch_at_login::supported(),
+                "commandLine": true,
                 "permissionsPane": true,
                 "notificationSettings": "system-pane",
                 "updater": "in-place",
@@ -309,6 +317,7 @@ mod tests {
                 "runInBackground": true,
                 "keepAwake": true,
                 "launchAtLogin": true,
+                "commandLine": false,
                 "permissionsPane": false,
                 "notificationSettings": "system-pane",
                 "updater": "installer",
@@ -349,6 +358,7 @@ mod tests {
         let current: serde_json::Value = serde_json::from_str(&current_json()).unwrap();
         assert_eq!(remote["runInBackground"], false);
         assert_eq!(remote["launchAtLogin"], false);
+        assert_eq!(remote["commandLine"], false);
         assert_eq!(remote["permissionsPane"], false);
         assert_eq!(remote["updater"], "none");
         for kept in [
@@ -382,7 +392,12 @@ mod tests {
         for facts in [macos(), windows(), linux()] {
             let local = json(&facts);
             let remote = json(&for_remote_window(facts));
-            for feature in ["runInBackground", "launchAtLogin", "permissionsPane"] {
+            for feature in [
+                "runInBackground",
+                "launchAtLogin",
+                "commandLine",
+                "permissionsPane",
+            ] {
                 assert!(
                     remote[feature].as_bool() <= local[feature].as_bool(),
                     "{feature}"

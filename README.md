@@ -123,7 +123,7 @@ with the installed `octoboardd`; a first install without `minisign` warns that i
 Then start the daemon and print the address to open:
 
 ```sh
-octoboardd start      # Listens on port 3369; add --port <port> for another one.
+octoboardd start      # Start the daemon in the background; its own port is one the system assigns.
 octoboardd address
 ```
 
@@ -131,12 +131,14 @@ If the installer says `~/.local/bin` is not on your `PATH`, use the full path it
 to your `PATH`, for example in `~/.profile`.
 
 `octoboardd address` also prints the `ssh -L` command that forwards the daemon's owner-only socket
-(`~/.octoboard/browser.sock`) to port 3369 on your own machine. Replace `<server>` in that command with the address
+(`~/.octoboard/browser.sock`) to port 3369 on your own machine. `octoboardd browser on` also opens a loopback browser
+port, 3369 by default, for a browser on the server or a tool such as `tailscale serve`; it is off until you turn it on,
+and on a server other people share, any of them can take that port while the daemon is not running. Replace `<server>` in that command with the address
 your machine uses to reach the server, run it on your machine and open the printed browser address.
 To have the daemon start at boot as a systemd user service instead, install with `--service`, which needs systemd:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -- --service   # Port 3369; add --port <port> for another.
+curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -- --service   # Starts the service; add --port <port> to give the daemon's own port.
 loginctl enable-linger "$USER"   # Only if the script says lingering is off: keeps the service running after logout and starts it at boot.
 ```
 
@@ -189,7 +191,7 @@ The daemon keeps running when the app quits or the window closes: a remote windo
 
 Another computer's macOS or Windows app can be a host too, the same way, through that computer's own SSH server:
 
-1. On the host computer, in the app's **Settings › Remote access**, turn on **Allow remote access**, and turn on the
+1. On the host computer, in the app's **Settings › Access**, turn on **Allow remote access**, and turn on the
    computer's SSH server as the section guides you (macOS: Remote Login; Windows: OpenSSH Server). While remote access
    is on, the section shows the connection details, as text and as a QR code, with the path of the app's own
    `octoboardd`. The host in them is the computer's own name: correct it on the other device if that device reaches

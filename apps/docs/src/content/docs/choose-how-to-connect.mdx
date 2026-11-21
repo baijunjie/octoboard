@@ -18,11 +18,11 @@ If some input lag and a blurry picture are fine for you, you don't need any of t
 | --- | --- | --- | --- |
 | Use from | Desktop app or browser | Browser only | Browser only |
 | Supported hosts | Linux server, Mac, Windows PC | Linux server, Mac, Windows PC | Mac or Windows PC only |
-| On the host you turn on or install | SSH sign-in (Remote Login on a Mac, OpenSSH Server on Windows; a Linux server already has it) | Tailscale; a Mac or Linux host also needs socat | UU Remote; a Mac host also needs socat |
+| On the host you turn on or install | SSH sign-in (Remote Login on a Mac, OpenSSH Server on Windows; a Linux server already has it) | Tailscale | UU Remote |
 | On your own computer you install | Nothing extra | Tailscale; also socat on a Mac or Linux computer | UU Remote (Mac or Windows) |
 | The traffic goes through | A direct connection, no third party | Tailscale's network, with your account | NetEase UU Remote's service, with your account |
 | Works when not on the same network | Only if the host can be reached: on the same network, at a public address or over a VPN | Yes | Yes |
-| Best for | Servers; the full desktop app; Mac and Linux hosts other people also sign in to | Reaching your own machines from anywhere without SSH | Users in mainland China who already use UU Remote |
+| Best for | Servers; the full desktop app; Linux hosts other people also sign in to, and Mac or Windows hosts you use from the desktop app | Reaching your own machines from anywhere without SSH | Users in mainland China who already use UU Remote |
 
 ## Before you pick a relay
 
@@ -33,7 +33,7 @@ The Tailscale and UU Remote guides haven't been fully tested between two devices
 </Aside>
 
 <Aside type="caution" title="Only on computers nobody else signs in to">
-With a relay, another user account on the host or on your own computer could catch the browser's key. Use Tailscale or UU Remote only on computers you alone sign in to. With [Connect over SSH](../remote-connections/), a Mac or Linux host doesn't have this weakness, and neither does your own computer when you use the desktop app. In a browser your computer still has it, because the SSH forward listens on a <code dir="ltr">127.0.0.1</code> port there too.
+With a relay, another user account on the host or on your own computer could catch the browser's key. Use Tailscale or UU Remote only on computers you alone sign in to. With [Connect over SSH](../remote-connections/), a Linux host with browser access off doesn't have this weakness, nor does a Mac or Windows host you use from the desktop app, and neither does your own computer when you use the desktop app. In a browser your computer still has it, because the SSH forward listens on a <code dir="ltr">127.0.0.1</code> port there too.
 </Aside>
 
 ## Next

@@ -66,7 +66,7 @@ x86_64와 aarch64를 지원하며, 배포판은 상관없습니다.
 
 <Code code={commands.linger} lang="sh" />
 
-기본 포트는 <code dir="ltr">{commands.defaultPort}</code>입니다. 다른 포트를 쓰려면 서비스 명령 끝이나 <code dir="ltr">{commands.start}</code>에 <code dir="ltr">{commands.portOption}</code>을(를) 덧붙이세요.
+octoboardd는 자체 포트를 스스로 고르며, 그 포트는 알 필요가 없습니다. <code dir="ltr">{commands.address}</code>가 출력하는 주소와 <code dir="ltr">ssh</code> 명령에는 매번 같은 포트 <code dir="ltr">{commands.defaultPort}</code>가 쓰입니다.
 
 ## 업그레이드
 

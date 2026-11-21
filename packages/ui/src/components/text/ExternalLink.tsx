@@ -96,6 +96,9 @@ export function useExternalLinkAction({ href, onOpen, onFailure, isPending = fal
   return {
     address,
     busy,
+    /** Opens the address from a control that is not an anchor (an icon button): the same open, guard against a second
+     * press while one is out, and failure alert as a click on the link. */
+    activate: () => void activate(),
     target: intercepted ? undefined : "_blank",
     onClick: (event: React.MouseEvent<HTMLAnchorElement>) => {
       if (busy || opening.current) { event.preventDefault(); return; }

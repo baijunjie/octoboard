@@ -326,6 +326,14 @@ async fn run_daemon(
         state
             .remote_access
             .begin(&state, paths::data_dir(), !server::ui::EMBEDDED.is_empty());
+    } else if browser_listener.is_some() {
+        // The server form: the socket and the owner key are its own, and the browser port opens
+        // when the stored setting says (off to begin with), before the owner record is written.
+        state.remote_access.begin_server(
+            &state,
+            paths::data_dir(),
+            !server::ui::EMBEDDED.is_empty(),
+        );
     }
     // Resolved once: the refusal of a planned restart and the choice of its successor read the
     // same answer.
@@ -473,7 +481,7 @@ async fn run_daemon(
         owner_record::Owner::current(port, parent_pid.is_some(), takes_restart).map(|owner| {
             owner
                 .with_service_manager(state.service_managed())
-                .with_owner_key(state.owner_key.is_held())
+                .with_owner_key(state.remote_access.recorded_endpoint(&state))
                 .with_browser_port(state.remote_access.recorded_port(&state))
                 .with_unit(unit)
                 .with_predecessor(predecessor)
@@ -499,7 +507,7 @@ async fn run_daemon(
     // connect and what to present. Besides this line the key is in memory, in the owner-only key
     // record above, and in what the daemon starts (their arguments and environment, and the
     // owner-only files of a session's scratch directory): the port file below stays port-only.
-    println!("octoboardd listening on 127.0.0.1:{port} with key {key}");
+    println!("{}", cli::listening_line(port, &key));
     use std::io::Write;
     std::io::stdout().flush().ok();
     // A convenience for a developer attaching to a daemon started by hand, not something the

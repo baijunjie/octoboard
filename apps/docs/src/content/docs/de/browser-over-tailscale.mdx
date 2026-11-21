@@ -15,7 +15,7 @@ Du bist nicht sicher, ob das der richtige Weg für dich ist? Siehe [Verbindungsa
 Diese Schritte wurden noch nicht vollständig getestet. Sie folgen der Dokumentation von Tailscale Serve und den eigenen Prüfungen von {productName}. Die Relay-Programme wurden auf einem einzelnen Computer ausprobiert, einschließlich der Live-Verbindung des Browsers; Tailscale Serve zwischen zwei Geräten und die Weiterleitung unter Windows wurden noch nicht ausprobiert.
 </Aside>
 
-<strong>Browser auf deinem Computer</strong> → <strong>Relay auf deinem Computer (127.0.0.1)</strong> ⟷ Tailscale ⟷ <strong>Relay auf dem Host (127.0.0.1)</strong> → <strong>{productName}</strong>
+<strong>Browser auf deinem Computer</strong> → <strong>Relay auf deinem Computer (127.0.0.1)</strong> ⟷ Tailscale ⟷ <strong>Browser-Port auf dem Host (127.0.0.1)</strong> → <strong>{productName}</strong>
 
 <details>
 <summary>Neu hier?</summary>
@@ -32,21 +32,21 @@ Diese Schritte wurden noch nicht vollständig getestet. Sie folgen der Dokumenta
 
 ## Warum die zusätzlichen Schritte
 
-Aus Sicherheitsgründen nimmt {productName} nur einen Browser an, der es unter <code dir="ltr">{tunnel.loopback}</code> öffnet, einer Adresse, die immer „genau dieser Computer“ bedeutet (auch Loopback genannt). Du kannst also nicht einfach die Tailscale-Adresse des Hosts in den Browser eingeben. Stattdessen führst du auf jedem Computer ein kleines Relay-Programm aus: Auf deinem Computer lässt es den Host unter <code dir="ltr">{tunnel.loopback}</code> lokal erscheinen; auf dem Host übergibt es die Verbindung an {productName}. Tailscale transportiert den Datenverkehr zwischen den beiden.
+Aus Sicherheitsgründen nimmt {productName} nur einen Browser an, der es unter <code dir="ltr">{tunnel.loopback}</code> öffnet, einer Adresse, die immer „genau dieser Computer“ bedeutet (auch Loopback genannt). Du kannst also nicht einfach die Tailscale-Adresse des Hosts in den Browser eingeben. Stattdessen lässt ein Relay oder eine Weiterleitung auf deinem Computer den Host unter <code dir="ltr">{tunnel.loopback}</code> lokal erscheinen, und Tailscale transportiert den Datenverkehr zwischen den beiden. Auf dem Host lauscht {productName} selbst auf einem Loopback-Port, dort ist also nichts auszuführen.
 
 ## Bevor du anfängst
 
 - <strong>Tailscale auf beiden Computern,</strong> angemeldet im selben Tailnet. Verwende ein Tailnet, das nur deine eigenen Geräte enthält: Jedes Gerät, das es zum Host durchlässt, kann den freigegebenen Port erreichen.
-- <strong>socat auf jedem Computer, der ein Mac ist oder Linux nutzt.</strong> Ein Windows-Computer braucht es nicht.
+- <strong>socat auf jedem Mac oder Linux-Computer, von dem aus du im Browser arbeitest.</strong> Ein Host braucht es nie, und ein Windows-Computer, von dem aus du im Browser arbeitest, auch nicht.
 
-  <Tabs syncKey="host">
+  <Tabs>
   <TabItem label="macOS">
   Installiere zuerst [Homebrew](https://brew.sh/), falls du es nicht hast (macOS bringt kein Werkzeug mit, das diese Aufgabe erledigen kann), und führe dann dies im Terminal aus:
 
   <Code code={tunnel.installSocatMac} lang="sh" />
   </TabItem>
   <TabItem label="Windows">
-  Es ist nichts zu installieren: Ein Windows-Host stellt den Browser bereits über einen Port an <code dir="ltr">{tunnel.loopback}</code> bereit, und ein Windows-Computer, von dem aus du im Browser arbeitest, verwendet stattdessen einen eingebauten Befehl.
+  Es ist nichts zu installieren: Ein Windows-Computer, von dem aus du im Browser arbeitest, verwendet stattdessen einen eingebauten Befehl.
   </TabItem>
   <TabItem label="Linux">
   <Code code={tunnel.installSocatLinux} lang="sh" />
@@ -54,7 +54,7 @@ Aus Sicherheitsgründen nimmt {productName} nur einen Browser an, der es unter <
   Verwende den Paketmanager deiner Distribution (<code dir="ltr">dnf</code>, <code dir="ltr">pacman</code> und so weiter), wenn es nicht <code dir="ltr">apt</code> ist.
   </TabItem>
   </Tabs>
-- <strong>Zwei oder drei geöffnete Fenster</strong>, während du arbeitest: das Relay und Tailscale Serve auf dem Host (außer dem Relay unter Windows) und das Relay auf deinem Computer (außer unter Windows).
+- <strong>Bis zu zwei geöffnete Fenster</strong>, während du arbeitest: Tailscale Serve auf dem Host und das Relay auf deinem Computer (außer unter Windows).
 
 ## Auf dem Host
 
@@ -67,42 +67,38 @@ Aus Sicherheitsgründen nimmt {productName} nur einen Browser an, der es unter <
    <HostBrowserAddress />
    </TabItem>
    <TabItem label="Windows">
-   <HostBrowserAddress windows />
+   <HostBrowserAddress />
    </TabItem>
    <TabItem label="Linux">
-   Führe dies als der Benutzer aus, als der octoboardd läuft, und kopiere die ausgegebene Adresse, die mit <code dir="ltr">{tunnel.addressStart}</code> beginnt. Ignoriere den SSH-Befehl, den es danach ausgibt.
+   Führe diese beiden Befehle als der Benutzer aus, als der octoboardd läuft. Der erste öffnet den Browser-Port, ausschließlich auf <code dir="ltr">127.0.0.1</code> (mit <code dir="ltr">--port</code> und einer Zahl wählst du einen anderen Port); der zweite gibt die Adresse aus. Kopiere die ausgegebene Adresse, die mit <code dir="ltr">{tunnel.addressStart}</code> beginnt, und ignoriere den SSH-Befehl, den er danach ausgibt.
+
+   <Code code={commands.browserOn} lang="sh" />
 
    <Code code={commands.address} lang="sh" />
    </TabItem>
    </Tabs>
-2. Starte das Relay auf dem Host, das einen Port an <code dir="ltr">{tunnel.loopback}</code> des Hosts mit {productName} verbindet. Dieser Port ist in den folgenden Schritten der <strong>Host-Port</strong>.
+2. Notiere den Port, auf dem {productName} auf dem Host an <code dir="ltr">{tunnel.loopback}</code> lauscht. Dieser Port ist der <strong>Host-Port</strong> in den folgenden Schritten.
 
    <Tabs syncKey="host">
    <TabItem label="macOS">
-   Führe dies im Terminal aus und lass das Fenster geöffnet. Es lauscht ausschließlich auf <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   Der Host-Port ist <code dir="ltr">{tunnel.bridgePort}</code>.
+   Es ist nichts auszuführen: {productName} selbst lauscht auf dem Browser-Port, ausschließlich auf <code dir="ltr">127.0.0.1</code>. Der Host-Port ist der <strong>Browser-Port</strong> ({commands.defaultPort}, sofern du ihn nicht geändert hast).
    </TabItem>
    <TabItem label="Windows">
    Es ist nichts auszuführen: {productName} selbst lauscht auf dem Browser-Port, ausschließlich auf <code dir="ltr">127.0.0.1</code>. Der Host-Port ist der <strong>Browser-Port</strong> ({commands.defaultPort}, sofern du ihn nicht geändert hast).
    </TabItem>
    <TabItem label="Linux">
-   Führe dies als derselbe Benutzer aus, in einem Terminal oder einer <code dir="ltr">tmux</code>-Sitzung, die geöffnet bleibt. Es lauscht ausschließlich auf <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   Der Host-Port ist <code dir="ltr">{tunnel.bridgePort}</code>.
+   Es ist nichts weiter auszuführen: octoboardd lauscht selbst auf dem Browser-Port, ausschließlich auf <code dir="ltr">127.0.0.1</code>. Der Host-Port ist <code dir="ltr">{commands.defaultPort}</code> oder die Zahl, die du mit <code dir="ltr">--port</code> angegeben hast.
    </TabItem>
    </Tabs>
 3. Gib den Host-Port mit Tailscale Serve für dein Tailnet frei und lass das Fenster geöffnet. Verwende niemals Tailscale Funnel, das ihn im öffentlichen Internet bereitstellen würde.
 
    <Tabs syncKey="host">
    <TabItem label="macOS">
-   <Code code={tunnel.serveBridge} lang="sh" />
+   <Code code={tunnel.serveBrowserPort} lang="sh" />
 
    Wenn du die Tailscale-App aus dem App Store hast, führe den Befehl als <code dir="ltr">{tunnel.macCli}</code> anstelle von <code dir="ltr">tailscale</code> aus. Bei der eigenständigen App installiere den Befehl zuerst in ihren Einstellungen unter „CLI integration“.
+
+   Verwende deinen Port, wenn du den <strong>Browser-Port</strong> geändert hast.
    </TabItem>
    <TabItem label="Windows">
    In PowerShell oder in der Eingabeaufforderung:
@@ -112,7 +108,7 @@ Aus Sicherheitsgründen nimmt {productName} nur einen Browser an, der es unter <
    Verwende deinen Port, wenn du den <strong>Browser-Port</strong> geändert hast.
    </TabItem>
    <TabItem label="Linux">
-   <Code code={tunnel.serveBridge} lang="sh" />
+   <Code code={tunnel.serveBrowserPort} lang="sh" />
 
    Wenn Tailscale meldet, dass dir die Berechtigung fehlt, erlaube deinem Benutzer einmalig die Verwaltung mit <code dir="ltr">{tunnel.linuxOperator}</code> oder führe den Befehl mit <code dir="ltr">sudo</code> aus.
    </TabItem>
@@ -157,23 +153,24 @@ Es hat geklappt, wenn sich {productName} im Browser-Tab öffnet, ohne dass du di
 
 ## Wenn es nicht funktioniert
 
-- <strong>Die Seite lädt nicht:</strong> Eines der Fenster wurde geschlossen, oder sein Befehl wurde beendet. Prüfe, ob die Relays und Tailscale Serve noch laufen und ob <code dir="ltr">{tunnel.serveStatus}</code> auf dem Host den Host-Port auflistet.
+- <strong>Die Seite lädt nicht:</strong> Eines der Fenster wurde geschlossen oder sein Befehl beendet. Prüfe, ob das Relay auf deinem Computer und Tailscale Serve noch laufen und ob <code dir="ltr">{tunnel.serveStatus}</code> auf dem Host den Host-Port auflistet.
 - <strong>socat meldet „Address already in use“:</strong> Dieser Port ist auf diesem Computer belegt. Wähle einen anderen Port; auf deinem Computer ändere ihn auch in der Browser-Adresse.
 - <strong>Die Seite wird abgelehnt oder bleibt leer:</strong> Prüfe, ob du die Adresse unter <code dir="ltr">{tunnel.loopback}</code> geöffnet hast und nicht über den Tailscale-Namen des Hosts oder seine <code dir="ltr">100.x.y.z</code>-Adresse.
-- <strong>Das Relay auf dem Host gibt „Connection refused“ oder „No such file or directory“ aus, wenn du die Seite öffnest:</strong> <strong>Fernzugriff erlauben</strong> ist ausgeschaltet, oder {productName} läuft auf dem Host nicht (unter Linux: octoboardd läuft nicht).
+- <strong>Das Relay auf deinem Computer gibt „Connection refused“ aus, oder die Seite wird abgelehnt, wenn du sie öffnest:</strong> <strong>Browserzugriff erlauben</strong> ist ausgeschaltet, ein anderes Programm belegt den Browser-Port (die Einstellungen sagen es), oder {productName} läuft auf dem Host nicht (unter Linux läuft octoboardd nicht oder <code dir="ltr">{commands.browserOn}</code> wurde nicht ausgeführt).
 
 ## Ausschalten
 
 - <strong>Auf dem Computer, von dem aus du im Browser gearbeitet hast:</strong> Beende socat mit <kbd>Strg</kbd>+<kbd>C</kbd> oder lösche unter Windows die Weiterleitung in PowerShell, als Administrator ausgeführt:
 
   <Code code={tunnel.visitorForwardWindowsOff} lang="powershell" />
-- <strong>Auf dem Host:</strong> Beende den Tailscale-Serve-Befehl und socat mit <kbd>Strg</kbd>+<kbd>C</kbd>. Prüfe mit <code dir="ltr">{tunnel.serveStatus}</code>, dass nichts mehr freigegeben ist; wenn der Port noch aufgelistet wird, entferne ihn mit <code dir="ltr">{tunnel.serveBridgeOff}</code> (unter Windows mit <code dir="ltr">{tunnel.serveBrowserPortOff}</code>).
-- <strong>Bei einem Mac- oder Windows-Host</strong> schalte <strong>Fernzugriff erlauben</strong> aus, wenn du ihn nicht mehr brauchst. Das schließt den Browser-Zugang und trennt jede Seite, die mit dem Schlüssel geöffnet wurde.
-- <strong>Wenn die Adresse möglicherweise durchgesickert ist,</strong> gib ihr mit <strong>Schlüssel erneuern</strong> auf dem Tab <strong>Browser</strong> einen neuen Schlüssel, oder unter Linux mit <code dir="ltr">{tunnel.rotate}</code>. Seiten, die mit der alten Adresse geöffnet sind, werden getrennt.
+- <strong>Auf dem Host:</strong> Beende den Tailscale-Serve-Befehl mit <kbd>Strg</kbd>+<kbd>C</kbd>. Prüfe mit <code dir="ltr">{tunnel.serveStatus}</code>, dass nichts mehr freigegeben ist; wenn der Port noch aufgelistet wird, entferne ihn mit <code dir="ltr">{tunnel.serveBrowserPortOff}</code>.
+- <strong>Bei einem Mac- oder Windows-Host</strong> schalte <strong>Browserzugriff erlauben</strong> aus, wenn du ihn nicht mehr brauchst. Das schließt den Browser-Port und trennt jede Seite, die mit dem Schlüssel geöffnet wurde.
+- <strong>Bei einem Linux-Host</strong> führe <code dir="ltr">{commands.browserOff}</code> aus, wenn du ihn nicht mehr brauchst. Das schließt den Browser-Port und trennt jede Seite, die mit dem Schlüssel geöffnet wurde.
+- <strong>Wenn die Adresse möglicherweise durchgesickert ist,</strong> gib ihr mit <strong>Schlüssel erneuern</strong> unter <strong>Einstellungen › Zugriff</strong> einen neuen Schlüssel, oder unter Linux mit <code dir="ltr">{tunnel.rotate}</code>. Seiten, die mit der alten Adresse geöffnet sind, werden getrennt.
 
 ## Sicherheit
 
 - <strong>Die Adresse ist das Passwort:</strong> Ihr Schlüssel gibt die volle Kontrolle über {productName} auf dem Host, einschließlich der Ausführung beliebiger Befehle. Er gilt, bis du ihn erneuerst. Er bleibt im Verlauf und in den Lesezeichen des Browsers und wird mit deinen anderen Geräten synchronisiert, wenn die Browser-Synchronisierung eingeschaltet ist.
-- <strong>Wer sie erreichen kann:</strong> jeder, der den Host-Port erreicht und den Schlüssel hat. Die Relays lauschen nur auf <code dir="ltr">127.0.0.1</code>, daher können andere Geräte im Netzwerk des Hosts oder in deinem lokalen Netzwerk sie nicht erreichen; Tailscale Serve macht den Host-Port nur aus deinem Tailnet erreichbar, soweit dessen Zugriffsregeln es erlauben.
-- <strong>Nur auf Computern, an denen sich sonst niemand anmeldet:</strong> Ein anderes Benutzerkonto auf dem Host oder auf deinem Computer kann sich mit diesen <code dir="ltr">127.0.0.1</code>-Ports verbinden, und solange ein Relay nicht läuft, kann es dessen Port übernehmen und den Schlüssel erhalten, wenn sich dein Browser neu verbindet. [Über SSH verbinden](../remote-connections/) hat bei einem Mac- oder Linux-Host diese Schwäche nicht, und auch dein eigener Computer hat sie nicht, wenn du die Desktop-App nutzt. Im Browser hat dein Computer sie weiterhin, denn dort lauscht die SSH-Weiterleitung ebenfalls auf einem <code dir="ltr">127.0.0.1</code>-Port.
+- <strong>Wer sie erreichen kann:</strong> jeder, der den Host-Port erreicht und den Schlüssel hat. Der Browser-Port und das Relay lauschen nur auf <code dir="ltr">127.0.0.1</code>, daher können andere Geräte im Netzwerk des Hosts oder in deinem lokalen Netzwerk sie nicht erreichen; Tailscale Serve macht den Host-Port nur aus deinem Tailnet erreichbar, soweit dessen Zugriffsregeln es erlauben.
+- <strong>Nur auf Computern, an denen sich sonst niemand anmeldet:</strong> Ein anderes Benutzerkonto auf dem Host oder auf deinem Computer kann sich mit diesen <code dir="ltr">127.0.0.1</code>-Ports verbinden, und kann den Browser-Port auf dem Host übernehmen, solange {productName} nicht läuft oder neu startet, oder den Relay-Port auf deinem Computer, solange das Relay nicht läuft, und den Schlüssel erhalten, wenn sich dein Browser neu verbindet. [Über SSH verbinden](../remote-connections/) hat bei einem Linux-Host mit ausgeschaltetem Browserzugriff und bei einem Mac- oder Windows-Host, den du mit der Desktop-App nutzt, diese Schwäche nicht, und auch dein eigener Computer hat sie nicht, wenn du die Desktop-App nutzt. Im Browser hat dein Computer sie weiterhin, denn dort lauscht die SSH-Weiterleitung ebenfalls auf einem <code dir="ltr">127.0.0.1</code>-Port.
 - <strong>Niemals Funnel:</strong> Tailscale Funnel würde den Port für das gesamte Internet veröffentlichen.

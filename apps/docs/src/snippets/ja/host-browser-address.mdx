@@ -1,12 +1,11 @@
 import { productName } from "../../commands.ts";
 
-{/* The host's steps both relay guides share: turning on remote access and copying the browser address. Pass
-`windows` on a Windows host, which also needs the browser port. */}
+{/* The host's steps both browser guides share: turning on browser access and copying the local address. */}
 
-{productName} で <strong>設定 › リモートアクセス</strong> を開き、<strong>リモートアクセスを許可</strong>をオンにして、<strong>許可</strong>を選んで確定します。スイッチの下に 2 つのタブが現れます。<strong>ブラウザ</strong>タブの <strong>手順 2: ブラウザのアドレス</strong> で、<strong>アドレスをコピー</strong>を選びます。{props.windows ? <>あわせて、<strong>ブラウザ用ポート</strong>の下に表示されている番号を控えておきます。</> : null}
+{productName} で <strong>設定 › アクセス</strong> を開きます。<strong>ブラウザアクセスを許可</strong>をオンにして、<strong>許可</strong>を選んで確定します。<strong>このコンピューターのブラウザ</strong>の下で、<strong>ローカルのアドレスをコピー</strong>を選びます。あわせて、<strong>ブラウザ用ポート</strong>の下に表示されている番号を控えておきます。
 
 アドレスは、自分だけが読める方法でもう一方のコンピューターに渡してください。たとえば自分宛てのメモに貼り付けます。アドレスはパスワードと同じ働きをします。
 
 <strong>手順 1: SSH フォワード</strong>は飛ばします。アプリの設定には SSH の話が何か所か出てきますが、このガイドで使うのはブラウザのアドレスだけなので、気にしなくて大丈夫です。
 
-{productName} は起動したままにしてください。終了すると、リモートアクセスも止まります。
+{productName} は起動したままにしてください。終了すると、ブラウザアクセスも止まります。

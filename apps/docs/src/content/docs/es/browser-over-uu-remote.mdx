@@ -14,7 +14,7 @@ Esta guía abre {productName} en un navegador de tu propio equipo. Eso es más n
 ¿No estás seguro de que esta sea la mejor opción? Consulta [Elige cómo conectarte](../choose-how-to-connect/).
 
 <Aside type="caution">
-Estos pasos todavía no se han probado entre dos dispositivos. Siguen la propia ayuda de UU Remote. El relé en un host Mac se probó en un solo equipo, incluida la conexión en directo del navegador.
+Estos pasos todavía no se han probado entre dos dispositivos. Siguen la propia ayuda de UU Remote.
 </Aside>
 
 <strong>Navegador en tu equipo</strong> → <strong>127.0.0.1 en tu equipo</strong> ⟷ UU Remote ⟷ <strong>127.0.0.1 en el host</strong> → <strong>{productName}</strong>
@@ -25,7 +25,6 @@ Estos pasos todavía no se han probado entre dos dispositivos. Siguen la propia 
 - <strong>127.0.0.1 (loopback):</strong> una dirección que siempre significa «este mismo equipo».
 - <strong>Puerto:</strong> un número que elige un programa de un equipo, como el número de una puerta. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> es el puerto {commands.defaultPort} de este equipo.
 - <strong>Asignación de puertos (端口映射):</strong> una función de UU Remote que hace que un puerto del host aparezca como un puerto de tu propio equipo.
-- <strong>socat:</strong> un programa pequeño y gratuito que pasa una conexión de un lugar a otro. Un host Mac lo necesita como relé.
 - <strong>Terminal:</strong> la ventana en la que escribes comandos: Terminal en macOS, PowerShell en Windows.
 
 </details>
@@ -37,7 +36,6 @@ La asignación de puertos de UU Remote hace que {productName} del host aparezca 
 - <strong>Ambos equipos son un Mac o un PC con Windows.</strong> UU Remote no tiene asignación de puertos para Linux; para acceder a un servidor Linux usa en su lugar [Tailscale](../browser-over-tailscale/) o [SSH](../remote-connections/).
 - <strong>Ambos tienen UU Remote instalado y con la sesión iniciada en la misma cuenta,</strong> en la versión 4.21.0 o posterior en Windows y 4.32.0 o posterior en macOS. La asignación de puertos funciona solo con TCP, que es todo lo que necesita {productName}. En el momento de escribir esto, UU Remote incluye la asignación de puertos entre sus funciones gratuitas; si tienes dudas, consulta sus planes actuales.
 - <strong>El host aparece en Mis dispositivos (我的设备)</strong> en UU Remote, en el equipo desde el que vas a navegar.
-- <strong>Un host Mac también necesita [Homebrew](https://brew.sh/)</strong>, para instalar socat más abajo.
 
 ## En el host
 
@@ -45,32 +43,10 @@ La asignación de puertos de UU Remote hace que {productName} del host aparezca 
 
 1. Obtén la dirección del navegador, que lleva la clave con la que el navegador inicia sesión.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
    <HostBrowserAddress />
-   </TabItem>
-   <TabItem label="Windows">
-   <HostBrowserAddress windows />
-   </TabItem>
-   </Tabs>
 2. Crea un puerto en el <code dir="ltr">{tunnel.loopback}</code> del host que lleve a {productName}. Este puerto es el <strong>puerto del host</strong> en los pasos siguientes.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
-   Un Mac sirve el navegador de una forma que UU Remote no puede asignar, así que necesita socat como relé. Instálalo en Terminal:
-
-   <Code code={tunnel.installSocatMac} lang="sh" />
-
-   Después ejecuta esto y deja la ventana abierta. Escucha solo en <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   El puerto del host es <code dir="ltr">{tunnel.bridgePort}</code>.
-   </TabItem>
-   <TabItem label="Windows">
-   No hay que ejecutar nada: {productName} escucha por sí mismo en el puerto del navegador, solo en <code dir="ltr">127.0.0.1</code>. El puerto del host es el <strong>Puerto del navegador</strong> de la pestaña <strong>Navegador</strong> ({commands.defaultPort} salvo que lo hayas cambiado).
-   </TabItem>
-   </Tabs>
+   No hay que ejecutar nada: {productName} escucha por sí mismo en el puerto del navegador, solo en <code dir="ltr">127.0.0.1</code>. El puerto del host es el <strong>Puerto del navegador</strong> en <strong>Ajustes › Acceso</strong> ({commands.defaultPort} salvo que lo hayas cambiado).
 
 </Steps>
 
@@ -112,19 +88,18 @@ Sabrás que ha funcionado cuando {productName} se abra en la pestaña del navega
 
 ## Si no funciona
 
-- <strong>La asignación aparece como conectada, pero la página no carga:</strong> en un host Mac, se cerró la ventana de socat o su comando se detuvo; o <strong>Permitir acceso remoto</strong> está desactivado, o {productName} no se está ejecutando en el host.
+- <strong>La asignación aparece como conectada, pero la página no carga:</strong> <strong>Permitir acceso desde el navegador</strong> está desactivado, o {productName} no se está ejecutando en el host.
 - <strong>La asignación no se guarda o no se conecta:</strong> puede que el puerto local esté ocupado en este equipo. Elige otro y cámbialo también en la dirección del navegador.
 - <strong>La página se rechaza o aparece en blanco:</strong> comprueba que abriste la dirección en <code dir="ltr">{tunnel.loopback}</code>.
 
 ## Desactivarlo
 
 - <strong>En el equipo desde el que navegaste:</strong> desactiva la asignación en el panel de asignación de puertos de UU Remote, o elimínala. Cerrar el panel o desconectarse también la detiene.
-- <strong>En un host Mac:</strong> detén socat con <kbd>Ctrl</kbd>+<kbd>C</kbd>.
-- <strong>En el host,</strong> desactiva <strong>Permitir acceso remoto</strong> cuando ya no lo necesites. Esto cierra la entrada del navegador y desconecta todas las páginas abiertas con la clave.
-- <strong>Si la dirección puede haberse filtrado,</strong> dale una clave nueva con <strong>Renovar clave</strong> en la pestaña <strong>Navegador</strong>. Las páginas abiertas con la dirección anterior se desconectan.
+- <strong>En el host,</strong> desactiva <strong>Permitir acceso desde el navegador</strong> cuando ya no lo necesites. Esto cierra el puerto del navegador y desconecta todas las páginas abiertas con la clave.
+- <strong>Si la dirección puede haberse filtrado,</strong> dale una clave nueva con <strong>Renovar clave</strong> en <strong>Ajustes › Acceso</strong>. Las páginas abiertas con la dirección anterior se desconectan.
 
 ## Seguridad
 
 - <strong>La dirección es la contraseña:</strong> su clave da control total de {productName} en el host, incluida la ejecución de cualquier comando. Dura hasta que la renuevas. Queda en el historial y los marcadores del navegador y se sincroniza con tus otros dispositivos si la sincronización del navegador está activada.
 - <strong>Quién puede acceder:</strong> cualquiera que llegue al puerto del host y tenga la clave. En el host escucha solo en <code dir="ltr">127.0.0.1</code>; quien pueda usar tu cuenta de UU Remote para asignar puertos al host también puede llegar a él, así que mantén esa cuenta protegida.
-- <strong>Solo en equipos en los que nadie más inicia sesión:</strong> otra cuenta de usuario del host o de tu equipo puede conectarse a estos puertos <code dir="ltr">127.0.0.1</code> y, mientras la asignación o socat no está en marcha, puede ocupar el puerto y recibir la clave cuando tu navegador se reconecte. [Conectarse por SSH](../remote-connections/) no tiene este punto débil en un host Mac o Linux, y tu propio equipo tampoco lo tiene si usas la app de escritorio. En un navegador, tu equipo sigue teniéndolo, porque allí el reenvío de SSH también escucha en un puerto <code dir="ltr">127.0.0.1</code>.
+- <strong>Solo en equipos en los que nadie más inicia sesión:</strong> otra cuenta de usuario del host o de tu equipo puede conectarse a estos puertos <code dir="ltr">127.0.0.1</code> y puede ocupar el puerto del navegador del host mientras {productName} no está en marcha o se reinicia, o el puerto asignado de tu equipo mientras la asignación no está en marcha, y recibir la clave cuando tu navegador se reconecte. [Conectarse por SSH](../remote-connections/) no tiene este punto débil en un host Linux con el acceso desde el navegador desactivado, ni en un host Mac o Windows que uses desde la app de escritorio, y tu propio equipo tampoco lo tiene si usas la app de escritorio. En un navegador, tu equipo sigue teniéndolo, porque allí el reenvío de SSH también escucha en un puerto <code dir="ltr">127.0.0.1</code>.

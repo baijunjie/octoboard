@@ -212,7 +212,7 @@ mod tests {
         .expect("the checks ran");
     }
 
-    /// A rotation on a desktop daemon serving remote access broadcasts the new address, so its
+    /// A rotation on a desktop daemon serving browser access broadcasts the new address, so its
     /// Settings do not keep showing the old one.
     #[tokio::test]
     async fn a_rotation_on_the_desktop_daemon_broadcasts_the_new_address() {
@@ -233,7 +233,7 @@ mod tests {
             .unwrap()
             .port();
         state.remote_access.set_port(&state, free).unwrap();
-        state.remote_access.set(&state, true).unwrap();
+        state.remote_access.set_browser(&state, true).unwrap();
         let old = state.owner_key.current().expect("serving");
         let port = serve_state(state.clone()).await;
         let mut events = state.subscribe();

@@ -1,12 +1,11 @@
 import { productName } from "../../commands.ts";
 
-{/* The host's steps both relay guides share: turning on remote access and copying the browser address. Pass
-`windows` on a Windows host, which also needs the browser port. */}
+{/* The host's steps both browser guides share: turning on browser access and copying the local address. */}
 
-Trong {productName}, mở <strong>Cài đặt › Truy cập từ xa</strong>, bật <strong>Cho phép truy cập từ xa</strong> rồi chọn <strong>Cho phép</strong> để xác nhận. Hai thẻ sẽ hiện ra bên dưới công tắc. Trên thẻ <strong>Trình duyệt</strong>, chọn <strong>Sao chép địa chỉ</strong> trong mục <strong>Bước 2: địa chỉ trình duyệt</strong>.{props.windows ? <> Hãy ghi lại cả con số trong mục <strong>Cổng trình duyệt</strong>.</> : null}
+Trong {productName}, mở <strong>Cài đặt › Truy cập</strong>. Bật <strong>Cho phép truy cập từ trình duyệt</strong> rồi chọn <strong>Cho phép</strong> để xác nhận. Trong mục <strong>Trình duyệt trên máy tính này</strong>, chọn <strong>Sao chép địa chỉ cục bộ</strong>. Hãy ghi lại cả con số trong mục <strong>Cổng trình duyệt</strong>.
 
 Hãy chuyển địa chỉ này sang máy tính kia theo cách chỉ mình bạn đọc được, chẳng hạn một ghi chú gửi cho chính mình: địa chỉ này có tác dụng như mật khẩu.
 
 Bỏ qua <strong>Bước 1: chuyển tiếp SSH</strong>. Phần cài đặt của ứng dụng nhắc đến SSH ở nhiều chỗ; bạn có thể bỏ qua ở đây, vì hướng dẫn này chỉ dùng địa chỉ trình duyệt.
 
-Hãy để {productName} tiếp tục chạy: nếu bạn thoát ứng dụng, truy cập từ xa sẽ dừng.
+Hãy để {productName} tiếp tục chạy: nếu bạn thoát ứng dụng, truy cập từ trình duyệt sẽ dừng.

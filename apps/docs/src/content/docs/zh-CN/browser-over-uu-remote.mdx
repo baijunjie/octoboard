@@ -14,7 +14,7 @@ import HostBrowserAddress from "../../../snippets/zh-CN/host-browser-address.mdx
 不确定该用哪种方式？请看[选择连接方式](../choose-how-to-connect/)。
 
 <Aside type="caution">
-这些步骤尚未在两台设备之间实测，依据 UU 远程自己的帮助编写。Mac 主机上的转发程序已在单台电脑上试过，包括浏览器的实时连接。
+这些步骤尚未在两台设备之间实测，依据 UU 远程自己的帮助编写。
 </Aside>
 
 <strong>你电脑上的浏览器</strong> → <strong>你电脑上的 127.0.0.1</strong> ⟷ UU 远程 ⟷ <strong>主机上的 127.0.0.1</strong> → <strong>{productName}</strong>
@@ -25,7 +25,6 @@ import HostBrowserAddress from "../../../snippets/zh-CN/host-browser-address.mdx
 - <strong>127.0.0.1（回环地址）：</strong>永远指“本机”的地址。
 - <strong>端口：</strong>用来指定电脑上某个程序的编号，就像门牌号。<code dir="ltr">127.0.0.1:{commands.defaultPort}</code> 就是本机的 {commands.defaultPort} 端口。
 - <strong>端口映射：</strong>UU 远程的一项功能，让主机上的某个端口出现在你自己的电脑上。
-- <strong>socat：</strong>一个免费的小程序，负责把连接从一处转到另一处。Mac 主机需要用它做转发程序。
 - <strong>终端：</strong>输入命令的窗口，macOS 上是“终端”，Windows 上是 PowerShell。
 
 </details>
@@ -37,7 +36,6 @@ UU 远程的端口映射会让主机上的 {productName} 出现在你自己电�
 - <strong>两台电脑都是 Mac 或 Windows 电脑。</strong>UU 远程没有 Linux 版端口映射；请改用 [Tailscale](../browser-over-tailscale/) 或 [SSH](../remote-connections/) 访问 Linux 服务器。
 - <strong>两台电脑都装好 UU 远程，并登录同一个账号，</strong>Windows 上需要 4.21.0 及以上版本，macOS 上需要 4.32.0 及以上版本。端口映射只支持 TCP，{productName} 也只需要 TCP。撰写本文时，UU 远程把端口映射列为免费功能；如有疑问，请查看它当前的会员说明。
 - <strong>访问端的 UU 远程里，“我的设备”中能看到这台主机。</strong>
-- <strong>主机是 Mac 时，还需要 [Homebrew](https://brew.sh/)</strong>，用来安装下文的 socat。
 
 ## 在主机上
 
@@ -45,32 +43,10 @@ UU 远程的端口映射会让主机上的 {productName} 出现在你自己电�
 
 1. 获取浏览器地址，地址里带有登录密钥，用浏览器打开即可直接登录。
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
    <HostBrowserAddress />
-   </TabItem>
-   <TabItem label="Windows">
-   <HostBrowserAddress windows />
-   </TabItem>
-   </Tabs>
 2. 在主机上准备一个能连到 {productName} 的本机端口。下文的<strong>主机端口</strong>就是这个端口。
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
-   Mac 为浏览器提供服务的方式 UU 远程无法映射，所以需要用 socat 做转发程序。在“终端”中安装它：
-
-   <Code code={tunnel.installSocatMac} lang="sh" />
-
-   然后运行这条命令，不要关闭窗口。它只监听 <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>。
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   主机端口是 <code dir="ltr">{tunnel.bridgePort}</code>。
-   </TabItem>
-   <TabItem label="Windows">
-   无需运行任何命令：{productName} 自己就在浏览器端口上监听，而且只监听 <code dir="ltr">127.0.0.1</code>。主机端口就是<strong>浏览器</strong>标签页里的<strong>浏览器端口</strong>（没改过的话是 {commands.defaultPort}）。
-   </TabItem>
-   </Tabs>
+   无需运行任何命令：{productName} 自己就在浏览器端口上监听，而且只监听 <code dir="ltr">127.0.0.1</code>。主机端口就是<strong>设置 › 访问</strong>里的<strong>浏览器端口</strong>（没改过的话是 {commands.defaultPort}）。
 
 </Steps>
 
@@ -112,19 +88,18 @@ UU 远程的端口映射会让主机上的 {productName} 出现在你自己电�
 
 ## 连不上时
 
-- <strong>映射显示已连接，但页面打不开：</strong>主机是 Mac 时，socat 的窗口被关掉了或命令已停止；或者<strong>允许远程访问</strong>没有开启，或主机上的 {productName} 没有运行。
+- <strong>映射显示已连接，但页面打不开：</strong><strong>允许浏览器访问</strong>没有开启，或主机上的 {productName} 没有运行。
 - <strong>映射无法保存或连不上：</strong>这台电脑上的本地端口可能已被占用。请换一个，并在浏览器地址中也改成它。
 - <strong>页面被拒绝或一片空白：</strong>请确认打开的是 <code dir="ltr">{tunnel.loopback}</code> 开头的地址。
 
 ## 停止使用
 
 - <strong>在访问端电脑上：</strong>在 UU 远程的端口映射面板中停用或删除这条映射。关闭面板或断开连接也会让映射停止。
-- <strong>主机是 Mac 时：</strong>按 <kbd>Ctrl</kbd>+<kbd>C</kbd> 停止 socat。
-- <strong>在主机上，</strong>不再需要时请关闭<strong>允许远程访问</strong>。这会关闭浏览器入口，并断开所有用该密钥打开的页面。
-- <strong>如果地址可能已泄露，</strong>在<strong>浏览器</strong>标签页点击<strong>轮换密钥</strong>给它换一个新密钥。用旧地址打开的页面会被断开。
+- <strong>在主机上，</strong>不再需要时请关闭<strong>允许浏览器访问</strong>。这会关闭浏览器端口，并断开所有用该密钥打开的页面。
+- <strong>如果地址可能已泄露，</strong>在<strong>设置 › 访问</strong>点击<strong>轮换密钥</strong>给它换一个新密钥。用旧地址打开的页面会被断开。
 
 ## 安全
 
 - <strong>地址就是密码：</strong>地址里的密钥可以完全控制主机上的 {productName}，包括运行任何命令。密钥在你轮换之前一直有效。它会留在浏览器的历史记录和书签里，开启同步后还会同步到你的其他设备。
 - <strong>谁能访问：</strong>能访问主机端口并持有密钥的任何人。主机上的端口只监听 <code dir="ltr">127.0.0.1</code>；能用你的 UU 远程账号向这台主机映射端口的人也能访问它，请保管好这个账号。
-- <strong>只在没有其他人登录的电脑上使用：</strong>主机或你电脑上的其他用户账户可以连接这些 <code dir="ltr">127.0.0.1</code> 端口；映射或 socat 没在运行时，他们还可以占用该端口，在你的浏览器重连时拿到密钥。[通过 SSH 连接](../remote-connections/)时，Mac 或 Linux 主机没有这个弱点；用桌面应用时，你自己的电脑也没有。但用浏览器时，你用来浏览的电脑仍有这个弱点，因为那里的 SSH 转发同样监听 <code dir="ltr">127.0.0.1</code> 端口。
+- <strong>只在没有其他人登录的电脑上使用：</strong>主机或你电脑上的其他用户账户可以连接这些 <code dir="ltr">127.0.0.1</code> 端口；{productName} 没在运行或正在重启时，他们还可以占用主机上的浏览器端口；你电脑上的映射没在运行时，则可以占用它映射的端口；在你的浏览器重连时拿到密钥。[通过 SSH 连接](../remote-connections/)时，关闭了浏览器访问的 Linux 主机、以及从桌面应用使用的 Mac 或 Windows 主机，都没有这个弱点；用桌面应用时，你自己的电脑也没有。但用浏览器时，你用来浏览的电脑仍有这个弱点，因为那里的 SSH 转发同样监听 <code dir="ltr">127.0.0.1</code> 端口。

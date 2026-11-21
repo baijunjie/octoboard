@@ -65,10 +65,10 @@ Anda juga dapat menjangkau Mac atau PC Windows yang menjalankan aplikasi {produc
 
 <Steps>
 
-1. Di komputer yang ingin Anda jangkau, buka <strong>Pengaturan › Akses jarak jauh</strong> di {productName}.
+1. Di komputer yang ingin Anda jangkau, buka <strong>Pengaturan › Akses</strong> di {productName}.
 2. Pilih <strong>Buka Pengaturan Sistem</strong> (macOS) atau <strong>Buka Pengaturan</strong> (Windows) di sana, lalu aktifkan <strong>Login Jarak Jauh</strong> (macOS) atau <strong>OpenSSH Server</strong> (Windows), dengan mengikuti jalur yang diberikan baris itu, agar komputer ini menerima login SSH. Ini memerlukan administrator. Kembali di {productName}, baris itu kemudian menampilkan <strong>Aktif</strong>.
 3. Aktifkan <strong>Izinkan akses jarak jauh</strong>, pilih <strong>Izinkan</strong> untuk mengonfirmasi, dan biarkan {productName} tetap berjalan: jika Anda menutupnya, akses jarak jauh berhenti.
-4. Di tab <strong>Aplikasi {productName}</strong>, pilih <strong>Salin detail koneksi</strong>, dan kirim ke komputer lain, misalnya lewat email atau chat.
+4. Pilih <strong>Salin detail koneksi</strong>, dan kirim ke komputer lain, misalnya lewat email atau chat.
 5. Di komputer tempat Anda akan bekerja, tambahkan host seperti pada langkah 2 sampai 5 [Terhubung ke server Linux](#terhubung-ke-server-linux), dengan menempelkan detail yang Anda kirim. Masuk dengan nama pengguna dan kata sandi Anda di host.
 
 </Steps>
@@ -81,7 +81,7 @@ Anda tahu semuanya berhasil saat jendela terpisah terbuka dengan proyek dan sesi
 
 1. Dapatkan perintah penerusan SSH:
 
-   - <strong>Di host Mac atau Windows,</strong> lakukan dulu langkah 1 sampai 3 [Gunakan komputer lain sebagai host](#gunakan-komputer-lain-sebagai-host). Lalu, di tab <strong>Browser</strong>, lihat <strong>Langkah 1: penerusan SSH</strong>. Klik alamat di dalam perintah untuk memilih bagaimana komputer lain Anda menjangkau komputer ini (atau pilih <strong>Masukkan alamat sendiri</strong> dan ganti <code dir="ltr">{commands.server}</code> nanti), lalu pilih <strong>Salin perintah penerusan</strong>. Pilih juga <strong>Salin alamat</strong> di bawah <strong>Langkah 2: alamat browser</strong>.
+   - <strong>Di host Mac atau Windows,</strong> lakukan dulu langkah 1 dan 2 [Gunakan komputer lain sebagai host](#gunakan-komputer-lain-sebagai-host). Lalu buka <strong>Pengaturan › Akses</strong>, aktifkan <strong>Izinkan akses browser</strong>, dan pilih <strong>Izinkan</strong> untuk konfirmasi. Di tab <strong>Browser</strong>, lihat <strong>Langkah 1: penerusan SSH</strong>. Klik alamat di dalam perintah untuk memilih bagaimana komputer lain Anda menjangkau komputer ini (atau pilih <strong>Masukkan alamat sendiri</strong> dan ganti <code dir="ltr">{commands.server}</code> nanti), lalu pilih <strong>Salin perintah penerusan</strong>. Pilih juga <strong>Salin alamat lokal</strong> di bawah <strong>Browser di komputer ini</strong>.
    - <strong>Di server Linux,</strong> jalankan ini di server. Perintah ini mencetak alamat browser, lalu perintah SSH yang harus dijalankan.
 
      <Code code={commands.address} lang="sh" />

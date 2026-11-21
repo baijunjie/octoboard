@@ -59,6 +59,32 @@ describe("quitHolders", () => {
   });
 });
 
+/** A case of `apps/daemon/testdata/quit_holders_cases.json`, which the daemon's stop check (`apps/daemon/src/coordinator/stop_check.rs`) runs too. */
+interface QuitCase {
+  name: string;
+  sessions: { id: string; status: SessionStatus; background?: boolean }[];
+  shellTerminals: { id: string; state: ShellTerminal["state"]; busy: boolean }[];
+  holdingSessions: string[];
+  holdingShellTerminals: string[];
+}
+
+describe("the quit rule shared with the daemon's stop check", () => {
+  const { cases } = JSON.parse(
+    readFileSync(new URL("../../../../apps/daemon/testdata/quit_holders_cases.json", pathToFileURL(`${import.meta.dirname}/`)), "utf8"),
+  ) as { cases: QuitCase[] };
+
+  it.each(cases.map((testCase) => [testCase.name, testCase] as const))("%s", (_, testCase) => {
+    const sessions = testCase.sessions.map(({ id, status, background }) =>
+      sessionOf(id, "c", "p", id, status, background ? { background_tasks: [{ id: "b" }] } : {}),
+    );
+    const terminals = testCase.shellTerminals.map(({ id, state, busy }): ShellTerminal => ({ id, project_id: "p", worktree: null, cwd: "/p", title: "zsh", renamed: false, state, busy, created_at: 0 }));
+    // `quitHolders` answers for the whole set, so each session and terminal is asked about alone.
+    expect(sessions.filter((session) => quitHolders([session]).sessions).map(({ id }) => id)).toEqual(testCase.holdingSessions);
+    expect(terminals.filter((terminal) => quitHolders([], [terminal]).terminals).map(({ id }) => id)).toEqual(testCase.holdingShellTerminals);
+    expect(quitHolders(sessions, terminals)).toEqual({ sessions: testCase.holdingSessions.length > 0, terminals: testCase.holdingShellTerminals.length > 0 });
+  });
+});
+
 /** A case of `apps/daemon/testdata/restart_impact_cases.json`, which the daemon's restart check runs too. */
 interface RestartCase {
   name: string;

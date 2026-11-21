@@ -571,7 +571,7 @@ async fn the_users_own_switches_are_out_of_the_agents_reach() {
     }
 }
 
-/// Remote access (Allow remote access, and the browser port of Windows) is the user's alone: an
+/// Remote access and browser access (Allow remote access, Allow browser access and the browser port) are the user's alone: an
 /// agent can neither read nor change it through the settings tools, whatever it passes.
 #[tokio::test]
 async fn remote_access_is_out_of_the_agents_reach() {
@@ -582,6 +582,7 @@ async fn remote_access_is_out_of_the_agents_reach() {
         .unwrap();
     let text = listed.to_string();
     assert!(!text.contains("remote_access"), "{text}");
+    assert!(!text.contains("browser_access"), "{text}");
     assert!(!text.contains("4000"), "{text}");
 
     let updated = call(
@@ -590,6 +591,7 @@ async fn remote_access_is_out_of_the_agents_reach() {
         "update_settings",
         &arguments(json!({
             "allow_remote_access": true,
+            "allow_browser_access": true,
             "remote_access_port": 5000,
             "default_clone_dir": crate::test_support::host_path("/tmp/clones"),
         })),
@@ -597,7 +599,9 @@ async fn remote_access_is_out_of_the_agents_reach() {
     .await
     .unwrap();
     assert!(!updated.to_string().contains("remote_access"), "{updated}");
+    assert!(!updated.to_string().contains("browser_access"), "{updated}");
     assert!(!state.store.allow_remote_access().unwrap());
+    assert!(!state.store.allow_browser_access().unwrap());
     assert_eq!(state.store.remote_access_port().unwrap(), Some(4000));
 }
 

@@ -15,10 +15,14 @@ use super::succession::{find_daemon, Found};
 
 /// Prints the address to open the running daemon at in a browser, its key included, as one line on
 /// stdout: `http://127.0.0.1:<port>/?key=<key>`, a loopback address a browser treats as a secure
-/// context, and the one address the forward `octoboardd address` prints binds on the owner's
-/// machine. Exits 3 when no daemon runs. The key is the owner key when the daemon's record says it
-/// accepts one and `owner.key` holds one, which outlives the daemon, else the launch key from the
-/// daemon's owner-only record. Only the daemon's own user obtains either.
+/// context: the browser port's while browser access serves, which a browser on this computer opens
+/// as it is, else the one address the forward `octoboardd address` prints for the owner socket
+/// binds on the owner's machine while remote access serves it. Exits 3 when no daemon runs. The key
+/// is the owner key when the daemon's record says it accepts one and `owner.key` holds one, which
+/// outlives the daemon, else the launch key from the daemon's owner-only record. Only the daemon's
+/// own user obtains either. The desktop application's daemon with neither setting on has no
+/// address for a browser, which is said with status 1, and on Windows, whose owner pipe is no
+/// browser's way in, with remote access on alone likewise.
 ///
 /// With `rotate`, the owner key is replaced first (see [`rotate_owner_key`]) and the address
 /// printed is the new one's, except where the daemon does not take an owner key: it is the launch
@@ -63,14 +67,18 @@ fn print_address_of(rotate: bool, through_unrecorded: bool) -> Result<i32> {
         eprintln!("{}", address_key_not_recorded(&owner));
         return Ok(1);
     };
-    if owner.follows_application == Some(true) && !owner.takes_owner_key {
-        return remote_access_off(rotate, &data);
+    if owner.follows_application == Some(true) && !owner.takes_key_anywhere() {
+        return both_off(rotate, &data);
     }
-    if rotate && owner.takes_owner_key {
+    if rotate && owner.takes_key_anywhere() {
         return rotate_owner_key(&owner, &key, &data);
     }
     if rotate {
         return rotate_for_daemon_without_owner_key(&owner, &key, &data);
+    }
+    if no_browser_way(&owner) {
+        eprintln!("{}", browser_access_off_note(false));
+        return Ok(1);
     }
     let (address, shown, lasting) = address_to_print(&owner, &key, &data);
     if !lasting {
@@ -81,7 +89,7 @@ fn print_address_of(rotate: bool, through_unrecorded: bool) -> Result<i32> {
         );
     }
     println!("{address}");
-    if owner.takes_owner_key {
+    if owner.takes_key_anywhere() {
         note_browser_forward(&owner, &data, &shown);
     } else if crate::browser::socket::AVAILABLE {
         eprintln!("{}", no_browser_note());
@@ -89,9 +97,9 @@ fn print_address_of(rotate: bool, through_unrecorded: bool) -> Result<i32> {
     Ok(0)
 }
 
-/// Says on stderr how the address of `owner`, a daemon that serves the browser on its way in (the
-/// owner socket, or on Windows its browser port), is reached from the owner's machine, and whether
-/// the daemon accepts `key` there.
+/// Says on stderr how the address of `owner`, a daemon that serves the browser on its way in (its
+/// browser port, else the owner socket), is reached from the owner's machine, and whether the
+/// daemon accepts `key` there.
 fn note_browser_forward(owner: &Owner, data: &Path, key: &str) {
     let notes = match owner.browser_port {
         Some(port) => port_address_notes(port, key),
@@ -108,50 +116,76 @@ fn note_browser_forward(owner: &Owner, data: &Path, key: &str) {
 /// as one.
 fn address_to_print(owner: &Owner, key: &str, data: &Path) -> (String, String, bool) {
     let owner_key = owner
-        .takes_owner_key
+        .takes_key_anywhere()
         .then(|| crate::owner_key::read_in(data))
         .flatten();
-    let lasting = owner_key.is_some() || !owner.takes_owner_key;
+    let lasting = owner_key.is_some() || !owner.takes_key_anywhere();
     let shown = owner_key.unwrap_or_else(|| key.to_owned());
     (browser_address(address_port(owner), &shown), shown, lasting)
 }
 
 /// The port of the address printed for `owner`, which is also the one its forward binds on the
-/// browser's machine: the daemon's own for a daemon that runs on its own, whose port stays the same
-/// across its starts; for the desktop application's daemon, whose port the system assigns at each
-/// launch, the fixed port its Settings show too: on Windows, the port it serves the browser at,
-/// which its record names.
+/// browser's machine: for a daemon that takes the owner key, the fixed port its Settings show too,
+/// since the daemon's own port is one the system assigns at each start: on Windows and macOS, and
+/// in the server form where it is turned on, the port it serves the browser at, which its record
+/// names (the default browser port where it has none open); for a daemon that takes none, whose
+/// address carries the launch key and is for programs, its own.
 fn address_port(owner: &Owner) -> u16 {
-    if owner.follows_application == Some(true) {
+    if owner.follows_application == Some(true) || owner.takes_key_anywhere() {
         owner
             .browser_port
-            .unwrap_or(crate::coordinator::remote_access::FORWARD_PORT)
+            .unwrap_or(crate::coordinator::remote_access::DEFAULT_BROWSER_PORT)
     } else {
         owner.port
     }
 }
 
-/// `address` for the desktop application's daemon while remote access is off: there is no address
-/// for a browser, which is said on stderr with status 1. With `rotate`, the owner key in `data` is
-/// replaced all the same, for when remote access is turned on, and the status is 0.
-fn remote_access_off(rotate: bool, data: &Path) -> Result<i32> {
+/// Whether the browser has no way to the address of `owner`, a daemon that takes the owner key
+/// only at its owner endpoint on a host with no socket (the owner pipe is no browser's way in):
+/// browser access is off.
+fn no_browser_way(owner: &Owner) -> bool {
+    owner.takes_owner_key && owner.browser_port.is_none() && !crate::browser::socket::AVAILABLE
+}
+
+/// `address` for the desktop application's daemon while neither remote access nor browser access
+/// is on: there is no address for a browser, which is said on stderr with status 1. With `rotate`,
+/// the owner key in `data` is replaced all the same, for when one is turned on, and the status is
+/// 0.
+fn both_off(rotate: bool, data: &Path) -> Result<i32> {
     if rotate {
         crate::owner_key::replace_in(data).context("replacing the owner key")?;
     }
-    eprintln!("{}", remote_access_off_note(rotate));
+    eprintln!("{}", both_off_note(rotate));
     Ok(if rotate { 0 } else { 1 })
 }
 
-/// What `address` says of the desktop application's daemon while remote access is off.
-fn remote_access_off_note(rotated: bool) -> String {
+/// What `address` says of the desktop application's daemon while neither setting is on.
+fn both_off_note(rotated: bool) -> String {
     let rotated = if rotated {
-        "the owner key was replaced, for when it is turned on; "
+        "the owner key was replaced, for when one is turned on; "
     } else {
         ""
     };
     format!(
-        "{rotated}remote access to the {app} application's daemon is off: turn on Allow remote \
-         access in its Settings, under Remote access, for a browser address",
+        "{rotated}neither browser access nor remote access to the {app} application's daemon is \
+         on: turn on Allow browser access in its Settings, under Remote access, or run \
+         `octoboardd browser on`, for a browser address",
+        app = crate::APP_NAME
+    )
+}
+
+/// What `address` says of the desktop application's daemon where only remote access is on and
+/// there is no socket for a browser to be forwarded to (Windows).
+fn browser_access_off_note(rotated: bool) -> String {
+    let rotated = if rotated {
+        "the owner key was replaced; "
+    } else {
+        ""
+    };
+    format!(
+        "{rotated}browser access to the {app} application's daemon is off, and remote access \
+         gives a browser no address here: turn on Allow browser access in its Settings, under \
+         Remote access, or run `octoboardd browser on`, for a browser address",
         app = crate::APP_NAME
     )
 }
@@ -198,6 +232,10 @@ fn rotate_owner_key(owner: &Owner, key: &str, data: &Path) -> Result<i32> {
         Err(err) => return failed(format!("{err:#}")),
     }
     match crate::owner_key::read_in(data) {
+        Some(_) if no_browser_way(owner) => {
+            eprintln!("{}", browser_access_off_note(true));
+            Ok(0)
+        }
         Some(new) => {
             println!("{}", browser_address(address_port(owner), &new));
             note_browser_forward(owner, data, &new);
@@ -260,21 +298,22 @@ fn address_notes(port: u16, data: &Path, key: &str) -> Vec<String> {
 }
 
 /// What `octoboardd address` says on stderr beside the address of the desktop application's daemon
-/// on Windows, which serves the browser at the loopback `port`, the address being for `key`: a
-/// warning when the daemon does not accept `key` there, or nothing answers there, and the command
-/// that forwards the port.
+/// on Windows or macOS, which serves the browser at the loopback `port`, the address being for
+/// `key`: a warning when the daemon does not accept `key` there, or nothing answers there, and
+/// the command that forwards the port to another machine (a browser on this computer opens the
+/// address as it is).
 fn port_address_notes(port: u16, key: &str) -> Vec<String> {
     let mut notes = Vec::new();
     match crate::browser::port::key_accepted(port, key, CHECK_WAIT) {
         Ok(true) => {}
         Ok(false) => notes.push(format!(
-            "the {} application's daemon refuses the key in this address at port {port} (owner.key \
+            "the running {} refuses the key in this address at port {port} (owner.key \
              may have been changed since it started, or another program holds the port); \
              `octoboardd address --rotate` makes a key it accepts",
             crate::APP_NAME
         )),
         Err(err) => notes.push(format!(
-            "whether the {} application's daemon accepts this address could not be checked at \
+            "whether the running {} accepts this address could not be checked at \
              port {port}: {err}",
             crate::APP_NAME
         )),
@@ -321,8 +360,10 @@ mod tests {
     #[test]
     fn the_address_has_the_owner_key_only_where_the_daemon_takes_it() {
         let dir = crate::test_support::ScratchDir::new("address-owner-key");
-        let launch = format!("http://127.0.0.1:7531/?key={KEY}");
-        let owner = format!("http://127.0.0.1:7531/?key={OWNER_KEY}");
+        // A daemon that takes the owner key is addressed at the fixed forward port, not its own.
+        let fixed = crate::coordinator::remote_access::DEFAULT_BROWSER_PORT;
+        let launch = format!("http://127.0.0.1:{fixed}/?key={KEY}");
+        let owner = format!("http://127.0.0.1:{fixed}/?key={OWNER_KEY}");
         // No file.
         assert_eq!(
             address_to_print(&owner_taking_key_on(7531), KEY, &dir),
@@ -336,7 +377,11 @@ mod tests {
         // A daemon without the token (desktop application, earlier build).
         assert_eq!(
             address_to_print(&owner_on(7531), KEY, &dir),
-            (launch.clone(), KEY.to_owned(), true)
+            (
+                format!("http://127.0.0.1:7531/?key={KEY}"),
+                KEY.to_owned(),
+                true
+            )
         );
         // A file that holds no key.
         std::fs::write(crate::owner_key::path_in(&dir), "nonsense\n").unwrap();
@@ -517,29 +562,41 @@ mod tests {
         assert!(note.contains("launch key"), "{note}");
     }
 
-    /// The desktop application's daemon is given the fixed forward port in its address, the
-    /// daemon's own port being one the system assigns at each launch; a daemon on its own keeps
-    /// its own.
+    /// A daemon that takes the owner key is given the fixed forward port in its address, the
+    /// daemon's own port being one the system assigns at each start, or the port its record names
+    /// where it serves the browser at one (the server form, once browser access is on); a daemon
+    /// that takes none is told by its own.
     #[test]
-    fn the_application_daemons_address_has_the_fixed_forward_port() {
+    fn a_daemon_taking_the_owner_key_has_the_fixed_forward_port_in_its_address() {
         let dir = crate::test_support::ScratchDir::new("address-application");
         crate::owner_key::write_in(&dir, OWNER_KEY);
-        let fixed = crate::coordinator::remote_access::FORWARD_PORT;
-        let application = Owner {
-            follows_application: Some(true),
-            ..owner_taking_key_on(54321)
+        let fixed = crate::coordinator::remote_access::DEFAULT_BROWSER_PORT;
+        for follows in [true, false] {
+            let owner = Owner {
+                follows_application: Some(follows),
+                ..owner_taking_key_on(54321)
+            };
+            assert_eq!(
+                address_to_print(&owner, KEY, &dir).0,
+                format!("http://127.0.0.1:{fixed}/?key={OWNER_KEY}")
+            );
+        }
+        let on_a_port = Owner {
+            follows_application: Some(false),
+            ..owner_taking_key_on(54321).with_browser_port(Some(4000))
         };
         assert_eq!(
-            address_to_print(&application, KEY, &dir).0,
-            format!("http://127.0.0.1:{fixed}/?key={OWNER_KEY}")
+            address_to_print(&on_a_port, KEY, &dir).0,
+            format!("http://127.0.0.1:4000/?key={OWNER_KEY}")
         );
-        let alone = Owner {
+        let takes_none = Owner {
             follows_application: Some(false),
+            takes_owner_key: false,
             ..owner_taking_key_on(7531)
         };
         assert_eq!(
-            address_to_print(&alone, KEY, &dir).0,
-            format!("http://127.0.0.1:7531/?key={OWNER_KEY}")
+            address_to_print(&takes_none, KEY, &dir).0,
+            format!("http://127.0.0.1:7531/?key={KEY}")
         );
     }
 
@@ -601,22 +658,55 @@ mod tests {
         assert_forward(&notes[1], port);
     }
 
-    /// While remote access is off, the application's daemon has no browser address: `address` says
-    /// so with status 1, and `--rotate` replaces the key for later with status 0.
+    /// The application's daemon with neither setting on has no address for a browser, and a
+    /// rotation then replaces the key for when one is turned on.
     #[test]
-    fn the_application_daemon_with_remote_access_off_has_no_address() {
-        let dir = crate::test_support::ScratchDir::new("address-remote-off");
+    fn the_application_daemon_with_both_settings_off_has_no_address() {
+        let dir = crate::test_support::ScratchDir::new("address-both-off");
         crate::owner_key::write_in(&dir, OWNER_KEY);
-        assert_eq!(remote_access_off(false, &dir).unwrap(), 1);
+        assert_eq!(both_off(false, &dir).unwrap(), 1);
         assert_eq!(
             crate::owner_key::read_in(&dir).as_deref(),
             Some(OWNER_KEY),
             "nothing was replaced"
         );
-        assert_eq!(remote_access_off(true, &dir).unwrap(), 0);
+        assert_eq!(both_off(true, &dir).unwrap(), 0);
         let replaced = crate::owner_key::read_in(&dir).expect("a new key");
         assert_ne!(replaced, OWNER_KEY);
-        assert!(remote_access_off_note(false).contains("Allow remote access"));
-        assert!(remote_access_off_note(true).starts_with("the owner key was replaced"));
+        assert!(both_off_note(false).contains("Allow browser access"));
+        assert!(both_off_note(true).starts_with("the owner key was replaced"));
+    }
+
+    /// A daemon that takes the owner key at its browser port alone has an address, at the port,
+    /// with the owner key; one that takes it at its owner endpoint alone has the owner socket's
+    /// forward port, where the host has a socket; and it counts as taking the key either way.
+    #[test]
+    fn the_address_follows_whichever_way_in_takes_the_owner_key() {
+        let dir = crate::test_support::ScratchDir::new("address-ways");
+        crate::owner_key::write_in(&dir, OWNER_KEY);
+        let at_port = owner_on(7531).with_browser_port(Some(4000));
+        assert!(at_port.takes_key_anywhere());
+        assert!(!at_port.takes_owner_key);
+        assert_eq!(
+            address_to_print(&at_port, KEY, &dir),
+            (
+                format!("http://127.0.0.1:4000/?key={OWNER_KEY}"),
+                OWNER_KEY.to_owned(),
+                true
+            )
+        );
+        let at_endpoint = owner_taking_key_on(7531);
+        let fixed = crate::coordinator::remote_access::DEFAULT_BROWSER_PORT;
+        assert_eq!(
+            address_to_print(&at_endpoint, KEY, &dir).0,
+            format!("http://127.0.0.1:{fixed}/?key={OWNER_KEY}")
+        );
+        // The owner pipe of a host with no socket gives a browser no address.
+        assert_eq!(
+            no_browser_way(&at_endpoint),
+            !crate::browser::socket::AVAILABLE
+        );
+        assert!(!no_browser_way(&at_port));
+        assert!(browser_access_off_note(true).starts_with("the owner key was replaced"));
     }
 }

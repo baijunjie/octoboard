@@ -25,65 +25,21 @@ pub(super) const SCHEMA_VERSION: i64 = 6;
 /// when it is created, so that a SQLite file of another program is told apart from one of ours.
 pub(super) const APPLICATION_ID: i64 = 0x4F43_5442;
 
-/// The steps that bring a database up to [`SCHEMA_VERSION`]: `MIGRATIONS[n - 1]` takes a database
-/// at version `n` to version `n + 1`. Each is a batch of SQL that runs in the one transaction of
-/// the whole migration, with foreign keys off, and leaves exactly the shape `SCHEMA` creates (a
-/// test compares the two). A step that rebuilds a table renames the old one aside and creates the
-/// new one under its final name: a table renamed into place is stored with its name quoted in
-/// `sqlite_master`, which no longer matches `SCHEMA`.
-pub(super) const MIGRATIONS: &[&str] = &[
-    // 1 to 2: the id of the owner a release left with the notice told at the next launch.
-    "ALTER TABLE sessions ADD COLUMN owner_notice_former_owner TEXT;",
-    // 2 to 3: the sidebar's ordering moved into the client's own preferences, the settings that
-    // resume the interrupted sessions when the daemon starts and hold the computer awake (Prevent
-    // sleep, and when) are added, and so are the tables of what the holders run (see `SCHEMA`), and
-    // the compatibility switches a console's launch settings, a project's and a session hold.
-    "ALTER TABLE settings DROP COLUMN sidebar_order_by_status;
-     ALTER TABLE settings ADD COLUMN resume_sessions_on_start INTEGER NOT NULL DEFAULT 0;
-     ALTER TABLE settings ADD COLUMN keep_awake INTEGER NOT NULL DEFAULT 0;
-     ALTER TABLE settings ADD COLUMN keep_awake_when TEXT NOT NULL DEFAULT 'working';
-     CREATE TABLE held_terminals (
-         kind        TEXT NOT NULL CHECK (kind IN ('session', 'shell_terminal')),
-         owner_id    TEXT NOT NULL,
-         holder_id   TEXT NOT NULL,
-         terminal_id TEXT NOT NULL,
-         launch_id   TEXT NOT NULL,
-         PRIMARY KEY (kind, owner_id)
-     );
-     CREATE TABLE shell_terminal_titles (
-         id    TEXT PRIMARY KEY,
-         title TEXT NOT NULL
-     );
-     ALTER TABLE console_launches ADD COLUMN compatibility TEXT;
-     ALTER TABLE project_providers ADD COLUMN compatibility TEXT;
-     ALTER TABLE sessions ADD COLUMN compatibility TEXT;",
-    // 3 to 4: a report page is a tree of components with the submission of its form, in place of an
-    // HTML document. A page stored as HTML has no tree to be read as, so every one is discarded.
-    // The setting that keeps a project session to its own project is added too, and the daemon's
-    // update check with the channel it follows.
-    "ALTER TABLE settings ADD COLUMN keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0;
-     ALTER TABLE settings ADD COLUMN daemon_update_check INTEGER NOT NULL DEFAULT 1;
-     ALTER TABLE settings ADD COLUMN daemon_update_channel TEXT NOT NULL DEFAULT 'stable';
-     DROP TABLE pages;
-     CREATE TABLE pages (
-         id         TEXT PRIMARY KEY,
-         session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-         content    TEXT NOT NULL,
-         submission TEXT,
-         submission_revision INTEGER NOT NULL DEFAULT 0,
-         created_at INTEGER NOT NULL
-     );
-     CREATE INDEX pages_session_id ON pages (session_id);",
-    // 4 to 5: Allow remote access and the browser port on Windows; the interface language's two
-    // Chinese tags become region tags (`zh-Hans` to `zh-CN`, `zh-Hant` to `zh-TW`).
-    "ALTER TABLE settings ADD COLUMN allow_remote_access INTEGER NOT NULL DEFAULT 0;
-     ALTER TABLE settings ADD COLUMN remote_access_port INTEGER;
-     UPDATE settings SET interface_language = 'zh-CN' WHERE interface_language = 'zh-Hans';
-     UPDATE settings SET interface_language = 'zh-TW' WHERE interface_language = 'zh-Hant';",
-    // 5 to 6: Octoboard's memory, the entries a console's console sessions and a place's project
-    // sessions keep, and the setting that turns it on; and the scheduled tasks with the records of
-    // their runs (see `SCHEMA`).
-    "ALTER TABLE settings ADD COLUMN memory_enabled INTEGER NOT NULL DEFAULT 0;
+/// The step that adds the column for Allow browser access (5 to 6), after which a system whose
+/// browser access starts from its remote access
+/// ([`crate::platform::BROWSER_ACCESS_STARTS_FROM_REMOTE_ACCESS`]) runs [`CARRY_BROWSER_ACCESS`].
+const BROWSER_ACCESS_STEP: usize = 5;
+
+/// What follows the step from 5 to 6 where browser access starts equal to the remote access the
+/// store had; a test runs it on any system.
+const CARRY_BROWSER_ACCESS: &str =
+    "UPDATE settings SET allow_browser_access = allow_remote_access;";
+
+/// The SQL of the step from 5 to 6 before the column for Allow browser access that [`MIGRATIONS`]
+/// adds to it. A macro, so that `concat!` can take it.
+macro_rules! step_5_to_6 {
+    () => {
+        "ALTER TABLE settings ADD COLUMN memory_enabled INTEGER NOT NULL DEFAULT 0;
      CREATE TABLE memories (
          console_id         TEXT NOT NULL DEFAULT '',
          host_id            TEXT NOT NULL DEFAULT '',
@@ -149,7 +105,75 @@ pub(super) const MIGRATIONS: &[&str] = &[
          failure_params      TEXT,
          failure_message     TEXT
      );
-     CREATE INDEX scheduled_task_runs_task_id ON scheduled_task_runs (task_id, seq);",
+     CREATE INDEX scheduled_task_runs_task_id ON scheduled_task_runs (task_id, seq);"
+    };
+}
+
+/// The steps that bring a database up to [`SCHEMA_VERSION`]: `MIGRATIONS[n - 1]` takes a database
+/// at version `n` to version `n + 1`. Each is a batch of SQL that runs in the one transaction of
+/// the whole migration, with foreign keys off, and leaves exactly the shape `SCHEMA` creates (a
+/// test compares the two). A step that rebuilds a table renames the old one aside and creates the
+/// new one under its final name: a table renamed into place is stored with its name quoted in
+/// `sqlite_master`, which no longer matches `SCHEMA`.
+pub(super) const MIGRATIONS: &[&str] = &[
+    // 1 to 2: the id of the owner a release left with the notice told at the next launch.
+    "ALTER TABLE sessions ADD COLUMN owner_notice_former_owner TEXT;",
+    // 2 to 3: the sidebar's ordering moved into the client's own preferences, the settings that
+    // resume the interrupted sessions when the daemon starts and hold the computer awake (Prevent
+    // sleep, and when) are added, and so are the tables of what the holders run (see `SCHEMA`), and
+    // the compatibility switches a console's launch settings, a project's and a session hold.
+    "ALTER TABLE settings DROP COLUMN sidebar_order_by_status;
+     ALTER TABLE settings ADD COLUMN resume_sessions_on_start INTEGER NOT NULL DEFAULT 0;
+     ALTER TABLE settings ADD COLUMN keep_awake INTEGER NOT NULL DEFAULT 0;
+     ALTER TABLE settings ADD COLUMN keep_awake_when TEXT NOT NULL DEFAULT 'working';
+     CREATE TABLE held_terminals (
+         kind        TEXT NOT NULL CHECK (kind IN ('session', 'shell_terminal')),
+         owner_id    TEXT NOT NULL,
+         holder_id   TEXT NOT NULL,
+         terminal_id TEXT NOT NULL,
+         launch_id   TEXT NOT NULL,
+         PRIMARY KEY (kind, owner_id)
+     );
+     CREATE TABLE shell_terminal_titles (
+         id    TEXT PRIMARY KEY,
+         title TEXT NOT NULL
+     );
+     ALTER TABLE console_launches ADD COLUMN compatibility TEXT;
+     ALTER TABLE project_providers ADD COLUMN compatibility TEXT;
+     ALTER TABLE sessions ADD COLUMN compatibility TEXT;",
+    // 3 to 4: a report page is a tree of components with the submission of its form, in place of an
+    // HTML document. A page stored as HTML has no tree to be read as, so every one is discarded.
+    // The setting that keeps a project session to its own project is added too, and the daemon's
+    // update check with the channel it follows.
+    "ALTER TABLE settings ADD COLUMN keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0;
+     ALTER TABLE settings ADD COLUMN daemon_update_check INTEGER NOT NULL DEFAULT 1;
+     ALTER TABLE settings ADD COLUMN daemon_update_channel TEXT NOT NULL DEFAULT 'stable';
+     DROP TABLE pages;
+     CREATE TABLE pages (
+         id         TEXT PRIMARY KEY,
+         session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+         content    TEXT NOT NULL,
+         submission TEXT,
+         submission_revision INTEGER NOT NULL DEFAULT 0,
+         created_at INTEGER NOT NULL
+     );
+     CREATE INDEX pages_session_id ON pages (session_id);",
+    // 4 to 5: Allow remote access and the browser port on Windows; the interface language's two
+    // Chinese tags become region tags (`zh-Hans` to `zh-CN`, `zh-Hant` to `zh-TW`).
+    "ALTER TABLE settings ADD COLUMN allow_remote_access INTEGER NOT NULL DEFAULT 0;
+     ALTER TABLE settings ADD COLUMN remote_access_port INTEGER;
+     UPDATE settings SET interface_language = 'zh-CN' WHERE interface_language = 'zh-Hans';
+     UPDATE settings SET interface_language = 'zh-TW' WHERE interface_language = 'zh-Hant';",
+    // 5 to 6: Octoboard's memory, the entries a console's console sessions and a place's project
+    // sessions keep, and the setting that turns it on; and the scheduled tasks with the records of
+    // their runs (see `SCHEMA`).
+    // Allow browser access, apart from Allow remote access, joins them, off; where the browser port
+    // belonged to remote access (Windows) it then starts equal to the remote access the store had
+    // (`run_migrations`), so the update changes nothing a user had on.
+    concat!(
+        step_5_to_6!(),
+        " ALTER TABLE settings ADD COLUMN allow_browser_access INTEGER NOT NULL DEFAULT 0;"
+    ),
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -451,13 +475,14 @@ CREATE TABLE settings (
     squash_before_delivery INTEGER NOT NULL DEFAULT 0,
     rebase_before_delivery INTEGER NOT NULL DEFAULT 1,
     delivery            TEXT NOT NULL DEFAULT 'ask',
-    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working', keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0, daemon_update_check INTEGER NOT NULL DEFAULT 1, daemon_update_channel TEXT NOT NULL DEFAULT 'stable', allow_remote_access INTEGER NOT NULL DEFAULT 0, remote_access_port INTEGER, memory_enabled INTEGER NOT NULL DEFAULT 0);
+    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working', keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0, daemon_update_check INTEGER NOT NULL DEFAULT 1, daemon_update_channel TEXT NOT NULL DEFAULT 'stable', allow_remote_access INTEGER NOT NULL DEFAULT 0, remote_access_port INTEGER, memory_enabled INTEGER NOT NULL DEFAULT 0, allow_browser_access INTEGER NOT NULL DEFAULT 0);
 -- `resume_sessions_on_start`, `keep_awake`, `keep_awake_when`, `keep_sessions_in_own_project`,
--- `daemon_update_check`, `daemon_update_channel`, `allow_remote_access`, `remote_access_port` and
--- `memory_enabled` are the last columns, spelled as a migration leaves them; see
--- `Store::resume_sessions_on_start`, `Store::keep_awake`, `Store::keep_sessions_in_own_project`,
--- `Store::daemon_update_check`, `Store::allow_remote_access`, `Store::remote_access_port` and
--- `Store::memory_enabled`.
+-- `daemon_update_check`, `daemon_update_channel`, `allow_remote_access`, `remote_access_port`,
+-- `memory_enabled` and `allow_browser_access` are the last columns, spelled as a migration leaves
+-- them; see `Store::resume_sessions_on_start`, `Store::keep_awake`,
+-- `Store::keep_sessions_in_own_project`, `Store::daemon_update_check`,
+-- `Store::allow_remote_access`, `Store::remote_access_port`, `Store::memory_enabled` and
+-- `Store::allow_browser_access`.
 -- The user's explicit choice for a setting of a provider, as JSON (`true`, `false` or a quoted
 -- choice); a setting with no row follows its default. Rows naming a provider or setting this
 -- build does not declare are kept and ignored. See `Store::provider_settings`.
@@ -860,8 +885,13 @@ fn run_migrations(path: &Path, version: i64, steps: &[&str], target: i64) -> Res
     // The pragma has no effect inside a transaction.
     conn.pragma_update(None, "foreign_keys", "OFF")?;
     let tx = conn.transaction()?;
-    for step in &steps[usize::try_from(version - 1)?..] {
+    for (index, step) in steps.iter().enumerate().skip(usize::try_from(version - 1)?) {
         tx.execute_batch(step)?;
+        if index + 1 == BROWSER_ACCESS_STEP
+            && crate::platform::BROWSER_ACCESS_STARTS_FROM_REMOTE_ACCESS
+        {
+            tx.execute_batch(CARRY_BROWSER_ACCESS)?;
+        }
     }
     let violations: i64 =
         tx.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
@@ -1460,6 +1490,43 @@ mod tests {
         drop(store);
         let reopened = Store::open(&path).expect("reopened");
         assert!(reopened.memory_enabled().unwrap());
+    }
+
+    /// Migrating a version 5 database adds Allow browser access, which starts off, except on
+    /// Windows, where the browser port belonged to remote access and the step carries the
+    /// remote access the store had into it; the carrying statement is run here on every system,
+    /// and the port the store held is kept.
+    #[test]
+    fn migrating_a_version_5_database_adds_browser_access_carrying_windows_remote_access() {
+        let path = temp_db("migrate-browser-access");
+        {
+            let conn = Connection::open(&path).expect("version 5 database");
+            conn.execute_batch(PAST_SCHEMAS[4])
+                .expect("version 5 schema");
+            conn.pragma_update(None, "user_version", 5)
+                .expect("version");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
+            conn.execute_batch(
+                "INSERT INTO settings (id, allow_remote_access, remote_access_port)
+                 VALUES ('singleton', 1, 4000);",
+            )
+            .expect("settings");
+        }
+
+        let store = Store::open(&path).expect("migrated");
+        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+        assert!(store.allow_remote_access().unwrap());
+        assert_eq!(store.remote_access_port().unwrap(), Some(4000));
+        assert_eq!(
+            store.allow_browser_access().unwrap(),
+            crate::platform::BROWSER_ACCESS_STARTS_FROM_REMOTE_ACCESS
+        );
+        store
+            .lock()
+            .execute_batch(CARRY_BROWSER_ACCESS)
+            .expect("the carrying statement");
+        assert!(store.allow_browser_access().unwrap());
     }
 
     /// Migrating a version 3 database adds the switch that keeps sessions to their own project,

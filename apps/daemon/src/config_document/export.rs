@@ -614,17 +614,19 @@ mod tests {
         (document, text, clone_dir)
     }
 
-    /// Remote access (Allow remote access, and the browser port of Windows) travels in no
+    /// Remote access and browser access (the two switches and the browser port) travel in no
     /// document, so that no import can open a machine to remote use.
     #[test]
     fn remote_access_is_in_no_document() {
         let (state, _dir) = crate::test_support::app_state("config-export-remote-access");
         populated(&state.store);
         state.store.set_allow_remote_access(true).unwrap();
+        state.store.set_allow_browser_access(true).unwrap();
         state.store.set_remote_access_port(Some(4321)).unwrap();
         let document = build(&state.store, &Selection::full(true)).expect("built");
         let text = serde_json::to_string(&document).unwrap();
         assert!(!text.contains("remote_access"), "{text}");
+        assert!(!text.contains("browser_access"), "{text}");
         assert!(!text.contains("4321"), "{text}");
     }
 

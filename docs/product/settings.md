@@ -13,13 +13,14 @@ account details dialog, and on the sharing row of an account's settings dialog (
 `docs/product/per-agent-settings.md`, "The accounts table", "The account details dialog" and "Sharing the default
 configuration" in `docs/product/agent-accounts.md`, and "Explanations in help tips" in
 `docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **Appearance**, **Agent
-behavior**, **Agent accounts**, **Memory**, **Git**, **Trusted folders**, **Permissions**, **Remote access**, **Notifications**,
+behavior**, **Agent accounts**, **Memory**, **Git**, **Trusted folders**, **Permissions**, **Access**, **Notifications**,
 **Keyboard shortcuts**, **Cleanup**, **Configuration**, **Updates** and **About**; the dialog opens on General unless it
 was asked to open on another section. **Permissions** is there in the macOS application's main window and in a browser
 running on a Mac, an iPhone or an iPad — judged from the platform the browser reports, not from the system the daemon
 runs on; the desktop application on any other system, its remote windows and a browser on any other system leave it
-out. **Remote access** is there only in the main window of the macOS and Windows applications (see
-`docs/product/remote-access-settings.md`). **Updates** is there only where something updates itself: the desktop
+out. **Access** is there only in the main window of the macOS and Windows applications (see
+`docs/product/remote-access-settings.md`); its browser rows only where the daemon serves the browser at a port of its
+own. **Updates** is there only where something updates itself: the desktop
 application's main window, a browser open on a daemon that updates itself, and a remote window whose daemon updates
 itself, there with that daemon's two settings alone (see `docs/product/update-settings.md`).
 
@@ -143,8 +144,10 @@ While Settings is open everything under it stays as it was, the terminal include
 
 ## Group headings
 
-A section whose rows fall into groups — General, Git and Keyboard shortcuts — heads each group with a
-heading of its own. Once the section is scrolled far enough for a group's heading to reach the top of the section's
+A section whose rows fall into groups — General, Git, Access and Keyboard shortcuts — heads each group
+with a heading of its own, and orders its groups by how often each is used, most frequent first (the Access
+groups by where each is used instead: This computer's browser, Other computers, Key). A row of no group, General's
+Language, comes first, above the groups. Once the section is scrolled far enough for a group's heading to reach the top of the section's
 area, the heading stays pinned there, opaque, and the group's rows scroll beneath it, until the next group's heading
 arrives and pushes it out; the top fade then begins below the pinned heading (see "The edge that hides content fades" in
 `docs/product/scrolling-surfaces.md`).
@@ -200,8 +203,9 @@ client in the same way (see "Check for updates automatically" in `docs/product/u
 
 ## General
 
-App-wide settings: the **Language** row, then the groups **Startup**, **Window**,
-**Power**, **Terminals** and **Sorting**, each under a heading (see "Group headings" above), some of them only in the desktop application. Which rows
+App-wide settings: the **Language** row first, then the groups **Sorting**, **Terminals**, **Power**, **Window**,
+**Startup** and **Command line**, each under a heading (see "Group headings" above), some of them only in the desktop
+application. Which rows
 each group holds, where each is shown and what each does are in `docs/product/general-settings.md`.
 
 ## Appearance
@@ -289,12 +293,15 @@ Recording and Accessibility, to grant it ahead of time. In a browser that has th
 the list of sections above), it only says that permissions can be managed only in the macOS application. What the
 section shows and what each row offers are in `docs/product/macos-privacy-permissions.md`.
 
-## Remote access
+## Access
 
-In the main window of the macOS and Windows applications: whether the application's own daemon may be reached from the
-owner's other devices over SSH, and, while it is, the browser address, the SSH forward, the connection details with
-their QR code and the key rotation, with whether the computer's SSH server is on, and on Windows the browser port. What
-the section shows, and what each row does, are in `docs/product/remote-access-settings.md`.
+In the main window of the macOS and Windows applications, in three groups by where it is used. This computer's
+browser, where the application's daemon serves the browser at a port of its own: whether a browser may open it at that
+port (Allow browser access, with the port), and, while it is open, the address for a browser on this computer. Other
+computers: whether the computer's SSH server is on, then, in two tabs where there is a browser port, the Octoboard app tab (whether the
+application's own daemon may be reached from another computer's application over SSH, Allow remote access, and, while it is,
+the connection details with their QR code) and the Browser tab (the SSH steps for a browser on another computer). Key: the rotation of the one key
+both ways in share. What the section shows, and what each row does, are in `docs/product/remote-access-settings.md`.
 
 ## Notifications
 

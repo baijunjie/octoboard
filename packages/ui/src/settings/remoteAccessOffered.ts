@@ -1,7 +1,7 @@
 import type { PlatformAdapter } from "../platform";
 import type { RemoteAccess } from "../protocol";
 
-/** Whether Settings has the Remote access section: only in the desktop application's own window, for a daemon that
+/** Whether Settings has the Access section: only in the desktop application's own window, for a daemon that
  * offers remote access (`remoteAccess` is set). The section configures this computer's own daemon, so a browser, which
  * reaches a daemon through the very access the section switches, never has it: the daemon would refuse a browser's
  * change anyway (`remote_access_refused_to_browser`), and the browser's platform adapter has none of the shell's

@@ -65,10 +65,10 @@ You can also reach a Mac or Windows PC that runs the {productName} app.
 
 <Steps>
 
-1. On the computer you want to reach, open <strong>Settings › Remote access</strong> in {productName}.
+1. On the computer you want to reach, open <strong>Settings › Access</strong> in {productName}.
 2. Select <strong>Open System Settings</strong> (macOS) or <strong>Open Settings</strong> (Windows) there, and turn on <strong>Remote Login</strong> (macOS) or <strong>OpenSSH Server</strong> (Windows), following the path the row gives, so this computer accepts SSH sign-ins. This needs an administrator. Back in {productName}, the row then shows <strong>On</strong>.
 3. Turn on <strong>Allow remote access</strong>, select <strong>Allow</strong> to confirm, and keep {productName} running: if you quit it, remote access stops.
-4. On the <strong>{productName} app</strong> tab, select <strong>Copy connection details</strong>, and send them to the other computer, for example by email or chat.
+4. Select <strong>Copy connection details</strong>, and send them to the other computer, for example by email or chat.
 5. On the computer you'll work from, add the host as in steps 2 to 5 of [Connect to a Linux server](#connect-to-a-linux-server), pasting the details you sent. Sign in with your user name and password on the host.
 
 </Steps>
@@ -81,7 +81,7 @@ You'll know it worked when a separate window opens with the host's projects and 
 
 1. Get the SSH forward command:
 
-   - <strong>On a Mac or Windows host,</strong> first do steps 1 to 3 of [Use another computer as the host](#use-another-computer-as-the-host). Then, on the <strong>Browser</strong> tab, look at <strong>Step 1: SSH forward</strong>. Click the address in the command to choose how your other computer reaches this one (or choose <strong>Enter the address yourself</strong> and replace <code dir="ltr">{commands.server}</code> later), then select <strong>Copy forward command</strong>. Also select <strong>Copy address</strong> under <strong>Step 2: Browser address</strong>.
+   - <strong>On a Mac or Windows host,</strong> first do steps 1 and 2 of [Use another computer as the host](#use-another-computer-as-the-host). Then open <strong>Settings › Access</strong>, turn on <strong>Allow browser access</strong> and select <strong>Allow</strong> to confirm. On the <strong>Browser</strong> tab, look at <strong>Step 1: SSH forward</strong>. Click the address in the command to choose how your other computer reaches this one (or choose <strong>Enter the address yourself</strong> and replace <code dir="ltr">{commands.server}</code> later), then select <strong>Copy forward command</strong>. Also select <strong>Copy local address</strong> under <strong>This computer's browser</strong>.
    - <strong>On a Linux server,</strong> run this on the server. It prints the browser address, then the SSH command to run.
 
      <Code code={commands.address} lang="sh" />

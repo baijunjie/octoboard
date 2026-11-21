@@ -1,0 +1,8 @@
+# A custom permission for the app's command-line tool commands; see `exit-lifecycle.toml` for why an
+# app-defined command needs a file like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-command-line"
+description = "Allows the frontend to read whether the command-line tool (a link named octoboardd) is installed, install or reinstall it, and remove it."
+commands.allow = ["command_line_status", "command_line_install", "command_line_remove"]

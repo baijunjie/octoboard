@@ -14,7 +14,7 @@ import HostBrowserAddress from "../../../snippets/zh-TW/host-browser-address.mdx
 不確定該用哪種方式？請看[選擇連線方式](../choose-how-to-connect/)。
 
 <Aside type="caution">
-這些步驟尚未在兩台裝置之間實測，是依據 UU 遠程本身的說明撰寫的。Mac 主機上的轉送程式已在單台電腦上試過，包括瀏覽器的即時連線。
+這些步驟尚未在兩台裝置之間實測，是依據 UU 遠程本身的說明撰寫的。
 </Aside>
 
 <strong>你電腦上的瀏覽器</strong> → <strong>你電腦上的 127.0.0.1</strong> ⟷ UU 遠程 ⟷ <strong>主機上的 127.0.0.1</strong> → <strong>{productName}</strong>
@@ -25,7 +25,6 @@ import HostBrowserAddress from "../../../snippets/zh-TW/host-browser-address.mdx
 - <strong>127.0.0.1（回送位址）：</strong>永遠代表「本機」的位址。
 - <strong>連接埠：</strong>用來指定電腦上某個程式的編號，就像門牌號碼。<code dir="ltr">127.0.0.1:{commands.defaultPort}</code> 就是本機的 {commands.defaultPort} 連接埠。
 - <strong>連接埠對應（介面上為「端口映射」）：</strong>UU 遠程的一項功能，讓主機上的某個連接埠出現在你自己的電腦上。
-- <strong>socat：</strong>一個免費的小程式，負責把連線從一處轉到另一處。Mac 主機需要用它當作轉送程式。
 - <strong>終端機：</strong>輸入指令的視窗，macOS 上是「終端機」，Windows 上是 PowerShell。
 
 </details>
@@ -37,7 +36,6 @@ UU 遠程的連接埠對應會讓主機上的 {productName} 出現在你自己�
 - <strong>兩台電腦都是 Mac 或 Windows 電腦。</strong>UU 遠程沒有 Linux 版的連接埠對應；請改用 [Tailscale](../browser-over-tailscale/) 或 [SSH](../remote-connections/) 存取 Linux 伺服器。
 - <strong>兩台電腦都安裝好 UU 遠程，並登入同一個帳號，</strong>Windows 上需要 4.21.0 以上版本，macOS 上需要 4.32.0 以上版本。連接埠對應只支援 TCP，{productName} 也只需要 TCP。撰寫本文時，UU 遠程把連接埠對應列為免費功能；如有疑問，請查看它目前的方案說明。
 - <strong>在用來瀏覽的電腦上，UU 遠程的「我的设备」中看得到這台主機。</strong>
-- <strong>主機是 Mac 時，還需要 [Homebrew](https://brew.sh/)</strong>，用來安裝下文的 socat。
 
 ## 在主機上
 
@@ -45,32 +43,10 @@ UU 遠程的連接埠對應會讓主機上的 {productName} 出現在你自己�
 
 1. 取得瀏覽器位址，位址裡帶有登入金鑰，用瀏覽器開啟就能直接登入。
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
    <HostBrowserAddress />
-   </TabItem>
-   <TabItem label="Windows">
-   <HostBrowserAddress windows />
-   </TabItem>
-   </Tabs>
 2. 在主機的 <code dir="ltr">{tunnel.loopback}</code> 上準備一個能連到 {productName} 的連接埠。下文的<strong>主機連接埠</strong>就是這個連接埠。
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
-   Mac 為瀏覽器提供服務的方式 UU 遠程無法對應，所以需要用 socat 當作轉送程式。在「終端機」中安裝它：
-
-   <Code code={tunnel.installSocatMac} lang="sh" />
-
-   然後執行這個指令，不要關閉視窗。它只監聽 <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>。
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   主機連接埠是 <code dir="ltr">{tunnel.bridgePort}</code>。
-   </TabItem>
-   <TabItem label="Windows">
-   不需要執行任何指令：{productName} 本身就在瀏覽器連接埠上監聽，而且只監聽 <code dir="ltr">127.0.0.1</code>。主機連接埠就是<strong>瀏覽器</strong>分頁裡的<strong>瀏覽器連接埠</strong>（沒改過的話是 {commands.defaultPort}）。
-   </TabItem>
-   </Tabs>
+   不需要執行任何指令：{productName} 本身就在瀏覽器連接埠上監聽，而且只監聽 <code dir="ltr">127.0.0.1</code>。主機連接埠就是<strong>設定 › 存取</strong>裡的<strong>瀏覽器連接埠</strong>（沒改過的話是 {commands.defaultPort}）。
 
 </Steps>
 
@@ -112,19 +88,18 @@ UU 遠程的連接埠對應會讓主機上的 {productName} 出現在你自己�
 
 ## 連不上時
 
-- <strong>對應顯示已連線，但頁面打不開：</strong>主機是 Mac 時，socat 的視窗被關掉了或指令已停止；或者<strong>允許遠端存取</strong>沒有開啟，或主機上的 {productName} 沒有在執行。
+- <strong>對應顯示已連線，但頁面打不開：</strong><strong>允許瀏覽器存取</strong>沒有開啟，或主機上的 {productName} 沒有在執行。
 - <strong>對應無法儲存或連不上：</strong>這台電腦上的本地連接埠可能已被占用。請換一個，並在瀏覽器位址中也改成它。
 - <strong>頁面被拒絕或一片空白：</strong>請確認開啟的是 <code dir="ltr">{tunnel.loopback}</code> 開頭的位址。
 
 ## 停止使用
 
 - <strong>在用來瀏覽的電腦上：</strong>在 UU 遠程的端口映射面板中停用或刪除這條對應。關閉面板或中斷連線也會讓對應停止。
-- <strong>主機是 Mac 時：</strong>按 <kbd>Ctrl</kbd>+<kbd>C</kbd> 停止 socat。
-- <strong>在主機上，</strong>不再需要時請關閉<strong>允許遠端存取</strong>。這會關閉瀏覽器入口，並中斷所有用該金鑰開啟的頁面。
-- <strong>如果位址可能已外洩，</strong>在<strong>瀏覽器</strong>分頁點選<strong>輪替金鑰</strong>為它換一把新金鑰。用舊位址開啟的頁面會被中斷。
+- <strong>在主機上，</strong>不再需要時請關閉<strong>允許瀏覽器存取</strong>。這會關閉瀏覽器連接埠，並中斷所有用該金鑰開啟的頁面。
+- <strong>如果位址可能已外洩，</strong>在<strong>設定 › 存取</strong>點選<strong>輪替金鑰</strong>為它換一把新金鑰。用舊位址開啟的頁面會被中斷。
 
 ## 安全性
 
 - <strong>位址就是密碼：</strong>位址裡的金鑰可以完全控制主機上的 {productName}，包括執行任何指令。金鑰在你輪替之前一直有效。它會留在瀏覽器的瀏覽紀錄和書籤裡，開啟同步後還會同步到你的其他裝置。
 - <strong>誰能存取：</strong>能連到主機連接埠並持有金鑰的任何人。主機上的連接埠只監聽 <code dir="ltr">127.0.0.1</code>；能用你的 UU 遠程帳號對這台主機進行連接埠對應的人也能存取它，請妥善保管這個帳號。
-- <strong>只在沒有其他人登入的電腦上使用：</strong>主機或你電腦上的其他使用者帳戶可以連到這些 <code dir="ltr">127.0.0.1</code> 連接埠；對應或 socat 沒在執行時，他們還可以占用該連接埠，在你的瀏覽器重新連線時拿到金鑰。[透過 SSH 連線](../remote-connections/)時，Mac 或 Linux 主機沒有這個弱點；用桌面應用程式時，你自己的電腦也沒有。但用瀏覽器時，你用來瀏覽的電腦仍有這個弱點，因為那裡的 SSH 轉送同樣監聽 <code dir="ltr">127.0.0.1</code> 連接埠。
+- <strong>只在沒有其他人登入的電腦上使用：</strong>主機或你電腦上的其他使用者帳戶可以連到這些 <code dir="ltr">127.0.0.1</code> 連接埠；{productName} 沒在執行或正在重新啟動時，他們還可以占用主機上的瀏覽器連接埠；你電腦上的對應沒在執行時，則可以占用它對應的連接埠；在你的瀏覽器重新連線時拿到金鑰。[透過 SSH 連線](../remote-connections/)時，關閉了瀏覽器存取的 Linux 主機、以及從桌面應用程式使用的 Mac 或 Windows 主機，都沒有這個弱點；用桌面應用程式時，你自己的電腦也沒有。但用瀏覽器時，你用來瀏覽的電腦仍有這個弱點，因為那裡的 SSH 轉送同樣監聽 <code dir="ltr">127.0.0.1</code> 連接埠。

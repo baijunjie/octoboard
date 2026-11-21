@@ -89,8 +89,8 @@ the review" in `docs/product/configuration-export-and-import-dialogs.md`).
 - **Redeeming a usage limit reset** with an outcome the window does not know: see "How a redeem ends" in
   `docs/product/usage-limit-resets.md`.
 - **A login** reaching a status the window does not know closes the login dialog, not as a success.
-- **Remote access failing** for a reason the window does not know shows its error with no reason in the application's
-  words, the system's own words still behind its details (see "When the daemon cannot serve" in
-  `docs/product/remote-access-settings.md`).
+- **Remote access or browser access failing** for a reason the window does not know shows its error with no reason in
+  the application's words, the system's own words still behind its details (see "When remote access cannot be served"
+  and "Allow browser access" in `docs/product/remote-access-settings.md`).
 - **Moving an account directory to the Trash**, refused for a directory shared with something of a kind the window does
   not know: see "Checking the directory when the option is ticked" in `docs/product/removing-accounts.md`.

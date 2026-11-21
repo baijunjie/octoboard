@@ -45,13 +45,13 @@ password. The desktop application installs a key of its own on the remote machin
   by running `octoboardd address` on the server as the daemon's user, however the daemon was started (see "Running in
   the background from the command line" in `docs/product/daemon-command-line.md`). A server build of the daemon serves
   the UI at that address itself (see "The UI the daemon serves" in `docs/product/server-form.md`). A browser reaches
-  the desktop application's daemon the same way while its remote access is on, with the address and the forward its
-  Settings show (see "Remote access to the desktop application's daemon" below).
+  the desktop application's daemon the same way on macOS while its remote access is on, or at its browser port while its
+  browser access is on, with the address and the forward its Settings show (see "Remote access to the desktop application's daemon" below).
 - **The macOS and Windows applications** reach a remote daemon — a Linux server's, or another of the owner's desktops'
   while its remote access is on — through an SSH connection they make themselves, verifying the host key against a
   pinned fingerprint, and running `octoboardd proxy` on the remote machine, as the daemon's user, for each connection
   the window opens (see `docs/product/remote-daemons.md`). Setting a device up is helped by the connection details
-  `octoboardd connection` prints on the remote machine, or a desktop's Remote access section shows, as a line of text
+  `octoboardd connection` prints on the remote machine, or a desktop's Access section shows, as a line of text
   the application takes pasted and as a QR code of that line, carrying the host, SSH port, user, host key fingerprint
   and the path of `octoboardd`, and no secret (see "Printing the connection details" in
   `docs/product/daemon-command-line.md`). The same connection also carries, for a remote window, connections to the
@@ -115,9 +115,10 @@ restarts it, and at some planned restarts (below); whatever a client sends to th
 it. A browser reconnecting through the owner's forward would send the owner key there, so the owner key is never
 accepted on the daemon's TCP port: the browser reaches the daemon only through its socket, which no other user but the
 superuser can create, replace or connect to, nor forward through an SSH login of their own (see "The browser socket" in
-`docs/product/server-form.md`). The one exception is the desktop application's daemon on Windows, whose SSH server
-cannot forward to a socket: there a browser port of its own takes the owner key, at the cost said under "Remote access
-to the desktop application's daemon" below. The launch key is still sent to the TCP port, by the clients that carry it.
+`docs/product/server-form.md`). The exceptions are a browser port of the daemon's own, which takes the owner key where
+the owner chose it with Allow browser access: the desktop application's daemon on Windows and macOS, and the server
+form's daemon once `octoboardd browser on` opened one, at the cost said under "Remote access to the
+desktop application's daemon" below, which is the same on each. The launch key is still sent to the TCP port, by the clients that carry it.
 The desktop application's remote window is opened on a loopback port the application itself holds from before the
 window opens until it closes, its reconnections included, for the same reason (see "A dropped connection" in
 `docs/product/remote-daemons.md`). At a planned
@@ -156,35 +157,37 @@ first alone (see "The UI the daemon serves" in `docs/product/server-form.md`):
 
 A daemon that serves the browser (see "The browser socket" in `docs/product/server-form.md`) accepts a second key
 beside its launch key, on the browser's way in alone: the **owner key**, the key of the address the owner opens in a
-browser. Those daemons are the server form's, and the desktop application's while its remote access is on (see "Remote
-access to the desktop application's daemon" below); the way in is the browser socket, and for the desktop application's
-daemon on Windows its browser port and its owner pipe. The key is kept in `~/.octoboard/owner.key`, which only the
+browser. Those daemons are the server form's, and the desktop application's while its remote access or its browser access
+is on (see "Remote access to the desktop application's daemon" below); the way in is the browser socket, the browser port
+where one is open, and for the desktop application's daemon on Windows its owner pipe. The key is kept in `~/.octoboard/owner.key`, which only the
 daemon's user can read, and is trusted only as a file of that user's that nobody else could have read or written (see
 `docs/product/files-octoboard-owns.md`). Such a daemon reads it as it starts serving the browser, and makes a new one and
 writes it there when the file is missing or holds no key it trusts; one that cannot read the file, or cannot write a new
 key, logs a warning, accepts no owner key and serves no browser, its launch key alone opening it. A daemon that serves
-no browser — the desktop application's while remote access is off, one whose build carries no UI, a server-form daemon
+no browser — the desktop application's while both settings are off, one whose build carries no UI, a server-form daemon
 on Windows, one whose way in could not be opened — never reads, makes or accepts an owner key.
 
-The owner key is the browser's alone. On the way in it is accepted on every request, a WebSocket included, as the
-launch key is, and so opens everything the launch key opens, except replacing the owner key itself, which needs the
-launch key, and changing the desktop application's remote access, which its own window alone does. The daemon's TCP
-port never accepts it, refusing it as any wrong key (see "Other users of the same machine" above). It is in no helper's
-key file, settings file or transcript, no holder's record, no command line, environment, log or startup line, and not
-in `daemon.key`: the launch key keeps every other use it has. `octoboardd address` prints the address with the owner
-key wherever the running daemon accepts one (see "Running in the background from the command line" in
-`docs/product/daemon-command-line.md`), and `octoboardd address --json` gives it to another device's application over
-SSH (see "Another device reaching the daemon over SSH" in the same doc).
+The owner key is the browser's alone. On the way in it is accepted on every request, a WebSocket included, as the launch
+key is, and so opens everything the launch key opens, except replacing the owner key itself, which needs the launch key,
+and changing the desktop application's Allow remote access or Allow browser access, which only the owner can do, in the
+application's window or, for browser access, with `octoboardd browser` and the launch key; a connection the owner key
+opened can change neither.
+The daemon's TCP port never accepts it, refusing it as any wrong key (see "Other users of the same machine" above). It
+is in no helper's key file, settings file or transcript, no holder's record, no command line, environment, log or
+startup line, and not in `daemon.key`: the launch key keeps every other use it has. `octoboardd address` prints the
+address with the owner key wherever the running daemon accepts one (see "Running in the background from the command
+line" in `docs/product/daemon-command-line.md`), and `octoboardd address --json` gives it to another device's
+application over SSH (see "Another device reaching the daemon over SSH" in the same doc).
 
 **It lasts until the owner rotates it.** The owner key stays the same across every start of a daemon that serves the
 browser, a planned restart and a service manager's restart included, so an address bookmarked in a browser keeps
 opening the daemon; nothing replaces it but `octoboardd address --rotate` and, for the desktop application's daemon,
-Rotate key in its Remote access section (see `docs/product/remote-access-settings.md`). This is a trade-off made for an
+Rotate key in its Access section (see `docs/product/remote-access-settings.md`). This is a trade-off made for an
 address that keeps working: the key in the browser's address no longer expires with the daemon, and the browser keeps
 the address, the key with it, in its history, its bookmarks and its open tabs. A browser that syncs those across
 devices carries the key to every other device signed into it, and to the sync provider. The key is still of use only
 to whoever can also reach the daemon's way in, which only the daemon's user (and the superuser) can open on its machine
-— through an SSH login as that user, say — except for the Windows browser port below.
+— through an SSH login as that user, say — except for the browser port below.
 
 **Revoking it** takes a rotation alone: the daemon refuses the old key on every new request and connection from then
 on, and at once closes every connection the old key opened, every control connection and every terminal connection of
@@ -197,42 +200,62 @@ computer's application reads the new key itself and carries on (see "A dropped c
 ## Remote access to the desktop application's daemon
 
 The daemon the macOS or Windows application runs serves no browser and takes no owner key until the owner turns on
-**Allow remote access** in its Settings (see `docs/product/remote-access-settings.md`). The daemon keeps that setting,
-off to begin with, and applies it at its start and at once whenever it changes:
+one of two settings in its Settings, both in the Access section (see
+`docs/product/remote-access-settings.md`) and off to begin with: **Allow remote access**, for another computer reaching this one over SSH, and **Allow browser access**, for a
+browser at the daemon's loopback browser port. The daemon keeps both, and applies them at its start and at once whenever
+one changes. Either can be on without the other:
 
-- **Turned on**, the daemon opens its way in, serves the UI it carries there, and holds and accepts the owner key, as the
-  server form's daemon always does. A browser on another machine then reaches it through the owner's own SSH forward,
-  and another of the owner's computers through its application (see `docs/product/remote-daemons.md`).
-- **Turned off**, it closes its way in, refuses the owner key and closes every connection the key opened, as a rotation
-  does. `octoboardd address` then says remote access is off (see "Running in the background from the command line" in
-  `docs/product/daemon-command-line.md`).
+- **Allow remote access**, turned on, opens the daemon's socket on macOS and Linux (`~/.octoboard/browser.sock`, under
+  the same conditions as the server form's, see "The browser socket" in `docs/product/server-form.md`), and on Windows,
+  whose SSH server cannot forward to a socket or a named pipe, its owner pipe, and serves the UI it carries on the socket.
+  Another of the owner's computers reaches either through its application and `octoboardd proxy` (see
+  `docs/product/remote-daemons.md`), and a browser on another machine through the owner's own SSH forward to the socket
+  (Settings does not offer that forward; Windows has none). It opens no TCP port.
+- **Allow browser access**, turned on (macOS, Windows), opens the browser port, below, which a browser on the same
+  computer opens at `http://127.0.0.1:<port>/?key=<owner key>` with nothing to run first, and which another machine
+  reaches through something that carries the loopback port over an encrypted channel: an SSH forward to the port, or a
+  tool such as `tailscale serve` (see the documentation site). The Access section gives the SSH forward alone.
+  It lets no other computer's application in, and opens no socket or pipe.
+- **Either turned off** closes its own way in and the connections made through it, leaving the other serving. The owner
+  key is held and accepted while either way in is open, and refused, with every connection it opened closed as a
+  rotation does, once both are off. `octoboardd address` then says neither is on (see "Running in the background from the
+  command line" in `docs/product/daemon-command-line.md`).
+- One of the two failing to open (a socket refused, a port taken) leaves the other serving, and Settings says which.
 
-Nobody but the owner, in the application's own window, can turn it on: it is offered to no agent's settings tool, no
-configuration document carries it or applies it, and the daemon refuses a change of it, or a rotation of the owner key,
-on a connection the owner key opened. The daemon's own TCP port serves no UI and refuses the owner key throughout, on
-every system. The application's daemon runs only while the application does, so remote use needs the application kept
-running on that computer: quitting it ends every remote connection to its daemon.
+Only what runs as the owner can turn either on, in the application's own window or, for browser access, with
+`octoboardd browser on` in a terminal: they are offered to no agent's settings tool, no configuration document carries
+or applies them, and the daemon refuses a change of either, or a rotation of the owner key, on a connection the owner key
+opened, so a browser cannot turn its own access on or move it. The command asks the running daemon, with the launch key,
+the same request Settings sends (see "Browser access" in `docs/product/daemon-command-line.md`); anything that runs
+commands as the owner, an agent included, can run it, which the owner accepts, since an agent running as the owner can
+already read the owner key with `octoboardd address`. The command changes browser access alone and never remote access.
+The daemon's own TCP port serves no UI and refuses the owner key throughout, on every system. The application's daemon
+runs only while the application does, so remote use needs the application kept running on that computer: quitting it ends
+every remote connection to its daemon.
 
-**On macOS** the way in is the daemon's socket, `~/.octoboard/browser.sock`, under the same conditions as the server
-form's (see "The browser socket" in `docs/product/server-form.md`), and the browser's address is at the server form's
-default port, the same at every launch, which the forward binds on the browser's machine.
+**The browser port** is a loopback port of the daemon's own, apart from its TCP port, which serves the UI and takes the
+owner key. It is the default browser port, 3369, until the owner changes it in Settings or with `octoboardd browser
+on --port`, which takes effect at once: the old port is let go, every connection made through it is closed and the new
+one is listened on. A port that cannot be listened on (taken by another program or user) is said in Settings, which asks
+for another port. **This is the one place a TCP port accepts the owner key, and it costs this**: any other user of the
+computer can take that port whenever the daemon is not holding it — while the application is not running, or while its
+daemon is restarted — and a browser that reconnects meanwhile sends them the key. The confirmation that turns browser
+access on says so, as does `octoboardd browser on`. The macOS and Windows daemons take this cost on for a browser that
+needs no forward, with no further protection. **The server form's daemon takes it on only while browser access is on**,
+which it is not until the owner runs `octoboardd browser on`: a server is more often shared by several users, so there the
+port is off to begin with, the socket serves the browser alone, and `browser off` closes the port again, with every
+connection made through it, leaving the socket as it is (see "Browser access" in `docs/product/server-form.md`). The
+same port may never be the daemon's own TCP port, which the daemon assigns itself and which never accepts the owner key.
+The application itself never sends the key to this port.
 
-**On Windows**, whose SSH server cannot forward to a socket or a named pipe, there are two ways in, open while remote
-access is on:
+**On Windows**, the owner pipe is the way in Allow remote access opens, as the socket is elsewhere:
 
-- **The browser port**, a loopback port of the daemon's own, apart from its TCP port, which serves the UI and takes the
-  owner key, and which the browser's forward reaches. It is the server form's default port until the owner changes it
-  in Settings, which takes effect at once: the old port is let go, every connection the owner key opened is closed and
-  the new one is listened on. **This is the one place a TCP port accepts the owner key, and it costs this**: any other
-  user of the computer can take that port whenever the daemon is not holding it — while the application is not running,
-  or while its daemon is restarted — and a browser that reconnects meanwhile sends them the key. The confirmation that
-  turns remote access on says so. The application itself never sends the key to this port.
 - **The owner pipe**, `\\.\pipe\octoboard-owner-<hash of the data directory>`, which another computer's application
   reaches through `octoboardd proxy` run over SSH. The daemon creates it refusing remote clients, owned by and open only
   to its own user (where the name is taken, it joins only a pipe of its own user's), and `octoboardd proxy` and
-  `address --json` refuse a pipe of that name owned by anyone else. A change of the browser port leaves it open; a pipe
-  whose name another program or user holds is not opened, and nothing is served.
+  `address --json` refuse a pipe of that name owned by anyone else. A change of the browser port, or browser access
+  turned on or off, leaves it open; a pipe whose name another program or user holds is not opened.
 
 **Another computer reaches it only while its SSH server is on**: Remote Login on macOS, OpenSSH Server on Windows. The
-application says in its Remote access section whether it is, and how to turn it on (see "The SSH server" in
+application says in its Access section whether it is, and how to turn it on (see "The SSH server" in
 `docs/product/remote-access-settings.md`); it never turns it on itself.

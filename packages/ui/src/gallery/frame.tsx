@@ -98,7 +98,8 @@ let daemonExited: ((detail: string) => void) | undefined;
  * link opener that refuses with the error of a scenario's `externalLinkError` (otherwise the browser's own opener
  * stands, which opens a new tab), `backgroundRun`, `menuBarIcon` and `launchAtLogin` for a scenario that says so (the
  * General switches; none of them reaches a shell, and the login entry is a stub that keeps the last choice, its list of
- * login items refused when the scenario gives a `launchAtLoginOpenError`), the desktop shell's `notifications` for one
+ * login items refused when the scenario gives a `launchAtLoginOpenError`), the command-line tool for one that gives
+ * `commandLine` (a stub that keeps where it stands, its install refused or never finishing as the scenario says), the desktop shell's `notifications` for one
  * that says `desktopNotifications` (nothing is shown or opened; the link to the system's pane only where the scenario's
  * `host` has one), the clipboard taken away for a scenario that says so, and the configuration-file capability stubbed
  * from the scenario's `configuration` (absent where it says the platform has none) so that no download or file picker
@@ -121,6 +122,8 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
   let clipboardText = typeof scenario?.clipboard === "object" ? scenario.clipboard.text : "";
   // The system's login entry, which the switch changes and a read finds as it was left.
   const launchAtLogin = scenario?.launchAtLogin === undefined ? undefined : { status: scenario.launchAtLogin };
+  // The command-line tool's link, which an install makes and a remove takes away.
+  const commandLine = scenario?.commandLine && { state: scenario.commandLine.state };
   return {
     ...platform,
     kind: scenario?.desktopApp ? "tauri" : platform.kind,
@@ -192,6 +195,21 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
         openSystemSettings: async () => {
           if (scenario?.launchAtLoginOpenError !== undefined) throw new Error(scenario.launchAtLoginOpenError);
         },
+      },
+    }),
+    ...(commandLine && {
+      commandLine: {
+        status: async () => {
+          if (commandLine.state === "unreadable") throw new Error("gallery: the shell cannot read the link");
+          return commandLine.state;
+        },
+        install: async () => {
+          const behaviour = scenario?.commandLine?.install;
+          if (behaviour === "pending") return new Promise<never>(() => {});
+          if (behaviour) throw behaviour.error;
+          return (commandLine.state = { state: "installed", path: "/usr/local/bin/octoboardd", pathNote: false });
+        },
+        remove: async () => (commandLine.state = { state: "notInstalled" }),
       },
     }),
     ...(scenario?.desktopNotifications && {

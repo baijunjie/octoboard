@@ -3,11 +3,12 @@
 // `apps/web/seo/downloads.ts`) and the download addresses (the redirect pages of `downloadPagePath` there, and
 // `releasesUrl`), which `webParity.test.ts` checks. The default port and the website address come from the same
 // settings the website and the daemon read (`config/app.json`, and the website's deployment address through
-// `site.config.ts`), so the docs cannot quote another port or script address than the site serves.
+// `site.config.ts`), so the docs cannot quote another port or script address than the site serves. The default port is
+// the browser port's, 3369 until the owner sets another; the daemon's own port is one the system assigns, which no page quotes.
 import appConfig from "../../../config/app.json" with { type: "json" };
 import site from "../site.config.ts";
 
-const port = appConfig.defaultServerPort;
+const port = appConfig.defaultBrowserPort;
 const websiteUrl = `${site.origin}${site.websiteBase}`;
 
 export const productName = site.productName;
@@ -21,12 +22,13 @@ export const commands = {
   signIn: "ssh <you>@<server>",
   start: "octoboardd start",
   address: "octoboardd address",
+  browserOn: "octoboardd browser on",
+  browserOff: "octoboardd browser off",
   connection: "octoboardd connection",
   update: "octoboardd update",
   restart: "octoboardd restart",
   binDir: "~/.local/bin",
   server: "<server>",
-  portOption: "--port <port>",
   defaultPort: String(port),
   linger: 'loginctl enable-linger "$USER"',
   host: "--host",
@@ -37,30 +39,22 @@ export const commands = {
   localhost: "localhost",
 } as const;
 
-// The port the bridge on a macOS or Linux host listens on, on that host's loopback alone: the one after the default
-// port, which a Linux server's own daemon holds.
-const bridgePort = port + 1;
-
-// The commands of the guides that reach a host's browser entry through Tailscale or UU Remote instead of SSH. A macOS
-// or Linux host serves the browser on its socket, which a bridge on the host's loopback connects a TCP port to; a
-// Windows host serves it on its browser port, already a loopback TCP port. Every listener here binds 127.0.0.1 only.
+// The commands of the guides that reach a host's browser entry through Tailscale or UU Remote instead of SSH. Every host
+// serves the browser on its browser port, already a loopback TCP port, so only the computer a reader browses from needs a
+// relay. Every listener here binds 127.0.0.1 only.
 export const tunnel = {
-  bridgePort: String(bridgePort),
-  bridge: `socat TCP-LISTEN:${bridgePort},bind=127.0.0.1,reuseaddr,fork UNIX-CONNECT:"$HOME/.octoboard/browser.sock"`,
   installSocatMac: "brew install socat",
   installSocatLinux: "sudo apt install socat",
   checkListener: `lsof -nP -iTCP:${port} -sTCP:LISTEN`,
   checkListenerWindows: `netstat -ano | findstr :${port}`,
-  serveBridge: `tailscale serve --tcp=${bridgePort} tcp://127.0.0.1:${bridgePort}`,
   serveBrowserPort: `tailscale serve --tcp=${port} tcp://127.0.0.1:${port}`,
-  serveBridgeOff: `tailscale serve --tcp=${bridgePort} off`,
   serveBrowserPortOff: `tailscale serve --tcp=${port} off`,
   serveStatus: "tailscale serve status",
   macCli: "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
   linuxOperator: 'sudo tailscale set --operator="$USER"',
   visitorForward: `socat TCP-LISTEN:${port},bind=127.0.0.1,reuseaddr,fork TCP:<host>:<host port>`,
-  // The same forward filled in for a Mac host named `my-mac` on the tailnet, whose host port is the bridge's.
-  visitorForwardExample: `socat TCP-LISTEN:${port},bind=127.0.0.1,reuseaddr,fork TCP:my-mac:${bridgePort}`,
+  // The same forward filled in for a Mac host named `my-mac` on the tailnet, whose host port is its browser port.
+  visitorForwardExample: `socat TCP-LISTEN:${port},bind=127.0.0.1,reuseaddr,fork TCP:my-mac:${port}`,
   visitorForwardWindows: `netsh interface portproxy add v4tov4 listenaddress=127.0.0.1 listenport=${port} connectaddress=<host IP> connectport=<host port>`,
   visitorForwardWindowsOff: `netsh interface portproxy delete v4tov4 listenaddress=127.0.0.1 listenport=${port}`,
   host: "<host>",

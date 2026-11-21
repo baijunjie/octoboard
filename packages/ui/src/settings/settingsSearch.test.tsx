@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { translatorFor } from "../i18n/catalog";
 import { LanguageProvider } from "../i18n/react";
+import { click } from "../test/dom";
 import type { PlatformAdapter } from "../platform";
 import { ThemeProvider } from "../preferences/theme";
 import type { ClientRequestBody, Event, Settings } from "../protocol";
@@ -65,7 +66,7 @@ const CASES: { name: string; platform: PlatformAdapter; state: Partial<State> }[
     state: {
       host: { ...HOST, keep_awake: true },
       settings: { ...DEFAULT_SETTINGS, keep_awake: true, git_workflow: { ...DEFAULT_SETTINGS.git_workflow, development: "worktree" } },
-      remoteAccess: { allowed: true, state: "serving", browser_port: null, address: "http://127.0.0.1:3369/?key=k", forward_command: "ssh -N -L 127.0.0.1:3369:/s u@<server>", server_addresses: [], connection: null, failure: null },
+      remoteAccess: { allowed: true, state: "serving", browser_allowed: false, browser_state: "off", browser_port: null, address: "http://127.0.0.1:3369/?key=k", forward_command: "ssh -N -L 127.0.0.1:3369:/s u@<server>", server_addresses: [], connection: null, failure: null, browser_failure: null },
     },
   },
   {
@@ -145,9 +146,8 @@ it("shows the choice of when to prevent sleep for a value this build does not kn
 
 /** Mounts `section` on the desktop shell with the reads of the system answering as given, and holds the section's
  * rendered entries to the index's under the readiness the dialog works out. */
-async function renderedMatchesIndex(section: SettingsSectionId, overrides: Partial<PlatformAdapter>): Promise<{ rendered: (string | undefined)[]; indexed: string[] }> {
+async function renderedMatchesIndex(section: SettingsSectionId, overrides: Partial<PlatformAdapter>, state: Partial<State> = CASES[0]!.state): Promise<{ rendered: (string | undefined)[]; indexed: string[] }> {
   const platform: PlatformAdapter = { ...CASES[0]!.platform, ...overrides };
-  const state = CASES[0]!.state;
   const { panel, reads } = await mountSection(section, platform, state);
   const context: SettingsSearchContext = { platform, keepAwake: true, settings: state.settings as Settings, remoteAccess: state.remoteAccess ?? null, reads };
   return {
@@ -180,5 +180,40 @@ describe("when the permissions cannot be read", () => {
     });
     expect(rendered).toEqual(indexed);
     expect(indexed).toEqual(["permissions.unreadable"]);
+  });
+});
+
+/** The desktop shell's daemon with a browser port, in the states that decide what the Access section shows. */
+const BROWSER_PORT_STATES: [string, NonNullable<State["remoteAccess"]>][] = [
+  ["nothing served", { ...CASES[0]!.state.remoteAccess!, state: "off", allowed: false, browser_port: 3369, address: null, forward_command: null }],
+  ["browser access serving", { ...CASES[0]!.state.remoteAccess!, state: "off", allowed: false, browser_allowed: true, browser_state: "serving", browser_port: 3369, forward_command: "ssh -N -L 127.0.0.1:3369:127.0.0.1:3369 u@<server>" }],
+  ["the browser port taken while remote access serves", { ...CASES[0]!.state.remoteAccess!, browser_allowed: true, browser_state: "failed", browser_port: 3369, browser_failure: { reason: "port_in_use", detail: "in use" } }],
+  ["remote access failed", { ...CASES[0]!.state.remoteAccess!, state: "failed", browser_port: 3369, failure: { reason: "pipe_failed", detail: "denied" } }],
+];
+// The two ways in from another computer are tabs, so a render holds the selected one's rows beside the section's others.
+const APP_TAB = ["remote-access.allow", "remote-access.failed", "remote-access.connection"];
+const BROWSER_TAB = ["remote-access.browser-forward", "remote-access.browser-address", "remote-access.browser-closed", "remote-access.browser-off"];
+
+/** The Access section on the desktop shell's platform over `remoteAccess`, and what the index shows for it. */
+async function mountAccess(remoteAccess: NonNullable<State["remoteAccess"]>) {
+  const state = { ...CASES[0]!.state, remoteAccess };
+  const { panel, reads } = await mountSection("remote-access", CASES[0]!.platform, state);
+  const context: SettingsSearchContext = { platform: CASES[0]!.platform, keepAwake: true, settings: state.settings as Settings, remoteAccess, reads };
+  const indexed = SETTINGS_SEARCH_INDEX["remote-access"].filter((entry) => !entry.shown || entry.shown(context)).map((entry) => entry.id);
+  const tab = [...panel.querySelectorAll<HTMLElement>('[role="tab"]')].find((element) => element.textContent?.trim() === "Browser")!;
+  const rendered = () => [...panel.querySelectorAll<HTMLElement>("[data-settings-search-id]")].map((element) => element.dataset.settingsSearchId);
+  return { tab, indexed, rendered };
+}
+
+describe.each(BROWSER_PORT_STATES)("with a browser port: %s", (_name, remoteAccess) => {
+  it("the remote-access section renders exactly the entries the index shows, with the application tab selected", async () => {
+    const { indexed, rendered } = await mountAccess(remoteAccess);
+    expect([...rendered()].sort()).toEqual(indexed.filter((id) => !BROWSER_TAB.includes(id)).sort());
+  });
+
+  it("the remote-access section renders exactly the entries the index shows, with the Browser tab selected", async () => {
+    const { tab, indexed, rendered } = await mountAccess(remoteAccess);
+    await click(tab);
+    expect([...rendered()].sort()).toEqual(indexed.filter((id) => !APP_TAB.includes(id)).sort());
   });
 });

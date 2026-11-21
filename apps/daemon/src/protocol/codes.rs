@@ -143,13 +143,17 @@ pub mod error_code {
 
     /// A request that is not valid JSON of a known shape.
     pub const UNREADABLE_REQUEST: Code = Code("unreadable_request");
-    /// `set_remote_access`, `rotate_owner_key` or `set_remote_access_port` was sent to a daemon
-    /// that offers no remote access (it runs on its own, or its host has no way in for the
-    /// browser), a rotation while remote access is not serving, or a port to a daemon that serves
-    /// the browser at no port of its own (not on Windows).
+    /// `set_remote_access`, `set_browser_access`, `rotate_owner_key` or `set_remote_access_port`
+    /// was sent to a daemon that offers no remote access (it runs on its own, or its host has no
+    /// way in for the browser), remote access to the server form's daemon, which has no such
+    /// setting, a rotation while neither remote access nor browser access is serving, or browser
+    /// access or a port to a daemon that serves the browser at no port of its own (a Linux
+    /// desktop).
     pub const REMOTE_ACCESS_UNAVAILABLE: Code = Code("remote_access_unavailable");
-    /// `set_remote_access`, `rotate_owner_key` or `set_remote_access_port` came over a connection
-    /// the owner key opened: only the application's own window changes remote access.
+    /// `set_remote_access`, `set_browser_access`, `rotate_owner_key` or `set_remote_access_port`
+    /// came over a connection the owner key opened: the settings are changed with the launch key,
+    /// by the application's own window or, for browser access, by `octoboardd browser`; the server
+    /// form has no window, so there `octoboardd browser` alone changes browser access.
     pub const REMOTE_ACCESS_REFUSED_TO_BROWSER: Code = Code("remote_access_refused_to_browser");
     /// Anything that is not meant for the user to read in detail: an unexpected failure with no
     /// meaning of its own. The text is carried as the `detail` param.

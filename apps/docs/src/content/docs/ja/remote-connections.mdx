@@ -65,10 +65,10 @@ import { commands, productName } from "../../../commands.ts";
 
 <Steps>
 
-1. つなぎたいコンピューターで、{productName} の<strong>設定 › リモートアクセス</strong>を開きます。
+1. つなぎたいコンピューターで、{productName} の<strong>設定 › アクセス</strong>を開きます。
 2. そこで<strong>システム設定を開く</strong>（macOS）または <strong>設定を開く</strong>（Windows）を選び、その行が示す手順に従って<strong>リモートログイン</strong>（macOS）または <strong>OpenSSH Server</strong>（Windows）をオンにします。これで、このコンピューターが SSH でのサインインを受け付けるようになります。管理者の権限が必要です。{productName} に戻ると、その行に<strong>オン</strong>と表示されます。
 3. <strong>リモートアクセスを許可</strong>をオンにし、<strong>許可</strong>を選んで確定します。{productName} は起動したままにしてください。終了すると、リモートアクセスも止まります。
-4. <strong>{productName} アプリ</strong>タブで<strong>接続情報をコピー</strong>を選び、もう一方のコンピューターに、たとえばメールやチャットで送ります。
+4. <strong>接続情報をコピー</strong>を選び、もう一方のコンピューターに、たとえばメールやチャットで送ります。
 5. 作業に使うコンピューターで、[Linux サーバーに接続する](#linux-サーバーに接続する)の手順 2 から 5 と同じようにホストを追加し、送られてきた情報を貼り付けます。ホストのユーザー名とパスワードでサインインします。
 
 </Steps>
@@ -81,7 +81,7 @@ import { commands, productName } from "../../../commands.ts";
 
 1. SSH フォワードのコマンドを手に入れます。
 
-   - <strong>ホストが Mac または Windows の場合は、</strong>まず[別のコンピューターをホストにする](#別のコンピューターをホストにする)の手順 1 から 3 を行います。続いて<strong>ブラウザ</strong>タブの<strong>手順 1: SSH フォワード</strong>を見ます。コマンド中のアドレスをクリックして、もう一方のコンピューターがこのコンピューターに届くときの経路を選び（または<strong>アドレスを自分で入力</strong>を選んで、あとで <code dir="ltr">{commands.server}</code> を自分で置き換え）、<strong>フォワードのコマンドをコピー</strong>を選びます。さらに、<strong>手順 2: ブラウザのアドレス</strong>の下で<strong>アドレスをコピー</strong>も選びます。
+   - <strong>ホストが Mac または Windows の場合は、</strong>まず[別のコンピューターをホストにする](#別のコンピューターをホストにする)の手順 1 と 2 を行います。続いて <strong>設定 › アクセス</strong> を開き、<strong>ブラウザアクセスを許可</strong>をオンにして<strong>許可</strong>を選んで確定します。<strong>ブラウザ</strong>タブの<strong>手順 1: SSH フォワード</strong>を見ます。コマンド中のアドレスをクリックして、もう一方のコンピューターがこのコンピューターに届くときの経路を選び（または<strong>アドレスを自分で入力</strong>を選んで、あとで <code dir="ltr">{commands.server}</code> を自分で置き換え）、<strong>フォワードのコマンドをコピー</strong>を選びます。さらに、<strong>このコンピューターのブラウザ</strong>の下で<strong>ローカルのアドレスをコピー</strong>も選びます。
    - <strong>ホストが Linux サーバーの場合は、</strong>サーバーで次のコマンドを実行します。ブラウザのアドレスに続けて、実行する SSH コマンドが表示されます。
 
      <Code code={commands.address} lang="sh" />

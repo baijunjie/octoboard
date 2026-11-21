@@ -116,8 +116,8 @@ export const WEB_IMPORTS_DESKTOP = ["apps/desktop/scripts/release-manifest.mjs"]
 // A UI test (`appConfig.test.ts`) holds `config/app.json` to the license.
 export const UI_READS_ELSEWHERE = ["LICENSE"];
 // UI tests (`daemonCodes.test.ts`, `fixtureProviders.test.ts`) read the provider modules' sources, where each provider
-// declares its codes and facts; `useAppExit.test.ts` runs the restart cases the daemon's restart check runs too.
-export const UI_READS_DAEMON = ["apps/daemon/src/providers/", "apps/daemon/testdata/restart_impact_cases.json"];
+// declares its codes and facts; `useAppExit.test.ts` runs the restart and quit cases the daemon's checks run too.
+export const UI_READS_DAEMON = ["apps/daemon/src/providers/", "apps/daemon/testdata/restart_impact_cases.json", "apps/daemon/testdata/quit_holders_cases.json"];
 // A UI module (`settings/AboutSection.tsx`) inlines the app icon into the UI bundle, and so into the preview of the app
 // the website ships.
 export const UI_IMPORTS_NATIVE = ["apps/desktop/src-tauri/icons/128x128.png"];

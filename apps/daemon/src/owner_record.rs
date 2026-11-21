@@ -29,11 +29,12 @@ use crate::platform::proc_table;
 /// reads, whether it comes fourth or, without a third, in its place. It is read wherever it
 /// stands after the port; a record without it, as an earlier build writes, does not say.
 ///
-/// A daemon that accepts the owner key ([`crate::owner_key`]) adds `owner-key` after the tokens
-/// above, and is read wherever it stands after the port. It changes nothing an earlier build reads
+/// A daemon that accepts the owner key ([`crate::owner_key`]) at its owner endpoint adds
+/// `owner-key` after the tokens above, and is read wherever it stands after the port. It changes nothing an earlier build reads
 /// for the same reason: it is the third token only in a record that has none of the others, and
 /// that build takes an unknown word there as no third token. A record without it is of a daemon
-/// that takes no owner key, as one that follows the application or an earlier build.
+/// that takes no owner key at an endpoint, as one that follows the application with remote access
+/// off or an earlier build.
 ///
 /// Two more tokens follow for the same reason, read wherever they stand after the port:
 /// `unit=<name>`, the systemd unit a service-managed daemon runs as, so that a command can ask
@@ -43,9 +44,11 @@ use crate::platform::proc_table;
 /// `after=`, as a build before it writes or a daemon that cannot tell writes, does not say
 /// ([`Predecessor::Unsaid`]).
 ///
-/// The desktop application's daemon on Windows, which serves the browser at a loopback port of its
-/// own while remote access is on ([`crate::browser::port`]), adds `browser-port=<port>` beside
-/// `owner-key` for the same reason, read wherever it stands after the port.
+/// A daemon that serves the browser at a loopback port of its own ([`crate::browser::port`]: the
+/// desktop application's daemon on Windows and macOS while browser access is on, the server form's
+/// where `octoboardd browser on` opened one) adds `browser-port=<port>` for the same reason, read
+/// wherever it stands after the port. It is there whether or not `owner-key` is: `owner-key` says
+/// the owner key is taken at the owner endpoint, and the port is a way in of its own.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Owner {
     pub identity: ProcessIdentity,
@@ -57,12 +60,14 @@ pub struct Owner {
     /// makes a key of its own, rather than this daemon, which hands over its key; `None` for a
     /// record without the token.
     pub service_managed: Option<bool>,
-    /// Whether the daemon accepts the owner key, which `address` then prints in place of the
-    /// launch key.
+    /// Whether the daemon accepts the owner key at its owner endpoint, the browser socket (on
+    /// Windows, the owner pipe): the server form's always, the desktop application's daemon's while
+    /// Allow remote access is on. `address` then prints the owner key in place of the launch key.
     pub takes_owner_key: bool,
     /// The loopback port the daemon takes the owner key at, where it serves the browser at a port
-    /// of its own (the desktop application's daemon on Windows) rather than on its socket; `None`
-    /// otherwise.
+    /// of its own (while Allow browser access is on, on the desktop application's daemon; where
+    /// `octoboardd browser on` opened one, on the server form); `None` otherwise. A daemon that has
+    /// it takes the owner key whether or not it takes it at the owner endpoint.
     pub browser_port: Option<u16>,
     /// The systemd unit the daemon runs as, where a service manager restarts it and it could name
     /// the unit (a systemd user service, systemd 248 or later); `None` otherwise.
@@ -109,7 +114,7 @@ const SERVICE: &str = "service";
 /// The token of a record of a daemon that starts its successor itself.
 const NO_SERVICE: &str = "no-service";
 
-/// The token of a record of a daemon that accepts the owner key.
+/// The token of a record of a daemon that accepts the owner key at its owner endpoint.
 const OWNER_KEY: &str = "owner-key";
 
 /// What leads the token naming the port the daemon takes the owner key at.
@@ -177,7 +182,13 @@ impl Owner {
         }
     }
 
-    /// This owner, saying whether the daemon accepts the owner key.
+    /// Whether the daemon accepts the owner key anywhere, at its owner endpoint or at its browser
+    /// port.
+    pub fn takes_key_anywhere(&self) -> bool {
+        self.takes_owner_key || self.browser_port.is_some()
+    }
+
+    /// This owner, saying whether the daemon accepts the owner key at its owner endpoint.
     pub fn with_owner_key(self, takes: bool) -> Self {
         Self {
             takes_owner_key: takes,

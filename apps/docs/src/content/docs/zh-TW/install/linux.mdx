@@ -66,7 +66,7 @@ import { commands, downloads, productName } from "../../../../commands.ts";
 
 <Code code={commands.linger} lang="sh" />
 
-預設連接埠為 <code dir="ltr">{commands.defaultPort}</code>。要改用其他連接埠，請在服務指令或 <code dir="ltr">{commands.start}</code> 的結尾加上 <code dir="ltr">{commands.portOption}</code>。
+octoboardd 會自行選用自己的連接埠，你不需要知道它：<code dir="ltr">{commands.address}</code> 印出的網址與 <code dir="ltr">ssh</code> 指令使用的連接埠是 <code dir="ltr">{commands.defaultPort}</code>，每次都相同。
 
 ## 升級
 

@@ -23,10 +23,10 @@ scripts, the checks, the dependencies and the single sources of configuration ar
   `lucide/lucide-aria-hidden` rule from `scripts/eslint/`, applied to `packages/ui/**/*.{ts,tsx}`; `pnpm format` runs it
   with `--fix --fix-type layout` and `cargo fmt`.
 - `config/app.json` — the single source for product identity, repository and issue-report destinations, author and
-  support contacts, website address, the default server port (`defaultServerPort`), license and copyright year. Read by
+  support contacts, website address, the default browser port (`defaultBrowserPort`), license and copyright year. Read by
   the UI (`packages/ui/src/appConfig.ts`), the website (`apps/web/nuxt.config.ts`, `apps/web/seo/downloads.ts`), the documentation site (`apps/docs/site.config.ts`, `apps/docs/src/commands.ts`) and both
-  Cargo crates' `build.rs` (the daemon's turns the port into `octoboardd start`'s default); the website's
-  `install-script.test.ts` pins the install script's and the example systemd unit's port to it; copies the toolchain
+  Cargo crates' `build.rs` (the daemon's turns the port into the browser port's default); the website's
+  `install-script.test.ts` holds the install script and the example systemd unit to naming no port of their own; copies the toolchain
   requires elsewhere are checked against it (the UI's `appConfig.test.ts`, the build scripts). `pnpm identity:sync`
   regenerates the tracked `LICENSE` copyright line and `Cargo.toml` workspace authors from it (when to run it:
   `docs/conventions/tooling.md`, "Dependencies and single sources of configuration"); builds and installation do not

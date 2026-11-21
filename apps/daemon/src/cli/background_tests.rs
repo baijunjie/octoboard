@@ -226,6 +226,22 @@ impl StandIn {
         stand_in
     }
 
+    /// [`StandIn::start_now`] for one that records `port` as the port it listens on and that it
+    /// follows the desktop application where `application`, and returns once it has recorded
+    /// itself.
+    pub(super) fn start_listening_on(home: &Path, port: u16, application: bool) -> Self {
+        let mut stand_in = Self::spawn(home, |command| {
+            command
+                .env(RECORD_AFTER, "0")
+                .env(RECORD_PORT, port.to_string());
+            if application {
+                command.env(RECORD_APPLICATION, "1");
+            }
+        });
+        stand_in.await_line("recorded");
+        stand_in
+    }
+
     /// [`StandIn::start`] for one that records the daemon `after` as its predecessor.
     pub(super) fn start_after(home: &Path, record_after: Duration, after: Predecessor) -> Self {
         Self::spawn(home, |command| {
@@ -389,7 +405,7 @@ impl Drop for Renewal {
 fn stop_waits_for_a_daemon_that_holds_the_lock_to_record_itself_and_stops_it() {
     let home = ScratchDir::new("stop-unrecorded");
     let mut stand_in = StandIn::start(&home, HALF_WAY);
-    let (code, stdout, stderr) = finished(command(&home, "stop"));
+    let (code, stdout, stderr) = finished(command(&home, "stop --force"));
     assert_eq!(code, 0, "{stdout}{stderr}");
     assert_eq!(
         said(&stdout),
@@ -413,7 +429,7 @@ fn stop_waits_through_the_free_lock_of_a_handover_for_the_successor_and_stops_it
         .unwrap()
         .with_service_manager(false);
     handing_over.note_handover_in(&data).unwrap();
-    let stop = command(&home, "stop");
+    let stop = command(&home, "stop --force");
     // The CLI only reports when it returns; it does not publish its handover wait.
     std::thread::sleep(HALF_WAY);
     let mut stand_in = StandIn::start_after(
@@ -480,7 +496,7 @@ fn stop_leaves_a_daemon_that_records_another_predecessor_running() {
                 .with_service_manager(false)
         };
         noted.note_handover_in(&data).unwrap();
-        let mut stop = command(&home, "stop");
+        let mut stop = command(&home, "stop --force");
         // The daemon that handed over runs, with its note, while `stop` looks, and the other daemon
         // takes the lock and records itself only once `stop` has been seen waiting.
         // The CLI only reports when it returns; it does not publish its handover wait.
@@ -533,7 +549,7 @@ fn stop_leaves_a_daemon_that_is_not_the_service_managed_successor_running() {
     let mut stand_in = StandIn::start_held(&home);
     exited.note_handover_in(&data).unwrap();
     let renewal = Renewal::start(exited, data);
-    let mut stop = command(&home, "stop");
+    let mut stop = command(&home, "stop --force");
     // The CLI only reports when it returns; it does not publish its handover wait.
     std::thread::sleep(HALF_WAY);
     assert!(
@@ -1120,12 +1136,12 @@ fn connection_names_the_entry_after_the_machine_unless_that_is_the_host() {
     assert!(details_line(&stdout).contains("name="), "{stdout}");
 }
 
-/// `address` for the desktop application's daemon prints the browser address at the fixed forward
-/// port, not at the port the system assigned the daemon, while remote access is on; with it off it
+/// `address` for the desktop application's daemon prints the browser address at the browser port,
+/// not at the port the system assigned the daemon, while browser access is on; with it off it
 /// prints none, says which setting turns it on and exits 1, and `--rotate` replaces the key for
 /// later and exits 0.
 #[tokio::test(flavor = "multi_thread")]
-async fn address_for_the_application_daemon_follows_remote_access() {
+async fn address_for_the_application_daemon_follows_browser_access() {
     let home = ScratchDir::new("address-application-on");
     let _served = serve_endpoint(&home, crate::browser::key_check_router());
     let home_path = home.to_path_buf();
@@ -1154,7 +1170,7 @@ async fn address_for_the_application_daemon_follows_remote_access() {
         .lines()
         .find(|line| line.starts_with("http://"))
         .expect("an address");
-    let fixed = crate::coordinator::remote_access::FORWARD_PORT;
+    let fixed = crate::coordinator::remote_access::DEFAULT_BROWSER_PORT;
     assert_eq!(line, format!("http://127.0.0.1:{fixed}/?key={OWNER_KEY}"));
 
     let (code, stdout, stderr) = off;
@@ -1163,7 +1179,7 @@ async fn address_for_the_application_daemon_follows_remote_access() {
         !stdout.lines().any(|line| line.starts_with("http://")),
         "{stdout}"
     );
-    assert!(stderr.contains("Allow remote access"), "{stderr}");
+    assert!(stderr.contains("Allow browser access"), "{stderr}");
 
     let (kept, (code, stdout, stderr)) = rotated;
     assert_eq!(

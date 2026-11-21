@@ -18,11 +18,11 @@ Jika sedikit jeda input dan gambar yang buram tidak masalah bagi Anda, Anda tida
 | --- | --- | --- | --- |
 | Dipakai dari | Aplikasi desktop atau browser | Hanya browser | Hanya browser |
 | Host yang didukung | Server Linux, Mac, PC Windows | Server Linux, Mac, PC Windows | Hanya Mac atau PC Windows |
-| Di host Anda aktifkan atau instal | Login SSH (Login Jarak Jauh di Mac, OpenSSH Server di Windows; server Linux sudah memilikinya) | Tailscale; host Mac atau Linux juga memerlukan socat | UU Remote; host Mac juga memerlukan socat |
+| Di host Anda aktifkan atau instal | Login SSH (Login Jarak Jauh di Mac, OpenSSH Server di Windows; server Linux sudah memilikinya) | Tailscale | UU Remote |
 | Di komputer Anda sendiri Anda instal | Tidak ada tambahan | Tailscale; juga socat di komputer Mac atau Linux | UU Remote (Mac atau Windows) |
 | Lalu lintas data melewati | Koneksi langsung, tanpa pihak ketiga | Jaringan Tailscale, dengan akun Anda | Layanan NetEase UU Remote, dengan akun Anda |
 | Berfungsi saat tidak berada di jaringan yang sama | Hanya jika host dapat dijangkau: di jaringan yang sama, di alamat publik, atau lewat VPN | Ya | Ya |
-| Paling cocok untuk | Server; aplikasi desktop lengkap; host Mac dan Linux yang juga dipakai orang lain untuk login | Menjangkau mesin Anda sendiri dari mana saja tanpa SSH | Pengguna di Tiongkok daratan yang sudah memakai UU Remote |
+| Paling cocok untuk | Server; aplikasi desktop lengkap; host Linux yang juga dipakai orang lain untuk login, dan host Mac atau Windows yang Anda pakai dari aplikasi desktop | Menjangkau mesin Anda sendiri dari mana saja tanpa SSH | Pengguna di Tiongkok daratan yang sudah memakai UU Remote |
 
 ## Sebelum memilih relay
 
@@ -33,7 +33,7 @@ Panduan Tailscale dan UU Remote belum diuji sepenuhnya di antara dua perangkat. 
 </Aside>
 
 <Aside type="caution" title="Hanya di komputer yang tidak dipakai login orang lain">
-Dengan relay, akun pengguna lain di host atau di komputer Anda sendiri dapat menangkap kunci browser. Pakai Tailscale atau UU Remote hanya di komputer yang hanya Anda yang login. [Terhubung melalui SSH](../remote-connections/) tidak memiliki kelemahan ini di host Mac atau Linux, dan komputer Anda sendiri juga tidak memilikinya saat memakai aplikasi desktop. Di browser, komputer Anda tetap memilikinya, karena penerusan SSH di sana juga mendengarkan di port <code dir="ltr">127.0.0.1</code>.
+Dengan relay, akun pengguna lain di host atau di komputer Anda sendiri dapat menangkap kunci browser. Pakai Tailscale atau UU Remote hanya di komputer yang hanya Anda yang login. [Terhubung melalui SSH](../remote-connections/) tidak memiliki kelemahan ini di host Linux dengan akses browser nonaktif, maupun di host Mac atau Windows yang dipakai dari aplikasi desktop, dan komputer Anda sendiri juga tidak memilikinya saat memakai aplikasi desktop. Di browser, komputer Anda tetap memilikinya, karena penerusan SSH di sana juga mendengarkan di port <code dir="ltr">127.0.0.1</code>.
 </Aside>
 
 ## Selanjutnya

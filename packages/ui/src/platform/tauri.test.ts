@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { afterQueuedWork } from "../test/clock";
 import { MAC_HOST, WINDOWS_HOST } from "../test/hosts";
+import { CommandLineError } from "./commandLineError";
 import { ConfigurationFileError } from "./configurationFileError";
 import { browserHost } from "./host";
 import { tauriPlatform } from "./tauri";
@@ -99,6 +100,50 @@ describe("the host facts", () => {
     expect(windows.translucentWindow).toBe(false);
     expect([windows.appMenu, windows.badge, windows.notifications?.openSystemSettings].map((capability) => capability !== undefined)).toEqual([false, false, true]);
     expect([windows.statusItem, windows.backgroundRun, windows.updater].map((capability) => capability !== undefined)).toEqual([true, true, true]);
+  });
+});
+
+describe("the command-line tool", () => {
+  const STATE = { state: "installed", path: "/usr/local/bin/octoboardd", pathNote: false };
+
+  it("is a capability only where the host facts say the application offers it", () => {
+    expect(tauriPlatform().commandLine).toBeDefined();
+    reportHost(WINDOWS_HOST);
+    expect(tauriPlatform().commandLine).toBeUndefined();
+    reportHost({ ...MAC_HOST, commandLine: false });
+    expect(tauriPlatform().commandLine).toBeUndefined();
+  });
+
+  it("asks the shell for the state, the install and the removal, and hands back what the shell answers", async () => {
+    invoke.mockResolvedValue(STATE);
+    const { commandLine } = tauriPlatform();
+    await expect(commandLine!.status()).resolves.toEqual(STATE);
+    await expect(commandLine!.install()).resolves.toEqual(STATE);
+    await expect(commandLine!.remove()).resolves.toEqual(STATE);
+    expect(invoke.mock.calls).toEqual([["command_line_status"], ["command_line_install"], ["command_line_remove"]]);
+  });
+
+  it.each([
+    { shell: { code: "not_a_link", path: "/usr/local/bin/octoboardd", detail: "is a directory" }, code: "not_a_link", path: "/usr/local/bin/octoboardd", detail: "is a directory" },
+    { shell: { code: "refused", path: null, detail: "User canceled" }, code: "refused", path: null, detail: "User canceled" },
+    { shell: { code: "from_a_newer_shell", detail: "new" }, code: "failed", path: null, detail: "new" },
+    { shell: "an older shell's text", code: "failed", path: null, detail: "an older shell's text" },
+  ])("tells an install the shell refused by its code: $shell", async ({ shell, code, path, detail }) => {
+    invoke.mockRejectedValue(shell);
+    const { commandLine } = tauriPlatform();
+    for (const method of ["install", "remove"] as const) {
+      const error = await commandLine![method]().catch((err: unknown) => err);
+      expect(error).toBeInstanceOf(CommandLineError);
+      expect(error).toMatchObject({ code, path, detail });
+    }
+  });
+
+  it("falls back to the browser's host facts when the shell reports facts without the command-line one", () => {
+    const { commandLine: _, ...old } = MAC_HOST;
+    for (const facts of [old, { ...MAC_HOST, commandLine: "yes" }]) {
+      reportHost(facts);
+      expect(tauriPlatform().host).toEqual(browserHost());
+    }
   });
 });
 

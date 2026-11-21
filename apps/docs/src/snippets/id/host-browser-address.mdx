@@ -1,12 +1,11 @@
 import { productName } from "../../commands.ts";
 
-{/* The host's steps both relay guides share: turning on remote access and copying the browser address. Pass
-`windows` on a Windows host, which also needs the browser port. */}
+{/* The host's steps both browser guides share: turning on browser access and copying the local address. */}
 
-Di {productName}, buka <strong>Pengaturan › Akses jarak jauh</strong>, aktifkan <strong>Izinkan akses jarak jauh</strong>, lalu pilih <strong>Izinkan</strong> untuk mengonfirmasi. Dua tab kemudian muncul di bawah sakelar. Di tab <strong>Browser</strong>, pilih <strong>Salin alamat</strong> di bawah <strong>Langkah 2: alamat browser</strong>.{props.windows ? <> Catat juga angka di bawah <strong>Port browser</strong>.</> : null}
+Di {productName}, buka <strong>Pengaturan › Akses</strong>. Aktifkan <strong>Izinkan akses browser</strong>, lalu pilih <strong>Izinkan</strong> untuk mengonfirmasi. Di bawah <strong>Browser di komputer ini</strong>, pilih <strong>Salin alamat lokal</strong>. Catat juga angka di bawah <strong>Port browser</strong>.
 
 Kirim alamat itu ke komputer lain dengan cara yang hanya bisa Anda baca, misalnya catatan untuk diri sendiri: alamat ini berfungsi seperti kata sandi.
 
 Lewati <strong>Langkah 1: penerusan SSH</strong>. Pengaturan aplikasi menyebut SSH di beberapa tempat; Anda bisa mengabaikannya di sini, karena panduan ini hanya memakai alamat browser.
 
-Biarkan {productName} tetap berjalan: jika Anda menutupnya, akses jarak jauh berhenti.
+Biarkan {productName} tetap berjalan: jika Anda menutupnya, akses browser berhenti.

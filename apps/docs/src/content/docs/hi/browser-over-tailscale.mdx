@@ -15,7 +15,7 @@ import HostBrowserAddress from "../../../snippets/hi/host-browser-address.mdx";
 इन चरणों को अभी पूरी तरह टेस्ट नहीं किया गया है। ये Tailscale Serve के दस्तावेज़ों और {productName} की अपनी जाँचों पर आधारित हैं। रिले प्रोग्राम एक ही कंप्यूटर पर आज़माए गए थे, ब्राउज़र के लाइव कनेक्शन समेत; दो डिवाइसों के बीच Tailscale Serve और Windows का फ़ॉरवर्ड अभी आज़माए नहीं गए हैं।
 </Aside>
 
-<strong>आपके कंप्यूटर का ब्राउज़र</strong> → <strong>आपके कंप्यूटर पर रिले (127.0.0.1)</strong> ⟷ Tailscale ⟷ <strong>होस्ट पर रिले (127.0.0.1)</strong> → <strong>{productName}</strong>
+<strong>आपके कंप्यूटर का ब्राउज़र</strong> → <strong>आपके कंप्यूटर पर रिले (127.0.0.1)</strong> ⟷ Tailscale ⟷ <strong>होस्ट पर ब्राउज़र पोर्ट (127.0.0.1)</strong> → <strong>{productName}</strong>
 
 <details>
 <summary>पहली बार है?</summary>
@@ -32,21 +32,21 @@ import HostBrowserAddress from "../../../snippets/hi/host-browser-address.mdx";
 
 ## ये अतिरिक्त चरण क्यों
 
-सुरक्षा के लिए, {productName} सिर्फ़ उसी ब्राउज़र को स्वीकार करता है जो उसे <code dir="ltr">{tunnel.loopback}</code> पर खोलता है, यानी ऐसे पते पर जिसका मतलब हमेशा “यही कंप्यूटर” होता है (इसे लूपबैक भी कहते हैं)। इसलिए आप होस्ट का Tailscale पता सीधे ब्राउज़र में टाइप नहीं कर सकते। इसके बजाय, आप हर कंप्यूटर पर एक छोटा रिले प्रोग्राम चलाते हैं: आपके कंप्यूटर पर वह होस्ट को <code dir="ltr">{tunnel.loopback}</code> पर लोकल जैसा दिखाता है; होस्ट पर वह कनेक्शन {productName} को सौंप देता है। दोनों के बीच का ट्रैफ़िक Tailscale ले जाता है।
+सुरक्षा के लिए, {productName} सिर्फ़ उसी ब्राउज़र को स्वीकार करता है जो उसे <code dir="ltr">{tunnel.loopback}</code> पर खोलता है, यानी ऐसे पते पर जिसका मतलब हमेशा “यही कंप्यूटर” होता है (इसे लूपबैक भी कहते हैं)। इसलिए आप होस्ट का Tailscale पता सीधे ब्राउज़र में टाइप नहीं कर सकते। इसके बजाय, आपके कंप्यूटर पर एक रिले या फ़ॉरवर्ड होस्ट को <code dir="ltr">{tunnel.loopback}</code> पर लोकल जैसा दिखाता है, और दोनों के बीच का ट्रैफ़िक Tailscale ले जाता है। होस्ट पर {productName} खुद लूपबैक पोर्ट पर सुनता है, इसलिए वहाँ कुछ चलाना नहीं पड़ता।
 
 ## शुरू करने से पहले
 
 - <strong>दोनों कंप्यूटरों पर Tailscale,</strong> एक ही tailnet में साइन इन किया हुआ। ऐसा tailnet इस्तेमाल करें जिसमें सिर्फ़ आपके अपने डिवाइस हों: वह जिस भी डिवाइस को होस्ट तक पहुँचने देता है, वह आपके शेयर किए पोर्ट तक पहुँच सकता है।
-- <strong>हर उस कंप्यूटर पर socat जो Mac है या Linux चलाता है।</strong> Windows कंप्यूटर को इसकी ज़रूरत नहीं है।
+- <strong>ब्राउज़ करने वाले हर Mac या Linux कंप्यूटर पर socat।</strong> होस्ट को इसकी कभी ज़रूरत नहीं होती, और ब्राउज़ करने वाले Windows कंप्यूटर को भी नहीं।
 
-  <Tabs syncKey="host">
+  <Tabs>
   <TabItem label="macOS">
   अगर [Homebrew](https://brew.sh/) नहीं है तो पहले उसे इंस्टॉल करें (macOS में यह काम कर सकने वाला कोई टूल नहीं आता), फिर Terminal में यह चलाएँ:
 
   <Code code={tunnel.installSocatMac} lang="sh" />
   </TabItem>
   <TabItem label="Windows">
-  कुछ इंस्टॉल करने की ज़रूरत नहीं: Windows होस्ट पहले से ही ब्राउज़र को <code dir="ltr">{tunnel.loopback}</code> के एक पोर्ट पर परोसता है, और जिस Windows कंप्यूटर से आप ब्राउज़ करते हैं वह इसके बजाय एक बिल्ट-इन कमांड इस्तेमाल करता है।
+  कुछ इंस्टॉल करने की ज़रूरत नहीं: जिस Windows कंप्यूटर से आप ब्राउज़ करते हैं वह इसके बजाय एक बिल्ट-इन कमांड इस्तेमाल करता है।
   </TabItem>
   <TabItem label="Linux">
   <Code code={tunnel.installSocatLinux} lang="sh" />
@@ -54,7 +54,7 @@ import HostBrowserAddress from "../../../snippets/hi/host-browser-address.mdx";
   अगर आपका डिस्ट्रिब्यूशन <code dir="ltr">apt</code> नहीं है, तो उसके पैकेज मैनेजर (<code dir="ltr">dnf</code>, <code dir="ltr">pacman</code> वगैरह) का इस्तेमाल करें।
   </TabItem>
   </Tabs>
-- <strong>काम करते समय दो या तीन विंडो खुली रखें:</strong> होस्ट पर रिले और Tailscale Serve (Windows पर रिले को छोड़कर), और आपके कंप्यूटर पर रिले (Windows को छोड़कर)।
+- <strong>काम करते समय दो तक विंडो खुली रखें:</strong> होस्ट पर Tailscale Serve, और आपके कंप्यूटर पर रिले (Windows को छोड़कर)।
 
 ## होस्ट पर
 
@@ -67,42 +67,38 @@ import HostBrowserAddress from "../../../snippets/hi/host-browser-address.mdx";
    <HostBrowserAddress />
    </TabItem>
    <TabItem label="Windows">
-   <HostBrowserAddress windows />
+   <HostBrowserAddress />
    </TabItem>
    <TabItem label="Linux">
-   इसे उसी यूज़र के रूप में चलाएँ जिसके रूप में octoboardd चलता है, और जो पता यह दिखाए उसे कॉपी करें, जो <code dir="ltr">{tunnel.addressStart}</code> से शुरू होता है। इसके बाद जो SSH कमांड यह दिखाता है, उसे अनदेखा करें।
+   इन दोनों कमांड को उसी यूज़र के रूप में चलाएँ जिसके रूप में octoboardd चलता है। पहली कमांड ब्राउज़र पोर्ट खोलती है, सिर्फ़ <code dir="ltr">127.0.0.1</code> पर (<code dir="ltr">--port</code> और एक संख्या जोड़कर दूसरा पोर्ट चुनें); दूसरी पता प्रिंट करती है। प्रिंट हुआ पता कॉपी करें, जो <code dir="ltr">{tunnel.addressStart}</code> से शुरू होता है, और उसके बाद छपी SSH कमांड को अनदेखा करें।
+
+   <Code code={commands.browserOn} lang="sh" />
 
    <Code code={commands.address} lang="sh" />
    </TabItem>
    </Tabs>
-2. होस्ट पर रिले शुरू करें, जो होस्ट के <code dir="ltr">{tunnel.loopback}</code> के एक पोर्ट को {productName} से जोड़ता है। नीचे के चरणों में यही पोर्ट <strong>होस्ट पोर्ट</strong> है।
+2. वह पोर्ट नोट करें जिस पर {productName} होस्ट के <code dir="ltr">{tunnel.loopback}</code> पर सुनता है। नीचे के चरणों में यही <strong>होस्ट पोर्ट</strong> है।
 
    <Tabs syncKey="host">
    <TabItem label="macOS">
-   इसे Terminal में चलाएँ और विंडो खुली रहने दें। यह सिर्फ़ <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> पर सुनता है।
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   होस्ट पोर्ट <code dir="ltr">{tunnel.bridgePort}</code> है।
+   कुछ चलाने की ज़रूरत नहीं: {productName} खुद ब्राउज़र पोर्ट पर सुनता है, सिर्फ़ <code dir="ltr">127.0.0.1</code> पर। होस्ट पोर्ट <strong>ब्राउज़र पोर्ट</strong> है (जब तक आपने न बदला हो, {commands.defaultPort})।
    </TabItem>
    <TabItem label="Windows">
    कुछ चलाने की ज़रूरत नहीं: {productName} खुद ब्राउज़र पोर्ट पर सुनता है, सिर्फ़ <code dir="ltr">127.0.0.1</code> पर। होस्ट पोर्ट <strong>ब्राउज़र पोर्ट</strong> है (जब तक आपने न बदला हो, {commands.defaultPort})।
    </TabItem>
    <TabItem label="Linux">
-   इसे उसी यूज़र के रूप में, किसी ऐसे टर्मिनल या <code dir="ltr">tmux</code> सेशन में चलाएँ जो खुला रहे। यह सिर्फ़ <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> पर सुनता है।
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   होस्ट पोर्ट <code dir="ltr">{tunnel.bridgePort}</code> है।
+   और कुछ चलाने की ज़रूरत नहीं: octoboardd खुद ब्राउज़र पोर्ट पर सुनता है, सिर्फ़ <code dir="ltr">127.0.0.1</code> पर। होस्ट पोर्ट <code dir="ltr">{commands.defaultPort}</code> है, या वह संख्या जो आपने <code dir="ltr">--port</code> से दी।
    </TabItem>
    </Tabs>
 3. Tailscale Serve से होस्ट पोर्ट को अपने tailnet के साथ शेयर करें, और विंडो खुली रहने दें। Tailscale Funnel कभी इस्तेमाल न करें, क्योंकि वह इसे सार्वजनिक इंटरनेट पर रख देगा।
 
    <Tabs syncKey="host">
    <TabItem label="macOS">
-   <Code code={tunnel.serveBridge} lang="sh" />
+   <Code code={tunnel.serveBrowserPort} lang="sh" />
 
    App Store के Tailscale ऐप के साथ, कमांड को <code dir="ltr">tailscale</code> की जगह <code dir="ltr">{tunnel.macCli}</code> के रूप में चलाएँ। स्टैंडअलोन ऐप के साथ, पहले उसकी सेटिंग्स में CLI integration के नीचे से कमांड इंस्टॉल करें।
+
+   अगर आपने <strong>ब्राउज़र पोर्ट</strong> बदला है, तो अपना पोर्ट इस्तेमाल करें।
    </TabItem>
    <TabItem label="Windows">
    PowerShell या Command Prompt में:
@@ -112,7 +108,7 @@ import HostBrowserAddress from "../../../snippets/hi/host-browser-address.mdx";
    अगर आपने <strong>ब्राउज़र पोर्ट</strong> बदला है, तो अपना पोर्ट इस्तेमाल करें।
    </TabItem>
    <TabItem label="Linux">
-   <Code code={tunnel.serveBridge} lang="sh" />
+   <Code code={tunnel.serveBrowserPort} lang="sh" />
 
    अगर Tailscale कहे कि आपके पास अनुमति नहीं है, तो <code dir="ltr">{tunnel.linuxOperator}</code> से अपने यूज़र को उसे मैनेज करने दें (एक बार), या कमांड को <code dir="ltr">sudo</code> के साथ चलाएँ।
    </TabItem>
@@ -157,23 +153,24 @@ import HostBrowserAddress from "../../../snippets/hi/host-browser-address.mdx";
 
 ## अगर यह काम न करे
 
-- <strong>पेज लोड नहीं होता:</strong> कोई विंडो बंद हो गई थी, या उसकी कमांड रुक गई। जाँचें कि रिले और Tailscale Serve अब भी चल रहे हैं, और होस्ट पर <code dir="ltr">{tunnel.serveStatus}</code> की सूची में होस्ट पोर्ट दिखता है।
+- <strong>पेज लोड नहीं होता:</strong> कोई विंडो बंद हो गई या उसकी कमांड रुक गई। जाँचें कि आपके कंप्यूटर का रिले और Tailscale Serve अब भी चल रहे हैं, और होस्ट पर <code dir="ltr">{tunnel.serveStatus}</code> होस्ट पोर्ट दिखाता है।
 - <strong>socat “Address already in use” कहता है:</strong> उस कंप्यूटर पर वह पोर्ट पहले से लिया हुआ है। कोई दूसरा पोर्ट चुनें; अपने कंप्यूटर पर उसे ब्राउज़र पते में भी बदलें।
 - <strong>पेज रिफ़्यूज़ हो जाता है या खाली रहता है:</strong> जाँचें कि आपने पता <code dir="ltr">{tunnel.loopback}</code> पर खोला है, होस्ट के Tailscale नाम या <code dir="ltr">100.x.y.z</code> पते पर नहीं।
-- <strong>पेज खोलने पर होस्ट का रिले “Connection refused” या “No such file or directory” दिखाता है:</strong> <strong>रिमोट एक्सेस की अनुमति दें</strong> बंद है, या होस्ट पर {productName} नहीं चल रहा (Linux पर, octoboardd नहीं चल रहा)।
+- <strong>पेज खोलने पर आपके कंप्यूटर का रिले “Connection refused” छापता है, या पेज रिफ़्यूज़ हो जाता है:</strong> <strong>ब्राउज़र एक्सेस की अनुमति दें</strong> बंद है, कोई दूसरा प्रोग्राम ब्राउज़र पोर्ट लिए हुए है (सेटिंग्स यह बताती हैं), या होस्ट पर {productName} नहीं चल रहा (Linux पर octoboardd नहीं चल रहा, या <code dir="ltr">{commands.browserOn}</code> नहीं चलाई गई)।
 
 ## इसे बंद करें
 
 - <strong>जिस कंप्यूटर से आपने ब्राउज़ किया उस पर:</strong> socat को <kbd>Ctrl</kbd>+<kbd>C</kbd> से रोकें, या Windows पर एडमिनिस्ट्रेटर के रूप में चलाए गए PowerShell में फ़ॉरवर्ड हटाएँ:
 
   <Code code={tunnel.visitorForwardWindowsOff} lang="powershell" />
-- <strong>होस्ट पर:</strong> Tailscale Serve कमांड और socat को <kbd>Ctrl</kbd>+<kbd>C</kbd> से रोकें। <code dir="ltr">{tunnel.serveStatus}</code> से जाँचें कि अब कुछ शेयर नहीं हो रहा; अगर पोर्ट अब भी सूची में है, तो उसे <code dir="ltr">{tunnel.serveBridgeOff}</code> से हटाएँ (Windows पर <code dir="ltr">{tunnel.serveBrowserPortOff}</code>)।
-- <strong>Mac या Windows होस्ट पर,</strong> जब ज़रूरत न रहे तो <strong>रिमोट एक्सेस की अनुमति दें</strong> बंद कर दें। इससे ब्राउज़र का प्रवेश बंद हो जाता है और उस कुंजी से खोला गया हर पेज डिस्कनेक्ट हो जाता है।
-- <strong>अगर पता लीक हो गया हो,</strong> तो <strong>ब्राउज़र</strong> टैब पर <strong>कुंजी बदलें</strong> से उसे नई कुंजी दें, या Linux पर <code dir="ltr">{tunnel.rotate}</code> से। पुराने पते से खुले पेज डिस्कनेक्ट हो जाते हैं।
+- <strong>होस्ट पर:</strong> Tailscale Serve कमांड को <kbd>Ctrl</kbd>+<kbd>C</kbd> से रोकें। <code dir="ltr">{tunnel.serveStatus}</code> से जाँचें कि अब कुछ शेयर नहीं हो रहा; अगर पोर्ट अब भी सूची में है, तो उसे <code dir="ltr">{tunnel.serveBrowserPortOff}</code> से हटाएँ।
+- <strong>Mac या Windows होस्ट पर,</strong> जब ज़रूरत न रहे तो <strong>ब्राउज़र एक्सेस की अनुमति दें</strong> बंद कर दें। इससे ब्राउज़र पोर्ट बंद हो जाता है और उस कुंजी से खोला गया हर पेज डिस्कनेक्ट हो जाता है।
+- <strong>Linux होस्ट पर,</strong> ज़रूरत न रहने पर <code dir="ltr">{commands.browserOff}</code> चलाएँ। इससे ब्राउज़र पोर्ट बंद हो जाता है और उस कुंजी से खुले सभी पेज डिस्कनेक्ट हो जाते हैं।
+- <strong>अगर पता लीक हो गया हो,</strong> तो <strong>सेटिंग्स › एक्सेस</strong> में <strong>कुंजी बदलें</strong> से उसे नई कुंजी दें, या Linux पर <code dir="ltr">{tunnel.rotate}</code> से। पुराने पते से खुले पेज डिस्कनेक्ट हो जाते हैं।
 
 ## सुरक्षा
 
 - <strong>पता ही पासवर्ड है:</strong> इसकी कुंजी होस्ट पर {productName} का पूरा नियंत्रण देती है, किसी भी कमांड को चलाना भी। यह तब तक रहती है जब तक आप उसे बदल न दें। यह ब्राउज़र की हिस्ट्री और बुकमार्क में रह जाती है, और ब्राउज़र सिंक चालू होने पर आपके दूसरे डिवाइसों में भी सिंक हो जाती है।
-- <strong>कौन पहुँच सकता है:</strong> कोई भी जो होस्ट पोर्ट तक पहुँचे और जिसके पास कुंजी हो। रिले सिर्फ़ <code dir="ltr">127.0.0.1</code> पर सुनते हैं, इसलिए होस्ट के या आपके लोकल नेटवर्क के दूसरे डिवाइस उन तक नहीं पहुँच सकते; Tailscale Serve होस्ट पोर्ट को सिर्फ़ आपके tailnet से पहुँचने लायक बनाता है, उसके एक्सेस नियमों की सीमा तक।
-- <strong>सिर्फ़ ऐसे कंप्यूटरों पर जिन पर कोई और साइन इन नहीं करता:</strong> होस्ट या आपके कंप्यूटर पर कोई दूसरा यूज़र अकाउंट इन <code dir="ltr">127.0.0.1</code> पोर्ट से जुड़ सकता है, और जब कोई रिले नहीं चल रहा होता तब वह उसका पोर्ट ले सकता है और आपका ब्राउज़र दोबारा कनेक्ट होने पर कुंजी पा सकता है। [SSH से कनेक्ट करने](../remote-connections/) पर Mac या Linux होस्ट पर यह कमज़ोरी नहीं होती, और डेस्कटॉप ऐप इस्तेमाल करने पर आपके अपने कंप्यूटर पर भी नहीं होती। लेकिन ब्राउज़र में आपके कंप्यूटर पर यह कमज़ोरी अब भी रहती है, क्योंकि वहाँ SSH फ़ॉरवर्ड भी <code dir="ltr">127.0.0.1</code> पोर्ट पर सुनता है।
+- <strong>कौन पहुँच सकता है:</strong> कोई भी जो होस्ट पोर्ट तक पहुँचे और जिसके पास कुंजी हो। ब्राउज़र पोर्ट और रिले सिर्फ़ <code dir="ltr">127.0.0.1</code> पर सुनते हैं, इसलिए होस्ट के या आपके लोकल नेटवर्क के दूसरे डिवाइस उन तक नहीं पहुँच सकते; Tailscale Serve होस्ट पोर्ट को सिर्फ़ आपके tailnet से पहुँचने लायक बनाता है, उसके एक्सेस नियमों की सीमा तक।
+- <strong>सिर्फ़ ऐसे कंप्यूटरों पर जिन पर कोई और साइन इन नहीं करता:</strong> होस्ट या आपके कंप्यूटर पर कोई दूसरा यूज़र अकाउंट इन <code dir="ltr">127.0.0.1</code> पोर्ट से जुड़ सकता है, और होस्ट का ब्राउज़र पोर्ट तब ले सकता है जब {productName} नहीं चल रहा या दोबारा शुरू हो रहा होता है, या आपके कंप्यूटर पर रिले का पोर्ट तब जब रिले नहीं चल रहा होता, और आपका ब्राउज़र दोबारा कनेक्ट होने पर कुंजी पा सकता है। [SSH से कनेक्ट करने](../remote-connections/) पर ब्राउज़र एक्सेस बंद होने पर Linux होस्ट पर, और डेस्कटॉप ऐप से इस्तेमाल करने पर Mac या Windows होस्ट पर यह कमज़ोरी नहीं होती, और डेस्कटॉप ऐप इस्तेमाल करने पर आपके अपने कंप्यूटर पर भी नहीं होती। लेकिन ब्राउज़र में आपके कंप्यूटर पर यह कमज़ोरी अब भी रहती है, क्योंकि वहाँ SSH फ़ॉरवर्ड भी <code dir="ltr">127.0.0.1</code> पोर्ट पर सुनता है।
 - <strong>कभी Funnel नहीं:</strong> Tailscale Funnel पोर्ट को पूरे इंटरनेट पर प्रकाशित कर देगा।

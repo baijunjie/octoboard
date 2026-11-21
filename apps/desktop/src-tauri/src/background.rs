@@ -11,8 +11,9 @@
 //! by a close, such as by clicking a system notification, brings it back too. With the switch off,
 //! the default, all three are an ordinary quit (`exit::request_quit_from_window`), confirmation
 //! included; and with no daemon left running there is nothing to keep in the background, so they
-//! quit at once whatever the switch says. A launch at login with the switch on starts in this
-//! state, the window never shown (`start_in_background`). What the platform adds to hiding and
+//! quit at once whatever the switch says. A launch at login with the switch on, and the command line's
+//! launch (`BACKGROUND_ARGUMENT`), start in this state, the window never shown
+//! (`start_in_background`). What the platform adds to hiding and
 //! showing the window (the Dock, fullscreen, activation on macOS) is in `lifecycle`.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -27,6 +28,28 @@ use crate::launch_at_login::take_login_launch;
 use crate::lifecycle::{before_show, hide_after_leaving_fullscreen, window_hidden};
 use crate::sidecar::daemon_stopped;
 use crate::MAIN_WINDOW_LABEL;
+
+/// The argument `octoboardd start` of the application's own copy launches the application with
+/// (`apps/daemon/src/platform/application/macos.rs` names it too): the application starts in the
+/// background, its window never shown, whatever the user's Settings choice.
+const BACKGROUND_ARGUMENT: &str = "--start-in-background";
+
+/// Whether this process was launched with [`BACKGROUND_ARGUMENT`], until the window is first
+/// revealed (`reveal_main_window`).
+static BACKGROUND_LAUNCH: AtomicBool = AtomicBool::new(false);
+
+/// Records whether `args`, the process's own, carry [`BACKGROUND_ARGUMENT`]. Called once, from
+/// `setup`.
+pub fn capture_background_launch<I, S>(args: I)
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let asked = args
+        .into_iter()
+        .any(|arg| arg.as_ref() == std::ffi::OsStr::new(BACKGROUND_ARGUMENT));
+    BACKGROUND_LAUNCH.store(asked, Ordering::SeqCst);
+}
 
 #[derive(Default)]
 pub struct BackgroundState {
@@ -287,8 +310,8 @@ pub fn safety_net_decision(
 /// What the main window's page asking to reveal it leads to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MainReveal {
-    /// The launch at login keeps the application in the background: the window stays hidden for
-    /// good (`start_in_background`).
+    /// The launch at login or the command line's launch keeps the application in the background:
+    /// the window stays hidden for good (`start_in_background`).
     StartInBackground,
     /// The window is held while the remote windows come back, which decide
     /// (`remote::begin_restore`).
@@ -298,11 +321,11 @@ pub enum MainReveal {
     Show,
 }
 
-/// The decision for a reveal of the main window, from whether this is the launch at login that
-/// keeps the application in the background, whether the window is held for the remote windows, and
+/// The decision for a reveal of the main window, from whether this is a launch (at login, or the
+/// command line's) that keeps the application in the background, whether the window is held for the remote windows, and
 /// whether it is meant to stay hidden.
-pub fn main_reveal(background_login: bool, held: bool, kept_hidden: bool) -> MainReveal {
-    if background_login {
+pub fn main_reveal(stays_in_background: bool, held: bool, kept_hidden: bool) -> MainReveal {
+    if stays_in_background {
         MainReveal::StartInBackground
     } else if held {
         MainReveal::Defer
@@ -313,14 +336,22 @@ pub fn main_reveal(background_login: bool, held: bool, kept_hidden: bool) -> Mai
     }
 }
 
-/// Whether this launch is one at login that keeps the application in the background, as
-/// `reveal_main_window` will find it; read before the window reveals.
-pub fn starts_in_background_at_login(app: &AppHandle) -> bool {
-    crate::launch_at_login::login_launch_pending()
-        && app
-            .state::<BackgroundState>()
-            .run_in_background
-            .load(Ordering::SeqCst)
+/// Whether this launch is one at login that keeps the application in the background, or the command
+/// line's launch (`BACKGROUND_ARGUMENT`), as `reveal_main_window` will find it; read before the
+/// window reveals.
+pub fn launch_stays_in_background(app: &AppHandle) -> bool {
+    background_launch_pending()
+        || (crate::launch_at_login::login_launch_pending()
+            && app
+                .state::<BackgroundState>()
+                .run_in_background
+                .load(Ordering::SeqCst))
+}
+
+/// Whether this process was launched with [`BACKGROUND_ARGUMENT`] and the window has not been
+/// revealed yet. Peeked at, not taken: the reveal still needs to find it.
+pub fn background_launch_pending() -> bool {
+    BACKGROUND_LAUNCH.load(Ordering::SeqCst)
 }
 
 /// Shows the window the shell created hidden, once the UI has painted it, except after a launch at
@@ -338,10 +369,13 @@ pub fn reveal_main_window(app: AppHandle, webview_window: WebviewWindow) -> Resu
     }
     let state = app.state::<BackgroundState>();
     let run_in_background = state.run_in_background.load(Ordering::SeqCst);
-    // Taken whatever follows: only the first reveal of a process can be the launch at login's.
-    let background_login = take_login_launch() && run_in_background;
+    // Both taken whatever follows: only the first reveal of a process can be a launch's. The
+    // command line's launch keeps the application in the background whatever the setting says.
+    let login = take_login_launch();
+    let background_launch = BACKGROUND_LAUNCH.swap(false, Ordering::SeqCst);
+    let stays_in_background = (login && run_in_background) || background_launch;
     match main_reveal(
-        background_login,
+        stays_in_background,
         crate::remote::holding_main(&app),
         state.main_kept_hidden.load(Ordering::SeqCst),
     ) {
@@ -403,6 +437,15 @@ mod tests {
 
     const MAIN: bool = true;
     const REMOTE: bool = false;
+
+    #[test]
+    fn the_background_argument_is_recognised_among_others() {
+        capture_background_launch(["octoboard", "--other"]);
+        assert!(!BACKGROUND_LAUNCH.load(Ordering::SeqCst));
+        capture_background_launch(["octoboard", BACKGROUND_ARGUMENT]);
+        assert!(BACKGROUND_LAUNCH.load(Ordering::SeqCst));
+        BACKGROUND_LAUNCH.store(false, Ordering::SeqCst);
+    }
 
     #[test]
     fn closing_the_main_window_while_a_remote_one_is_on_screen_only_hides_it() {
@@ -490,7 +533,7 @@ mod tests {
         assert_eq!(main_reveal(false, false, true), MainReveal::StayHidden);
         assert_eq!(main_reveal(false, true, false), MainReveal::Defer);
         assert_eq!(main_reveal(false, false, false), MainReveal::Show);
-        // The launch at login into the background decides first.
+        // A launch into the background decides first.
         assert_eq!(main_reveal(true, true, true), MainReveal::StartInBackground);
     }
 

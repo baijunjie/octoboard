@@ -123,6 +123,7 @@ export const REPLY_TYPES = {
   set_account_disabled: "ack",
   set_account_sharing: "ack",
   set_remote_access: "ack",
+  set_browser_access: "ack",
   rotate_owner_key: "ack",
   set_remote_access_port: "ack",
   get_project_source: "project_source",

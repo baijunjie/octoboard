@@ -2,6 +2,7 @@
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { booleanSetting } from "../configuration/booleanSettings";
+import { remoteAccessOf } from "../fixtures/builders";
 import { DEVELOPMENT_CHOICES } from "../git/gitWorkflow";
 import { translatorFor } from "../i18n/catalog";
 import type { PlatformAdapter } from "../platform";
@@ -34,7 +35,7 @@ const SECTION_LABELS: Record<SettingsSectionId, Parameters<typeof sectionMatches
   memory: "settings.section.memory",
   "trusted-folders": "settings.section.trustedFolders",
   permissions: "settings.section.permissions",
-  "remote-access": "settings.section.remoteAccess",
+  "remote-access": "settings.section.access",
   notifications: "settings.section.notifications",
   shortcuts: "settings.section.shortcuts",
   cleanup: "settings.section.cleanup",
@@ -119,6 +120,18 @@ describe("sectionMatches", () => {
       // Nor is it counted before the system has said what it is (the row is not on screen until then).
       const unread = { launchAtLogin: false, macosPermissions: false, macosPermissionsUnreadable: false };
       expect(find("general", "launch at login", context({ platform: DESKTOP, reads: unread })).ids.has("launch-at-login")).toBe(false);
+    });
+
+    it("counts the command-line row, and finds it by its name or its heading, only where the platform offers the tool", () => {
+      const commandLine = { status: async () => ({ state: "notInstalled" as const }), install: async () => ({ state: "notInstalled" as const }), remove: async () => ({ state: "notInstalled" as const }) };
+      const offered = context({ platform: { ...DESKTOP, commandLine } });
+      for (const query of ["command-line tool", "command line", "octoboardd"]) {
+        expect(find("general", query, offered).ids.has("command-line"), query).toBe(true);
+      }
+      expect([...find("general", "command line", offered).groups]).toContain("settings.general.group.commandLine");
+      for (const given of [context({ platform: DESKTOP }), context({ platform: BROWSER })]) {
+        expect(find("general", "command line", given).ids.has("command-line")).toBe(false);
+      }
     });
 
     describe("the macOS permissions", () => {
@@ -313,19 +326,20 @@ describe("which section each row is indexed under", () => {
     expect(SETTINGS_SEARCH_INDEX.appearance.every((entry) => entry.group === undefined)).toBe(true);
   });
 
-  it("lists the language, the startup, window, power and terminal rows and the sorting rows under General, and not the theme or the Markdown style", () => {
+  it("lists the language row and the sorting, terminal, power, window, startup and command-line rows under General, in the order the page shows them, and not the theme or the Markdown style", () => {
     expect(ids("general")).toEqual([
       "language",
-      "launch-at-login",
-      "resume_sessions_on_start",
-      "run-in-background",
-      "menu-bar-icon",
-      "keep_awake",
-      "keep_awake_when",
-      "auto_close_idle_shell_terminals",
       "session-order.sessions",
       "session-order.activeProjects",
       "session-order.inactiveProjects",
+      "auto_close_idle_shell_terminals",
+      "keep_awake",
+      "keep_awake_when",
+      "run-in-background",
+      "menu-bar-icon",
+      "launch-at-login",
+      "resume_sessions_on_start",
+      "command-line",
     ]);
   });
 
@@ -339,6 +353,65 @@ describe("which section each row is indexed under", () => {
 
   it("names the General section's groups by its own headings", () => {
     const groups = new Set(SETTINGS_SEARCH_INDEX.general.map((entry) => entry.group));
-    expect(groups).toEqual(new Set([undefined, "settings.general.group.startup", "settings.general.group.window", "settings.general.group.power", "settings.general.group.terminals", "settings.sort.group"]));
+    expect(groups).toEqual(new Set([undefined, "settings.general.group.startup", "settings.general.group.window", "settings.general.group.commandLine", "settings.general.group.power", "settings.general.group.terminals", "settings.sort.group"]));
+  });
+});
+
+describe("the Access section", () => {
+  const serving = remoteAccessOf({
+    allowed: true,
+    state: "serving",
+    browser_allowed: true,
+    browser_state: "serving",
+    browser_port: 3369,
+    address: "http://127.0.0.1:3369/?key=k",
+    forward_command: "ssh -N -L 127.0.0.1:3369:127.0.0.1:3369 u@<server>",
+    connection: { text: "octoboard+ssh://u@h", qr: ["1"] },
+  });
+  const idsOf = (query: string, remoteAccess = serving) => [...find("remote-access", query, context({ platform: DESKTOP, remoteAccess })).ids];
+  const shownIds = (remoteAccess: typeof serving) => SETTINGS_SEARCH_INDEX["remote-access"].filter((entry) => !entry.shown || entry.shown(context({ platform: DESKTOP, remoteAccess }))).map((entry) => entry.id);
+
+  it("finds the browser's rows, the app's rows and the steps in the one section, each row by its own words", () => {
+    expect(idsOf("browser port")).toEqual(expect.arrayContaining(["remote-access.browser-port"]));
+    expect(idsOf("allow browser access")).toContain("remote-access.browser-allow");
+    expect(idsOf("ssh forward")).toEqual(expect.arrayContaining(["remote-access.browser-forward", "remote-access.browser-port"]));
+    // Step 2 names the local address it points at.
+    expect(idsOf("local address")).toEqual(["remote-access.browser-local", "remote-access.browser-address"]);
+    expect(idsOf("allow remote access")).toContain("remote-access.allow");
+    expect(idsOf("connection details")).toEqual(["remote-access.connection"]);
+  });
+
+  it("finds a whole group by its heading", () => {
+    expect(idsOf("this computer's browser")).toEqual(expect.arrayContaining(["remote-access.browser-allow", "remote-access.browser-port", "remote-access.browser-local"]));
+    expect(idsOf("other computers")).toEqual(expect.arrayContaining(["remote-access.remote-login", "remote-access.allow", "remote-access.connection", "remote-access.browser-forward", "remote-access.browser-address"]));
+    expect(find("remote-access", "this computer's browser", context({ platform: DESKTOP, remoteAccess: serving })).groups).toContain("settings.remoteAccess.group.browser");
+  });
+
+  it("finds Rotate key, by the words that say the key is shared, under its own group", () => {
+    expect(idsOf("rotate key")).toEqual(["remote-access.rotate"]);
+    expect(idsOf("other computers' apps")).toEqual(["remote-access.rotate"]);
+    expect(find("remote-access", "key", context({ platform: DESKTOP, remoteAccess: serving })).groups).toContain("settings.remoteAccess.group.key");
+  });
+
+  it("lists the forward, the local address and step 2 only while the browser port serves, the line to turn browser access on only while it is off, the line about the closed port only while it failed, and Rotate key while either way in serves", () => {
+    const taken = remoteAccessOf({ ...serving, browser_state: "failed", browser_failure: { reason: "port_in_use", detail: "d" } });
+    const off = remoteAccessOf({ browser_port: 3369 });
+    expect(shownIds(serving)).toEqual([
+      "remote-access.browser-allow",
+      "remote-access.browser-port",
+      "remote-access.browser-local",
+      "remote-access.remote-login",
+      "remote-access.allow",
+      "remote-access.connection",
+      "remote-access.browser-forward",
+      "remote-access.browser-address",
+      "remote-access.rotate",
+    ]);
+    expect(shownIds(taken)).toEqual(["remote-access.browser-allow", "remote-access.browser-failed", "remote-access.browser-port", "remote-access.remote-login", "remote-access.allow", "remote-access.connection", "remote-access.browser-closed", "remote-access.rotate"]);
+    expect(shownIds(off)).toEqual(["remote-access.browser-allow", "remote-access.browser-port", "remote-access.remote-login", "remote-access.allow", "remote-access.browser-off"]);
+  });
+
+  it("lists nothing of the browser where the daemon has no browser port", () => {
+    expect(shownIds(remoteAccessOf())).toEqual(["remote-access.remote-login", "remote-access.allow"]);
   });
 });

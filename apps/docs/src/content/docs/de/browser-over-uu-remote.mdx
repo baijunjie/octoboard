@@ -14,7 +14,7 @@ Diese Anleitung öffnet {productName} in einem Browser auf deinem eigenen Comput
 Du bist nicht sicher, ob das der richtige Weg für dich ist? Siehe [Verbindungsart wählen](../choose-how-to-connect/).
 
 <Aside type="caution">
-Diese Schritte wurden noch nicht zwischen zwei Geräten getestet. Sie folgen der eigenen Hilfe von UU Remote. Das Relay auf einem Mac-Host wurde auf einem einzelnen Computer ausprobiert, einschließlich der Live-Verbindung des Browsers.
+Diese Schritte wurden noch nicht zwischen zwei Geräten getestet. Sie folgen der eigenen Hilfe von UU Remote.
 </Aside>
 
 <strong>Browser auf deinem Computer</strong> → <strong>127.0.0.1 auf deinem Computer</strong> ⟷ UU Remote ⟷ <strong>127.0.0.1 auf dem Host</strong> → <strong>{productName}</strong>
@@ -25,7 +25,6 @@ Diese Schritte wurden noch nicht zwischen zwei Geräten getestet. Sie folgen der
 - <strong>127.0.0.1 (Loopback):</strong> eine Adresse, die immer „genau dieser Computer“ bedeutet.
 - <strong>Port:</strong> eine Zahl, die ein Programm auf einem Computer auswählt, wie eine Türnummer. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> ist Port {commands.defaultPort} auf diesem Computer.
 - <strong>Portzuordnung (端口映射):</strong> eine Funktion von UU Remote, die einen Port auf dem Host als Port auf deinem eigenen Computer erscheinen lässt.
-- <strong>socat:</strong> ein kleines, kostenloses Programm, das eine Verbindung von einem Ort an einen anderen weitergibt. Ein Mac-Host braucht es als Relay.
 - <strong>Terminal:</strong> das Fenster, in das du Befehle eingibst: Terminal unter macOS, PowerShell unter Windows.
 
 </details>
@@ -37,7 +36,6 @@ Die Portzuordnung von UU Remote lässt {productName} des Hosts auf deinem eigene
 - <strong>Beide Computer sind ein Mac oder ein Windows-PC.</strong> UU Remote hat für Linux keine Portzuordnung; erreiche einen Linux-Server stattdessen über [Tailscale](../browser-over-tailscale/) oder [SSH](../remote-connections/).
 - <strong>Auf beiden ist UU Remote installiert und beim selben Konto angemeldet,</strong> in Version 4.21.0 oder höher unter Windows und 4.32.0 oder höher unter macOS. Die Portzuordnung funktioniert nur für TCP, und mehr braucht {productName} nicht. Zum Zeitpunkt der Erstellung führt UU Remote die Portzuordnung unter seinen kostenlosen Funktionen auf; prüfe im Zweifel die aktuellen Tarife.
 - <strong>Der Host erscheint unter „Meine Geräte“ (我的设备)</strong> in UU Remote auf dem Computer, von dem aus du im Browser arbeitest.
-- <strong>Ein Mac-Host braucht außerdem [Homebrew](https://brew.sh/)</strong>, um unten socat zu installieren.
 
 ## Auf dem Host
 
@@ -45,32 +43,10 @@ Die Portzuordnung von UU Remote lässt {productName} des Hosts auf deinem eigene
 
 1. Besorge dir die Browser-Adresse, die den Schlüssel trägt, mit dem sich der Browser anmeldet.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
    <HostBrowserAddress />
-   </TabItem>
-   <TabItem label="Windows">
-   <HostBrowserAddress windows />
-   </TabItem>
-   </Tabs>
 2. Richte einen Port an <code dir="ltr">{tunnel.loopback}</code> des Hosts ein, der zu {productName} führt. Dieser Port ist in den folgenden Schritten der <strong>Host-Port</strong>.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
-   Ein Mac stellt den Browser auf eine Weise bereit, die UU Remote nicht zuordnen kann, daher braucht er socat als Relay. Installiere es im Terminal:
-
-   <Code code={tunnel.installSocatMac} lang="sh" />
-
-   Führe dann dies aus und lass das Fenster geöffnet. Es lauscht ausschließlich auf <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   Der Host-Port ist <code dir="ltr">{tunnel.bridgePort}</code>.
-   </TabItem>
-   <TabItem label="Windows">
-   Es ist nichts auszuführen: {productName} selbst lauscht auf dem Browser-Port, ausschließlich auf <code dir="ltr">127.0.0.1</code>. Der Host-Port ist der <strong>Browser-Port</strong> auf dem Tab <strong>Browser</strong> ({commands.defaultPort}, sofern du ihn nicht geändert hast).
-   </TabItem>
-   </Tabs>
+   Es ist nichts auszuführen: {productName} selbst lauscht auf dem Browser-Port, ausschließlich auf <code dir="ltr">127.0.0.1</code>. Der Host-Port ist der <strong>Browser-Port</strong> unter <strong>Einstellungen › Zugriff</strong> ({commands.defaultPort}, sofern du ihn nicht geändert hast).
 
 </Steps>
 
@@ -112,19 +88,18 @@ Es hat geklappt, wenn sich {productName} im Browser-Tab öffnet, ohne dass du di
 
 ## Wenn es nicht funktioniert
 
-- <strong>Die Zuordnung wird als verbunden angezeigt, aber die Seite lädt nicht:</strong> Bei einem Mac-Host wurde das socat-Fenster geschlossen oder sein Befehl beendet; oder <strong>Fernzugriff erlauben</strong> ist ausgeschaltet, oder {productName} läuft auf dem Host nicht.
+- <strong>Die Zuordnung wird als verbunden angezeigt, aber die Seite lädt nicht:</strong> <strong>Browserzugriff erlauben</strong> ist ausgeschaltet, oder {productName} läuft auf dem Host nicht.
 - <strong>Die Zuordnung lässt sich nicht speichern oder verbinden:</strong> Möglicherweise ist der lokale Port auf diesem Computer belegt. Wähle einen anderen und ändere ihn auch in der Browser-Adresse.
 - <strong>Die Seite wird abgelehnt oder bleibt leer:</strong> Prüfe, ob du die Adresse unter <code dir="ltr">{tunnel.loopback}</code> geöffnet hast.
 
 ## Ausschalten
 
 - <strong>Auf dem Computer, von dem aus du im Browser gearbeitet hast:</strong> Schalte die Zuordnung im Portzuordnungs-Bereich von UU Remote aus oder lösche sie. Auch das Schließen des Bereichs oder das Trennen beendet sie.
-- <strong>Bei einem Mac-Host:</strong> Beende socat mit <kbd>Strg</kbd>+<kbd>C</kbd>.
-- <strong>Schalte auf dem Host</strong> <strong>Fernzugriff erlauben</strong> aus, wenn du ihn nicht mehr brauchst. Das schließt den Browser-Zugang und trennt jede Seite, die mit dem Schlüssel geöffnet wurde.
-- <strong>Wenn die Adresse möglicherweise durchgesickert ist,</strong> gib ihr mit <strong>Schlüssel erneuern</strong> auf dem Tab <strong>Browser</strong> einen neuen Schlüssel. Seiten, die mit der alten Adresse geöffnet sind, werden getrennt.
+- <strong>Schalte auf dem Host</strong> <strong>Browserzugriff erlauben</strong> aus, wenn du ihn nicht mehr brauchst. Das schließt den Browser-Port und trennt jede Seite, die mit dem Schlüssel geöffnet wurde.
+- <strong>Wenn die Adresse möglicherweise durchgesickert ist,</strong> gib ihr mit <strong>Schlüssel erneuern</strong> unter <strong>Einstellungen › Zugriff</strong> einen neuen Schlüssel. Seiten, die mit der alten Adresse geöffnet sind, werden getrennt.
 
 ## Sicherheit
 
 - <strong>Die Adresse ist das Passwort:</strong> Ihr Schlüssel gibt die volle Kontrolle über {productName} auf dem Host, einschließlich der Ausführung beliebiger Befehle. Er gilt, bis du ihn erneuerst. Er bleibt im Verlauf und in den Lesezeichen des Browsers und wird mit deinen anderen Geräten synchronisiert, wenn die Browser-Synchronisierung eingeschaltet ist.
 - <strong>Wer sie erreichen kann:</strong> jeder, der den Host-Port erreicht und den Schlüssel hat. Auf dem Host lauscht er nur auf <code dir="ltr">127.0.0.1</code>; wer dein UU-Remote-Konto nutzen kann, um Ports zum Host zuzuordnen, kann ihn ebenfalls erreichen, daher halte dieses Konto sicher.
-- <strong>Nur auf Computern, an denen sich sonst niemand anmeldet:</strong> Ein anderes Benutzerkonto auf dem Host oder auf deinem Computer kann sich mit diesen <code dir="ltr">127.0.0.1</code>-Ports verbinden, und solange die Zuordnung oder socat nicht läuft, kann es den Port übernehmen und den Schlüssel erhalten, wenn sich dein Browser neu verbindet. [Über SSH verbinden](../remote-connections/) hat bei einem Mac- oder Linux-Host diese Schwäche nicht, und auch dein eigener Computer hat sie nicht, wenn du die Desktop-App nutzt. Im Browser hat dein Computer sie weiterhin, denn dort lauscht die SSH-Weiterleitung ebenfalls auf einem <code dir="ltr">127.0.0.1</code>-Port.
+- <strong>Nur auf Computern, an denen sich sonst niemand anmeldet:</strong> Ein anderes Benutzerkonto auf dem Host oder auf deinem Computer kann sich mit diesen <code dir="ltr">127.0.0.1</code>-Ports verbinden, und kann den Browser-Port auf dem Host übernehmen, solange {productName} nicht läuft oder neu startet, oder den zugeordneten Port auf deinem Computer, solange die Zuordnung nicht läuft, und den Schlüssel erhalten, wenn sich dein Browser neu verbindet. [Über SSH verbinden](../remote-connections/) hat bei einem Linux-Host mit ausgeschaltetem Browserzugriff und bei einem Mac- oder Windows-Host, den du mit der Desktop-App nutzt, diese Schwäche nicht, und auch dein eigener Computer hat sie nicht, wenn du die Desktop-App nutzt. Im Browser hat dein Computer sie weiterhin, denn dort lauscht die SSH-Weiterleitung ebenfalls auf einem <code dir="ltr">127.0.0.1</code>-Port.

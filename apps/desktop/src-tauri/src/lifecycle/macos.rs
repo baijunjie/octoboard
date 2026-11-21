@@ -44,6 +44,74 @@ pub fn install(app: &AppHandle) {
     // delegate this installs onto already exists by now. See the function's own doc
     // comment for why the Dock icon's own Quit needs this at all.
     install_application_should_terminate_override(app);
+    install_quit_signal(app);
+}
+
+/// The write end of the pipe the quit signal's handler writes to, or -1 before it is installed.
+static QUIT_PIPE: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
+
+/// The handler of `SIGUSR1`: only a byte on the pipe, which is all a handler may safely do.
+extern "C" fn on_quit_signal(_: libc::c_int) {
+    let fd = QUIT_PIPE.load(Ordering::Relaxed);
+    if fd >= 0 {
+        // SAFETY: `write` is async-signal-safe; the byte's loss when the pipe is full is a quit
+        // already requested.
+        unsafe { libc::write(fd, b"q".as_ptr().cast(), 1) };
+    }
+}
+
+/// Makes `SIGUSR1` a quit that asks nothing: what `octoboardd stop` of the application's own copy
+/// sends (see `docs/product/daemon-command-line.md`). The handler wakes a thread through a pipe,
+/// which quits as a confirmed quit does (`exit::quit_without_asking`), the quit confirmation
+/// never shown. The pipe is not inherited by the processes the shell starts.
+fn install_quit_signal(app: &AppHandle) {
+    let mut fds = [0 as libc::c_int; 2];
+    // SAFETY: `pipe` fills the two descriptors; each is then only configured and kept for the
+    // life of the process.
+    unsafe {
+        if libc::pipe(fds.as_mut_ptr()) != 0 {
+            diagnostic!(
+                "cannot make the quit signal's pipe: {}",
+                std::io::Error::last_os_error()
+            );
+            return;
+        }
+        for fd in fds {
+            libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC);
+        }
+        libc::fcntl(fds[1], libc::F_SETFL, libc::O_NONBLOCK);
+    }
+    QUIT_PIPE.store(fds[1], Ordering::SeqCst);
+    // SAFETY: a zeroed `sigaction` with a handler that is async-signal-safe and the mask emptied.
+    let installed = unsafe {
+        let mut action: libc::sigaction = std::mem::zeroed();
+        action.sa_sigaction = on_quit_signal as extern "C" fn(libc::c_int) as usize;
+        libc::sigemptyset(&mut action.sa_mask);
+        action.sa_flags = libc::SA_RESTART;
+        libc::sigaction(libc::SIGUSR1, &action, std::ptr::null_mut())
+    };
+    if installed != 0 {
+        diagnostic!(
+            "cannot handle the quit signal: {}",
+            std::io::Error::last_os_error()
+        );
+        return;
+    }
+    let app = app.clone();
+    let reader = fds[0];
+    std::thread::spawn(move || loop {
+        let mut byte = 0u8;
+        // SAFETY: reads one byte into a local; the descriptor lives as long as the process.
+        let read = unsafe { libc::read(reader, (&mut byte as *mut u8).cast(), 1) };
+        if read == 1 {
+            diagnostic!("quitting: the command line asked for it");
+            crate::exit::quit_without_asking(&app);
+        } else if read == 0
+            || std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted
+        {
+            return;
+        }
+    });
 }
 
 /// The script the relaunch runs: it waits for the process whose id is `$0` to end, then opens the
@@ -453,6 +521,42 @@ mod tests {
         assert!(!is_system_end_reason(u32::from_be_bytes(*b"quit")));
         assert!(!is_system_end_reason(u32::from_be_bytes(*b"quia")));
         assert!(!is_system_end_reason(0));
+    }
+
+    /// What `SIGUSR1` does once the handler is installed: a byte on the pipe the quit thread reads,
+    /// which is what makes it a quit with no confirmation, and nothing before there is a pipe.
+    #[test]
+    fn the_quit_signal_is_one_byte_on_the_pipe_and_nothing_while_there_is_no_pipe() {
+        let mut fds = [0 as libc::c_int; 2];
+        // SAFETY: plain system calls on descriptors and a signal disposition of this test's own,
+        // which it puts back before it ends.
+        unsafe {
+            assert_eq!(libc::pipe(fds.as_mut_ptr()), 0);
+            libc::fcntl(fds[0], libc::F_SETFL, libc::O_NONBLOCK);
+            let mut action: libc::sigaction = std::mem::zeroed();
+            action.sa_sigaction = on_quit_signal as extern "C" fn(libc::c_int) as usize;
+            libc::sigemptyset(&mut action.sa_mask);
+            let mut previous: libc::sigaction = std::mem::zeroed();
+            assert_eq!(libc::sigaction(libc::SIGUSR1, &action, &mut previous), 0);
+
+            let read = |fd| {
+                let mut byte = 0u8;
+                let count = libc::read(fd, (&mut byte as *mut u8).cast(), 1);
+                (count, byte)
+            };
+            QUIT_PIPE.store(-1, Ordering::SeqCst);
+            libc::raise(libc::SIGUSR1);
+            assert_eq!(read(fds[0]).0, -1, "a byte was written with no pipe");
+
+            QUIT_PIPE.store(fds[1], Ordering::SeqCst);
+            libc::raise(libc::SIGUSR1);
+            assert_eq!(read(fds[0]), (1, b'q'));
+
+            QUIT_PIPE.store(-1, Ordering::SeqCst);
+            libc::sigaction(libc::SIGUSR1, &previous, std::ptr::null_mut());
+            libc::close(fds[0]);
+            libc::close(fds[1]);
+        }
     }
 
     #[test]

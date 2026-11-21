@@ -24,7 +24,7 @@ Octoboard is deployed in one of two forms, and the other documents name them as 
 - **The desktop form**: the macOS and Windows applications. The window, the daemon and the projects are on one machine, used by
   one person, and the daemon starts and stops with the application.
 - **The server form**: the daemon alone, on a machine without a display — a Linux server, Ubuntu say — started and kept
-  running there, listening on the server's loopback on a fixed port, and reached by its owner from another machine over
+  running there, listening on the server's loopback, and reached by its owner from another machine over
   SSH: from a browser through the owner's own SSH forward of the daemon's browser socket, or from the macOS or Windows application through an SSH
   tunnel the application builds itself. The machine showing the window and the machine holding the daemon and the
   projects are two different ones. This is what Linux is for: there is no Linux desktop application.
@@ -232,10 +232,13 @@ The decisions behind remote access, which the code alone does not explain:
 - **The owner endpoint.** A daemon is opened from another machine at an endpoint only its own user can reach: the
   socket in the data directory on Linux and macOS, and on Windows a named pipe only that user can open. The owner key
   is accepted there, never on the daemon's own TCP port. Windows' SSH server cannot forward to a socket or a named
-  pipe, so on Windows alone a separate loopback listener for the browser takes the owner key while remote access is on,
-  at the cost the confirmation states: on a computer other people log in to, one of them can take that port while the
-  daemon does not hold it and be sent the key by a browser that reconnects.
-- **The desktop form opens itself only on request.** One Allow remote access switch, off by default and confirmed when
+  pipe, so Windows' endpoint is the named pipe itself, which another computer's application reaches through
+  `octoboardd proxy`. A browser on the same computer has no such endpoint, so a separate loopback listener, the browser
+  port, takes the owner key as well, on macOS and Windows while its own switch, Allow browser access, is on, and in the
+  server form while `octoboardd browser on` has opened it, at the cost its confirmation states: on a computer other
+  people log in to, one of them can take that port while the daemon does not hold it and be sent the key by a browser
+  that reconnects.
+- **The desktop form opens itself only on request.** Two switches, Allow remote access and Allow browser access, each off by default and confirmed when
   turned on, kept by the daemon and offered neither to the agents' settings tools nor in a configuration document, so
   neither can open a machine to remote use. The desktop daemon carries the UI, as the server builds do, so both forms
   serve a browser through one code path and the switch needs no restart.

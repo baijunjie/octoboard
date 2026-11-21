@@ -18,11 +18,11 @@ import { productName } from "../../../commands.ts";
 | --- | --- | --- | --- |
 | 사용 환경 | 데스크톱 앱 또는 브라우저 | 브라우저만 | 브라우저만 |
 | 지원하는 호스트 | Linux 서버, Mac, Windows PC | Linux 서버, Mac, Windows PC | Mac 또는 Windows PC만 |
-| 호스트에서 켜거나 설치할 것 | SSH 로그인(Mac은 원격 로그인, Windows는 OpenSSH Server, Linux 서버에는 이미 있음) | Tailscale. Mac이나 Linux 호스트는 socat도 필요 | UU Remote. Mac 호스트는 socat도 필요 |
+| 호스트에서 켜거나 설치할 것 | SSH 로그인(Mac은 원격 로그인, Windows는 OpenSSH Server, Linux 서버에는 이미 있음) | Tailscale | UU Remote |
 | 내 컴퓨터에 설치할 것 | 추가로 설치할 것 없음 | Tailscale. Mac이나 Linux 컴퓨터는 socat도 필요 | UU Remote(Mac 또는 Windows) |
 | 트래픽이 거치는 곳 | 제3자 없이 직접 연결 | Tailscale 네트워크(내 계정 사용) | NetEase UU Remote 서비스(내 계정 사용) |
 | 같은 네트워크가 아닐 때 | 호스트에 닿을 수 있어야만 가능: 같은 네트워크, 공개 주소, VPN 중 하나 | 가능 | 가능 |
-| 이런 경우에 추천 | 서버, 전체 데스크톱 앱, 다른 사람도 로그인하는 Mac·Linux 호스트 | SSH 없이 어디서든 내 컴퓨터에 접속 | 이미 UU Remote를 쓰는 중국 본토 사용자 |
+| 이런 경우에 추천 | 서버, 전체 데스크톱 앱, 다른 사람도 로그인하는 Linux 호스트, 데스크톱 앱으로 쓰는 Mac·Windows 호스트 | SSH 없이 어디서든 내 컴퓨터에 접속 | 이미 UU Remote를 쓰는 중국 본토 사용자 |
 
 ## 중계 서비스를 고르기 전에
 
@@ -33,7 +33,7 @@ Tailscale과 UU Remote 가이드는 아직 두 기기 사이에서 완전히 시
 </Aside>
 
 <Aside type="caution" title="나 혼자 로그인하는 컴퓨터에서만">
-중계 서비스를 쓰면 호스트나 내 컴퓨터의 다른 사용자 계정이 브라우저의 키를 가로챌 수 있습니다. Tailscale이나 UU Remote는 나 혼자 로그인하는 컴퓨터에서만 쓰세요. SSH로 연결하면 Mac이나 Linux 호스트에는 이 약점이 없고, 데스크톱 앱을 쓸 때는 내 컴퓨터에도 없습니다. 하지만 브라우저를 쓸 때는 브라우저를 쓰는 컴퓨터에 약점이 남습니다. 그곳에서도 SSH 포워드가 <code dir="ltr">127.0.0.1</code> 포트에서 대기하기 때문입니다.
+중계 서비스를 쓰면 호스트나 내 컴퓨터의 다른 사용자 계정이 브라우저의 키를 가로챌 수 있습니다. Tailscale이나 UU Remote는 나 혼자 로그인하는 컴퓨터에서만 쓰세요. SSH로 연결하면 브라우저 접근을 끈 Linux 호스트와 데스크톱 앱으로 쓰는 Mac이나 Windows 호스트에는 이 약점이 없고, 데스크톱 앱을 쓸 때는 내 컴퓨터에도 없습니다. 하지만 브라우저를 쓸 때는 브라우저를 쓰는 컴퓨터에 약점이 남습니다. 그곳에서도 SSH 포워드가 <code dir="ltr">127.0.0.1</code> 포트에서 대기하기 때문입니다.
 </Aside>
 
 ## 다음 단계

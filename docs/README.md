@@ -311,9 +311,9 @@ Where to start, by question:
   the ways to upgrade.
 - [Who can reach the daemon](product/who-can-reach-the-daemon.md) — the daemon's access model in both forms: loopback
   only, the launch key and where helpers keep it, the owner key a browser address carries (on the browser's way in
-  alone) and its trade-off, SSH as the only remote path, remote access to the desktop app's daemon (the macOS socket,
-  the Windows browser port and owner pipe), other users of the machine and port takeover, and the origin and key
-  checks.
+  alone) and its trade-off, SSH as the only remote path, remote access to the desktop app's daemon (Allow remote
+  access's macOS socket and Windows owner pipe, Allow browser access's loopback browser port), other users of the
+  machine and port takeover, and the origin and key checks.
 - [Remote daemons](product/remote-daemons.md) — the desktop app reaching daemons on other machines over SSH: the
   Remote, Dock and Windows system menus and the jump list, the saved-daemon fields, connection details, every
   connection outcome, device keys, the remote window, Disconnect and restoring remote windows at launch.
@@ -337,9 +337,10 @@ Where to start, by question:
 - [Links and files in a remote window](product/links-and-files-in-a-remote-window.md) — how a remote window forwards
   the remote machine's loopback addresses to this computer, the Forwarded ports button on its rail, and the copies
   Download and open keeps of remote files.
-- [Remote access settings](product/remote-access-settings.md) — Settings' Remote access section: the switch and its
-  confirmation, failures, the Windows browser port, the address and forward, the connection details with QR, Rotate
-  key and the SSH server row.
+- [Access settings](product/remote-access-settings.md) — Settings' Access
+  section: its groups (This computer's browser, Other computers, Key), the two switches and their confirmations,
+  failures, the browser port, the local address, the SSH server row, the connection details with QR, the SSH steps for a
+  browser on another computer and Rotate key.
 - [Files Octoboard owns](product/files-octoboard-owns.md) — every file Octoboard writes under `~/.octoboard` and the
   desktop app's own state files, and the database's schema version check.
 - [Process holders](product/process-holders.md) — the processes that run sessions and shell terminals so they outlive

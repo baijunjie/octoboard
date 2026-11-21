@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defaultServerPort as port, installCommand, linuxCommands } from "../../seo/downloads";
+import { defaultBrowserPort as port, installCommand, linuxCommands } from "../../seo/downloads";
 
 // public/demo-workspace.webp, the picture in the browser window, is the site's own product preview
 // (public/preview/website-preview.html?scene=overview&lang=en, as built by `pnpm --filter @octoboard/web build`)
@@ -29,6 +29,8 @@ const windows = [
   { title: "you@server: ~", prompt: "you@server:~$", caption: "downloadDemoServerCaption" },
   { title: "you@laptop: ~", prompt: "you@laptop:~$", caption: "downloadDemoLocalCaption" },
 ] as const;
+// The daemon's own port is one the system assigns; the address and the forward name the browser port, 3369 by default.
+const daemonPort = 41873;
 const address = `127.0.0.1:${port}/?key=3f9c…`;
 // The forward `octoboardd address` prints for a user `you`, and the one the laptop window types: the same with the
 // server named and without `-N`, so the session opens the shell the demo shows.
@@ -42,11 +44,11 @@ const lines: Line[] = [
   {
     window: 0,
     kind: "out",
-    text: `Start it with \`octoboardd start\` (port ${port}; \`--port N\` picks another), then run \`octoboardd address\`: it prints the address to open and the SSH forward to open it through.`,
+    text: "Start it with `octoboardd start`, then run `octoboardd address`: it prints the address to open and the SSH forward to open it through.",
   },
   { window: 0, kind: "cmd", text: linuxCommands.start },
-  { window: 0, kind: "out", text: `octoboardd listening on 127.0.0.1:${port} with key 3f9c…` },
-  { window: 0, kind: "out", text: `${config.public.appName} started: pid 4242, http://127.0.0.1:${port}` },
+  { window: 0, kind: "out", text: `octoboardd listening on 127.0.0.1:${daemonPort} with key 3f9c…` },
+  { window: 0, kind: "out", text: `${config.public.appName} started: pid 4242, http://127.0.0.1:${daemonPort}` },
   { window: 0, kind: "cmd", text: linuxCommands.address },
   { window: 0, kind: "out", text: `http://127.0.0.1:${port}/?key=3f9c…` },
   {

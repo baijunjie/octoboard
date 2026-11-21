@@ -64,6 +64,7 @@ export const UI_READERS = [
   { match: "apps/daemon/src/protocol/", tests: [] },
   { match: "apps/daemon/src/providers/", tests: ["src/daemonCodes.test.ts", "src/fixtures/fixtureProviders.test.ts"] },
   { match: "apps/daemon/testdata/restart_impact_cases.json", tests: ["src/lifecycle/useAppExit.test.ts"] },
+  { match: "apps/daemon/testdata/quit_holders_cases.json", tests: ["src/lifecycle/useAppExit.test.ts"] },
   { match: "apps/desktop/src-tauri/Info.template.plist", tests: ["src/i18n/bundleLocalizations.test.ts"] },
   { match: "LICENSE", tests: ["src/appConfig.test.ts"] },
 ];

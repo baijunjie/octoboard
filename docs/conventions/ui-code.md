@@ -65,10 +65,10 @@ can see. `eslint.config.mjs` applies the compiler's lint rules to `packages/ui`,
   a comment saying what it reads.
 - **Never write or read a ref during render.** Keep the latest value with `useLatest` or `useStableHandler`
   (`components/hooks/useLatest.ts`), or `useRenderLatest` where a child reads it in the same commit.
-- **A `try` in a component or hook has a `catch`, no `finally`, and no conditional, logical or optional-chaining
-  expression inside it**; the compiler skips such a function silently. For "run this, report a rejection, then always do
-  that" use `settle` (`components/hooks/settle.ts`); otherwise build the value before the `try` or move the helper to
-  module level.
+- **A `try` in a component or hook has a `catch`, no `finally`, and no conditional, logical, optional-chaining
+  expression or `throw` inside it**; the compiler skips such a function silently. For "run this, report a rejection,
+  then always do that" use `settle` (`components/hooks/settle.ts`); otherwise build the value before the `try` or move
+  the helper to module level.
 - **Write no `??=`, no `||` whose left side holds a ternary or logical expression inside a call, and no destructuring
   with a computed key.** Name the left side in a local; copy the object and `delete` the key. The compiler cannot lower
   them. `??=` is refused by lint (`no-restricted-syntax` in `eslint.config.mjs`) in every file of `packages/ui/src`

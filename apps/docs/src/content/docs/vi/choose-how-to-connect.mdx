@@ -18,11 +18,11 @@ Nếu bạn chấp nhận được độ trễ khi thao tác và hình ảnh hơ
 | --- | --- | --- | --- |
 | Dùng từ | Ứng dụng trên máy tính hoặc trình duyệt | Chỉ trình duyệt | Chỉ trình duyệt |
 | Máy đích được hỗ trợ | Máy chủ Linux, Mac, PC Windows | Máy chủ Linux, Mac, PC Windows | Chỉ Mac hoặc PC Windows |
-| Trên máy đích, bạn bật hoặc cài | Đăng nhập SSH (Đăng nhập từ xa trên Mac, OpenSSH Server trên Windows; máy chủ Linux đã có sẵn) | Tailscale; máy đích Mac hoặc Linux còn cần socat | UU Remote; máy đích Mac còn cần socat |
+| Trên máy đích, bạn bật hoặc cài | Đăng nhập SSH (Đăng nhập từ xa trên Mac, OpenSSH Server trên Windows; máy chủ Linux đã có sẵn) | Tailscale | UU Remote |
 | Trên máy tính của bạn, bạn cài | Không cần gì thêm | Tailscale; thêm socat nếu là máy Mac hoặc Linux | UU Remote (Mac hoặc Windows) |
 | Lưu lượng đi qua | Kết nối trực tiếp, không qua bên thứ ba | Mạng của Tailscale, bằng tài khoản của bạn | Dịch vụ của NetEase UU Remote, bằng tài khoản của bạn |
 | Dùng được khi không cùng mạng | Chỉ khi truy cập được tới máy đích: cùng mạng, qua địa chỉ công khai hoặc qua VPN | Có | Có |
-| Phù hợp nhất cho | Máy chủ; ứng dụng đầy đủ trên máy tính; máy đích Mac và Linux mà người khác cũng đăng nhập | Truy cập máy của chính bạn từ mọi nơi mà không cần SSH | Người dùng ở Trung Quốc đại lục đã dùng UU Remote |
+| Phù hợp nhất cho | Máy chủ; ứng dụng đầy đủ trên máy tính; máy đích Linux mà người khác cũng đăng nhập, và máy đích Mac hoặc Windows dùng qua ứng dụng máy tính | Truy cập máy của chính bạn từ mọi nơi mà không cần SSH | Người dùng ở Trung Quốc đại lục đã dùng UU Remote |
 
 ## Trước khi chọn dịch vụ chuyển tiếp
 
@@ -33,7 +33,7 @@ Các hướng dẫn Tailscale và UU Remote chưa được thử đầy đủ gi
 </Aside>
 
 <Aside type="caution" title="Chỉ dùng trên những máy mà không ai khác đăng nhập">
-Với dịch vụ chuyển tiếp, một tài khoản người dùng khác trên máy đích hoặc trên máy tính của bạn có thể chặn lấy khóa của trình duyệt. Chỉ dùng Tailscale hoặc UU Remote trên những máy tính mà một mình bạn đăng nhập. [Kết nối qua SSH](../remote-connections/) không có điểm yếu này trên máy đích Mac hoặc Linux, và máy tính của bạn cũng không có khi dùng ứng dụng máy tính. Nhưng trong trình duyệt, máy tính của bạn vẫn có điểm yếu này, vì chuyển tiếp SSH ở đó cũng lắng nghe trên một cổng <code dir="ltr">127.0.0.1</code>.
+Với dịch vụ chuyển tiếp, một tài khoản người dùng khác trên máy đích hoặc trên máy tính của bạn có thể chặn lấy khóa của trình duyệt. Chỉ dùng Tailscale hoặc UU Remote trên những máy tính mà một mình bạn đăng nhập. [Kết nối qua SSH](../remote-connections/) không có điểm yếu này trên máy đích Linux đã tắt truy cập từ trình duyệt, cũng như trên máy đích Mac hoặc Windows khi dùng từ ứng dụng máy tính, và máy tính của bạn cũng không có khi dùng ứng dụng máy tính. Nhưng trong trình duyệt, máy tính của bạn vẫn có điểm yếu này, vì chuyển tiếp SSH ở đó cũng lắng nghe trên một cổng <code dir="ltr">127.0.0.1</code>.
 </Aside>
 
 ## Tiếp theo

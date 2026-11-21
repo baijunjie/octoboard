@@ -14,7 +14,7 @@ Panduan ini membuka {productName} di browser pada komputer Anda sendiri. Cara it
 Belum yakin ini cara yang tepat untuk Anda? Lihat [Pilih cara terhubung](../choose-how-to-connect/).
 
 <Aside type="caution">
-Langkah-langkah ini belum diuji di antara dua perangkat. Langkah-langkah ini mengikuti bantuan UU Remote sendiri. Relay di host Mac sudah dicoba di satu komputer, termasuk koneksi langsung browser.
+Langkah-langkah ini belum diuji di antara dua perangkat. Langkah-langkah ini mengikuti bantuan UU Remote sendiri.
 </Aside>
 
 <strong>Browser di komputer Anda</strong> → <strong>127.0.0.1 di komputer Anda</strong> ⟷ UU Remote ⟷ <strong>127.0.0.1 di host</strong> → <strong>{productName}</strong>
@@ -25,7 +25,6 @@ Langkah-langkah ini belum diuji di antara dua perangkat. Langkah-langkah ini men
 - <strong>127.0.0.1 (loopback):</strong> alamat yang selalu berarti “komputer yang sama ini”.
 - <strong>Port:</strong> angka yang memilih satu program di komputer, seperti nomor pintu. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> adalah port {commands.defaultPort} di komputer ini.
 - <strong>Pemetaan port (端口映射):</strong> fitur UU Remote yang membuat sebuah port di host tampak sebagai port di komputer Anda sendiri.
-- <strong>socat:</strong> program kecil dan gratis yang meneruskan koneksi dari satu tempat ke tempat lain. Host Mac memerlukannya sebagai relay.
 - <strong>Terminal:</strong> jendela tempat Anda mengetik perintah: Terminal di macOS, PowerShell di Windows.
 
 </details>
@@ -37,7 +36,6 @@ Pemetaan port UU Remote membuat {productName} milik host tampak di komputer Anda
 - <strong>Kedua komputer berupa Mac atau PC Windows.</strong> UU Remote tidak memiliki pemetaan port untuk Linux; jangkau server Linux lewat [Tailscale](../browser-over-tailscale/) atau [SSH](../remote-connections/).
 - <strong>Keduanya memiliki UU Remote yang terinstal dan masuk ke akun yang sama,</strong> versi 4.21.0 atau lebih baru di Windows dan 4.32.0 atau lebih baru di macOS. Pemetaan port hanya berfungsi untuk TCP, yang memang satu-satunya kebutuhan {productName}. Saat tulisan ini dibuat, UU Remote mencantumkan pemetaan port di antara fitur gratisnya; periksa paket terbarunya jika ragu.
 - <strong>Host muncul di Perangkat saya (我的设备)</strong> di UU Remote pada komputer tempat Anda akan browsing.
-- <strong>Host Mac juga memerlukan [Homebrew](https://brew.sh/)</strong>, untuk menginstal socat di bawah.
 
 ## Di host
 
@@ -45,32 +43,10 @@ Pemetaan port UU Remote membuat {productName} milik host tampak di komputer Anda
 
 1. Dapatkan alamat browser, yang membawa kunci untuk memasukkan browser.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
    <HostBrowserAddress />
-   </TabItem>
-   <TabItem label="Windows">
-   <HostBrowserAddress windows />
-   </TabItem>
-   </Tabs>
 2. Buat sebuah port di <code dir="ltr">{tunnel.loopback}</code> milik host yang mengarah ke {productName}. Port ini adalah <strong>port host</strong> pada langkah-langkah berikut.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
-   Mac menyajikan browser dengan cara yang tidak dapat dipetakan UU Remote, jadi ia memerlukan socat sebagai relay. Instal di Terminal:
-
-   <Code code={tunnel.installSocatMac} lang="sh" />
-
-   Lalu jalankan ini dan biarkan jendelanya terbuka. Relay hanya mendengarkan di <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   Port host-nya adalah <code dir="ltr">{tunnel.bridgePort}</code>.
-   </TabItem>
-   <TabItem label="Windows">
-   Tidak ada yang perlu dijalankan: {productName} sendiri mendengarkan di port browser, hanya di <code dir="ltr">127.0.0.1</code>. Port host-nya adalah <strong>Port browser</strong> di tab <strong>Browser</strong> ({commands.defaultPort} kecuali Anda mengubahnya).
-   </TabItem>
-   </Tabs>
+   Tidak ada yang perlu dijalankan: {productName} sendiri mendengarkan di port browser, hanya di <code dir="ltr">127.0.0.1</code>. Port host-nya adalah <strong>Port browser</strong> di <strong>Pengaturan › Akses</strong> ({commands.defaultPort} kecuali Anda mengubahnya).
 
 </Steps>
 
@@ -112,19 +88,18 @@ Anda tahu semuanya berhasil saat {productName} terbuka di tab browser tanpa memi
 
 ## Jika tidak berhasil
 
-- <strong>Pemetaan tampak terhubung, tetapi halaman tidak termuat:</strong> di host Mac, jendela socat ditutup atau perintahnya berhenti; atau <strong>Izinkan akses jarak jauh</strong> nonaktif, atau {productName} tidak berjalan di host.
+- <strong>Pemetaan tampak terhubung, tetapi halaman tidak termuat:</strong> <strong>Izinkan akses browser</strong> nonaktif, atau {productName} tidak berjalan di host.
 - <strong>Pemetaan tidak mau tersimpan atau terhubung:</strong> port lokal mungkin sudah dipakai di komputer ini. Pilih port lain, dan ubah juga di alamat browser.
 - <strong>Halaman ditolak atau kosong:</strong> periksa bahwa Anda membuka alamat di <code dir="ltr">{tunnel.loopback}</code>.
 
 ## Mematikannya
 
 - <strong>Di komputer tempat Anda browsing:</strong> matikan pemetaan di panel pemetaan port UU Remote, atau hapus. Menutup panel atau memutus koneksi juga menghentikannya.
-- <strong>Di host Mac:</strong> hentikan socat dengan <kbd>Ctrl</kbd>+<kbd>C</kbd>.
-- <strong>Di host,</strong> nonaktifkan <strong>Izinkan akses jarak jauh</strong> saat Anda tidak lagi memerlukannya. Ini menutup pintu masuk browser dan memutus setiap halaman yang dibuka dengan kunci itu.
-- <strong>Jika alamat mungkin bocor,</strong> beri alamat kunci baru dengan <strong>Ganti kunci</strong> di tab <strong>Browser</strong>. Halaman yang terbuka dengan alamat lama akan terputus.
+- <strong>Di host,</strong> nonaktifkan <strong>Izinkan akses browser</strong> saat Anda tidak lagi memerlukannya. Ini menutup port browser dan memutus setiap halaman yang dibuka dengan kunci itu.
+- <strong>Jika alamat mungkin bocor,</strong> beri alamat kunci baru dengan <strong>Ganti kunci</strong> di <strong>Pengaturan › Akses</strong>. Halaman yang terbuka dengan alamat lama akan terputus.
 
 ## Keamanan
 
 - <strong>Alamat adalah kata sandi:</strong> kuncinya memberi kendali penuh atas {productName} di host, termasuk menjalankan perintah apa pun. Kunci berlaku sampai Anda menggantinya. Alamat tersimpan di riwayat dan bookmark browser, serta tersinkron ke perangkat Anda yang lain jika sinkronisasi browser aktif.
 - <strong>Siapa yang dapat menjangkaunya:</strong> siapa pun yang mencapai port host dan memiliki kuncinya. Di host, port itu hanya mendengarkan di <code dir="ltr">127.0.0.1</code>; siapa pun yang dapat memakai akun UU Remote Anda untuk memetakan port ke host juga dapat menjangkaunya, jadi amankan akun itu.
-- <strong>Hanya di komputer yang tidak dipakai login orang lain:</strong> akun pengguna lain di host atau di komputer Anda dapat terhubung ke port <code dir="ltr">127.0.0.1</code> ini, dan selama pemetaan atau socat tidak berjalan ia dapat mengambil port itu dan menerima kunci saat browser Anda tersambung kembali. [Terhubung melalui SSH](../remote-connections/) tidak memiliki kelemahan ini di host Mac atau Linux, dan komputer Anda sendiri juga tidak memilikinya saat memakai aplikasi desktop. Di browser, komputer Anda tetap memilikinya, karena penerusan SSH di sana juga mendengarkan di port <code dir="ltr">127.0.0.1</code>.
+- <strong>Hanya di komputer yang tidak dipakai login orang lain:</strong> akun pengguna lain di host atau di komputer Anda dapat terhubung ke port <code dir="ltr">127.0.0.1</code> ini, dan dapat mengambil port browser di host selama {productName} tidak berjalan atau sedang dimulai ulang, atau port yang dipetakan di komputer Anda selama pemetaan tidak berjalan, lalu menerima kunci saat browser Anda tersambung kembali. [Terhubung melalui SSH](../remote-connections/) tidak memiliki kelemahan ini di host Linux dengan akses browser nonaktif, maupun di host Mac atau Windows yang dipakai dari aplikasi desktop, dan komputer Anda sendiri juga tidak memilikinya saat memakai aplikasi desktop. Di browser, komputer Anda tetap memilikinya, karena penerusan SSH di sana juga mendengarkan di port <code dir="ltr">127.0.0.1</code>.

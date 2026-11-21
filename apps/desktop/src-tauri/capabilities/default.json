@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions plus the exit-flow commands, the macOS privacy-permission commands, reading whether macOS Remote Login is on and opening its pane, the remote daemons (listing, saving and removing them, connecting, disconnecting, taking what a connection made elsewhere left the Remote devices page to show, and showing the local daemon's window; no command of it returns a secret), opening the app's notification settings in the system's settings app, the menu labels, the menu bar icon's menu and whether it shows the computer kept awake, raising the window for the exit confirmation, the settings the shell reads at startup (running in the background, the menu bar icon), launching at login and opening the system's list of login items, its share of the Dock badge, system notifications marked with the window that raised them (of the notification plugin, only asking whether notifications are allowed: a page shows a notification through the shell alone, so that on macOS its click still reaches the shell), reading and writing clipboard text, reading a clipboard image, saving and opening the configuration file and choosing a directory in the system's dialogs, checking for and installing a new version, opening a link in the system's browser, native window theming, revealing the window the shell creates hidden through the shell, and dragging and zooming it by the UI's own top bar",
+  "description": "enables the default permissions plus the exit-flow commands, the macOS privacy-permission commands, reading whether macOS Remote Login is on and opening its pane, the remote daemons (listing, saving and removing them, connecting, disconnecting, taking what a connection made elsewhere left the Remote devices page to show, and showing the local daemon's window; no command of it returns a secret), opening the app's notification settings in the system's settings app, the menu labels, the menu bar icon's menu and whether it shows the computer kept awake, raising the window for the exit confirmation, the settings the shell reads at startup (running in the background, the menu bar icon), launching at login and opening the system's list of login items, installing and removing the command-line tool, its share of the Dock badge, system notifications marked with the window that raised them (of the notification plugin, only asking whether notifications are allowed: a page shows a notification through the shell alone, so that on macOS its click still reaches the shell), reading and writing clipboard text, reading a clipboard image, saving and opening the configuration file and choosing a directory in the system's dialogs, checking for and installing a new version, opening a link in the system's browser, native window theming, revealing the window the shell creates hidden through the shell, and dragging and zooming it by the UI's own top bar",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -13,6 +13,7 @@
     "allow-set-menu-labels",
     "allow-set-app-settings",
     "allow-launch-at-login",
+    "allow-command-line",
     "allow-reveal-main-window",
     "allow-configuration-file",
     "allow-directory-picker",

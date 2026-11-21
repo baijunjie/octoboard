@@ -65,10 +65,10 @@ Puoi raggiungere anche un Mac o un PC Windows su cui gira l’app {productName}.
 
 <Steps>
 
-1. Sul computer che vuoi raggiungere, apri <strong>Impostazioni › Accesso remoto</strong> in {productName}.
+1. Sul computer che vuoi raggiungere, apri <strong>Impostazioni › Accesso</strong> in {productName}.
 2. Lì seleziona <strong>Apri Impostazioni di Sistema</strong> (macOS) o <strong>Apri Impostazioni</strong> (Windows) e attiva <strong>Login remoto</strong> (macOS) o <strong>OpenSSH Server</strong> (Windows), seguendo il percorso indicato nella riga, così questo computer accetta gli accessi SSH. Serve un amministratore. Tornando in {productName}, la riga mostra poi <strong>Attivo</strong>.
 3. Attiva <strong>Consenti accesso remoto</strong>, seleziona <strong>Consenti</strong> per confermare e tieni {productName} in esecuzione: se lo chiudi, l’accesso remoto si interrompe.
-4. Nella scheda <strong>App {productName}</strong>, seleziona <strong>Copia dati di connessione</strong> e inviali all’altro computer, per esempio per email o in chat.
+4. Seleziona <strong>Copia dati di connessione</strong> e inviali all’altro computer, per esempio per email o in chat.
 5. Sul computer da cui lavorerai, aggiungi l’host come nei passaggi da 2 a 5 di [Connettiti a un server Linux](#connettiti-a-un-server-linux), incollando i dati che hai inviato. Accedi con il tuo nome utente e la tua password sull’host.
 
 </Steps>
@@ -81,7 +81,7 @@ Saprai che ha funzionato quando si apre una finestra separata con i progetti e l
 
 1. Ottieni il comando di inoltro SSH:
 
-   - <strong>Su un host Mac o Windows,</strong> esegui prima i passaggi da 1 a 3 di [Usa un altro computer come host](#usa-un-altro-computer-come-host). Poi, nella scheda <strong>Browser</strong>, guarda <strong>Passaggio 1: inoltro SSH</strong>. Fai clic sull’indirizzo nel comando per scegliere come l’altro computer raggiunge questo (oppure scegli <strong>Inserisci l’indirizzo manualmente</strong> e sostituisci <code dir="ltr">{commands.server}</code> più tardi), poi seleziona <strong>Copia comando di inoltro</strong>. Seleziona anche <strong>Copia indirizzo</strong> sotto <strong>Passaggio 2: indirizzo del browser</strong>.
+   - <strong>Su un host Mac o Windows,</strong> esegui prima i passaggi 1 e 2 di [Usa un altro computer come host](#usa-un-altro-computer-come-host). Poi apri <strong>Impostazioni › Accesso</strong>, attiva <strong>Consenti accesso dal browser</strong> e seleziona <strong>Consenti</strong> per confermare. Nella scheda <strong>Browser</strong>, guarda <strong>Passaggio 1: inoltro SSH</strong>. Fai clic sull’indirizzo nel comando per scegliere come l’altro computer raggiunge questo (oppure scegli <strong>Inserisci l’indirizzo manualmente</strong> e sostituisci <code dir="ltr">{commands.server}</code> più tardi), poi seleziona <strong>Copia comando di inoltro</strong>. Seleziona anche <strong>Copia indirizzo locale</strong> sotto <strong>Browser di questo computer</strong>.
    - <strong>Su un server Linux,</strong> esegui questo sul server. Stampa l’indirizzo del browser, poi il comando SSH da eseguire.
 
      <Code code={commands.address} lang="sh" />

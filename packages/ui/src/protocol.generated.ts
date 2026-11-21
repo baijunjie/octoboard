@@ -4303,38 +4303,55 @@ export type ReadFrom = {
 };
 
 /**
- * Where remote access to a daemon that follows the desktop application stands
- * (`snapshot.remote_access`, `remote_access_updated`).
+ * Where remote access and browser access to a daemon that follows the desktop application stand
+ * (`snapshot.remote_access`, `remote_access_updated`), and, in the server form's daemon, where
+ * browser access stands.
  */
 export type RemoteAccess = {
   /**
-   * The Allow remote access setting, as the user left it. Off unless the user turned it on. It
-   * is the user's alone: no agent's settings tool reads or changes it, and no configuration
-   * export carries it.
+   * The Allow remote access setting, as the user left it: whether another computer's
+   * application, or a browser forwarding to the socket, may reach this daemon over the owner
+   * socket (Linux, macOS) or the owner pipe (Windows). Off unless the user turned it on, and
+   * always off in the server form's daemon, whose socket serves whatever the setting. It is the
+   * user's alone: no agent's settings tool reads or changes it, and no configuration export
+   * carries it.
    */
   allowed: boolean,
   /**
-   * What the daemon does with it right now.
+   * What the daemon does with remote access right now.
    */
   state: Received<RemoteAccessState>,
   /**
-   * On Windows, whose SSH server cannot forward to a socket, the loopback port the daemon serves
-   * the browser at while remote access is on, in place of the owner socket, as the user set it
-   * (`set_remote_access_port`); set whatever `state` is. Null on every other system, where the
-   * browser goes through the owner socket. Like `allowed`, it is the user's alone.
+   * The Allow browser access setting, as the user left it: whether the daemon serves the browser
+   * at the loopback port `browser_port` names. Off unless the user turned it on (on Windows, a
+   * store from before the setting began with the value remote access had). False wherever
+   * `browser_port` is null. Like `allowed`, it is the user's alone.
+   */
+  browser_allowed: boolean,
+  /**
+   * What the daemon does with browser access right now.
+   */
+  browser_state: Received<RemoteAccessState>,
+  /**
+   * The loopback port the daemon serves the browser at while browser access is on (Windows,
+   * macOS and the server form), as the user set it (`set_remote_access_port`); set whatever
+   * `browser_state` is. Null where the daemon offers no browser port (Linux's desktop daemon),
+   * where the browser goes through the owner socket. Like `allowed`, it is the user's alone.
    */
   browser_port: number | null,
   /**
-   * The address a browser opens, `http://127.0.0.1:<port>/?key=<owner key>`, through the forward
-   * below; set while `state` is `serving`, null otherwise. The port is the one the forward binds
-   * on the browser's machine, which stays the same across launches, so the address can be
-   * bookmarked.
+   * The address a browser opens, `http://127.0.0.1:<port>/?key=<owner key>`; set while the
+   * browser port serves (the port is `browser_port`, which a browser on this computer opens as
+   * it is), else while `state` is `serving` and the daemon has an owner socket (the port is the
+   * one the socket's forward binds on the browser's machine, which stays the same across
+   * launches, so the address can be bookmarked); null otherwise.
    */
   address: string | null,
   /**
-   * The command the browser's machine forwards the owner socket (on Windows, `browser_port`)
-   * with, as `octoboardd address` prints it, the remote host left as `<server>` for the owner to
-   * fill in; set while `state` is `serving`, null otherwise.
+   * The command the browser's machine forwards a port of its own to the daemon with, as
+   * `octoboardd address` prints it, the remote host left as `<server>` for the owner to fill in:
+   * to `browser_port` while the port serves, else to the owner socket; set whenever `address` is,
+   * null otherwise.
    */
   forward_command: string | null,
   /**
@@ -4344,15 +4361,20 @@ export type RemoteAccess = {
    * its IPv6 addresses, each as text that `ssh` takes after `user@` as it is. Loopback, unspecified, multicast and link-local addresses and
    * `localhost` names are left out, as are deprecated, tentative and failed addresses where the
    * system says so (Linux, Windows) and temporary IPv6 addresses on Linux (they are kept on
-   * macOS and Windows). Read when the state is; set while `state` is `serving`, empty
-   * otherwise, and empty while the computer reports none.
+   * macOS and Windows). Read when the state is; set while `state` or `browser_state` is
+   * `serving`, empty otherwise, and empty while the computer reports none.
    */
   server_addresses: Array<string>,
   /**
-   * Why the daemon could not serve a browser though the setting is on; set while `state` is
+   * Why the daemon could not serve remote access though the setting is on; set while `state` is
    * `failed`, null otherwise.
    */
   failure: RemoteAccessFailure | null,
+  /**
+   * Why the daemon could not serve the browser port though browser access is on; set while
+   * `browser_state` is `failed`, null otherwise.
+   */
+  browser_failure: RemoteAccessFailure | null,
   /**
    * The connection details another device's application sets itself up from to reach this
    * daemon over the computer's SSH server, as `octoboardd connection` prints them on a server;
@@ -4362,8 +4384,8 @@ export type RemoteAccess = {
 };
 
 /**
- * Why the way in (the owner socket, or on Windows the browser port and the owner pipe) is not
- * served though remote access is on.
+ * Why a way in (the owner socket or owner pipe of remote access, the browser port of browser
+ * access) is not served though its setting is on.
  */
 export type RemoteAccessFailure = {
   reason: Received<RemoteAccessFailureReason>,
@@ -4377,10 +4399,11 @@ export type RemoteAccessFailure = {
 /**
  * The kind of failure, which a client words.
  */
-export type RemoteAccessFailureReason = "no_ui" | "not_private" | "socket_failed" | "owner_key_failed" | "port_in_use" | "port_failed" | "pipe_failed";
+export type RemoteAccessFailureReason = "no_ui" | "not_private" | "socket_failed" | "owner_key_failed" | "port_in_use" | "port_is_daemons" | "port_failed" | "pipe_failed";
 
 /**
- * What a daemon that follows the application does with remote access.
+ * What a daemon that follows the application does with one of its two settings, remote access
+ * (`state`) or browser access (`browser_state`).
  */
 export type RemoteAccessState = "off" | "serving" | "failed";
 
@@ -5371,6 +5394,10 @@ export type Request = {
 }
   | {
   "type": "set_remote_access",
+  allowed: boolean,
+}
+  | {
+  "type": "set_browser_access",
   allowed: boolean,
 }
   | {
@@ -6521,6 +6548,10 @@ export type RequestBody = {
 }
 | {
   "type": "set_remote_access",
+  allowed: boolean,
+}
+| {
+  "type": "set_browser_access",
   allowed: boolean,
 }
 | {

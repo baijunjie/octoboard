@@ -18,11 +18,11 @@ Si un léger décalage à la saisie et une image floue ne vous gênent pas, vous
 | --- | --- | --- | --- |
 | S’utilise depuis | L’app de bureau ou un navigateur | Un navigateur uniquement | Un navigateur uniquement |
 | Hôtes pris en charge | Serveur Linux, Mac, PC Windows | Serveur Linux, Mac, PC Windows | Mac ou PC Windows uniquement |
-| Sur l’hôte, vous activez ou installez | La connexion SSH (Connexion à distance sur un Mac, OpenSSH Server sous Windows ; un serveur Linux l’a déjà) | Tailscale ; un hôte Mac ou Linux a aussi besoin de socat | UU Remote ; un hôte Mac a aussi besoin de socat |
+| Sur l’hôte, vous activez ou installez | La connexion SSH (Connexion à distance sur un Mac, OpenSSH Server sous Windows ; un serveur Linux l’a déjà) | Tailscale | UU Remote |
 | Sur votre propre ordinateur, vous installez | Rien de plus | Tailscale ; et socat sur un ordinateur Mac ou Linux | UU Remote (Mac ou Windows) |
 | Le trafic passe par | Une connexion directe, sans tiers | Le réseau de Tailscale, avec votre compte | Le service de NetEase UU Remote, avec votre compte |
 | Fonctionne hors du même réseau | Seulement si l’hôte est joignable : sur le même réseau, à une adresse publique ou via un VPN | Oui | Oui |
-| Idéal pour | Les serveurs ; l’app de bureau complète ; les hôtes Mac et Linux auxquels d’autres personnes se connectent aussi | Atteindre vos propres machines de n’importe où sans SSH | Les utilisateurs en Chine continentale qui utilisent déjà UU Remote |
+| Idéal pour | Les serveurs ; l’app de bureau complète ; les hôtes Linux auxquels d’autres personnes se connectent aussi, et les hôtes Mac ou Windows que vous utilisez depuis l’app de bureau | Atteindre vos propres machines de n’importe où sans SSH | Les utilisateurs en Chine continentale qui utilisent déjà UU Remote |
 
 ## Avant de choisir un relais
 
@@ -33,7 +33,7 @@ Les guides Tailscale et UU Remote n’ont pas encore été entièrement testés 
 </Aside>
 
 <Aside type="caution" title="Uniquement sur des ordinateurs auxquels personne d’autre ne se connecte">
-Avec un relais, un autre compte utilisateur sur l’hôte ou sur votre propre ordinateur pourrait intercepter la clé du navigateur. N’utilisez Tailscale ou UU Remote que sur des ordinateurs auxquels vous seul vous connectez. La méthode [Se connecter via SSH](../remote-connections/) n’a pas cette faiblesse sur un hôte Mac ou Linux, et votre propre ordinateur ne l’a pas non plus quand vous utilisez l’app de bureau. Dans un navigateur, votre ordinateur l’a toujours, car la redirection SSH y écoute aussi sur un port <code dir="ltr">127.0.0.1</code>.
+Avec un relais, un autre compte utilisateur sur l’hôte ou sur votre propre ordinateur pourrait intercepter la clé du navigateur. N’utilisez Tailscale ou UU Remote que sur des ordinateurs auxquels vous seul vous connectez. La méthode [Se connecter via SSH](../remote-connections/) n’a pas cette faiblesse sur un hôte Linux dont l’accès par navigateur est désactivé, ni sur un hôte Mac ou Windows utilisé depuis l’app de bureau, et votre propre ordinateur ne l’a pas non plus quand vous utilisez l’app de bureau. Dans un navigateur, votre ordinateur l’a toujours, car la redirection SSH y écoute aussi sur un port <code dir="ltr">127.0.0.1</code>.
 </Aside>
 
 ## Ensuite

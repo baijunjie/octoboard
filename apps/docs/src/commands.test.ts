@@ -33,20 +33,15 @@ test("the install command and the download addresses follow the website's deploy
 
 test("the default port is the one the application settings give", () => {
   const { commands } = load();
-  assert.equal(commands.defaultPort, String(appConfig.defaultServerPort));
+  assert.equal(commands.defaultPort, String(appConfig.defaultBrowserPort));
 });
 
 test("every listener the Tailscale and UU Remote guides start binds loopback alone, around the default port", () => {
   const { tunnel } = loadWithEnv(commandsModule, ["tunnel"]) as unknown as { tunnel: Record<string, string> };
-  const port = appConfig.defaultServerPort;
-  assert.equal(tunnel.bridgePort, String(port + 1));
-  for (const name of ["bridge", "visitorForward"]) {
-    assert.match(tunnel[name], /^socat TCP-LISTEN:\d+,bind=127\.0\.0\.1,/, name);
-  }
-  assert.ok(tunnel.bridge.endsWith('UNIX-CONNECT:"$HOME/.octoboard/browser.sock"'));
+  const port = appConfig.defaultBrowserPort;
+  assert.match(tunnel.visitorForward, /^socat TCP-LISTEN:\d+,bind=127\.0\.0\.1,/);
   assert.ok(tunnel.visitorForward.startsWith(`socat TCP-LISTEN:${port},`));
   assert.ok(tunnel.visitorForwardWindows.includes(`listenaddress=127.0.0.1 listenport=${port} `));
-  assert.equal(tunnel.serveBridge, `tailscale serve --tcp=${port + 1} tcp://127.0.0.1:${port + 1}`);
   assert.equal(tunnel.serveBrowserPort, `tailscale serve --tcp=${port} tcp://127.0.0.1:${port}`);
   for (const command of Object.values(tunnel)) assert.equal(/funnel/i.test(command), false, command);
 });

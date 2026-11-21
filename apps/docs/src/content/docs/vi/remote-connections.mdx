@@ -65,10 +65,10 @@ Bạn cũng có thể truy cập một máy Mac hoặc PC Windows đang chạy �
 
 <Steps>
 
-1. Trên máy tính bạn muốn truy cập tới, mở <strong>Cài đặt › Truy cập từ xa</strong> trong {productName}.
+1. Trên máy tính bạn muốn truy cập tới, mở <strong>Cài đặt › Truy cập</strong> trong {productName}.
 2. Tại đó chọn <strong>Mở Cài đặt hệ thống</strong> (macOS) hoặc <strong>Mở Cài đặt</strong> (Windows), rồi bật <strong>Đăng nhập từ xa</strong> (macOS) hoặc <strong>OpenSSH Server</strong> (Windows), làm theo đường dẫn mà dòng đó chỉ ra, để máy tính này nhận đăng nhập SSH. Việc này cần quyền quản trị viên. Quay lại {productName}, dòng đó sẽ hiện <strong>Bật</strong>.
 3. Bật <strong>Cho phép truy cập từ xa</strong>, chọn <strong>Cho phép</strong> để xác nhận, và để {productName} tiếp tục chạy: nếu bạn thoát ứng dụng, truy cập từ xa sẽ dừng.
-4. Trên thẻ <strong>Ứng dụng {productName}</strong>, chọn <strong>Sao chép thông tin kết nối</strong>, rồi gửi chúng sang máy tính kia, chẳng hạn qua email hoặc tin nhắn.
+4. Chọn <strong>Sao chép thông tin kết nối</strong>, rồi gửi chúng sang máy tính kia, chẳng hạn qua email hoặc tin nhắn.
 5. Trên máy tính bạn sẽ làm việc, thêm máy đích như ở bước 2 đến 5 của [Kết nối với máy chủ Linux](#kết-nối-với-máy-chủ-linux), dán thông tin bạn đã gửi. Đăng nhập bằng tên người dùng và mật khẩu của bạn trên máy đích.
 
 </Steps>
@@ -81,7 +81,7 @@ Bạn sẽ biết là đã thành công khi một cửa sổ riêng mở ra, hi�
 
 1. Lấy lệnh chuyển tiếp SSH:
 
-   - <strong>Trên máy đích Mac hoặc Windows,</strong> trước tiên làm bước 1 đến 3 của [Dùng máy tính khác làm máy đích](#dùng-máy-tính-khác-làm-máy-đích). Sau đó, trên thẻ <strong>Trình duyệt</strong>, xem mục <strong>Bước 1: chuyển tiếp SSH</strong>. Bấm vào địa chỉ trong lệnh để chọn cách máy tính kia tới được máy này (hoặc chọn <strong>Tự nhập địa chỉ</strong> rồi thay <code dir="ltr">{commands.server}</code> sau), rồi chọn <strong>Sao chép lệnh chuyển tiếp</strong>. Đồng thời chọn <strong>Sao chép địa chỉ</strong> trong mục <strong>Bước 2: địa chỉ trình duyệt</strong>.
+   - <strong>Trên máy đích Mac hoặc Windows,</strong> trước tiên làm bước 1 và 2 của [Dùng máy tính khác làm máy đích](#dùng-máy-tính-khác-làm-máy-đích). Sau đó mở <strong>Cài đặt › Truy cập</strong>, bật <strong>Cho phép truy cập từ trình duyệt</strong> và chọn <strong>Cho phép</strong> để xác nhận. Trong tab <strong>Trình duyệt</strong>, xem mục <strong>Bước 1: chuyển tiếp SSH</strong>. Bấm vào địa chỉ trong lệnh để chọn cách máy tính kia tới được máy này (hoặc chọn <strong>Tự nhập địa chỉ</strong> rồi thay <code dir="ltr">{commands.server}</code> sau), rồi chọn <strong>Sao chép lệnh chuyển tiếp</strong>. Đồng thời chọn <strong>Sao chép địa chỉ cục bộ</strong> trong mục <strong>Trình duyệt trên máy tính này</strong>.
    - <strong>Trên máy chủ Linux,</strong> chạy lệnh này trên máy chủ. Nó in ra địa chỉ trình duyệt, rồi đến lệnh SSH cần chạy.
 
      <Code code={commands.address} lang="sh" />

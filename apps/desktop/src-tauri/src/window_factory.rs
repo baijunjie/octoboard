@@ -28,7 +28,7 @@ use crate::{
 /// bundle at all, say — where a window left hidden forever is strictly worse than one that briefly
 /// shows through in the OS's own appearance. Four seconds is generous next to that measured reveal
 /// without being so long that a genuinely stuck launch reads as a hung application rather than a
-/// slow one. Not armed for the main window after a launch at login.
+/// slow one. Not armed for the main window after a launch at login or the command line's launch into the background.
 const REVEAL_SAFETY_NET: Duration = Duration::from_secs(4);
 
 /// Opens the main window for the daemon as it is when the window is built. On the main thread.
@@ -55,12 +55,23 @@ pub fn open_main_window(
     }
     // Not after a launch at login: the UI's reveal can arrive late there (the system is busy
     // starting), and the net would show the whole window at a launch that may be meant to stay
-    // hidden. Should the UI never load, the menu bar icon, a reopen of the app or a notification
-    // still bring the window back. Peeked at, not taken: the reveal still needs to find it.
-    if !launch_at_login::login_launch_pending() {
+    // hidden. Nor after the command line's `--start-in-background` launch, which is meant to stay
+    // hidden whatever the setting says. Should the UI never load, the menu bar icon, a reopen of
+    // the app or a notification still bring the window back. Peeked at, not taken: the reveal
+    // still needs to find it.
+    if main_net_armed(
+        launch_at_login::login_launch_pending(),
+        background::background_launch_pending(),
+    ) {
         arm_reveal_safety_net(app, window);
     }
     Ok(())
+}
+
+/// Whether the main window gets the reveal safety net: not at a launch that may be meant to stay
+/// hidden, from the login entry (`login_launch`) or the command line (`background_launch`).
+fn main_net_armed(login_launch: bool, background_launch: bool) -> bool {
+    !login_launch && !background_launch
 }
 
 /// Opens a window of its own, labelled `label` (`daemon_window::register` took it), on `remote`, a
@@ -238,6 +249,13 @@ fn arm_reveal_safety_net(app: &AppHandle, window: tauri::WebviewWindow) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_main_window_gets_no_safety_net_at_a_launch_meant_to_stay_hidden() {
+        assert!(main_net_armed(false, false));
+        assert!(!main_net_armed(true, false));
+        assert!(!main_net_armed(false, true));
+    }
 
     #[test]
     fn a_remote_window_s_query_says_where_its_daemon_is_and_what_to_show_it_as() {

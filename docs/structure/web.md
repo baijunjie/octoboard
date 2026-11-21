@@ -35,8 +35,8 @@ The rules behind these edges are in `docs/conventions/website.md`, "Imports and 
   preview's `postMessage` contract (`@octoboard/ui/preview-messages`) and the agent marks (`@octoboard/ui/agent-marks`);
   it hosts the React preview in iframes and never imports its components.
 - Product identity and contacts come from `config/app.json`, mapped into runtime configuration by `nuxt.config.ts`; the
-  default server port (`defaultServerPort`) is read by `seo/downloads.ts` and pinned for `public/install.sh` by
-  `install-script.test.ts`.
+  default browser port (`defaultBrowserPort`) is read by `seo/downloads.ts`; `install-script.test.ts` holds
+  `public/install.sh` to naming no port of its own.
 - The download links depend on the release workflow's output: `seo/downloads.ts` reads the stable manifests of the
   `updater` release that `apps/desktop/scripts/publish-release.mjs` writes (names from
   `apps/desktop/scripts/release-manifest.mjs`), so a change to those manifests' names or the macOS disk image's name

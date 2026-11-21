@@ -19,12 +19,14 @@ export const SSH_SERVER_NAMES = {
   services: STEP.services,
 } as const satisfies Record<string, PlainMessageKey>;
 
-/** The words of the Remote access section's row about the computer's SSH server, by the system's name for it: Remote
+/** The words of the Access section's row about the computer's SSH server, by the system's name for it: Remote
  * Login on macOS, OpenSSH Server on Windows, an optional feature added in Settings and run as a service. */
 const WORDS = {
   macos: {
     label: "settings.remoteAccess.remoteLogin.label",
-    description: "settings.remoteAccess.remoteLogin.accessRequirement",
+    description: "settings.remoteAccess.remoteLogin.accessRequirementApp",
+    // Where the daemon also serves a browser, which logs in over SSH too.
+    descriptionBoth: "settings.remoteAccess.remoteLogin.accessRequirement",
     off: "settings.remoteAccess.remoteLogin.off",
     unknown: "settings.remoteAccess.remoteLogin.unknown",
     openFailed: "settings.remoteAccess.remoteLogin.openFailed",
@@ -39,7 +41,8 @@ const WORDS = {
   },
   windows: {
     label: "settings.remoteAccess.openSsh.label",
-    description: "settings.remoteAccess.openSsh.description",
+    description: "settings.remoteAccess.openSsh.descriptionApp",
+    descriptionBoth: "settings.remoteAccess.openSsh.description",
     off: "settings.remoteAccess.openSsh.off",
     unknown: "settings.remoteAccess.openSsh.unknown",
     openFailed: "settings.remoteAccess.openSsh.openFailed",

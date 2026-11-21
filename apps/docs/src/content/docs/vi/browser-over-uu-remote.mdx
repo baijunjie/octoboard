@@ -14,7 +14,7 @@ Hướng dẫn này mở {productName} trong trình duyệt trên máy tính c�
 Chưa chắc đây là cách phù hợp với bạn? Xem [Chọn cách kết nối](../choose-how-to-connect/).
 
 <Aside type="caution">
-Các bước này chưa được thử giữa hai thiết bị. Chúng dựa theo phần trợ giúp của chính UU Remote. Chương trình chuyển tiếp trên máy đích Mac đã được thử trên một máy tính duy nhất, kể cả kết nối trực tiếp của trình duyệt.
+Các bước này chưa được thử giữa hai thiết bị. Chúng dựa theo phần trợ giúp của chính UU Remote.
 </Aside>
 
 <strong>Trình duyệt trên máy tính của bạn</strong> → <strong>127.0.0.1 trên máy tính của bạn</strong> ⟷ UU Remote ⟷ <strong>127.0.0.1 trên máy đích</strong> → <strong>{productName}</strong>
@@ -25,7 +25,6 @@ Các bước này chưa được thử giữa hai thiết bị. Chúng dựa the
 - <strong>127.0.0.1 (loopback):</strong> một địa chỉ luôn có nghĩa là “chính máy tính này”.
 - <strong>Cổng:</strong> một con số chọn ra một chương trình trên máy tính, giống số cửa. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> là cổng {commands.defaultPort} trên máy tính này.
 - <strong>Ánh xạ cổng (端口映射):</strong> một tính năng của UU Remote khiến một cổng trên máy đích hiện ra như một cổng trên máy tính của bạn.
-- <strong>socat:</strong> một chương trình nhỏ, miễn phí, chuyển một kết nối từ nơi này sang nơi khác. Máy đích Mac cần nó làm chương trình chuyển tiếp.
 - <strong>Terminal:</strong> cửa sổ để bạn gõ lệnh: Terminal trên macOS, PowerShell trên Windows.
 
 </details>
@@ -37,7 +36,6 @@ Tính năng ánh xạ cổng của UU Remote làm cho {productName} của máy �
 - <strong>Cả hai máy tính đều là Mac hoặc PC Windows.</strong> UU Remote không có ánh xạ cổng cho Linux; để tới một máy chủ Linux, hãy dùng [Tailscale](../browser-over-tailscale/) hoặc [SSH](../remote-connections/).
 - <strong>Cả hai đều đã cài UU Remote và đăng nhập cùng một tài khoản,</strong> phiên bản 4.21.0 trở lên trên Windows và 4.32.0 trở lên trên macOS. Ánh xạ cổng chỉ hoạt động với TCP, đủ cho nhu cầu của {productName}. Tại thời điểm viết bài, UU Remote liệt kê ánh xạ cổng trong số các tính năng miễn phí; nếu còn nghi ngờ, hãy xem các gói hiện hành của nó.
 - <strong>Máy đích hiện trong Thiết bị của tôi (我的设备)</strong> trong UU Remote trên máy tính bạn dùng để duyệt web.
-- <strong>Máy đích Mac còn cần [Homebrew](https://brew.sh/)</strong>, để cài socat bên dưới.
 
 ## Trên máy đích
 
@@ -45,32 +43,10 @@ Tính năng ánh xạ cổng của UU Remote làm cho {productName} của máy �
 
 1. Lấy địa chỉ trình duyệt, nó mang khóa dùng để đăng nhập trình duyệt.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
    <HostBrowserAddress />
-   </TabItem>
-   <TabItem label="Windows">
-   <HostBrowserAddress windows />
-   </TabItem>
-   </Tabs>
 2. Tạo một cổng trên <code dir="ltr">{tunnel.loopback}</code> của máy đích dẫn tới {productName}. Cổng này là <strong>cổng của máy đích</strong> trong các bước bên dưới.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
-   Máy Mac phục vụ trình duyệt theo cách UU Remote không ánh xạ được, nên cần socat làm chương trình chuyển tiếp. Cài nó trong Terminal:
-
-   <Code code={tunnel.installSocatMac} lang="sh" />
-
-   Sau đó chạy lệnh này và để cửa sổ mở. Nó chỉ lắng nghe tại <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>.
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   Cổng của máy đích là <code dir="ltr">{tunnel.bridgePort}</code>.
-   </TabItem>
-   <TabItem label="Windows">
-   Không cần chạy gì: chính {productName} lắng nghe trên cổng trình duyệt, chỉ tại <code dir="ltr">127.0.0.1</code>. Cổng của máy đích là <strong>Cổng trình duyệt</strong> trên thẻ <strong>Trình duyệt</strong> ({commands.defaultPort} nếu bạn chưa đổi).
-   </TabItem>
-   </Tabs>
+   Không cần chạy gì: chính {productName} lắng nghe trên cổng trình duyệt, chỉ tại <code dir="ltr">127.0.0.1</code>. Cổng của máy đích là <strong>Cổng trình duyệt</strong> trong <strong>Cài đặt › Truy cập</strong> ({commands.defaultPort} nếu bạn chưa đổi).
 
 </Steps>
 
@@ -112,19 +88,18 @@ Bạn sẽ biết là đã thành công khi {productName} mở trong thẻ trìn
 
 ## Nếu không được
 
-- <strong>Ánh xạ hiện là đã kết nối, nhưng trang không tải:</strong> trên máy đích Mac, cửa sổ socat đã bị đóng hoặc lệnh của nó đã dừng; hoặc <strong>Cho phép truy cập từ xa</strong> đang tắt, hoặc {productName} không chạy trên máy đích.
+- <strong>Ánh xạ hiện là đã kết nối, nhưng trang không tải:</strong> <strong>Cho phép truy cập từ trình duyệt</strong> đang tắt, hoặc {productName} không chạy trên máy đích.
 - <strong>Ánh xạ không lưu hoặc không kết nối được:</strong> cổng cục bộ có thể đã bị chiếm trên máy tính này. Hãy chọn cổng khác, và đổi cả trong địa chỉ trình duyệt.
 - <strong>Trang bị từ chối hoặc trống:</strong> kiểm tra bạn đã mở địa chỉ tại <code dir="ltr">{tunnel.loopback}</code>.
 
 ## Tắt đi
 
 - <strong>Trên máy tính bạn đã dùng để duyệt web:</strong> tắt ánh xạ trong bảng ánh xạ cổng của UU Remote, hoặc xóa nó. Đóng bảng hoặc ngắt kết nối cũng làm nó dừng.
-- <strong>Trên máy đích Mac:</strong> dừng socat bằng <kbd>Ctrl</kbd>+<kbd>C</kbd>.
-- <strong>Trên máy đích,</strong> tắt <strong>Cho phép truy cập từ xa</strong> khi bạn không cần nữa. Việc này đóng lối vào của trình duyệt và ngắt mọi trang đã mở bằng khóa.
-- <strong>Nếu địa chỉ có thể đã bị lộ,</strong> hãy cấp cho nó một khóa mới bằng <strong>Đổi khóa</strong> trên thẻ <strong>Trình duyệt</strong>. Các trang đang mở bằng địa chỉ cũ sẽ bị ngắt.
+- <strong>Trên máy đích,</strong> tắt <strong>Cho phép truy cập từ trình duyệt</strong> khi bạn không cần nữa. Việc này đóng cổng trình duyệt và ngắt mọi trang đã mở bằng khóa.
+- <strong>Nếu địa chỉ có thể đã bị lộ,</strong> hãy cấp cho nó một khóa mới bằng <strong>Đổi khóa</strong> trong <strong>Cài đặt › Truy cập</strong>. Các trang đang mở bằng địa chỉ cũ sẽ bị ngắt.
 
 ## Bảo mật
 
 - <strong>Địa chỉ chính là mật khẩu:</strong> khóa của nó cho toàn quyền điều khiển {productName} trên máy đích, kể cả chạy bất kỳ lệnh nào. Nó có hiệu lực cho đến khi bạn đổi khóa. Nó nằm lại trong lịch sử và dấu trang của trình duyệt, đồng thời đồng bộ sang các thiết bị khác của bạn nếu bật đồng bộ trình duyệt.
 - <strong>Ai tới được nó:</strong> bất kỳ ai tới được cổng của máy đích và có khóa. Trên máy đích, nó chỉ lắng nghe tại <code dir="ltr">127.0.0.1</code>; bất kỳ ai dùng được tài khoản UU Remote của bạn để ánh xạ cổng tới máy đích cũng tới được nó, nên hãy giữ tài khoản đó an toàn.
-- <strong>Chỉ dùng trên những máy mà không ai khác đăng nhập:</strong> một tài khoản người dùng khác trên máy đích hoặc trên máy tính của bạn có thể kết nối tới các cổng <code dir="ltr">127.0.0.1</code> này, và khi ánh xạ hoặc socat không chạy, nó có thể chiếm cổng đó và nhận được khóa khi trình duyệt của bạn kết nối lại. [Kết nối qua SSH](../remote-connections/) không có điểm yếu này trên máy đích Mac hoặc Linux, và máy tính của bạn cũng không có khi dùng ứng dụng máy tính. Nhưng trong trình duyệt, máy tính của bạn vẫn có điểm yếu này, vì chuyển tiếp SSH ở đó cũng lắng nghe trên một cổng <code dir="ltr">127.0.0.1</code>.
+- <strong>Chỉ dùng trên những máy mà không ai khác đăng nhập:</strong> một tài khoản người dùng khác trên máy đích hoặc trên máy tính của bạn có thể kết nối tới các cổng <code dir="ltr">127.0.0.1</code> này, và có thể chiếm cổng trình duyệt trên máy đích khi {productName} không chạy hoặc đang khởi động lại, hoặc cổng được ánh xạ trên máy của bạn khi ánh xạ không chạy, rồi nhận được khóa khi trình duyệt của bạn kết nối lại. [Kết nối qua SSH](../remote-connections/) không có điểm yếu này trên máy đích Linux đã tắt truy cập từ trình duyệt, cũng như trên máy đích Mac hoặc Windows khi dùng từ ứng dụng máy tính, và máy tính của bạn cũng không có khi dùng ứng dụng máy tính. Nhưng trong trình duyệt, máy tính của bạn vẫn có điểm yếu này, vì chuyển tiếp SSH ở đó cũng lắng nghe trên một cổng <code dir="ltr">127.0.0.1</code>.

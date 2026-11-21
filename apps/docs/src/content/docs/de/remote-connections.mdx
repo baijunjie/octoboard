@@ -65,10 +65,10 @@ Du kannst auch einen Mac oder Windows-PC erreichen, auf dem die {productName}-Ap
 
 <Steps>
 
-1. Öffne auf dem Computer, den du erreichen möchtest, in {productName} <strong>Einstellungen › Fernzugriff</strong>.
+1. Öffne auf dem Computer, den du erreichen möchtest, in {productName} <strong>Einstellungen › Zugriff</strong>.
 2. Wähle dort <strong>Systemeinstellungen öffnen</strong> (macOS) oder <strong>Einstellungen öffnen</strong> (Windows) und schalte <strong>Entfernte Anmeldung</strong> (macOS) oder <strong>OpenSSH Server</strong> (Windows) ein, wie es der Pfad in der Zeile angibt, damit dieser Computer SSH-Anmeldungen annimmt. Dafür sind Administratorrechte nötig. Zurück in {productName} zeigt die Zeile dann <strong>Ein</strong>.
 3. Schalte <strong>Fernzugriff erlauben</strong> ein, bestätige mit <strong>Erlauben</strong> und lass {productName} geöffnet: Wenn du es beendest, endet der Fernzugriff.
-4. Wähle auf dem Tab <strong>{productName}-App</strong> die Option <strong>Verbindungsdaten kopieren</strong> und sende sie an den anderen Computer, zum Beispiel per E-Mail oder Chat.
+4. Wähle die Option <strong>Verbindungsdaten kopieren</strong> und sende sie an den anderen Computer, zum Beispiel per E-Mail oder Chat.
 5. Füge den Host auf dem Computer, von dem aus du arbeitest, wie in den Schritten 2 bis 5 von [Verbindung zu einem Linux-Server herstellen](#verbindung-zu-einem-linux-server-herstellen) hinzu und füge die gesendeten Daten ein. Melde dich mit deinem Benutzernamen und Passwort auf dem Host an.
 
 </Steps>
@@ -81,7 +81,7 @@ Es hat geklappt, wenn sich ein eigenes Fenster mit den Projekten und Sitzungen d
 
 1. Besorge dir den Befehl für die SSH-Weiterleitung:
 
-   - <strong>Bei einem Mac- oder Windows-Host</strong> führe zuerst die Schritte 1 bis 3 von [Einen anderen Computer als Host verwenden](#einen-anderen-computer-als-host-verwenden) aus. Sieh dir dann auf dem Tab <strong>Browser</strong> den Abschnitt <strong>Schritt 1: SSH-Weiterleitung</strong> an. Klicke auf die Adresse im Befehl, um zu wählen, wie dein anderer Computer diesen erreicht (oder wähle <strong>Adresse selbst eingeben</strong> und ersetze <code dir="ltr">{commands.server}</code> später), und wähle dann <strong>Weiterleitungsbefehl kopieren</strong>. Wähle außerdem unter <strong>Schritt 2: Browser-Adresse</strong> die Option <strong>Adresse kopieren</strong>.
+   - <strong>Bei einem Mac- oder Windows-Host</strong> führe zuerst die Schritte 1 und 2 von [Einen anderen Computer als Host verwenden](#einen-anderen-computer-als-host-verwenden) aus. Öffne dann <strong>Einstellungen › Zugriff</strong>, schalte <strong>Browserzugriff erlauben</strong> ein und bestätige mit <strong>Erlauben</strong>. Sieh dir im Tab <strong>Browser</strong> den Abschnitt <strong>Schritt 1: SSH-Weiterleitung</strong> an. Klicke auf die Adresse im Befehl, um zu wählen, wie dein anderer Computer diesen erreicht (oder wähle <strong>Adresse selbst eingeben</strong> und ersetze <code dir="ltr">{commands.server}</code> später), und wähle dann <strong>Weiterleitungsbefehl kopieren</strong>. Wähle außerdem unter <strong>Browser auf diesem Computer</strong> die Option <strong>Lokale Adresse kopieren</strong>.
    - <strong>Bei einem Linux-Server</strong> führe dies auf dem Server aus. Es gibt die Browser-Adresse aus und danach den SSH-Befehl, den du ausführen sollst.
 
      <Code code={commands.address} lang="sh" />

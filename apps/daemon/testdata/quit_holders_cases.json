@@ -1,0 +1,54 @@
+{
+  "description": "What holds a quit of the application, or an `octoboardd stop`, up: the daemon's stop check (coordinator/stop_check.rs, holds_quit and terminal_holds_quit) and a window's quit confirmation (packages/ui/src/lifecycle/useAppExit.ts, quitHolders) both read the sessions with the status a client is shown. A Rust test and a UI test both run every case, so that the two copies of the rule stay in step. `background` is whether the session has work left running in the background.",
+  "cases": [
+    {
+      "name": "starting, working and dormant sessions hold it up",
+      "sessions": [
+        { "id": "starting", "status": "starting" },
+        { "id": "working", "status": "working" },
+        { "id": "dormant", "status": "dormant" }
+      ],
+      "shellTerminals": [],
+      "holdingSessions": ["starting", "working", "dormant"],
+      "holdingShellTerminals": []
+    },
+    {
+      "name": "a session waiting for the user holds it up",
+      "sessions": [{ "id": "waiting", "status": "waiting_user" }],
+      "shellTerminals": [],
+      "holdingSessions": ["waiting"],
+      "holdingShellTerminals": []
+    },
+    {
+      "name": "an idle session holds it up only with work left in the background",
+      "sessions": [
+        { "id": "at-rest", "status": "idle" },
+        { "id": "background", "status": "idle", "background": true }
+      ],
+      "shellTerminals": [],
+      "holdingSessions": ["background"],
+      "holdingShellTerminals": []
+    },
+    {
+      "name": "an interrupted or archived session does not hold it up",
+      "sessions": [
+        { "id": "interrupted", "status": "interrupted" },
+        { "id": "archived", "status": "archived" }
+      ],
+      "shellTerminals": [],
+      "holdingSessions": [],
+      "holdingShellTerminals": []
+    },
+    {
+      "name": "only a running shell terminal that is busy holds it up",
+      "sessions": [],
+      "shellTerminals": [
+        { "id": "busy", "state": "running", "busy": true },
+        { "id": "prompt", "state": "running", "busy": false },
+        { "id": "exited", "state": "exited", "busy": false }
+      ],
+      "holdingSessions": [],
+      "holdingShellTerminals": ["busy"]
+    }
+  ]
+}

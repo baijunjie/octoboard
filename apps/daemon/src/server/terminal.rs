@@ -594,7 +594,7 @@ async fn handle_term(
             () = admission.revoked() => {
                 tracing::info!(
                     terminal = %id,
-                    "a terminal client's owner key was rotated; it is disconnected"
+                    "a terminal client's owner key was rotated or the way in it came through closed; it is disconnected"
                 );
                 let _ = socket.send(Message::Close(None)).await;
                 break;

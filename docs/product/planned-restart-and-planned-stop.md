@@ -1,7 +1,7 @@
 # Planned restart and planned stop
 
 A **planned restart** stops the daemon without ending anything: every session and shell terminal is handed over to the
-process holder it runs in, with its screen saved, and the next daemon comes up on the same port and takes them over
+process holder it runs in, with its screen saved, and the next daemon comes up and takes them over
 with their screens as they were, exactly wherever the saved screen can reproduce them (see "The screen of a terminal
 handed over" in `docs/product/process-holders.md`). A **planned stop** is the same handover with no next daemon: the
 daemon exits with status 0, and the next daemon started — by hand, by `octoboardd start` or by the desktop application —
@@ -50,8 +50,9 @@ for does not replace it, and a planned stop asked for after the desktop applicat
 replaces it, and one asked for once it has begun cuts it short (see "An ordinary stop during a planned stop" below).
 
 **Who starts the next daemon.** A daemon no service manager restarts starts the next one itself once it has handed
-everything over and let go of `daemon.lock`: in the background, as `octoboardd start` does, on the same port and with
-the same launch key, so a page or program that held the old address and key reaches the new daemon unchanged. The key goes to
+everything over and let go of `daemon.lock`: in the background, as `octoboardd start` does, on the same port (the
+listener is handed over) and with the same launch key, so a page or program that held the old address and key reaches
+the new daemon unchanged. The key goes to
 the next daemon on its standard input, never on its command line or in its environment, where other users of the
 machine could find it (see `docs/product/who-can-reach-the-daemon.md`); a second line there names the stopping daemon,
 which the next daemon records as the daemon it took over from (see `daemon.owner` in

@@ -6,9 +6,11 @@
 //! daemon calls instead.
 
 mod address;
+mod application;
 mod background;
 #[cfg(all(test, unix))]
 mod background_tests;
+mod browser;
 mod connection;
 mod holder;
 pub(crate) mod hook;
@@ -19,6 +21,9 @@ mod owner_endpoint;
 mod restart_check;
 #[cfg(all(test, unix))]
 mod restart_tests;
+#[cfg(all(test, unix))]
+mod stop_and_browser_tests;
+mod stop_guard;
 mod succession;
 pub(crate) mod update;
 mod verify_archive;
@@ -47,8 +52,8 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) parent_pid: Option<u32>,
 
-    /// Listen on this loopback port instead of one the system assigns, so the address stays the
-    /// same across restarts: what a service definition runs, and what `start` starts.
+    /// Listen on this loopback port instead of one the system assigns, so that it stays the same
+    /// across starts; the browser port (`octoboardd browser`) is another.
     #[arg(long, value_parser = clap::value_parser!(u16).range(1..))]
     pub(crate) port: Option<u16>,
 
@@ -73,30 +78,44 @@ pub(crate) struct Cli {
     pub(crate) service_managed: bool,
 }
 
-/// The port `start` listens on when none is given: `defaultServerPort` in `config/app.json`, which
-/// the install script's service uses too, so that the documented SSH forward works unchanged. The
-/// foreground daemon keeps a port the system assigns: the desktop application and development runs
-/// start it without one.
-pub(crate) const DEFAULT_START_PORT: u16 =
-    match u16::from_str_radix(env!("OCTOBOARD_DEFAULT_SERVER_PORT"), 10) {
-        Ok(port) => port,
-        Err(_) => panic!("OCTOBOARD_DEFAULT_SERVER_PORT is not a port number"),
-    };
+/// The line the daemon prints once it listens, which the desktop application reads for the port and
+/// key and `octoboardd start` shows.
+pub(crate) fn listening_line(port: u16, key: &str) -> String {
+    format!("octoboardd listening on 127.0.0.1:{port} with key {key}")
+}
+
+/// The port a line made by [`listening_line`] names.
+pub(crate) fn listening_port(line: &str) -> Option<u16> {
+    line.strip_prefix("octoboardd listening on 127.0.0.1:")?
+        .split(' ')
+        .next()?
+        .parse()
+        .ok()
+}
 
 #[derive(Subcommand)]
 pub(crate) enum Command {
-    /// Start the daemon in the background on a fixed loopback port and return once it is
-    /// listening; it keeps running after the terminal closes, until `stop`.
+    /// Start the daemon in the background and return once it is listening; it keeps running
+    /// after the terminal closes, until `stop`.
     Start {
-        /// The loopback port the daemon listens on, and keeps across restarts.
-        #[arg(long, default_value_t = DEFAULT_START_PORT, value_parser = clap::value_parser!(u16).range(1..))]
-        port: u16,
+        /// The loopback port the daemon listens on, and keeps across restarts; one the system
+        /// assigns when absent. The browser port (`octoboardd browser`) is another.
+        #[arg(long, value_parser = clap::value_parser!(u16).range(1..))]
+        port: Option<u16>,
     },
     /// Stop the daemon running against this data directory, which ends every session it runs
-    /// as interrupted.
-    Stop,
-    /// Restart the daemon running against this data directory on the same address, keeping every
-    /// session it runs running, with its screen, under the daemon that takes over. Where the
+    /// as interrupted. Where that would interrupt work (a session the application's quit
+    /// confirmation asks about, or a running shell terminal) it says what runs, stops nothing and
+    /// exits with status 1. On macOS, the desktop application's own copy quits the application instead.
+    Stop {
+        /// Stop regardless of the work it would interrupt.
+        #[arg(long)]
+        force: bool,
+    },
+    /// Restart the daemon running against this data directory, keeping every session it runs
+    /// running, with its screen, under the daemon that takes over; the browser address, which
+    /// carries the owner key and the browser port, stays the same, and so does the daemon's own
+    /// port unless a service manager restarts it without `--port`, which takes a new one. Where the
     /// daemon this executable would start cannot take some of them over (a process holder older
     /// than it adopts), it says which and asks first when run in a terminal; run otherwise, it
     /// restarts regardless. Refused for a daemon that follows the desktop application.
@@ -169,6 +188,13 @@ pub(crate) enum Command {
         /// application is not running.
         #[arg(long, conflicts_with = "rotate")]
         json: bool,
+    },
+    /// Turn the running daemon's browser access on or off, or say where it stands: the setting
+    /// Settings changes, so a change is made through the running daemon and applies at once. With
+    /// no daemon running, it says so and changes nothing.
+    Browser {
+        #[command(subcommand)]
+        action: browser::Action,
     },
     /// Print the connection details another device sets itself up from: the SSH host, port and
     /// user, the SSH server's host key fingerprint and this octoboardd's path, with no secret, as
@@ -332,7 +358,7 @@ impl From<McpKind> for protocol::SessionKind {
 pub(crate) fn run(command: Command) -> Result<()> {
     match command {
         Command::Start { port } => std::process::exit(background::start(port)?),
-        Command::Stop => std::process::exit(background::stop()?),
+        Command::Stop { force } => std::process::exit(background::stop(force)?),
         Command::Restart { yes, if_safe } => std::process::exit(restart_check::run_restart(
             restart_check::mode_of(yes, if_safe, restart_check::Mode::Regardless),
         )?),
@@ -361,6 +387,7 @@ pub(crate) fn run(command: Command) -> Result<()> {
         } else {
             address::print_address(rotate)?
         }),
+        Command::Browser { action } => std::process::exit(browser::run(&action)?),
         Command::Connection {
             host,
             ssh_port,
@@ -475,6 +502,13 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn the_listening_line_names_its_port() {
+        let line = listening_line(40123, &"a".repeat(64));
+        assert_eq!(listening_port(&line), Some(40123));
+        assert_eq!(listening_port("something else"), None);
+    }
+
     fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
         Cli::try_parse_from(["octoboardd"].into_iter().chain(args.iter().copied()))
     }
@@ -574,26 +608,57 @@ mod tests {
     }
 
     #[test]
-    fn start_takes_the_default_port_unless_given_one_and_stop_and_status_take_none() {
+    fn start_takes_a_port_only_when_given_one_and_stop_and_status_take_none() {
         assert!(matches!(
             parse(&["start"]).unwrap().command,
-            Some(Command::Start {
-                port: DEFAULT_START_PORT
-            })
+            Some(Command::Start { port: None })
         ));
         assert!(parse(&["start", "--port", "0"]).is_err());
         assert!(matches!(
             parse(&["start", "--port", "7531"]).unwrap().command,
-            Some(Command::Start { port: 7531 })
+            Some(Command::Start { port: Some(7531) })
         ));
         assert!(matches!(
             parse(&["stop"]).unwrap().command,
-            Some(Command::Stop)
+            Some(Command::Stop { force: false })
+        ));
+        assert!(matches!(
+            parse(&["stop", "--force"]).unwrap().command,
+            Some(Command::Stop { force: true })
         ));
         assert!(matches!(
             parse(&["status"]).unwrap().command,
             Some(Command::Status)
         ));
+    }
+
+    #[test]
+    fn browser_takes_on_with_an_optional_port_off_and_status() {
+        use browser::Action;
+        let action = |args: &[&str]| match parse(args).unwrap().command {
+            Some(Command::Browser { action }) => action,
+            _ => panic!("not the browser command: {args:?}"),
+        };
+        assert!(matches!(
+            action(&["browser", "on"]),
+            Action::On { port: None }
+        ));
+        assert!(matches!(
+            action(&["browser", "on", "--port", "4000"]),
+            Action::On { port: Some(4000) }
+        ));
+        assert!(matches!(action(&["browser", "off"]), Action::Off));
+        assert!(matches!(action(&["browser", "status"]), Action::Status));
+        // A port is a number from 1 to 65535, and only `on` takes one; the action is not optional.
+        for args in [
+            &["browser", "on", "--port", "0"][..],
+            &["browser", "on", "--port", "65536"],
+            &["browser", "off", "--port", "4000"],
+            &["browser", "status", "--port", "4000"],
+            &["browser"],
+        ] {
+            assert!(parse(args).is_err(), "{args:?}");
+        }
     }
 
     #[test]

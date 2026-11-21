@@ -1,12 +1,15 @@
 //! The browser's way in: the listeners that serve the embedded UI and accept the owner key
 //! ([`crate::owner_key`]), which a browser on another machine reaches through an SSH forward, and
 //! another device's application through `octoboardd proxy`. The server form's daemon always serves
-//! one; the desktop application's daemon while Allow remote access is on
+//! its socket, and a loopback port besides while browser access is on; the desktop application's
+//! daemon serves its socket (on Windows its owner pipe) while Allow remote access is on and its
+//! loopback port while Allow browser access is on, each apart from the other
 //! ([`crate::coordinator::remote_access`]).
 //!
-//! The way in is the owner socket in the data directory on Linux and macOS ([`socket`]), and on
-//! Windows, whose SSH server cannot forward to a socket, a loopback port of its own ([`port`]) with
-//! the owner pipe ([`crate::platform::owner_pipe`]) beside it for `octoboardd proxy`. They are all
+//! The way in is the owner socket in the data directory on Linux and macOS ([`socket`]), a
+//! loopback port of its own ([`port`]) beside it on macOS and in the server form, and on
+//! Windows, whose SSH server cannot forward to a socket, the port with the owner pipe
+//! ([`crate::platform::owner_pipe`]) in place of the socket, for `octoboardd proxy`. They are all
 //! served by the one accept loop here; [`forward`] makes the command a browser's machine forwards
 //! them with.
 //!
@@ -68,23 +71,47 @@ impl Accept for Releasable {
 }
 
 /// Serves `router` on `listener` until the returned task is dropped: each connection on a task of
-/// its own, WebSocket upgrades included, as `axum::serve` serves the TCP port. A connection already
-/// open runs on past the drop, as one on the TCP port does once `axum::serve` is gone.
+/// its own, WebSocket upgrades included, as `axum::serve` serves the TCP port. The connections
+/// made through it are told when the task is dropped ([`WayClosed`]) and end as well.
 pub fn serve_on(listener: impl Accept, router: axum::Router) -> ServeTask {
+    let (closed, watching) = tokio::sync::watch::channel(());
     ServeTask {
-        task: accept_loop(listener, router),
+        task: accept_loop(listener, router.layer(axum::Extension(WayClosed(watching)))),
         port: None,
+        _closed: closed,
     }
 }
 
-/// [`serve_on`] for the loopback port the browser is served at on Windows ([`port`]), whose
-/// listener is closed as the returned task is dropped, not once the cancelled task is next run: the
-/// port is free again at once, for remote access turned off and on, or a change of port and back.
+/// What a connection made through a listener served by [`serve_on`] or [`serve_on_port`] watches,
+/// as a request extension: it resolves once that listener is closed, which the connection then
+/// ends at. A page's connection upgraded to a WebSocket outlives the accept loop and its own task,
+/// so closing the listener cannot end it but by telling it. Each way in has its own, which is what
+/// lets Allow remote access and Allow browser access be turned off apart: the owner key admits
+/// the connections of both, and is let go only once both are closed.
+#[derive(Clone)]
+pub struct WayClosed(tokio::sync::watch::Receiver<()>);
+
+impl WayClosed {
+    /// Resolves when the listener the request came through has been closed.
+    pub async fn closed(&mut self) {
+        // Nothing is ever sent: the sender going away is the close.
+        let _ = self.0.changed().await;
+    }
+}
+
+/// [`serve_on`] for a loopback port the browser is served at ([`port`]), whose listener is closed
+/// as the returned task is dropped, not once the cancelled task is next run: the port is free
+/// again at once, for browser access turned off and on, or a change of port and back.
 pub fn serve_on_port(listener: tokio::net::TcpListener, router: axum::Router) -> ServeTask {
     let slot = Arc::new(Mutex::new(Some(listener)));
+    let (closed, watching) = tokio::sync::watch::channel(());
     ServeTask {
-        task: accept_loop(Releasable(slot.clone()), router),
+        task: accept_loop(
+            Releasable(slot.clone()),
+            router.layer(axum::Extension(WayClosed(watching))),
+        ),
         port: Some(slot),
+        _closed: closed,
     }
 }
 
@@ -124,13 +151,16 @@ pub struct ServeTask {
     task: tokio::task::JoinHandle<()>,
     /// The listener of a port served by [`serve_on_port`], closed on the drop.
     port: Option<Arc<Mutex<Option<tokio::net::TcpListener>>>>,
+    /// The sender the connections' [`WayClosed`] watch, which the drop ends.
+    _closed: tokio::sync::watch::Sender<()>,
 }
 
 impl Drop for ServeTask {
     fn drop(&mut self) {
-        if let Some(port) = &self.port {
+        if let Some(listener) = &self.port {
             drop(
-                port.lock()
+                listener
+                    .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
                     .take(),
             );

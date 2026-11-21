@@ -66,7 +66,7 @@ Bu komut programı kurar, bir systemd kullanıcı hizmeti olarak ayarlar ve baş
 
 <Code code={commands.linger} lang="sh" />
 
-Varsayılan bağlantı noktası <code dir="ltr">{commands.defaultPort}</code> değeridir. Başka birini kullanmak için <code dir="ltr">{commands.portOption}</code> seçeneğini hizmet komutunun ya da <code dir="ltr">{commands.start}</code> komutunun sonuna ekleyin.
+octoboardd kendi bağlantı noktasını kendisi seçer ve bunu bilmeniz gerekmez: <code dir="ltr">{commands.address}</code> komutunun yazdırdığı adres ve <code dir="ltr">ssh</code> komutu, her seferinde aynı olan <code dir="ltr">{commands.defaultPort}</code> bağlantı noktasını belirtir.
 
 ## Yükseltme
 

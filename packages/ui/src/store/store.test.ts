@@ -679,14 +679,14 @@ it("holds whether the daemon keeps the computer awake from the snapshot and foll
 it("holds where remote access stands from the snapshot and follows remote_access_updated", () => {
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   expect(daemon.store.getState().remoteAccess).toBeNull();
-  const off = { allowed: false, state: "off", address: null, forward_command: null, server_addresses: [] as string[], connection: null, failure: null } as const;
+  const off = { allowed: false, state: "off", address: null, forward_command: null, server_addresses: [] as string[], connection: null, failure: null, browser_failure: null } as const;
   const snapshot = {
     type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
     agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], agent_cli_statuses: [], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings", keep_awake: false }, keep_awake_held: false, shell_terminals: [], remote_access: off,
   } as unknown as Event;
   client.onEvents!([snapshot]);
   expect(daemon.store.getState().remoteAccess).toEqual(off);
-  const serving = { allowed: true, state: "serving", browser_port: null, address: "http://127.0.0.1:3369/?key=k", forward_command: "ssh", server_addresses: [] as string[], connection: null, failure: null } as const;
+  const serving = { allowed: true, state: "serving", browser_allowed: false, browser_state: "off", browser_port: null, address: "http://127.0.0.1:3369/?key=k", forward_command: "ssh", server_addresses: [] as string[], connection: null, failure: null, browser_failure: null } as const;
   client.onEvents!([{ type: "remote_access_updated", remote_access: serving }]);
   expect(daemon.store.getState().remoteAccess).toEqual(serving);
   const held = daemon.store.getState().remoteAccess;

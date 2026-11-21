@@ -17,8 +17,8 @@ Paths below are relative to `apps/web/` unless they start with `apps/` or `packa
 - **`seo/agent-documents.ts` reads the catalogs with `node:fs` and is imported only by `nuxt.config.ts` and Node
   tests**, never by Vue code, since it does not run in the browser.
 - **Product identity and contacts come from `config/app.json`**, mapped into runtime configuration by `nuxt.config.ts`
-  (how copy names the product is in `docs/conventions/i18n-in-code.md`, "Website copy"). The default port is read by
-  `seo/downloads.ts` and pinned for `public/install.sh` by `test/install-script.test.ts`.
+  (how copy names the product is in `docs/conventions/i18n-in-code.md`, "Website copy"). The default browser port is read by
+  `seo/downloads.ts`; `test/install-script.test.ts` holds `public/install.sh` to naming no port of its own.
 - **`seo/downloads.ts` reads the stable manifests of the `updater` release by the names `release-manifest.mjs`
   gives**, so a change to those names in `apps/desktop/scripts/` changes this module in the same change.
 

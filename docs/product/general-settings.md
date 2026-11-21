@@ -1,21 +1,23 @@
 # General settings
 
-Settings' **General** section (see "General" in `docs/product/settings.md`): app-wide settings, the **Language** row
-first, on its own, then five groups, each under a heading (see "Group
-headings" in `docs/product/settings.md`):
+Settings' **General** section (see "General" in `docs/product/settings.md`): the **Language** row first, on its own
+because it governs the whole interface, then app-wide settings in six groups, each under a heading (see "Group
+headings" in `docs/product/settings.md`). The groups are ordered by how often each is used, most frequent first:
 
-- **Startup**: **Launch at login**, in the desktop application's main window where the system offers it (see "Launch
-  at login" below), then **Resume sessions on start**, in every client;
-- **Window**, in the desktop application's main window only: **Keep running in the background**, then **Show menu bar
-  icon**;
+- **Sorting**: **Sessions**, **Active projects** and **Inactive projects**, in every client;
+- **Terminals**: **Close idle terminals when closing the panel**, in every client;
 - **Power**, in every client, where the daemon's host can be held awake: **Prevent sleep**, and under it, while it is
   on, **When to prevent sleep**;
-- **Terminals**: **Close idle terminals when closing the panel**, in every client;
-- **Sorting**: **Sessions**, **Active projects** and **Inactive projects**, in every client.
+- **Window**, in the desktop application's main window only: **Keep running in the background**, then **Show menu bar
+  icon**;
+- **Startup**: **Launch at login**, in the desktop application's main window where the system offers it (see "Launch
+  at login" below), then **Resume sessions on start**, in every client;
+- **Command line**, in the macOS application's main window only: **Command-line tool** (see "Command-line tool"
+  below).
 
 A group with nothing to show in the client is left out, so a browser, and a remote window of the desktop application
-(see "The remote window" in `docs/product/remote-daemons.md`), show Language, then Startup with Resume
-sessions on start alone, Power where the daemon's host can be held awake, Terminals and Sorting. In a remote window
+(see "The remote window" in `docs/product/remote-daemons.md`), show Language, then Sorting, Terminals, Power where the
+daemon's host can be held awake, and Startup with Resume sessions on start alone. In a remote window
 every setting of the section that the daemon keeps is the remote daemon's.
 
 How each of these switches saves is in "How switches save" in `docs/product/settings.md`.
@@ -41,6 +43,32 @@ it in System Settings, and an **Open System Settings** button stands beside the 
 under the text (see "In a narrow window" in `docs/product/settings.md`). What the system's entry is, how the state is
 read, the approval, failures and what a launch at login does are in `docs/product/launch-at-login.md`. A configuration
 export never carries it.
+
+## Command-line tool
+
+**Command line**, **Command-line tool**, in the macOS application's main window only. macOS puts nothing inside an
+application bundle on the PATH, so a terminal finds no `octoboardd` by name; this row makes the link that does. The link
+is a symbolic link named `octoboardd` to the `octoboardd` inside the application (`Contents/MacOS/octoboardd`), not a
+copy, so it runs the build an update puts there. **Nothing makes it at launch**: the user installs it from the row.
+
+- **Install** goes to `/usr/local/bin`: made directly where the user may write there, and otherwise through the system's
+  own administrator prompt, which creates the directory too. Where that is refused or fails, the link goes to
+  `~/.local/bin` instead, and the row then says to add that directory to the PATH if it is not on it yet; but where
+  `/usr/local/bin` already holds a link of the application's, the refusal or failure is the answer, said in the row,
+  with no fallback, since a link in `~/.local/bin` would be hidden behind the old one. A file of that name that is not a
+  link is never replaced: the row says so. Nor is a link, at either location, that leads to anything but an
+  application's `octoboardd`: it blocks the install, and the row says what is there. A link to another copy of the
+  application is replaced. A link left in `~/.local/bin` by an earlier install is removed once the one in
+  `/usr/local/bin` is made.
+- **The row shows its state each time Settings opens**, and again when the window gets focus back, saying so in the row
+  and never in a dialog: **Not installed**; **Installed at** the link's path; installed but running **another copy** of
+  the application; or installed but the copy it points to **is no longer there**. A refusal or failure of an action is
+  said in the row too.
+- **The actions follow the state**: Install where there is no link; Reinstall (which points the link at this
+  application) and Remove where there is one, whichever of the three states.
+
+Run from the link, `octoboardd` is the application's own copy, whose `start` and `stop` start and quit the application
+(see "The application's copy of `octoboardd`" in `docs/product/daemon-command-line.md`).
 
 ## Resume sessions on start
 

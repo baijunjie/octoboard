@@ -3,6 +3,7 @@ import { type HostFacts, inTauri } from "./host";
 import { tauriPlatform } from "./tauri";
 import type { Agent } from "../protocol";
 
+export { CommandLineError } from "./commandLineError";
 export { ConfigurationFileError } from "./configurationFileError";
 export { UpdaterError } from "./updaterError";
 export { LinkForwardError } from "./linkForwardError";
@@ -104,6 +105,8 @@ export interface PlatformAdapter {
   readonly keepAwake?: KeepAwakeCapability;
   /** Opening the application when the user logs in, present only where the system lets the shell register it. */
   readonly launchAtLogin?: LaunchAtLoginCapability;
+  /** Linking the application's `octoboardd` into the PATH, present only where the shell offers it (the macOS application). */
+  readonly commandLine?: CommandLineCapability;
   /** Looking for, downloading and installing a new version of the application: present only where a shell
    * can replace itself, so the update notices and Settings rows exist only there. */
   readonly updater?: UpdaterCapability;
@@ -505,6 +508,27 @@ export interface LaunchAtLoginCapability {
   /** Opens the system's list of login items, where the user approves a registration that is `requiresApproval`.
    * Rejects when the system did not open it. */
   openSystemSettings(): Promise<void>;
+}
+
+/** Where the command-line tool, a link named `octoboardd` to the application's own, stands. `path` is the link's. */
+export type CommandLineState =
+  | { state: "notInstalled" }
+  /** `pathNote`: the link is in a directory the user may still have to add to their PATH. */
+  | { state: "installed"; path: string; pathNote: boolean }
+  /** The link runs another copy of the application. */
+  | { state: "otherCopy"; path: string }
+  /** The link leads nowhere: the copy it was made for is gone. */
+  | { state: "unresolved"; path: string };
+
+export interface CommandLineCapability {
+  /** Where the tool stands now, read each time. */
+  status(): Promise<CommandLineState>;
+  /** Makes the link, replacing one made earlier, which may raise the system's administrator prompt, and resolves with
+   * where the tool stands; rejects with a `CommandLineError` when it could not be made. */
+  install(): Promise<CommandLineState>;
+  /** Removes the link and resolves with where the tool stands; rejects with a `CommandLineError` when it could not be
+   * removed. */
+  remove(): Promise<CommandLineState>;
 }
 
 export interface KeepAwakeCapability {

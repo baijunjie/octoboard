@@ -36,8 +36,8 @@ that rule. What is the user's alone is never changed through these tools, by any
   `docs/product/consoles.md`);
 - adding, editing or removing an account, or turning one off or back on;
 - adding or removing a trusted folder;
-- turning remote access to the desktop application's daemon on or off, changing its browser port, or rotating its owner
-  key, none of which the tools read either (see `docs/product/remote-access-settings.md`), since opening the computer
+- turning Allow remote access or Allow browser access of the desktop application's daemon on or off, changing its
+  browser port, or rotating its owner key, none of which the tools read either (see `docs/product/remote-access-settings.md`), since opening the computer
   to other devices is the user's own choice;
 - adding, removing or reordering agents (see "Added agents" and "Reordering and removing an agent" in
   `docs/product/agent-accounts.md`), since the list of added agents decides whether a new session of an agent may be

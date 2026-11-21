@@ -411,6 +411,44 @@ fn a_polite_stop_is_followed_by_a_kill() {
     guard.0.clear();
 }
 
+/// The command line asks the desktop application to quit with `SIGUSR1`, which reaches the process
+/// the identity names; a process that has gone is found gone, and a start time that is not the
+/// process's is another process, which the signal is never sent to.
+#[cfg(unix)]
+#[test]
+fn the_application_is_asked_to_quit_by_a_signal_to_the_process_the_identity_names() {
+    use std::os::unix::process::ExitStatusExt;
+
+    let dir = ScratchDir::new("proc-application-quit");
+    let ready = dir.join("application");
+    let mut application = start("park", &ready, |_| {});
+    let mut guard = KillOnDrop(vec![application.id() as i32]);
+    let pid = wait_for_pid(&ready);
+    let start_micros = proc_table::start_of(pid).expect("the process runs");
+    let named = ProcessIdentity {
+        pid: ProcessId(pid as u32),
+        start_micros,
+    };
+
+    // Another process under the same number: not asked, and not ended.
+    let other = ProcessIdentity {
+        start_micros: start_micros + 1,
+        ..named
+    };
+    assert!(matches!(request_application_quit(&other), Sent::Gone));
+    assert!(is_running(pid));
+
+    assert!(matches!(request_application_quit(&named), Sent::Delivered));
+    // A process that takes no handler for it is ended by the signal, which is how a build that
+    // does not handle it would end.
+    assert_eq!(
+        wait_for_exit(&mut application).signal(),
+        Some(libc::SIGUSR1)
+    );
+    guard.0.clear();
+    assert!(matches!(request_application_quit(&named), Sent::Gone));
+}
+
 /// The kill of a group reaches what its leader started without moving it elsewhere.
 #[test]
 fn a_group_kill_reaches_what_the_leader_started() {

@@ -26,8 +26,8 @@ removed projects left behind is that machine's — though a console's memory tra
 console carries" in `docs/product/configuration-export-and-import.md`). Nothing of the
 Trusted folders, Permissions, Notifications and Updates sections travels — neither form's update channel or automatic
 update check (see `docs/product/update-settings.md`) — nor does a choice a client keeps elsewhere, such as a project's
-focus mode (see `docs/product/focus-mode.md`). Nor does anything of the Remote access section, Allow remote access and
-the browser port included, so that no import can open a machine to remote use (see
+focus mode (see `docs/product/focus-mode.md`). Nor does anything of the Access section, Allow remote access,
+Allow browser access and the browser port included, so that no import can open a machine to remote use (see
 `docs/product/remote-access-settings.md`), nor the saved remote daemons of the desktop application (see "Saved remote
 daemons" in `docs/product/remote-daemons.md`).
 

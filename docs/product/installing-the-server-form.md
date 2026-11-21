@@ -93,7 +93,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -
 | Option | Meaning |
 |---|---|
 | `--service` | Also install, enable and start the systemd user unit (see "Installing it as a service" below). |
-| `--port N` | The port the service's daemon listens on, 1 to 65535; without it, the default server port, **3369**, the one `octoboardd start` listens on (see "Choosing the port" in `docs/product/server-form.md`). Accepted only with `--service`; given without it, it is an error. |
+| `--port N` | The port the service's daemon itself listens on, 1 to 65535; without it, one the system assigns at each start, as `octoboardd start` does (see "Choosing the port" in `docs/product/server-form.md`); the browser port, 3369, is another (see "Browser access" there). Accepted only with `--service`; given without it, it is an error. |
 | `--beta` | Install the newest version of the Beta channel (`beta-linux.json`). |
 | `--stable` | Install the newest version of the Stable channel (`stable-linux.json`), also when the installed beta is newer. |
 | `--allow-downgrade` | Install the channel's newest version even when it is older than the installed one. |
@@ -178,7 +178,7 @@ status 1:
    restart failed, or the new binary does not take `--if-safe`), the script says that `octoboardd restart` moves the
    daemon to the new version and that its sessions keep running: the restart itself names no command to run next, so
    the advice is given once. With no daemon running, to start it with `octoboardd
-   start` (on the default server port, `--port N` picking another) and then to run `octoboardd address`, which prints
+   start` and then to run `octoboardd address`, which prints
    the address to open and the SSH forward to open it through (see "The browser socket" in
    `docs/product/server-form.md`). In these messages, and in those of `--service`,
    `octoboardd` stands for the command as the script names it: `octoboardd` when that is the installed file on the
@@ -190,21 +190,19 @@ status 1:
 With `--service`, after installing the binary, the script:
 
 - writes `octoboardd.service` into `$XDG_CONFIG_HOME/systemd/user/` (`~/.config/systemd/user/` without it), made from
-  the archive's unit with its `ExecStart` line replaced by `<install directory>/octoboardd --port <port>
-  --service-managed`. An existing unit that differs is replaced, and the script says so, with the version and the port,
-  and that any changes made to it are gone;
+  the archive's unit with its `ExecStart` line replaced by `<install directory>/octoboardd --service-managed`, with
+  `--port <port>` before `--service-managed` where `--port` was given. An existing unit that differs is replaced, and
+  the script says so, with the version, and that any changes made to it are gone;
 - reloads the user's systemd manager and enables the unit, so that it starts at boot; when the user's manager cannot be
   reached it fails, saying to log in over SSH rather than with `su`, so that a user session exists;
 - then:
   - **the service already running**: restarts it as step 5 does, with `octoboardd restart --if-safe`, where that
-    interrupts no session, and when the unit changed then says to open the address `octoboardd address` prints, as
-    the new unit's port may differ; where it does not restart it, it says to run `octoboardd restart` to move it to the new
-    version — and, when the unit changed, to the new unit, port included — with its sessions kept running, then to open
-    the address `octoboardd address` prints. That planned restart has systemd start the next daemon from the new unit
+    interrupts no session; where it does not restart it, it says to run `octoboardd restart` to move it to the new
+    version — and, when the unit changed, to the new unit — with its sessions kept running. That planned restart has systemd start the next daemon from the new unit
     and the new binary (see "Planned restart and planned stop" in `docs/product/planned-restart-and-planned-stop.md`);
   - **a daemon of this user running outside the service**: enables the service without starting it, and says to stop
-    that daemon (`octoboardd stop`) and start the service (`systemctl --user start octoboardd`);
-  - **otherwise**: starts the service, says it started on its port and to run `octoboardd address`, which prints the
+    that daemon (`octoboardd stop`, with `--force` where it refuses because the daemon runs work) and start the service (`systemctl --user start octoboardd`);
+  - **otherwise**: starts the service, says it started and to run `octoboardd address`, which prints the
     address to open and the SSH forward to open it through; a service that does not start is an error pointing at
     `journalctl --user -u octoboardd`;
 - finally, when lingering is not on for the user, turns it on with `loginctl enable-linger <user>`, never asking for a
@@ -247,6 +245,6 @@ All three keep the replaced executable as `octoboardd.previous`, which `octoboar
 across a database migration (see "Rolling back across a database migration" in `docs/product/server-form-updates.md`).
 
 The restart is a planned restart: every session and shell terminal keeps running and the next daemon, started from the
-new binary, takes them over, on the same port for a daemon started with `octoboardd start`, and on the unit's port for
-one the service runs. The owner key stays the same, so an address `octoboardd address` printed before still opens the
+new binary, takes them over, on the same port for a daemon started with `octoboardd start`, and on a port the system assigns again for
+one the service runs, unless the unit names one with `--port`; no address a user opens names the daemon's own port. The owner key stays the same, so an address `octoboardd address` printed before still opens the
 daemon, through the forward it prints (see "The UI the daemon serves" in `docs/product/server-form.md`).

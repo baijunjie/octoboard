@@ -66,7 +66,7 @@ import { commands, downloads, productName } from "../../../../commands.ts";
 
 <Code code={commands.linger} lang="sh" />
 
-默认端口为 <code dir="ltr">{commands.defaultPort}</code>。要换成其他端口，请在服务命令或 <code dir="ltr">{commands.start}</code> 的末尾加上 <code dir="ltr">{commands.portOption}</code>。
+octoboardd 会自行选用自己的端口，你无需知道它：<code dir="ltr">{commands.address}</code> 打印的地址和 <code dir="ltr">ssh</code> 命令使用的端口是 <code dir="ltr">{commands.defaultPort}</code>，每次都相同。
 
 ## 升级
 

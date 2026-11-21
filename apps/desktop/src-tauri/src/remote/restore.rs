@@ -58,14 +58,14 @@ pub fn remembered_at_quit(open: &[String], main_visible: bool) -> Remembered {
     }
 }
 
-/// Whether the launch brings remote windows back: not one at login that stays in the background.
-pub fn restores(remembered: &Remembered, background_login: bool) -> bool {
-    !background_login && !remembered.entries.is_empty()
+/// Whether the launch brings remote windows back: not a launch, at login or by the command line, that stays in the background.
+pub fn restores(remembered: &Remembered, stays_in_background: bool) -> bool {
+    !stays_in_background && !remembered.entries.is_empty()
 }
 
 /// Whether the main window is held hidden while the remote windows are connected.
-pub fn holds_main(remembered: &Remembered, background_login: bool) -> bool {
-    restores(remembered, background_login) && remembered.main_hidden
+pub fn holds_main(remembered: &Remembered, stays_in_background: bool) -> bool {
+    restores(remembered, stays_in_background) && remembered.main_hidden
 }
 
 /// What becomes of a held main window once the remote windows have been connected.
@@ -156,17 +156,17 @@ pub fn remember(app: &AppHandle) {
 }
 
 /// Starts bringing back the remote windows the last quit left, holding the main window hidden
-/// first where that applies; `background_login` is a launch at login that stays in the background.
+/// first where that applies; `stays_in_background` is a launch, at login or by the command line, that stays in the background.
 /// Before the main window is opened.
-pub fn begin(app: &AppHandle, background_login: bool) {
+pub fn begin(app: &AppHandle, stays_in_background: bool) {
     let Ok(path) = config_path(app, FILE_NAME) else {
         return;
     };
     let remembered = load(&path);
-    if !restores(&remembered, background_login) {
+    if !restores(&remembered, stays_in_background) {
         return;
     }
-    let held = holds_main(&remembered, background_login);
+    let held = holds_main(&remembered, stays_in_background);
     app.state::<RestoreState>()
         .holding_main
         .store(held, Ordering::SeqCst);

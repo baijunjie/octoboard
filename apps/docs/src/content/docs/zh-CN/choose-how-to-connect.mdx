@@ -18,11 +18,11 @@ import { productName } from "../../../commands.ts";
 | --- | --- | --- | --- |
 | 可以从哪里用 | 桌面应用或浏览器 | 仅浏览器 | 仅浏览器 |
 | 支持的主机 | Linux 服务器、Mac、Windows 电脑 | Linux 服务器、Mac、Windows 电脑 | 仅 Mac 或 Windows 电脑 |
-| 主机上需要开启或安装 | SSH 登录（Mac 上是“远程登录”，Windows 上是 OpenSSH 服务器；Linux 服务器本来就有） | Tailscale；主机是 Mac 或 Linux 时还需要 socat | UU 远程；主机是 Mac 时还需要 socat |
+| 主机上需要开启或安装 | SSH 登录（Mac 上是“远程登录”，Windows 上是 OpenSSH 服务器；Linux 服务器本来就有） | Tailscale | UU 远程 |
 | 你自己的电脑上需要安装 | 无需额外安装 | Tailscale；Mac 或 Linux 电脑还需要 socat | UU 远程（Mac 或 Windows） |
 | 数据经过 | 直接连接，不经过第三方 | Tailscale 的网络，使用你的账号 | 网易 UU 远程的服务，使用你的账号 |
 | 不在同一网络时能否使用 | 仅当能访问到主机时：在同一网络、主机有公网地址或通过 VPN | 能 | 能 |
-| 适合谁 | 服务器；要用完整的桌面应用；其他人也会登录的 Mac 或 Linux 主机 | 不开 SSH，从任何地方访问自己的机器 | 已经在用 UU 远程的中国大陆用户 |
+| 适合谁 | 服务器；要用完整的桌面应用；其他人也会登录的 Linux 主机，以及从桌面应用使用的 Mac 或 Windows 主机 | 不开 SSH，从任何地方访问自己的机器 | 已经在用 UU 远程的中国大陆用户 |
 
 ## 选择中转服务之前
 
@@ -33,7 +33,7 @@ Tailscale 和 UU 远程的指南尚未在两台设备之间完整实测，它们
 </Aside>
 
 <Aside type="caution" title="只在没有其他人登录的电脑上使用">
-使用中转服务时，主机或你电脑上的其他用户账户有可能截获浏览器的密钥。请只在仅你自己登录的电脑上使用 Tailscale 或 UU 远程。通过 SSH 连接时，Mac 或 Linux 主机没有这个弱点；用桌面应用时，你自己的电脑也没有。但用浏览器时，你用来浏览的电脑仍有这个弱点，因为那里的 SSH 转发同样监听 <code dir="ltr">127.0.0.1</code> 端口。
+使用中转服务时，主机或你电脑上的其他用户账户有可能截获浏览器的密钥。请只在仅你自己登录的电脑上使用 Tailscale 或 UU 远程。通过 SSH 连接时，关闭了浏览器访问的 Linux 主机、以及从桌面应用使用的 Mac 或 Windows 主机，都没有这个弱点；用桌面应用时，你自己的电脑也没有。但用浏览器时，你用来浏览的电脑仍有这个弱点，因为那里的 SSH 转发同样监听 <code dir="ltr">127.0.0.1</code> 端口。
 </Aside>
 
 ## 下一步

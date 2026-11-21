@@ -65,10 +65,10 @@ Você também pode acessar um Mac ou um PC com Windows que execute o app {produc
 
 <Steps>
 
-1. No computador que você quer acessar, abra <strong>Ajustes › Acesso remoto</strong> no {productName}.
+1. No computador que você quer acessar, abra <strong>Ajustes › Acesso</strong> no {productName}.
 2. Selecione <strong>Abrir Ajustes do Sistema</strong> (macOS) ou <strong>Abrir Configurações</strong> (Windows) ali e ative <strong>Login remoto</strong> (macOS) ou <strong>OpenSSH Server</strong> (Windows), seguindo o caminho indicado na linha, para que este computador aceite logins SSH. Isso exige um administrador. De volta ao {productName}, a linha passa a mostrar <strong>Ativado</strong>.
 3. Ative <strong>Permitir acesso remoto</strong>, selecione <strong>Permitir</strong> para confirmar e mantenha o {productName} em execução: se você o fechar, o acesso remoto para.
-4. Na guia <strong>App {productName}</strong>, selecione <strong>Copiar dados de conexão</strong> e envie-os ao outro computador, por exemplo por e-mail ou chat.
+4. Selecione <strong>Copiar dados de conexão</strong> e envie-os ao outro computador, por exemplo por e-mail ou chat.
 5. No computador de onde você vai trabalhar, adicione o host como nos passos 2 a 5 de [Conectar a um servidor Linux](#conectar-a-um-servidor-linux), colando os dados que você enviou. Faça login com o seu nome de usuário e a sua senha no host.
 
 </Steps>
@@ -81,7 +81,7 @@ Você saberá que funcionou quando uma janela separada abrir com os projetos e a
 
 1. Obtenha o comando de encaminhamento SSH:
 
-   - <strong>Em um host Mac ou Windows,</strong> faça primeiro os passos 1 a 3 de [Usar outro computador como host](#usar-outro-computador-como-host). Depois, na guia <strong>Navegador</strong>, veja <strong>Etapa 1: encaminhamento SSH</strong>. Clique no endereço no comando para escolher como o seu outro computador alcança este (ou escolha <strong>Inserir o endereço manualmente</strong> e substitua <code dir="ltr">{commands.server}</code> depois) e selecione <strong>Copiar comando de encaminhamento</strong>. Selecione também <strong>Copiar endereço</strong> em <strong>Etapa 2: endereço do navegador</strong>.
+   - <strong>Em um host Mac ou Windows,</strong> faça primeiro os passos 1 e 2 de [Usar outro computador como host](#usar-outro-computador-como-host). Depois abra <strong>Ajustes › Acesso</strong>, ative <strong>Permitir acesso pelo navegador</strong> e selecione <strong>Permitir</strong> para confirmar. Na guia <strong>Navegador</strong>, veja <strong>Etapa 1: encaminhamento SSH</strong>. Clique no endereço no comando para escolher como o seu outro computador alcança este (ou escolha <strong>Inserir o endereço manualmente</strong> e substitua <code dir="ltr">{commands.server}</code> depois) e selecione <strong>Copiar comando de encaminhamento</strong>. Selecione também <strong>Copiar endereço local</strong> em <strong>Navegador deste computador</strong>.
    - <strong>Em um servidor Linux,</strong> execute isto no servidor. Ele imprime o endereço do navegador e depois o comando SSH a executar.
 
      <Code code={commands.address} lang="sh" />

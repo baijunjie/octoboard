@@ -169,7 +169,7 @@ async fn handle_control(
                 break;
             }
             () = admission.revoked() => {
-                tracing::info!("a control client's owner key was rotated; it is disconnected");
+                tracing::info!("a control client's owner key was rotated or the way in it came through closed; it is disconnected");
                 writer.abort();
                 writer_done = true;
                 break;
@@ -945,7 +945,7 @@ mod tests {
     /// turns it on, for that one.
     #[test]
     fn the_snapshot_carries_remote_access_only_where_the_daemon_offers_it() {
-        use crate::coordinator::remote_access::{WayIn, FORWARD_PORT};
+        use crate::coordinator::remote_access::{WayIn, DEFAULT_BROWSER_PORT};
         use crate::protocol::RemoteAccessState;
 
         let (state, dir) = crate::test_support::app_state("snapshot-remote-access");
@@ -967,13 +967,13 @@ mod tests {
             .begin_with(&state, dir.to_path_buf(), true, WayIn::Port);
         let offered = remote_access(&state).expect("offered to the application's daemon");
         assert_eq!(
-            (offered.allowed, offered.state),
+            (offered.browser_allowed, offered.browser_state),
             (false, RemoteAccessState::Off)
         );
         let json = serde_json::to_value(snapshot(&state).unwrap()).unwrap();
-        assert_eq!(json["remote_access"]["state"], "off");
-        assert_eq!(json["remote_access"]["allowed"], false);
-        assert_eq!(json["remote_access"]["browser_port"], FORWARD_PORT);
+        assert_eq!(json["remote_access"]["browser_state"], "off");
+        assert_eq!(json["remote_access"]["browser_allowed"], false);
+        assert_eq!(json["remote_access"]["browser_port"], DEFAULT_BROWSER_PORT);
         assert!(json["remote_access"]["address"].is_null());
         drop(state.remote_access.close());
     }

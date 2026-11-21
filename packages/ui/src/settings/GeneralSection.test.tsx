@@ -29,7 +29,7 @@ const stubMatchMedia = () => {
   onTestFinished(() => void vi.unstubAllGlobals());
 };
 
-/** What the section shows: the rows outside any group, then each group's heading and rows, in document order. */
+/** What the section shows: the rows outside any group, which come first, then each group's heading and rows. */
 async function layout(platform: PlatformAdapter, state: Partial<State> = {}) {
   stubMatchMedia();
   const daemon = testDaemon({ state: { connectionState: "open", settings: DEFAULT_SETTINGS, ...state } });
@@ -58,29 +58,29 @@ async function layout(platform: PlatformAdapter, state: Partial<State> = {}) {
 const DESKTOP: PlatformAdapter = { kind: "tauri", host: MAC_HOST, launchAtLogin, backgroundRun, statusItem };
 const BROWSER: PlatformAdapter = { kind: "browser", host: BROWSER_HOST };
 
-it("shows the language row on its own at the top, then Startup, Window, Power, Terminals and Sorting, where the platform and the daemon's host offer everything", async () => {
+it("shows the language row on its own, then Sorting, Terminals, Power, Window and Startup, where the platform and the daemon's host offer everything", async () => {
   const { ungrouped, groups } = await layout(DESKTOP, { host: { ...HOST, keep_awake: true } });
   expect(ungrouped).toEqual(["language"]);
   expect(groups.map(({ key }) => key)).toEqual([
-    "settings.general.group.startup",
-    "settings.general.group.window",
-    "settings.general.group.power",
-    "settings.general.group.terminals",
     "settings.sort.group",
+    "settings.general.group.terminals",
+    "settings.general.group.power",
+    "settings.general.group.window",
+    "settings.general.group.startup",
   ]);
   expect(groups.map(({ title }) => title)).toEqual([
-    t("settings.general.group.startup"),
-    t("settings.general.group.window"),
-    t("settings.general.group.power"),
-    t("settings.general.group.terminals"),
     t("settings.sort.group"),
+    t("settings.general.group.terminals"),
+    t("settings.general.group.power"),
+    t("settings.general.group.window"),
+    t("settings.general.group.startup"),
   ]);
   expect(groups.map(({ ids }) => ids)).toEqual([
-    ["launch-at-login", "resume_sessions_on_start"],
-    ["run-in-background", "menu-bar-icon"],
-    ["keep_awake"],
-    ["auto_close_idle_shell_terminals"],
     ["session-order.sessions", "session-order.activeProjects", "session-order.inactiveProjects"],
+    ["auto_close_idle_shell_terminals"],
+    ["keep_awake"],
+    ["run-in-background", "menu-bar-icon"],
+    ["launch-at-login", "resume_sessions_on_start"],
   ]);
 });
 
@@ -88,9 +88,9 @@ it("leaves out the Window and Power groups and the launch-at-login row in a brow
   const { ungrouped, groups } = await layout(BROWSER);
   expect(ungrouped).toEqual(["language"]);
   expect(groups.map(({ key, ids }) => [key, ids])).toEqual([
-    ["settings.general.group.startup", ["resume_sessions_on_start"]],
-    ["settings.general.group.terminals", ["auto_close_idle_shell_terminals"]],
     ["settings.sort.group", ["session-order.sessions", "session-order.activeProjects", "session-order.inactiveProjects"]],
+    ["settings.general.group.terminals", ["auto_close_idle_shell_terminals"]],
+    ["settings.general.group.startup", ["resume_sessions_on_start"]],
   ]);
 });
 
@@ -120,4 +120,42 @@ it("shows the Power group only when the daemon's own host can be held awake, wha
 it("offers the choice of when to keep awake in the Power group once keeping awake is on", async () => {
   const { groups } = await layout(BROWSER, { host: { ...HOST, keep_awake: true }, settings: { ...DEFAULT_SETTINGS, keep_awake: true } });
   expect(groups.find(({ key }) => key === "settings.general.group.power")?.ids).toEqual(["keep_awake", "keep_awake_when"]);
+});
+
+const commandLine = { status: async () => ({ state: "notInstalled" as const }), install: async () => ({ state: "notInstalled" as const }), remove: async () => ({ state: "notInstalled" as const }) };
+
+it("shows the Command line group, after Startup, only where the platform has the command-line tool", async () => {
+  const offered = await layout({ ...DESKTOP, commandLine }, { host: { ...HOST, keep_awake: true } });
+  expect(offered.groups.map(({ key }) => key)).toEqual([
+    "settings.sort.group",
+    "settings.general.group.terminals",
+    "settings.general.group.power",
+    "settings.general.group.window",
+    "settings.general.group.startup",
+    "settings.general.group.commandLine",
+  ]);
+  expect(offered.ungrouped).toEqual(["language"]);
+  expect(offered.groups.find(({ key }) => key === "settings.general.group.commandLine")).toMatchObject({ title: t("settings.general.group.commandLine"), ids: ["command-line"] });
+  const without = await layout(DESKTOP, { host: { ...HOST, keep_awake: true } });
+  expect(without.groups.map(({ key }) => key)).not.toContain("settings.general.group.commandLine");
+  expect(without.groups.flatMap(({ ids }) => ids)).not.toContain("command-line");
+});
+
+it("puts the language row before the first group, in the page's order", async () => {
+  stubMatchMedia();
+  const daemon = testDaemon({ state: { connectionState: "open", settings: DEFAULT_SETTINGS } });
+  const container = mountHost(
+    <LanguageProvider>
+      <ThemeProvider>
+        <SettingsReadsProvider>
+          <GeneralSection />
+        </SettingsReadsProvider>
+      </ThemeProvider>
+    </LanguageProvider>,
+    { platform: BROWSER, daemon },
+  );
+  await act(flushPromises);
+  const language = container.querySelector('[data-settings-search-id="language"]')!;
+  const firstGroup = container.querySelector("[data-settings-search-group]")!;
+  expect(language.compareDocumentPosition(firstGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });

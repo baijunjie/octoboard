@@ -15,7 +15,7 @@ import HostBrowserAddress from "../../../snippets/zh-CN/host-browser-address.mdx
 这些步骤尚未完整实测，依据 Tailscale Serve 的文档和 {productName} 自身的检查编写。转发程序已在单台电脑上试过，包括浏览器的实时连接；两台设备之间的 Tailscale Serve 以及 Windows 上的转发尚未实测。
 </Aside>
 
-<strong>你电脑上的浏览器</strong> → <strong>你电脑上的转发程序（127.0.0.1）</strong> ⟷ Tailscale ⟷ <strong>主机上的转发程序（127.0.0.1）</strong> → <strong>{productName}</strong>
+<strong>你电脑上的浏览器</strong> → <strong>你电脑上的转发程序（127.0.0.1）</strong> ⟷ Tailscale ⟷ <strong>主机上的浏览器端口（127.0.0.1）</strong> → <strong>{productName}</strong>
 
 <details>
 <summary>新手须知</summary>
@@ -32,21 +32,21 @@ import HostBrowserAddress from "../../../snippets/zh-CN/host-browser-address.mdx
 
 ## 为什么要多这几步
 
-出于安全考虑，{productName} 只接受在 <code dir="ltr">{tunnel.loopback}</code>（永远指“本机”的地址，也叫回环地址）上打开的浏览器页面，所以不能直接在浏览器里输入主机的 Tailscale 地址。做法是在两台电脑上各运行一个小的转发程序：你这边的让主机看起来就在本机 <code dir="ltr">{tunnel.loopback}</code> 上，主机那边的把连接交给 {productName}，中间由 Tailscale 传输。
+出于安全考虑，{productName} 只接受在 <code dir="ltr">{tunnel.loopback}</code>（永远指“本机”的地址，也叫回环地址）上打开的浏览器页面，所以不能直接在浏览器里输入主机的 Tailscale 地址。做法是：你电脑上的转发程序让主机看起来就在本机 <code dir="ltr">{tunnel.loopback}</code> 上，中间由 Tailscale 传输。主机上，{productName} 自己就在回环端口上监听，无需运行任何东西。
 
 ## 准备工作
 
 - <strong>两台电脑都装好 Tailscale，</strong>并登录同一个 tailnet。请使用只包含你自己设备的 tailnet：它允许访问主机的每台设备，都能访问你共享的端口。
-- <strong>是 Mac 或运行 Linux 的电脑，都要装 socat。</strong>Windows 电脑不需要。
+- <strong>用来浏览的 Mac 或 Linux 电脑都要装 socat。</strong>主机永远不需要，用来浏览的 Windows 电脑也不需要。
 
-  <Tabs syncKey="host">
+  <Tabs>
   <TabItem label="macOS">
   如果还没有 [Homebrew](https://brew.sh/)，请先安装它（macOS 自带的工具都做不了这件事），然后在“终端”中运行：
 
   <Code code={tunnel.installSocatMac} lang="sh" />
   </TabItem>
   <TabItem label="Windows">
-  无需安装：Windows 主机本来就在 <code dir="ltr">{tunnel.loopback}</code> 的端口上为浏览器提供服务，用来浏览的 Windows 电脑则改用系统自带的命令。
+  无需安装：用来浏览的 Windows 电脑改用系统自带的命令。
   </TabItem>
   <TabItem label="Linux">
   <Code code={tunnel.installSocatLinux} lang="sh" />
@@ -54,7 +54,7 @@ import HostBrowserAddress from "../../../snippets/zh-CN/host-browser-address.mdx
   如果发行版不用 <code dir="ltr">apt</code>，请改用它的包管理器（<code dir="ltr">dnf</code>、<code dir="ltr">pacman</code> 等）。
   </TabItem>
   </Tabs>
-- <strong>使用期间要开着两到三个窗口：</strong>主机上的转发程序和 Tailscale Serve（Windows 主机不需要转发程序），以及你电脑上的转发程序（Windows 电脑不需要）。
+- <strong>使用期间最多要开着两个窗口：</strong>主机上的 Tailscale Serve，以及你电脑上的转发程序（Windows 电脑不需要）。
 
 ## 在主机上
 
@@ -67,42 +67,38 @@ import HostBrowserAddress from "../../../snippets/zh-CN/host-browser-address.mdx
    <HostBrowserAddress />
    </TabItem>
    <TabItem label="Windows">
-   <HostBrowserAddress windows />
+   <HostBrowserAddress />
    </TabItem>
    <TabItem label="Linux">
-   以运行 octoboardd 的用户身份运行这条命令，复制它输出的以 <code dir="ltr">{tunnel.addressStart}</code> 开头的地址。忽略之后输出的 SSH 命令。
+   以运行 octoboardd 的用户身份执行这两条命令。第一条只在 <code dir="ltr">127.0.0.1</code> 上打开浏览器端口（加上 <code dir="ltr">--port</code> 和一个数字可改用其他端口）；第二条打印地址。复制它打印的、以 <code dir="ltr">{tunnel.addressStart}</code> 开头的地址，忽略它之后打印的 SSH 命令。
+
+   <Code code={commands.browserOn} lang="sh" />
 
    <Code code={commands.address} lang="sh" />
    </TabItem>
    </Tabs>
-2. 在主机上启动转发程序，把主机 <code dir="ltr">{tunnel.loopback}</code> 上的一个端口接到 {productName}。下文的<strong>主机端口</strong>就是这个端口。
+2. 记下 {productName} 在主机 <code dir="ltr">{tunnel.loopback}</code> 上监听的端口。它就是下文中的<strong>主机端口</strong>。
 
    <Tabs syncKey="host">
    <TabItem label="macOS">
-   在“终端”中运行这条命令，不要关闭窗口。它只监听 <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>。
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   主机端口是 <code dir="ltr">{tunnel.bridgePort}</code>。
+   无需运行任何命令：{productName} 自己就在浏览器端口上监听，而且只监听 <code dir="ltr">127.0.0.1</code>。主机端口就是<strong>浏览器端口</strong>（没改过的话是 {commands.defaultPort}）。
    </TabItem>
    <TabItem label="Windows">
    无需运行任何命令：{productName} 自己就在浏览器端口上监听，而且只监听 <code dir="ltr">127.0.0.1</code>。主机端口就是<strong>浏览器端口</strong>（没改过的话是 {commands.defaultPort}）。
    </TabItem>
    <TabItem label="Linux">
-   以同一用户身份，在一直开着的终端或 <code dir="ltr">tmux</code> 会话中运行这条命令。它只监听 <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code>。
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   主机端口是 <code dir="ltr">{tunnel.bridgePort}</code>。
+   无需再运行任何东西：octoboardd 自己在浏览器端口上监听，而且只监听 <code dir="ltr">127.0.0.1</code>。主机端口是 <code dir="ltr">{commands.defaultPort}</code>，或你用 <code dir="ltr">--port</code> 指定的数字。
    </TabItem>
    </Tabs>
 3. 用 Tailscale Serve 把主机端口共享给你的 tailnet，不要关闭窗口。不要使用 Tailscale Funnel，它会把端口公开到互联网上。
 
    <Tabs syncKey="host">
    <TabItem label="macOS">
-   <Code code={tunnel.serveBridge} lang="sh" />
+   <Code code={tunnel.serveBrowserPort} lang="sh" />
 
    如果用的是 App Store 版 Tailscale，请用 <code dir="ltr">{tunnel.macCli}</code> 代替命令中的 <code dir="ltr">tailscale</code>。如果用的是独立版，请先在它的设置中的 CLI integration 里安装命令。
+
+   如果改过<strong>浏览器端口</strong>，请换成你的端口。
    </TabItem>
    <TabItem label="Windows">
    在 PowerShell 或命令提示符中运行：
@@ -112,7 +108,7 @@ import HostBrowserAddress from "../../../snippets/zh-CN/host-browser-address.mdx
    如果改过<strong>浏览器端口</strong>，请换成你的端口。
    </TabItem>
    <TabItem label="Linux">
-   <Code code={tunnel.serveBridge} lang="sh" />
+   <Code code={tunnel.serveBrowserPort} lang="sh" />
 
    如果 Tailscale 提示权限不足，请运行一次 <code dir="ltr">{tunnel.linuxOperator}</code> 让你的用户可以管理它，或用 <code dir="ltr">sudo</code> 运行这条命令。
    </TabItem>
@@ -157,23 +153,24 @@ import HostBrowserAddress from "../../../snippets/zh-CN/host-browser-address.mdx
 
 ## 连不上时
 
-- <strong>页面打不开：</strong>某个窗口被关掉了，或其中的命令已停止。请确认转发程序和 Tailscale Serve 都还在运行，并且主机上的 <code dir="ltr">{tunnel.serveStatus}</code> 列出了主机端口。
+- <strong>页面打不开：</strong>某个窗口被关掉了，或它的命令已停止。检查你电脑上的转发程序和 Tailscale Serve 是否仍在运行，以及主机上的 <code dir="ltr">{tunnel.serveStatus}</code> 是否列出了主机端口。
 - <strong>socat 提示“Address already in use”：</strong>这台电脑上的该端口已被占用。请换一个端口；如果是你这边的电脑，浏览器地址里也要改成它。
 - <strong>页面被拒绝或一片空白：</strong>请确认打开的是 <code dir="ltr">{tunnel.loopback}</code> 开头的地址，而不是主机的 Tailscale 名称或 <code dir="ltr">100.x.y.z</code> 地址。
-- <strong>打开页面时，主机上的转发程序提示“Connection refused”或“No such file or directory”：</strong><strong>允许远程访问</strong>没有开启，或主机上的 {productName} 没有运行（Linux 上是 octoboardd 没有运行）。
+- <strong>打开页面时，你电脑上的转发程序打印“Connection refused”，或页面被拒绝：</strong><strong>允许浏览器访问</strong>没有开启，另一个程序占用了浏览器端口（设置里会提示），或主机上的 {productName} 没有运行（Linux 上是 octoboardd 没有运行，或还没执行 <code dir="ltr">{commands.browserOn}</code>）。
 
 ## 停止使用
 
 - <strong>在用来浏览的电脑上：</strong>按 <kbd>Ctrl</kbd>+<kbd>C</kbd> 停止 socat；在 Windows 上，以管理员身份打开 PowerShell，删除转发：
 
   <Code code={tunnel.visitorForwardWindowsOff} lang="powershell" />
-- <strong>在主机上：</strong>按 <kbd>Ctrl</kbd>+<kbd>C</kbd> 停止 Tailscale Serve 命令和 socat。用 <code dir="ltr">{tunnel.serveStatus}</code> 确认已不再共享任何内容；如果端口仍在列表中，用 <code dir="ltr">{tunnel.serveBridgeOff}</code> 移除它（Windows 上用 <code dir="ltr">{tunnel.serveBrowserPortOff}</code>）。
-- <strong>主机是 Mac 或 Windows 时，</strong>不再需要时请关闭<strong>允许远程访问</strong>。这会关闭浏览器入口，并断开所有用该密钥打开的页面。
-- <strong>如果地址可能已泄露，</strong>在<strong>浏览器</strong>标签页点击<strong>轮换密钥</strong>给它换一个新密钥，Linux 上运行 <code dir="ltr">{tunnel.rotate}</code>。用旧地址打开的页面会被断开。
+- <strong>在主机上：</strong>按 <kbd>Ctrl</kbd>+<kbd>C</kbd> 停止 Tailscale Serve 命令。用 <code dir="ltr">{tunnel.serveStatus}</code> 确认已不再共享任何内容；如果端口仍在列表中，用 <code dir="ltr">{tunnel.serveBrowserPortOff}</code> 移除它。
+- <strong>主机是 Mac 或 Windows 时，</strong>不再需要时请关闭<strong>允许浏览器访问</strong>。这会关闭浏览器端口，并断开所有用该密钥打开的页面。
+- <strong>主机是 Linux 时，</strong>不再需要时请运行 <code dir="ltr">{commands.browserOff}</code>。这会关闭浏览器端口，并断开所有用该密钥打开的页面。
+- <strong>如果地址可能已泄露，</strong>在<strong>设置 › 访问</strong>点击<strong>轮换密钥</strong>给它换一个新密钥，Linux 上运行 <code dir="ltr">{tunnel.rotate}</code>。用旧地址打开的页面会被断开。
 
 ## 安全
 
 - <strong>地址就是密码：</strong>地址里的密钥可以完全控制主机上的 {productName}，包括运行任何命令。密钥在你轮换之前一直有效。它会留在浏览器的历史记录和书签里，开启同步后还会同步到你的其他设备。
-- <strong>谁能访问：</strong>能访问主机端口并持有密钥的任何人。两台电脑上的转发程序只监听 <code dir="ltr">127.0.0.1</code>，主机所在网络或你本地网络中的其他设备访问不到；Tailscale Serve 只让你的 tailnet 能访问主机端口，并受它的访问规则限制。
-- <strong>只在没有其他人登录的电脑上使用：</strong>主机或你电脑上的其他用户账户可以连接这些 <code dir="ltr">127.0.0.1</code> 端口；转发程序没在运行时，他们还可以占用该端口，在你的浏览器重连时拿到密钥。[通过 SSH 连接](../remote-connections/)时，Mac 或 Linux 主机没有这个弱点；用桌面应用时，你自己的电脑也没有。但用浏览器时，你用来浏览的电脑仍有这个弱点，因为那里的 SSH 转发同样监听 <code dir="ltr">127.0.0.1</code> 端口。
+- <strong>谁能访问：</strong>能访问主机端口并持有密钥的任何人。浏览器端口和你电脑上的转发程序只监听 <code dir="ltr">127.0.0.1</code>，主机所在网络或你本地网络中的其他设备访问不到；Tailscale Serve 只让你的 tailnet 能访问主机端口，并受它的访问规则限制。
+- <strong>只在没有其他人登录的电脑上使用：</strong>主机或你电脑上的其他用户账户可以连接这些 <code dir="ltr">127.0.0.1</code> 端口；{productName} 没在运行或正在重启时，他们还可以占用主机上的浏览器端口；你电脑上的转发程序没在运行时，则可以占用它的端口；在你的浏览器重连时拿到密钥。[通过 SSH 连接](../remote-connections/)时，关闭了浏览器访问的 Linux 主机、以及从桌面应用使用的 Mac 或 Windows 主机，都没有这个弱点；用桌面应用时，你自己的电脑也没有。但用浏览器时，你用来浏览的电脑仍有这个弱点，因为那里的 SSH 转发同样监听 <code dir="ltr">127.0.0.1</code> 端口。
 - <strong>不要使用 Funnel：</strong>Tailscale Funnel 会把端口公开到整个互联网。

@@ -50,7 +50,7 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
 ## Dependency direction
 
 - The docs depend on `@octoboard/ui` (`workspace:*`) for one thing, the language list (`@octoboard/ui/languages`), and
-  on `config/app.json` for the product name, repository address and default server port.
+  on `config/app.json` for the product name, repository address and default browser port.
 - The docs read two images from the website (`apps/web/public/logo-640.png`, `wordmark.png`) and take its icon
   (`favicon.png`) by its deployed address instead of keeping copies; they import no website code into the Astro build. The few things the website also decides are
   copied here (the deployment settings in `site.config.ts`, the redirect page and the retired path segments in

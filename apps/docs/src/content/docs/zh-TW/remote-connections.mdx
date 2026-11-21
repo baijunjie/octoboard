@@ -65,10 +65,10 @@ import { commands, productName } from "../../../commands.ts";
 
 <Steps>
 
-1. 在你要連過去的電腦上，開啟 {productName} 的<strong>設定 › 遠端存取</strong>。
+1. 在你要連過去的電腦上，開啟 {productName} 的<strong>設定 › 存取</strong>。
 2. 點選那裡的<strong>開啟系統設定</strong>（macOS）或<strong>開啟設定</strong>（Windows），依照該列提供的路徑開啟<strong>遠端登入</strong>（macOS）或 <strong>OpenSSH Server</strong>（Windows），讓這台電腦接受 SSH 登入。這一步需要系統管理員權限。回到 {productName}，該列會顯示<strong>已開啟</strong>。
 3. 開啟<strong>允許遠端存取</strong>，點選<strong>允許</strong>確認，並讓 {productName} 保持執行，結束後遠端存取也會隨之中斷。
-4. 在 <strong>{productName} App</strong> 分頁點選<strong>複製連線資訊</strong>，再透過電子郵件或聊天工具傳到另一台電腦。
+4. 點選<strong>複製連線資訊</strong>，再透過電子郵件或聊天工具傳到另一台電腦。
 5. 在你要用來工作的電腦上，依照[連線到 Linux 伺服器](#連線到-linux-伺服器)的第 2 到 5 步加入這台主機，貼上你傳過去的資訊。用主機上的使用者名稱和密碼登入。
 
 </Steps>
@@ -81,7 +81,7 @@ import { commands, productName } from "../../../commands.ts";
 
 1. 取得 SSH 轉送指令：
 
-   - <strong>主機是 Mac 或 Windows 電腦時，</strong>先完成[用另一台電腦當作主機](#用另一台電腦當作主機)的第 1 到 3 步。然後在<strong>瀏覽器</strong>分頁找到<strong>步驟 1：SSH 轉送</strong>。點選指令中的位址，選擇另一台電腦連到這台電腦時所用的位址（或選擇<strong>自行輸入位址</strong>，稍後自己取代 <code dir="ltr">{commands.server}</code>），然後點選<strong>複製轉送指令</strong>。再在<strong>步驟 2：瀏覽器位址</strong>處點選<strong>複製位址</strong>。
+   - <strong>主機是 Mac 或 Windows 電腦時，</strong>先完成[用另一台電腦當作主機](#用另一台電腦當作主機)的第 1 和 2 步。然後開啟<strong>設定 › 存取</strong>，開啟<strong>允許瀏覽器存取</strong>並點選<strong>允許</strong>確認。在<strong>瀏覽器</strong>分頁中找到<strong>步驟 1：SSH 轉送</strong>。點選指令中的位址，選擇另一台電腦連到這台電腦時所用的位址（或選擇<strong>自行輸入位址</strong>，稍後自己取代 <code dir="ltr">{commands.server}</code>），然後點選<strong>複製轉送指令</strong>。再在<strong>這台電腦的瀏覽器</strong>下點選<strong>複製本機位址</strong>。
    - <strong>主機是 Linux 伺服器時，</strong>在伺服器上執行這個指令。它會先輸出瀏覽器位址，再輸出要執行的 SSH 指令。
 
      <Code code={commands.address} lang="sh" />

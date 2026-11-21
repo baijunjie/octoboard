@@ -449,7 +449,7 @@ fn refuse_across_schema(
         Some(backup) => writeln!(
             err,
             "the copy kept before the database was migrated is {}; going back to it loses what \
-             changed since the update. To do so: `octoboardd stop`, move {db} (and any {db}-wal \
+             changed since the update. To do so: `octoboardd stop` (with `--force` where it refuses because work is running), move {db} (and any {db}-wal \
              and {db}-shm) aside, copy that file to {db}, then run `octoboardd update --rollback` \
              again and `octoboardd start`",
             backup.display()

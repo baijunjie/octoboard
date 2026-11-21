@@ -66,7 +66,7 @@ import { commands, downloads, productName } from "../../../../commands.ts";
 
 <Code code={commands.linger} lang="sh" />
 
-Порт по умолчанию — <code dir="ltr">{commands.defaultPort}</code>. Чтобы использовать другой, добавьте <code dir="ltr">{commands.portOption}</code> в конец команды установки службы или команды <code dir="ltr">{commands.start}</code>.
+octoboardd сам выбирает свой порт, и знать его вам не нужно: адрес и команда <code dir="ltr">ssh</code>, которые выводит <code dir="ltr">{commands.address}</code>, содержат порт <code dir="ltr">{commands.defaultPort}</code>, всегда один и тот же.
 
 ## Обновление
 

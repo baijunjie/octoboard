@@ -30,6 +30,7 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 
+use crate::browser::WayClosed;
 use crate::owner_key::{OwnerKey, Revocation};
 use crate::request_guard::{headers_allowed, key_matches};
 use crate::server::ui::{self, Files};
@@ -63,21 +64,23 @@ impl Access {
 pub const REFUSED: &str = "missing or wrong key";
 
 /// The body of a `401` on the TCP port of a daemon that serves the browser on its socket instead,
-/// or on Windows at a loopback port of its own ([`crate::browser::port`]).
+/// or at a loopback port of its own ([`crate::browser::port`]) in place of or beside the socket.
 pub const REFUSED_AT_PORT: &str = if crate::browser::port::USED {
     "missing or wrong key. A browser reaches this daemon at its own \
      browser port, not this one: run `octoboardd address` on that computer for the address and the \
      SSH forward to use."
 } else {
     "missing or wrong key. A browser reaches this daemon through its \
-     own socket, not this port: run `octoboardd address` on the server for the SSH forward to use."
+     own socket, or its browser port where `octoboardd browser on` opened one, not this port: run \
+     `octoboardd address` on the server for the SSH forward to use."
 };
 
-/// Which key let a request in, for a handler that keeps a connection open: one the owner key
-/// admitted closes once that key is rotated away ([`Admission::revoked`]); the launch key lasts as
-/// long as the daemon. Every request past the guard carries one, as a request extension.
+/// What a handler that keeps a connection open watches to know when to close it: one the owner
+/// key admitted closes once that key is rotated away or let go ([`Admission::revoked`]), the
+/// launch key lasts as long as the daemon, and one made through a way in for the browser closes
+/// with that way in. Every request past the guard carries one, as a request extension.
 #[derive(Clone, Default)]
-pub struct Admission(Option<Revocation>);
+pub struct Admission(Option<Revocation>, Option<WayClosed>);
 
 impl Admission {
     /// Whether the owner key admitted the request, as a browser's are: such a connection may not
@@ -86,12 +89,26 @@ impl Admission {
         self.0.is_some()
     }
 
-    /// Resolves when the owner key that admitted the request has been rotated since, and never
-    /// for a request the launch key admitted.
+    /// Resolves when the owner key that admitted the request has been rotated since, or the way in
+    /// it came through has been closed, and never for a request the launch key admitted that came
+    /// by neither.
     pub async fn revoked(&mut self) {
-        match &mut self.0 {
-            Some(revocation) => revocation.revoked().await,
-            None => std::future::pending().await,
+        let Self(key, port) = self;
+        let key = async {
+            match key {
+                Some(revocation) => revocation.revoked().await,
+                None => std::future::pending().await,
+            }
+        };
+        let port = async {
+            match port {
+                Some(closed) => closed.closed().await,
+                None => std::future::pending().await,
+            }
+        };
+        tokio::select! {
+            () = key => {}
+            () = port => {}
         }
     }
 }
@@ -116,15 +133,16 @@ pub async fn guard(State(access): State<Access>, mut request: Request, next: Nex
         return next.run(Request::from_parts(parts, Body::empty())).await;
     }
     let query = request.uri().query();
+    let port = request.extensions().get::<WayClosed>().cloned();
     let admission = if key_matches(query, &access.key) {
-        Admission::default()
+        Admission(None, port)
     } else {
         match access
             .owner_key
             .as_ref()
             .and_then(|owner| owner.admit(query))
         {
-            Some(revocation) => Admission(Some(revocation)),
+            Some(revocation) => Admission(Some(revocation), port),
             None => return (StatusCode::UNAUTHORIZED, access.refusal()).into_response(),
         }
     };
@@ -153,7 +171,7 @@ mod tests {
     async fn only_what_the_owner_key_admitted_is_revoked_by_a_rotation() {
         let (held, key, _dir) = held_key("access-admission");
         let query = format!("key={key}");
-        let mut owners = Admission(held.admit(Some(&query)));
+        let mut owners = Admission(held.admit(Some(&query)), None);
         let mut launch = Admission::default();
 
         held.rotate().unwrap();

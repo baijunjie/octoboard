@@ -14,6 +14,7 @@ mod apple_event;
 mod background;
 mod badge;
 mod chrome;
+mod command_line;
 mod config_dir;
 mod configuration_file;
 mod daemon_window;
@@ -105,6 +106,9 @@ pub fn run() {
             launch_at_login::launch_at_login_status,
             launch_at_login::set_launch_at_login,
             launch_at_login::open_login_items_settings,
+            command_line::command_line_status,
+            command_line::command_line_install,
+            command_line::command_line_remove,
             background::reveal_main_window,
             background::bring_to_front,
             app_settings::set_app_settings,
@@ -204,6 +208,7 @@ pub fn run() {
             // On the main thread, inside AppKit's launch, where the event that opened the app is
             // still the current one.
             launch_at_login::capture_launch();
+            background::capture_background_launch(std::env::args_os());
             menu::install(app.handle())?;
             // Before the icon, which is hidden at once when the user turned it off.
             app_settings::install(app.handle());
@@ -290,7 +295,7 @@ fn open_window_for(app: &tauri::AppHandle) {
     let handle = app.clone();
     page_isolation::prepare(move |configuration| {
         // Before the main window exists, which may be held hidden while they come back.
-        remote::begin_restore(&handle, background::starts_in_background_at_login(&handle));
+        remote::begin_restore(&handle, background::launch_stays_in_background(&handle));
         if let Err(err) = window_factory::open_main_window(&handle, configuration) {
             diagnostic!("cannot open the main window: {err}");
             handle.exit(1);

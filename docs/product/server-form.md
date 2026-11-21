@@ -62,7 +62,7 @@ server, and serves it on its browser socket, beside the protocol the UI speaks t
 Opening the address `octoboardd address` prints, through the SSH forward it prints with it, loads the full UI, which
 finds the daemon at the address it was loaded from and takes the key from that address. On a host that has such sockets
 the daemon's TCP port serves no UI. The daemon the desktop application bundles carries the UI as well, and serves it
-the same way, only while its remote access is on (see "Remote access to the desktop application's daemon" in
+the same way, on its socket while its remote access is on and at its browser port while its browser access is on (see "Remote access to the desktop application's daemon" in
 `docs/product/who-can-reach-the-daemon.md`); its TCP port serves none, on any system. The application's own windows
 load the UI the application itself bundles. The UI's files are kept compressed inside the daemon, and sent so.
 
@@ -74,8 +74,8 @@ from, and a page of another site, or a request naming the daemon by anything but
 any other path and any other method is refused with `401` without it. No other path gives the page, so an address with
 any path but `/` does not open the UI; given the key, such a path is answered `404`. On the TCP port of a daemon that
 serves the browser on its socket, where no file is served and the owner key is refused, a `401` says that a browser
-reaches this daemon through its own socket, not this port, and to run `octoboardd address` on the server for the SSH
-forward to use.
+reaches this daemon through its own socket, or its browser port where `octoboardd browser on` opened one, not this
+port, and to run `octoboardd address` on the server for the SSH forward to use.
 
 **What a browser keeps of it.** Every file is sent so that the browser sends no referrer from it and shows it in no
 frame of another page. The page itself is never stored: it is fetched afresh on every load, a reload after an update
@@ -118,8 +118,10 @@ shows the same screen at once, saying instead that this address does not open th
 the UI (the server builds), on a host that has Unix-domain sockets (Linux and macOS; Windows has none the daemon uses),
 serves the browser on a socket in its data directory, `~/.octoboard/browser.sock`, and not on its TCP port. So does the
 desktop application's daemon on macOS while its remote access is on, opening and closing the socket as the setting
-turns, under the conditions below; on Windows it serves the browser at a browser port of its own instead (see "Remote
-access to the desktop application's daemon" in `docs/product/who-can-reach-the-daemon.md`). Only there
+turns, under the conditions below, and apart from the browser port it serves while its browser access is on, which opens
+and closes with its own setting (on Windows only that port serves a browser, see "Remote access to the desktop application's daemon" in
+`docs/product/who-can-reach-the-daemon.md`). The server form has a browser port too, off until it is turned on (see
+"Browser access" below); the socket serves whatever that setting. Only there
 does it serve the UI and accept the owner key (see "The owner key" in `docs/product/who-can-reach-the-daemon.md`); the
 launch key opens it too. The TCP port keeps listening on loopback for everything else that reaches the daemon — its
 command line, the agents' helpers, the MCP bridge — and takes the launch key alone. Why the browser is kept off the port
@@ -145,7 +147,7 @@ ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:<port>:<socket path> <user>@<ser
 ```
 
 then `http://127.0.0.1:<port>/?key=<owner key>` in a browser on that machine. `octoboardd address` prints both, with
-the daemon's port as `<port>`, the socket's real path and the user's login name, leaving `<server>` to the owner (see
+the default browser port, 3369, as `<port>`, the socket's real path and the user's login name, leaving `<server>` to the owner (see
 "Running in the background from the command line" in `docs/product/daemon-command-line.md`). Any free local port does:
 the daemon checks only that the address names a loopback host, which the forward keeps as the browser sent it, not
 which port. Two parts of the command keep the browser's key from reaching another user of the owner's own machine, and
@@ -161,24 +163,61 @@ Unix-domain socket on the server cannot open the daemon in a browser. Another us
 to the socket nor forward it through an SSH login of their own (the server opens it as that user, and the forward
 fails), nor move the data directory out of the way.
 
-**A browser on the server itself** cannot use the daemon's port, which the daemon holds on `127.0.0.1` itself: forward
-the socket the same way through an SSH login to the server itself (`<user>@localhost`) to another local port, 3370
-say, and open `http://127.0.0.1:3370/?key=<owner key>`.
+**A browser on the server itself** has no use for the socket, which it cannot open: it opens the address at the
+browser port once browser access is on (see "Browser access" below), or, with it off, forwards the socket the same way
+through an SSH login to the server itself (`<user>@localhost`) to a local port, 3370 say, and opens
+`http://127.0.0.1:3370/?key=<owner key>`.
+
+## Browser access
+
+**The browser port.** The server form's daemon can also serve the browser at a loopback TCP port of its own, beside the
+socket, so that a browser on the server, `tailscale serve` or a plain SSH forward of a port reaches it with no socket
+to bridge. It
+is **off until turned on**: until then the daemon serves the browser on its socket alone, as before. `octoboardd
+browser on [--port <port>]` turns it on at once, at port **3369** unless `--port` names another, kept across restarts;
+`octoboardd browser off` closes it and every connection made through it; `octoboardd browser status` says where it
+stands (see "Browser access" in `docs/product/daemon-command-line.md`). The setting is the daemon's, not an option of
+`start` or of the unit, so a service needs no change, and it is kept across a daemon's restart: a daemon restarted by a
+planned restart, a failure or a service manager opens the port again as it was left. The port is bound on `127.0.0.1`
+alone and serves the UI and accepts the owner key the way the socket does, so the same address opens it; while it is
+open, `octoboardd address` prints the address at that port and the SSH forward of the port
+(`ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:<port>:127.0.0.1:<port> <user>@<server>`) in place of the socket's,
+and the daemon's owner record names the port. The daemon's own port and the browser port may never be the same: a
+browser port that equals the daemon's own is refused, naming both.
+
+**What it costs on a shared server.** The socket is closed to every other user of the server; a TCP port on loopback is
+not. Any other user of the server can take the browser port whenever the daemon is not holding it (it stopped, or is
+restarting), and a browser that reconnects through the owner's forward then hands them the owner key, which opens
+everything the owner can do. That is why the port is off until the owner turns it on, and `browser on` says so each time.
+Turn it on on a server only one person uses, or accept the cost knowingly; on a shared server keep to the socket. Anything
+that runs commands as the owner, an agent included, can run `octoboardd browser on`; the owner key stays a thing a
+browser cannot use to turn it on or move it (a request from a connection the owner key opened is refused), and an agent
+running as the owner can read the owner key with `octoboardd address` anyway. Turning it off closes the port and cuts off
+the connections made through it, and leaves the socket serving, so an address forwarded from the socket keeps opening
+the daemon.
+
+**Why the daemon's own port moved.** The daemon's own TCP port serves only local programs (the command line, the agents'
+helpers, the MCP bridge), which find it in the daemon's records, so it no longer needs to be a fixed port: without
+`--port` it is one the system assigns, and 3369 is left to the browser port (see "Choosing the port" below).
 
 ## Choosing the port
 
 `octoboardd --port <port>` runs the daemon in the foreground listening on `127.0.0.1:<port>`, the same port on every
-start given that option, so the address and the SSH forward `octoboardd address` prints, which name that port (see "The
-browser socket" above), stay the same: the address can be bookmarked and the forward written once. The port is a number
-from 1 to 65535; anything else, 0 included, is a usage error. Without the option the foreground daemon listens on a port
-the operating system assigns, as in the desktop form, whose application never gives one. Either way the startup line and
-the port file name the port (see "Starting up" in `docs/product/application-lifecycle.md`).
+start given that option, which is the port the daemon's own records name, the one the command line, the agents' helpers
+and the MCP bridge use. The port is a number from 1 to 65535; anything else, 0 included, is a usage error. Without the
+option the daemon listens on a port the operating system assigns, as in the desktop form, whose application never gives
+one, and so does `octoboardd start` without `--port`; the startup line and the port file name the port (see "Starting
+up" in `docs/product/application-lifecycle.md`), and `octoboardd status` prints it. Nothing a user opens depends on it:
+the address and the SSH forward `octoboardd address` prints name the browser port, 3369 by default (see "Browser access"
+above), the same at every start, so the address can be bookmarked and the forward written once. A planned restart by a daemon
+that starts its successor itself keeps the daemon's port, handing its listener to the next daemon; a start after a stop
+or a failure, and the successor a service manager starts after a planned restart, may take another unless `--port`
+fixed it; the sessions the daemon keeps running do not notice, since each reaches the daemon
+through its own holder.
 
-**The default server port** is **3369** (`defaultServerPort` in `config/app.json`, fixed when the daemon is built).
-`octoboardd start` listens on it when given no `--port` (see "Running in the background from the command line" in
-`docs/product/daemon-command-line.md`), and the install script's service and the example systemd unit use it unless told
-otherwise (see `docs/product/installing-the-server-form.md` and "Running as a systemd user service" below), so the
-address and the forward `octoboardd address` prints for a daemon started any of those ways name port 3369.
+**The default browser port** is **3369** (`defaultBrowserPort` in `config/app.json`, fixed when the daemon is built):
+the browser port `octoboardd browser on` opens without `--port`, and the local port the forward of the socket names, so
+the address and the forward `octoboardd address` prints for a daemon started any way name port 3369.
 
 **A port already in use fails the start.** The daemon exits with a non-zero status and an error saying that port is
 already in use, before it touches any session: the sessions of the previous run stay as they were stored. A daemon
@@ -194,11 +233,11 @@ error.
 
 The repository carries an example systemd user unit, `apps/daemon/dist/systemd/octoboardd.service`, for running the
 daemon on a Linux server from boot, and every Linux release archive carries it as `octoboardd.service`. Its binary path
-(`%h/.local/bin/octoboardd`) and port (3369, the default server port) are examples, and its comments say how to install
-and enable it by hand; the install script's `--service` installs it with the path and port filled in (see "Installing
-it as a service" in `docs/product/installing-the-server-form.md`). What it sets:
+(`%h/.local/bin/octoboardd`) is an example, and its comments say how to install and enable it by hand; the install
+script's `--service` installs it with the path filled in, and with `--port` where one is given (see "Installing it as a
+service" in `docs/product/installing-the-server-form.md`). What it sets:
 
-- It runs the daemon **in the foreground** with `--port`, as the user who owns the unit, so that user's `~/.octoboard`,
+- It runs the daemon **in the foreground**, on a port the system assigns unless `--port` is added, as the user who owns the unit, so that user's `~/.octoboard`,
   agent accounts and keys are the daemon's, and restarts it after a failure but not after a clean stop. It passes
   `--service-managed` and restarts the daemon after exit status 75 too, the status a planned restart then ends with, so
   that the next daemon runs in the unit (see `docs/product/planned-restart-and-planned-stop.md`), and records that

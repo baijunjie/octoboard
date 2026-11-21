@@ -87,7 +87,7 @@ checks are run in a piece of work, and that nothing bypasses them, is in `CLAUDE
   otherwise). `rust-toolchain.toml` pins the one toolchain used locally and in CI, and the workspace `rust-version`
   matches it. The Tauri CLI version in `.github/signer/` is bumped together with the workspace's `@tauri-apps/cli`.
 - **A fact about product identity lives in `config/app.json`** (name, repository, contacts, website,
-  `defaultServerPort`, license, copyright year), with a check on any copy the toolchain forces elsewhere. `author.name`
+  `defaultBrowserPort`, license, copyright year), with a check on any copy the toolchain forces elsewhere. `author.name`
   is the only editable author source; after changing it or `copyrightYear`, run `pnpm identity:sync` to regenerate the
   `LICENSE` and `Cargo.toml` author lines (`pnpm identity:check` verifies).
 - **`config/launchable-extensions.json` is the one source of which file extensions the system launches rather than

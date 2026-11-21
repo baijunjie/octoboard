@@ -74,7 +74,7 @@ A new remote daemon and a saved one are filled in on the same form, on the Remot
 `docs/product/remote-devices-page.md`), whose fields are, in this order:
 
 - **Connection details**, where the line `octoboardd connection` prints on the server (see "Printing the connection
-  details" in `docs/product/daemon-command-line.md`), or the one the Remote access section of another desktop shows (see
+  details" in `docs/product/daemon-command-line.md`), or the one the Access section of another desktop shows (see
   `docs/product/remote-access-settings.md`), is pasted, by hand or with the field's Paste button. Spaces around it are
   ignored. Such a line fills the host, the SSH port (22 where it names none) and the user, sets the path of
   `octoboardd` (emptying it where the line has none), sets the name where the line carries one, and pins the host key
@@ -240,7 +240,7 @@ differences:
   window shows, and its Settings change, the language the remote daemon holds (see "The language the daemon holds" in
   `docs/product/language.md`). What is the application's own is not offered there: Launch at login, Keep running in the
   background and Show menu bar icon in General (see `docs/product/general-settings.md`), the Permissions section, the
-  Remote access section, and the application's updates (below). Appearance, the terminal font size and the keyboard
+  Access section, and the application's updates (below). Appearance, the terminal font size and the keyboard
   shortcuts are the application's, shared with every window.
 - **Nothing is opened on the remote machine, and nothing of this computer is offered for the daemon's files**: no File
   manager, Default application or System terminal under Open in (see `docs/product/sidebar-project-rows.md` and "A row's

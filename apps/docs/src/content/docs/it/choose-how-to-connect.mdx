@@ -18,11 +18,11 @@ Se un po’ di ritardo nei comandi e un’immagine sfocata non ti disturbano, no
 | --- | --- | --- | --- |
 | Si usa da | App desktop o browser | Solo browser | Solo browser |
 | Host supportati | Server Linux, Mac, PC Windows | Server Linux, Mac, PC Windows | Solo Mac o PC Windows |
-| Sull’host attivi o installi | L’accesso SSH (Login remoto su un Mac, OpenSSH Server su Windows; un server Linux ce l’ha già) | Tailscale; un host Mac o Linux richiede anche socat | UU Remote; un host Mac richiede anche socat |
+| Sull’host attivi o installi | L’accesso SSH (Login remoto su un Mac, OpenSSH Server su Windows; un server Linux ce l’ha già) | Tailscale | UU Remote |
 | Sul tuo computer installi | Niente di aggiuntivo | Tailscale; su un computer Mac o Linux anche socat | UU Remote (Mac o Windows) |
 | Il traffico passa da | Una connessione diretta, senza terze parti | La rete di Tailscale, con il tuo account | Il servizio di NetEase UU Remote, con il tuo account |
 | Funziona fuori dalla stessa rete | Solo se l’host è raggiungibile: nella stessa rete, a un indirizzo pubblico o tramite VPN | Sì | Sì |
-| Ideale per | Server; l’app desktop completa; host Mac e Linux a cui accedono anche altre persone | Raggiungere le tue macchine da ovunque senza SSH | Chi è nella Cina continentale e usa già UU Remote |
+| Ideale per | Server; l’app desktop completa; host Linux a cui accedono anche altre persone, e host Mac o Windows che usi dall’app desktop | Raggiungere le tue macchine da ovunque senza SSH | Chi è nella Cina continentale e usa già UU Remote |
 
 ## Prima di scegliere un relay
 
@@ -33,7 +33,7 @@ Le guide per Tailscale e UU Remote non sono ancora state provate a fondo tra due
 </Aside>
 
 <Aside type="caution" title="Solo su computer a cui non accede nessun altro">
-Con un relay, un altro account utente sull’host o sul tuo computer potrebbe intercettare la chiave del browser. Usa Tailscale o UU Remote solo su computer a cui accedi soltanto tu. [Connettersi tramite SSH](../remote-connections/) non ha questo punto debole su un host Mac o Linux, e nemmeno il tuo computer se usi l’app desktop. In un browser il tuo computer ce l’ha ancora, perché lì anche l’inoltro SSH è in ascolto su una porta <code dir="ltr">127.0.0.1</code>.
+Con un relay, un altro account utente sull’host o sul tuo computer potrebbe intercettare la chiave del browser. Usa Tailscale o UU Remote solo su computer a cui accedi soltanto tu. [Connettersi tramite SSH](../remote-connections/) non ha questo punto debole su un host Linux con l’accesso dal browser disattivato, né su un host Mac o Windows usato dall’app desktop, e nemmeno il tuo computer se usi l’app desktop. In un browser il tuo computer ce l’ha ancora, perché lì anche l’inoltro SSH è in ascolto su una porta <code dir="ltr">127.0.0.1</code>.
 </Aside>
 
 ## Come proseguire

@@ -66,7 +66,7 @@ Das installiert das Programm, richtet es als systemd-Benutzerdienst ein und star
 
 <Code code={commands.linger} lang="sh" />
 
-Der Standardport ist <code dir="ltr">{commands.defaultPort}</code>. Um einen anderen zu verwenden, hänge <code dir="ltr">{commands.portOption}</code> an das Ende des Dienstbefehls oder an <code dir="ltr">{commands.start}</code> an.
+octoboardd wählt selbst einen eigenen Port, den du nie kennen musst: Die Adresse und der <code dir="ltr">ssh</code>-Befehl, die <code dir="ltr">{commands.address}</code> ausgibt, nennen den Port <code dir="ltr">{commands.defaultPort}</code>, jedes Mal denselben.
 
 ## Upgrade
 

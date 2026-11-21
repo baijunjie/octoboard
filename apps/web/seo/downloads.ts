@@ -27,9 +27,9 @@ function targetsOfKind<Kind extends "app" | "server">(kind: Kind): DownloadTarge
 export const appDownloads = targetsOfKind("app");
 export const serverDownloads = targetsOfKind("server");
 
-// The port `octoboardd start` listens on when none is given; config/app.json holds it for the daemon, the install
-// script and this site alike.
-export const defaultServerPort: number = appConfig.defaultServerPort;
+// The port the browser is served at until the owner sets another, and the one the forward `octoboardd address` prints
+// names; config/app.json holds it for the daemon and this site alike.
+export const defaultBrowserPort: number = appConfig.defaultBrowserPort;
 
 // The commands the Linux tab's terminal demo types after installing. They are not translated.
 export const linuxCommands = {

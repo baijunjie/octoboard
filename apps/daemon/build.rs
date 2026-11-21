@@ -11,12 +11,12 @@ fn main() {
         .as_str()
         .expect("config/app.json `name` is a string");
     println!("cargo:rustc-env=OCTOBOARD_APP_NAME={name}");
-    // And the port `octoboardd start` listens on without `--port`, as `OCTOBOARD_DEFAULT_SERVER_PORT`.
-    let port = config["defaultServerPort"]
+    // And the port the browser is served at until the owner sets another, as `OCTOBOARD_DEFAULT_BROWSER_PORT`.
+    let port = config["defaultBrowserPort"]
         .as_u64()
         .filter(|port| (1..=u64::from(u16::MAX)).contains(port))
-        .expect("config/app.json `defaultServerPort` is a port number");
-    println!("cargo:rustc-env=OCTOBOARD_DEFAULT_SERVER_PORT={port}");
+        .expect("config/app.json `defaultBrowserPort` is a port number");
+    println!("cargo:rustc-env=OCTOBOARD_DEFAULT_BROWSER_PORT={port}");
     // And the repository the releases are published in, which the self-update reads its manifest
     // from, as `OCTOBOARD_REPOSITORY_URL`.
     let repository = config["repositoryUrl"]

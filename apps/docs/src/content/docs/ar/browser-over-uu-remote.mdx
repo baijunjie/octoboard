@@ -14,7 +14,7 @@ import HostBrowserAddress from "../../../snippets/ar/host-browser-address.mdx";
 لست متأكدًا أن هذه هي الطريقة المناسبة لك؟ راجع [اختر طريقة الاتصال](../choose-how-to-connect/).
 
 <Aside type="caution">
-لم تُختبر هذه الخطوات بين جهازين بعد. فهي تتبع مساعدة UU Remote نفسها. جُرّب الوسيط على مضيف Mac على كمبيوتر واحد، بما في ذلك الاتصال المباشر للمتصفح.
+لم تُختبر هذه الخطوات بين جهازين بعد. فهي تتبع مساعدة UU Remote نفسها.
 </Aside>
 
 <strong>المتصفح على كمبيوترك</strong> ← <strong>127.0.0.1 على كمبيوترك</strong> ⟷ UU Remote ⟷ <strong>127.0.0.1 على المضيف</strong> ← <strong>{productName}</strong>
@@ -25,7 +25,6 @@ import HostBrowserAddress from "../../../snippets/ar/host-browser-address.mdx";
 - <strong>127.0.0.1 (loopback):</strong> عنوان يعني دائمًا “هذا الكمبيوتر نفسه”.
 - <strong>المنفذ (Port):</strong> رقم يحدد برنامجًا واحدًا على الكمبيوتر، مثل رقم باب. <code dir="ltr">127.0.0.1:{commands.defaultPort}</code> هو المنفذ {commands.defaultPort} على هذا الكمبيوتر.
 - <strong>تعيين المنافذ (端口映射):</strong> ميزة في UU Remote تجعل منفذًا على المضيف يظهر كمنفذ على كمبيوترك.
-- <strong>socat:</strong> برنامج صغير ومجاني ينقل اتصالًا من مكان إلى آخر. ويحتاج إليه مضيف Mac وسيطًا.
 - <strong>Terminal:</strong> النافذة التي تكتب فيها الأوامر: Terminal في macOS، وPowerShell في Windows.
 
 </details>
@@ -37,7 +36,6 @@ import HostBrowserAddress from "../../../snippets/ar/host-browser-address.mdx";
 - <strong>الكمبيوتران كلاهما Mac أو كمبيوتر Windows.</strong> لا يوفّر UU Remote تعيين منافذ لنظام Linux؛ للوصول إلى خادم Linux استخدم [Tailscale](../browser-over-tailscale/) أو [SSH](../remote-connections/) بدلًا من ذلك.
 - <strong>على كليهما UU Remote مثبّت ومسجَّل الدخول إلى الحساب نفسه،</strong> بالإصدار 4.21.0 أو أحدث على Windows و4.32.0 أو أحدث على macOS. يعمل تعيين المنافذ مع TCP فقط، وهو كل ما يحتاجه {productName}. وقت كتابة هذا الدليل، يُدرج UU Remote تعيين المنافذ ضمن ميزاته المجانية؛ راجع خططه الحالية إن شككت.
 - <strong>يظهر المضيف ضمن أجهزتي (我的设备)</strong> في UU Remote على الكمبيوتر الذي ستتصفح منه.
-- <strong>يحتاج مضيف Mac أيضًا إلى [Homebrew](https://brew.sh/)</strong>، لتثبيت socat أدناه.
 
 ## على المضيف
 
@@ -45,32 +43,10 @@ import HostBrowserAddress from "../../../snippets/ar/host-browser-address.mdx";
 
 1. احصل على عنوان المتصفح، وهو يحمل المفتاح الذي يسجّل دخول المتصفح.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
    <HostBrowserAddress />
-   </TabItem>
-   <TabItem label="Windows">
-   <HostBrowserAddress windows />
-   </TabItem>
-   </Tabs>
 2. أنشئ منفذًا على <code dir="ltr">{tunnel.loopback}</code> الخاص بالمضيف يؤدي إلى {productName}. هذا المنفذ هو <strong>منفذ المضيف</strong> في الخطوات أدناه.
 
-   <Tabs syncKey="host">
-   <TabItem label="macOS">
-   يقدّم Mac المتصفح بطريقة لا يستطيع UU Remote تعيينها، لذا يحتاج إلى socat وسيطًا. ثبّته في Terminal:
-
-   <Code code={tunnel.installSocatMac} lang="sh" />
-
-   ثم شغّل هذا واترك النافذة مفتوحة. ينصت على <code dir="ltr">127.0.0.1:{tunnel.bridgePort}</code> وحده.
-
-   <Code code={tunnel.bridge} lang="sh" />
-
-   منفذ المضيف هو <code dir="ltr">{tunnel.bridgePort}</code>.
-   </TabItem>
-   <TabItem label="Windows">
-   لا شيء يُشغَّل: {productName} نفسه ينصت على منفذ المتصفح، على <code dir="ltr">127.0.0.1</code> وحده. ومنفذ المضيف هو <strong>منفذ المتصفح</strong> في تبويب <strong>المتصفح</strong> ({commands.defaultPort} ما لم تغيّره).
-   </TabItem>
-   </Tabs>
+   لا شيء يُشغَّل: {productName} نفسه ينصت على منفذ المتصفح، على <code dir="ltr">127.0.0.1</code> وحده. ومنفذ المضيف هو <strong>منفذ المتصفح</strong> في <strong>الإعدادات › الوصول</strong> ({commands.defaultPort} ما لم تغيّره).
 
 </Steps>
 
@@ -112,19 +88,18 @@ import HostBrowserAddress from "../../../snippets/ar/host-browser-address.mdx";
 
 ## إذا لم يعمل
 
-- <strong>يظهر التعيين متصلًا، لكن الصفحة لا تُحمَّل:</strong> على مضيف Mac، أُغلقت نافذة socat أو توقف أمرها؛ أو أن <strong>السماح بالوصول عن بُعد</strong> متوقف، أو أن {productName} لا يعمل على المضيف.
+- <strong>يظهر التعيين متصلًا، لكن الصفحة لا تُحمَّل:</strong> <strong>السماح بالوصول من المتصفح</strong> متوقف، أو أن {productName} لا يعمل على المضيف.
 - <strong>لا يُحفظ التعيين أو لا يتصل:</strong> قد يكون المنفذ المحلي مستخدمًا على هذا الكمبيوتر. اختر منفذًا آخر، وغيّره في عنوان المتصفح أيضًا.
 - <strong>تُرفض الصفحة أو تظهر فارغة:</strong> تأكد من أنك فتحت العنوان على <code dir="ltr">{tunnel.loopback}</code>.
 
 ## إيقافه
 
 - <strong>على الكمبيوتر الذي تصفحت منه:</strong> أوقف التعيين في لوحة تعيين المنافذ في UU Remote، أو احذفه. وإغلاق اللوحة أو قطع الاتصال يوقفه أيضًا.
-- <strong>على مضيف Mac:</strong> أوقف socat بـ <kbd>Ctrl</kbd>+<kbd>C</kbd>.
-- <strong>على المضيف،</strong> أوقف <strong>السماح بالوصول عن بُعد</strong> عندما لا تحتاج إليه بعد الآن. يغلق هذا مدخل المتصفح ويقطع اتصال كل صفحة فُتحت بالمفتاح.
-- <strong>إذا احتمل أن العنوان تسرّب،</strong> فأعطه مفتاحًا جديدًا بـ <strong>تجديد المفتاح</strong> في تبويب <strong>المتصفح</strong>. تنقطع الصفحات المفتوحة بالعنوان القديم.
+- <strong>على المضيف،</strong> أوقف <strong>السماح بالوصول من المتصفح</strong> عندما لا تحتاج إليه بعد الآن. يغلق هذا منفذ المتصفح ويقطع اتصال كل صفحة فُتحت بالمفتاح.
+- <strong>إذا احتمل أن العنوان تسرّب،</strong> فأعطه مفتاحًا جديدًا بـ <strong>تجديد المفتاح</strong> في <strong>الإعدادات › الوصول</strong>. تنقطع الصفحات المفتوحة بالعنوان القديم.
 
 ## الأمان
 
 - <strong>العنوان هو كلمة المرور:</strong> مفتاحه يمنح تحكمًا كاملًا في {productName} على المضيف، بما في ذلك تشغيل أي أمر. ويبقى صالحًا إلى أن تجدّده. ويبقى في سجل المتصفح وإشاراته المرجعية، ويُزامَن إلى أجهزتك الأخرى إذا كانت مزامنة المتصفح مفعّلة.
 - <strong>من يستطيع الوصول إليه:</strong> كل من يصل إلى منفذ المضيف ويملك المفتاح. وعلى المضيف ينصت على <code dir="ltr">127.0.0.1</code> فقط؛ ويستطيع الوصول إليه أيضًا كل من يستطيع استخدام حساب UU Remote الخاص بك لتعيين منافذ إلى المضيف، فأبقِ ذلك الحساب مؤمّنًا.
-- <strong>فقط على أجهزة لا يسجّل الدخول إليها أحد غيرك:</strong> يستطيع حساب مستخدم آخر على المضيف أو على كمبيوترك الاتصال بمنافذ <code dir="ltr">127.0.0.1</code> هذه، وعندما لا يكون التعيين أو socat قيد التشغيل يستطيع أن يستولي على المنفذ ويتلقى المفتاح عندما يعيد متصفحك الاتصال. عند [الاتصال عبر SSH](../remote-connections/)، لا يوجد هذا الضعف في مضيف Mac أو Linux، ولا في كمبيوترك أنت عند استخدام تطبيق سطح المكتب. أما في المتصفح فيبقى هذا الضعف في كمبيوترك، لأن إعادة توجيه SSH هناك تستمع أيضًا على منفذ <code dir="ltr">127.0.0.1</code>.
+- <strong>فقط على أجهزة لا يسجّل الدخول إليها أحد غيرك:</strong> يستطيع حساب مستخدم آخر على المضيف أو على كمبيوترك الاتصال بمنافذ <code dir="ltr">127.0.0.1</code> هذه، ويستطيع أن يستولي على منفذ المتصفح في المضيف عندما لا يعمل {productName} أو يُعاد تشغيله، أو على المنفذ المعيَّن في كمبيوترك عندما لا يعمل التعيين، ويتلقى المفتاح عندما يعيد متصفحك الاتصال. عند [الاتصال عبر SSH](../remote-connections/)، لا يوجد هذا الضعف في مضيف Linux عند إيقاف الوصول من المتصفح، ولا في مضيف Mac أو Windows عند استخدامه من تطبيق سطح المكتب، ولا في كمبيوترك أنت عند استخدام تطبيق سطح المكتب. أما في المتصفح فيبقى هذا الضعف في كمبيوترك، لأن إعادة توجيه SSH هناك تستمع أيضًا على منفذ <code dir="ltr">127.0.0.1</code>.

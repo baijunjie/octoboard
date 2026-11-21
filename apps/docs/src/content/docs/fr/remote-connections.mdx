@@ -65,10 +65,10 @@ Vous pouvez aussi atteindre un Mac ou un PC Windows sur lequel fonctionne l’ap
 
 <Steps>
 
-1. Sur l’ordinateur que vous voulez atteindre, ouvrez <strong>Réglages › Accès à distance</strong> dans {productName}.
+1. Sur l’ordinateur que vous voulez atteindre, ouvrez <strong>Réglages › Accès</strong> dans {productName}.
 2. Sélectionnez-y <strong>Ouvrir Réglages Système</strong> (macOS) ou <strong>Ouvrir Paramètres</strong> (Windows), et activez <strong>Connexion à distance</strong> (macOS) ou <strong>OpenSSH Server</strong> (Windows), en suivant le chemin que donne la ligne, pour que cet ordinateur accepte les connexions SSH. Cela demande un administrateur. De retour dans {productName}, la ligne affiche alors <strong>Activée</strong>.
 3. Activez <strong>Autoriser l’accès à distance</strong>, sélectionnez <strong>Autoriser</strong> pour confirmer, et laissez {productName} en marche : si vous le quittez, l’accès à distance s’arrête.
-4. Dans l’onglet <strong>App {productName}</strong>, sélectionnez <strong>Copier les informations de connexion</strong>, et envoyez-les à l’autre ordinateur, par exemple par e-mail ou par messagerie.
+4. Sélectionnez <strong>Copier les informations de connexion</strong>, et envoyez-les à l’autre ordinateur, par exemple par e-mail ou par messagerie.
 5. Sur l’ordinateur depuis lequel vous travaillerez, ajoutez l’hôte comme aux étapes 2 à 5 de [Se connecter à un serveur Linux](#se-connecter-à-un-serveur-linux), en collant les informations que vous avez envoyées. Connectez-vous avec votre nom d’utilisateur et votre mot de passe sur l’hôte.
 
 </Steps>
@@ -81,7 +81,7 @@ Vous saurez que ça a marché quand une fenêtre distincte s’ouvre avec les pr
 
 1. Obtenez la commande de redirection SSH :
 
-   - <strong>Sur un hôte Mac ou Windows,</strong> faites d’abord les étapes 1 à 3 de [Utiliser un autre ordinateur comme hôte](#utiliser-un-autre-ordinateur-comme-hôte). Puis, dans l’onglet <strong>Navigateur</strong>, regardez <strong>Étape 1 : redirection SSH</strong>. Cliquez sur l’adresse dans la commande pour choisir comment votre autre ordinateur atteint celui-ci (ou choisissez <strong>Saisir l’adresse soi-même</strong> et remplacez <code dir="ltr">{commands.server}</code> plus tard), puis sélectionnez <strong>Copier la commande de redirection</strong>. Sélectionnez aussi <strong>Copier l’adresse</strong> sous <strong>Étape 2 : adresse du navigateur</strong>.
+   - <strong>Sur un hôte Mac ou Windows,</strong> faites d’abord les étapes 1 et 2 de [Utiliser un autre ordinateur comme hôte](#utiliser-un-autre-ordinateur-comme-hôte). Puis ouvrez <strong>Réglages › Accès</strong>, activez <strong>Autoriser l’accès par navigateur</strong> et sélectionnez <strong>Autoriser</strong> pour confirmer. Dans l’onglet <strong>Navigateur</strong>, regardez <strong>Étape 1 : redirection SSH</strong>. Cliquez sur l’adresse dans la commande pour choisir comment votre autre ordinateur atteint celui-ci (ou choisissez <strong>Saisir l’adresse soi-même</strong> et remplacez <code dir="ltr">{commands.server}</code> plus tard), puis sélectionnez <strong>Copier la commande de redirection</strong>. Sélectionnez aussi <strong>Copier l’adresse locale</strong> sous <strong>Navigateur de cet ordinateur</strong>.
    - <strong>Sur un serveur Linux,</strong> exécutez ceci sur le serveur. Il affiche l’adresse du navigateur, puis la commande SSH à exécuter.
 
      <Code code={commands.address} lang="sh" />

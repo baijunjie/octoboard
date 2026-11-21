@@ -7,6 +7,7 @@
 //! This module uses nothing else in the crate: it sits in the foundation layer, so any module may
 //! use it.
 
+pub(crate) mod application;
 pub(crate) mod build_files;
 #[cfg(target_os = "macos")]
 pub(crate) mod cf;
@@ -52,6 +53,16 @@ impl HostOs {
         }
     }
 }
+
+/// Whether the desktop application's daemon serves the browser at a loopback port of its own while
+/// browser access is on: on Windows, whose SSH server cannot forward to a socket, in place of the
+/// owner socket, and on macOS beside it, so that a browser on the same Mac needs no forward.
+pub const APPLICATION_BROWSER_PORT: bool = cfg!(any(windows, target_os = "macos"));
+
+/// Whether a store migrated from a version before Allow browser access (version 5) starts with
+/// browser access equal to the remote access it had: on Windows, where the browser port belonged
+/// to remote access, so that the update changes nothing a user had on. Elsewhere it starts off.
+pub const BROWSER_ACCESS_STARTS_FROM_REMOTE_ACCESS: bool = cfg!(windows);
 
 /// How the host's own interface names the place a move to the Trash ([`fs::trash_context`])
 /// puts things.

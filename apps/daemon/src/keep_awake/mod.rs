@@ -159,7 +159,7 @@ fn working_sessions(state: &AppState) -> HashSet<String> {
 /// Whether `session`, as a client is shown it, is at work: starting, working or dormant, or idle
 /// with work left running in the background. Mirrors the UI's `sessionIsWorking`; the two must
 /// stay in step.
-fn session_is_working(session: &Session) -> bool {
+pub(crate) fn session_is_working(session: &Session) -> bool {
     match session.status {
         SessionStatus::Starting | SessionStatus::Working | SessionStatus::Dormant => true,
         SessionStatus::Idle => !session.background_tasks.is_empty(),

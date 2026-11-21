@@ -258,16 +258,26 @@ their cascade order does not depend on which screen opened first.
   count that decides when a focus return re-reads), `settingsReads.ts` is their context (`useSettingsReads`) and `searchReads`,
   what the search is told of them, so the search counts those rows only once their read has answered, while `useMacosPermissions`
   is the Permissions section's actions on top of that read;
-  `GeneralSection.tsx` the General section (the language, then startup, window, power, terminals and Sorting groups, each
+  `GeneralSection.tsx` the General section (the language, then the Sorting, terminals, power, window, startup and command-line groups, each
   shown only where the platform has the capability, the power one where the daemon's host can be held awake (`host.keep_awake`));
   `LaunchAtLoginSetting.tsx`, `MenuBarIconSetting.tsx` and `BackgroundRunSetting.tsx` are its native-backed rows,
   `KeepAwakeSetting.tsx` its daemon-backed Prevent sleep row, with its choices of when, and what each says, in `configuration/keepAwakeWhen.ts`;
-  `RemoteAccessSection.tsx` the Remote access section (this computer's daemon reached from another device over SSH: first whether the
-  SSH server is on (`useRemoteLogin.ts`, `sshServerWords.ts`), then the switch and, on Windows while nothing is served, the browser
-  port; while served, two underline tabs, the application's connection details with copy and QR, and the browser's numbered steps,
-  `ForwardCommand.tsx` (the SSH forward with its address as a token that opens a menu of this computer's names and addresses) and the
-  address, the port and Rotate key, each tab's rows in a `SettingsTabPanel.tsx`, which keeps a tab switch from taking part in the
-  section's list motion), offered only in the application's own window for a daemon that offers it (`remoteAccessOffered.ts`);
+  `RemoteAccessSection.tsx` the Access section, which composes three `SettingsGroup`s by where it is used and holds what they share
+  (the lead, whether Remote Login is on, the focus handoff for the controls the daemon's state unmounts): `BrowserAccessGroup.tsx`
+  (This computer's browser, only where the daemon has a browser port: the switch, the browser port with its change dialog and, while the
+  port is open, the local address, whose open button goes through `useExternalLinkAction().activate`), `OtherComputersGroup.tsx` (first
+  whether the SSH server is on (`useRemoteLogin.ts`, `sshServerWords.ts`), then, with a browser port, two tabs (`SettingsTabPanel.tsx`
+  being a tab's panel): the application's, with the switch and, while served, the connection details with copy and QR, and the browser's,
+  with the numbered steps from another computer while the port is open, `ForwardCommand.tsx` being the SSH forward with its address as a
+  token that opens a menu of this computer's names and addresses; with no browser port the application's rows alone) and Key
+  (`RotateKeyRow.tsx`, the row and confirmation that rotate the one owner key). The two switches are `AccessSwitchRow.tsx` (the
+  confirmation before turning on, the request), a way's failure `AccessFailureAlert.tsx`, and what the daemon is doing is read through
+  `accessState.ts` (`hasBrowserPort`, `servedBrowserAddress`, `servedConnection`, `anyServing`, ...), which the search index uses too;
+  offered only in the application's own window for a daemon that offers it (`remoteAccessOffered.ts`), and wording a daemon's failure through
+  `remoteAccessFailure.ts`;
+  `CommandLineSetting.tsx` the General section's command-line row (macOS only, `PlatformAdapter.commandLine`): the state in the row, a
+  pending button for the change out, and a failed change as an alert in the row worded by the shell's `CommandLineError` code
+  (`src/platform/commandLineError.ts`), its outcome announced through `AttendedStatusAnnouncer`;
   `AppearanceSection.tsx` the Appearance section (`ThemeSetting.tsx`, `MarkdownStyleSetting.tsx` and `TerminalFontSizeSetting.tsx`,
   the terminals' font size, a `NumberField` from `src/primitives/`), `CleanupSection.tsx` the Cleanup section;
   `accounts/` the Agent accounts section, where `AgentProviderSettings.tsx` renders every setting the daemon serves for an agent
@@ -446,7 +456,7 @@ are the helper list; the rules that go beyond "use helper X" are in `docs/conven
 | A button that confirms its action by turning to a done state (a tooltip text and glyph change, announced) | `FeedbackButton` with `useDoneFeedback` (`src/components/controls/FeedbackButton.tsx`), as `CopyButton` and `PasteButton` use it |
 | Read the clipboard's text on a user's press | `PasteButton` (`src/components/controls/PasteButton.tsx`) over the platform's `clipboard.readText` |
 | A block of code shown as text | `CodeBlock`, or `SurfaceCodeBlock` for a wrapping block on its own surface (`src/components/text/CodeBlock.tsx`); a flush `CodeBlock` built on a surface of its own, such as inside a scroller as `DiagnosticBlock` does, puts `CODE_SURFACE_CLASS` (the classes of the secondary `Surface` it sits on) on that surface |
-| Open an external address with the platform adapter and shared failure handling | `ExternalLink` (`src/components/text/ExternalLink.tsx`) for application links; `useExternalLinkAction` from the same module for document-owned link markup |
+| Open an external address with the platform adapter and shared failure handling | `ExternalLink` (`src/components/text/ExternalLink.tsx`) for application links; `useExternalLinkAction` from the same module for document-owned link markup, and, through its `activate`, for a control that is not an anchor (an icon button) and wants the same open, double-press guard and failure alert |
 | A settings section's lead paragraph and the rows under it | `SettingsLead` and `LeadRows` (`src/settings/SettingsLead.tsx`) |
 | A new row, or a block of a section's own, in Settings | `SettingRow` / `SwitchSettingRow` with a `searchId`, or `SettingsSearchBlock` around the block, and its entry in `SETTINGS_SEARCH_INDEX` (`src/settings/settingsSearch.ts`); a group's `SettingsGroup` `title` is a message key; `LeadRows` takes `hidden`. `src/settings/settingsSearch.test.tsx` fails when a row and the index drift apart; what the entry must carry is in `docs/conventions/ui-components.md`, "Shared components to reuse" |
 | An on/off switch in Settings that saves | `SettingSwitch` or `SwitchSettingRow` (`src/settings/SettingRow.tsx`); the `onChange` may return the save, so the switch ignores presses until it settles; `DaemonSwitchSetting` and `GitSection` return nothing and rely on `useSettingsWrite`'s version guard instead |

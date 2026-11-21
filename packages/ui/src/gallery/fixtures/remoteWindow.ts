@@ -14,7 +14,7 @@ const { console: console_, web, api, sessions } = SAMPLE;
  * facts, `host`, less what is the application's rather than a daemon's (running in the background, launching at login,
  * the privacy grants and the updater). */
 function remoteWindowHost(host: HostFacts): HostFacts {
-  return { ...host, runInBackground: false, launchAtLogin: false, permissionsPane: false, updater: "none" };
+  return { ...host, runInBackground: false, launchAtLogin: false, commandLine: false, permissionsPane: false, updater: "none" };
 }
 
 /** A remote window's host on macOS. */
@@ -83,7 +83,7 @@ export const remoteWindowScenarios: Scenario[] = [
     category: "normal",
     title: "General settings in a remote daemon's window",
     description:
-      "Settings of the window opened on Staging, a Linux server. The section opens on the Language row, which is the remote daemon's own setting: a remote window shows the language its daemon holds and changes that daemon's. Under it only what is the daemon's: Resume sessions on start, Terminals and Sorting. The application's own groups (Launch at login, Window, and Power, which a Linux server cannot offer) are absent, and so are the Permissions, Remote access and Updates sections in the list on the left.",
+      "Settings of the window opened on Staging, a Linux server. The section opens on the Language row, which is the remote daemon's own setting: a remote window shows the language its daemon holds and changes that daemon's. Under it only what is the daemon's: Sorting, Terminals and Startup (only Resume sessions on start). The application's own groups (Launch at login, Window, Command line, and Power, which a Linux server cannot offer) are absent, and so are the Permissions, Access and Updates sections in the list on the left.",
     state: remoteState,
     host: REMOTE_WINDOW_HOST,
     desktopApp: true,

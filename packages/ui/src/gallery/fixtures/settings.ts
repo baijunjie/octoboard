@@ -8,6 +8,7 @@ import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
 import { accountOf, agentCliStatusOf, agentCliUpdateOf, MACOS_MACHINE, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState, WINDOWS_MACHINE } from "../../fixtures/builders";
 import { withCliStatus } from "../../fixtures/fixtureAgentClis";
+import { CommandLineError } from "../../platform";
 import { browserHost } from "../../platform/host";
 import { MAC_HOST, WINDOWS_HOST } from "../../test/hosts";
 import { noneAddedState } from "./empty";
@@ -398,6 +399,8 @@ function withLogins(base: Scenario["state"], ...logins: AccountLogin[]): Scenari
 
 /** How far the many-accounts section is scrolled: the default account, Work and a few rows more have gone under the strip. */
 const SCROLLED_UNDER_STRIP = 420;
+/** An offset past the end of a section, which is clamped to it: the last rows in view. */
+const SCROLLED_TO_END = 100000;
 
 /** Longer than the fixture daemon takes to walk a login from starting through waiting to its outcome. */
 const LOGIN_ENDS_WITHIN_MS = 700;
@@ -771,7 +774,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings",
-    description: "The section opens on the Language row, a select with no group heading above it, then three headed groups. Startup holds only \"Resume sessions on start\", off, since a browser cannot be launched at login. Terminals holds only the terminal-cleanup switch, off, whose description says closing the panel closes idle terminals and keeps running commands. Sorting ends the section: three select rows, Sessions (Status), Active projects (Status) and Inactive projects (Name), each with a short description of what it orders; the project rows say which projects they cover and where those sit relative to the other kind. Window is not offered, and neither is Power, as the daemon's host cannot be held awake. The theme and Markdown style are in Appearance and the archive-cleanup switch is in Cleanup, so neither is listed. Choose Phone (390px) to see the Language and Sorting selects stretch across their rows beneath the labels. At Tablet portrait (768px) and narrower, Settings fills the window with horizontal section tabs and controls stacked beneath their labels. Above 768px the sections stay a menu column under the search field, the selected one a filled row; choose a short height to see the list scroll inside the column, with faded edges and no scroll buttons. Widths below 390px use compact spacing; Desktop (1440px) and Tablet landscape (1024px) keep the same desktop layout.",
+    description: "The section opens on the Language row, a select with no group heading above it, then the Sorting group: three select rows, Sessions (Status), Active projects (Status) and Inactive projects (Name), each with a short description of what it orders; the project rows say which projects they cover and where those sit relative to the other kind. Terminals follows, holding only the terminal-cleanup switch, off, whose description says closing the panel closes idle terminals and keeps running commands, then Startup, holding only \"Resume sessions on start\", off, since a browser cannot be launched at login; Startup is at the edge of the fold of a short window. Window is not offered, and neither is Power, as the daemon's host cannot be held awake. The theme and Markdown style are in Appearance and the archive-cleanup switch is in Cleanup, so neither is listed. Choose Phone (390px) to see the Language and Sorting selects stretch across their rows beneath the labels. At Tablet portrait (768px) and narrower, Settings fills the window with horizontal section tabs and controls stacked beneath their labels. Above 768px the sections stay a menu column under the search field, the selected one a filled row; choose a short height to see the list scroll inside the column, with faded edges and no scroll buttons. Widths below 390px use compact spacing; Desktop (1440px) and Tablet landscape (1024px) keep the same desktop layout.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -782,7 +785,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings, daemon host can stay awake",
-    description: "A browser against a daemon whose host can be held awake: the Power group is offered here too, between Startup and Terminals, with \"Prevent sleep\" on above \"When to prevent sleep\", a select reading \"While sessions work\". Window is still not offered.",
+    description: "A browser against a daemon whose host can be held awake: the Power group is offered here too, between Terminals and Startup, with \"Prevent sleep\" on above \"When to prevent sleep\", a select reading \"While sessions work\". Window is still not offered.",
     state: { ...browserState, host: MACOS_MACHINE.host, settings: { ...browserState!.settings!, keep_awake: true } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -793,13 +796,14 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Desktop General settings",
-    description: "The desktop app on macOS, every group in order under the ungrouped Language row. Startup: \"Launch at login\", on, above \"Resume sessions on start\", on, whose description ends with the sentence that a logout, restart or shutdown quits the app without asking (only the macOS app says it). Window: \"Keep running in the background\", on, above \"Show menu bar icon\", on. Power: \"Prevent sleep\", on, so \"When to prevent sleep\" follows it as a select reading \"While sessions work\"; at Phone width (390px) the select stretches beneath its label, and switching Prevent sleep off removes that row with the list motion. Terminals, holding only the terminal-cleanup switch, comes next, and the Sorting group ends the section, both below the fold of a short window, so scroll the dialog to them. Each group heading stays clear while pinned; as the next group replaces it, only the outgoing heading fades at its pinned boundary, on the opaque dialog surface. The incoming heading and controls below it keep their usual appearance.",
+    description: "The desktop app on macOS, every group in order of use. The Language row, with no group heading, comes first; then Sorting, then Terminals, holding only the terminal-cleanup switch. Power: \"Prevent sleep\", on, so \"When to prevent sleep\" follows it as a select reading \"While sessions work\"; at Phone width (390px) the select stretches beneath its label, and switching Prevent sleep off removes that row with the list motion. Window: \"Keep running in the background\", on, above \"Show menu bar icon\", on. Startup: \"Launch at login\", on, above \"Resume sessions on start\", on, whose description ends with the sentence that a logout, restart or shutdown quits the app without asking (only the macOS app says it). Command line: the \"Command-line tool\" row, \"Not installed.\", with an Install button as its only button. Startup and Command line are below the fold of a short window, so scroll the dialog to them. Each group heading stays clear while pinned; as the next group replaces it, only the outgoing heading fades at its pinned boundary, on the opaque dialog surface. The incoming heading and controls below it keep their usual appearance.",
     state: resumingState,
     host: MAC_HOST,
     desktopApp: true,
     backgroundRun: true,
     menuBarIcon: true,
     launchAtLogin: "enabled",
+    commandLine: { state: { state: "notInstalled" } },
     shellSettings: { runInBackground: true },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -810,13 +814,98 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "General, Launch at login awaiting approval",
-    description: "The macOS app has registered its login entry, but the system holds it for approval. Startup: the \"Launch at login\" row reads on, and its description says the app is waiting for approval and to allow it in System Settings, the app and System Settings each as an inline chip. An \"Open System Settings\" secondary button sits before the switch. At Phone width (390px) the button and switch drop beneath the text, at its end edge, instead of sitting beside it; check that nothing overflows. Startup, Terminals and Sorting follow the Language row, since the window offers no Window or Power setting here.",
+    description: "The macOS app has registered its login entry, but the system holds it for approval. Startup: the \"Launch at login\" row reads on, and its description says the app is waiting for approval and to allow it in System Settings, the app and System Settings each as an inline chip. An \"Open System Settings\" secondary button sits before the switch. At Phone width (390px) the button and switch drop beneath the text, at its end edge, instead of sitting beside it; check that nothing overflows. The group is below the fold, so the section is scrolled to its end. The Language row, Sorting and Terminals come before it, and the window offers no Window or Power setting here.",
     state,
     host: MAC_HOST,
     desktopApp: true,
     launchAtLogin: "requiresApproval",
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.scrollPanel(ui.t("settings.section.general"), SCROLLED_TO_END),
+    ],
+  },
+  {
+    id: "settings-command-line-installed",
+    group: GROUP,
+    category: "normal",
+    title: "General, command-line tool installed in the user's folder",
+    description: "The Command line group on the macOS app (below the fold of a short window, so the section is scrolled to its end), with the tool installed in the user's own folder: the \"Command-line tool\" row says where, and a second line asks to add that directory to the PATH. Remove and Reinstall, both secondary, sit at the end edge. At Phone width (390px) the buttons drop beneath the text, at its end edge. The other installed wordings (in /usr/local/bin without that line, running another copy of the app, pointing at a copy that is gone) have the same layout and actions, so a test holds them.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    commandLine: { state: { state: "installed", path: "/Users/dev/.local/bin/octoboardd", pathNote: true } },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.scrollPanel(ui.t("settings.section.general"), SCROLLED_TO_END),
+    ],
+  },
+  {
+    id: "settings-command-line-busy",
+    group: GROUP,
+    category: "normal",
+    title: "General, command-line tool change in progress",
+    description: "Reinstall has been pressed on a link whose copy of the app is gone, and the system has not answered yet (it may be waiting for an administrator's password): the row keeps its text, Reinstall shows its pending state and Remove is disabled until the system answers.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    commandLine: { state: { state: "unresolved", path: "/usr/local/bin/octoboardd" }, install: "pending" },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.commandLine.reinstall")),
+      (ui) => ui.scrollPanel(ui.t("settings.section.general"), SCROLLED_TO_END),
+    ],
+  },
+  {
+    id: "settings-command-line-unreadable",
+    group: GROUP,
+    category: "exceptional",
+    title: "General, command-line tool state could not be read",
+    description: "The shell cannot tell whether the tool is installed: the row says \"Could not tell whether the tool is installed.\" in place of the state line, and Install is enabled, as the only button.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    commandLine: { state: "unreadable" },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.scrollPanel(ui.t("settings.section.general"), SCROLLED_TO_END),
+    ],
+  },
+  {
+    id: "settings-command-line-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "General, command-line tool change refused",
+    description: "Install has been pressed and the system did not allow the change (the administrator prompt was declined): under the state line, a compact error alert titled \"Could not install the command-line tool\" says the system did not allow the change to the link's path, a monospace chip, and that it was left as it was, with the system's own words behind its Details button. It is in the row, not a dialog, and Install is enabled again. A failed Remove reads the same under its own title, and the other codes (not a link, any other failure) have the same layout with their own sentence.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    commandLine: {
+      state: { state: "notInstalled" },
+      install: { error: new CommandLineError("refused", "/usr/local/bin/octoboardd", "User canceled. (-128)") },
+    },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.commandLine.install")),
+      (ui) => ui.scrollPanel(ui.t("settings.section.general"), SCROLLED_TO_END),
+    ],
+  },
+  {
+    id: "settings-command-line-foreign-link",
+    group: GROUP,
+    category: "exceptional",
+    title: "General, command-line tool link leads to something else",
+    description: "Reinstall has been pressed on a link that runs another copy of the app, and the shell finds a link there that leads elsewhere: the error alert names both the link and its target as monospace chips (\"... is a link to ..., not to this app, so it was left as it is\"). It has no Details button, as the target is already in the sentence. Remove and Reinstall are both enabled again.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    commandLine: {
+      state: { state: "otherCopy", path: "/usr/local/bin/octoboardd" },
+      install: { error: new CommandLineError("foreign_link", "/usr/local/bin/octoboardd", "/opt/tools/bin/octoboardd") },
+    },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.commandLine.reinstall")),
+      (ui) => ui.scrollPanel(ui.t("settings.section.general"), SCROLLED_TO_END),
     ],
   },
   {

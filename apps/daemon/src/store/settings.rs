@@ -356,13 +356,15 @@ bool_settings! {
     keep_awake, set_keep_awake;
     daemon_update_check, set_daemon_update_check;
     allow_remote_access, set_allow_remote_access;
+    allow_browser_access, set_allow_browser_access;
 }
 
 impl Store {
-    /// The port the desktop application's daemon serves a browser at on Windows while remote
-    /// access is on, as the user set it; `None` until they do, which is the built-in default. Like
-    /// Allow remote access, it is the user's alone: no settings tool or configuration document
-    /// carries it. A stored value that is no port reads as `None`.
+    /// The port a daemon serves a browser at while Allow browser access is on (the desktop
+    /// application's on Windows and macOS, the server form's), as the user set it; `None` until
+    /// they do, which is the built-in default. Like Allow remote access and Allow browser access,
+    /// it is the user's alone: no settings tool or configuration document carries it. A stored
+    /// value that is no port reads as `None`.
     pub fn remote_access_port(&self) -> Result<Option<u16>> {
         let port: Option<i64> = read_setting(&self.lock(), "remote_access_port")?;
         Ok(port
@@ -1109,20 +1111,38 @@ mod tests {
         }
     }
 
-    /// Neither remote access setting is part of the settings record every client and every
+    /// Allow browser access is off in a new store, apart from Allow remote access, and is kept.
+    #[test]
+    fn allow_browser_access_is_off_until_turned_on_apart_from_remote_access_and_is_kept() {
+        let path = temp_db("allow-browser-access");
+        let store = Store::open(&path).expect("store");
+        assert!(!store.allow_browser_access().unwrap());
+        assert!(store.set_allow_browser_access(true).unwrap());
+        assert!(!store.set_allow_browser_access(true).unwrap());
+        assert!(store.allow_browser_access().unwrap());
+        assert!(!store.allow_remote_access().unwrap());
+        drop(store);
+        let reopened = Store::open(&path).expect("reopened");
+        assert!(reopened.allow_browser_access().unwrap());
+        assert!(reopened.set_allow_browser_access(false).unwrap());
+        assert!(!reopened.allow_browser_access().unwrap());
+    }
+
+    /// None of the remote access settings is part of the settings record every client and every
     /// settings tool reads: they are the user's alone.
     #[test]
     fn the_settings_record_holds_no_remote_access_setting() {
         let path = temp_db("settings-no-remote-access");
         let store = Store::open(&path).expect("store");
         store.set_allow_remote_access(true).unwrap();
+        store.set_allow_browser_access(true).unwrap();
         store.set_remote_access_port(Some(4000)).unwrap();
         let settings = serde_json::to_value(store.get_settings().unwrap()).unwrap();
         let keys: Vec<&String> = settings
             .as_object()
             .unwrap()
             .keys()
-            .filter(|key| key.contains("remote_access"))
+            .filter(|key| key.contains("remote_access") || key.contains("browser_access"))
             .collect();
         assert!(keys.is_empty(), "{keys:?}");
     }

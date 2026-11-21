@@ -33,10 +33,12 @@ for the adopted and claimed sessions' scratch directories, writes the owner-only
 owner record beside the lock (`owner_record::Owner`, the pid identity, the port, whether it follows an application,
 whether a service manager starts its successor, the systemd unit it then runs as, which daemon it took over from
 (`Owner::predecessor`) and, as the `owner-key` token, whether it holds an owner key, with, as `browser-port=<port>`, the
-loopback port the desktop application's daemon on Windows takes it at; no key is in it), prints the handshake line (port
+loopback port the desktop application's daemon on Windows and macOS, and the server form's once browser access is on, takes it at; no key is in it), prints the handshake line (port
 and key) and runs the server, beside the browser socket's when it has one, and, in a daemon that follows the
 application, the way in remote access opened (`RemoteAccess::begin` applies the stored setting before the owner record
-is written, `RemoteAccess::serve_clients` serves what it opened once the daemon serves its other clients), until a stop
+is written, `RemoteAccess::serve_clients` serves what it opened once the daemon serves its other clients), or, in a
+server-form daemon that serves the browser, the browser port its setting asks for (`RemoteAccess::begin_server`, the
+same two steps), until a stop
 is asked for (`state::StopKind`). An ordinary stop ends every session: the `shutdown` control request, `POST /shutdown`
 (`src/server/callbacks.rs`), a termination signal or the application's pid going away after the application wrote a
 `quit` line to the daemon's stdin (`state::application_note`); the pid going away with no such line is a planned stop.
@@ -51,8 +53,8 @@ awaited for up to `ENDINGS_WAIT`, 4 s, so that the startup line the application 
 [`src/holder/`](../../apps/daemon/src/holder/README.md). A planned stop hands every terminal over to its holder with its
 screen saved and ends nothing (`coordinator::planned_stop`, behind the barrier of `state::handover_barrier`): the
 `planned_stop` control request and `POST /planned-stop`; a planned restart, `POST /restart` or the host's restart
-request (`SIGUSR1`, which `restart` sends to a daemon whose key is not recorded), also brings the successor up on the
-same port: started by `main` (`self_update::start_successor`, which is handed `cli::start_successor` as its start, so
+request (`SIGUSR1`, which `restart` sends to a daemon whose key is not recorded), also brings the successor up, on the
+same port where the daemon starts it itself (a service manager's successor binds its own): started by `main` (`self_update::start_successor`, which is handed `cli::start_successor` as its start, so
 that `self_update` names nothing of the entry layer, and, for a server-form daemon whose update does not start, goes
 back to the build that ran, and where the first start fails and nothing is put back starts the same file once more with
 no listener handed over; from the installation entry point `cli::launch_path` in `src/cli/installation.rs`, its final
@@ -63,8 +65,8 @@ listener for the run (`platform::listener_handover::Kept::of`); at a planned res
 `run_daemon` keeps the port bound, has `turn_away` accept and reset every new connection until right before the
 successor is started, then passes the kept listener down the chain above, to be handed to the successor as descriptor 3
 with `--listen-fd 3`; every other stop lets the port go as soon as it stops serving. A user runs the modes `start` (on
-the port of `--port`, else `defaultServerPort` of `config/app.json`, which `build.rs` passes in as
-`OCTOBOARD_DEFAULT_SERVER_PORT`), `stop`, `restart`, `status` and `address` to keep a daemon in the background and to
+the port of `--port`, else one the system assigns, which the line it reports names; the browser port's default is
+`defaultBrowserPort` of `config/app.json`, which `build.rs` passes in as `OCTOBOARD_DEFAULT_BROWSER_PORT`), `stop`, `restart`, `status` and `address` to keep a daemon in the background and to
 find it (`src/cli/background.rs` for the first four, `src/cli/address.rs` for `address`; `start` runs the daemon as a
 background process of its own, `stop`, `restart`, `status` and `address` find it through `instance_lock::is_running` and
 the owner record, `owner_record::Owner`, waiting through a planned restart caught half-way with the handover note the
@@ -81,7 +83,15 @@ served); `address --rotate` replaces the owner key first, through the running da
 none running, in `owner.key` (`owner_key::replace_in`), and prints the new address; where the host has no signal to stop
 a daemon by (Windows), `stop` asks it over loopback instead, and `restart` asks over loopback on every host wherever the
 key is recorded, so that a refusal comes back with its reason, with the key the key record (`daemon.key`) holds; the
-loopback request is `request_over_loopback` in `src/cli/background.rs`, which `address --rotate` uses too). The CLI
+loopback request is `request_over_loopback` in `src/cli/background.rs`, which `address --rotate` uses too); `browser`
+(`src/cli/browser.rs`) changes and reports browser access by sending the running daemon the requests Settings sends, over
+a control connection opened with the launch key); `stop` first asks the running daemon what a stop would interrupt
+(`POST /stop-check`, answered by `coordinator/stop_check.rs`, which counts what the application's quit confirmation
+counts and mirrors the UI's `quitHolders`; the asking and the refusal's wording are `src/cli/stop_guard.rs`) and refuses
+without `--force`; the desktop application's own copy of `octoboardd` (macOS) starts and quits the application instead of
+a daemon of its own, in `src/cli/application.rs` over `platform/application/` (launching the bundle through `open`,
+finding the application as the daemon's parent and asking it to quit with `SIGUSR1`, `platform::proc::request_application_quit`).
+The CLI
 modes other processes start are `hook`, `git-ref`, `gate-hook`, `guard-hook`, `status-line`, `mcp` and `holder`: their
 dispatch, with the user's modes, is `src/cli/mod.rs`, and their code is `src/cli/hook.rs` (`hook`), a provider's
 `StatusLine` (`status-line`; `src/cli/mod.rs` only finds the provider's and hands over, Claude Code's is
@@ -119,17 +129,18 @@ mode that calls no daemon: it takes neither of them, only the list file that the
 `src/` has one directory per domain, plus a few helpers at its root: `blocking_pass/` (the width of a pass of blocking
 per-entity work, `each_blocking` for an async caller, `blocking_pass/within.rs`'s `within_deadline` for a caller with no
 runtime, and, in `blocking_pass/stalled.rs`, `StalledPasses`, the blocking work that outran its deadline and whose
-thread is still running), `browser/` (the browser's way in, served by the server form and by the desktop application's
-daemon while remote access is on: `mod.rs` has the one accept loop for every such listener, `serve_on` with its `Accept`
-listeners and `ServeTask`, and `serve_on_port`, whose listener is closed as its task is dropped so the port is free
-again at once, the key check a browser asks, `key_check_over`, and `browser_address`; `socket.rs` the owner-only Unix
+thread is still running), `browser/` (the browser's way in, served by the server form, with a port besides while browser access is on, and by the
+desktop application's daemon while remote access is on: `mod.rs` has the one accept loop for every such listener,
+`serve_on` with its `Accept` listeners and `ServeTask`, and `serve_on_port`, whose listener is closed as its task is
+dropped so the port is free again at once, and whose connections are told of the close (`PortClosed`, a request
+extension that the guard turns into part of the connection's `Admission`), the key check a browser asks, `key_check_over`, and `browser_address`; `socket.rs` the owner-only Unix
 socket `browser.sock` in the data directory, which `bind` listens on once the directory and its ancestors are found
 private, `key_accepted` asks and `AVAILABLE` says whether the host has; `port.rs` the loopback port Windows serves the
-browser at instead, `USED`, `bind`, `in_use` and `key_accepted`; `forward.rs` the `ssh -L` command a browser's machine
+browser at instead, macOS and the server form beside the socket, `USED`, `bind`, `in_use` and `key_accepted`; `forward.rs` the `ssh -L` command a browser's machine
 forwards either with, the login being the daemon's account, and `shell_quoted`), `connection_details.rs` (the connection
 details another device reaches the daemon with over SSH: the SSH host, port and user, the host key's fingerprint and the
 path of `octoboardd`, as an `octoboard+ssh://` line and a QR code of it, which `octoboardd connection` prints and the
-desktop application's daemon gives its Remote access section while serving), `git_workflow.rs` (the one place the
+desktop application's daemon gives its Access section while serving), `git_workflow.rs` (the one place the
 application-wide git workflow values and a project's overrides are combined: `effective`; the settings types are in
 `protocol/`), `host_tools.rs` (`HostTools`, the seam tests substitute stand-ins behind, `git` among them: the one place
 a project's git gets the user's `git`, handed out by pace with `Tools::git_for`, which `isolated_git` and
@@ -140,13 +151,13 @@ private, and whether one runs), `interface_language.rs` (the languages the inter
 HTTP client to a loopback address, the daemon's or a holder's, that the CLI modes, the git hook modes and the MCP stdio
 bridge call with; it names the statuses a holder answers a waiting helper with when it has no daemon or lost it),
 `owner_key.rs` (`OwnerKey`, the owner key of a daemon that serves the browser: `owner.key` in the data directory, a
-second key accepted besides the launch key on the browser's way in only (the owner socket, or on Windows the browser
-port and the owner pipe), kept across launches until rotated, and never written to `daemon.key`, a helper's key file or
+second key accepted besides the launch key on the browser's way in only (the owner socket, the browser port where one
+is open, and on Windows the owner pipe), kept across launches until rotated, and never written to `daemon.key`, a helper's key file or
 a holder's record or handed to anything the daemon starts; `admit` gives a connection the key admitted a `Revocation`
 that resolves when a rotation moves the key on; `read_in` and `replace_in` are what the `address` mode uses),
 `owner_record.rs` (the owner record beside the lock, which finds the running daemon and says whether it follows an
 application, whether a service manager starts its successor, which systemd unit it runs as, which daemon it took over
-from (`Predecessor`), whether it holds an owner key and, on Windows, at which browser port (`browser-port=`), and the
+from (`Predecessor`), whether it holds an owner key and, where it serves a browser port, at which (`browser-port=`), and the
 owner-only key record, `daemon.key`, which four things read: `address`; `stop` and `restart` on every host, to recognise
 a successor by its key where its record does not name its predecessor; `stop` on Windows and `restart` on every host,
 which ask over loopback; and the git hook modes' fallback; the `_in` reads take the data directory from their caller),
@@ -170,7 +181,8 @@ the pnpm package `@octoboard/daemon`, only to run that cargo build after the UI'
 `@octoboard/ui`); it has no test script. Test-only files (`tests.rs`, `*_tests.rs`, `test_support/` and
 `store/test_support.rs`, `session/test_support.rs` and the `layering_tests/` directory) sit beside the code they test, and `apps/daemon/testdata/`
 holds the captured agent screens and records tests replay, `testdata/restart_impact_cases.json`, the cases of what a
-restart would interrupt that the restart check's test and the UI's `useAppExit.test.ts` both run, and
+restart would interrupt that the restart check's test and the UI's `useAppExit.test.ts` both run, `testdata/quit_holders_cases.json`, the quit-holder
+rule that the stop check (`coordinator/stop_check.rs`) and the UI's quit confirmation both run the same way, and
 `testdata/self_update/`, a signed test archive and its test key for the self-update's tests. `apps/daemon/dist/` holds hand-written distribution files, not build output
 (`dist/systemd/octoboardd.service`, an example systemd user unit for running the daemon in the background on Linux,
 which the Linux release archive ships and the website's `install.sh` installs with `--service`).
@@ -179,7 +191,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 
 - `src/server/` — the router of `PROTOCOL.md`, built twice by `mod.rs`: `router` for the loopback TCP port (the launch
   key alone, and no UI on a host with browser sockets) and `browser_router` for the browser's way in (the browser
-  socket, and on Windows the browser port and the owner pipe: the launch key or the owner key, and the embedded UI);
+  socket, the browser port where one is served, and on Windows the owner pipe: the launch key or the owner key, and the
+  embedded UI);
   `control/` the control socket (`mod.rs` the connection; it serves what belongs to one connection itself, in frame
   order, not through the coordinator: `uploads.rs` the upload requests of both families, a pasted image's and an
   attached file's, each with the connection's own `session::upload::Uploads` of its family,
@@ -231,7 +244,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 - `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode, `background.rs` the user's `start`,
   `stop`, `restart` and `status`, the start of a planned restart's successor and the loopback request the commands send
   (`request_over_loopback`), `address.rs` the user's `address` and `address --rotate` and the notes `address` says on
-  stderr (`address_notes`, `no_browser_note`; the forward command they give is `browser::forward`'s),
+  stderr (`address_notes`, `port_address_notes`, `no_browser_note`; the forward command they give is `browser::forward`'s),
   `owner_endpoint.rs` the `proxy` mode and `address --json`, for a program on the daemon's machine running as its user,
   such as the one another device's application runs over SSH (the owner endpoint is the browser socket on Linux and
   macOS and the owner pipe on Windows; `proxy` carries bytes between its standard input and output and the endpoint, and
@@ -284,7 +297,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   linked to, interrupted once it is gone; the screen a planned stop saved for a session whose holder is gone at the next
   start becomes its preview, `unlinked::keep_screens_as_previews`), `planned_stop.rs` (the daemon's planned stop: every
   terminal handed over to its holder, each handed-over screen saved for the next daemon, the holders parted from and
-  left running, nothing ended or recorded; an ordinary stop asked for meanwhile cuts it short), `handover_check.rs` (the
+  left running, nothing ended or recorded; an ordinary stop asked for meanwhile cuts it short), `stop_check.rs` (what a stop would interrupt, `stop_impact`), `handover_check.rs` (the
   `handover_check` request: given the next daemon's holder floor and version, which running sessions and shell
   terminals, and which shell terminals of holders not yet reached, a planned stop followed by that daemon would not
   carry over, judged by `holder::compat::Range`; and `restart_impact`, the same read as a window asks the user about it,
@@ -298,12 +311,12 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   through the same path as `open_session` and records the run, for the scheduler and for `run_scheduled_task`;
   `scheduler.rs` the scheduler, a daemon task that `main.rs` spawns after the start-up resume and reconciliation, which
   catches up at start what was missed and then runs each enabled task as it comes due, woken early by
-  `AppState::scheduler_wake` when a task changes) and `remote_access.rs` (`RemoteAccess`,
-  `AppState::remote_access`: Allow remote access and, on Windows, the browser port beside it, offered only in a daemon
-  that follows the application; applying them opens or closes the browser's way in, the owner socket or on Windows the
-  browser port with the owner pipe, holds or refuses the owner key and closes what it admitted, writes the owner
+  `AppState::scheduler_wake` when a task changes) and `remote_access/` (`mod.rs`: `RemoteAccess`,
+  `AppState::remote_access`: Allow remote access and, on Windows and macOS, Allow browser access with its browser port beside it, two settings of their own, offered in a
+  daemon that follows the application, and, as browser access and its port alone, in the server form's daemon
+  (`begin_server`: its socket and owner key are its own, so applying the setting opens or closes the port and leaves them); applying them opens or closes each way in apart, remote access's owner socket (macOS, Linux) or owner pipe (Windows) and browser access's browser port, each a `Way` whose connections are told when it closes (`browser::WayClosed`), holds the owner key while either is open and refuses it, closing what it admitted, once neither is, writes the owner
   record's `owner-key` and `browser-port=` tokens again and broadcasts `remote_access_updated`, all under one `changing`
-  lock that a rotation of the owner key, `rotate_key`, takes too).
+  lock that a rotation of the owner key, `rotate_key`, takes too; `ways.rs`: the `Way` and its listeners, and how the owner socket, the owner pipe and the browser port are opened and the failure each says; its tests sit in topic files beside them, with `test_support.rs` holding what they share).
 - `src/session_request/` — a session asking the user to approve something (`request_session`, `request_resume_session`,
   account switch, handoff): `mod.rs` the wait, `registry.rs` the requests the daemon holds, `request.rs` what a request
   is, `change.rs` the account switch and handoff variant, `carry_out.rs` what an approval does, `outcome.rs` the wording

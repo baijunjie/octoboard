@@ -65,7 +65,7 @@ const SECTIONS: Record<SettingsSectionId, Section> = {
   "agent-permissions": { label: "settings.section.agentPermissions", Icon: ShieldUser, Content: AgentBehaviorSection },
   "trusted-folders": { label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
   permissions: { label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },
-  "remote-access": { label: "settings.section.remoteAccess", Icon: Cable, Content: RemoteAccessSection },
+  "remote-access": { label: "settings.section.access", Icon: Cable, Content: RemoteAccessSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
   notifications: { label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
   shortcuts: { label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
   cleanup: { label: "settings.section.cleanup", Icon: BrushCleaning, Content: CleanupSection },
@@ -190,7 +190,7 @@ function SettingsDialogContent({ initialSection = SETTINGS_SECTION_IDS[0], navig
   const remoteUpdatePreferences = useRemoteUpdatePreferences();
   const updates = useUpdateStore() !== undefined || remoteUpdatePreferences;
   const permissions = (host.permissionsPane || host.os === "macos") && windowKind() !== "remote";
-  // Remote access is the application's own: in the local daemon's window, for a daemon that offers it.
+  // Access is the application's own: in the local daemon's window, for a daemon that offers it.
   const remoteAccess = remoteAccessOffered(platform, useDaemonStoreOrEmpty((s) => s.remoteAccess));
   const sectionIds = SETTINGS_SECTION_IDS.filter((id) => (id !== "permissions" || permissions) && (id !== "remote-access" || remoteAccess) && (id !== "updates" || updates));
   const isNarrow = useIsNarrow();

@@ -826,6 +826,18 @@ pub(crate) fn request_restart(_id: &ProcessIdentity) -> Sent {
     ))
 }
 
+/// The command line does not quit the desktop application on Windows.
+#[allow(
+    dead_code,
+    reason = "only the macOS application is quit by the command line"
+)]
+pub(crate) fn request_application_quit(_id: &ProcessIdentity) -> Sent {
+    Sent::Failed(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "the desktop application cannot be asked to quit by a signal on Windows",
+    ))
+}
+
 /// Nothing to leave: a process on Windows is in no session a command's end could signal, and the
 /// job it was started in ends with nothing the daemon does.
 pub(crate) fn leave_session() {}

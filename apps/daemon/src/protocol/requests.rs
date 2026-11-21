@@ -1442,30 +1442,44 @@ pub enum RequestBody {
     /// an update asks `handover_check` first, to tell the user which sessions the restart
     /// interrupts.
     RestartDaemon,
-    /// Turns Allow remote access on or off for the desktop application's daemon. Answered with
-    /// `ack` once it has taken effect, and broadcast as `remote_access_updated` (also when the
-    /// owner socket could not be opened, which `failure` says). Refused with
-    /// `remote_access_unavailable` where the snapshot carries no `remote_access`, and with
-    /// `remote_access_refused_to_browser` on a connection the owner key opened, which a browser
-    /// holds. Turning it off closes the owner socket, refuses the owner key and closes every
-    /// connection it opened. Not offered to agents' settings tools.
+    /// Turns Allow remote access on or off for the desktop application's daemon: whether another
+    /// computer reaches it over its owner socket (on Windows, its owner pipe), apart from Allow
+    /// browser access. Answered with `ack` once it has taken effect, and broadcast as
+    /// `remote_access_updated` (also when the way in could not be opened, which `failure` says).
+    /// Refused with `remote_access_unavailable` where the snapshot carries no `remote_access` or the
+    /// daemon is the server form's, and with `remote_access_refused_to_browser` on a connection the
+    /// owner key opened, which a browser holds. Turning it off closes the owner socket or pipe and
+    /// every connection made through it, and refuses the owner key once browser access is off too.
+    /// Not offered to agents' settings tools.
     SetRemoteAccess {
+        allowed: bool,
+    },
+    /// Turns Allow browser access on or off: whether the daemon serves the browser at its loopback
+    /// browser port (`remote_access.browser_port`), apart from Allow remote access. Answered with
+    /// `ack` once it has taken effect, and broadcast as `remote_access_updated` (also when the port
+    /// could not be opened, which `browser_failure` says). Refused with `remote_access_unavailable`
+    /// where the snapshot's `remote_access` carries no `browser_port`, and with
+    /// `remote_access_refused_to_browser` on a connection the owner key opened. Turning it off
+    /// closes the port and every connection made through it, and refuses the owner key once remote
+    /// access is off too (the server form's daemon always holds it). Not offered to agents'
+    /// settings tools.
+    SetBrowserAccess {
         allowed: bool,
     },
     /// Replaces the owner key with a new one, as `octoboardd address --rotate` does: every page
     /// opened with the old one is cut off. Answered with `ack`, and broadcast as
     /// `remote_access_updated` with the new address. Refused with `remote_access_unavailable` where
-    /// the snapshot carries no `remote_access` or it is not `serving`, and with
-    /// `remote_access_refused_to_browser` on a connection the owner key opened.
+    /// the snapshot carries no `remote_access` or neither `state` nor `browser_state` is
+    /// `serving`, and with `remote_access_refused_to_browser` on a connection the owner key opened.
     RotateOwnerKey,
-    /// Sets the loopback port the desktop application's daemon serves the browser at on Windows
-    /// while remote access is on (`remote_access.browser_port`). Takes effect at once: while remote
-    /// access is on, the old port is let go, every connection the owner key opened is closed, and
-    /// the new port is listened on (a port already in use is said as `failure`). Answered with
-    /// `ack`, and broadcast as `remote_access_updated`. Refused with `remote_access_unavailable`
-    /// where the snapshot's `remote_access` carries no `browser_port`, and with
-    /// `remote_access_refused_to_browser` on a connection the owner key opened; port 0 does not
-    /// read as a request. Not offered to agents' settings tools.
+    /// Sets the loopback port the daemon serves the browser at while browser access is on
+    /// (`remote_access.browser_port`), whether or not it is on now. Takes effect at once: while
+    /// browser access is on, the old port is let go, every connection made through it is closed,
+    /// and the new port is listened on (a port already in use is said as `browser_failure`).
+    /// Answered with `ack`, and broadcast as `remote_access_updated`. Refused with
+    /// `remote_access_unavailable` where the snapshot's `remote_access` carries no `browser_port`,
+    /// and with `remote_access_refused_to_browser` on a connection the owner key opened; port 0
+    /// does not read as a request. Not offered to agents' settings tools.
     SetRemoteAccessPort {
         port: std::num::NonZeroU16,
     },
@@ -1754,6 +1768,7 @@ impl RequestBody {
     pub fn changes_remote_access(&self) -> bool {
         match self {
             Self::SetRemoteAccess { .. }
+            | Self::SetBrowserAccess { .. }
             | Self::RotateOwnerKey
             | Self::SetRemoteAccessPort { .. } => true,
             Self::CreateConsole { .. }

@@ -18,11 +18,11 @@ Biraz giriş gecikmesi ve bulanık bir görüntü sizin için sorun değilse aş
 | --- | --- | --- | --- |
 | Şuradan kullanılır | Masaüstü uygulaması veya tarayıcı | Yalnızca tarayıcı | Yalnızca tarayıcı |
 | Desteklenen ana makineler | Linux sunucusu, Mac, Windows bilgisayarı | Linux sunucusu, Mac, Windows bilgisayarı | Yalnızca Mac veya Windows bilgisayarı |
-| Ana makinede açtığınız ya da kurduğunuz | SSH ile oturum açma (Mac’te Uzaktan Oturum Açma, Windows’ta OpenSSH Server; Linux sunucusunda zaten vardır) | Tailscale; Mac veya Linux ana makinesinde ayrıca socat | UU Remote; Mac ana makinesinde ayrıca socat |
+| Ana makinede açtığınız ya da kurduğunuz | SSH ile oturum açma (Mac’te Uzaktan Oturum Açma, Windows’ta OpenSSH Server; Linux sunucusunda zaten vardır) | Tailscale | UU Remote |
 | Kendi bilgisayarınıza kurduğunuz | Ek bir şey gerekmez | Tailscale; Mac veya Linux bilgisayarında ayrıca socat | UU Remote (Mac veya Windows) |
 | Trafiğin geçtiği yer | Doğrudan bağlantı, üçüncü taraf yok | Tailscale’in ağı, hesabınızla | NetEase UU Remote’un hizmeti, hesabınızla |
 | Aynı ağda değilken çalışır mı | Yalnızca ana makineye ulaşılabiliyorsa: aynı ağda, genel bir adreste veya VPN üzerinden | Evet | Evet |
-| En uygun olduğu durum | Sunucular; tam masaüstü uygulaması; başkalarının da oturum açtığı Mac ve Linux ana makineleri | Kendi makinelerinize SSH olmadan her yerden ulaşmak | Zaten UU Remote kullanan, anakara Çin’deki kullanıcılar |
+| En uygun olduğu durum | Sunucular; tam masaüstü uygulaması; başkalarının da oturum açtığı Linux ana makineleri ve masaüstü uygulamasıyla kullanılan Mac veya Windows ana makineleri | Kendi makinelerinize SSH olmadan her yerden ulaşmak | Zaten UU Remote kullanan, anakara Çin’deki kullanıcılar |
 
 ## Bir aktarıcı seçmeden önce
 
@@ -33,7 +33,7 @@ Tailscale ve UU Remote kılavuzları henüz iki cihaz arasında tam olarak sına
 </Aside>
 
 <Aside type="caution" title="Yalnızca başka kimsenin oturum açmadığı bilgisayarlarda">
-Bir aktarıcıyla, ana makinedeki veya kendi bilgisayarınızdaki başka bir kullanıcı hesabı tarayıcının anahtarını ele geçirebilir. Tailscale veya UU Remote’u yalnızca sizin oturum açtığınız bilgisayarlarda kullanın. [SSH ile bağlanma](../remote-connections/) yöntemi, Mac veya Linux ana makinesinde bu zayıflığa sahip değildir; masaüstü uygulamasını kullandığınızda kendi bilgisayarınızda da yoktur. Ancak tarayıcıda bilgisayarınızda bu zayıflık yine vardır, çünkü orada da SSH yönlendirmesi bir <code dir="ltr">127.0.0.1</code> bağlantı noktasını dinler.
+Bir aktarıcıyla, ana makinedeki veya kendi bilgisayarınızdaki başka bir kullanıcı hesabı tarayıcının anahtarını ele geçirebilir. Tailscale veya UU Remote’u yalnızca sizin oturum açtığınız bilgisayarlarda kullanın. [SSH ile bağlanma](../remote-connections/) yöntemi, tarayıcı erişimi kapalı bir Linux ana makinesinde ve masaüstü uygulamasıyla kullanılan bir Mac veya Windows ana makinesinde bu zayıflığa sahip değildir; masaüstü uygulamasını kullandığınızda kendi bilgisayarınızda da yoktur. Ancak tarayıcıda bilgisayarınızda bu zayıflık yine vardır, çünkü orada da SSH yönlendirmesi bir <code dir="ltr">127.0.0.1</code> bağlantı noktasını dinler.
 </Aside>
 
 ## Sonraki adım

@@ -262,6 +262,14 @@ pub fn confirm_quit(app: AppHandle, state: tauri::State<ExitState>, restart: Opt
     app.exit(0);
 }
 
+/// Quits as a confirmed quit does, with no confirmation: what the command line's `octoboardd stop`
+/// of the application's own copy asks for, the check for running work having been made there. The
+/// daemon is stopped with the quit's ordinary stop.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn quit_without_asking(app: &AppHandle) {
+    confirm_quit(app.clone(), app.state::<ExitState>(), None);
+}
+
 /// What becomes of an exit Tauri is about to make (`RunEvent::ExitRequested`).
 #[derive(Debug, PartialEq)]
 enum ExitRoute {

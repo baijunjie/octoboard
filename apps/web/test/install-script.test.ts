@@ -373,13 +373,14 @@ test("the key the script checks signatures with is the update key the desktop ap
   assert.equal(embedded, keyLine);
 });
 
-test("the script's and the example unit's default port is the configured server port", () => {
-  const { defaultServerPort } = JSON.parse(readFileSync(appConfig, "utf8"));
+test("neither the script nor the example unit fixes the daemon's own port", () => {
   const script = readFileSync(installScript, "utf8");
-  assert.equal(/^default_port=(\d+)$/m.exec(script)?.[1], String(defaultServerPort));
-  assert.deepEqual(script.match(/\b\d{4,5}\b/g)?.filter((n) => n !== "65535") ?? [], [String(defaultServerPort)]);
+  // The daemon's own port is one the system assigns unless `--port` asks for another; the fixed default port is the
+  // browser port's, which the daemon opens only once `octoboardd browser on` is run.
+  assert.doesNotMatch(script, /default_port/);
+  assert.deepEqual(script.match(/\b\d{4,5}\b/g)?.filter((n) => n !== "65535") ?? [], []);
   const unit = readFileSync(exampleUnit, "utf8");
-  assert.match(unit, new RegExp(`^ExecStart=\\S+ --port ${defaultServerPort} --service-managed$`, "m"));
+  assert.match(unit, /^ExecStart=\S+ --service-managed$/m);
 });
 
 test("the script reads the manifests from the repository's updater release", () => {
@@ -1219,8 +1220,6 @@ test("with --service and the service running, it is restarted where that is safe
   assert.match(logged(world), /^restart --if-safe$/m);
   assert.doesNotMatch(logged(world), /^systemctl --user start /m);
   assert.doesNotMatch(result.stdout, /Run `.*restart`/);
-  // The new unit may listen on another port: where to open it is still said, once.
-  assert.equal(result.stdout.match(/open the address `.* address` prints/g)?.length, 1, result.stdout);
 
   // Not done: the advice for a changed unit.
   world = makeWorld(t, { systemctl: true, loginctl: true });
@@ -1230,10 +1229,7 @@ test("with --service and the service running, it is restarted where that is safe
   writeFileSync(path.join(world.home, ".config", "systemd", "user", "octoboardd.service"), "[Service]\nExecStart=/old\n");
   result = run(world, ["--service"], { SYSTEMCTL_ACTIVE_EXIT: "0", STUB_STATUS_EXIT: "1", STUB_RESTART_EXIT: "1", FAKE_LINGER: "yes" });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Run `.* restart` to move it to 1\.2\.3 and to the new unit, port \d+ included/);
-  // The restart was not made, so the port is not said to differ after one that was.
-  assert.doesNotMatch(result.stdout, /port may differ/);
-  assert.equal(result.stdout.match(/open the address `.* address` prints/g)?.length, 1, result.stdout);
+  assert.match(result.stdout, /Run `.* restart` to move it to 1\.2\.3 and to the new unit; its sessions keep running\./);
 
   // The unit is the same: the advice without the unit.
   world = makeWorld(t, { systemctl: true, loginctl: true });
@@ -1244,7 +1240,6 @@ test("with --service and the service running, it is restarted where that is safe
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /The service is running from the file this replaced\. Run `.* restart` to move it to 1\.2\.3; its sessions keep running\./);
   assert.doesNotMatch(result.stdout, /new unit/);
-  assert.doesNotMatch(result.stdout, /port may differ/);
 });
 
 test("with --service and the service not running, nothing is restarted", { skip }, (t) => {
@@ -1295,27 +1290,26 @@ test("without --service, lingering is left alone", { skip }, (t) => {
 // together whatever the wording.
 const DEMO_BINARY = "/home/you/.local/bin/octoboardd";
 
-// The text of a string or template literal of the component's source, with `${port}` filled in.
-function literalText(literal: string, port: number): string {
+// The text of a string or template literal of the component's source, with escaped backticks unescaped.
+function literalText(literal: string): string {
   if (literal.startsWith('"')) return JSON.parse(literal);
-  const inner = literal.slice(1, -1).replaceAll("\\`", "`").replaceAll("${port}", String(port));
-  assert.ok(!inner.includes("${") && !inner.includes("\\"), `${literal} uses more than the template's \${port} and escaped backticks`);
+  const inner = literal.slice(1, -1).replaceAll("\\`", "`");
+  assert.ok(!inner.includes("${") && !inner.includes("\\"), `${literal} uses more than escaped backticks`);
   return inner;
 }
 
 // The `kind: "out"` lines of window 0 between the install command and the next command, which starts the daemon.
-function demoInstallOutput(port: number): string[] {
+function demoInstallOutput(): string[] {
   const source = readFileSync(terminalDemo, "utf8");
   const lines = source.slice(source.indexOf("const lines: Line[] = ["));
   const commands = [...lines.matchAll(/window: 0,\s*kind: "cmd"/g)].map((match) => match.index as number);
   assert.ok(commands.length >= 2, "the demo has the install command and one after it");
   const between = lines.slice(commands[0], commands[1]);
-  return [...between.matchAll(/window: 0,\s*kind: "out",\s*text: ("(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)/g)].map((match) => literalText(match[1], port));
+  return [...between.matchAll(/window: 0,\s*kind: "out",\s*text: ("(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)/g)].map((match) => literalText(match[1]));
 }
 
 test("the terminal demo's install output is lines the script prints, in order", { skip }, (t) => {
-  const { defaultServerPort } = JSON.parse(readFileSync(appConfig, "utf8"));
-  const demo = demoInstallOutput(defaultServerPort);
+  const demo = demoInstallOutput();
   assert.ok(demo.length >= 3, `the demo prints the download, the install and the next step: ${JSON.stringify(demo)}`);
 
   const world = makeWorld(t);
@@ -1370,9 +1364,9 @@ test("--service without systemctl is refused before anything is downloaded", { s
   assert.equal(logged(world), "");
 });
 
-test("--service installs the unit with the binary's path and the port, enables it and starts it", { skip }, (t) => {
+test("--service installs the unit with the binary's path, and the port when one is given, enables it and starts it", { skip }, (t) => {
   for (const [args, port] of [
-    [["--service"], String(JSON.parse(readFileSync(appConfig, "utf8")).defaultServerPort)],
+    [["--service"], null],
     [["--service", "--port", "1"], "1"],
     [["--service", "--port", "65535"], "65535"],
   ] as const) {
@@ -1383,7 +1377,8 @@ test("--service installs the unit with the binary's path and the port, enables i
     const unit = readFileSync(path.join(world.home, ".config", "systemd", "user", "octoboardd.service"), "utf8");
     const execStart = unit.split("\n").find((line) => line.startsWith("ExecStart="));
     assert.ok(execStart?.startsWith(`ExecStart=${installed(world)} `), execStart);
-    assert.ok(execStart?.includes(`--port ${port}`), execStart);
+    if (port === null) assert.ok(!execStart?.includes("--port"), execStart);
+    else assert.ok(execStart?.includes(`--port ${port}`), execStart);
     assert.match(unit, /^WantedBy=default\.target$/m);
     const calls = logged(world);
     assert.match(calls, /^systemctl --user enable octoboardd\.service$/m);

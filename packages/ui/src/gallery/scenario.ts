@@ -1,7 +1,7 @@
 import type { ThirdPartyLicenses } from "../about/thirdPartyLicenses";
 import type { StartupCause } from "../daemon";
 import type { Language } from "../i18n/languages";
-import type { AvailableUpdate, HostFacts, LaunchAtLoginStatus, LinkForwardError, MacosPermissionsStatus, RemoteDaemonConnectOutcome, RemoteDaemonEntry, RemoteDaemonStatus, RemoteForward, UpdateProgress } from "../platform";
+import type { AvailableUpdate, CommandLineError, CommandLineState, HostFacts, LaunchAtLoginStatus, LinkForwardError, MacosPermissionsStatus, RemoteDaemonConnectOutcome, RemoteDaemonEntry, RemoteDaemonStatus, RemoteForward, UpdateProgress } from "../platform";
 import type { Fixture } from "../fixtures/fixture";
 import type { Step } from "../fixtures/interact";
 import type { Preferences } from "../fixtures/preferences";
@@ -104,6 +104,18 @@ export interface UpdaterFixture {
   install?: { progress?: UpdateProgress; ends?: "pending" | "gone" };
 }
 
+/** What the macOS application's command-line tool answers (`PlatformAdapter.commandLine`): the Settings row for it exists
+ * only with one. */
+export interface CommandLineFixture {
+  /** Where the tool stands when the window opens, which follows a successful install or remove; `"unreadable"` is a shell
+   * that cannot tell (the read is refused). */
+  state: CommandLineState | "unreadable";
+  /** What Install or Reinstall does: by default it makes the link in `/usr/local/bin`; `"pending"` is a change that never
+   * finishes, so the row stays with the pressed button pending; `{ error }` refuses as the shell does, with the
+   * `CommandLineError` it gives. */
+  install?: "pending" | { error: CommandLineError };
+}
+
 export interface Scenario extends Fixture {
   id: string;
   /** The heading it is listed under. */
@@ -198,15 +210,18 @@ export interface Scenario extends Fixture {
   /** With `launchAtLogin`, the reason the system gives for not opening its list of login items, which the Open System
    * Settings button of a login entry that `requiresApproval` goes to; without it the list opens (nothing is shown). */
   launchAtLoginOpenError?: string;
+  /** The macOS application can link its `octoboardd` into the PATH, so the Command line group of General is shown, the
+   * tool standing as this says when the window opens. Needs a `host` that offers it (`MAC_HOST`). */
+  commandLine?: CommandLineFixture;
   /** The platform offers the desktop shell's remote daemons, listing these, so the rail has its Remote devices
    * button under the consoles (alone, and in a `desktopApp`, which is the window that has it). Saving and removing
    * change the list. */
   remoteDaemons?: RemoteDaemonsFixture;
   /** The window is a remote daemon's, as the shell opens one (`?remote=<name>`): the title bar names the daemon, and
-   * what is the application's own rather than a daemon's is absent (the rail's Remote devices button, the Remote access,
+   * what is the application's own rather than a daemon's is absent (the rail's Remote devices button, the Access,
    * Permissions and Updates sections), as in the shell's window of that kind. Give the `host` the shell gives such a
    * window (`REMOTE_WINDOW_HOST` of `fixtures/remoteWindow.ts`) and leave out the capabilities a remote window is not
-   * given (`backgroundRun`, `menuBarIcon`, `launchAtLogin`, `updater`). The daemon's host is its own, as `state.host`
+   * given (`backgroundRun`, `menuBarIcon`, `launchAtLogin`, `commandLine`, `updater`). The daemon's host is its own, as `state.host`
    * says. */
   remoteWindow?: { name: string };
   /** The ports of this computer the remote window's shell forwards to its daemon's machine, in the order they were made:
@@ -216,7 +231,7 @@ export interface Scenario extends Fixture {
    * open); the shell takes every part and shows nothing, and how many parts the daemon answers is the file's own
    * (`answeredParts`). Only for a `remoteWindow`. */
   remoteFiles?: boolean;
-  /** Whether macOS Remote Login (Windows: OpenSSH Server) is on, as the shell reports it for the Remote access section:
+  /** Whether macOS Remote Login (Windows: OpenSSH Server) is on, as the shell reports it for the Access section:
    * `"unknown"` is a shell that cannot tell. Opening the system's settings succeeds and shows nothing. Only a window
    * that has it offers the section (with `state.remoteAccess` set). */
   remoteLogin?: "on" | "off" | "unknown";

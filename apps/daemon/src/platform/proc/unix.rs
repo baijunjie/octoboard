@@ -527,6 +527,20 @@ pub(crate) fn request_restart(id: &ProcessIdentity) -> Sent {
     send_number(raw(id.pid), libc::SIGUSR1)
 }
 
+/// Asks the desktop application `id` names to quit without asking the user, if it still runs:
+/// `SIGUSR1`, which the application installs a handler for (see "The application's copy of
+/// `octoboardd`" in docs/product/daemon-command-line.md). Its start time is read right before the
+/// signal, as for [`signal_identified`]. A process that installed no handler for it is ended by
+/// it, so the caller sends it only to an application it has confirmed runs the bundle of this
+/// executable (`platform::application::runs_bundle_of`), which handles it.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn request_application_quit(id: &ProcessIdentity) -> Sent {
+    if !id.is_running() {
+        return Sent::Gone;
+    }
+    send_number(raw(id.pid), libc::SIGUSR1)
+}
+
 /// Sends `signal` to the process group `leader` leads, which a session leader does too. The
 /// caller holds `leader` unreaped, or knows the group still has a member, so the group id is still
 /// its own.

@@ -1,3 +1,4 @@
+import { commandLineError } from "./commandLineError";
 import { ConfigurationFileError } from "./configurationFileError";
 import type {
   AppMenuCapability,
@@ -10,6 +11,8 @@ import type {
   ExitCapability,
   FileDropCapability,
   KeepAwakeCapability,
+  CommandLineCapability,
+  CommandLineState,
   LaunchAtLoginCapability,
   LaunchAtLoginStatus,
   LinkCapability,
@@ -84,6 +87,7 @@ export function tauriPlatform(): PlatformAdapter {
     backgroundRun: host.runInBackground ? tauriBackgroundRun() : undefined,
     keepAwake: host.keepAwake ? tauriKeepAwake() : undefined,
     launchAtLogin: host.launchAtLogin ? tauriLaunchAtLogin() : undefined,
+    commandLine: host.commandLine ? tauriCommandLine() : undefined,
     updater: host.updater === "none" ? undefined : tauriUpdater(),
   };
 }
@@ -659,6 +663,28 @@ function tauriLaunchAtLogin(): LaunchAtLoginCapability {
     async openSystemSettings() {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("open_login_items_settings");
+    },
+  };
+}
+
+/** The shell rejects an install or a removal with `{ code, path, detail }` (`CommandLineError`). */
+function rejectCommandLine(err: unknown): never {
+  throw commandLineError(err);
+}
+
+function tauriCommandLine(): CommandLineCapability {
+  return {
+    async status() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<CommandLineState>("command_line_status");
+    },
+    async install() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<CommandLineState>("command_line_install").catch(rejectCommandLine);
+    },
+    async remove() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<CommandLineState>("command_line_remove").catch(rejectCommandLine);
     },
   };
 }

@@ -1,5 +1,5 @@
 //! Whether the computer's SSH server is on (macOS Remote Login, Windows OpenSSH Server), for the
-//! Remote access section of Settings: a browser on another machine reaches the application's daemon
+//! Access section of Settings: a browser on another machine reaches the application's daemon
 //! through an SSH login to this computer, so remote access is of use only with the SSH server on.
 //! The section shows where it stands and opens the system's settings where it is turned on; turning
 //! it on needs an administrator, which the application never asks for itself.

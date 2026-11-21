@@ -1,12 +1,11 @@
 import { productName } from "../../commands.ts";
 
-{/* The host's steps both relay guides share: turning on remote access and copying the browser address. Pass
-`windows` on a Windows host, which also needs the browser port. */}
+{/* The host's steps both browser guides share: turning on browser access and copying the local address. */}
 
-{productName} में <strong>सेटिंग्स › रिमोट एक्सेस</strong> खोलें, <strong>रिमोट एक्सेस की अनुमति दें</strong> चालू करें और पुष्टि के लिए <strong>अनुमति दें</strong> चुनें। स्विच के नीचे दो टैब दिखाई देंगे। <strong>ब्राउज़र</strong> टैब पर <strong>चरण 2: ब्राउज़र पता</strong> के नीचे <strong>पता कॉपी करें</strong> चुनें।{props.windows ? <> साथ ही <strong>ब्राउज़र पोर्ट</strong> के नीचे दिखने वाला नंबर नोट कर लें।</> : null}
+{productName} में <strong>सेटिंग्स › एक्सेस</strong> खोलें। <strong>ब्राउज़र एक्सेस की अनुमति दें</strong> चालू करें और पुष्टि के लिए <strong>अनुमति दें</strong> चुनें। <strong>इस कंप्यूटर का ब्राउज़र</strong> शीर्षक के नीचे <strong>स्थानीय पता कॉपी करें</strong> चुनें। साथ ही <strong>ब्राउज़र पोर्ट</strong> के नीचे दिखने वाला नंबर नोट कर लें।
 
 पता दूसरे कंप्यूटर तक ऐसे तरीके से पहुँचाएँ जिसे सिर्फ़ आप पढ़ सकें, जैसे खुद को भेजा गया नोट: यह पासवर्ड की तरह काम करता है।
 
 <strong>चरण 1: SSH फ़ॉरवर्ड</strong> को छोड़ दें। ऐप की सेटिंग्स में कई जगह SSH का ज़िक्र है; यहाँ उसे अनदेखा कर सकते हैं, क्योंकि यह गाइड सिर्फ़ ब्राउज़र पते का इस्तेमाल करती है।
 
-{productName} को चालू रखें: इसे बंद करने पर रिमोट एक्सेस रुक जाता है।
+{productName} को चालू रखें: इसे बंद करने पर ब्राउज़र एक्सेस रुक जाता है।

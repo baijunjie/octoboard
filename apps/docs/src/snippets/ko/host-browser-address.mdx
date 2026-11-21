@@ -1,12 +1,11 @@
 import { productName } from "../../commands.ts";
 
-{/* The host's steps both relay guides share: turning on remote access and copying the browser address. Pass
-`windows` on a Windows host, which also needs the browser port. */}
+{/* The host's steps both browser guides share: turning on browser access and copying the local address. */}
 
-{productName}에서 <strong>설정 › 원격 접근</strong>을 열고 <strong>원격 접근 허용</strong>을 켠 다음 <strong>허용</strong>을 눌러 확인하세요. 스위치 아래에 탭 두 개가 나타납니다. <strong>브라우저</strong> 탭의 <strong>2단계: 브라우저 주소</strong> 아래에서 <strong>주소 복사</strong>를 누르세요.{props.windows ? <> <strong>브라우저 포트</strong> 아래의 숫자도 적어 두세요.</> : null}
+{productName}에서 <strong>설정 › 접근</strong>을 열고, <strong>브라우저 접근 허용</strong>을 켠 다음 <strong>허용</strong>을 눌러 확인하세요. <strong>이 컴퓨터의 브라우저</strong> 아래의 <strong>로컬 주소 복사</strong>를 누르세요. <strong>브라우저 포트</strong> 아래의 숫자도 적어 두세요.
 
 주소는 다른 컴퓨터로 가져가야 하는데, 비밀번호와 같으니 본인만 볼 수 있는 방법(예: 나에게 쓰는 메모)으로 옮기세요.
 
 <strong>1단계: SSH 포워드</strong>는 건너뛰세요. 앱 설정 곳곳에 SSH가 나오지만, 이 가이드는 브라우저 주소만 쓰므로 여기서는 무시해도 됩니다.
 
-{productName}을(를) 계속 실행해 두세요. 종료하면 원격 접근이 멈춥니다.
+{productName}을(를) 계속 실행해 두세요. 종료하면 브라우저 접근이 멈춥니다.

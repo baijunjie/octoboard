@@ -1,12 +1,11 @@
 import { productName } from "../../commands.ts";
 
-{/* The host's steps both relay guides share: turning on remote access and copying the browser address. Pass
-`windows` on a Windows host, which also needs the browser port. */}
+{/* The host's steps both browser guides share: turning on browser access and copying the local address. */}
 
-В {productName} откройте <strong>Настройки › Удалённый доступ</strong>, включите <strong>Разрешить удалённый доступ</strong> и нажмите <strong>Разрешить</strong>, чтобы подтвердить. Под переключателем появятся две вкладки. На вкладке <strong>Браузер</strong> в разделе <strong>Шаг 2: адрес для браузера</strong> нажмите <strong>Скопировать адрес</strong>.{props.windows ? <> Запишите также число в поле <strong>Порт браузера</strong>.</> : null}
+В {productName} откройте <strong>Настройки › Доступ</strong>. Включите <strong>Разрешить доступ из браузера</strong> и нажмите <strong>Разрешить</strong>, чтобы подтвердить. В разделе <strong>Браузер на этом компьютере</strong> нажмите <strong>Копировать локальный адрес</strong>. Запишите также число в поле <strong>Порт браузера</strong>.
 
 Передайте адрес на другой компьютер так, чтобы его видели только вы, например заметкой для самого себя: он работает как пароль.
 
 Пропустите <strong>Шаг 1: SSH-перенаправление</strong>. В настройках приложения SSH упоминается в нескольких местах; здесь это можно не учитывать, потому что в этой инструкции нужен только адрес для браузера.
 
-Не закрывайте {productName}: если вы выйдете из приложения, удалённый доступ прекратится.
+Не закрывайте {productName}: если вы выйдете из приложения, доступ из браузера прекратится.

@@ -7,8 +7,8 @@
 // `beforeBuildCommand` runs it (`pnpm build:tauri`), the one in `tauri.conf.json` and, on Windows, the one in
 // `tauri.windows.conf.json`, which replaces it.
 //
-// The embedded UI is what the daemon serves a browser on its owner socket while Allow remote access is on; the window
-// still loads the UI the shell bundles.
+// The embedded UI is what the daemon serves a browser on its owner socket while Allow remote access is on, and at the
+// browser port while Allow browser access is on; the window still loads the UI the shell bundles.
 //
 // `tauri dev` does NOT run it — `beforeDevCommand` starts the frontend dev server and nothing else.
 // So a dev run after a change to `apps/daemon/` serves whatever binary is already in `binaries/`: a

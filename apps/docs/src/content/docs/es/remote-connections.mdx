@@ -65,10 +65,10 @@ También puedes acceder a un Mac o a un PC con Windows que ejecute la app de {pr
 
 <Steps>
 
-1. En el equipo al que quieres acceder, abre <strong>Ajustes › Acceso remoto</strong> en {productName}.
+1. En el equipo al que quieres acceder, abre <strong>Ajustes › Acceso</strong> en {productName}.
 2. Selecciona allí <strong>Abrir Ajustes del Sistema</strong> (macOS) o <strong>Abrir Configuración</strong> (Windows) y activa <strong>Acceso remoto</strong> (macOS) u <strong>OpenSSH Server</strong> (Windows), siguiendo la ruta que indica la fila, para que este equipo acepte inicios de sesión por SSH. Esto requiere un administrador. De vuelta en {productName}, la fila mostrará <strong>Activado</strong>.
 3. Activa <strong>Permitir acceso remoto</strong>, selecciona <strong>Permitir</strong> para confirmar y mantén {productName} en ejecución: si lo cierras, el acceso remoto se detiene.
-4. En la pestaña <strong>App de {productName}</strong>, selecciona <strong>Copiar datos de conexión</strong> y envíalos al otro equipo, por ejemplo por correo o por chat.
+4. Selecciona <strong>Copiar datos de conexión</strong> y envíalos al otro equipo, por ejemplo por correo o por chat.
 5. En el equipo desde el que vas a trabajar, añade el host como en los pasos 2 a 5 de [Conectar con un servidor Linux](#conectar-con-un-servidor-linux), pegando los datos que enviaste. Inicia sesión con tu nombre de usuario y tu contraseña en el host.
 
 </Steps>
@@ -81,7 +81,7 @@ Sabrás que ha funcionado cuando se abra una ventana aparte con los proyectos y 
 
 1. Obtén el comando de reenvío SSH:
 
-   - <strong>En un host Mac o Windows,</strong> haz primero los pasos 1 a 3 de [Usar otro equipo como host](#usar-otro-equipo-como-host). Después, en la pestaña <strong>Navegador</strong>, mira <strong>Paso 1: reenvío SSH</strong>. Haz clic en la dirección del comando para elegir cómo accede tu otro equipo a este (o elige <strong>Introducir la dirección manualmente</strong> y sustituye <code dir="ltr">{commands.server}</code> después), y luego selecciona <strong>Copiar comando de reenvío</strong>. Selecciona también <strong>Copiar dirección</strong> en <strong>Paso 2: dirección del navegador</strong>.
+   - <strong>En un host Mac o Windows,</strong> haz primero los pasos 1 y 2 de [Usar otro equipo como host](#usar-otro-equipo-como-host). Después abre <strong>Ajustes › Acceso</strong>, activa <strong>Permitir acceso desde el navegador</strong> y selecciona <strong>Permitir</strong> para confirmar. En la pestaña <strong>Navegador</strong>, mira <strong>Paso 1: reenvío SSH</strong>. Haz clic en la dirección del comando para elegir cómo accede tu otro equipo a este (o elige <strong>Introducir la dirección manualmente</strong> y sustituye <code dir="ltr">{commands.server}</code> después), y luego selecciona <strong>Copiar comando de reenvío</strong>. Selecciona también <strong>Copiar dirección local</strong> en <strong>Navegador de este equipo</strong>.
    - <strong>En un servidor Linux,</strong> ejecuta esto en el servidor. Muestra la dirección del navegador y después el comando SSH que debes ejecutar.
 
      <Code code={commands.address} lang="sh" />

@@ -355,6 +355,12 @@ space and the dividers between blocks come only from the group and its rows: no 
 margin set by hand, and no block goes without a heading after another one. A section of one block needs no group.
 (Source: user decision, after a section's second block stood under a hand-set gap with no heading of its own.)
 
+#### Settings groups
+
+Settings sections order their groups by how often each is used, most frequent first (by the user's decision), so what
+is changed often sits at the top and what is set once sits at the end. A section's ungrouped rows come first, above its
+first group. A section ordered on another principle says so in its product doc.
+
 #### A menu's filter field
 
 A menu with a filter field (`MenuFilter` in `packages/ui/src/primitives/MenuFilter.tsx`, reached through
@@ -418,7 +424,7 @@ act: project paths can reveal user and folder names; an import may not find a ma
 When location matters, distinguish the environment where sessions run from the interface the user is viewing.
 Installation and project-directory instructions concern the session environment; clipboard access, file downloads,
 notifications and keyboard-shortcut preferences concern the current interface. Do not use an unqualified "this machine"
-or "your device" for server-side files or tools. A section that exists only in the desktop window (Remote access) may
+or "your device" for server-side files or tools. A section that exists only in the desktop window (Access) may
 say "this computer". A console memory entry's "This machine only" is the exception, by the user's decision: it means
 the machine running the daemon, where the console lives. Project memory, whose project may be on a remote host, says
 "the machine the project is on".
@@ -1606,12 +1612,11 @@ section while the transparent tab list keeps its content width. Keep the scrolli
 under "Visible focus".
 
 Within a Settings page, tabs take the underline strip, the look of Agent accounts: `AgentTabList` for agent tabs and
-`TextTabStrip` with `underline` for text tabs (Remote access), content-width tabs from the start, the selected one
+`TextTabStrip` with `underline` for text tabs, content-width tabs from the start, the selected one
 underlined over a divider across the row, and the panels under it bare, with no rule of their own on top. The filled
 strip is the Settings dialog's own sections at narrow widths and tabs inside a dialog's frame, so a page's tabs never
 look like the dialog's sections. Switching tabs shows the chosen panel at once, with no motion of its content (only the
-indicator slides): a panel of setting rows is `SettingsTabPanel`, whose rows the section's list motion leaves alone,
-so a swap does not read as rows removed and added. (Source: user decision.)
+indicator slides), so a swap does not read as rows removed and added. (Source: user decision.)
 
 ### A value a newer daemon sends
 
@@ -1700,9 +1705,11 @@ Where an error or a warning is shown follows from how it arises, not from the sc
 
 Rules 3 and 4 are "On the screen: an Alert when it matters, a mark at its point otherwise" below.
 
-The Windows notification-area flyout is the one exception to the first rule: a choice or an Esc it could not hand to
+The Windows notification-area flyout is an exception to the first rule: a choice or an Esc it could not hand to
 the shell is an Alert at the top of the flyout, which stays open, until the flyout is next shown. Its window is sized to
-its menu, too small to hold the error alert dialog, and the shell that would act on the choice never received it.
+its menu, too small to hold the error alert dialog, and the shell that would act on the choice never received it. The General section's Command-line tool row is another: a failure of its Install, Reinstall or Remove
+is an Alert in the row, not the error alert dialog, since the row is where the tool's state is read and acted on (by the
+user's decision).
 
 The Processes panel, and the rail's processes panel over its counts, keep a failed refresh visible as a warning Alert
 above their existing rows and actions. The list

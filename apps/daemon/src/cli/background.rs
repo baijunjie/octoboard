@@ -32,6 +32,7 @@ use super::succession::{
     find_daemon, handover_input, next_may_come, recorded_after, succession, Awaited, EndWatch,
     Found, Succession, POLL, SERVICE_RESTART_GRACE,
 };
+use super::{application, stop_guard};
 
 /// Exit status of `status` and `address` when no daemon runs.
 pub(super) const NOT_RUNNING: i32 = 3;
@@ -63,6 +64,14 @@ const STDERR_GRACE: Duration = Duration::from_secs(2);
 
 fn address(port: u16) -> String {
     format!("http://127.0.0.1:{port}")
+}
+
+/// What `start` says once the daemon with pid `pid` listens, at `port` where it is known.
+pub(super) fn started_line(pid: u32, port: Option<u16>) -> String {
+    match port {
+        Some(port) => format!("{} started: pid {pid}, {}", crate::APP_NAME, address(port)),
+        None => format!("{} started: pid {pid}", crate::APP_NAME),
+    }
 }
 
 pub(super) fn not_running() -> String {
@@ -114,7 +123,7 @@ pub(super) fn status() -> Result<i32> {
     Ok(0)
 }
 
-pub(super) fn stop() -> Result<i32> {
+pub(super) fn stop(force: bool) -> Result<i32> {
     let began = Instant::now();
     let outcome = match find_daemon(RESTART_WAIT, true)? {
         // The daemon found once the handover the stop waited through was over is stopped only if
@@ -126,7 +135,12 @@ pub(super) fn stop() -> Result<i32> {
         } => {
             let key = owner.recorded_key();
             match succession(&from, None, &owner, key.as_deref()) {
-                Succession::Successor => stop_following(&owner, key, began, None)?,
+                Succession::Successor => {
+                    if let Some(status) = stop_guard::refusal_status(&owner, force) {
+                        return Ok(status);
+                    }
+                    stop_following(&owner, key, began, None)?
+                }
                 Succession::Other | Succession::Unproven => {
                     if ended_by(&from, began + RESTART_WAIT) {
                         StopOutcome::Superseded {
@@ -143,7 +157,15 @@ pub(super) fn stop() -> Result<i32> {
                 }
             }
         }
-        Found::Running { owner, .. } => stop_and_wait(&owner, began)?,
+        Found::Running { owner, .. } => {
+            if let Some(status) = stop_guard::refusal_status(&owner, force) {
+                return Ok(status);
+            }
+            if owner.follows_application == Some(true) && application::is_application_copy() {
+                return application::stop(&owner);
+            }
+            stop_and_wait(&owner, began)?
+        }
         Found::NotRunning { waited: false } => {
             println!("{}", not_running());
             return Ok(0);
@@ -505,7 +527,7 @@ fn stopped_phrase(pid: u32, how: HowEnded) -> String {
     }
 }
 
-pub(super) fn start(port: u16) -> Result<i32> {
+pub(super) fn start(port: Option<u16>) -> Result<i32> {
     let running = match find_daemon(RESTART_WAIT, true)? {
         Found::NotRunning { .. } => None,
         Found::Running { owner, .. } => Some(Some(owner)),
@@ -519,15 +541,20 @@ pub(super) fn start(port: u16) -> Result<i32> {
         );
         return Ok(1);
     }
+    if application::is_application_copy() {
+        return application::start(port);
+    }
     let exe = super::launch_path()?;
     match spawn_and_await_handshake(&exe, port, None, None) {
         Ok(started) => {
             println!("{}", started.line);
+            // The port the system assigned, when none was asked for, is in the line.
             println!(
-                "{} started: pid {}, {}",
-                crate::APP_NAME,
-                started.pid,
-                address(port)
+                "{}",
+                started_line(
+                    started.pid,
+                    port.or_else(|| super::listening_port(&started.line))
+                )
             );
             if started.in_starter_job {
                 eprintln!(
@@ -603,7 +630,7 @@ pub(crate) fn start_successor(
     listener: Option<&crate::platform::listener_handover::Kept>,
 ) -> SuccessorStart {
     let handover = handover_input(key, crate::owner_record::own_identity());
-    match spawn_and_await_handshake(exe, port, Some(&handover), listener) {
+    match spawn_and_await_handshake(exe, Some(port), Some(&handover), listener) {
         Ok(started) => {
             tracing::info!(pid = started.pid, port, "the next daemon is listening");
             if started.in_starter_job {
@@ -643,13 +670,13 @@ fn refused_listener(status: Option<i32>, said: &str) -> bool {
     status == Some(2) && said.contains("--listen-fd")
 }
 
-/// Starts the daemon `exe` on `port` in the background and waits for its handshake line, killing it
+/// Starts the daemon `exe` on `port` (one the system assigns for `None`) in the background and waits for its handshake line, killing it
 /// when none comes in time. With `handover` (the key and the identity of the daemon handing over,
 /// [`handover_input`]), the daemon is told to read its key from its stdin, where that is written;
 /// otherwise it makes one. With `listener`, it is handed that socket and told to take it over.
 fn spawn_and_await_handshake(
     exe: &Path,
-    port: u16,
+    port: Option<u16>,
     handover: Option<&str>,
     listener: Option<&crate::platform::listener_handover::Kept>,
 ) -> Result<Started, StartFailure> {
@@ -659,9 +686,10 @@ fn spawn_and_await_handshake(
     std::fs::create_dir_all(&data_dir)
         .with_context(|| format!("creating {}", data_dir.display()))?;
     let mut command = Command::new(exe);
-    command
-        .args(["--port", &port.to_string()])
-        .current_dir(&data_dir);
+    command.current_dir(&data_dir);
+    if let Some(port) = port {
+        command.args(["--port", &port.to_string()]);
+    }
     if handover.is_some() {
         command.arg("--key-stdin");
     }

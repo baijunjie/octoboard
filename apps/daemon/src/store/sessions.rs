@@ -904,6 +904,13 @@ impl Store {
         Ok(session)
     }
 
+    /// Makes every later read or write of the sessions fail.
+    #[cfg(test)]
+    pub fn drop_sessions(&self) -> Result<()> {
+        self.lock().execute_batch("DROP TABLE sessions")?;
+        Ok(())
+    }
+
     pub fn list_sessions(&self) -> Result<Vec<Session>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(&format!(
