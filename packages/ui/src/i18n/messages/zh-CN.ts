@@ -1988,7 +1988,7 @@ export const zhCN: Translation<"other"> = {
   "dialog.sessionModel.blockedTitle": "无法更改模型",
   "daemon.session_model_session_gone": "会话 {title} 已不存在，无法更改其模型。",
   "daemon.session_model_session_archived": "会话 {title} 已归档，无法更改其模型。重新打开后，可更改其模型和推理强度。",
-  "dialog.sessionModel.noteLaunch": "此会话将沿用更改后的模型、推理强度和兼容性设置。",
+  "dialog.sessionModel.noteShown": "此会话将沿用更改后的模型、推理强度和兼容性设置。如果会话实际使用的模型或推理强度与其设置不同，此处显示的值也会一并沿用。",
   "dialog.sessionModel.confirm": "更改模型",
   "dialog.sessionModel.failedTitle": "无法更改模型",
   "dialog.sessionModel.doneLaunch": "会话 {session} 已重新启动并使用新的启动设置",

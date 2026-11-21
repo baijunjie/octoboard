@@ -2134,7 +2134,7 @@ export const en = {
   "dialog.sessionModel.blockedTitle": "Cannot change the model",
   "daemon.session_model_session_gone": "The session {title} no longer exists, so its model cannot be changed.",
   "daemon.session_model_session_archived": "The session {title} was archived, so its model cannot be changed. Reopen it to change its model and reasoning effort.",
-  "dialog.sessionModel.noteLaunch": "Changes to the model, reasoning effort or compatibility settings are kept for this session from now on.",
+  "dialog.sessionModel.noteShown": "Changes to the model, reasoning effort or compatibility settings are kept for this session from now on. If the session runs with a different model or reasoning effort than its launch settings give it, the value shown here is kept as well.",
   "dialog.sessionModel.confirm": "Change model",
   "dialog.sessionModel.failedTitle": "Could not change the model",
   "dialog.sessionModel.doneLaunch": "{session} restarted with its new launch settings",

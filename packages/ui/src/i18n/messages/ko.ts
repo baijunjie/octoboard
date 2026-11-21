@@ -1941,7 +1941,7 @@ export const ko: Translation<"other"> = {
   "dialog.sessionModel.blockedTitle": "모델을 변경할 수 없습니다",
   "daemon.session_model_session_gone": "세션 {title}이(가) 더 이상 존재하지 않아 모델을 변경할 수 없습니다.",
   "daemon.session_model_session_archived": "세션 {title}이(가) 아카이브되어 모델을 변경할 수 없습니다. 다시 열면 모델과 추론 강도를 변경할 수 있습니다.",
-  "dialog.sessionModel.noteLaunch": "여기에서 변경한 모델, 추론 강도 및 호환성 설정은 앞으로 이 세션에 유지됩니다.",
+  "dialog.sessionModel.noteShown": "여기에서 변경한 모델, 추론 강도 및 호환성 설정은 앞으로 이 세션에 유지됩니다. 세션이 실제로 사용 중인 모델이나 추론 강도가 설정과 다르면 여기에 표시된 값도 함께 유지됩니다.",
   "dialog.sessionModel.confirm": "모델 변경",
   "dialog.sessionModel.failedTitle": "모델을 변경하지 못했습니다",
   "dialog.sessionModel.doneLaunch": "{session}이(가) 새 실행 설정으로 재시작되었습니다",

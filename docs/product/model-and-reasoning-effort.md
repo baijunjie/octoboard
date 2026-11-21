@@ -243,13 +243,33 @@ diagnostic output. Neither a missing list nor one still being fetched stops the 
 compatibility switches (see `docs/product/compatibility-switches-in-launch-settings.md`). It precedes Switch account,
 is absent for archived sessions, and is disabled while the session is starting or switching accounts. The dialog shows
 the Model and Reasoning effort pickers directly, with the same choices, loading and unavailable-list rules described
-above, and below them the session's switches. They start on the session's launch choices, taking inherited values where the session has no
-choice of its own; they do not start on the model last observed in the agent's records. While the dialog is open, its
-session name, account, restart explanation and untouched fields follow the session's current state and settings. An
-edited field keeps its chosen value; choosing the session's current value again makes it follow the session again.
-Clearing either chooses the agent's own default for it. Confirm requires at least one value — the model, the effort or
-a switch — to differ from the session's current launch values. Only changed values are sent, so the others keep their
-choice or inheritance. A change of switches alone restarts the session as a change of model does.
+above, and below them the session's switches. The switches start on the session's own values. The Model and Reasoning
+effort pickers start on the session's launch choices, taking inherited values where the session has no choice of its
+own, except where the agent's records show the session running with something else (see "The model and effort a
+session is shown running with" below): then they start on what it runs, so a launch value that differs from it — such
+as a project default changed after the session started — can be chosen as a change.
+
+- **Model.** The observed model is read as one of the listed models: the one with that id, or the alias whose
+  concrete version (see "The models offered" above) it is. It replaces the launch model only when the launch model —
+  or, where none is set, the default model the list names — is a listed model different from it. An observed model the list does not name, a launch model the list does
+  not name, and a list still being fetched or unavailable leave the launch model shown.
+- **Reasoning effort.** The observed effort replaces the launch effort only when the launch sets one and the observed
+  level is one the effort picker offers for the model shown, so never before the list is known. An effort the launch
+  leaves unset stays unset.
+
+While the dialog is open, its session name, account, restart explanation and untouched fields follow the session's
+current state, settings and records. An edited field keeps its chosen value; choosing the value shown again makes it
+follow the session again. Clearing either chooses the agent's own default for it. Confirm requires at least one value —
+the model, the effort or a switch — to differ from what the dialog shows. A changed value is sent and becomes the
+session's own choice, including the launch value chosen over a different running one. When anything is confirmed —
+a change of switches alone included — each untouched model or effort the pickers show from the records that differs
+from the launch value is sent too and becomes the session's own, so the restart gives what the dialog showed; an
+untouched value equal to the launch value is not sent and keeps its choice or inheritance. The dialog's note says that
+changes are kept for the session from then on, and that a model or effort shown because the session runs with it is
+kept as well. A change of switches alone restarts the session as a change of model does. Where the only change is
+choosing a model or effort the session already holds as its own choice while the agent runs a different one (switched
+inside the agent), the session is given the choices it already has, so the change is answered as unchanged and the
+session is not restarted.
 
 A session that becomes starting or switches accounts while the dialog is open temporarily disables Confirm, with a
 warning explaining that the user must wait for it to finish. A session deleted or archived while it is open instead
@@ -278,7 +298,7 @@ restart ended" in `docs/product/background-processes.md`). What is queued for th
 restarted process, behind its prompt to continue when it is sent one, and dropped when the restart fails after ending
 the process (see "What is queued crosses an account switch or a model change" in `docs/product/message-delivery.md`).
 An interrupted session is not started: the choices are recorded for its next
-resume. The changed values become the session's own choices, persisting as described at the top of this document. The
+resume. The values sent become the session's own choices, persisting as described at the top of this document. The
 user can change a session waiting for the user too; the dialog explains that restarting ends the prompt it was showing.
 For a dormant session it explains instead that the session is showing its background agents and restarting closes that
 view (see "Dormant" in `docs/product/session-statuses.md`).

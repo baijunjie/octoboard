@@ -1941,7 +1941,7 @@ export const zhTW: Translation<"other"> = {
   "dialog.sessionModel.blockedTitle": "無法更改模型",
   "daemon.session_model_session_gone": "工作階段 {title} 已不存在，無法更改其模型。",
   "daemon.session_model_session_archived": "工作階段 {title} 已封存，無法更改其模型。重新開啟後，可更改其模型和推理強度。",
-  "dialog.sessionModel.noteLaunch": "此工作階段將沿用更改後的模型、推理強度和相容性設定。",
+  "dialog.sessionModel.noteShown": "此工作階段將沿用更改後的模型、推理強度和相容性設定。如果工作階段實際使用的模型或推理強度與其設定不同，此處顯示的值也會一併沿用。",
   "dialog.sessionModel.confirm": "更改模型",
   "dialog.sessionModel.failedTitle": "無法更改模型",
   "dialog.sessionModel.doneLaunch": "工作階段 {session} 已重新啟動並使用新的啟動設定",

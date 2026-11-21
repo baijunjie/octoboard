@@ -17,6 +17,7 @@ import { Message, useT } from "../i18n/react";
 import type { Launch, Session } from "../protocol";
 import type { AcknowledgementView } from "../components/alerts/errorAlerts";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
+import { runningLaunch } from "../sessions/sessionModel";
 import { isLive } from "../sessions/sessionStatus";
 import { useAccountSwitchHeld, useDaemonStore, useProviders } from "../store";
 import { Dialog } from "../components/dialog/Dialog";
@@ -25,24 +26,38 @@ import { LaunchPickers, useLaunchModels } from "./LaunchSettingsFields";
 import { useFailureWhenBlocked } from "../components/dialog/useFailureWhenBlocked";
 import { Description, partSelector } from "../primitives";
 
-/** The edits that differ from what the pickers started on, so a value that now equals the session's own
+/** The edits that differ from what the pickers started on, so a value that now equals the one shown
  * (another window made the same change) is not sent, and a session is never restarted for nothing. */
-function changedFrom(start: Launch, picked: LaunchOverrides): LaunchOverrides {
-  const compatibility = changedCompatibility(applyCompatibility(start.compatibility, picked.compatibility), start.compatibility);
+function changedFrom(shown: Launch, picked: LaunchOverrides): LaunchOverrides {
+  const compatibility = changedCompatibility(applyCompatibility(shown.compatibility, picked.compatibility), shown.compatibility);
   return {
     ...(Object.keys(compatibility).length > 0 ? { compatibility } : {}),
-    ...(picked.model !== undefined && picked.model !== start.model ? { model: picked.model } : {}),
-    ...(picked.effort !== undefined && picked.effort !== start.effort ? { effort: picked.effort } : {}),
+    ...(picked.model !== undefined && picked.model !== shown.model ? { model: picked.model } : {}),
+    ...(picked.effort !== undefined && picked.effort !== shown.effort ? { effort: picked.effort } : {}),
+  };
+}
+
+/** What a confirmed change sends: the user's `edits`, and with them each untouched model or effort the pickers show
+ * (`shown`) that is not what the session is launched with (`launched`), so the restart gives every value the dialog
+ * showed rather than a launch value it never did. Nothing is sent from the records without an edit. */
+function sentWith(launched: Launch, shown: Launch, edits: LaunchOverrides): LaunchOverrides {
+  if (Object.keys(edits).length === 0) return edits;
+  return {
+    ...(shown.model !== launched.model ? { model: shown.model } : {}),
+    ...(shown.effort !== launched.effort ? { effort: shown.effort } : {}),
+    ...edits,
   };
 }
 
 /**
  * Changes the model and reasoning effort a session runs with (`set_session_model`), on its own agent
  * and account. The pickers are shown at once, since they are what the dialog is for. They start on
- * what the session is launched with — its own choice, else what its project or console gives it — and
- * follow the session while the dialog is open, except for a field the user has edited; the values the
- * user changes become the session's own, and clearing one chooses the agent's own default. Confirm
- * waits for a change. A field changed back to the session's value follows the session again. A running
+ * what the session is launched with — its own choice, else what its project or console gives it — or,
+ * where the agent's records show it running with another model or effort, on that (`runningLaunch`), so
+ * the value it is launched with can be chosen as a change. They follow the session while the dialog is
+ * open, except for a field the user has edited; the values the user changes become the session's own,
+ * as does an untouched value shown from the records, and clearing one chooses the agent's own default.
+ * Confirm waits for a change. A field changed back to the value shown follows the session again. A running
  * session is restarted to take them, which the dialog says: keeping its
  * conversation, or starting a fresh one where it has none, and ending the prompt a session waiting for
  * the user is showing. An interrupted session takes them at its next resume. Confirm closes the
@@ -83,13 +98,13 @@ export function SessionModelDialog({
   const inherited = parentConsole ? inheritedSessionLaunch(parentConsole, project, session.agent, display, session.kind === "project") : { model: null, effort: null, compatibility: {} };
   const own = launchWithOverrides(inherited, { model: session.model, effort: session.effort });
   // A stored retired `best` is no model, so clearing the picker back to unset over it is no edit.
-  const start = { ...own, compatibility: session.compatibility, model: shownModel(display, own.model) };
-  return <SessionModelForm session={session} start={start} inheritCompatibility={inherited.compatibility} followLabel={session.kind === "project" ? "dialog.agentSettings.sameAsProject" : "dialog.agentSettings.sameAsConsole"} failure={failure} onClose={onClose} onChangeModel={onChangeModel} />;
+  const launched = { ...own, compatibility: session.compatibility, model: shownModel(display, own.model) };
+  return <SessionModelForm session={session} launched={launched} inheritCompatibility={inherited.compatibility} followLabel={session.kind === "project" ? "dialog.agentSettings.sameAsProject" : "dialog.agentSettings.sameAsConsole"} failure={failure} onClose={onClose} onChangeModel={onChangeModel} />;
 }
 
 function SessionModelForm({
   session,
-  start,
+  launched,
   inheritCompatibility,
   followLabel,
   failure,
@@ -97,7 +112,7 @@ function SessionModelForm({
   onChangeModel,
 }: {
   session: Session;
-  start: Launch;
+  launched: Launch;
   inheritCompatibility: Compatibility;
   followLabel: PlainMessageKey;
   failure: AcknowledgementView | undefined;
@@ -117,24 +132,25 @@ function SessionModelForm({
       : dialogAround(pickers)?.querySelector<HTMLButtonElement>(`:is(${partSelector.dialogFooter}) button[type="button"]`);
     target?.focus();
   });
-  const edits = changedFrom(start, picked);
-  const { model, effort } = launchWithOverrides(start, picked);
+  const shown = runningLaunch(session, launched, launch.models, launch.defaultModel, launch.display);
+  const edits = changedFrom(shown, picked);
+  const { model, effort } = launchWithOverrides(shown, picked);
   // The daemon would refuse these; the menu does not offer the dialog for them, but one can come about while it
   // is open, so Confirm waits. Any other refusal comes after the dialog has closed, as an error alert.
   const switching = useAccountSwitchHeld(session);
   const held = session.status === "starting" || switching;
   // A status this client does not know is not running: nothing is said of a restart it may not need.
   const running = isLive(session.status);
-  // A value picked back to the session's own is no edit: the field follows the session again.
+  // A value picked back to the one shown is no edit: the field follows the session again.
   const pick = (field: "model" | "effort", value: string | null) => setPicked((now) => {
     const next = { ...now, [field]: value };
-    if (value === start[field]) delete next[field];
+    if (value === shown[field]) delete next[field];
     return next;
   });
   const restart = session.has_conversation ? "dialog.sessionModel.restart" : "dialog.sessionModel.restartFresh";
 
   const submit = () => {
-    onChangeModel(session.id, edits);
+    onChangeModel(session.id, sentWith(launched, shown, edits));
     onClose();
   };
 
@@ -165,13 +181,13 @@ function SessionModelForm({
       )}
       <StatusAnnouncer text={launch.modelText} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />
       <div ref={pickers} {...focusHandoff} className="flex flex-col gap-4">
-        <Description>{t("dialog.sessionModel.noteLaunch")}</Description>
+        <Description>{t("dialog.sessionModel.noteShown")}</Description>
         <LaunchPickers
           launch={launch}
           model={model}
           effort={effort}
-          compatibility={{ value: { ...start.compatibility, ...picked.compatibility },
-            onChange: (compatibility) => setPicked((now) => ({ ...now, compatibility: changedCompatibility(applyCompatibility(start.compatibility, compatibility), start.compatibility) })),
+          compatibility={{ value: { ...shown.compatibility, ...picked.compatibility },
+            onChange: (compatibility) => setPicked((now) => ({ ...now, compatibility: changedCompatibility(applyCompatibility(shown.compatibility, compatibility), shown.compatibility) })),
             inherit: inheritCompatibility, followLabel,
           }}
           onModelChange={(value) => pick("model", value)}

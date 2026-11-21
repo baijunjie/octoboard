@@ -25,13 +25,17 @@ async function pick(text: string, id = first.id) {
   expect(field(id)).toBeDefined(); await click(field(id));
   const option = optionElements().find((entry) => entry.textContent?.startsWith(text)); expect(option).toBeDefined(); await click(option);
 }
-async function mount(kind: "project" | "console" = "project", held: Record<string, boolean> = {}) {
+const listed = [
+  { id: "fable", name: "Fable", efforts: ["low", "max"] },
+  { id: "opus", name: "Opus", efforts: ["low", "high"] },
+];
+async function mount(kind: "project" | "console" = "project", held: Record<string, boolean> = {}, running?: { model: string; effort: string }) {
   fakeTimers();
-  const session = sessionOf("s", "c", kind === "project" ? "p" : undefined, "Session", "idle", { agent: provider.id, compatibility: held });
+  const session = sessionOf("s", "c", kind === "project" ? "p" : undefined, "Session", "idle", { agent: provider.id, compatibility: held, ...(running && { observed_model: running.model, observed_effort: running.effort }) });
   const owner = consoleOf("c", "Console", { launch: { [provider.id]: { compatibility: { [first.id]: true } } }, project_session_launch: { [provider.id]: { compatibility: { [first.id]: true, [second.id]: false } } } });
-  const project = projectOf("p", "c", "Project", { launch: { [provider.id]: { compatibility: { [first.id]: false } } } });
+  const project = projectOf("p", "c", "Project", { launch: { [provider.id]: { compatibility: { [first.id]: false }, ...(running && { model: "opus", effort: "high" }) } } });
   const daemon = testDaemon({ state: { consoles: new Map([[owner.id, owner]]), projects: new Map([[project.id, project]]), sessions: new Map([[session.id, session]]) }, request: async (body) => {
-    if (body.type === "list_agent_models") return { type: "agent_models", id: null, agent: body.agent, account: body.account ?? null, models: [], unavailable: null };
+    if (body.type === "list_agent_models") return { type: "agent_models", id: null, agent: body.agent, account: body.account ?? null, models: running ? listed : [], unavailable: null };
     throw new Error(`Unexpected request: ${body.type}`);
   } });
   const changed = vi.fn(); const container = document.body.appendChild(document.createElement("div")); const root = createRoot(container);
@@ -72,4 +76,13 @@ it("follows session updates for an unedited switch and avoids restarting when an
   await pick("On"); expect(confirm().disabled).toBe(false);
   act(() => daemon.store.setState({ sessions: new Map([[session.id, { ...session, compatibility: { [first.id]: true } }]]) }));
   expect(confirm().disabled).toBe(true);
+});
+it("sends the model and effort the pickers show from the records along with an edited switch", async () => {
+  // The project launches Opus with high effort; the agent's records show the session running Fable with low.
+  const { changed, session } = await mount("project", {}, { model: "fable", effort: "low" });
+  expect(buttons().some((entry) => entry.textContent?.includes("Fable"))).toBe(true);
+  expect(confirm().disabled).toBe(true);
+  await pick("On");
+  await click(confirm());
+  expect(changed).toHaveBeenCalledExactlyOnceWith(session.id, { compatibility: { [first.id]: true }, model: "fable", effort: "low" });
 });

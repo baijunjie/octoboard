@@ -1874,7 +1874,7 @@ export const hi: Translation<"one" | "other"> = {
   "dialog.sessionModel.blockedTitle": "मॉडल नहीं बदल सकते",
   "daemon.session_model_session_gone": "सेशन {title} अब मौजूद नहीं है, इसलिए इसका मॉडल नहीं बदल सकते।",
   "daemon.session_model_session_archived": "सेशन {title} आर्काइव है, इसलिए इसका मॉडल नहीं बदल सकते। मॉडल और सोचने का स्तर बदलने के लिए इसे दोबारा खोलें।",
-  "dialog.sessionModel.noteLaunch": "मॉडल, सोचने के स्तर या कम्पैटिबिलिटी सेटिंग्स में किए गए बदलाव अब से इस सेशन के लिए रखे जाते हैं।",
+  "dialog.sessionModel.noteShown": "मॉडल, सोचने के स्तर या कम्पैटिबिलिटी सेटिंग्स में किए गए बदलाव अब से इस सेशन के लिए रखे जाते हैं। अगर सेशन अपनी सेटिंग्स से अलग मॉडल या सोचने के स्तर पर चल रहा है, तो यहाँ दिखाया गया मान भी रखा जाता है।",
   "dialog.sessionModel.confirm": "मॉडल बदलें",
   "dialog.sessionModel.failedTitle": "मॉडल नहीं बदल सका",
   "dialog.sessionModel.doneLaunch": "{session} नई लॉन्च सेटिंग्स के साथ फिर से शुरू हुआ",

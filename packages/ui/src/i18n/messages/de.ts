@@ -1902,7 +1902,7 @@ export const de: Translation<"one" | "other"> = {
   "dialog.sessionModel.blockedTitle": "Modell kann nicht geändert werden",
   "daemon.session_model_session_gone": "Sitzung {title} existiert nicht mehr. Ihr Modell kann daher nicht geändert werden.",
   "daemon.session_model_session_archived": "Sitzung {title} wurde archiviert. Ihr Modell kann daher nicht geändert werden. Öffne sie erneut, um Modell und Denkintensität zu ändern.",
-  "dialog.sessionModel.noteLaunch": "Änderungen an Modell, Denkintensität oder Kompatibilitätseinstellungen bleiben ab jetzt für diese Sitzung erhalten.",
+  "dialog.sessionModel.noteShown": "Änderungen an Modell, Denkintensität oder Kompatibilitätseinstellungen bleiben ab jetzt für diese Sitzung erhalten. Läuft die Sitzung mit einem anderen Modell oder einer anderen Denkintensität als eingestellt, bleibt auch der hier angezeigte Wert erhalten.",
   "dialog.sessionModel.confirm": "Modell ändern",
   "dialog.sessionModel.failedTitle": "Modell konnte nicht geändert werden",
   "dialog.sessionModel.doneLaunch": "{session} mit neuen Starteinstellungen neu gestartet",

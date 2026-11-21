@@ -1940,7 +1940,7 @@ export const ja: Translation<"other"> = {
   "dialog.sessionModel.blockedTitle": "モデルを変更できません",
   "daemon.session_model_session_gone": "セッション {title} はもう存在しないため、モデルを変更できません。",
   "daemon.session_model_session_archived": "セッション {title} はアーカイブ済みのため、モデルを変更できません。開き直すと、モデルと推論の強度を変更できます。",
-  "dialog.sessionModel.noteLaunch": "ここで変更したモデル、推論の強度、互換性設定は、今後このセッションに使用されます。",
+  "dialog.sessionModel.noteShown": "ここで変更したモデル、推論の強度、互換性設定は、今後このセッションに使用されます。セッションが実際に使用しているモデルや推論の強度が設定と異なる場合は、ここに表示されている値も同様に使用されます。",
   "dialog.sessionModel.confirm": "モデルを変更",
   "dialog.sessionModel.failedTitle": "モデルを変更できませんでした",
   "dialog.sessionModel.doneLaunch": "{session} を新しい起動設定で再起動しました",

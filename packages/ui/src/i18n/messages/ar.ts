@@ -1875,7 +1875,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "dialog.sessionModel.blockedTitle": "لا يمكن تغيير النموذج",
   "daemon.session_model_session_gone": "لم تعد الجلسة {title} موجودة، لذا لا يمكن تغيير نموذجها.",
   "daemon.session_model_session_archived": "أُرشفت الجلسة {title}، لذا لا يمكن تغيير نموذجها. أعد فتحها لتغيير نموذجها ومستوى استدلالها.",
-  "dialog.sessionModel.noteLaunch": "يُحتفظ بأي تغيير في النموذج أو مستوى الاستدلال أو إعدادات التوافق لهذه الجلسة من الآن فصاعداً.",
+  "dialog.sessionModel.noteShown": "يُحتفظ بأي تغيير في النموذج أو مستوى الاستدلال أو إعدادات التوافق لهذه الجلسة من الآن فصاعداً. إذا كانت الجلسة تعمل بنموذج أو مستوى استدلال يختلف عن إعداداتها، فسيُحتفظ أيضاً بالقيمة المعروضة هنا.",
   "dialog.sessionModel.confirm": "تغيير النموذج",
   "dialog.sessionModel.failedTitle": "تعذر تغيير النموذج",
   "dialog.sessionModel.doneLaunch": "أُعيد تشغيل {session} بإعدادات التشغيل الجديدة",

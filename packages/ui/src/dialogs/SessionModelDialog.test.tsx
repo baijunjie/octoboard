@@ -319,3 +319,95 @@ it("freezes the latest session name when a renamed session is deleted", async ()
   expect(failureModal()?.querySelector("[data-inline-reference]")?.textContent).toBe("New title");
   expect(failureModal()?.textContent).not.toContain("Fix search");
 });
+
+const pickOption = async (name: string, option: (text: string) => boolean) => {
+  await act(async () => picker(name).click());
+  await act(async () => optionElements().find((entry) => option(entry.textContent ?? ""))!.click());
+};
+
+it("starts on the model the session is running when it differs from the project's, so the project's can be chosen", async () => {
+  // The project launches Opus; the agent's records show the session running Fable.
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { observed_model: "claude-fable-5-1" });
+  const { onChangeModel } = await mount(session, "versioned");
+
+  expect(picker("Model").textContent).toContain("Fable");
+  expect(confirm().disabled).toBe(true);
+
+  await pickOption("Model", (text) => text.startsWith("Opus"));
+  expect(confirm().disabled).toBe(false);
+  await act(async () => confirm().click());
+
+  expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { model: "opus" });
+});
+
+it("takes picking back the model shown from the records for no edit", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { observed_model: "claude-fable-5-1" });
+  const { onChangeModel } = await mount(session, "versioned");
+
+  await pickOption("Model", (text) => text.startsWith("Opus"));
+  expect(confirm().disabled).toBe(false);
+  await pickOption("Model", (text) => text.startsWith("Fable"));
+  expect(confirm().disabled).toBe(true);
+  expect(onChangeModel).not.toHaveBeenCalled();
+});
+
+it("sends the untouched effort shown from the records along with a changed model", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { effort: "high", observed_effort: "low" });
+  const { onChangeModel } = await mount(session);
+
+  expect(picker("Reasoning effort").textContent).toContain("low");
+  expect(confirm().disabled).toBe(true);
+
+  await pickOption("Model", (text) => text === "Sonnet");
+  await act(async () => confirm().click());
+
+  expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { model: "sonnet", effort: "low" });
+});
+
+it("sends the untouched model shown from the records along with a changed effort", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { observed_model: "claude-fable-5-1" });
+  const { onChangeModel } = await mount(session, "versioned");
+
+  await pickOption("Reasoning effort", (text) => text === "max");
+  await act(async () => confirm().click());
+
+  expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { model: "fable", effort: "max" });
+});
+
+it("takes a session running what it is launched with as it did before the records were read", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { observed_model: "claude-opus-5-5", observed_effort: "high" });
+  const { onChangeModel } = await mount(session, "versioned");
+
+  expect(picker("Model").textContent).toContain("Opus");
+  expect(confirm().disabled).toBe(true);
+
+  await pickOption("Reasoning effort", (text) => text === "low");
+  await act(async () => confirm().click());
+
+  expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { effort: "low" });
+});
+
+it("shows the launch model until the model list is known", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { observed_model: "claude-fable-5-1" });
+  await mount(session, "pending");
+
+  expect(picker("Model").textContent).toContain("opus");
+  expect(picker("Model").textContent).not.toContain("Fable");
+});
+
+it("leaves the launch model in place when the observed model is not in the list", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { observed_model: "claude-sonnet-9-9" });
+  await mount(session, "versioned");
+
+  expect(picker("Model").textContent).toContain("Opus");
+  expect(confirm().disabled).toBe(true);
+});
+
+it.each(["pending", "unavailable"] as const)("shows the launch effort while the model list is %s, though the records show another", async (models) => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { effort: "high", observed_effort: "low" });
+  await mount(session, models);
+
+  expect(picker("Reasoning effort").textContent).toContain("high");
+  expect(picker("Reasoning effort").textContent).not.toContain("low");
+  expect(confirm().disabled).toBe(true);
+});

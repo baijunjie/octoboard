@@ -1875,7 +1875,7 @@ export const id: Translation<"other"> = {
   "dialog.sessionModel.blockedTitle": "Tidak dapat mengganti model",
   "daemon.session_model_session_gone": "Sesi {title} sudah tidak ada, sehingga modelnya tidak dapat diubah.",
   "daemon.session_model_session_archived": "Sesi {title} sudah diarsipkan, sehingga modelnya tidak dapat diubah. Buka kembali untuk mengubah model dan upaya penalarannya.",
-  "dialog.sessionModel.noteLaunch": "Perubahan pada model, upaya penalaran, atau pengaturan kompatibilitas dipertahankan untuk sesi ini mulai sekarang.",
+  "dialog.sessionModel.noteShown": "Perubahan pada model, upaya penalaran, atau pengaturan kompatibilitas dipertahankan untuk sesi ini mulai sekarang. Jika sesi berjalan dengan model atau upaya penalaran yang berbeda dari pengaturannya, nilai yang ditampilkan di sini juga dipertahankan.",
   "dialog.sessionModel.confirm": "Ganti model",
   "dialog.sessionModel.failedTitle": "Tidak dapat mengganti model",
   "dialog.sessionModel.doneLaunch": "{session} dimulai ulang dengan pengaturan peluncuran baru",

@@ -1874,7 +1874,7 @@ export const vi: Translation<"other"> = {
   "dialog.sessionModel.blockedTitle": "Không thể đổi mô hình",
   "daemon.session_model_session_gone": "Phiên {title} không còn tồn tại nên không thể đổi mô hình.",
   "daemon.session_model_session_archived": "Phiên {title} đã được lưu trữ nên không thể đổi mô hình. Mở lại phiên để đổi mô hình và mức suy luận.",
-  "dialog.sessionModel.noteLaunch": "Các thay đổi về mô hình, mức suy luận hoặc cài đặt tương thích được giữ cho phiên này từ nay về sau.",
+  "dialog.sessionModel.noteShown": "Các thay đổi về mô hình, mức suy luận hoặc cài đặt tương thích được giữ cho phiên này từ nay về sau. Nếu phiên đang chạy với mô hình hoặc mức suy luận khác với cài đặt của nó, giá trị hiển thị ở đây cũng được giữ lại.",
   "dialog.sessionModel.confirm": "Đổi mô hình",
   "dialog.sessionModel.failedTitle": "Không đổi được mô hình",
   "dialog.sessionModel.doneLaunch": "{session} đã khởi động lại với cài đặt khởi chạy mới",

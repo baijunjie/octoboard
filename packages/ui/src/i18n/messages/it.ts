@@ -1875,7 +1875,7 @@ export const it: Translation<"one" | "many" | "other"> = {
   "dialog.sessionModel.blockedTitle": "Impossibile cambiare il modello",
   "daemon.session_model_session_gone": "La sessione {title} non esiste più, quindi il modello non può essere modificato.",
   "daemon.session_model_session_archived": "La sessione {title} è stata archiviata, quindi il modello non può essere modificato. Riaprila per cambiare modello e livello di ragionamento.",
-  "dialog.sessionModel.noteLaunch": "Ogni modifica al modello, al livello di ragionamento o alla compatibilità viene mantenuta per questa sessione da ora in poi.",
+  "dialog.sessionModel.noteShown": "Ogni modifica al modello, al livello di ragionamento o alla compatibilità viene mantenuta per questa sessione da ora in poi. Se la sessione è in esecuzione con un modello o un livello di ragionamento diverso da quello impostato, viene mantenuto anche quello mostrato qui.",
   "dialog.sessionModel.confirm": "Cambia modello",
   "dialog.sessionModel.failedTitle": "Impossibile cambiare il modello",
   "dialog.sessionModel.doneLaunch": "{session} si è riavviata con le nuove impostazioni di avvio",

@@ -1,9 +1,9 @@
-import { shownModel } from "../agents/agentLaunchSettings";
+import { effortLevels, shownModel } from "../agents/agentLaunchSettings";
 import { providerModelDisplay } from "../agents/providers";
 import { consoleProjectLaunch, inheritedSessionLaunch, launchWithOverrides } from "../agents/agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import type { Console, Launch, ModelDisplay, Project, ProviderInfo, Session } from "../protocol";
+import type { AgentModel, Console, Launch, ModelDisplay, Project, ProviderInfo, Session } from "../protocol";
 
 /** The rest of a model id after its maker's prefix: the family, then the version parts, then optionally a release date. */
 const FAMILY_VERSION = /^([a-z]+)((?:-\d{1,2})+)(?:-\d{8})?$/;
@@ -56,6 +56,27 @@ export function sessionModelEffort(session: Session, inherited: Launch, display:
     effort: session.observed_effort ?? session.default_effort ?? launched.effort ?? null,
     compatibility: { ...inherited.compatibility, ...session.compatibility },
   };
+}
+
+/** The pair a session's launch pickers start on: `launch`, what it is launched with, except where the agent's records
+ * show it running with something else, so that the pickers name the model the line beside its agent mark shows and
+ * the value it is launched with can be picked as a change. The observed model is read as one of `models` (the agent's list): the
+ * one whose id it is, or the alias whose version is its short name. It replaces the launch model only when that one,
+ * or `defaultModel` where the launch names none, is known to be a different model; an observed model the list does
+ * not name, and a launch model it does not name, leave the launch model in place. The observed effort replaces the
+ * launch one only where it is a level the effort picker offers for the model shown, so nothing is shown from the
+ * records before the list is known; an effort the launch leaves to the agent stays unset, since the observed one may
+ * be that very default. The compatibility switches are `launch`'s own. */
+export function runningLaunch(session: Session, launch: Launch, models: AgentModel[], defaultModel: string | null, display: ModelDisplay | undefined): Launch {
+  const observed = session.observed_model;
+  const name = observed === undefined ? undefined : modelDisplayName(observed, display);
+  const runs = (model: AgentModel) => model.id === observed || (model.version !== undefined && model.version === name);
+  const launched = models.find((model) => model.id === (launch.model ?? defaultModel));
+  const running = launched && !runs(launched) ? models.find(runs) : undefined;
+  const model = running?.id ?? launch.model;
+  const observedEffort = session.observed_effort;
+  const offered = observedEffort !== undefined && effortLevels(models, model ?? defaultModel).levels.includes(observedEffort);
+  return { ...launch, model, effort: launch.effort !== null && offered ? observedEffort : launch.effort };
 }
 
 /** The model's short name and the effort as separate values, for the labelled list of a session's

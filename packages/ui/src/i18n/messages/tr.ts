@@ -1971,7 +1971,7 @@ export const tr: Translation<"one" | "other"> = {
   "dialog.sessionModel.blockedTitle": "Model değiştirilemez",
   "daemon.session_model_session_gone": "{title} oturumu artık olmadığından modeli değiştirilemez.",
   "daemon.session_model_session_archived": "{title} oturumu arşivlendiğinden modeli değiştirilemez. Modelini ve akıl yürütme düzeyini değiştirmek için yeniden açın.",
-  "dialog.sessionModel.noteLaunch": "Model, akıl yürütme düzeyi veya uyumluluk ayarlarındaki değişiklikler bundan sonra bu oturum için korunur.",
+  "dialog.sessionModel.noteShown": "Model, akıl yürütme düzeyi veya uyumluluk ayarlarındaki değişiklikler bundan sonra bu oturum için korunur. Oturum, ayarlarındakinden farklı bir model veya akıl yürütme düzeyiyle çalışıyorsa burada gösterilen değer de korunur.",
   "dialog.sessionModel.confirm": "Model değiştir",
   "dialog.sessionModel.failedTitle": "Model değiştirilemedi",
   "dialog.sessionModel.doneLaunch": "{session} yeni başlatma ayarlarıyla yeniden başlatıldı",

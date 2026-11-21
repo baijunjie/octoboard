@@ -1939,7 +1939,7 @@ export const th: Translation<"other"> = {
   "dialog.sessionModel.blockedTitle": "เปลี่ยนโมเดลไม่ได้",
   "daemon.session_model_session_gone": "ไม่มีเซสชัน {title} แล้ว จึงเปลี่ยนโมเดลไม่ได้",
   "daemon.session_model_session_archived": "เซสชัน {title} เก็บถาวรแล้ว จึงเปลี่ยนโมเดลไม่ได้ เปิดใหม่เพื่อเปลี่ยนโมเดลและระดับการใช้เหตุผล",
-  "dialog.sessionModel.noteLaunch": "การเปลี่ยนโมเดล ระดับการใช้เหตุผล หรือการตั้งค่าความเข้ากันได้จะใช้กับเซสชันนี้นับจากนี้",
+  "dialog.sessionModel.noteShown": "การเปลี่ยนโมเดล ระดับการใช้เหตุผล หรือการตั้งค่าความเข้ากันได้จะใช้กับเซสชันนี้นับจากนี้ หากเซสชันกำลังทำงานด้วยโมเดลหรือระดับการใช้เหตุผลที่ต่างจากการตั้งค่า ค่าที่แสดงที่นี่จะถูกใช้ต่อไปด้วย",
   "dialog.sessionModel.confirm": "เปลี่ยนโมเดล",
   "dialog.sessionModel.failedTitle": "เปลี่ยนโมเดลไม่ได้",
   "dialog.sessionModel.doneLaunch": "เริ่ม {session} ใหม่ด้วยการตั้งค่าใหม่แล้ว",
