@@ -268,8 +268,9 @@ otherwise the session comes back at its prompt — *paused* where its last turn 
 has none yet. A Codex session waiting for Octoboard to retry a turn stopped at its model's capacity is not sent that
 retry once its model or effort is changed: it comes back *paused*. The failed report held for the turn reaches its
 owner only if the session still has its process when the report is delivered; the change's own result tells the owner
-what became of the session (see "When the selected model is at capacity" in `docs/product/turns-hooks-do-not-report.md`). While it shows as starting, a session ranked by status sorts with what it will be once the restart is
-over (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). The processes the session's agent
+what became of the session (see "When the selected model is at capacity" in `docs/product/turns-hooks-do-not-report.md`).
+While it shows as *starting*, it has the loading rank (see "The status order" in
+`docs/product/order-of-projects-and-sessions.md`). The processes the session's agent
 left running in the background are carried over to the restarted session rather than stopped, as in an account switch, and kept as project processes
 when the restart fails after it ended the process (see "Automatic stopping and its boundaries" in
 `docs/product/background-processes.md`); those the restart ended anyway are named to the session (see "Processes a

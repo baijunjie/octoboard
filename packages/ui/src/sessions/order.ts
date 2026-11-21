@@ -1,16 +1,15 @@
 import { type Console, type Project, type Session } from "../protocol";
 import { listedAmongConsoleSessions } from "./sessionKind";
-import { isLive, runsInBackground, sessionShownStatusKind, sessionStatusKind, showsSwitching, type ShownStatusKind } from "./sessionStatus";
+import { holdsPendingLink, isLive, runsInBackground, sessionShownStatusKind, sessionStatusKind, showsSwitching, type ShownStatusKind } from "./sessionStatus";
 
 /** How soon a session wants a person: the ones that need someone to act or look come first (a raised
  * hand, a session that cannot take messages while its background agents are on view, a turn that ended
  * abnormally, a finished turn, a prompt waiting for a first instruction), then work going on elsewhere
- * (delegated or left in the background), then the sessions busy working, which are best left alone, then a status this
- * client does not know (`unknown`), and last the ones with no process. Archived sessions are listed separately. A
- * session starting up or switching account has no rank of its own: it sorts where it will land (`outcomeKind`), so
- * `starting` has no entry. A session whose process cannot be reached (`reconnecting`) is only drawn differently: it
+ * (delegated or left in the background), then the sessions busy working, then loading sessions, then a status this
+ * client does not know (`unknown`), and last the ones with no process. Archived sessions are listed separately.
+ * Starting up and switching account share the loading rank. A session whose process cannot be reached (`reconnecting`)
  * ranks by its stored status. */
-export const STATUS_RANK: Record<Exclude<ShownStatusKind, "starting" | "switching" | "reconnecting">, number> = {
+export const STATUS_RANK: Record<Exclude<ShownStatusKind, "starting" | "switching" | "reconnecting"> | "loading", number> = {
   waiting_user: 0,
   dormant: 1,
   paused: 2,
@@ -19,23 +18,16 @@ export const STATUS_RANK: Record<Exclude<ShownStatusKind, "starting" | "switchin
   delegated: 5,
   background: 6,
   working: 7,
-  unknown: 8,
-  interrupted: 9,
-  archived: 10,
+  loading: 8,
+  unknown: 9,
+  interrupted: 10,
+  archived: 11,
 };
 
-/** What a session that is starting or switching account will be once that is over: working when the launch
- * hands the agent a prompt, else done when it has a conversation, else idle. */
-function outcomeKind(session: Pick<Session, "has_conversation" | "prompt_on_launch">): "working" | "done" | "idle" {
-  if (session.prompt_on_launch) return "working";
-  return session.has_conversation ? "done" : "idle";
-}
-
-/** A session's place in the status order (`STATUS_RANK`); one an account switch holds (`showsSwitching`, with
- * `queuedSwitches` the store's `queuedAccountSwitches`) sorts where it will land, as one starting up does. */
+/** A session's place in the status order, including account switches queued in this window. */
 function rankOf(session: Session, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>): number {
   const kind = sessionStatusKind(session, delegating);
-  if (kind === "starting" || showsSwitching(session, queuedSwitches)) return STATUS_RANK[outcomeKind(session)];
+  if (kind === "starting" || (showsSwitching(session, queuedSwitches) && !holdsPendingLink(session))) return STATUS_RANK.loading;
   return STATUS_RANK[kind];
 }
 
@@ -420,8 +412,7 @@ export function focusGroupRows(sessions: Session[], project: Project, consoleSes
 
 /** The status of the most urgent session of `sessions` by the sidebar's status rank, independent of
  * pins or the user's choice to sort rows by date: what the console's avatar on the rail, a collapsed
- * project's row and a focus-mode switch chip each mark their sessions with. A session starting up or
- * switching account counts where it will land (`rankOf`) but is drawn as it is. Archived sessions are
+ * project's row and a focus-mode switch chip each mark their sessions with. Archived sessions are
  * left out, so `undefined` when none is left. Ties take the newest session, as rows do. */
 export function topStatus(sessions: Iterable<Session>, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>): ShownStatusKind | undefined {
   let selected: Session | undefined;

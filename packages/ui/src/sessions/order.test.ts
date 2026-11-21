@@ -171,16 +171,12 @@ describe("topStatus", () => {
     for (const [kind, one] of Object.entries(sessions)) expect(topStatus([one], delegating, NONE)).toBe(kind);
   });
 
-  it("ranks a session starting up or switching account where it will land, and draws it as it is", () => {
-    const starting = session("starting", "starting", 3);
-    const idle = session("idle", "idle", 2);
+  it("gives working priority over loading and loading priority over status unknown", () => {
+    const starting = { ...session("starting", "starting", 3), prompt_on_launch: true };
+    const unknown = session("unknown", "from_a_newer_daemon", 9);
     const working = session("working", "working", 1);
-    expect(topStatus([starting], NONE, NONE)).toBe("starting");
-    expect(topStatus([starting, working], NONE, NONE)).toBe("starting");
-    expect(topStatus([working, { ...starting, prompt_on_launch: true }], NONE, NONE)).toBe("starting");
-    expect(topStatus([working, { ...starting, has_conversation: true }, session("waiting", "waiting_user", 0)], NONE, NONE)).toBe("waiting_user");
-    expect(topStatus([session("interrupted", "interrupted", 9), starting], NONE, NONE)).toBe("starting");
-    expect(liveSessions([working, starting, idle], NONE, NONE).map((s) => s.id)).toEqual(["starting", "idle", "working"]);
+    expect(topStatus([unknown, starting, working], NONE, NONE)).toBe("working");
+    expect(topStatus([unknown, starting], NONE, NONE)).toBe("starting");
   });
 
   it("puts interrupted last, and leaves out archived sessions", () => {
@@ -196,9 +192,11 @@ describe("topStatus", () => {
     expect(liveSessions(sessions, NONE, NONE).map((s) => s.id)).toEqual(["working", "unknown", "interrupted"]);
   });
 
-  it("takes the newest of equally ranked sessions", () => {
-    expect(topStatus([session("old", "working", 1), { ...session("new", "starting", 2), prompt_on_launch: true }], NONE, NONE)).toBe("starting");
-    expect(topStatus([session("new", "working", 2), { ...session("old", "starting", 1), prompt_on_launch: true }], NONE, NONE)).toBe("working");
+  it("shows the actual status of the newest loading session", () => {
+    const starting = { ...session("starting", "starting", 2), prompt_on_launch: true };
+    const switching = { ...session("switching", "interrupted", 1), switching_account: true, has_conversation: true };
+    expect(topStatus([switching, starting], NONE, NONE)).toBe("starting");
+    expect(topStatus([starting, { ...switching, started_at: 3 }], NONE, NONE)).toBe("switching");
   });
 });
 
@@ -210,6 +208,25 @@ describe("a session whose process cannot be reached", () => {
     expect(topStatus([working, session("w", "working", 0)], NONE, NONE)).toBe("reconnecting");
     expect(topStatus([working], NONE, NONE)).toBe("reconnecting");
     expect(projectRank([working], NONE, NONE)).toBe(STATUS_RANK.working);
+  });
+
+  it.each(["queued", "active"] as const)("keeps the stored rank while reconnecting with an account switch (%s)", (switchState) => {
+    const reconnecting: Session = {
+      ...session("reconnecting", "idle", 1),
+      has_conversation: true,
+      holder_link: "pending",
+      switching_account: switchState === "active",
+    };
+    const queuedSwitches = switchState === "queued" ? new Set([reconnecting.id]) : NONE;
+    const working = session("working", "working", 2);
+    expect(projectRank([reconnecting], NONE, queuedSwitches)).toBe(STATUS_RANK.done);
+    expect(topStatus([working, reconnecting], NONE, queuedSwitches)).toBe("reconnecting");
+  });
+
+  it("keeps the loading rank for a starting session while it reconnects", () => {
+    const starting: Session = { ...session("starting", "starting", 1), holder_link: "pending" };
+    expect(projectRank([starting], NONE, NONE)).toBe(STATUS_RANK.loading);
+    expect(topStatus([starting], NONE, NONE)).toBe("reconnecting");
   });
 });
 
@@ -310,7 +327,7 @@ describe("boundSessionsArchivedWith", () => {
       session("other-owner", "working", 9, false, "elsewhere"),
       session("old-child", "archived", 10, false, "coordinator"),
     ];
-    expect(boundSessionsArchivedWith(sessions, "s-console", NONE, NONE).map((s) => s.id)).toEqual(["bound-live", "coordinator", "under-archived", "under-coordinator-live", "under-live", "under-coordinator"]);
+    expect(boundSessionsArchivedWith(sessions, "s-console", NONE, NONE).map((s) => s.id)).toEqual(["bound-live", "coordinator", "under-coordinator-live", "under-archived", "under-live", "under-coordinator"]);
   });
 });
 
@@ -707,45 +724,49 @@ describe("switchStrip", () => {
 });
 
 describe("STATUS_RANK", () => {
-  it("lists what wants a person first, then work elsewhere, then work, then no process, archived at the very end", () => {
+  it("lists loading between working and status unknown in the status order", () => {
     const byRank = (Object.keys(STATUS_RANK) as (keyof typeof STATUS_RANK)[]).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b]);
-    expect(byRank).toEqual(["waiting_user", "dormant", "paused", "done", "idle", "delegated", "background", "working", "unknown", "interrupted", "archived"]);
+    expect(byRank).toEqual(["waiting_user", "dormant", "paused", "done", "idle", "delegated", "background", "working", "loading", "unknown", "interrupted", "archived"]);
     expect(INACTIVE_PROJECT_RANK).toBe(STATUS_RANK.archived);
   });
 
-  it("orders sessions by the kind they show, a starting or switching one by the kind it will become", () => {
+  it("orders starting and switching sessions together by recency after working and before status unknown", () => {
+    const queued = { ...session("queued", "interrupted", 11), has_conversation: true };
     const sessions = [
       session("working", "working", 1),
       { ...session("background", "idle", 2), background_tasks: [{ id: "b" }] },
       session("delegating", "idle", 3),
       session("child", "working", 4, false, "delegating"),
       { ...session("switching", "idle", 5), switching_account: true },
-      { ...session("switching-done", "interrupted", 5), switching_account: true, has_conversation: true },
-      session("starting", "starting", 6),
+      { ...session("switching-done", "interrupted", 8), switching_account: true, has_conversation: true },
+      { ...session("starting", "starting", 6), prompt_on_launch: true },
       session("interrupted", "interrupted", 7),
       session("fresh", "idle", 8),
       { ...session("done", "idle", 9), has_conversation: true },
       session("waiting", "waiting_user", 10),
+      session("unknown", "from_a_newer_daemon", 12),
+      queued,
     ];
     const delegating = delegatingSessionIds(sessions);
-    expect(liveSessions(sessions, delegating, NONE).map((s) => s.id)).toEqual([
-      "waiting", "done", "switching-done", "fresh", "starting", "switching", "delegating", "background", "child", "working", "interrupted",
+    expect(liveSessions(sessions, delegating, new Set([queued.id])).map((s) => s.id)).toEqual([
+      "waiting", "done", "fresh", "delegating", "background", "child", "working",
+      "queued", "switching-done", "starting", "switching", "unknown", "interrupted",
     ]);
   });
 
-  it.each(["starting", "switching"] as const)("ranks a %s session as working with a prompt on launch, else done with a conversation, else idle", (kind) => {
+  it.each(["starting", "switching"] as const)("ranks a %s session as loading regardless of its prompt or conversation", (kind) => {
     const of = (extra: Partial<Session>): Session =>
       kind === "starting" ? { ...session("s", "starting", 1), ...extra } : { ...session("s", "interrupted", 1), switching_account: true, ...extra };
     const rankIn = (extra: Partial<Session>) => projectRank([of(extra)], NONE, NONE);
-    expect(rankIn({ compatibility: {}, prompt_on_launch: true, has_conversation: true })).toBe(STATUS_RANK.working);
-    expect(rankIn({ compatibility: {}, has_conversation: true })).toBe(STATUS_RANK.done);
-    expect(rankIn({ compatibility: {}, has_conversation: false })).toBe(STATUS_RANK.idle);
+    expect(rankIn({ prompt_on_launch: true, has_conversation: true })).toBe(STATUS_RANK.loading);
+    expect(rankIn({ has_conversation: true })).toBe(STATUS_RANK.loading);
+    expect(rankIn({ has_conversation: false })).toBe(STATUS_RANK.loading);
   });
 
   it("ranks and shows a session this window has queued for an account switch as switching, from the queue alone", () => {
     const queued = { ...session("queued", "interrupted", 1), has_conversation: true };
     const held = new Set([queued.id]);
-    expect(projectRank([queued], NONE, held)).toBe(STATUS_RANK.done);
+    expect(projectRank([queued], NONE, held)).toBe(STATUS_RANK.loading);
     expect(topStatus([queued], NONE, held)).toBe("switching");
     expect(projectRank([queued], NONE, NONE)).toBe(STATUS_RANK.interrupted);
     expect(topStatus([queued], NONE, NONE)).toBe("interrupted");

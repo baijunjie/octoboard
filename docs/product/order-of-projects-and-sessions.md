@@ -12,9 +12,7 @@ segments of projects (see "Choosing the sort" below). The rules below give each 
    then the **inactive** projects, which have none;
 2. within each segment, pinned projects first;
 3. then by the choice for that segment. For active projects:
-   - **Status**: by its most urgent unarchived session's status, in the status order below: a project with a session
-     waiting for the user, then one with a session dormant, paused, done, awaiting instructions, with child sessions
-     working, working in background, working, and last a project whose unarchived sessions are all interrupted;
+   - **Status**: by its most urgent unarchived session's status, in the status order below;
    - **Name**: this rule is skipped;
    - **Recently used**: by when its most recently started unarchived session started, the most recent first.
 
@@ -56,8 +54,8 @@ same order (see "The raised hand" in `docs/product/session-statuses.md`).
 
 ## The status order
 
-Sessions that need a person to act or look come first, and sessions busy working, best left undisturbed, come last;
-interrupted sessions come last of all. The statuses are those of "Session statuses" in
+Sessions that need a person to act or look come first. Working and loading sessions follow, then sessions whose
+status is unknown and interrupted sessions. The statuses are those of "Session statuses" in
 `docs/product/session-statuses.md`:
 
 1. waiting for the user;
@@ -68,28 +66,18 @@ interrupted sessions come last of all. The statuses are those of "Session status
 6. child sessions working;
 7. working in background;
 8. working;
-9. status unknown, a status a newer daemon gives that the window does not know (see "Status unknown" in
+9. starting and switching account, sharing one loading rank;
+10. status unknown, a status a newer daemon gives that the window does not know (see "Status unknown" in
    `docs/product/session-statuses.md`);
-10. interrupted.
+11. interrupted.
 
 Archived sessions are not in the lists this order ranks; they are listed separately.
 
-**Starting and switching account have no place of their own.** A session that is starting, or switching account, sorts
-with the status it will have once that is over:
+**Starting and switching account** share a rank, including switches still queued in the window that confirmed them.
+Among sessions tied at that rank, the most recently started comes first. Each session keeps its own status label.
 
-- with *working* when the launch will hand the agent a prompt: a new session opened with a task (a brief, an approved
-  session request's opening prompt, or the brief of a handoff), a relaunch that continues a turn after an account switch
-  or a change of model and effort, and a resume handed an instruction or a notice owed to the session as an owner;
-- otherwise with *done* when the session has a conversation;
-- otherwise with *awaiting instructions*.
-
-For an account switch or a change of model and effort, whether the relaunch continues a turn is decided only once the
-old process has stopped, so until then such a session sorts by whether it has a conversation. For a moment after its
-launch has finished, a session that was handed a prompt can read as at its prompt before its agent's first report moves
-it on to *working*, and sorts as such.
-
-**Reconnecting has no place of its own either.** A session shown as reconnecting (see "Which status a session shows" in
-`docs/product/session-statuses.md`) sorts with the status it stores.
+**Reconnecting** sorts by the session's stored status even while an account switch is under way (see "Which status a
+session shows" in `docs/product/session-statuses.md`).
 
 ## Choosing the sort
 

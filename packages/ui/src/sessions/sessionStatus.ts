@@ -97,9 +97,8 @@ export function sessionStatusKind(session: Pick<Session, "id" | "status" | "paus
 
 /** What a status glyph and label show: a `StatusKind`, or one of two kinds a session shows over its own status:
  * *switching account*, while an account switch holds it (`holdsAccountSwitch`), and *reconnecting*, while the daemon
- * cannot reach its process (`holdsPendingLink`) and the status it stores may be stale. Only what is drawn follows
- * them, and, for *reconnecting* alone, what counts a session as waiting for the user (`waitsForUser`); ordering and
- * the other decisions about a session go by `StatusKind`. */
+ * cannot reach its process (`holdsPendingLink`) and the status it stores may be stale. Account switches also affect
+ * status ordering. Reconnecting affects whether the session counts as waiting for the user (`waitsForUser`). */
 export type ShownStatusKind = StatusKind | "switching" | "reconnecting";
 
 /** Whether an account switch holds `session`: the daemon says one does (`Session.switching_account`), or an

@@ -104,9 +104,8 @@ While a session is shown as switching:
 - its sidebar row, focus mode card, breadcrumb and its entry in a confirmation's list of sessions show the *switching
   account* status in place of its own (see `docs/product/session-statuses.md`), except while its process cannot be
   reached, when they show *reconnecting* over both;
-- where sessions are ranked by status, it sorts with the status it will have once the switch is over — with *working*
-  once its relaunch is to continue its turn, otherwise with *done* or *awaiting instructions* by whether it has a
-  conversation (see "The status order" in `docs/product/order-of-projects-and-sessions.md`);
+- where sessions are ranked by status, it shares the loading rank with *starting*. If shown as *reconnecting* during
+  the switch, it ranks by its stored status (see "The status order" in `docs/product/order-of-projects-and-sessions.md`);
 - its terminal shows a cover with a turning arc and a message that the session is switching its account,
   whatever state its connection passes through meanwhile, and takes no input: no key reaches the session's process.
   The terminal offers no Resume. When the session stops being shown as switching, the cover gives way to whatever the

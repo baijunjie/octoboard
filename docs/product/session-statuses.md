@@ -11,7 +11,7 @@
 | Awaiting instructions | `idle`, with `has_conversation` false | a green speech bubble | The process is running and sitting at its prompt, and the session has never had a conversation: it waits for its first instruction. |
 | Child sessions working | `idle`, while a session under it is starting, working, waiting for the user, dormant or has work left running in the background | a hollow green ring with a filled green dot in its centre, pinging outward | The process is sitting at its prompt with nothing of its own left running, while work it delegated is in progress in the sessions under it. See "Done, awaiting instructions and child sessions working" below. |
 | Working in background | `idle`, with a non-empty `background_tasks` | a hollow green ring, pinging outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code and Grok Build sessions only; see "Working in background" below. |
-| Switching account | any status except `archived`, with `switching_account` true, or queued in this window's account switch | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). Shown in place of the session's own status, which it does not change; lists ranked by status sort it by the status it will have once the switch is over (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). |
+| Switching account | any status except `archived`, with `switching_account` true, or queued in this window's account switch | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). It appears in place of the session's stored status and shares the loading rank with *starting* (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). |
 | Reconnecting | `starting`, `working`, `waiting_user`, `dormant` or `idle`, with `holder_link` `pending` | an amber arc turning once every two seconds | The session's process still runs but Octoboard cannot reach it for now, and retries by itself (see "A holder that cannot be connected to" in `docs/product/process-holders.md`). Worked out by the client alone and shown in place of the session's own status and of *switching account*; the stored status, which may be out of date until the process is reached again, is unchanged, and lists ranked by status sort the session by it. |
 | Status unknown | any value the window does not know | a dashed empty circle in the muted grey | A status a daemon newer than the window gives the session. The session is still shown, and nothing is decided from its status. See "Status unknown" below. |
 | Interrupted | `interrupted` | a grey pause sign, with no circle | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
@@ -477,11 +477,10 @@ and nothing is decided from that status:
 A collapsed project's row and a console session's focus-mode switch-strip chip mark several sessions with their **top
 status**: the shown status, as "Which status a session shows" above gives it, of the session that comes first in the
 status order (see "The status order" in `docs/product/order-of-projects-and-sessions.md`), the most recently started
-breaking a tie. Archived sessions are left out. A session starting or switching account is ranked with the status it
-will have once that is over, but marked as starting or switching account. A session shown reconnecting is ranked with
-its stored status, so it never moves a group's top status up by itself, but is marked as reconnecting when it is the one
-chosen. The choice does not depend on pins, nor on the sort chosen in Settings (see "Choosing the sort" in
-`docs/product/order-of-projects-and-sessions.md`).
+breaking a tie. Archived sessions are left out. *Starting* and *switching account* share the loading rank, and the
+mark uses the chosen session's own label. A session shown as *reconnecting* ranks by its stored status, including
+during an account switch, and is marked as *reconnecting* when chosen. Pins and the sort chosen in Settings have no
+effect on the choice (see "Choosing the sort" in `docs/product/order-of-projects-and-sessions.md`).
 
 Every status but *archived* has its own glyph there, as "Status glyphs" above describes, so the mark always says exactly
 which status it is; there is a mark whenever any of the sessions is not archived. The accessible name of the row or

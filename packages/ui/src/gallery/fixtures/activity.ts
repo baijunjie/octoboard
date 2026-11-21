@@ -98,10 +98,8 @@ const markerState = switchingAccount(
   ["s-payments-1", "s-switching-1"],
 );
 
-// One session per status the sidebar draws, each titled by its status and started in the order they sort in.
-// Switching account and Starting sort where they will land: the first has had a conversation, so with Done;
-// the second launches with a prompt, so with Working (older than it, to follow it). The unknown one carries a status
-// this client has no name for, as a newer daemon would send, and ranks between Working and Interrupted.
+// Starting is newer than Switching account to show the start-time tie-break at their shared status rank.
+// The unknown session carries a status this client has no name for, as a newer daemon would send.
 const glyphConsole = consoleOf("c-glyphs", "Main");
 const glyphProject = projectOf("p-glyphs", glyphConsole.id, "Status glyphs");
 const glyphSessions = [
@@ -109,13 +107,13 @@ const glyphSessions = [
   sessionOf("s-glyph-dormant", glyphConsole.id, glyphProject.id, "Dormant", "dormant", { started_at: minutesAgo(15) }),
   sessionOf("s-glyph-paused", glyphConsole.id, glyphProject.id, "Paused", "idle", { started_at: minutesAgo(20), paused: true }),
   sessionOf("s-glyph-done", glyphConsole.id, glyphProject.id, "Done", "idle", { started_at: minutesAgo(25) }),
-  sessionOf("s-glyph-switching", glyphConsole.id, glyphProject.id, "Switching account", "idle", { started_at: minutesAgo(30) }),
   sessionOf("s-glyph-idle", glyphConsole.id, glyphProject.id, "Awaiting instructions", "idle", { started_at: minutesAgo(40), has_conversation: false }),
   sessionOf("s-glyph-delegated", glyphConsole.id, glyphProject.id, "Child sessions working", "idle", { started_at: minutesAgo(50) }),
   sessionOf("s-glyph-child", glyphConsole.id, glyphProject.id, "Watch the first paint build", "idle", { started_at: minutesAgo(5), bound_to: "s-glyph-delegated", background_tasks: watching.background_tasks }),
   sessionOf("s-glyph-background", glyphConsole.id, glyphProject.id, "Working in background", "idle", { started_at: minutesAgo(60), background_tasks: watching.background_tasks }),
   sessionOf("s-glyph-working", glyphConsole.id, glyphProject.id, "Working", "working", { started_at: minutesAgo(70) }),
-  sessionOf("s-glyph-starting", glyphConsole.id, glyphProject.id, "Starting", "starting", { started_at: minutesAgo(80), prompt_on_launch: true }),
+  sessionOf("s-glyph-starting", glyphConsole.id, glyphProject.id, "Starting", "starting", { started_at: minutesAgo(75), prompt_on_launch: true }),
+  sessionOf("s-glyph-switching", glyphConsole.id, glyphProject.id, "Switching account", "idle", { started_at: minutesAgo(80) }),
   sessionOf("s-glyph-unknown", glyphConsole.id, glyphProject.id, "Status unknown", "paused_for_review", { started_at: minutesAgo(85) }),
   sessionOf("s-glyph-interrupted", glyphConsole.id, glyphProject.id, "Interrupted", "interrupted", { started_at: minutesAgo(90) }),
 ];
@@ -138,7 +136,7 @@ export const activityScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Every session status glyph, side by side",
-    description: "One session per status, titled by its status and in the order the sidebar ranks them: Waiting for you (orange waving hand), Dormant (orange zz, Zs growing as they rise from the bottom left to the top right, or a still pair with the small Z at the bottom left and the large Z at the top right under reduced motion, between the hand and the green glyphs), Paused (green circled pause sign, ranked above Done), Done (green circled check mark), Awaiting instructions (green speech bubble), Child sessions working (pinging green ring with a dot in its centre; its only child, nested below, is idle with a watcher still running and shows Working in background, which is enough to read as delegated rather than Done), Working in background (pinging hollow green ring), Working (solid blue dot), Status unknown (muted dashed empty circle, a status a newer daemon sent that this client does not know; it is not counted as working) and Interrupted (grey pause). Switching account and Starting, both a grey turning arc, sort with the status they will reach: Switching account, which has had a conversation, follows Done; Starting, launching with a prompt, follows Working. Hover a glyph for its label.",
+    description: "One session per status, titled by its status and in the order the sidebar ranks them: Waiting for you (orange waving hand), Dormant (orange zz, Zs growing as they rise from the bottom left to the top right, or a still pair with the small Z at the bottom left and the large Z at the top right under reduced motion, between the hand and the green glyphs), Paused (green circled pause sign, ranked above Done), Done (green circled check mark), Awaiting instructions (green speech bubble), Child sessions working (pinging green ring with a dot in its centre; its only child, nested below, is idle with a watcher still running and shows Working in background, which is enough to read as delegated rather than Done), Working in background (pinging hollow green ring), Working (solid blue dot), Starting and Switching account (grey turning arcs), Status unknown (muted dashed empty circle, a status from a newer daemon) and Interrupted (grey pause). Starting and Switching account share a rank, so the newer Starting session comes first. Hover a glyph for its label.",
     state: glyphState,
   },
   {
@@ -146,7 +144,7 @@ export const activityScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Collapsed project statuses and rail session counts",
-    description: "Collapsed project rows retain every status glyph, while avatar badges show only Waiting for you, Paused, Done and Awaiting instructions by priority. Main's tooltip starts open: its name sits above a divider and a two-column list, with muted status labels at the start and numeric counts aligned at the end. The rows have no icons or coloured chips. Its two waiting sessions include one console session and one project session; its two Done sessions and the remaining project sessions demonstrate grouping by displayed status, including Dormant, Child sessions working, Working in background, Starting, Switching account and Interrupted. The collapsed Integrations row shows the compact amber Reconnecting arc. Archived project and console sessions are excluded. The avatar's accessible name carries the same counts once. Focus or hover another avatar to compare: consoles without an eligible avatar badge still show all their session counts in their tooltips. Ready is the last avatar, with a complete green speech-bubble badge outside its button; scroll to the bottom at a short window height to check that the badge stays clear of the scroller's edge. The pinned Archived only and No sessions yet projects remain dimmed and folded after the active projects; expand from Projects to open only the twelve active projects.",
+    description: "Collapsed project rows retain every status glyph, while avatar badges show only Waiting for you, Paused, Done and Awaiting instructions by priority. Main's tooltip starts open: its name sits above a divider and a two-column list, with muted status labels at the start and numeric counts aligned at the end. The rows have no icons or coloured chips. Its two waiting sessions include one console session and one project session; its two Done sessions and the remaining project sessions demonstrate grouping by displayed status, including Dormant, Child sessions working, Working in background, Starting, Switching account and Interrupted. The collapsed Integrations row shows the compact amber Reconnecting arc. Onboarding (Starting) and Payments (Switching account) share a rank, so they appear by name after the Working projects and before interrupted Docs. Archived project and console sessions are excluded. The avatar's accessible name carries the same counts once. Focus or hover another avatar to compare: consoles without an eligible avatar badge still show all their session counts in their tooltips. Ready is the last avatar, with a complete green speech-bubble badge outside its button; scroll to the bottom at a short window height to check that the badge stays clear of the scroller's edge. The pinned Archived only and No sessions yet projects remain dimmed and folded after the active projects; expand from Projects to open only the twelve active projects.",
     state: markerState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.collapseAll")),
