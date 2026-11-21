@@ -10,6 +10,8 @@ use serde_json::json;
 const CLAUDE_REPLY: &str = include_str!("../../../../testdata/claude_get_usage_reply.json");
 const CODEX_REPLY: &str = include_str!("../../../../testdata/codex_rate_limits_reply.json");
 const GROK_REPLY: &str = include_str!("../../../../testdata/grok_billing_reply.json");
+const GROK_REPLY_PERIOD_UNUSED: &str =
+    include_str!("../../../../testdata/grok_billing_reply_period_unused.json");
 
 /// Long enough for a fake agent to start on a loaded machine, short enough to wait out.
 const SHORT: Duration = Duration::from_millis(700);
@@ -664,6 +666,67 @@ fn a_grok_pool_without_a_period_still_reads() {
     assert_eq!(reading.plan, None);
     assert_eq!(reading.windows[0].resets_at, None);
     assert_eq!(reading.windows[0].window_minutes, None);
+}
+
+#[test]
+fn a_grok_period_with_nothing_used_reads_as_zero_percent() {
+    // Grok Build 1.0.92, right after a weekly reset: the percent is left out, the period is there.
+    let dir = ScratchDir::new("quota-grok-unused");
+    let env = answering_agent(&dir, AgentId::GROK, GROK_REPLY_PERIOD_UNUSED);
+    let reading = probe(
+        AgentId::GROK,
+        &env,
+        None,
+        crate::test_support::PATIENCE,
+        &AtomicBool::new(false),
+        &mut ProbeTrace::default(),
+    )
+    .expect("a readable reply");
+    assert_eq!(reading.plan.as_deref(), Some("SuperGrok Lite"));
+    assert_eq!(
+        reading.windows,
+        [QuotaWindow {
+            kind: QuotaWindowKind::CreditPeriod,
+            label: None,
+            used_percent: 0.0,
+            resets_at: Some(1_795_708_297_667),
+            window_minutes: Some(10080),
+        }]
+    );
+}
+
+#[test]
+fn a_grok_reply_without_a_percent_or_a_period_is_unreadable() {
+    for config in [
+        json!({}),
+        json!({"currentPeriod": null}),
+        json!({"currentPeriod": "weekly"}),
+    ] {
+        let reply = json!({"jsonrpc": "2.0", "id": 2, "result": {
+            "config": config, "subscription_tier": "SuperGrok"}});
+        assert_eq!(
+            read_grok(&reply, None),
+            Err(ReplyProblem::Unreadable),
+            "{reply}"
+        );
+    }
+}
+
+#[test]
+fn a_grok_percent_that_is_not_a_number_is_unreadable_even_with_a_period() {
+    for percent in [json!("12.5"), json!(null), json!({"val": 1}), json!(true)] {
+        let reply = json!({"jsonrpc": "2.0", "id": 2, "result": {
+            "config": {
+                "creditUsagePercent": percent,
+                "currentPeriod": {
+                    "start": "2026-11-19T15:51:37.667+00:00",
+                    "end": "2026-11-26T15:51:37.667+00:00"}}}});
+        assert_eq!(
+            read_grok(&reply, None),
+            Err(ReplyProblem::Unreadable),
+            "{reply}"
+        );
+    }
 }
 
 #[test]

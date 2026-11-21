@@ -2693,7 +2693,8 @@ Write ACP (JSON-RPC) lines. The method name's **leading underscore is required**
 
 The server sends notifications of its own in between (`_x.ai/mcp/servers_updated`). The reply to id 2 is
 `{"jsonrpc":"2.0","id":2,"result":{"config":{...},"subscription_tier":"SuperGrok"}}`, with `config.creditUsagePercent`
-(a float, `100.0` on the measured account), `config.currentPeriod` `{type:"USAGE_PERIOD_TYPE_WEEKLY", start, end}`
+(a float, `100.0` on the measured account; left out altogether while nothing of the current period is used, as
+measured right after a weekly reset), `config.currentPeriod` `{type:"USAGE_PERIOD_TYPE_WEEKLY", start, end}`
 (ISO 8601), and spend fields (`onDemandCap`, `onDemandUsed`, `prepaidBalance`) that are not a quota window. There is
 one credit pool, not a session and a weekly window.
 

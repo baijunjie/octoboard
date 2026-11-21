@@ -157,13 +157,18 @@ pub(crate) fn read_grok(
             .and_then(parse_rfc3339_millis)
     };
     let (start, end) = (bound("start"), bound("end"));
+    // Right after a period resets the reply leaves `creditUsagePercent` out
+    // (`docs/agent-cli-reference.md`, "Plan quota"); a `currentPeriod` object is what still marks
+    // it as a billing reading.
+    let used_percent = match config.get("creditUsagePercent") {
+        Some(percent) => percent.as_f64().ok_or(ReplyProblem::Unreadable)?,
+        None if period.is_some_and(Value::is_object) => 0.0,
+        None => return Err(ReplyProblem::Unreadable),
+    };
     let window = QuotaWindow {
         kind: QuotaWindowKind::CreditPeriod,
         label: None,
-        used_percent: config
-            .get("creditUsagePercent")
-            .and_then(Value::as_f64)
-            .ok_or(ReplyProblem::Unreadable)?,
+        used_percent,
         resets_at: end,
         window_minutes: start
             .zip(end)

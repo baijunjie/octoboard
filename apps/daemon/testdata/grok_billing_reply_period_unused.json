@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":2,"result":{"config":{"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","start":"2026-11-19T15:51:37.667+00:00","end":"2026-11-26T15:51:37.667+00:00"},"prepaidBalance":{"val":0},"isUnifiedBillingUser":true,"billingPeriodStart":"2026-11-19T15:51:37.667+00:00","billingPeriodEnd":"2026-11-26T15:51:37.667+00:00"},"subscription_tier":"SuperGrok Lite"}}
