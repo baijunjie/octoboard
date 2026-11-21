@@ -1191,7 +1191,8 @@ async fn handle_inner(
             Ok(None)
         }
 
-        // An approval is answered with the session it started, a refusal with an ack.
+        // An approval is answered with the session it started or moved, a refusal, and an approval
+        // of a scheduled task change (which starts no session), with an ack.
         RequestBody::AnswerSessionRequest {
             request_id: asked,
             approve,
@@ -1223,6 +1224,7 @@ async fn handle_inner(
             auto_approve_resume_requests,
             auto_approve_account_switches,
             auto_approve_handoffs,
+            auto_approve_scheduled_task_changes,
             ask_questions_as_choices,
             keep_sessions_in_own_project,
             memory_enabled,
@@ -1250,6 +1252,7 @@ async fn handle_inner(
                     auto_approve_resume_requests,
                     auto_approve_account_switches,
                     auto_approve_handoffs,
+                    auto_approve_scheduled_task_changes,
                     ask_questions_as_choices,
                     keep_sessions_in_own_project,
                     memory_enabled,

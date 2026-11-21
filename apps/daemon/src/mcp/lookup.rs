@@ -249,26 +249,42 @@ pub(super) fn console_accounts_argument(
 
 /// The account `wanted` names for `agent` — `default` for the agent's default account (`None`),
 /// else an id or a name among that agent's accounts. Another agent's account is refused here as an
-/// unknown one, which is what it is for this agent.
+/// unknown one, which is what it is for this agent. Where the agent is not known yet (`None`, a
+/// launch that leaves it to the project), the accounts of every agent are searched, and a name that
+/// fits accounts of several agents is refused, asking for the id or the agent.
 pub(super) fn resolve_account(
     state: &Arc<AppState>,
-    agent: AgentId,
+    agent: impl Into<Option<AgentId>>,
     wanted: &str,
 ) -> Result<Option<String>> {
+    let agent = agent.into();
     let wanted = wanted.trim();
     if wanted.eq_ignore_ascii_case("default") {
         return Ok(None);
     }
     let key = crate::accounts::account_name_key(wanted);
     let accounts = state.store.list_accounts()?;
-    let of_agent = || accounts.iter().filter(|account| account.agent == agent);
-    of_agent()
-        .find(|account| account.id == wanted)
-        .or_else(|| {
-            of_agent().find(|account| crate::accounts::account_name_key(&account.name) == key)
-        })
-        .map(|account| Some(account.id.clone()))
-        .ok_or_else(|| CodedError::unknown_account(wanted))
+    let candidates = || {
+        accounts
+            .iter()
+            .filter(|account| agent.is_none_or(|agent| account.agent == agent))
+    };
+    if let Some(account) = candidates().find(|account| account.id == wanted) {
+        return Ok(Some(account.id.clone()));
+    }
+    let named: Vec<_> = candidates()
+        .filter(|account| crate::accounts::account_name_key(&account.name) == key)
+        .collect();
+    match named.as_slice() {
+        [one] => Ok(Some(one.id.clone())),
+        [] => Err(CodedError::unknown_account(wanted)),
+        // With an agent, names are unique among its accounts; without one they may not be.
+        [first, ..] if agent.is_some() => Ok(Some(first.id.clone())),
+        _ => bail!(
+            "the account `{wanted}` names accounts of several agents; name the agent too, or use \
+             the account's id"
+        ),
+    }
 }
 
 /// The `compatibility` argument of a tool that takes a model and effort: an object of compatibility
@@ -443,13 +459,17 @@ pub(super) fn find_console(state: &Arc<AppState>, wanted: &str) -> Result<Consol
     }
 }
 
-/// The project an unbound project session starts sessions in: its own, always. A `project` it
-/// names must be that one, by id or by name, so a call aimed at another project is refused rather
-/// than quietly run in this one.
+/// What [`own_project`] words a refusal with where the caller starts sessions.
+pub(super) const START_ONLY_IN: &str = "start sessions only in";
+
+/// The project an unbound project session works in: its own, always. A `project` it names must be
+/// that one, by id or by name, so a call aimed at another project is refused rather than quietly
+/// run in this one. `allowed` words what it may do there, "start sessions only in" or the like.
 pub(super) fn own_project(
     state: &Arc<AppState>,
     caller: &Session,
     named: Option<String>,
+    allowed: &str,
 ) -> Result<Project> {
     let project = caller
         .project_id
@@ -461,7 +481,7 @@ pub(super) fn own_project(
     if let Some(named) = named {
         if named != project.id && named != project.name {
             bail!(
-                "you can start sessions only in your own project, `{}` (\"{}\"), not in `{named}`",
+                "you can {allowed} your own project, `{}` (\"{}\"), not `{named}`",
                 project.id,
                 project.name
             );

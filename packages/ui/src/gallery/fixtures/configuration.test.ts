@@ -85,6 +85,7 @@ it("reports the setting this machine has now as the scenario's own state has it"
     expect(settings.current_auto_approve_resume_requests, id).toBe(machine!.auto_approve_resume_requests ?? false);
     expect(settings.current_auto_approve_account_switches, id).toBe(machine!.auto_approve_account_switches ?? false);
     expect(settings.current_auto_approve_handoffs, id).toBe(machine!.auto_approve_handoffs ?? false);
+    expect(settings.current_auto_approve_scheduled_task_changes, id).toBe(machine!.auto_approve_scheduled_task_changes ?? false);
     expect(settings.current_git_workflow, id).toEqual(machine!.git_workflow);
     expect(settings.current_default_clone_dir, id).toBe(machine!.default_clone_dir);
   }

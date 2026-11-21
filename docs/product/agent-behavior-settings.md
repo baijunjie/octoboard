@@ -1,15 +1,15 @@
 # Agent behavior settings
 
 Settings' **Agent behavior** section (see "Agent behavior" in `docs/product/settings.md`): what a session may do
-without asking the user first, and how it asks the user. A paragraph under the heading says as much, above six rows:
+without asking the user first, and how it asks the user. A paragraph under the heading says as much, above seven rows:
 **Automatically approve session requests**, **Automatically approve resume requests**, **Automatically approve account
-switches**, **Automatically approve handoffs**, **Ask questions as choices**, then **Keep sessions to their own
-project**. The section is the same in every
+switches**, **Automatically approve handoffs**, **Automatically approve scheduled task changes**, **Ask questions as
+choices**, then **Keep sessions to their own project**. The section is the same in every
 client. Each switch is kept by the daemon, so every window shows the same, and besides its row only an import asked to
 apply a configuration document's Agent behavior section changes it (see "The application settings an export carries"
 in `docs/product/settings-in-a-configuration.md`); turning one on or off leaves the others as they are. How the
 switches save is in "How switches save" in `docs/product/settings.md`. What an automatic approval does, what turning
-one of the four approval switches on changes, and why agents cannot change any of them are in "Approving requests
+one of the five approval switches on changes, and why agents cannot change any of them are in "Approving requests
 automatically" in `docs/product/session-requests.md`.
 
 ## Automatically approve session requests
@@ -41,6 +41,15 @@ session of another agent, is made without asking the user (see "The user's appro
 `docs/product/handing-off-sessions.md`). While the switch is off the row's description says that, once it is on, a
 session can do so without asking first; while it is on, it says that a session can do so without asking first. The Hand
 off the user makes from the window is not affected.
+
+## Automatically approve scheduled task changes
+
+A switch, **off to begin with**: whether a console session's or project coordinator's call of a scheduled task tool
+that writes — creating, changing, turning on or off, deleting or running a scheduled task — is carried out without
+asking the user (see "The user's approval of a session's task change" in `docs/product/scheduled-tasks.md`). While the
+switch is off the row's description says that, once it is on, a session can do so without asking first; while it is
+on, it says that a session can do so without asking first. The daemon stores it as
+`auto_approve_scheduled_task_changes`. What the user does on the Scheduled tasks page is not affected.
 
 ## Ask questions as choices
 

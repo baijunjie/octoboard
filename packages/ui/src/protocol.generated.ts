@@ -1917,6 +1917,7 @@ export type DocumentSettings = {
   auto_approve_resume_requests?: boolean,
   auto_approve_account_switches?: boolean,
   auto_approve_handoffs?: boolean,
+  auto_approve_scheduled_task_changes?: boolean,
   ask_questions_as_choices?: boolean,
   keep_sessions_in_own_project?: boolean,
   /**
@@ -2277,22 +2278,26 @@ export type Event = {
   action: Received<SessionRequestAction>,
   /**
    * Whether the session asked for would be a console session or a project session; for
-   * `switch` and `handoff`, which the target is.
+   * `switch` and `handoff`, which the target is; for the scheduled task actions, which
+   * session the task starts (a task's target after the change).
    */
   kind: Received<SessionKind>,
   /**
    * The console the new session would be in, or the console of the session to bring back,
-   * switch or hand off.
+   * switch or hand off; for the scheduled task actions, the task's console after the change.
    */
   console: string,
   /**
    * The project the new session would be in, or the project of the session to bring back,
-   * switch or hand off; null for a console session.
+   * switch or hand off; null for a console session; for the scheduled task actions, the
+   * task's project after the change, null for a console task.
    */
   project: string | null,
   /**
    * The agent the new session would run, or the agent of the session to bring back or
-   * switch; for `handoff`, the receiving agent.
+   * switch; for `handoff`, the receiving agent; for the scheduled task actions, the agent
+   * the task names, else the requesting session's own, which carries no more meaning than
+   * that for them.
    */
   agent: Agent,
   /**
@@ -2340,6 +2345,19 @@ export type Event = {
   compatibility: {
     [key in string]: boolean
   },
+  /**
+   * For the scheduled task actions: what the call asks for (see `ScheduledTaskAsked`).
+   * Left out for every other action.
+   */
+  scheduled_task?: ScheduledTaskAsked,
+  /**
+   * The text the requesting agent wrote for the request, verbatim: for `start`, its brief
+   * as handed to the new session; for `handoff`, its note to the receiving session; for
+   * `create_scheduled_task`, the task's prompt; for `update_scheduled_task`, the new
+   * prompt when the call changes it. Left out where there is none (the other actions, and
+   * a tool call that carries no such text).
+   */
+  prompt?: string,
   /**
    * Milliseconds since the epoch, which is what orders several requests oldest first.
    */
@@ -3313,6 +3331,8 @@ export type InspectedSettings = {
   current_auto_approve_account_switches: boolean,
   auto_approve_handoffs: boolean,
   current_auto_approve_handoffs: boolean,
+  auto_approve_scheduled_task_changes: boolean,
+  current_auto_approve_scheduled_task_changes: boolean,
   ask_questions_as_choices: boolean,
   current_ask_questions_as_choices: boolean,
   keep_sessions_in_own_project: boolean,
@@ -5227,6 +5247,7 @@ export type Request = {
   auto_approve_resume_requests?: boolean,
   auto_approve_account_switches?: boolean,
   auto_approve_handoffs?: boolean,
+  auto_approve_scheduled_task_changes?: boolean,
   ask_questions_as_choices?: boolean,
   keep_sessions_in_own_project?: boolean,
   memory_enabled?: boolean,
@@ -6389,6 +6410,7 @@ export type RequestBody = {
   auto_approve_resume_requests?: boolean,
   auto_approve_account_switches?: boolean,
   auto_approve_handoffs?: boolean,
+  auto_approve_scheduled_task_changes?: boolean,
   ask_questions_as_choices?: boolean,
   keep_sessions_in_own_project?: boolean,
   memory_enabled?: boolean,
@@ -6890,6 +6912,36 @@ export type ScheduledTask = {
 };
 
 /**
+ * What a `session_request` for a scheduled task change asks for, in the event's `scheduled_task`
+ * field. Every field is left out where the request does not carry it, so a client reads only
+ * what is there; the task's prompt is the event's own `prompt`, since it is text an agent wrote.
+ */
+export type ScheduledTaskAsked = {
+  /**
+   * The task an approval changes, enables, disables, deletes or runs; left out for a task to
+   * create.
+   */
+  task?: string,
+  /**
+   * For a create, the launch settings the task would be saved with; for an update, present
+   * only when the call changes launch settings, and then the whole launch as it would be saved
+   * (the settings the call left out stay as the task holds them). Its `title` is the task's
+   * name.
+   */
+  launch?: ScheduledTaskLaunch,
+  /**
+   * For a create, the schedule the task would be saved with; for an update, present only when
+   * the call changes the schedule.
+   */
+  schedule?: Schedule,
+  /**
+   * For a create, whether the task would be saved on; for `set_scheduled_task_enabled`, what it
+   * is set to; left out otherwise.
+   */
+  enabled?: boolean,
+};
+
+/**
  * The launch settings of a scheduled task's session, with the rules `open_session` gives the same
  * fields: each is checked as `open_session` checks it when the task is saved, and read again at
  * every run.
@@ -7254,7 +7306,7 @@ export type SessionRecordPresence = "present" | "absent" | "unknown";
 /**
  * What approving a `session_request` does.
  */
-export type SessionRequestAction = "start" | "reopen" | "resume" | "resume_record" | "switch" | "handoff";
+export type SessionRequestAction = "start" | "reopen" | "resume" | "resume_record" | "switch" | "handoff" | "create_scheduled_task" | "update_scheduled_task" | "set_scheduled_task_enabled" | "delete_scheduled_task" | "run_scheduled_task";
 
 /**
  * Why a `session_request` stopped waiting.
@@ -7360,6 +7412,13 @@ export type Settings = {
    * approvals. Off unless the user turned it on; only the user's own client changes it.
    */
   auto_approve_handoffs: boolean,
+  /**
+   * Whether an agent's calls that create, change, enable, disable, delete or run a scheduled
+   * task run without asking the user, as `auto_approve_session_requests` does for
+   * `request_session`, independently of the other approvals. Off unless the user turned it on;
+   * only the user's own client changes it.
+   */
+  auto_approve_scheduled_task_changes: boolean,
   /**
    * Whether the instructions given to every session at launch ask it to put each question that
    * needs the user's decision or answer as options to pick from. On unless the user turned it

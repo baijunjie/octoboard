@@ -30,7 +30,10 @@ repository, held to the caller's own console (see "Reading a project's changes" 
 `get_console` and `get_settings` are the console session's (see "The console session's tools" in
 `docs/product/hub-orchestration.md`) — and `list_pages`, the read of the report panel pages the caller pushed itself,
 offered with the other report panel tools to a console session and to a project coordinator (see "Reading back the pages
-pushed" in `docs/product/report-panel.md`). What a session may do to another is narrower too (see "Which sessions an
+pushed" in `docs/product/report-panel.md`), and the reads of scheduled tasks, `list_scheduled_tasks` and
+`list_scheduled_task_runs`, offered with the tools that change them to a console session, for its console's tasks, and to
+a project coordinator, for its own project's (see "The scheduled task tools" in `docs/product/scheduled-tasks.md`). What
+a session may do to another is narrower too (see "Which sessions an
 owner drives" in `docs/product/hub-orchestration.md`). The tool descriptions, the console session's instructions and
 every project session's role description tell it that a session it does not own is somebody else's and is to be left
 alone, whatever it can read of it.

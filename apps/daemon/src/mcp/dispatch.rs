@@ -36,7 +36,8 @@ use super::tools::sessions::{
 use super::tools::settings::add_project;
 use super::tools::{
     account_switch, agents, bindings, handoff, history, memory, models, pages, project_branches,
-    project_changes, reads, resume_request, session_branches, session_model, settings, transfer,
+    project_changes, reads, resume_request, scheduled_tasks, session_branches, session_model,
+    settings, transfer,
 };
 
 /// Runs one tool call. The `Err` case is what the model is shown as the reason the call failed, so
@@ -173,6 +174,25 @@ async fn dispatch(
         "request_session" => request_session(state, &session, arguments).await,
         "request_resume_session" => {
             resume_request::request_resume_session(state, &session, arguments).await
+        }
+        "list_scheduled_tasks" => scheduled_tasks::list_scheduled_tasks(state, &session),
+        "list_scheduled_task_runs" => {
+            scheduled_tasks::list_scheduled_task_runs(state, &session, arguments)
+        }
+        "create_scheduled_task" => {
+            scheduled_tasks::create_scheduled_task(state, &session, arguments).await
+        }
+        "update_scheduled_task" => {
+            scheduled_tasks::update_scheduled_task(state, &session, arguments).await
+        }
+        "set_scheduled_task_enabled" => {
+            scheduled_tasks::set_scheduled_task_enabled(state, &session, arguments).await
+        }
+        "delete_scheduled_task" => {
+            scheduled_tasks::delete_scheduled_task(state, &session, arguments).await
+        }
+        "run_scheduled_task" => {
+            scheduled_tasks::run_scheduled_task(state, &session, arguments).await
         }
         // Unreachable while the catalogue and this dispatch agree; a tool added to one and not the
         // other should say so rather than look like a refusal.

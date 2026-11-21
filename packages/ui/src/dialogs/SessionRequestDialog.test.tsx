@@ -12,6 +12,7 @@ import type { SessionRequest, TrustPrompt } from "../store";
 import { press } from "../components/alerts/detailsTestSupport";
 import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
 import { fakeTimers } from "../test/clock";
+import { scheduledTaskOf } from "../fixtures/scheduledTaskBuilders";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -711,4 +712,184 @@ it("a refusal that fails keeps the dialog's failure title", async () => {
   const dialog = mount(() => Promise.reject(failure));
   await pressButton("Refuse");
   expect(dialog.alerts()).toEqual([{ error: failure, title: "Could not refuse the request", session: "s-1" }]);
+});
+
+// A request for a scheduled task is a plain confirmation: the title and button say what it does, the sentence names the
+// task as the Scheduled tasks page does and where it starts its sessions, and an approval carries nothing of a form.
+const saved = scheduledTaskOf("t-1", "c-1", { project_id: "p-1", launch: { title: "Morning report", compatibility: {} } });
+const taskRequest = (extra: object): SessionRequest => ({ ...request, requestId: "r-task", ...extra }) as SessionRequest;
+const mountTask = (asked: SessionRequest, extra: Parameters<typeof mountPendingQuestionDialog>[0] = {}, reply = ack) => mountPendingQuestionDialog({
+  ...snapshotState({}),
+  ...names,
+  scheduledTasks: new Map([[saved.id, saved]]),
+  scheduledTasksZone: "UTC",
+  sessionRequests: [asked],
+  ...extra,
+}, reply);
+
+it.each([
+  { action: "update_scheduled_task", title: "Change a scheduled task?", confirm: "Change task", text: "asks to change the scheduled task Morning report. It would start a session in the project Shop of the console Main." },
+  { action: "delete_scheduled_task", title: "Delete a scheduled task?", confirm: "Delete task", text: "asks to delete the scheduled task Morning report, which starts a session in the project Shop of the console Main." },
+  { action: "run_scheduled_task", title: "Run a scheduled task?", confirm: "Run now", text: "asks to run the scheduled task Morning report now." },
+  { action: "set_scheduled_task_enabled", enabled: true, title: "Enable a scheduled task?", confirm: "Enable task", text: "asks to enable the scheduled task Morning report, which starts" },
+  { action: "set_scheduled_task_enabled", enabled: false, title: "Disable a scheduled task?", confirm: "Disable task", text: "asks to disable the scheduled task Morning report, which starts" },
+])("a request to $action names the task and what it starts, and approves with no edits", async ({ title, confirm, text, ...asked }) => {
+  const dialog = mountTask(taskRequest({ ...asked, task: "t-1" }));
+  expect(document.body.querySelector("[role=alertdialog] [slot=title]")?.textContent).toBe(title);
+  expect(dialogText()).toContain(text);
+  expect(findButton("Refuse")).toBeDefined();
+  await pressButton(confirm);
+  expect(dialog.sent()).toEqual([{ type: "answer_session_request", request_id: "r-task", approve: true }]);
+  // The reply of an approval is an ack with no session, which is a success: nothing is raised.
+  expect(dialog.alerts()).toEqual([]);
+});
+
+it("a delete is marked as destructive", () => {
+  mountTask(taskRequest({ action: "delete_scheduled_task", task: "t-1" }));
+  expect(findButton("Delete task")!.className).toMatch(/danger/);
+});
+
+it.each([
+  { action: "update_scheduled_task", confirm: "Change task" },
+  { action: "run_scheduled_task", confirm: "Run now" },
+  { action: "set_scheduled_task_enabled", confirm: "Enable task" },
+])("a $action is not marked as destructive", ({ action, confirm }) => {
+  mountTask(taskRequest({ action, task: "t-1", enabled: true }));
+  expect(findButton(confirm)!.className).not.toMatch(/danger/);
+});
+
+it("a delete says the task will not run again and the sessions it started stay", () => {
+  mountTask(taskRequest({ action: "delete_scheduled_task", task: "t-1" }));
+  expect(dialogText()).toContain("It will not run again. Sessions it already started stay as they are.");
+});
+
+it("refusing a task request sends the refusal and no edits", async () => {
+  const dialog = mountTask(taskRequest({ action: "delete_scheduled_task", task: "t-1" }));
+  await pressButton("Refuse");
+  expect(dialog.sent()).toEqual([{ type: "answer_session_request", request_id: "r-task", approve: false }]);
+});
+
+it.each([
+  { label: "an approval that fails", failure: new CodedError("could not run", "launch_failed", { session: "other" }), title: "Could not approve the request" },
+  { label: "an approval that finds the session no longer waiting", failure: new CodedError("no longer waiting", CODE.session_request_not_waiting, { session: "s-1" }), title: "Could not approve the request" },
+])("a task request's $label raises the notification other requests raise, about the requesting session", async ({ failure, title }) => {
+  const dialog = mountTask(taskRequest({ action: "run_scheduled_task", task: "t-1" }), {}, () => Promise.reject(failure));
+  await pressButton("Run now");
+  expect(dialog.alerts()).toEqual([{ error: failure, title, session: "s-1" }]);
+});
+
+it("a task request reads none of what a session request's sentence does, even where the event carries branches", () => {
+  mountTask(taskRequest({ action: "run_scheduled_task", task: "t-1", branches: ["feat/a"] }));
+  expect(dialogText()).not.toContain("would report to you");
+  expect(dialogText()).not.toContain("feat/a");
+});
+
+it("an update whose launch names nothing lists nothing", () => {
+  mountTask(taskRequest({ action: "update_scheduled_task", task: "t-1", launch: { compatibility: {} } }));
+  expect(dialogText()).toContain("It would change the launch settings.");
+  expect(document.body.querySelector("[role=alertdialog] dl")).toBeNull();
+});
+
+it("names nothing of the agent the event carries, which means nothing for a task request", () => {
+  mountTask(taskRequest({ action: "update_scheduled_task", task: "t-1", agent: "claude", prompt: "New prompt" }));
+  expect(dialogText()).not.toMatch(/claude|codex/i);
+  expect(document.querySelector("[data-inline-reference] [class*=provider]")).toBeNull();
+});
+
+it("a task the window does not know, and a console the task starts in, are named as the start dialog names them", () => {
+  mountTask(taskRequest({ action: "run_scheduled_task", task: "t-gone", kind: "console", project: null }));
+  expect(dialogText()).toContain("asks to run the scheduled task t-gone now. It would start a console session in the console Main.");
+});
+
+const create = {
+  action: "create_scheduled_task",
+  prompt: "Check the dependencies\nand open a PR",
+  launch: { title: "Dependency check", agent: "claude", account: "a-two", model: "claude-opus-5-5", effort: "high", bound_to: "s-held", compatibility: {} },
+  schedule: { kind: "daily", time: { hour: 9, minute: 30 } },
+  enabled: false,
+};
+
+it("a create names the task by its launch title and lists the schedule and the launch settings it names", () => {
+  mountTask(taskRequest(create), { sessions: new Map([[owned.id, owned]]), settings: { ...snapshotState({}).settings!, accounts: claudeAccounts } });
+  expect(dialogText()).toContain("asks to create the scheduled task Dependency check.");
+  expect(dialogText()).toContain("RunsEvery day at 9:30 AM");
+  expect(dialogText()).toContain("EnabledOff");
+  expect(dialogText()).toContain("AgentClaude Code");
+  expect(dialogText()).toContain("AccountTwo");
+  expect(dialogText()).toContain("ModelOpus 5.5");
+  expect(dialogText()).toContain("Reasoning efforthigh");
+  expect(dialogText()).toContain("Report toOld work");
+  // Each value stands alone in its row, so none of them is a chip.
+  expect(document.querySelectorAll("dl [data-inline-reference]")).toHaveLength(0);
+});
+
+it("a create lists the compatibility switches its launch holds, named as the provider names them, an unknown one by its id", () => {
+  mountTask(taskRequest({ ...create, launch: { agent: "codex", account: "a-gone", compatibility: { from_a_newer_daemon: false, claude_compatibility: true } } }));
+  expect(dialogText()).toContain("Claude compatibility for CodexOn");
+  expect(dialogText()).toContain("from_a_newer_daemonOff");
+  // The declared switch comes first, then the one the provider does not declare; ids stand as plain code, with no chip.
+  expect(dialogText().indexOf("Claude compatibility")).toBeLessThan(dialogText().indexOf("from_a_newer_daemon"));
+  expect([...document.querySelectorAll("dl .font-mono")].map((id) => id.textContent)).toEqual(["a-gone", "from_a_newer_daemon"]);
+  expect(document.querySelectorAll("dl [data-inline-reference]")).toHaveLength(0);
+});
+
+it("an update that carries no launch lists no compatibility switch", () => {
+  mountTask(taskRequest({ action: "update_scheduled_task", task: "t-1", prompt: "New prompt" }));
+  expect(dialogText()).not.toContain("compatibility");
+});
+
+it("a create without a title is named by the first line of its prompt and lists no setting it leaves open", () => {
+  mountTask(taskRequest({ ...create, launch: { compatibility: {} } }));
+  expect(dialogText()).toContain("asks to create the scheduled task Check the dependencies.");
+  expect(dialogText()).not.toContain("Model");
+  expect(dialogText()).not.toContain("Account");
+});
+
+it("an update says which parts change and lists their new values only", () => {
+  mountTask(taskRequest({ action: "update_scheduled_task", task: "t-1", prompt: "New prompt", schedule: { kind: "manual" }, console: "c-1", project: null }));
+  expect(dialogText()).toContain("It would change the prompt, the schedule, and where it starts sessions.");
+  expect(dialogText()).toContain("RunsManual only");
+  expect(dialogText()).not.toContain("Model");
+});
+
+// The text the requesting session wrote is behind a disclosure folded to begin with, shown verbatim in a block that scrolls
+// within bounded height; a request with none has no disclosure.
+it.each([
+  { asked: { ...request, prompt: "Fix the **bug**\n  in <b>search</b> https://example.com" }, label: "Brief written by the session" },
+  { asked: taskRequest({ action: "update_scheduled_task", task: "t-1", prompt: "Fix the **bug**\n  in <b>search</b> https://example.com" }), label: "Prompt written by the session" },
+  { asked: { ...request, action: "handoff", target: "s-held", account: null, prompt: "Fix the **bug**\n  in <b>search</b> https://example.com" } as SessionRequest, label: "Note written by the session" },
+])("shows the text the session wrote in a folded disclosure, as plain text: $label", async ({ asked, label }) => {
+  mountTask(asked, { sessions: new Map([[owned.id, owned]]) });
+  const trigger = findButton(label)!;
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  await act(async () => trigger.click());
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  const block = document.body.querySelector("[role=alertdialog] pre")!;
+  expect(block.textContent).toBe("Fix the **bug**\n  in <b>search</b> https://example.com");
+  expect(block.querySelector("a, b, strong")).toBeNull();
+  expect(block.closest("[class*=max-h]")).not.toBeNull();
+});
+
+it("a request that carries no text of the session's own has no disclosure", () => {
+  mount();
+  expect(findButton("Brief written by the session")).toBeUndefined();
+  expect(document.body.querySelector("[role=alertdialog] pre")).toBeNull();
+});
+
+it.each([
+  { name: "an update that does not change the prompt", asked: { action: "update_scheduled_task", task: "t-1", schedule: { kind: "manual" } } },
+  { name: "a turn on", asked: { action: "set_scheduled_task_enabled", task: "t-1", enabled: true } },
+  { name: "a delete", asked: { action: "delete_scheduled_task", task: "t-1" } },
+  { name: "a run", asked: { action: "run_scheduled_task", task: "t-1" } },
+])("$name has no disclosure of text the session wrote", ({ asked }) => {
+  mountTask(taskRequest(asked));
+  expect(document.body.querySelector("[role=alertdialog] button[aria-expanded]")).toBeNull();
+  expect(document.body.querySelector("[role=alertdialog] pre")).toBeNull();
+});
+
+it.each(["switch", "resume"])("a %s has no disclosure of text the session wrote", (action) => {
+  mountTask({ ...request, action, target: "s-held", account: null, reopenedOwners: [] } as SessionRequest, { sessions: new Map([[owned.id, owned]]) });
+  expect(dialogText()).toContain(action === "switch" ? "Switch account?" : "Resume a session?");
+  for (const label of ["Brief written by the session", "Note written by the session", "Prompt written by the session"]) expect(findButton(label)).toBeUndefined();
+  expect(document.body.querySelector("[role=alertdialog] pre")).toBeNull();
 });

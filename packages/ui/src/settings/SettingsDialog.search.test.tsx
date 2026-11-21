@@ -625,13 +625,17 @@ describe("focus a re-match takes away", () => {
     expect(document.activeElement).toBe(document.querySelector("[data-settings-close]"));
   });
 
+  // The premise is that "lan" finds the Language row, in General, and no other section in English, and that the German
+  // catalog finds it in some other section: it is the number of German sections that match that the test does not hold.
   it("goes to the newly selected tab after a tap when the new language moves the shown section", async () => {
     await focusLanguageRowAfterTap("lan");
+    expect(shownTabs().map((tab) => tab.getAttribute("aria-label"))).toEqual(["General, 1 matching setting"]);
+    const general = selectedTab()!.id;
     act(() => setLanguage("de"));
     await settleFrames();
     expect(selectedTab()).not.toBeNull();
-    expect(shownTabs()).toEqual([selectedTab()]);
-    expect(selectedTab()?.textContent).not.toContain("General");
+    expect(selectedTab()!.id, "the German catalog still finds \"lan\" in General").not.toBe(general);
+    expect(shownTabs(), "the selected tab is one the search shows").toContain(selectedTab());
     expect(document.activeElement).toBe(selectedTab());
   });
 });

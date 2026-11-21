@@ -281,7 +281,7 @@ the order of that section's rows:
   bar icon, then the switch Prevent sleep and When to prevent sleep, then the switch Close idle terminals when closing
   the panel, then **Sorting**.
 - **Appearance**: Theme, Markdown style, then Terminal font size.
-- **Agent behavior**: its six switches.
+- **Agent behavior**: its seven switches.
 - **Git**: the default clone directory, Automatically pull repositories, then one line for the git workflow.
 - **Keyboard shortcuts**: one line, **Changed shortcuts**.
 - **Cleanup**: the switch Automatically delete archived sessions whose conversation is gone.

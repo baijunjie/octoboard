@@ -13,7 +13,7 @@ use crate::coordinator::{self, launch::LaunchEdit, open::OpenRequest};
 use crate::mcp::lookup::{
     compatibility_argument, find_console, find_project, optional_agent, optional_bool,
     optional_string, optional_string_list, optional_text, own_console, own_project, present_text,
-    raw_text, required_str, resolve_account, resolve_owned_session, resolve_project,
+    raw_text, required_str, resolve_account, resolve_owned_session, resolve_project, START_ONLY_IN,
 };
 use crate::mcp::views::{account_fields, branch_names_of, describe_session};
 use crate::messaging::texts::{self, branches_opening_prompt, request_opening_prompt};
@@ -100,7 +100,12 @@ fn session_to_start(
             &caller.console_id,
             required_str(arguments, "project")?,
         )?,
-        SessionKind::Project => own_project(state, caller, optional_string(arguments, "project"))?,
+        SessionKind::Project => own_project(
+            state,
+            caller,
+            optional_string(arguments, "project"),
+            START_ONLY_IN,
+        )?,
     };
     let open = session_in(
         state,
@@ -301,7 +306,9 @@ pub(in crate::mcp) async fn request_session(
             }
             let project = match optional_string(arguments, "project") {
                 Some(wanted) => find_project(state, caller, &wanted)?,
-                None if caller.kind == SessionKind::Project => own_project(state, caller, None)?,
+                None if caller.kind == SessionKind::Project => {
+                    own_project(state, caller, None, START_ONLY_IN)?
+                }
                 None => bail!("`project` is required for a session in a project"),
             };
             let console = state
@@ -335,6 +342,7 @@ pub(in crate::mcp) async fn request_session(
     let open = session_in(state, caller, &console, project, arguments)?;
     // Read once: the opening prompt says how the request was approved, and the call acts on it.
     let automatic = state.store.auto_approve_session_requests()?;
+    let brief = open.task.clone().unwrap_or_default();
     let task = open
         .task
         .map(|brief| request_opening_prompt(caller, transfer.as_ref(), automatic, &brief));
@@ -349,6 +357,7 @@ pub(in crate::mcp) async fn request_session(
         caller,
         asked,
         transfer,
+        brief,
         automatic,
         session_request::ANSWER_TIME_LIMIT,
     )

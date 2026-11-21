@@ -168,8 +168,9 @@ place given only where it is not the project of the session in question.
   console, and says the new session would report to the user.
 
 A session, project or console the window does not know is named by its id, and the account of a session the window
-does not know is shown as a dash. **Nothing the agent wrote is shown**: a name the request would give an archived
-session is not shown either.
+does not know is shown as a dash. **Nothing the agent wrote is shown**: the request carries no text of the agent's to
+show, so the dialog has no disclosure of one (see "The confirmation dialog" in `docs/product/session-requests.md`), and
+a name the request would give an archived session is not shown either.
 
 **A warning stands in for the second confirmation.** Where the session would run on an account whose last change of
 sharing is incomplete and no change of it is running, an amber warning mark follows the account in the sentence, named

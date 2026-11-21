@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS: Settings = {
   auto_approve_resume_requests: false,
   auto_approve_account_switches: false,
   auto_approve_handoffs: false,
+  auto_approve_scheduled_task_changes: false,
   ask_questions_as_choices: true,
   keep_sessions_in_own_project: false,
   memory_enabled: false,

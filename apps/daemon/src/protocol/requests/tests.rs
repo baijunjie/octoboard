@@ -1083,6 +1083,36 @@ fn an_update_settings_reads_prevent_sleep_and_refuses_an_unknown_when() {
     assert!(body(r#"{"type":"update_settings","keep_awake_when":"sometimes"}"#).is_err());
 }
 
+/// `update_settings` takes `auto_approve_scheduled_task_changes` as a field of its own: named, it
+/// is carried as given, and left out it stays absent, so the setting is left alone.
+#[test]
+fn an_update_settings_may_name_the_scheduled_task_approval() {
+    let parsed = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+        RequestBody::UpdateSettings {
+            auto_approve_scheduled_task_changes,
+            auto_approve_handoffs,
+            ..
+        } => (auto_approve_scheduled_task_changes, auto_approve_handoffs),
+        _ => panic!("parses as update_settings"),
+    };
+    assert_eq!(
+        parsed(r#"{"type":"update_settings","auto_approve_scheduled_task_changes":true}"#),
+        (Some(true), None)
+    );
+    assert_eq!(
+        parsed(r#"{"type":"update_settings","auto_approve_scheduled_task_changes":false}"#),
+        (Some(false), None)
+    );
+    assert_eq!(
+        parsed(r#"{"type":"update_settings","auto_approve_handoffs":true}"#),
+        (None, Some(true))
+    );
+    assert!(serde_json::from_str::<Request>(
+        r#"{"type":"update_settings","auto_approve_scheduled_task_changes":"yes"}"#
+    )
+    .is_err());
+}
+
 /// One field is enough: the others stay absent, and a body that names nothing leaves
 /// `auto_select_account` and `auto_start_quota_windows` absent too.
 #[test]

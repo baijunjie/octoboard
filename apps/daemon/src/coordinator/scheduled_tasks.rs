@@ -3,7 +3,9 @@
 //! [`check_saved_open`], so a task is refused for whatever would refuse the session it opens; its
 //! next run is computed by [`next_run`] in the daemon machine's time zone. The [`scheduler`] runs
 //! a task when it comes due and [`runs`] runs it once and records the run; every change of a task
-//! here wakes the scheduler.
+//! here wakes the scheduler. The agents' scheduled task tools (`mcp::tools::scheduled_tasks`) call
+//! the same functions, and the `check_*` ones to refuse before the user is asked whatever the
+//! operation would refuse.
 
 mod next_run;
 #[cfg(test)]
@@ -32,15 +34,26 @@ use super::open::{check_saved_open, OpenRequest};
 use super::validate::{field_required, required_text};
 use next_run::zone_name;
 pub(crate) use next_run::{local_zone, next_run};
-pub(super) use runs::list_scheduled_task_runs;
+pub(crate) use runs::list_scheduled_task_runs;
 
 /// `run_scheduled_task`: see [`runs::run_scheduled_task_now`].
-pub(super) fn run_scheduled_task(state: &Arc<AppState>, task_id: &str) -> Result<()> {
+pub(crate) fn run_scheduled_task(state: &Arc<AppState>, task_id: &str) -> Result<()> {
     runs::run_scheduled_task_now(state, task_id, runs::agent_launcher())
 }
 
+/// What `run_scheduled_task` refuses before it runs the task: an unknown task, and a run while the
+/// daemon is stopping. Runs nothing, and gives the task.
+pub(crate) fn check_run_scheduled_task(
+    state: &Arc<AppState>,
+    task_id: &str,
+) -> Result<ScheduledTask> {
+    let task = state.store.require_scheduled_task(task_id)?;
+    state.refuse_while_shutting_down()?;
+    Ok(task)
+}
+
 /// What a `create_scheduled_task` asks for.
-pub(super) struct NewScheduledTask {
+pub(crate) struct NewScheduledTask {
     pub console_id: String,
     pub project_id: Option<String>,
     pub launch: Option<ScheduledTaskLaunch>,
@@ -51,7 +64,7 @@ pub(super) struct NewScheduledTask {
 
 /// What an `update_scheduled_task` changes; `None` leaves a field alone, and for `project_id`
 /// `Some(None)` makes a console task.
-pub(super) struct ScheduledTaskChanges {
+pub(crate) struct ScheduledTaskChanges {
     pub console_id: Option<String>,
     pub project_id: Option<Option<String>>,
     pub launch: Option<ScheduledTaskLaunch>,
@@ -59,7 +72,7 @@ pub(super) struct ScheduledTaskChanges {
     pub schedule: Option<Schedule>,
 }
 
-pub(super) fn list_scheduled_tasks(
+pub(crate) fn list_scheduled_tasks(
     state: &Arc<AppState>,
     request_id: Option<String>,
 ) -> Result<Option<Event>> {
@@ -70,32 +83,40 @@ pub(super) fn list_scheduled_tasks(
     }))
 }
 
-pub(super) async fn create_scheduled_task(
-    state: &Arc<AppState>,
-    request_id: Option<String>,
-    new: NewScheduledTask,
-) -> Result<Option<Event>> {
-    let NewScheduledTask {
-        console_id,
-        project_id,
-        launch,
-        prompt,
-        schedule,
-        enabled,
-    } = new;
-    let definition = checked_definition(
+/// `new` as it would be stored, or the refusal: [`checked_definition`] of what it asks for.
+async fn checked_new(state: &Arc<AppState>, new: &NewScheduledTask) -> Result<Definition> {
+    checked_definition(
         state,
         Definition {
-            console_id,
-            project_id,
-            launch: launch.unwrap_or_default(),
-            prompt,
-            schedule,
+            console_id: new.console_id.clone(),
+            project_id: new.project_id.clone(),
+            launch: new.launch.clone().unwrap_or_default(),
+            prompt: new.prompt.clone(),
+            schedule: new.schedule.clone(),
         },
         true,
         now_millis(),
     )
-    .await?;
+    .await
+}
+
+/// What `create_scheduled_task` would refuse `new` for, checked as it checks it and saving
+/// nothing. Gives the launch settings as the task would be saved with them: the title trimmed, the
+/// model and effort normalised, and no `bound_to` for a console task.
+pub(crate) async fn check_new_scheduled_task(
+    state: &Arc<AppState>,
+    new: &NewScheduledTask,
+) -> Result<ScheduledTaskLaunch> {
+    checked_new(state, new).await.map(|checked| checked.launch)
+}
+
+pub(crate) async fn create_scheduled_task(
+    state: &Arc<AppState>,
+    request_id: Option<String>,
+    new: NewScheduledTask,
+) -> Result<Option<Event>> {
+    let definition = checked_new(state, &new).await?;
+    let enabled = new.enabled;
     let now = now_millis();
     let task = ScheduledTask {
         id: Uuid::new_v4().to_string(),
@@ -146,7 +167,7 @@ struct EditPause {
 /// seconds. The changes are merged onto the task as read, and the store writes only if the task's
 /// definition is still that one: when another edit landed during the check, this one is made again
 /// from a fresh read (up to [`EDIT_ATTEMPTS`] times), so neither edit's fields are lost.
-pub(super) async fn update_scheduled_task(
+pub(crate) async fn update_scheduled_task(
     state: &Arc<AppState>,
     request_id: Option<String>,
     task_id: &str,
@@ -159,30 +180,9 @@ pub(super) async fn update_scheduled_task(
         let task = state.store.require_scheduled_task(task_id)?;
         #[cfg(test)]
         EDIT_ATTEMPTS_MADE.with(|made| made.set(made.get() + 1));
-        let (console_id, project_id) = match (&changes.console_id, &changes.project_id) {
-            (Some(console_id), Some(project_id)) => (console_id.clone(), project_id.clone()),
-            (Some(console_id), None) => (console_id.clone(), task.project_id.clone()),
-            (None, Some(project_id)) => (task.console_id.clone(), project_id.clone()),
-            (None, None) => (task.console_id.clone(), task.project_id.clone()),
-        };
         let definition = checked_definition(
             state,
-            Definition {
-                console_id,
-                project_id,
-                launch: changes
-                    .launch
-                    .clone()
-                    .unwrap_or_else(|| task.launch.clone()),
-                prompt: changes
-                    .prompt
-                    .clone()
-                    .unwrap_or_else(|| task.prompt.clone()),
-                schedule: changes
-                    .schedule
-                    .clone()
-                    .unwrap_or_else(|| task.schedule.clone()),
-            },
+            changed_definition(&task, &changes),
             schedule_changed,
             now_millis(),
         )
@@ -219,9 +219,54 @@ pub(super) async fn update_scheduled_task(
     ))
 }
 
+/// `task` with `changes` merged onto it, not yet checked.
+fn changed_definition(task: &ScheduledTask, changes: &ScheduledTaskChanges) -> Definition {
+    let (console_id, project_id) = match (&changes.console_id, &changes.project_id) {
+        (Some(console_id), Some(project_id)) => (console_id.clone(), project_id.clone()),
+        (Some(console_id), None) => (console_id.clone(), task.project_id.clone()),
+        (None, Some(project_id)) => (task.console_id.clone(), project_id.clone()),
+        (None, None) => (task.console_id.clone(), task.project_id.clone()),
+    };
+    Definition {
+        console_id,
+        project_id,
+        launch: changes
+            .launch
+            .clone()
+            .unwrap_or_else(|| task.launch.clone()),
+        prompt: changes
+            .prompt
+            .clone()
+            .unwrap_or_else(|| task.prompt.clone()),
+        schedule: changes
+            .schedule
+            .clone()
+            .unwrap_or_else(|| task.schedule.clone()),
+    }
+}
+
+/// What `update_scheduled_task` would refuse `changes` to the task for, checked as it checks
+/// them, once, and saving nothing. Gives the launch settings the task would be saved with, as
+/// [`check_new_scheduled_task`] does.
+pub(crate) async fn check_scheduled_task_changes(
+    state: &Arc<AppState>,
+    task_id: &str,
+    changes: &ScheduledTaskChanges,
+) -> Result<ScheduledTaskLaunch> {
+    let task = state.store.require_scheduled_task(task_id)?;
+    checked_definition(
+        state,
+        changed_definition(&task, changes),
+        changes.schedule.is_some(),
+        now_millis(),
+    )
+    .await
+    .map(|checked| checked.launch)
+}
+
 /// Turns a task on or off. A disabled task has no next run; enabling one computes it from now,
 /// and turning on one that is already on leaves its next run alone.
-pub(super) fn set_scheduled_task_enabled(
+pub(crate) fn set_scheduled_task_enabled(
     state: &Arc<AppState>,
     request_id: Option<String>,
     task_id: &str,
@@ -240,7 +285,7 @@ pub(super) fn set_scheduled_task_enabled(
     Ok(Some(saved(state, request_id, updated)))
 }
 
-pub(super) fn delete_scheduled_task(state: &Arc<AppState>, task_id: &str) -> Result<()> {
+pub(crate) fn delete_scheduled_task(state: &Arc<AppState>, task_id: &str) -> Result<()> {
     if !state.store.delete_scheduled_task(task_id)? {
         return Err(CodedError::unknown_scheduled_task(task_id));
     }

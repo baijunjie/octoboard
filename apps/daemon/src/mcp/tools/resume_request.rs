@@ -22,6 +22,7 @@ use crate::state::{AppState, ClaimKind};
 
 use crate::mcp::lookup::{
     compatibility_argument, find_project, optional_string, own_project, present_text, required_str,
+    START_ONLY_IN,
 };
 
 /// Asks the user to resume the conversation `conversation`, and waits for the answer; see
@@ -68,7 +69,9 @@ async fn plan(
 ) -> Result<Action> {
     let project = match optional_string(arguments, "project") {
         Some(wanted) => find_project(state, caller, &wanted)?,
-        None if caller.kind == SessionKind::Project => own_project(state, caller, None)?,
+        None if caller.kind == SessionKind::Project => {
+            own_project(state, caller, None, START_ONLY_IN)?
+        }
         None => bail!("`project` is required for a console session"),
     };
     let wanted = required_str(arguments, "conversation")?;

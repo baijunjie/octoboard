@@ -3227,6 +3227,9 @@
             "auto_approve_handoffs": {
               "type": "boolean"
             },
+            "auto_approve_scheduled_task_changes": {
+              "type": "boolean"
+            },
             "ask_questions_as_choices": {
               "type": "boolean"
             },

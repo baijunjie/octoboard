@@ -20,6 +20,7 @@ pub(super) mod project_changes;
 pub(super) mod reads;
 pub(super) mod relaunch;
 pub(super) mod resume_request;
+pub(super) mod scheduled_tasks;
 pub(super) mod session_branches;
 pub(super) mod session_model;
 pub(super) mod sessions;

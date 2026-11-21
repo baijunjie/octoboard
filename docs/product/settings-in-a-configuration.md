@@ -93,6 +93,9 @@ language only when the daemon holds one; every other one is in every document wh
 - **Automatically approve handoffs** (see the same section), under `auto_approve_handoffs`. The review's line for
   turning it on says that a session's request to hand one of its sessions off to another agent is then approved without
   asking first.
+- **Automatically approve scheduled task changes** (see the same section), under
+  `auto_approve_scheduled_task_changes`. The review's line for turning it on says that a session's request to create,
+  change, enable or disable, delete or run a scheduled task is then approved without asking first.
 - **Ask questions as choices** (see that section in `docs/product/agent-behavior-settings.md`), under `ask_questions_as_choices`. The
   review's line for turning it on says that Octoboard then asks sessions started afterwards to put a question that needs
   the user's decision as options to pick from.
@@ -194,9 +197,9 @@ A document's application settings are applied **only when the import is explicit
 section, and are not applied by default, since applying them changes how the daemon's host behaves rather than only adding to what it
 holds: automatically pulling repositories makes the daemon fast-forward the user's own repositories by itself,
 automatically deleting archived sessions makes it delete sessions by itself, resuming sessions on start makes it
-relaunch agents by itself whenever it starts, the four automatic approvals let agents'
-requests, account switches and handoffs through without asking the user, asking questions as choices changes what
-sessions are told at launch, and the default clone directory decides where later clones go. The inspection says both
+relaunch agents by itself whenever it starts, the five automatic approvals let agents'
+requests, account switches, handoffs and scheduled task changes through without asking the user, asking questions as
+choices changes what sessions are told at launch, and the default clone directory decides where later clones go. The inspection says both
 what the document sets and what is set now — for a setting of the daemon's the document does not carry, what is set now
 in both places, so it reads as no change — and which sections the document carries, so what applying would change can
 be shown before anything is done. Only the sections asked for are applied, and only their settings: those of the other

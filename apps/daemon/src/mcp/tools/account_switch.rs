@@ -536,6 +536,8 @@ mod tests {
             target,
             account,
             agent,
+            prompt,
+            scheduled_task,
             ..
         } = crate::mcp::test_support::wait_for_request(&state, "a").await
         else {
@@ -543,6 +545,8 @@ mod tests {
         };
         assert_eq!(session, "a");
         assert_eq!(action, SessionRequestAction::Switch);
+        // A switch has no text of the call to show, and nothing of a scheduled task.
+        assert_eq!((prompt, scheduled_task), (None, None));
         assert_eq!(target.as_deref(), Some("of-a"));
         assert_eq!(account.as_deref(), Some("claude-a"));
         assert_eq!(agent, AgentId::CLAUDE);

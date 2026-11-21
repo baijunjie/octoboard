@@ -4,7 +4,8 @@ import type { AccountChoice } from "../accounts/choiceEntries";
 import type { LaunchPreset } from "../dialogs/useLaunchChoice";
 import type { Schedule, ScheduledTask, ScheduledTaskLaunch, Weekday } from "../protocol";
 import { sameValue } from "../values/sameValue";
-import { dayOfMonthAt, instantInputValue, isKnownScheduleKind, parseInstantInput, parseTimeInput, type ScheduleKind, timeInputValue, WEEKDAYS } from "./scheduleText";
+import { isKnownScheduleKind, type ScheduleKind } from "../values/scheduleKind";
+import { dayOfMonthAt, instantInputValue, parseInstantInput, parseTimeInput, timeInputValue, WEEKDAYS } from "./scheduleText";
 
 /** `OptionSelect`'s value for Report to's "None"; a session id is never this. */
 export const NO_OWNER = "none";

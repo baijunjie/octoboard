@@ -311,6 +311,9 @@ pub struct DocumentSettings {
     pub auto_approve_handoffs: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
+    pub auto_approve_scheduled_task_changes: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub ask_questions_as_choices: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
@@ -354,6 +357,7 @@ impl DocumentSettings {
             auto_approve_resume_requests,
             auto_approve_account_switches,
             auto_approve_handoffs,
+            auto_approve_scheduled_task_changes,
             ask_questions_as_choices,
             keep_sessions_in_own_project,
             keyboard_shortcuts,
@@ -383,6 +387,7 @@ impl DocumentSettings {
                     || auto_approve_resume_requests.is_some()
                     || auto_approve_account_switches.is_some()
                     || auto_approve_handoffs.is_some()
+                    || auto_approve_scheduled_task_changes.is_some()
                     || ask_questions_as_choices.is_some()
                     || keep_sessions_in_own_project.is_some()
             }
@@ -428,6 +433,7 @@ impl DocumentSettings {
             auto_approve_resume_requests,
             auto_approve_account_switches,
             auto_approve_handoffs,
+            auto_approve_scheduled_task_changes,
             ask_questions_as_choices,
             keep_sessions_in_own_project,
             keyboard_shortcuts,
@@ -452,6 +458,8 @@ impl DocumentSettings {
             auto_approve_resume_requests: auto_approve_resume_requests.filter(|_| agent_behavior),
             auto_approve_account_switches: auto_approve_account_switches.filter(|_| agent_behavior),
             auto_approve_handoffs: auto_approve_handoffs.filter(|_| agent_behavior),
+            auto_approve_scheduled_task_changes: auto_approve_scheduled_task_changes
+                .filter(|_| agent_behavior),
             ask_questions_as_choices: ask_questions_as_choices.filter(|_| agent_behavior),
             keep_sessions_in_own_project: keep_sessions_in_own_project.filter(|_| agent_behavior),
             keyboard_shortcuts: keyboard_shortcuts.filter(|_| keyboard),
@@ -714,6 +722,8 @@ pub struct InspectedSettings {
     pub current_auto_approve_account_switches: bool,
     pub auto_approve_handoffs: bool,
     pub current_auto_approve_handoffs: bool,
+    pub auto_approve_scheduled_task_changes: bool,
+    pub current_auto_approve_scheduled_task_changes: bool,
     pub ask_questions_as_choices: bool,
     pub current_ask_questions_as_choices: bool,
     pub keep_sessions_in_own_project: bool,
@@ -1056,6 +1066,7 @@ mod tests {
             auto_approve_resume_requests: Some(true),
             auto_approve_account_switches: Some(true),
             auto_approve_handoffs: Some(true),
+            auto_approve_scheduled_task_changes: Some(true),
             ask_questions_as_choices: Some(true),
             keep_sessions_in_own_project: Some(true),
             keyboard_shortcuts: Some(serde_json::json!({})),
@@ -1209,6 +1220,31 @@ mod tests {
         };
         assert_eq!(font_size.carried_sections(), [SettingsSection::Appearance]);
         assert!(DocumentSettings::default().carried_sections().is_empty());
+    }
+
+    #[test]
+    fn a_document_holding_the_scheduled_task_approval_carries_the_agent_behavior_section() {
+        let settings = DocumentSettings {
+            auto_approve_scheduled_task_changes: Some(false),
+            ..Default::default()
+        };
+        assert_eq!(
+            settings.carried_sections(),
+            [SettingsSection::AgentBehavior]
+        );
+        // Selecting another section leaves it out, and its own keeps it.
+        let full = full();
+        assert_eq!(
+            full.clone()
+                .only(&[SettingsSection::General])
+                .auto_approve_scheduled_task_changes,
+            None
+        );
+        assert_eq!(
+            full.only(&[SettingsSection::AgentBehavior])
+                .auto_approve_scheduled_task_changes,
+            Some(true)
+        );
     }
 
     /// What a document's `terminal_font_size` reads as, the rest of the document being absent.

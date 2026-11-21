@@ -71,6 +71,8 @@ export const REVIEW = inspected({
     current_auto_approve_account_switches: false,
     auto_approve_handoffs: true,
     current_auto_approve_handoffs: false,
+    auto_approve_scheduled_task_changes: true,
+    current_auto_approve_scheduled_task_changes: false,
     ask_questions_as_choices: false,
     current_ask_questions_as_choices: true,
     keep_sessions_in_own_project: true,
@@ -159,7 +161,7 @@ const LONG_CLONE_DETAIL = [
  * it was imported, a clone that failed with a long reason, a project nothing placed, a console that
  * could not be created with its project not tried, and the account references that fell back. */
 export const MIXED_RESULT = imported({
-  settings_applied: { auto_close_idle_shell_terminals: true, auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, keep_sessions_in_own_project: true, resume_sessions_on_start: true, keep_awake: true, keep_awake_when: "always", git_workflow: FILE_GIT_WORKFLOW, default_clone_dir: FILE_CLONE_DIR },
+  settings_applied: { auto_close_idle_shell_terminals: true, auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, auto_approve_scheduled_task_changes: true, ask_questions_as_choices: false, keep_sessions_in_own_project: true, resume_sessions_on_start: true, keep_awake: true, keep_awake_when: "always", git_workflow: FILE_GIT_WORKFLOW, default_clone_dir: FILE_CLONE_DIR },
   clone_dir_applied: FILE_CLONE_DIR,
   consoles: [
     {

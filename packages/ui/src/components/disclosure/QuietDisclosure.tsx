@@ -15,15 +15,15 @@ export function QuietDisclosureTrigger({ className = "", children }: { className
   );
 }
 
-/** What a disclosure folds away, set flush with what stands above it. HeroUI pads the body by 8px on every side and the
- * content clips what overflows it, so that padding is the room focus rings and shadows inside need. Taking all of it
- * out as a margin would reach past a dialog body, whose own slack is 4px, so the content takes 4px of it back and the
- * body's inner element the other 4px, which lands what is inside in line with what is above it with 4px of slack left
- * inside the clip. The padding above and below is HeroUI's own. `className` goes on the body's inner element. */
+/** What a disclosure folds away, set flush with what stands above it. The content clips what overflows it, so focus
+ * rings and shadows inside need room within the clip: the content reaches 4px past each side, which is the slack a
+ * dialog body has, and the body pads those 4px back in place of HeroUI's 8px, which lands what is inside in line with
+ * what is above it. Below, the body keeps 4px for the same rings; above, HeroUI's 8px, the gap to the trigger, which
+ * as a margin would stay when the disclosure is folded. `className` goes on the body's inner element. */
 export function FlushDisclosureContent({ className = "", children }: { className?: string; children: React.ReactNode }): React.ReactElement {
   return (
     <DisclosureContent className="-mx-1">
-      <DisclosureBody className={`-mx-1 ${className}`}>{children}</DisclosureBody>
+      <DisclosureBody flush className={className}>{children}</DisclosureBody>
     </DisclosureContent>
   );
 }

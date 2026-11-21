@@ -1,0 +1,8 @@
+/* A flush disclosure body (`DisclosureBody`'s `flush`): padded 4px at each side and at the bottom in place of HeroUI's
+   8px, keeping HeroUI's 8px above, the gap to the trigger. The content clips what overflows it, so focus rings and
+   shadows inside need that room within the clip; see `FlushDisclosureContent`. Unlayered, so it wins over HeroUI's rule
+   in `@layer components`. */
+.disclosure__body[data-flush] {
+  padding-inline: calc(var(--spacing) * 1);
+  padding-bottom: calc(var(--spacing) * 1);
+}

@@ -35,6 +35,7 @@ const switches: { key: string; label: string; help?: string; onText: string; off
   { key: "auto_approve_resume_requests", label: "Automatically approve resume requests", onText: "without asking you first" },
   { key: "auto_approve_account_switches", label: "Automatically approve account switches", onText: "without asking you first" },
   { key: "auto_approve_handoffs", label: "Automatically approve handoffs", onText: "without asking you first" },
+  { key: "auto_approve_scheduled_task_changes", label: "Automatically approve scheduled task changes", onText: "without asking you first" },
   { key: "ask_questions_as_choices", label: "Ask questions as choices", onText: "Sessions are asked to present decisions as options you can pick" },
   {
     key: "keep_sessions_in_own_project",

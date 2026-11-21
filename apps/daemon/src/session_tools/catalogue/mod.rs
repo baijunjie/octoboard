@@ -17,6 +17,7 @@ mod pages;
 mod reads;
 mod repository;
 mod requests;
+mod scheduled_tasks;
 mod schemas;
 mod sessions;
 mod settings;
@@ -47,6 +48,11 @@ use repository::{
     LIST_PROJECT_BRANCHES, LIST_PROJECT_CHANGES, LIST_SESSION_BRANCHES, READ_PROJECT_DIFF,
 };
 use requests::{REQUEST_RESUME_SESSION, REQUEST_SESSION};
+use scheduled_tasks::{
+    CONSOLE_CREATE_SCHEDULED_TASK, CONSOLE_UPDATE_SCHEDULED_TASK, DELETE_SCHEDULED_TASK,
+    LIST_SCHEDULED_TASKS, LIST_SCHEDULED_TASK_RUNS, PROJECT_CREATE_SCHEDULED_TASK,
+    PROJECT_UPDATE_SCHEDULED_TASK, RUN_SCHEDULED_TASK, SET_SCHEDULED_TASK_ENABLED,
+};
 use sessions::{
     ARCHIVE_SELF, ARCHIVE_SESSION, CONSOLE_OPEN_SESSION, INSTRUCT_SESSION, INTERRUPT_SESSION,
     PROJECT_OPEN_SESSION, RENAME_SESSION, RESUME_SESSION, SET_SESSION_PINNED,
@@ -55,15 +61,20 @@ use settings::{
     ADD_PROJECT, GET_CONSOLE, GET_SETTINGS, UPDATE_CONSOLE, UPDATE_PROJECT, UPDATE_SETTINGS,
 };
 
-/// The tools whose call the daemon has to learn the agent cancelled: a session request, or a switch
-/// or a handoff the user is asked to approve, waits in front of the user and is withdrawn when its
-/// call's connection to the daemon goes. A switch or a handoff that runs without asking finishes
-/// on a task of its own, so the connection going leaves it alone.
+/// The tools whose call the daemon has to learn the agent cancelled: a session request, or a switch,
+/// a handoff or a change to a scheduled task the user is asked to approve, waits in front of the
+/// user and is withdrawn when its call's connection to the daemon goes. One that runs without
+/// asking finishes on a task of its own, so the connection going leaves it alone.
 pub(crate) const WITHDRAWN_ON_CANCEL: &[&str] = &[
     "request_session",
     "request_resume_session",
     "switch_session_account",
     "handoff_session",
+    "create_scheduled_task",
+    "update_scheduled_task",
+    "set_scheduled_task_enabled",
+    "delete_scheduled_task",
+    "run_scheduled_task",
 ];
 
 /// Whether `tool`'s call runs on the task serving its connection, and so stops wherever it is when
@@ -174,6 +185,13 @@ static CONSOLE_SESSION_TOOLS: LazyLock<Vec<ToolDef>> = LazyLock::new(|| {
         RELEASE_SESSION,
         REQUEST_SESSION,
         REQUEST_RESUME_SESSION,
+        LIST_SCHEDULED_TASKS,
+        LIST_SCHEDULED_TASK_RUNS,
+        CONSOLE_CREATE_SCHEDULED_TASK,
+        CONSOLE_UPDATE_SCHEDULED_TASK,
+        SET_SCHEDULED_TASK_ENABLED,
+        DELETE_SCHEDULED_TASK,
+        RUN_SCHEDULED_TASK,
         LIST_SESSIONS,
         LIST_SESSION_BRANCHES,
         LIST_PROJECT_CHANGES,
@@ -244,6 +262,13 @@ static COORDINATOR_PROJECT_SESSION_TOOLS: LazyLock<Vec<ToolDef>> = LazyLock::new
         BIND_TO_SESSION,
         REQUEST_SESSION,
         REQUEST_RESUME_SESSION,
+        LIST_SCHEDULED_TASKS,
+        LIST_SCHEDULED_TASK_RUNS,
+        PROJECT_CREATE_SCHEDULED_TASK,
+        PROJECT_UPDATE_SCHEDULED_TASK,
+        SET_SCHEDULED_TASK_ENABLED,
+        DELETE_SCHEDULED_TASK,
+        RUN_SCHEDULED_TASK,
         REPORT,
         LIST_SESSIONS,
         LIST_SESSION_BRANCHES,

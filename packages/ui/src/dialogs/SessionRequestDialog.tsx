@@ -2,24 +2,26 @@ import React, { useId, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { incompleteAccount } from "../accounts/choiceEntries";
-import { defaultAccountName } from "../agents/agents";
 import { CodedError } from "../errors/codedError";
 import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
 import { InlineReference } from "../i18n/InlineReference";
 import { joinNodes } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import type { MessageKey, Translate } from "../i18n/catalog";
-import { type Account, type Agent, type SessionRequestAction, type Settings } from "../protocol";
+import type { PlainMessageKey } from "../i18n/catalog";
+import { type Account, type SessionRequestAction } from "../protocol";
 import { CODE } from "../errors/codes";
 import { sessionAccount, sessionDisplayTitle } from "../sessions/sessionLabel";
-import { useDaemon, useDaemonStore, type SessionRequest } from "../store";
+import { isScheduledTaskRequest, useDaemon, useDaemonStore, type ScheduledTaskRequest, type SessionRequest } from "../store";
 import { ProviderName } from "../components/text/ProviderName";
 import { raiseError } from "../components/alerts/raiseError";
 import { displayWirePath } from "../format/wirePath";
 import type { ConfirmDialogProps } from "../components/dialog/ConfirmDialog";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { useFailureWhenBlocked } from "../components/dialog/useFailureWhenBlocked";
+import { RequestPrompt } from "./RequestPrompt";
+import { ScheduledTaskRequestMessage } from "./ScheduledTaskRequestMessage";
+import { recordAccount, recordReference, requesterOf } from "./sessionRequestReferences";
 import { HandoffRequestForm, IncompleteSharingAnnouncer, IncompleteSharingMark, isChangeRequest, SwitchRequestForm, type RequestFormState } from "./SessionRequestForms";
 
 /** The branches an approval would transfer, each as code, joined as the language joins a list.
@@ -27,18 +29,6 @@ import { HandoffRequestForm, IncompleteSharingAnnouncer, IncompleteSharingMark, 
  * responsible for. */
 function branchList(language: Language, branches: string[]): React.ReactNode[] {
   return joinNodes(language, branches.map(displayWirePath), (branch, key) => <InlineReference key={key} monospace wrap>{branch}</InlineReference>);
-}
-
-function recordReference(name: string | undefined, id: string, key?: number): React.ReactElement {
-  return <InlineReference key={key} monospace={name === undefined} dir={name === undefined ? "ltr" : "auto"} wrap>{name ?? id}</InlineReference>;
-}
-
-/** The account that holds a conversation's record, as the pickers name it: the default account of
- * `agent` for `null`, a stored account by its name, else by its id, as any other id the store does
- * not know. */
-function recordAccount(t: Translate, accounts: Account[], defaultNames: Settings["default_account_names"], agent: Agent, account: string | null): React.ReactElement {
-  const name = account === null ? defaultAccountName(t, defaultNames, agent) : accounts.find((item) => item.id === account)?.name;
-  return recordReference(name, account ?? "");
 }
 
 /** The session a failed approval's notification is about: for a reopen or resume, the one the error
@@ -61,9 +51,10 @@ function failureSubject(request: SessionRequest, err: unknown): string {
  * here: the daemon refuses a request to resume a console session's conversation, so every resuming
  * sentence is the project one. A request to switch a session's account or hand it off names that
  * session, the agent and the account asked for; the form below the sentence lets the user change
- * them. It carries no text an agent wrote — the name an archived session would be given is not
- * shown either: the confirmation is the one place the user's approval is enforced, so it says
- * only what Octoboard knows. The requester's place is named because it may belong to another
+ * them. It carries no text an agent wrote, which goes in a disclosure of its own beneath
+ * (`RequestPrompt`) — the name an archived session would be given is not shown either: the
+ * confirmation is the one place the user's approval is enforced, so the sentence says only what
+ * Octoboard knows. The requester's place is named because it may belong to another
  * project or console than the one it asks in, which the user has no other way to
  * see; its project and console are named only where they are not the ones the new session would be
  * in, which the sentence names anyway. A session is named by its display title, its current task
@@ -73,7 +64,7 @@ function failureSubject(request: SessionRequest, err: unknown): string {
  * that did not finish (`incompleteAccount`), a warning mark in the sentence follows the account; a
  * switch or a handoff has it in its form instead, unless the form is not drawn (the window does not
  * know the session, or the console), when the sentence has it. */
-function SessionRequestMessage({ request }: { request: SessionRequest }): React.ReactElement {
+function SessionRequestMessage({ request }: { request: Exclude<SessionRequest, ScheduledTaskRequest> }): React.ReactElement {
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const sharing = useDaemonStore((s) => s.accountSharing);
   // The account the sentence marks, kept here with the announcer so that a mark which appears after the
@@ -131,24 +122,7 @@ function SessionRequestSentence({ request, incomplete }: { request: SessionReque
   // be asked for in any console.
   const console_ = recordReference(consoles.get(request.console)?.name, request.console);
   const project = request.project ? recordReference(projects.get(request.project)?.name, request.project) : null;
-  const session = recordReference(requesting ? sessionDisplayTitle(t, requesting) : undefined, request.session);
-  let requester: React.ReactElement;
-  if (!requesting || (requesting.project_id && requesting.project_id === request.project)) {
-    requester = <Message id="dialog.sessionRequest.requester.session" params={{ session }} />;
-  } else {
-    const elsewhere = requesting.console_id !== request.console;
-    const own = { session, console: recordReference(consoles.get(requesting.console_id)?.name, requesting.console_id) };
-    if (requesting.project_id) {
-      const project = recordReference(projects.get(requesting.project_id)?.name, requesting.project_id);
-      requester = elsewhere
-        ? <Message id="dialog.sessionRequest.requester.projectElsewhere" params={{ ...own, project }} />
-        : <Message id="dialog.sessionRequest.requester.project" params={{ session, project }} />;
-    } else {
-      requester = elsewhere
-        ? <Message id="dialog.sessionRequest.requester.consoleElsewhere" params={own} />
-        : <Message id="dialog.sessionRequest.requester.console" params={{ session }} />;
-    }
-  }
+  const requester = requesterOf(t, request, requesting, consoles, projects);
   const agent = <ProviderName agent={request.agent} />;
   const params = { requester, console: console_, agent };
   if (request.action === "resume_record") {
@@ -208,18 +182,32 @@ function SessionRequestSentence({ request, incomplete }: { request: SessionReque
 }
 
 /** The title and the confirm button for what an approval does. */
-const ACTION_TEXT = {
+const ACTION_TEXT: Record<Exclude<SessionRequestAction, "set_scheduled_task_enabled">, { title: PlainMessageKey; confirm: PlainMessageKey }> = {
   start: { title: "dialog.sessionRequest.title", confirm: "dialog.sessionRequest.confirm" },
   reopen: { title: "dialog.sessionRequest.reopen.title", confirm: "dialog.sessionRequest.reopen.confirm" },
   resume: { title: "dialog.sessionRequest.resume.title", confirm: "dialog.sessionRequest.resume.confirm" },
   resume_record: { title: "dialog.sessionRequest.record.title", confirm: "dialog.sessionRequest.record.confirm" },
   switch: { title: "dialog.sessionRequest.switch.title", confirm: "dialog.sessionRequest.switch.confirm" },
   handoff: { title: "dialog.sessionRequest.handoff.title", confirm: "dialog.sessionRequest.handoff.confirm" },
-} as const satisfies Record<SessionRequestAction, { title: MessageKey; confirm: MessageKey }>;
+  create_scheduled_task: { title: "dialog.sessionRequest.createTask.title", confirm: "dialog.sessionRequest.createTask.confirm" },
+  update_scheduled_task: { title: "dialog.sessionRequest.updateTask.title", confirm: "dialog.sessionRequest.updateTask.confirm" },
+  delete_scheduled_task: { title: "dialog.sessionRequest.deleteTask.title", confirm: "dialog.sessionRequest.deleteTask.confirm" },
+  run_scheduled_task: { title: "dialog.sessionRequest.runTask.title", confirm: "dialog.sessionRequest.runTask.confirm" },
+};
+
+/** The title and the confirm button of the dialog for `request`; a request to turn a task on or off words itself by
+ * which. */
+function actionText(request: SessionRequest): { title: PlainMessageKey; confirm: PlainMessageKey } {
+  if (request.action !== "set_scheduled_task_enabled") return ACTION_TEXT[request.action];
+  return request.enabled
+    ? { title: "dialog.sessionRequest.enableTask.title", confirm: "dialog.sessionRequest.enableTask.confirm" }
+    : { title: "dialog.sessionRequest.disableTask.title", confirm: "dialog.sessionRequest.disableTask.confirm" };
+}
 
 /** What the dialog for a session's request shows and does — to start a session with no owner, to
- * resume a conversation, or to switch the account of a session the requester owns or hand it off
- * (each a form the user may change before confirming, which an approval carries to the daemon) —
+ * resume a conversation, to switch the account of a session the requester owns or hand it off
+ * (each a form the user may change before confirming, which an approval carries to the daemon), or
+ * to create, change, turn on or off, delete or run a scheduled task (a plain confirmation) —
  * for the request `PendingQuestionDialog` puts forward, or nothing without one. A request that
  * would launch on an account whose last sharing change did not finish says so in a warning mark at
  * the account, where the user's own resume asks again (`useConfirmIncompleteLaunch`): the dialog is
@@ -259,23 +247,28 @@ export function useSessionRequestDialogProps(request: SessionRequest | undefined
     }
   };
 
-  const { action } = request;
+  const text = actionText(request);
   return {
     resetKey: `request:${request.requestId}`,
     failure,
-    title: t(ACTION_TEXT[action].title),
-    message: <SessionRequestMessage key={request.requestId} request={request} />,
-    extraControl: isChangeRequest(request)
+    title: t(text.title),
+    // A request for a scheduled task has a sentence and list of its own, which reads none of what a session request's does.
+    message: isScheduledTaskRequest(request)
+      ? <ScheduledTaskRequestMessage key={request.requestId} request={request} />
+      : <SessionRequestMessage key={request.requestId} request={request} />,
+    extraControl: isChangeRequest(request) || request.prompt !== undefined
       ? (
         <div key={request.requestId} className="flex flex-col gap-4">
-          {request.action === "switch"
+          {isChangeRequest(request) && (request.action === "switch"
             ? <SwitchRequestForm request={request} onReport={setReported} />
-            : <HandoffRequestForm request={request} onReport={setReported} />}
+            : <HandoffRequestForm request={request} onReport={setReported} />)}
+          {request.prompt !== undefined && <RequestPrompt action={request.action} prompt={request.prompt} />}
         </div>
       )
       : undefined,
     confirmDisabled: form?.unavailable === true,
-    confirmLabel: t(ACTION_TEXT[action].confirm),
+    confirmLabel: t(text.confirm),
+    destructive: request.action === "delete_scheduled_task",
     cancelLabel: t("dialog.sessionRequest.refuse"),
     errorTitle: t("dialog.sessionRequest.approveFailedTitle"),
     onCancel: () => void answer(false),

@@ -749,6 +749,13 @@ fn each_settings_change_names_the_path_it_writes() {
             },
         ),
         (
+            "auto_approve_scheduled_task_changes",
+            SettingsChanges {
+                auto_approve_scheduled_task_changes: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
             "ask_questions_as_choices",
             SettingsChanges {
                 ask_questions_as_choices: Some(true),

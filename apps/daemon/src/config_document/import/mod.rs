@@ -359,6 +359,7 @@ fn application_settings_changes(settings: &DocumentSettings) -> SettingsChanges 
         auto_approve_resume_requests: settings.auto_approve_resume_requests,
         auto_approve_account_switches: settings.auto_approve_account_switches,
         auto_approve_handoffs: settings.auto_approve_handoffs,
+        auto_approve_scheduled_task_changes: settings.auto_approve_scheduled_task_changes,
         ask_questions_as_choices: settings.ask_questions_as_choices,
         keep_sessions_in_own_project: settings.keep_sessions_in_own_project,
         interface_language: offered_language(settings.interface_language.as_deref()),
@@ -459,6 +460,8 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             let auto_approve_resume_requests = state.store.auto_approve_resume_requests()?;
             let auto_approve_account_switches = state.store.auto_approve_account_switches()?;
             let auto_approve_handoffs = state.store.auto_approve_handoffs()?;
+            let auto_approve_scheduled_task_changes =
+                state.store.auto_approve_scheduled_task_changes()?;
             let ask_questions_as_choices = state.store.ask_questions_as_choices()?;
             let keep_sessions_in_own_project = state.store.keep_sessions_in_own_project()?;
             let git_workflow = state.store.git_workflow_settings()?;
@@ -491,6 +494,10 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
                     .auto_approve_handoffs
                     .unwrap_or(auto_approve_handoffs),
                 current_auto_approve_handoffs: auto_approve_handoffs,
+                auto_approve_scheduled_task_changes: settings
+                    .auto_approve_scheduled_task_changes
+                    .unwrap_or(auto_approve_scheduled_task_changes),
+                current_auto_approve_scheduled_task_changes: auto_approve_scheduled_task_changes,
                 ask_questions_as_choices: settings
                     .ask_questions_as_choices
                     .unwrap_or(ask_questions_as_choices),

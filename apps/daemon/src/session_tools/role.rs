@@ -540,6 +540,27 @@ fn relationships(agent: AgentId, owns: bool) -> String {
             open_session = tool("open_session"),
             show_page = tool("show_page"),
         ));
+        lines.push(format!(
+            "- `{list_scheduled_tasks}` shows the scheduled tasks of your project, and \
+             `{list_scheduled_task_runs}` what a task's runs came to. A scheduled task starts a \
+             session of this project on a schedule and hands it the task's `prompt`; tasks \
+             belong to the user, so `{create_scheduled_task}`, `{update_scheduled_task}`, \
+             `{set_scheduled_task_enabled}`, `{delete_scheduled_task}` and `{run_scheduled_task}` \
+             are for when they asked you to. You reach only your own project's tasks: a task \
+             you create is a task of this project, and no task can be moved out of it. The \
+             sessions a task starts are the user's own, not yours: they report to the user, and \
+             you can only share information with them — unless the task's `launch.bound_to` \
+             names a console session, which then owns them. The writes ask the user first and \
+             wait for their answer, unless they have chosen to have scheduled task changes \
+             approved without asking; the reads need no approval.",
+            list_scheduled_tasks = tool("list_scheduled_tasks"),
+            list_scheduled_task_runs = tool("list_scheduled_task_runs"),
+            create_scheduled_task = tool("create_scheduled_task"),
+            update_scheduled_task = tool("update_scheduled_task"),
+            set_scheduled_task_enabled = tool("set_scheduled_task_enabled"),
+            delete_scheduled_task = tool("delete_scheduled_task"),
+            run_scheduled_task = tool("run_scheduled_task"),
+        ));
     }
     lines.push(format!(
         "- `{request_session}` asks the user to start an independent session — in any project, \
@@ -1024,6 +1045,52 @@ mod tests {
                         ),
                     }
                 }
+            }
+        }
+    }
+
+    /// The scheduled task tools are a coordinator's, bound to a parent or not, never a worker's:
+    /// its text names none of them, and a coordinator's names every one, by that agent's name for
+    /// it, in a bullet written as prose (no run of spaces left where a line was joined).
+    #[test]
+    fn only_a_coordinators_text_names_the_scheduled_task_tools() {
+        const TOOLS: [&str; 7] = [
+            "list_scheduled_tasks",
+            "list_scheduled_task_runs",
+            "create_scheduled_task",
+            "update_scheduled_task",
+            "set_scheduled_task_enabled",
+            "delete_scheduled_task",
+            "run_scheduled_task",
+        ];
+        for agent in AgentId::ALL {
+            let options = RoleOptions::default();
+            let worker =
+                role_description(SessionKind::Project, Some(&Owner::Console), agent, &options);
+            for tool in TOOLS {
+                assert!(
+                    !worker.contains(tool),
+                    "a worker's text names `{tool}` ({agent})"
+                );
+            }
+            for owner in [None, Some(&Owner::ConsoleOfCoordinator)] {
+                let text = role_description(SessionKind::Project, owner, agent, &options);
+                for tool in TOOLS {
+                    assert!(
+                        text.contains(&format!("`{}`", qualified_tool_name(agent, tool))),
+                        "a coordinator's text leaves out `{tool}` ({agent})"
+                    );
+                }
+                let bullet = text
+                    .lines()
+                    .find(|line| {
+                        line.starts_with(&format!(
+                            "- `{}`",
+                            qualified_tool_name(agent, "list_scheduled_tasks")
+                        ))
+                    })
+                    .expect("the bullet naming the scheduled task tools");
+                assert!(!bullet.contains("  "), "a run of spaces in: {bullet}");
             }
         }
     }

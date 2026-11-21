@@ -1128,3 +1128,263 @@ async fn a_report_to_session_may_be_archived_or_starting_when_saved() {
         assert_eq!(edited.launch.bound_to.as_deref(), Some(id));
     }
 }
+
+/// What a create would refuse, the check refuses alike (same code, same message), before anything
+/// is saved; one a create would take passes, and neither stores nor announces anything.
+#[tokio::test]
+async fn the_create_check_refuses_what_a_create_refuses_and_saves_nothing() {
+    let (state, _dir) = console_with_project_and_accounts("scheduled-check-new");
+    let mut events = state.subscribe();
+    let past = now_millis() - 1;
+    let cases: Vec<(NewScheduledTask, Code, &str)> = vec![
+        (
+            new_task("   ", daily()),
+            error_code::FIELD_REQUIRED,
+            "`prompt` is required",
+        ),
+        (
+            new_task(
+                "Run",
+                Schedule::Weekly {
+                    time: TimeOfDay { hour: 7, minute: 0 },
+                    days: vec![],
+                },
+            ),
+            error_code::FIELD_REQUIRED,
+            "`days` is required",
+        ),
+        (
+            new_task("Run", Schedule::Hourly { minute: 60 }),
+            error_code::UNREADABLE_REQUEST,
+            "the schedule's minute is out of range",
+        ),
+        (
+            new_task("Run", Schedule::Once { run_at: past }),
+            error_code::SCHEDULED_TIME_PASSED,
+            "the one-off time is not in the future",
+        ),
+        (
+            NewScheduledTask {
+                console_id: "nope".to_string(),
+                ..new_task("Run", daily())
+            },
+            error_code::UNKNOWN_CONSOLE,
+            "unknown console nope",
+        ),
+        (
+            NewScheduledTask {
+                project_id: Some("missing".to_string()),
+                ..new_task("Run", daily())
+            },
+            error_code::UNKNOWN_PROJECT,
+            "unknown project missing",
+        ),
+        (
+            NewScheduledTask {
+                launch: Some(ScheduledTaskLaunch {
+                    agent: Some(AgentId::CLAUDE),
+                    account: Some(Some("codex-a".to_string())),
+                    ..Default::default()
+                }),
+                ..new_task("Run", daily())
+            },
+            error_code::UNKNOWN_ACCOUNT,
+            "codex-a",
+        ),
+        (
+            NewScheduledTask {
+                launch: Some(ScheduledTaskLaunch {
+                    agent: Some(AgentId::CLAUDE),
+                    compatibility: [("no_such_switch".to_string(), true)].into(),
+                    ..Default::default()
+                }),
+                ..new_task("Run", daily())
+            },
+            error_code::UNREADABLE_REQUEST,
+            "`no_such_switch` is not a compatibility switch",
+        ),
+    ];
+    for (new, code, message) in cases {
+        let from_check = check_new_scheduled_task(&state, &new)
+            .await
+            .expect_err(message);
+        assert_refused(&from_check, code, message);
+        let from_create = create(&state, new).await.expect_err(message);
+        assert_eq!(code_of(&from_check), code_of(&from_create));
+        assert_eq!(from_check.to_string(), from_create.to_string());
+    }
+
+    check_new_scheduled_task(&state, &new_task("Run", daily()))
+        .await
+        .expect("a task a create would take");
+    check_new_scheduled_task(
+        &state,
+        &NewScheduledTask {
+            enabled: false,
+            ..new_task("Run", Schedule::Manual)
+        },
+    )
+    .await
+    .expect("a manual task, off");
+    assert!(state.store.list_scheduled_tasks().unwrap().is_empty());
+    assert!(task_events(&mut events).is_empty());
+}
+
+/// What an update would refuse, the check refuses alike, leaving the task as it was and telling
+/// nobody; it judges the merged task, and a schedule is judged for time only when the call changes
+/// it.
+#[tokio::test]
+async fn the_update_check_refuses_what_an_update_refuses_and_changes_nothing() {
+    let (state, _dir) = console_with_project_and_accounts("scheduled-check-update");
+    let past = now_millis() - 1;
+    let task = create(&state, new_task("Run", daily())).await.unwrap();
+    state
+        .store
+        .insert_scheduled_task(&ScheduledTask {
+            id: "ran".to_string(),
+            console_id: "console-1".to_string(),
+            project_id: None,
+            launch: ScheduledTaskLaunch::default(),
+            prompt: "Once".to_string(),
+            schedule: Schedule::Once { run_at: past },
+            enabled: true,
+            created_at: 1,
+            updated_at: 1,
+            next_run_at: None,
+            last_run_at: Some(past),
+            run_sessions: vec![],
+        })
+        .unwrap();
+    let before = state.store.list_scheduled_tasks().unwrap();
+    let mut events = state.subscribe();
+
+    let cases: Vec<(&str, ScheduledTaskChanges, Code, &str)> = vec![
+        (
+            &task.id,
+            ScheduledTaskChanges {
+                prompt: Some("  ".to_string()),
+                ..no_changes()
+            },
+            error_code::FIELD_REQUIRED,
+            "`prompt` is required",
+        ),
+        (
+            &task.id,
+            ScheduledTaskChanges {
+                schedule: Some(Schedule::Once { run_at: past }),
+                ..no_changes()
+            },
+            error_code::SCHEDULED_TIME_PASSED,
+            "the one-off time is not in the future",
+        ),
+        (
+            &task.id,
+            ScheduledTaskChanges {
+                schedule: Some(Schedule::Daily {
+                    time: TimeOfDay {
+                        hour: 9,
+                        minute: 60,
+                    },
+                }),
+                ..no_changes()
+            },
+            error_code::UNREADABLE_REQUEST,
+            "the schedule's minute is out of range",
+        ),
+        (
+            &task.id,
+            ScheduledTaskChanges {
+                project_id: Some(Some("missing".to_string())),
+                ..no_changes()
+            },
+            error_code::UNKNOWN_PROJECT,
+            "unknown project missing",
+        ),
+        (
+            &task.id,
+            ScheduledTaskChanges {
+                launch: Some(ScheduledTaskLaunch {
+                    agent: Some(AgentId::CLAUDE),
+                    account: Some(Some("codex-a".to_string())),
+                    ..Default::default()
+                }),
+                ..no_changes()
+            },
+            error_code::UNKNOWN_ACCOUNT,
+            "codex-a",
+        ),
+        (
+            "nope",
+            no_changes(),
+            error_code::UNKNOWN_SCHEDULED_TASK,
+            "unknown scheduled task nope",
+        ),
+    ];
+    for (id, changes, code, message) in cases {
+        let from_check = check_scheduled_task_changes(&state, id, &changes)
+            .await
+            .expect_err(message);
+        assert_refused(&from_check, code, message);
+        let from_update = update_scheduled_task(&state, None, id, changes)
+            .await
+            .expect_err(message);
+        assert_eq!(code_of(&from_check), code_of(&from_update));
+        assert_eq!(from_check.to_string(), from_update.to_string());
+    }
+
+    // What the call does not touch is not judged again: a one-off whose time has passed is no
+    // reason to refuse a new prompt, and a change that fits passes.
+    check_scheduled_task_changes(
+        &state,
+        "ran",
+        &ScheduledTaskChanges {
+            prompt: Some("Renamed".to_string()),
+            ..no_changes()
+        },
+    )
+    .await
+    .expect("an edit leaving the schedule alone");
+    check_scheduled_task_changes(
+        &state,
+        &task.id,
+        &ScheduledTaskChanges {
+            schedule: Some(Schedule::Manual),
+            prompt: Some("Other".to_string()),
+            ..no_changes()
+        },
+    )
+    .await
+    .expect("a change that fits");
+
+    assert_eq!(state.store.list_scheduled_tasks().unwrap(), before);
+    assert!(task_events(&mut events).is_empty());
+}
+
+/// A run is refused beforehand for an unknown task and while the daemon is stopping, and the check
+/// runs nothing: no run is recorded for a task it passes.
+#[tokio::test]
+async fn the_run_check_refuses_an_unknown_task_and_a_stopping_daemon_and_runs_nothing() {
+    let (state, _dir) = console_with_project_and_accounts("scheduled-check-run");
+    let task = create(&state, new_task("Run", daily())).await.unwrap();
+    let mut events = state.subscribe();
+
+    let err = check_run_scheduled_task(&state, "nope").expect_err("unknown");
+    assert_refused(
+        &err,
+        error_code::UNKNOWN_SCHEDULED_TASK,
+        "unknown scheduled task nope",
+    );
+    check_run_scheduled_task(&state, &task.id).expect("a known task");
+    assert!(state
+        .store
+        .list_scheduled_task_runs(&task.id)
+        .unwrap()
+        .is_empty());
+    assert!(std::iter::from_fn(|| events.try_recv().ok())
+        .next()
+        .is_none());
+
+    state.stop_all_sessions().await;
+    let err = check_run_scheduled_task(&state, &task.id).expect_err("stopping");
+    assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN, "{err:#}");
+}

@@ -1073,6 +1073,9 @@ pub enum RequestBody {
         auto_approve_handoffs: Option<bool>,
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
+        auto_approve_scheduled_task_changes: Option<bool>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         ask_questions_as_choices: Option<bool>,
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]

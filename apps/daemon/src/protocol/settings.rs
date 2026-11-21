@@ -68,6 +68,11 @@ pub struct Settings {
     /// `auto_approve_session_requests` does for `request_session`, independently of the other
     /// approvals. Off unless the user turned it on; only the user's own client changes it.
     pub auto_approve_handoffs: bool,
+    /// Whether an agent's calls that create, change, enable, disable, delete or run a scheduled
+    /// task run without asking the user, as `auto_approve_session_requests` does for
+    /// `request_session`, independently of the other approvals. Off unless the user turned it on;
+    /// only the user's own client changes it.
+    pub auto_approve_scheduled_task_changes: bool,
     /// Whether the instructions given to every session at launch ask it to put each question that
     /// needs the user's decision or answer as options to pick from. On unless the user turned it
     /// off. Fixed per session when it starts, so a change reaches only sessions begun afterwards
@@ -190,6 +195,7 @@ impl Default for Settings {
             auto_approve_resume_requests: false,
             auto_approve_account_switches: false,
             auto_approve_handoffs: false,
+            auto_approve_scheduled_task_changes: false,
             ask_questions_as_choices: true,
             keep_sessions_in_own_project: false,
             memory_enabled: false,

@@ -135,6 +135,36 @@ pub enum Weekday {
     Sunday,
 }
 
+/// What a `session_request` for a scheduled task change asks for, in the event's `scheduled_task`
+/// field. Every field is left out where the request does not carry it, so a client reads only
+/// what is there; the task's prompt is the event's own `prompt`, since it is text an agent wrote.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct ScheduledTaskAsked {
+    /// The task an approval changes, enables, disables, deletes or runs; left out for a task to
+    /// create.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub task: Option<String>,
+    /// For a create, the launch settings the task would be saved with; for an update, present
+    /// only when the call changes launch settings, and then the whole launch as it would be saved
+    /// (the settings the call left out stay as the task holds them). Its `title` is the task's
+    /// name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub launch: Option<ScheduledTaskLaunch>,
+    /// For a create, the schedule the task would be saved with; for an update, present only when
+    /// the call changes the schedule.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub schedule: Option<Schedule>,
+    /// For a create, whether the task would be saved on; for `set_scheduled_task_enabled`, what it
+    /// is set to; left out otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub enabled: Option<bool>,
+}
+
 /// One run of a scheduled task: what started it and what came of it. The daemon keeps the last
 /// [`SCHEDULED_TASK_RUNS_KEPT`] of each task, and drops them with the task.
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]

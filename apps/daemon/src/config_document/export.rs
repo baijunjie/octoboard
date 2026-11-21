@@ -192,6 +192,8 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
                     settings.auto_approve_account_switches =
                         Some(store.auto_approve_account_switches()?);
                     settings.auto_approve_handoffs = Some(store.auto_approve_handoffs()?);
+                    settings.auto_approve_scheduled_task_changes =
+                        Some(store.auto_approve_scheduled_task_changes()?);
                     settings.ask_questions_as_choices = Some(store.ask_questions_as_choices()?);
                     settings.keep_sessions_in_own_project =
                         Some(store.keep_sessions_in_own_project()?);
@@ -674,6 +676,7 @@ mod tests {
                 auto_approve_resume_requests: Some(false),
                 auto_approve_account_switches: Some(false),
                 auto_approve_handoffs: Some(false),
+                auto_approve_scheduled_task_changes: Some(false),
                 ask_questions_as_choices: Some(true),
                 keep_sessions_in_own_project: Some(false),
                 resume_sessions_on_start: Some(false),
@@ -1139,6 +1142,7 @@ mod tests {
                 "auto_approve_account_switches",
                 "auto_approve_handoffs",
                 "auto_approve_resume_requests",
+                "auto_approve_scheduled_task_changes",
                 "auto_approve_session_requests",
                 "keep_sessions_in_own_project",
             ]

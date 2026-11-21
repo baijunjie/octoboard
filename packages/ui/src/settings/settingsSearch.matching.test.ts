@@ -211,6 +211,15 @@ describe("sectionMatches", () => {
       }
     });
 
+    it("finds the scheduled task approval switch by its name and by either position's description, under Agent permissions", () => {
+      const { label, description } = booleanSetting("auto_approve_scheduled_task_changes");
+      expect([...find("agent-permissions", "scheduled task changes").ids]).toEqual(["auto_approve_scheduled_task_changes"]);
+      for (const value of [true, false]) {
+        const given = context({ settings: withSettings({ auto_approve_scheduled_task_changes: value }) });
+        for (const wording of [t(label), t(description.on), t(description.off)]) expect(find("agent-permissions", wording, given).ids.has("auto_approve_scheduled_task_changes")).toBe(true);
+      }
+    });
+
     it("is found by the description of every sleep choice, whichever is made", () => {
       for (const when of ["always", "working"] as const) {
         const given = context({ keepAwake: true, settings: withSettings({ keep_awake: true, keep_awake_when: when }) });

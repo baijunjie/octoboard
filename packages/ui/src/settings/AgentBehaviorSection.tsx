@@ -6,7 +6,7 @@ import { LeadRows, SettingsLead } from "./SettingsLead";
 
 /** How sessions behave towards the user: what they may do without asking first (whether their
  * requests to start a session and to resume a conversation, and their account switches and
- * handoffs, are approved on the spot, each by its own switch), how they ask (a question as
+ * handoffs, and their changes to scheduled tasks, are approved on the spot, each by its own switch), how they ask (a question as
  * options to pick from) and whether they are kept to their own project. */
 export function AgentBehaviorSection(): React.ReactElement {
   const t = useT();
@@ -18,6 +18,7 @@ export function AgentBehaviorSection(): React.ReactElement {
         <DaemonSwitchSetting field="auto_approve_resume_requests" />
         <DaemonSwitchSetting field="auto_approve_account_switches" />
         <DaemonSwitchSetting field="auto_approve_handoffs" />
+        <DaemonSwitchSetting field="auto_approve_scheduled_task_changes" />
         <DaemonSwitchSetting field="ask_questions_as_choices" />
         <DaemonSwitchSetting field="keep_sessions_in_own_project" />
       </LeadRows>

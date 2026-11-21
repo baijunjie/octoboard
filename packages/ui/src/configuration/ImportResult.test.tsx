@@ -237,7 +237,7 @@ it("tells of each application setting that was applied, and lists the values of 
   const container = mountHost(null);
   const render = (carried: Partial<ImportedSettings>) =>
     container.render(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings(carried), settings_error: null, accounts: null }} />);
-  render({ auto_pull_repositories: true, auto_approve_session_requests: true, auto_approve_handoffs: true, ask_questions_as_choices: false, keep_sessions_in_own_project: true });
+  render({ auto_pull_repositories: true, auto_approve_session_requests: true, auto_approve_handoffs: true, auto_approve_scheduled_task_changes: true, ask_questions_as_choices: false, keep_sessions_in_own_project: true });
   expect(settingGroupsOf(container)).toEqual([
     { title: "General", lines: ["Close idle terminals when closing the panel"] },
     {
@@ -247,6 +247,7 @@ it("tells of each application setting that was applied, and lists the values of 
         "Automatically approve resume requests",
         "Automatically approve account switches",
         "Automatically approve handoffs",
+        "Automatically approve scheduled task changes",
         "Ask questions as choices",
         "Keep sessions to their own project",
       ],
@@ -262,6 +263,7 @@ it("tells of each application setting that was applied, and lists the values of 
     "Automatically approve resume requests": { badge: "Off" },
     "Automatically approve account switches": { badge: "Off" },
     "Automatically approve handoffs": { badge: "On" },
+    "Automatically approve scheduled task changes": { badge: "On" },
     "Ask questions as choices": { badge: "Off" },
     "Keep sessions to their own project": { badge: "On" },
     "Git workflow": {

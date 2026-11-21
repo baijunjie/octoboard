@@ -48,6 +48,10 @@ impl Store {
             auto_approve_resume_requests: read_setting(&conn, "auto_approve_resume_requests")?,
             auto_approve_account_switches: read_setting(&conn, "auto_approve_account_switches")?,
             auto_approve_handoffs: read_setting(&conn, "auto_approve_handoffs")?,
+            auto_approve_scheduled_task_changes: read_setting(
+                &conn,
+                "auto_approve_scheduled_task_changes",
+            )?,
             ask_questions_as_choices: read_setting(&conn, "ask_questions_as_choices")?,
             keep_sessions_in_own_project: read_setting(&conn, "keep_sessions_in_own_project")?,
             memory_enabled: read_setting(&conn, "memory_enabled")?,
@@ -346,6 +350,7 @@ bool_settings! {
     auto_approve_resume_requests, set_auto_approve_resume_requests;
     auto_approve_account_switches, set_auto_approve_account_switches;
     auto_approve_handoffs, set_auto_approve_handoffs;
+    auto_approve_scheduled_task_changes, set_auto_approve_scheduled_task_changes;
     ask_questions_as_choices, set_ask_questions_as_choices;
     keep_sessions_in_own_project, set_keep_sessions_in_own_project;
     memory_enabled, set_memory_enabled;
@@ -708,6 +713,13 @@ mod tests {
                 set: Store::set_auto_approve_handoffs,
             },
             Setting {
+                column: "auto_approve_scheduled_task_changes",
+                default: false,
+                read: |settings| settings.auto_approve_scheduled_task_changes,
+                get: Store::auto_approve_scheduled_task_changes,
+                set: Store::set_auto_approve_scheduled_task_changes,
+            },
+            Setting {
                 column: "ask_questions_as_choices",
                 default: true,
                 read: |settings| settings.ask_questions_as_choices,
@@ -812,6 +824,29 @@ mod tests {
         let store = Store::open(&path).expect("reopened");
         assert!(store.keep_sessions_in_own_project().unwrap());
         assert!(store.get_settings().unwrap().keep_sessions_in_own_project);
+    }
+
+    /// The automatic approval of scheduled task changes is off in a new store, and once turned on
+    /// it is still on when the store is opened again, and turning it on touches no other approval.
+    #[test]
+    fn the_scheduled_task_approval_is_off_at_first_and_survives_reopening_the_store() {
+        let path = temp_db("scheduled-task-approval-reopen");
+        {
+            let store = Store::open(&path).expect("store");
+            assert!(!store.auto_approve_scheduled_task_changes().unwrap());
+            assert!(store.set_auto_approve_scheduled_task_changes(true).unwrap());
+            assert!(!store.auto_approve_handoffs().unwrap());
+            assert!(!store.auto_approve_session_requests().unwrap());
+        }
+        let store = Store::open(&path).expect("reopened");
+        assert!(store.auto_approve_scheduled_task_changes().unwrap());
+        assert!(
+            store
+                .get_settings()
+                .unwrap()
+                .auto_approve_scheduled_task_changes
+        );
+        assert!(!store.auto_approve_handoffs().unwrap());
     }
 
     /// The application-wide git workflow settings start at worktree, on, ask, off, change item by

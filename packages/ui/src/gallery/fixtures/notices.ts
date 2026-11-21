@@ -6,6 +6,7 @@ import type { SessionRequest } from "../../store";
 import type { Scenario } from "../scenario";
 import { accountOf, SAMPLE, consoleOf, failureTitle, projectOf, sessionOf, snapshotState, broadcastErrorNotification, sessionNoticeNotification } from "../../fixtures/builders";
 import { quotaOf, quotaWindow } from "../../fixtures/quotas";
+import { scheduledTaskOf } from "../../fixtures/scheduledTaskBuilders";
 import { SHELL_TIMEOUT } from "./shellTimeout";
 
 const TRUST = "Trust prompts and toasts";
@@ -165,6 +166,34 @@ const handoffRequest = handoffRequestOn("a-team");
 // The quotas with Team's session window used up.
 const teamUsedUpQuotas = moveQuotas.map((quota) => quota.account === "a-team" ? quotaOf("codex", "a-team", "pro", [quotaWindow("session", 100, 125), quotaWindow("weekly", 41, 3 * 24 * 60 + 60)]) : quota);
 
+// Requests to create, change or delete a scheduled task, asked by a session of Website (or Search API, for the delete)
+// while it waits. The window knows the one task the update and the delete name, Weekly dependency review of Website,
+// which the daemon lists once connected.
+const taskState = (request: SessionRequest, requester = "s-web-1") => snapshotState({
+  consoles: [console_],
+  projects: [web, api, grokProject],
+  sessions: sessions.map(waiting(requester)),
+  sessionRequests: [request],
+  settings: { ...resumeSettings, accounts: moveAccounts },
+});
+const existingTask = scheduledTaskOf("t-deps", console_.id, {
+  project_id: web.id,
+  launch: { title: "Weekly dependency review", agent: "claude", compatibility: {}, bound_to: SAMPLE.consoleSession.id },
+  prompt: "Review the open dependency updates and open a pull request for the safe ones.",
+  schedule: { kind: "weekly", time: { hour: 9, minute: 30 }, days: ["monday", "wednesday", "friday"] },
+});
+const TASK_PROMPT = [
+  "Check every service in the monorepo for dependencies with a newer major version or an advisory against them.",
+  "Open one pull request per team for the upgrades that need no code change.",
+  "Comment on the audit issue for the ones that do, naming the breaking change and a suggested owner.",
+].join("\n");
+// A brief long enough to need scrolling in the block it is shown in: many short lines and one with no break opportunity.
+const LONG_BRIEF = [
+  "Context: the importer rewrite is merged, but the ranking fixtures still assume the old parser.",
+  ...Array.from({ length: 24 }, (_, index) => `${index + 1}. Re-run the ranking fixture for the ${index % 2 === 0 ? "search" : "suggestion"} index shard ${index + 1} and compare it with the saved baseline.`),
+  "Baseline: https://example.com/projects/octoboard/ranking/baselines/importer-rewrite/fixtures/search-and-suggestion-shards?compare=previous&sort=shard-ascending",
+].join("\n");
+
 // The states of the scenarios on an account whose last sharing change did not finish: Client, reopening Verify the
 // migration on it, and a switch to it.
 const reopenOnIncompleteAccount = resumeState("s-api-1", requestOf({
@@ -231,7 +260,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "normal",
     title: "Request to start a session in another project",
-    description: "A session in Search API asks for a Grok Build session in Search API experiments, a linked worktree of the same repository. The requester, named by its terminal title beside its name, belongs to a different console and project, so all requester and destination names appear as chips. The question is followed by the branches that would be transferred, each a code chip joined as the language joins a list. A literal % is shown as written (fix/coverage-at-100%), and the long name wraps inside its chip. A request in the requester's own project, for a console session, or to resume an interrupted session or a conversation only an account's record holds, asks the same question in its own words.",
+    description: "A session in Search API asks for a Grok Build session in Search API experiments, a linked worktree of the same repository. The requester, named by its terminal title beside its name, belongs to a different console and project, so all requester and destination names appear as chips. The question is followed by the branches that would be transferred, each a code chip joined as the language joins a list. A literal % is shown as written (fix/coverage-at-100%), and the long name wraps inside its chip. A request in the requester's own project, for a console session, or to resume an interrupted session or a conversation only an account's record holds, asks the same question in its own words. Under the question, a disclosure \"Brief written by the session\" (closed to begin with, and not where the focus starts) was opened: the brief the session wrote, as plain text with its lines and spacing kept and the long link wrapped, in a block of bounded height. It is much longer than the block, so it scrolls inside itself (with a Copy button, which copies all of it) and the dialog does not grow to hold it: the question above and Refuse and Start session below stay in view.",
     state: snapshotState({
       consoles: [console_, requestingConsole],
       projects: [web, { ...api, console_id: requestingConsole.id }, worktreeProject, grokProject],
@@ -249,9 +278,11 @@ export const noticeScenarios: Scenario[] = [
           project: worktreeProject.id,
           agent: "grok",
           branches: ["feature/saved-searches", "fix/coverage-at-100%25", "feature/rework-the-suggestion-index-so-that-prefixes-are-matched-before-fuzzy-candidates"],
+          prompt: LONG_BRIEF,
         }),
       ],
     }),
+    steps: [(ui) => ui.press(ui.t("dialog.sessionRequest.prompt.brief"))],
   },
   {
     id: "session-request-reopen",
@@ -285,9 +316,65 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "normal",
     title: "Request to hand off a session",
-    description: "The console session asks to hand off Verify the migration, which is idle, to a new Codex session on the account Team. Under the question the agent and account picker stands on Codex and Team, with the Advanced section open on the model GPT-5.6-Sol and the reasoning effort the call asked for, and under them Claude compatibility, the switch Codex has, reading On, the value the call asked for, with no badge. Nothing the asking session wrote is shown. Confirm reads Hand off session and is enabled.",
-    state: moveState(handoffRequest, { target: idleOwnedSession }),
-    steps: [(ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
+    description: "The console session asks to hand off Verify the migration, which is idle, to a new Codex session on the account Team. Under the question the agent and account picker stands on Codex and Team, with the Advanced section open on the model GPT-5.6-Sol and the reasoning effort the call asked for, and under them Claude compatibility, the switch Codex has, reading On, the value the call asked for, with no badge. Below the form, a disclosure \"Note written by the session\", opened here, shows the note the session passed with the call as plain text in a block of its own. Confirm reads Hand off session and is enabled.",
+    state: moveState({ ...handoffRequest, prompt: "Pick this up on Codex: the migration is half done. Start with the failing importer test, then re-run the ranking fixtures and report back to me when they pass." }, { target: idleOwnedSession }),
+    steps: [(ui) => ui.press(ui.t("dialog.agentSettings.advanced")), (ui) => ui.press(ui.t("dialog.sessionRequest.prompt.note"))],
+  },
+  {
+    id: "session-request-create-task",
+    group: TRUST,
+    category: "normal",
+    title: "Request to create a scheduled task",
+    description: "A session of Website asks to create the scheduled task Dependency and licence audit, which would start a session in the project Website of the console Main; the requester, the task, the project and the console are each a chip. Under the sentence a key and value list gives everything else the task sets, each as the scheduled tasks page and the session dialogs word it: Schedule (in words, such as \"Monday and Thursday at 10:00 AM\"), Enabled On, Agent Codex, Account Team, Model gpt-5.6-sol (a Codex model is named by its id as written, as the session views name it), Reasoning effort, Report to (the console session Hub) and the switch Claude compatibility, On. The keys are muted and share one column and the values wrap in the other; every value is plain text, with no chip, as chips stand only in the sentence. Below the list, a disclosure \"Prompt written by the session\" is closed (the focus is not on it). The buttons are Refuse and Create task, both enabled, and the dialog is not marked as destructive. The name is only in the sentence, not a row of the list.",
+    state: taskState(requestOf({
+      action: "create_scheduled_task",
+      session: "s-web-1",
+      kind: "project",
+      console: console_.id,
+      project: web.id,
+      agent: "claude",
+      launch: { title: "Dependency and licence audit", agent: "codex", account: "a-team", model: "gpt-5.6-sol", effort: "high", compatibility: { claude_compatibility: true }, bound_to: SAMPLE.consoleSession.id },
+      schedule: { kind: "weekly", time: { hour: 10, minute: 0 }, days: ["monday", "thursday"] },
+      enabled: true,
+      prompt: TASK_PROMPT,
+    })),
+  },
+  {
+    id: "session-request-update-task",
+    group: TRUST,
+    category: "normal",
+    title: "Request to change a scheduled task",
+    description: "A session of Website asks to change Weekly dependency review, a task the window knows, and move it to the project Search API: the sentence names the task by its name and where it would start sessions. A line under it says \"It would change the prompt, the schedule, the launch settings and where it starts sessions.\" and then the list gives only the new values: Name, Schedule, Agent Claude Code, Account Personal, Model, Reasoning effort, Report to and the switch Codex compatibility, Off; there is no Enabled row, as a change does not enable or disable the task. The values are plain text, with no chip. A closed disclosure \"Prompt written by the session\" holds the new prompt. The buttons are Refuse and Change task.",
+    state: taskState(requestOf({
+      action: "update_scheduled_task",
+      session: "s-web-1",
+      kind: "project",
+      console: console_.id,
+      project: api.id,
+      agent: "claude",
+      task: existingTask.id,
+      launch: { title: "Dependency and licence review", agent: "claude", account: "a-personal", model: "claude-sonnet-5-5", effort: "high", compatibility: { codex_compatibility: false }, bound_to: SAMPLE.consoleSession.id },
+      schedule: { kind: "daily", time: { hour: 7, minute: 45 } },
+      prompt: TASK_PROMPT,
+    })),
+    scheduledTasks: { tasks: [existingTask] },
+  },
+  {
+    id: "session-request-delete-task",
+    group: TRUST,
+    category: "normal",
+    title: "Request to delete a scheduled task",
+    description: "A session of Search API asks to delete Weekly dependency review, which starts a session in the project Website. The sentence is followed by a line saying the task will not run again and that sessions it already started stay as they are, and nothing else: no list and no disclosure. The dialog has the destructive look, unlike the other requests: a warning icon in the header and Delete task as a red button. A request to enable or disable a task (titled \"Enable a scheduled task?\" or \"Disable a scheduled task?\", confirmed by Enable task or Disable task) or to run it now has this layout, with its own sentence and buttons and without the extra line.",
+    state: taskState(requestOf({
+      action: "delete_scheduled_task",
+      session: "s-api-1",
+      kind: "project",
+      console: console_.id,
+      project: web.id,
+      agent: "claude",
+      task: existingTask.id,
+    }), "s-api-1"),
+    scheduledTasks: { tasks: [existingTask] },
   },
   {
     id: "session-request-reopen-long-names",
@@ -387,6 +474,23 @@ export const noticeScenarios: Scenario[] = [
       target: "s-reopen-unknown",
       owner: SAMPLE.consoleSession.id,
       reopenedOwners: [],
+    })),
+  },
+  {
+    id: "session-request-update-task-unknown",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to change a scheduled task the window does not know",
+    description: "The task to change is not among the tasks this window has, so the sentence gives its id as a code chip where its name would be, and, with nothing to compare with, the line under it names only the launch settings as what would change, never where the task starts sessions. The list shows what the launch settings name that the window cannot look up: the account and the console session to report to by their ids, each as plain monospace text with no chip (the account's after Account, the session's after Report to), and the compatibility switch by its id in plain monospace in place of a name, beside its On. Agent is named as usual and no disclosure is shown, as the call carried no prompt.",
+    state: taskState(requestOf({
+      action: "update_scheduled_task",
+      session: "s-web-1",
+      kind: "project",
+      console: console_.id,
+      project: web.id,
+      agent: "claude",
+      task: "t-removed",
+      launch: { agent: "claude", account: "a-removed", compatibility: { future_switch: true }, bound_to: "s-removed" },
     })),
   },
   {

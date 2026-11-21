@@ -2,16 +2,12 @@ import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
 import type { Schedule, TimeOfDay, Weekday } from "../protocol";
-import { knownValues } from "../values/knownValue";
+import { SCHEDULE_KINDS, type ScheduleKind } from "../values/scheduleKind";
 
-/** The kinds of schedule, in the order the form offers them. */
-export const SCHEDULE_KINDS = ["once", "hourly", "daily", "weekdays", "weekly", "monthly", "manual"] as const satisfies readonly Schedule["kind"][];
-
-export type ScheduleKind = (typeof SCHEDULE_KINDS)[number];
-
-/** Whether `raw`, the `kind` of a schedule, is one this client words: a newer daemon may send another, which is shown
- * as no schedule and never edited as one. */
-export const isKnownScheduleKind = knownValues<ScheduleKind>({ once: true, hourly: true, daily: true, weekdays: true, weekly: true, monthly: true, manual: true });
+// The shared list of kinds and the protocol's `Schedule` name the same ones: a kind in either and not the other fails
+// type-checking, the first line for the list holding a kind the protocol lacks, the second for the reverse.
+SCHEDULE_KINDS satisfies readonly Schedule["kind"][];
+true satisfies Schedule["kind"] extends ScheduleKind ? true : false;
 
 /** The name of each kind of schedule, as the form's Schedule picker lists it. */
 export const SCHEDULE_KIND_LABELS: Record<ScheduleKind, PlainMessageKey> = {

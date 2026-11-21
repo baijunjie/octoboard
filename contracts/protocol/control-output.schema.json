@@ -3599,6 +3599,9 @@
         "auto_approve_handoffs": {
           "type": "boolean"
         },
+        "auto_approve_scheduled_task_changes": {
+          "type": "boolean"
+        },
         "ask_questions_as_choices": {
           "type": "boolean"
         },
@@ -4843,22 +4846,22 @@
             },
             "kind": {
               "$ref": "#/$defs/SessionKind",
-              "description": "Whether the session asked for would be a console session or a project session; for\n`switch` and `handoff`, which the target is."
+              "description": "Whether the session asked for would be a console session or a project session; for\n`switch` and `handoff`, which the target is; for the scheduled task actions, which\nsession the task starts (a task's target after the change)."
             },
             "console": {
               "type": "string",
-              "description": "The console the new session would be in, or the console of the session to bring back,\nswitch or hand off."
+              "description": "The console the new session would be in, or the console of the session to bring back,\nswitch or hand off; for the scheduled task actions, the task's console after the change."
             },
             "project": {
               "type": [
                 "string",
                 "null"
               ],
-              "description": "The project the new session would be in, or the project of the session to bring back,\nswitch or hand off; null for a console session."
+              "description": "The project the new session would be in, or the project of the session to bring back,\nswitch or hand off; null for a console session; for the scheduled task actions, the\ntask's project after the change, null for a console task."
             },
             "agent": {
               "$ref": "#/$defs/Agent",
-              "description": "The agent the new session would run, or the agent of the session to bring back or\nswitch; for `handoff`, the receiving agent."
+              "description": "The agent the new session would run, or the agent of the session to bring back or\nswitch; for `handoff`, the receiving agent; for the scheduled task actions, the agent\nthe task names, else the requesting session's own, which carries no more meaning than\nthat for them."
             },
             "target": {
               "type": [
@@ -4922,6 +4925,14 @@
               },
               "description": "For `handoff`: the compatibility switches the call asked the receiving session to hold,\nby setting id; empty for every other request and where it asked for none."
             },
+            "scheduled_task": {
+              "description": "For the scheduled task actions: what the call asks for (see `ScheduledTaskAsked`).\nLeft out for every other action.",
+              "$ref": "#/$defs/ScheduledTaskAsked"
+            },
+            "prompt": {
+              "type": "string",
+              "description": "The text the requesting agent wrote for the request, verbatim: for `start`, its brief\nas handed to the new session; for `handoff`, its note to the receiving session; for\n`create_scheduled_task`, the task's prompt; for `update_scheduled_task`, the new\nprompt when the call changes it. Left out where there is none (the other actions, and\na tool call that carries no such text)."
+            },
             "requested_at": {
               "type": "integer",
               "format": "int64",
@@ -4950,7 +4961,7 @@
             "compatibility",
             "requested_at"
           ],
-          "description": "A session asked with `request_session` for a session that has no owner, or with\n`request_resume_session` to resume a conversation, or an owner called `switch_session_account`\nor `handoff_session` while the user's approval is required, and its call is waiting for the\nuser's answer. Broadcast once, when the call is made, and sent again to a client after each\n`snapshot`, oldest first, for every request still waiting."
+          "description": "A session asked with `request_session` for a session that has no owner, or with\n`request_resume_session` to resume a conversation, or an owner called `switch_session_account`\nor `handoff_session`, or a session called one of the scheduled task tools that change\nsomething, while the user's approval is required, and its call is waiting for the user's\nanswer. Broadcast once, when the call is made, and sent again to a client after each\n`snapshot`, oldest first, for every request still waiting."
         },
         {
           "type": "object",
@@ -8188,6 +8199,12 @@
         "current_auto_approve_handoffs": {
           "type": "boolean"
         },
+        "auto_approve_scheduled_task_changes": {
+          "type": "boolean"
+        },
+        "current_auto_approve_scheduled_task_changes": {
+          "type": "boolean"
+        },
         "ask_questions_as_choices": {
           "type": "boolean"
         },
@@ -8258,6 +8275,8 @@
         "current_auto_approve_account_switches",
         "auto_approve_handoffs",
         "current_auto_approve_handoffs",
+        "auto_approve_scheduled_task_changes",
+        "current_auto_approve_scheduled_task_changes",
         "ask_questions_as_choices",
         "current_ask_questions_as_choices",
         "keep_sessions_in_own_project",
@@ -10528,6 +10547,28 @@
       ],
       "description": "A scheduled task as the daemon stores it. A console session of `console_id` is started when\n`project_id` is null, else a project session of that project."
     },
+    "ScheduledTaskAsked": {
+      "type": "object",
+      "properties": {
+        "task": {
+          "type": "string",
+          "description": "The task an approval changes, enables, disables, deletes or runs; left out for a task to\ncreate."
+        },
+        "launch": {
+          "description": "For a create, the launch settings the task would be saved with; for an update, present\nonly when the call changes launch settings, and then the whole launch as it would be saved\n(the settings the call left out stay as the task holds them). Its `title` is the task's\nname.",
+          "$ref": "#/$defs/ScheduledTaskLaunch"
+        },
+        "schedule": {
+          "description": "For a create, the schedule the task would be saved with; for an update, present only when\nthe call changes the schedule.",
+          "$ref": "#/$defs/Schedule"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "For a create, whether the task would be saved on; for `set_scheduled_task_enabled`, what it\nis set to; left out otherwise."
+        }
+      },
+      "description": "What a `session_request` for a scheduled task change asks for, in the event's `scheduled_task`\nfield. Every field is left out where the request does not carry it, so a client reads only\nwhat is there; the task's prompt is the event's own `prompt`, since it is text an agent wrote."
+    },
     "ScheduledTaskLaunch": {
       "type": "object",
       "properties": {
@@ -11035,6 +11076,31 @@
           "type": "string",
           "const": "handoff",
           "description": "Hands the session `target`, which the asking session owns, off to a new session of another\nagent."
+        },
+        {
+          "type": "string",
+          "const": "create_scheduled_task",
+          "description": "Creates the scheduled task `scheduled_task` describes."
+        },
+        {
+          "type": "string",
+          "const": "update_scheduled_task",
+          "description": "Changes the scheduled task `scheduled_task.task` as `scheduled_task` and `prompt` say."
+        },
+        {
+          "type": "string",
+          "const": "set_scheduled_task_enabled",
+          "description": "Turns the scheduled task `scheduled_task.task` on or off, as `scheduled_task.enabled`\nsays."
+        },
+        {
+          "type": "string",
+          "const": "delete_scheduled_task",
+          "description": "Deletes the scheduled task `scheduled_task.task`."
+        },
+        {
+          "type": "string",
+          "const": "run_scheduled_task",
+          "description": "Runs the scheduled task `scheduled_task.task` once now."
         }
       ],
       "description": "What approving a `session_request` does."
@@ -11239,6 +11305,10 @@
           "type": "boolean",
           "description": "Whether an owner's `handoff_session` calls run without asking the user, as\n`auto_approve_session_requests` does for `request_session`, independently of the other\napprovals. Off unless the user turned it on; only the user's own client changes it."
         },
+        "auto_approve_scheduled_task_changes": {
+          "type": "boolean",
+          "description": "Whether an agent's calls that create, change, enable, disable, delete or run a scheduled\ntask run without asking the user, as `auto_approve_session_requests` does for\n`request_session`, independently of the other approvals. Off unless the user turned it on;\nonly the user's own client changes it."
+        },
         "ask_questions_as_choices": {
           "type": "boolean",
           "description": "Whether the instructions given to every session at launch ask it to put each question that\nneeds the user's decision or answer as options to pick from. On unless the user turned it\noff. Fixed per session when it starts, so a change reaches only sessions begun afterwards\n(a console session's file is rewritten at each launch, so it follows at the next one). Only\nthe user's own client changes it."
@@ -11388,6 +11458,7 @@
         "auto_approve_resume_requests",
         "auto_approve_account_switches",
         "auto_approve_handoffs",
+        "auto_approve_scheduled_task_changes",
         "ask_questions_as_choices",
         "keep_sessions_in_own_project",
         "memory_enabled",

@@ -23,16 +23,18 @@ use super::{not_waiting, outcome_message, Edits, Performed};
 pub(super) struct Approved {
     pub(super) result: Value,
     pub(super) caller_id: String,
-    /// The session the approval started or brought back, or found running.
-    pub(super) started: Session,
+    /// The session the approval started or brought back, or found running; none for a scheduled
+    /// task change.
+    pub(super) started: Option<Session>,
     pub(super) message: String,
 }
 
 /// Carries out an approval. A start opens the session the caller described, unbound, then
 /// transfers the branches the request names to it. A resume brings back the session that holds the
 /// conversation, or opens one on the record of it. A switch or a handoff runs the operation of its
-/// tool with the values the user ended the dialog on. The caller keeps running, and does not own
-/// what it asked for, except for the session a switch or a handoff leaves in its care.
+/// tool with the values the user ended the dialog on, and a scheduled task change the operation of
+/// its tool. The caller keeps running, and does not own what it asked for, except for the session
+/// a switch or a handoff leaves in its care.
 pub(super) async fn carry_out<F, Fut, R, RFut>(
     state: &Arc<AppState>,
     request: &Request,
@@ -52,7 +54,7 @@ where
         return Err(not_waiting(&caller.id));
     }
     let (started, result, note) = match &request.ask {
-        Ask::Session(action @ Action::Start { open, transfer }) => {
+        Ask::Session(action @ Action::Start { open, transfer, .. }) => {
             let started = launch(open.clone()).await?;
             let outcome = match transfer {
                 Some(transfer) => Some(move_branches(state, transfer, &caller, &started).await),
@@ -74,22 +76,29 @@ where
                 "project": started.project_id,
                 "note": note,
             });
-            (started, result, note)
+            (Some(started), result, note)
         }
         Ask::Session(action @ Action::ResumeRecord { open, .. }) => {
             let started = launch(open.clone()).await?;
             let note = record_outcome_note(state, &caller, &started, request.approval(action));
             let result = resume_result(ResumeAction::Opened, &started, &[], None, &note);
-            (started, result, note)
+            (Some(started), result, note)
         }
         Ask::Session(action @ Action::Resume { target, rename, .. }) => {
             let approval = request.approval(action);
-            bring_back(state, approval, &caller, target, rename.as_deref(), resume).await?
+            let (started, result, note) =
+                bring_back(state, approval, &caller, target, rename.as_deref(), resume).await?;
+            (Some(started), result, note)
         }
         Ask::Change(change) => {
             let Performed { session, result } = change.perform().start(edits)?.await?;
             let note = result["note"].as_str().unwrap_or_default().to_string();
-            (session, result, note)
+            (Some(session), result, note)
+        }
+        Ask::ScheduledTask(change) => {
+            let result = change.perform.start(())?.await?;
+            let note = result["note"].as_str().unwrap_or_default().to_string();
+            (None, result, note)
         }
     };
     let message = outcome_message(caller.agent, request.tool(), &note);

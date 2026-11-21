@@ -53,10 +53,12 @@ and deleting an owner follow the same rules whichever kind it is (see "Archiving
 `docs/product/deleting-sessions.md`).
 
 Octoboard injects the tools into the session. **What a session reads is the same whatever its kind**: every session
-gets the same read-only tools, with the same scope (see `docs/product/what-every-session-reads.md`). What it can
-change follows its kind and current role. A console session gets the full set of tools that act (see "The console
-session's tools" below); a project coordinator gets a narrower set, scoped to its own project for what it starts and
-drives (see "Project coordinators' tools" below); a worker gets `report` and cannot create or manage child sessions.
+gets the same read-only tools, with the same scope (see `docs/product/what-every-session-reads.md`, which also names
+the few reads offered only with a role's other tools, such as those of settings, report panel pages and scheduled
+tasks). What it can change follows its kind and current role. A console session gets the full set of tools that act
+(see "The console session's tools" below); a project coordinator gets a narrower set, scoped to its own project for
+what it starts and drives (see "Project coordinators' tools" below); a worker gets `report` and cannot create or manage
+child sessions.
 Every session also gets `inform_session`, for sharing information with every other running session (see
 `docs/product/information-between-sessions.md`), `request_session` and `request_resume_session`; every project session
 also gets `get_project`, a read-only view of its own project's settings (see `docs/product/agent-settings-tools.md`).
@@ -144,6 +146,8 @@ Besides the reads in `docs/product/what-every-session-reads.md`:
 | `release_session` | `session`, `note?` | Releases one of the caller's sessions from its binding, without the user: it becomes the user's own, independent session, and is passed the optional `note` as its former owner's parting note. See "Releasing a session from its owner" in `docs/product/changing-session-owners.md`. |
 | `request_session` | `kind`, `project?`, `console?`, `brief`, `title?`, `agent?`, `account?`, `model?`, `effort?`, `compatibility?`, `branches?` | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
 | `request_resume_session` | `conversation`, `project?`, `title?`, `model?`, `effort?`, `compatibility?` | Asks the user to resume a conversation by its id, as the session dialog's Resume conversation tab does; a console session has to name the project. See `docs/product/requests-to-resume-a-conversation.md`. |
+| `list_scheduled_tasks`, `list_scheduled_task_runs` | — / `task` | Read the scheduled tasks of the caller's console — console tasks and those of its projects — and a task's kept runs, without approval. See "Reading tasks from a session" in `docs/product/scheduled-tasks.md`. |
+| `create_scheduled_task`, `update_scheduled_task`, `set_scheduled_task_enabled`, `delete_scheduled_task`, `run_scheduled_task` | see "Changing tasks from a session" in `docs/product/scheduled-tasks.md` | Create, change, turn on or off, delete or run one of the console's scheduled tasks, once the user approves, unless they have chosen to have scheduled task changes approved without asking. See "Changing tasks from a session" and "The user's approval of a session's task change" in `docs/product/scheduled-tasks.md`. |
 | `inform_session` | see `docs/product/information-between-sessions.md` | As for every session. |
 | `show_page` | `title?`, `body` | Pushes a page — a tree of components Octoboard draws — to the caller's report panel, beside its own terminal. A page that fails the checks is refused, naming where and why, and stores nothing. Answers with the new page's id. See "Pushing a page" in `docs/product/report-panel.md`. |
 | `page_guide` | `topic` | The catalogue of a page's components, by topic, with each kind's JSON Schema; to be read before the first page. See "The page guide" in `docs/product/report-page-components.md`. |
@@ -200,6 +204,8 @@ a console session. Besides the reads in `docs/product/what-every-session-reads.m
 | `bind_to_session` | `owner`, `summary` | Binds the caller, while it is independent, to an owner, without the user. Refused for a coordinator with a parent, which is bound already. See "Setting a parent for an independent session" in `docs/product/changing-session-owners.md`. |
 | `request_session` | as the console session's | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
 | `request_resume_session` | `conversation`, `project?`, `title?`, `model?`, `effort?`, `compatibility?` | As the console session's; `project` defaults to the caller's own. See `docs/product/requests-to-resume-a-conversation.md`. |
+| `list_scheduled_tasks`, `list_scheduled_task_runs` | — / `task` | As the console session's, but only the tasks of its own project. |
+| `create_scheduled_task`, `update_scheduled_task`, `set_scheduled_task_enabled`, `delete_scheduled_task`, `run_scheduled_task` | as the console session's, without `project` | As the console session's, but only on the tasks of its own project: it cannot create a console task, name another project or move a task out of its project (see "The scheduled task tools" in `docs/product/scheduled-tasks.md`). |
 | `report` | as in `docs/product/reporting-to-owners.md` | Offered, but refused while the session is independent: it has nobody to report to. A coordinator with a parent can report to that console session (see "Coordinators with a parent session" below). |
 | `inform_session` | see `docs/product/information-between-sessions.md` | As for every session. |
 | `get_project` | `refresh?` | Its own project's settings, read-only, as for every project session (see "A project's settings" in `docs/product/agent-settings-tools.md`), optionally with its git status checked first (see "Reading the status from a session" in `docs/product/project-git-status.md`). |

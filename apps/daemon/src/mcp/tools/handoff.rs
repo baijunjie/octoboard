@@ -91,6 +91,7 @@ pub(in crate::mcp) async fn handoff_session(
         model: asked.model.clone(),
         effort: asked.effort.clone(),
         compatibility: asked.compatibility.clone(),
+        note: asked.note.clone(),
         perform: Perform::new({
             let (state, caller_id, target) = (state.clone(), caller.id.clone(), target.clone());
             // The account the dialog showed stands, rather than one settled again at approval.
@@ -892,6 +893,8 @@ mod tests {
             account,
             model,
             effort,
+            prompt,
+            scheduled_task,
             ..
         } = crate::mcp::test_support::wait_for_request(&state, "a").await
         else {
@@ -899,6 +902,9 @@ mod tests {
         };
         assert_eq!(action, SessionRequestAction::Handoff);
         assert_eq!(target.as_deref(), Some("of-a"));
+        // The dialog is shown the call's note as written.
+        assert_eq!(prompt.as_deref(), Some("Start with the failing test."));
+        assert_eq!(scheduled_task, None);
         assert_eq!(agent, AgentId::CODEX);
         assert_eq!(
             account, None,
@@ -944,6 +950,37 @@ mod tests {
             SessionStatus::Archived
         );
         assert_caller_not_told(&state, &caller);
+    }
+
+    /// A handoff that comes with no note, or an empty one, shows the dialog no text of the call:
+    /// the request's `prompt` is absent, never an empty string.
+    #[tokio::test]
+    async fn a_handoff_without_a_note_asks_with_no_prompt() {
+        for (name, note) in [("none", None), ("empty", Some(""))] {
+            let (state, _dir) = shared_console_state(&format!("handoff-no-note-{name}"));
+            let _caller = running(&state, "a");
+            let _original = running(&state, "of-a");
+            let (launches, started) = (Launches::default(), Started::default());
+            let mut input = json!({ "session": "of-a", "agent": "codex" });
+            if let Some(note) = note {
+                input["note"] = json!(note);
+            }
+            let call = {
+                let (state, caller) = (state.clone(), state.session_record("a").unwrap());
+                let launch = stand_in_launch(&started, &launches, || {});
+                tokio::spawn(async move {
+                    handoff_session(&state, &caller, &arguments(input), launch).await
+                })
+            };
+            let Event::SessionRequest { prompt, action, .. } =
+                crate::mcp::test_support::wait_for_request(&state, "a").await
+            else {
+                panic!("a session request");
+            };
+            assert_eq!(action, SessionRequestAction::Handoff);
+            assert_eq!(prompt, None, "{name}");
+            call.abort();
+        }
     }
 
     /// A refusal ends the call with an error saying the user refused and nothing changed.

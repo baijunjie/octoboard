@@ -232,8 +232,10 @@ The confirmation is titled "Hand off a session?", with two buttons, **Refuse** a
 names the requesting session, as a request for a session names it (see "The confirmation dialog" in
 `docs/product/session-requests.md`), then the session to hand off, by its displayed name, and the agent and the account
 the call asked for; it says that the session is archived and its work moves to the new session, and that the user can
-change the agent, account, model, reasoning effort and compatibility settings before confirming. **Nothing the agent wrote is shown**, neither
-the title nor the note it passed. A form follows:
+change the agent, account, model, reasoning effort and compatibility settings before confirming. The sentence holds
+nothing the agent wrote, and the title it passed is not shown anywhere; the note it passed, where there is one, is shown
+folded away below the form, under "Note written by the session" (see "The confirmation dialog" in
+`docs/product/session-requests.md`). A form follows:
 
 - **Hand off to** — the agent picker joined to an account picker of the handoff dialog (see "Handing off from the
   window" above), the session's own agent never offered, starting on the agent and the account the call asked for.

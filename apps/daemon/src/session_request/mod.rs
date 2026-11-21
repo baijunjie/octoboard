@@ -6,7 +6,9 @@
 //! everything else (the queue, the hand, the waiver, the withdrawal, the answer) is shared. So are
 //! an owner's `switch_session_account` and `handoff_session` calls while the user has not chosen
 //! to have them run without asking: their approval is a form, whose values the user may change
-//! (`Edits`), and what it runs is the tool's own operation, handed over as a [`Perform`].
+//! (`Edits`), and what it runs is the tool's own operation, handed over as a [`Perform`]. So are
+//! the calls of the scheduled task tools that write (`scheduled_task`), whose approval has nothing
+//! to edit.
 //!
 //! **The confirmation is the enforcement.** An approved request puts a session with no owner in
 //! any project, or a console session that dispatches into every project of its console, or a
@@ -25,7 +27,9 @@
 //! a call cancelled meanwhile does not interrupt it. The setting is read when the call is made, so
 //! a request already waiting stays in its dialog. The settings of the switches
 //! (`auto_approve_account_switches`) and of the handoffs (`auto_approve_handoffs`) are read by the
-//! tools themselves, which run the operation outright rather than ask (`change::run_unasked`).
+//! tools themselves, which run the operation outright rather than ask (`change::run_unasked`), and
+//! so is the setting of the scheduled task changes (`auto_approve_scheduled_task_changes`,
+//! `change::run_replacing`).
 //!
 //! **A request lives until it is answered, times out or is withdrawn.** It is held in memory only
 //! ([`SessionRequests`] on `AppState`) and sent again to a client after each `snapshot`, like a
@@ -36,8 +40,10 @@
 //! daemon is dropped, which drops the waiting call ([`wait_for_answer`]) and with it its guard. An
 //! agent that cancels the call over MCP reaches the second: its stdio server closes that
 //! connection (`mcp::stdio`). A session that asks again of the same kind (and, for a switch or a
-//! handoff, about the same session) has stopped waiting for its earlier call, so its new request
-//! takes the earlier one's place ([`Request::replaces`]).
+//! handoff, about the same session, and for a scheduled task change other than a create, about
+//! the same task) has stopped waiting for its earlier call, so its new request takes the earlier
+//! one's place ([`Request::replaces`]); two creates are two requests, which wait and are answered
+//! apart.
 //!
 //! **An agent can also give up on the call by its own time limit without any signal reaching
 //! Octoboard,** and nothing here tries to tell when. So an approval is always carried out the same
@@ -53,6 +59,7 @@ mod change;
 mod outcome;
 mod registry;
 mod request;
+mod scheduled_task;
 #[cfg(test)]
 mod tests;
 
@@ -74,13 +81,15 @@ use crate::state::AppState;
 
 use carry_out::carry_out;
 pub(crate) use change::{
-    ask_to_change, run_to_the_end, run_unasked, Change, Edits, Perform, Performed,
+    ask_to_change, run_replacing, run_to_the_end, run_unasked, Change, Edits, Perform, Performed,
+    TaskPerform,
 };
 pub(crate) use outcome::branch_outcome;
 pub use registry::SessionRequests;
 use registry::Waiting;
 use request::Request;
 pub(crate) use request::{Action, Ask};
+pub(crate) use scheduled_task::{ask_to_change_task, TaskChange, TaskPlace};
 
 /// How long a call waits for the user's answer. Octoboard's own value, for every agent alike, and
 /// kept below `session_tools::CALL_TIMEOUT` with room left for an approval given at the last
@@ -175,7 +184,8 @@ impl Drop for WithdrawOnDrop<'_> {
 /// is what the model is shown as the reason, so it is written for it. `transfer` is moved to the
 /// session on approval and only then. `automatic` is whether the user's setting to approve requests
 /// without asking was on when the call was made, which the caller also words the session's opening
-/// prompt by: the request is then approved at once, without asking.
+/// prompt by: the request is then approved at once, without asking. `brief` is the brief as the
+/// caller wrote it, which the dialog shows.
 ///
 /// A cancelled `request_session` is withdrawn by dropping this future (see `mcp::stdio`), so it
 /// can stop at any `.await`: work that must finish once started belongs on a task of its own.
@@ -184,6 +194,7 @@ pub async fn ask_for_session(
     caller: &Session,
     open: OpenRequest,
     transfer: Option<BranchTransfer>,
+    brief: String,
     automatic: bool,
     limit: Duration,
 ) -> Result<Value> {
@@ -193,6 +204,7 @@ pub async fn ask_for_session(
         Action::Start {
             open,
             transfer: transfer.map(Box::new),
+            brief,
         },
         automatic,
         limit,
@@ -382,8 +394,8 @@ async fn wait_for_answer(
 /// out or withdrawn changes nothing and is refused with a code saying which.
 ///
 /// An approval returns the session it started or brought back, or, for a switch or a handoff, the
-/// session it moved or the one that took its place. `edits` are the values the user changed in the
-/// dialog of a switch or a handoff.
+/// session it moved or the one that took its place; for a scheduled task change, none. `edits` are
+/// the values the user changed in the dialog of a switch or a handoff.
 pub async fn answer(
     state: &Arc<AppState>,
     request_id: &str,
@@ -465,7 +477,7 @@ where
             // the result so that a call still waiting has it first.
             let _ = waiting.answer.send(Ok(approved.result));
             tell_the_caller(state, &approved.caller_id, approved.message).await;
-            Ok(Some(approved.started))
+            Ok(approved.started)
         }
         Err(err) => {
             let _ = waiting.answer.send(Err(format!(

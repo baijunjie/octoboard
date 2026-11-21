@@ -37,7 +37,8 @@ export function DisclosureContent({ className, children }: { className?: string;
   return <HeroDisclosure.Content className={className}>{children}</HeroDisclosure.Content>;
 }
 
-/** The padded body inside a `DisclosureContent`. */
-export function DisclosureBody({ className, children }: { className?: string; children: React.ReactNode }): React.ReactElement {
-  return <HeroDisclosure.Body className={className}>{children}</HeroDisclosure.Body>;
+/** The padded body inside a `DisclosureContent`; `className` goes on its inner element. `flush` pads the body by 4px at
+ * the sides and the bottom in place of HeroUI's 8px (`Disclosure.css`), for what is set in line with the content above. */
+export function DisclosureBody({ flush, className, children }: { flush?: boolean; className?: string; children: React.ReactNode }): React.ReactElement {
+  return <HeroDisclosure.Body data-flush={flush || undefined} className={className}>{children}</HeroDisclosure.Body>;
 }

@@ -28,6 +28,7 @@ use crate::mcp::lookup::{
     console_accounts_argument, git_workflow_argument, launch_argument, optional_agent,
     optional_bool, optional_string, optional_string_list, own_console, own_project, present_agent,
     present_text, project_accounts_argument, raw_text, required_str, resolve_project,
+    START_ONLY_IN,
 };
 use crate::mcp::views::{describe_console, describe_project};
 use crate::project_git::remote_url;
@@ -289,6 +290,7 @@ pub(in crate::mcp) fn update_settings(
             auto_approve_resume_requests: None,
             auto_approve_account_switches: None,
             auto_approve_handoffs: None,
+            auto_approve_scheduled_task_changes: None,
             ask_questions_as_choices: None,
             keep_sessions_in_own_project: None,
             // Settings' Memory section is not the user's alone: an agent may turn it on or off
@@ -323,7 +325,7 @@ pub(in crate::mcp) async fn get_project(
     caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let project = own_project(state, caller, None)?;
+    let project = own_project(state, caller, None, START_ONLY_IN)?;
     let refreshed = if optional_bool(arguments, "refresh")?.unwrap_or(false) {
         Some(refresh_git_status(state, vec![project.clone()]).await)
     } else {

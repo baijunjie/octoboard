@@ -178,7 +178,7 @@ A row's switch whose value the daemon holds saves when it is turned, on its own:
 start**, **Prevent sleep** and **Close idle terminals when closing the panel**; in Git, **Automatically pull
 repositories**, **Squash commits before delivery**, **Rebase before delivery** and **Revert gate**; in Agent accounts,
 **Automatically select an account**, **Automatically switch accounts at the usage limit** and **Start usage windows
-automatically**; the five of Agent behavior; in Memory, **Let sessions share Octoboard's memory**; in Cleanup, **Automatically delete archived sessions whose conversation
+automatically**; the seven of Agent behavior; in Memory, **Let sessions share Octoboard's memory**; in Cleanup, **Automatically delete archived sessions whose conversation
 is gone**; and, in a browser open on a daemon that updates itself, Updates' **Check for updates automatically**. The
 switch always shows the value the daemon has stored, which every window shares: it moves when that value changes, not
 on the press itself. Once a press has sent a save, further presses are ignored until the stored value shows
@@ -246,7 +246,7 @@ The range, the default, what follows the size and where it is kept are in `docs/
 
 ## Agent behavior
 
-What a session may do without asking the user first, and how it asks the user: four switches that approve a session's
+What a session may do without asking the user first, and how it asks the user: five switches that approve a session's
 requests automatically, then **Ask questions as choices** and **Keep sessions to their own project**. The section and its rows are in
 `docs/product/agent-behavior-settings.md`.
 

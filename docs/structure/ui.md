@@ -64,8 +64,9 @@ their cascade order does not depend on which screen opened first.
 
 ### Pure domain layers
 
-- `src/values/` — `sameValue`, the structural equality the store keeps unchanged data by, and `knownValues`, the type
-  predicate a reader of a daemon enum is built from (`knownValue.ts`); imports nothing.
+- `src/values/` — `sameValue`, the structural equality the store keeps unchanged data by, `knownValues`, the type
+  predicate a reader of a daemon enum is built from (`knownValue.ts`), and `SCHEDULE_KINDS` with `isKnownScheduleKind`
+  (`scheduleKind.ts`), the schedule kinds that `store/` and `scheduledTasks/` share; imports nothing.
 - `src/platform/` — `PlatformAdapter`, the interface to everything native, made of optional capabilities: `tauri.ts`
   (the only place that imports `@tauri-apps/*`) and `browser.ts`, exposed by `react.tsx`; `host.ts` the `HostFacts`
   every adapter carries as `host` (the system, input facts, window chrome and native capabilities). The desktop shell
@@ -291,7 +292,7 @@ their cascade order does not depend on which screen opened first.
   alert of an update this window started that ended unfinished.
 - `src/dialogs/` — the feature dialogs (console, project, session, request, handoff, account switch, model, trust,
   archive and removal choices), on the `components/dialog/` toolkit. `RequestedDialog.tsx` only routes a requested
-  dialog to its component; the archive, open-in-application (`OpenSessionInAppDialog`, which archives first), removal, restore and pull-merge confirmations are in `confirmations/`. The dialogs' daemon
+  dialog to its component; the archive, open-in-application (`OpenSessionInAppDialog`, which archives first), removal, restore and pull-merge confirmations are in `confirmations/`. `SessionRequestDialog.tsx` answers a session's request to the user, the request of a scheduled task change included: `ScheduledTaskRequestMessage.tsx` words it, `ScheduledTaskLaunchRows.tsx` lists the launch settings it carries, `RequestPrompt.tsx` shows the agent-written text in a collapsed disclosure and `sessionRequestReferences.tsx` the sessions, projects and consoles it names. The dialogs' daemon
   lookups (detected agent, located conversation, agent models, session records, branch inspections) are built on
   `useLatestRequest`; `branchInspection.ts` holds the pure part of a branch inspection and `useBranchInspections.ts`
   its hooks, with `useArchiveScope`, what an archive of a session takes along, shared by the archive and open-in-application confirmations. A launch level's compatibility switches (console, project, session, request, handoff and model dialogs) are

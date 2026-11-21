@@ -38,32 +38,37 @@ pub(crate) struct Performed {
     pub result: Value,
 }
 
-type PerformFuture = Pin<Box<dyn Future<Output = Result<Performed>> + Send>>;
-type PerformOnce = Box<dyn FnOnce(Edits) -> PerformFuture + Send>;
+type PerformFuture<O> = Pin<Box<dyn Future<Output = Result<O>> + Send>>;
+type PerformOnce<I, O> = Box<dyn FnOnce(I) -> PerformFuture<O> + Send>;
 
-/// The operation an approval of a switch or a handoff runs, with the values the user ended the
-/// dialog on. It runs at most once.
-pub(crate) struct Perform(Mutex<Option<PerformOnce>>);
+/// The operation an approval runs, given `I` and giving `O`. It runs at most once. For a switch or
+/// a handoff it is given the values the user ended the dialog on and gives the [`Performed`]
+/// session and result; for a scheduled task change ([`TaskPerform`]) it is given nothing and gives
+/// the result.
+pub(crate) struct Perform<I = Edits, O = Performed>(Mutex<Option<PerformOnce<I, O>>>);
 
-impl Perform {
+/// The operation an approval of a scheduled task change runs.
+pub(crate) type TaskPerform = Perform<(), Value>;
+
+impl<I, O> Perform<I, O> {
     pub(crate) fn new<F, Fut>(run: F) -> Self
     where
-        F: FnOnce(Edits) -> Fut + Send + 'static,
-        Fut: Future<Output = Result<Performed>> + Send + 'static,
+        F: FnOnce(I) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<O>> + Send + 'static,
     {
-        Self(Mutex::new(Some(Box::new(move |edits| {
-            Box::pin(run(edits))
+        Self(Mutex::new(Some(Box::new(move |input| {
+            Box::pin(run(input))
         }))))
     }
 
-    pub(super) fn start(&self, edits: Edits) -> Result<PerformFuture> {
+    pub(super) fn start(&self, input: I) -> Result<PerformFuture<O>> {
         let run = self
             .0
             .lock()
             .expect("perform lock poisoned")
             .take()
             .ok_or_else(|| anyhow!("this request was carried out already"))?;
-        Ok(run(edits))
+        Ok(run(input))
     }
 }
 
@@ -84,6 +89,8 @@ pub(crate) enum Change {
         model: Option<Option<String>>,
         effort: Option<Option<String>>,
         compatibility: BTreeMap<String, Option<bool>>,
+        /// What the call told the receiving session beyond the package, as written.
+        note: Option<String>,
         perform: Perform,
     },
 }
@@ -96,6 +103,8 @@ pub(super) struct Described {
     pub model: Option<Option<String>>,
     pub effort: Option<Option<String>>,
     pub compatibility: BTreeMap<String, Option<bool>>,
+    /// The text of the call the receiving session is handed, if the tool takes any.
+    pub prompt: Option<String>,
 }
 
 impl Change {
@@ -123,8 +132,9 @@ impl Change {
         }
     }
 
-    /// [`Self::slot`] of the change `tool` makes to `target`.
-    fn slot_of(tool: &str, target: &str) -> String {
+    /// [`Self::slot`] of the change `tool` makes to `target`, which a change to a scheduled task
+    /// names alike.
+    pub(super) fn slot_of(tool: &str, target: &str) -> String {
         format!("{tool}\0{target}")
     }
 
@@ -143,6 +153,7 @@ impl Change {
                 model: None,
                 effort: None,
                 compatibility: BTreeMap::new(),
+                prompt: None,
             },
             Change::Handoff {
                 target,
@@ -150,6 +161,7 @@ impl Change {
                 model,
                 effort,
                 compatibility,
+                note,
                 ..
             } => Described {
                 action: SessionRequestAction::Handoff,
@@ -158,6 +170,7 @@ impl Change {
                 model: model.clone(),
                 effort: effort.clone(),
                 compatibility: compatibility.clone(),
+                prompt: note.clone(),
             },
         }
     }
@@ -206,19 +219,29 @@ pub(crate) async fn run_unasked(
     target: &str,
     run: impl Future<Output = Result<Performed>> + Send + 'static,
 ) -> Result<Value> {
-    // A request of the same kind for the same session that is still waiting is this call's to
-    // replace, as an asked one would.
-    let slot = Change::slot_of(tool, target);
-    super::close(
-        state,
-        |request| {
-            request.session == caller.id
-                && matches!(&request.ask, Ask::Change(change) if change.slot() == slot)
-        },
-        SessionRequestEnding::Withdrawn,
-    );
     let run = async move { run.await.map(|done| done.result) };
-    run_to_the_end(state, caller, tool, run).await
+    run_replacing(state, caller, tool, Some(target), run).await
+}
+
+/// Runs the operation of `tool` without asking, through [`run_to_the_end`], after closing the
+/// request of the caller for the same `tool` and `target` that is still waiting (none to close for
+/// a call that names no target, a create), as an asked request would replace it.
+pub(crate) fn run_replacing<'a>(
+    state: &'a Arc<AppState>,
+    caller: &'a Session,
+    tool: &'static str,
+    target: Option<&str>,
+    run: impl Future<Output = Result<Value>> + Send + 'static,
+) -> impl Future<Output = Result<Value>> + 'a {
+    if let Some(target) = target {
+        let slot = Request::approval_slot_of(&caller.id, &Change::slot_of(tool, target));
+        super::close(
+            state,
+            |request| request.approval_slot() == slot,
+            SessionRequestEnding::Withdrawn,
+        );
+    }
+    run_to_the_end(state, caller, tool, run)
 }
 
 /// Runs the operation of `tool`, which must finish once started, on a task of its own and answers

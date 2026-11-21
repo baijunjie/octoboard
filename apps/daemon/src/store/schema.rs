@@ -172,7 +172,8 @@ pub(super) const MIGRATIONS: &[&str] = &[
     // (`run_migrations`), so the update changes nothing a user had on.
     concat!(
         step_5_to_6!(),
-        " ALTER TABLE settings ADD COLUMN allow_browser_access INTEGER NOT NULL DEFAULT 0;"
+        " ALTER TABLE settings ADD COLUMN allow_browser_access INTEGER NOT NULL DEFAULT 0;
+     ALTER TABLE settings ADD COLUMN auto_approve_scheduled_task_changes INTEGER NOT NULL DEFAULT 0;"
     ),
 ];
 
@@ -475,14 +476,14 @@ CREATE TABLE settings (
     squash_before_delivery INTEGER NOT NULL DEFAULT 0,
     rebase_before_delivery INTEGER NOT NULL DEFAULT 1,
     delivery            TEXT NOT NULL DEFAULT 'ask',
-    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working', keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0, daemon_update_check INTEGER NOT NULL DEFAULT 1, daemon_update_channel TEXT NOT NULL DEFAULT 'stable', allow_remote_access INTEGER NOT NULL DEFAULT 0, remote_access_port INTEGER, memory_enabled INTEGER NOT NULL DEFAULT 0, allow_browser_access INTEGER NOT NULL DEFAULT 0);
+    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working', keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0, daemon_update_check INTEGER NOT NULL DEFAULT 1, daemon_update_channel TEXT NOT NULL DEFAULT 'stable', allow_remote_access INTEGER NOT NULL DEFAULT 0, remote_access_port INTEGER, memory_enabled INTEGER NOT NULL DEFAULT 0, allow_browser_access INTEGER NOT NULL DEFAULT 0, auto_approve_scheduled_task_changes INTEGER NOT NULL DEFAULT 0);
 -- `resume_sessions_on_start`, `keep_awake`, `keep_awake_when`, `keep_sessions_in_own_project`,
 -- `daemon_update_check`, `daemon_update_channel`, `allow_remote_access`, `remote_access_port`,
--- `memory_enabled` and `allow_browser_access` are the last columns, spelled as a migration leaves
--- them; see `Store::resume_sessions_on_start`, `Store::keep_awake`,
+-- `memory_enabled`, `allow_browser_access` and `auto_approve_scheduled_task_changes` are the last
+-- columns, spelled as a migration leaves them; see `Store::resume_sessions_on_start`, `Store::keep_awake`,
 -- `Store::keep_sessions_in_own_project`, `Store::daemon_update_check`,
 -- `Store::allow_remote_access`, `Store::remote_access_port`, `Store::memory_enabled` and
--- `Store::allow_browser_access`.
+-- `Store::allow_browser_access` and `Store::auto_approve_scheduled_task_changes`.
 -- The user's explicit choice for a setting of a provider, as JSON (`true`, `false` or a quoted
 -- choice); a setting with no row follows its default. Rows naming a provider or setting this
 -- build does not declare are kept and ignored. See `Store::provider_settings`.
@@ -1527,6 +1528,41 @@ mod tests {
             .execute_batch(CARRY_BROWSER_ACCESS)
             .expect("the carrying statement");
         assert!(store.allow_browser_access().unwrap());
+    }
+
+    /// Migrating a version 5 database adds the automatic approval of scheduled task changes, off,
+    /// and keeps the values the settings row holds, including the other automatic approvals; once
+    /// on, it survives reopening the store.
+    #[test]
+    fn migrating_a_version_5_database_adds_the_scheduled_task_approval_off() {
+        let path = temp_db("migrate-scheduled-task-approval");
+        {
+            let conn = Connection::open(&path).expect("version 5 database");
+            conn.execute_batch(PAST_SCHEMAS[4])
+                .expect("version 5 schema");
+            conn.pragma_update(None, "user_version", 5)
+                .expect("version");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
+            conn.execute_batch(
+                "INSERT INTO settings (id, auto_pull_repositories, auto_approve_handoffs)
+                 VALUES ('singleton', 1, 1);",
+            )
+            .expect("settings");
+        }
+
+        {
+            let store = Store::open(&path).expect("migrated");
+            assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+            let settings = store.get_settings().unwrap();
+            assert!(!settings.auto_approve_scheduled_task_changes);
+            assert!(!store.auto_approve_scheduled_task_changes().unwrap());
+            assert!(settings.auto_pull_repositories, "the row's values stay");
+            assert!(settings.auto_approve_handoffs, "the row's values stay");
+            assert!(store.set_auto_approve_scheduled_task_changes(true).unwrap());
+        }
+        let reopened = Store::open(&path).expect("reopened");
+        assert!(reopened.auto_approve_scheduled_task_changes().unwrap());
     }
 
     /// Migrating a version 3 database adds the switch that keeps sessions to their own project,

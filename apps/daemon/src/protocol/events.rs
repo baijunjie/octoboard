@@ -42,7 +42,7 @@ use super::records::{
     SessionKind, SessionStatus, ShellTerminal,
 };
 use super::remote_access::RemoteAccess;
-use super::scheduled_tasks::{ScheduledTask, ScheduledTaskRun};
+use super::scheduled_tasks::{ScheduledTask, ScheduledTaskAsked, ScheduledTaskRun};
 use super::session_branches::SessionBranchItem;
 use super::settings::Settings;
 
@@ -394,8 +394,9 @@ pub enum Event {
     },
     /// A session asked with `request_session` for a session that has no owner, or with
     /// `request_resume_session` to resume a conversation, or an owner called `switch_session_account`
-    /// or `handoff_session` while the user's approval is required, and its call is waiting for the
-    /// user's answer. Broadcast once, when the call is made, and sent again to a client after each
+    /// or `handoff_session`, or a session called one of the scheduled task tools that change
+    /// something, while the user's approval is required, and its call is waiting for the user's
+    /// answer. Broadcast once, when the call is made, and sent again to a client after each
     /// `snapshot`, oldest first, for every request still waiting.
     SessionRequest {
         request_id: String,
@@ -404,16 +405,20 @@ pub enum Event {
         /// What an approval does.
         action: SessionRequestAction,
         /// Whether the session asked for would be a console session or a project session; for
-        /// `switch` and `handoff`, which the target is.
+        /// `switch` and `handoff`, which the target is; for the scheduled task actions, which
+        /// session the task starts (a task's target after the change).
         kind: SessionKind,
         /// The console the new session would be in, or the console of the session to bring back,
-        /// switch or hand off.
+        /// switch or hand off; for the scheduled task actions, the task's console after the change.
         console: String,
         /// The project the new session would be in, or the project of the session to bring back,
-        /// switch or hand off; null for a console session.
+        /// switch or hand off; null for a console session; for the scheduled task actions, the
+        /// task's project after the change, null for a console task.
         project: Option<String>,
         /// The agent the new session would run, or the agent of the session to bring back or
-        /// switch; for `handoff`, the receiving agent.
+        /// switch; for `handoff`, the receiving agent; for the scheduled task actions, the agent
+        /// the task names, else the requesting session's own, which carries no more meaning than
+        /// that for them.
         agent: AgentId,
         /// For `reopen`, `resume`, `switch` and `handoff`: the session an approval brings back,
         /// switches or hands off. Null otherwise.
@@ -447,6 +452,19 @@ pub enum Event {
         /// by setting id; empty for every other request and where it asked for none.
         #[serde(default)]
         compatibility: BTreeMap<String, bool>,
+        /// For the scheduled task actions: what the call asks for (see `ScheduledTaskAsked`).
+        /// Left out for every other action.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        scheduled_task: Option<ScheduledTaskAsked>,
+        /// The text the requesting agent wrote for the request, verbatim: for `start`, its brief
+        /// as handed to the new session; for `handoff`, its note to the receiving session; for
+        /// `create_scheduled_task`, the task's prompt; for `update_scheduled_task`, the new
+        /// prompt when the call changes it. Left out where there is none (the other actions, and
+        /// a tool call that carries no such text).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        prompt: Option<String>,
         /// Milliseconds since the epoch, which is what orders several requests oldest first.
         requested_at: i64,
     },
@@ -1029,6 +1047,17 @@ pub enum SessionRequestAction {
     /// Hands the session `target`, which the asking session owns, off to a new session of another
     /// agent.
     Handoff,
+    /// Creates the scheduled task `scheduled_task` describes.
+    CreateScheduledTask,
+    /// Changes the scheduled task `scheduled_task.task` as `scheduled_task` and `prompt` say.
+    UpdateScheduledTask,
+    /// Turns the scheduled task `scheduled_task.task` on or off, as `scheduled_task.enabled`
+    /// says.
+    SetScheduledTaskEnabled,
+    /// Deletes the scheduled task `scheduled_task.task`.
+    DeleteScheduledTask,
+    /// Runs the scheduled task `scheduled_task.task` once now.
+    RunScheduledTask,
 }
 
 /// Why a `session_request` stopped waiting.
@@ -1049,8 +1078,120 @@ pub enum SessionRequestEnding {
 #[cfg(test)]
 mod tests {
     use crate::protocol::{
-        error_code, Event, ImportFailure, ImportItem, ImportItemState, SessionStatus,
+        error_code, AgentId, Event, ImportFailure, ImportItem, ImportItemState, Schedule,
+        ScheduledTaskAsked, ScheduledTaskLaunch, SessionKind, SessionRequestAction, SessionStatus,
+        TimeOfDay,
     };
+
+    fn session_request(
+        action: SessionRequestAction,
+        scheduled_task: Option<ScheduledTaskAsked>,
+        prompt: Option<&str>,
+    ) -> serde_json::Value {
+        serde_json::to_value(Event::SessionRequest {
+            request_id: "request-1".to_owned(),
+            session: "s-1".to_owned(),
+            action,
+            kind: SessionKind::Project,
+            console: "console-1".to_owned(),
+            project: Some("project-1".to_owned()),
+            agent: AgentId::CLAUDE,
+            target: None,
+            owner: None,
+            reopened_owners: Vec::new(),
+            account: None,
+            conversation: None,
+            branches: Vec::new(),
+            model: None,
+            effort: None,
+            compatibility: Default::default(),
+            scheduled_task,
+            prompt: prompt.map(str::to_owned),
+            requested_at: 7,
+        })
+        .unwrap()
+    }
+
+    /// The five scheduled task actions are written as the names of the tools that ask them, which
+    /// is how a client tells them apart.
+    #[test]
+    fn the_scheduled_task_actions_are_written_as_their_tools_names() {
+        for (action, name) in [
+            (
+                SessionRequestAction::CreateScheduledTask,
+                "create_scheduled_task",
+            ),
+            (
+                SessionRequestAction::UpdateScheduledTask,
+                "update_scheduled_task",
+            ),
+            (
+                SessionRequestAction::SetScheduledTaskEnabled,
+                "set_scheduled_task_enabled",
+            ),
+            (
+                SessionRequestAction::DeleteScheduledTask,
+                "delete_scheduled_task",
+            ),
+            (SessionRequestAction::RunScheduledTask, "run_scheduled_task"),
+        ] {
+            assert_eq!(
+                session_request(action, None, None)["action"],
+                name,
+                "{name}"
+            );
+        }
+    }
+
+    /// A request that carries no scheduled task and no text of the call has neither key, so a
+    /// client reads only what is there; what a scheduled task request carries is written, and a
+    /// field of it the call does not carry is left out.
+    #[test]
+    fn a_session_request_writes_its_scheduled_task_and_prompt_only_when_it_has_them() {
+        let plain = session_request(SessionRequestAction::Reopen, None, None);
+        let keys = plain.as_object().unwrap();
+        assert!(!keys.contains_key("scheduled_task"));
+        assert!(!keys.contains_key("prompt"));
+
+        let created = session_request(
+            SessionRequestAction::CreateScheduledTask,
+            Some(ScheduledTaskAsked {
+                task: None,
+                launch: Some(ScheduledTaskLaunch {
+                    title: Some("Nightly".to_owned()),
+                    ..Default::default()
+                }),
+                schedule: Some(Schedule::Daily {
+                    time: TimeOfDay { hour: 9, minute: 0 },
+                }),
+                enabled: Some(true),
+            }),
+            Some("Check the build"),
+        );
+        assert_eq!(created["prompt"], "Check the build");
+        assert_eq!(
+            created["scheduled_task"],
+            serde_json::json!({
+                "launch": { "title": "Nightly", "compatibility": {} },
+                "schedule": { "kind": "daily", "time": { "hour": 9, "minute": 0 } },
+                "enabled": true,
+            })
+        );
+
+        let deleted = session_request(
+            SessionRequestAction::DeleteScheduledTask,
+            Some(ScheduledTaskAsked {
+                task: Some("t-1".to_owned()),
+                ..Default::default()
+            }),
+            None,
+        );
+        assert_eq!(
+            deleted["scheduled_task"],
+            serde_json::json!({ "task": "t-1" })
+        );
+        assert!(!deleted.as_object().unwrap().contains_key("prompt"));
+    }
 
     #[test]
     fn a_session_interrupted_reply_serializes_with_its_type_and_fields() {

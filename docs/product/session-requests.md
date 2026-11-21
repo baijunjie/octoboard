@@ -19,9 +19,17 @@ of an owner's switch" in `docs/product/switching-session-accounts.md` and "The u
 dialog behaves, as this doc describes them; what it says of the session an approval starts, its brief and the branches
 it is handed does not apply to them.
 
-**The user's confirmation is enforced by Octoboard, not by a prompt.** Nothing is started, resumed, switched or handed
-off on the call alone: the call waits while the user is asked, and only the user's approval acts — or the user's
-standing approval, where they have chosen to have requests of that kind approved automatically (see "Approving
+A console session's or project coordinator's call of a scheduled task tool that writes — `create_scheduled_task`,
+`update_scheduled_task`, `set_scheduled_task_enabled`, `delete_scheduled_task` or `run_scheduled_task` — is a session
+request too, while **Automatically approve scheduled task changes** is off: the change is made only once the user
+approves it, in a plain confirmation with nothing to change (see "The user's approval of a session's task change" and
+"The confirmation of a task change" in `docs/product/scheduled-tasks.md`). It shares the wait, the ways a request ends,
+the outcome message and how the dialog behaves, as this doc describes them; what it says of the session an approval
+starts, its brief and the branches it is handed does not apply to it.
+
+**The user's confirmation is enforced by Octoboard, not by a prompt.** Nothing is started, resumed, switched, handed
+off or changed on the call alone: the call waits while the user is asked, and only the user's approval acts — or the
+user's standing approval, where they have chosen to have requests of that kind approved automatically (see "Approving
 requests automatically" below).
 
 ## Who is offered the tool
@@ -76,10 +84,11 @@ transfer (see "Transferring branches" below).
 
 ## Approving requests automatically
 
-Each kind of request has an application setting of its own, all four **off by default** and independent of one
+Each kind of request has an application setting of its own, all five **off by default** and independent of one
 another: **Automatically approve session requests** for `request_session`, **Automatically approve resume requests**
-for `request_resume_session`, **Automatically approve account switches** for an owner's `switch_session_account`, and
-**Automatically approve handoffs** for an owner's `handoff_session` (see the sections of the same names in
+for `request_resume_session`, **Automatically approve account switches** for an owner's `switch_session_account`,
+**Automatically approve handoffs** for an owner's `handoff_session`, and **Automatically approve scheduled task
+changes** for the scheduled task tools that write (see the sections of the same names in
 `docs/product/agent-behavior-settings.md`).
 While a `request_session` or `request_resume_session` call's own setting is on, the call, once it passes every check
 made before the user is asked, is **approved at once**, without asking:
@@ -107,23 +116,25 @@ made before the user is asked, is **approved at once**, without asking:
   daemon dropping — does not stop it: the session is still started or brought back, the branches still transferred,
   and the outcome message still reaches the caller's session.
 
-**A switch or a handoff under its setting is not a request at all.** While **Automatically approve account switches**
-is on, an owner's `switch_session_account` call makes the switch at once, and while **Automatically approve handoffs**
-is on, its `handoff_session` call makes the handoff at once:
+**A switch, a handoff or a scheduled task change under its setting is not a request at all.** While **Automatically
+approve account switches** is on, an owner's `switch_session_account` call makes the switch at once; while
+**Automatically approve handoffs** is on, its `handoff_session` call makes the handoff at once; and while
+**Automatically approve scheduled task changes** is on, a scheduled task tool that writes makes its change at once:
 no dialog is shown, the caller raises no hand, no notification is fired, and the call does not wait for an answer. What
-the switch or the handoff refuses is refused at that moment, an account whose quota is used up included (see "When a
-switch fails" in `docs/product/switching-session-accounts.md` and "What can be handed off" in
-`docs/product/handing-off-sessions.md`). The result is the tool's own and says nothing of an approval. The setting is
-read once, when the call is made, and a request the caller has waiting to make the same change — to switch the same
-session's account, or to hand the same session off — is withdrawn first. Once the call has started the switch or the
-handoff, cancelling the call does not stop it; when the call is gone by the time it ends, what was done, or why it could
-not be done, is written into the caller's session as the outcome message is (see "The outcome message" below).
+the switch, the handoff or the change refuses is refused at that moment, an account whose quota is used up included for
+a switch or a handoff (see "When a switch fails" in `docs/product/switching-session-accounts.md`, "What can be handed
+off" in `docs/product/handing-off-sessions.md` and "Saving a task" in `docs/product/scheduled-tasks.md`). The result is
+the tool's own and says nothing of an approval. The setting is read once, when the call is made, and a request the
+caller has waiting to make the same change — to switch the same session's account, to hand the same session off, or to
+make a change of the same tool to the same task — is withdrawn first. Once the call has started the switch, the handoff
+or the change, cancelling the call does not stop it; when the call is gone by the time it ends, what was done, or why it
+could not be done, is written into the caller's session as the outcome message is (see "The outcome message" below).
 
 Each tool's description tells the agent that the call waits for the user's answer unless the user has chosen to have
 such requests approved automatically, in which case the call does not wait; for `request_session` and
 `request_resume_session` the result then says so.
 
-An agent can neither read nor change any of the four settings through the settings tools (see "Application settings:
+An agent can neither read nor change any of the five settings through the settings tools (see "Application settings:
 `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), so a session cannot approve its own
 requests. Besides Settings, the only other way any of them changes is an import of a configuration document that
 carries the Agent behavior section, when the user asks to apply that section, whose review says beforehand when the document
@@ -190,10 +201,10 @@ connected window.
 
 | Ending | What the call returns | What changes |
 |---|---|---|
-| The user approves | The result described under "On approval" below; for `request_resume_session`, under "On approval" in `docs/product/requests-to-resume-a-conversation.md`; for a switch or a handoff, the tool's own result (see "Switching from an owner's tool" in `docs/product/switching-session-accounts.md` and "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`). | The session is started, brought back, switched or handed off, as described there. |
-| The user refuses — the **Refuse** button, Escape or the dialog's close button | A tool error in fixed prose saying the user refused the request and nothing was started (for `request_resume_session`, nothing was resumed); it ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal what it wanted the session for, and to follow the user's direction on continuing its own work or leaving notes for the next session and ending. For a switch or a handoff it says that nothing was changed, and ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal why it wanted the change, and to follow their direction on what to do instead. | Nothing. |
+| The user approves | The result described under "On approval" below; for `request_resume_session`, under "On approval" in `docs/product/requests-to-resume-a-conversation.md`; for a switch, a handoff or a scheduled task change, the tool's own result (see "Switching from an owner's tool" in `docs/product/switching-session-accounts.md`, "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md` and "Changing tasks from a session" in `docs/product/scheduled-tasks.md`). | The session is started, brought back, switched or handed off, or the task created, changed, turned on or off, deleted or run, as described there. |
+| The user refuses — the **Refuse** button, Escape or the dialog's close button | A tool error in fixed prose saying the user refused the request and nothing was started (for `request_resume_session`, nothing was resumed); it ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal what it wanted the session for, and to follow the user's direction on continuing its own work or leaving notes for the next session and ending. For a switch, a handoff or a scheduled task change it says that nothing was changed (for `run_scheduled_task`, that the task was not run), and ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal why it wanted the change, and to follow their direction on what to do instead. | Nothing. |
 | Nobody answers within the time limit | A tool error of the same shape, saying the user did not respond within the limit. | Nothing. |
-| The request is withdrawn | A tool error saying the request was withdrawn before the user answered and nothing was started (nothing resumed, or nothing changed, for the other tools), where the call is still there to receive it. | Nothing. |
+| The request is withdrawn | A tool error saying the request was withdrawn before the user answered and nothing was started (nothing resumed, nothing changed, or the task not run, for the other tools), where the call is still there to receive it. | Nothing. |
 
 The user is not asked for a reason when refusing.
 
@@ -202,8 +213,9 @@ A request is **withdrawn** on the signals Octoboard sees for every agent alike:
 - the caller's process ends — it is interrupted, archived, deleted or exits;
 - the call's connection to the daemon is dropped;
 - the agent cancels the call over MCP, which gets it a tool error saying the call was cancelled. This holds for
-  `request_session`, `request_resume_session`, `switch_session_account` and `handoff_session` only. A switch or a
-  handoff made without asking is left to finish (see "Approving requests automatically" above), and so is a call of any
+  `request_session`, `request_resume_session`, `switch_session_account`, `handoff_session` and the scheduled task tools
+  that write only. A switch, a handoff or a scheduled task change made without asking is left to finish (see
+  "Approving requests automatically" above), and so is a call of any
   other Octoboard tool, cancelled or not, even when its connection to the daemon goes part-way, as when the agent's
   process exits mid-call: an `open_session` that opened its session still transfers its branches, a `report` already
   delivered still goes on to archive its session where it would (`set_session_model` sees to its own end, see "Changing
@@ -215,7 +227,9 @@ A new one takes the place of the one the session already has waiting, which is w
 change. A request to switch a session's account takes the place only of the caller's waiting request to switch that same
 session, and a request to hand a session off only of its waiting request to hand that same session off: an owner can
 have a request for a session and several switches and handoffs, each of a session of its own, waiting at once, each
-shown in its own dialog.
+shown in its own dialog. Which waiting request a scheduled task change takes the place of is in "The user's approval of
+a session's task change" in `docs/product/scheduled-tasks.md`; a request for a session, a switch, a handoff and a
+scheduled task change never take one another's place.
 
 A request made while an approval of a request it would take the place of — from the dialog or automatic — is being
 carried out is refused, saying the earlier request has just been approved and is being carried out, and that its
@@ -327,7 +341,8 @@ the caller is still responsible for them.
 the delivery every message takes (see "Messages held until a session can take them" in
 `docs/product/message-delivery.md`). It opens as a notice from Octoboard ("Message from Octoboard:", see
 `docs/product/message-headers.md`) saying it concerns the caller's call that made the request, naming its tool —
-`request_session`, `request_resume_session`, `switch_session_account` or `handoff_session` — then carries the same note
+`request_session`, `request_resume_session`, `switch_session_account`, `handoff_session` or a scheduled task tool that
+writes — then carries the same note
 as the result, and says there is nothing more to do if the call already returned it. This is how a caller
 whose agent gave up on the call by a time limit of its own, without any signal reaching Octoboard, still learns what
 came of its request (see "Waiting for the answer" above).
@@ -348,7 +363,10 @@ the reason in an error alert about the requesting session. For an automatic appr
 request was approved automatically but could not be carried out, and no window shows an alert. A switch or a handoff
 the user approved that cannot be carried out leaves everything as a failed switch or handoff leaves it (see "When a
 switch fails" in `docs/product/switching-session-accounts.md` and "When a handoff fails" in
-`docs/product/handing-off-sessions.md`), and is answered the same way, the alert being about the requesting session.
+`docs/product/handing-off-sessions.md`), and is answered the same way, the alert being about the requesting session;
+so is a scheduled task change the user approved that cannot be carried out, which leaves the task as it was — because
+the caller's process ended first, or because the change is refused when it is checked again (see "The user's approval
+of a session's task change" in `docs/product/scheduled-tasks.md`).
 For a `request_session` it is for one of these reasons (a `request_resume_session`'s, and the session its alert is
 about, are in "When an approval cannot be carried out" in `docs/product/requests-to-resume-a-conversation.md`):
 
@@ -363,9 +381,10 @@ about, are in "When an approval cannot be carried out" in `docs/product/requests
 
 For a `request_session`, a plain confirmation titled "Start a session?", with two buttons, **Refuse** and **Start
 session**; what a `request_resume_session`'s says is in "The confirmation dialog" in
-`docs/product/requests-to-resume-a-conversation.md`, and what a switch's and a handoff's say and let the user change is
+`docs/product/requests-to-resume-a-conversation.md`, what a switch's and a handoff's say and let the user change is
 in "The user's approval of an owner's switch" in `docs/product/switching-session-accounts.md` and "The user's approval
-of an owner's handoff" in `docs/product/handing-off-sessions.md`.
+of an owner's handoff" in `docs/product/handing-off-sessions.md`, and what a scheduled task change's says is in "The
+confirmation of a task change" in `docs/product/scheduled-tasks.md`.
 
 - **One sentence says who asks and for what.** It names the requesting session by its displayed name (see
   "Displayed names" in `docs/product/session-titles.md`; its id where the window does not know the session) and where
@@ -378,15 +397,25 @@ of an owner's handoff" in `docs/product/handing-off-sessions.md`.
 - **Where the request transfers branches, a second sentence names them**, saying they would be transferred to the new
   session. Each branch is shown as code, and they are joined as the window's language joins a list. With none, the
   dialog says only the first sentence.
-- **Nothing the agent wrote is shown**, its brief included: the dialog is the one place the user's approval is
-  enforced, so it says only what Octoboard knows. The names of sessions, projects and consoles in the sentence are the
-  ones the user gave, each shown as a name in the ordinary font rather than in quotation marks; the branches it names
-  were each checked to be one the requester is responsible for before the user was asked. What the agent wants the
-  session for is for the requesting session to say, in its own terminal.
+- **The sentences hold nothing the agent wrote**: the dialog is the one place the user's approval is enforced, so they
+  say only what Octoboard knows. The names of sessions, projects and consoles in them are the ones the user gave, each
+  shown as a name in the ordinary font rather than in quotation marks; the branches they name were each checked to be
+  one the requester is responsible for before the user was asked. The brief is shown apart, folded away (see below):
+  it is the brief as Octoboard renders it into the new session's opening prompt (see "Handing out a task: the brief" in
+  `docs/product/hub-orchestration.md`), without the paragraph Octoboard puts before it.
 - The text wraps anywhere, so a long unbroken title or branch name does not widen the dialog.
 
 Every session request's dialog behaves as follows:
 
+- **Text the agent wrote is shown only folded away, and only as written.** A request that carries text its agent wrote
+  for the request shows it under what the dialog says, below a handoff's form, in a disclosure that is collapsed to
+  begin with: "Brief written by the session" for a `request_session`, "Note written by the session" for a handoff whose
+  call passed a note, and "Prompt written by the session" for a scheduled task create and for an update that changes
+  the task's prompt. Opened, it shows the text exactly as the agent wrote it, as plain text — never as Markdown, and
+  with no links — keeping its whitespace and wrapping long lines anywhere, in a block at most 40% of the window's height
+  that scrolls within itself, with a button that copies the whole text. A request without such text — to resume a
+  conversation or reopen a session, a switch, a handoff without a note, a request to turn a scheduled task on or off,
+  delete it or run it — has no disclosure.
 - **Keyboard focus starts on the dialog itself** rather than on a button, for each request it shows, so Enter answers
   nothing until the user moves focus onto a control (see "Where keyboard focus starts in a confirmation" in
   `docs/product/dialogs.md`).

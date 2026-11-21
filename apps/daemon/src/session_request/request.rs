@@ -11,7 +11,7 @@ use crate::protocol::{AgentId, Event, Session, SessionKind, SessionRequestAction
 use crate::time::now_millis;
 
 use super::outcome::approval_wording;
-use super::Change;
+use super::{Change, TaskChange};
 
 /// What a call that changed nothing tells the model to do next: stopping there is the expected
 /// outcome, and asking again would put the same question in front of the user straight away.
@@ -32,6 +32,9 @@ pub(crate) enum Action {
     Start {
         open: OpenRequest,
         transfer: Option<Box<BranchTransfer>>,
+        /// The brief as the agent wrote it, which the dialog shows; `open`'s task is Octoboard's
+        /// opening paragraph followed by it.
+        brief: String,
     },
     /// Brings back the archived or interrupted session `target`, which holds the conversation;
     /// `archived` is which it was when the request was made, which is what the dialog words the
@@ -53,11 +56,12 @@ pub(crate) enum Action {
     },
 }
 
-/// What a request asks the user to approve: a session to start or bring back, or a change to a
-/// session the requester owns (`change`).
+/// What a request asks the user to approve: a session to start or bring back, a change to a
+/// session the requester owns (`change`), or a change to a scheduled task.
 pub(crate) enum Ask {
     Session(Action),
     Change(Change),
+    ScheduledTask(TaskChange),
 }
 
 /// One request: what the dialog is told of it, and what an approval does.
@@ -116,6 +120,7 @@ impl Request {
                 "request_resume_session"
             }
             Ask::Change(change) => change.tool(),
+            Ask::ScheduledTask(change) => change.tool,
         }
     }
 
@@ -124,6 +129,7 @@ impl Request {
         match &self.ask {
             Ask::Session(_) => "request for a session",
             Ask::Change(change) => change.what(),
+            Ask::ScheduledTask(change) => change.what(),
         }
     }
 
@@ -131,7 +137,7 @@ impl Request {
     pub(super) fn do_not_ask_again(&self) -> &'static str {
         match &self.ask {
             Ask::Session(_) => DO_NOT_ASK_AGAIN,
-            Ask::Change(_) => DO_NOT_ASK_AGAIN_TO_CHANGE,
+            Ask::Change(_) | Ask::ScheduledTask(_) => DO_NOT_ASK_AGAIN_TO_CHANGE,
         }
     }
 
@@ -148,6 +154,7 @@ impl Request {
                 "nothing was resumed"
             }
             Ask::Change(_) => "nothing was changed",
+            Ask::ScheduledTask(change) => change.untouched(),
         }
     }
 
@@ -160,6 +167,9 @@ impl Request {
             && match (&self.ask, &other.ask) {
                 (Ask::Session(_), Ask::Session(_)) => true,
                 (Ask::Change(this), Ask::Change(that)) => this.same_change(that),
+                (Ask::ScheduledTask(this), Ask::ScheduledTask(that)) => {
+                    this.slot().is_some() && this.slot() == that.slot()
+                }
                 _ => false,
             }
     }
@@ -170,8 +180,18 @@ impl Request {
     pub(super) fn approval_slot(&self) -> String {
         match &self.ask {
             Ask::Session(_) => self.session.clone(),
-            Ask::Change(change) => format!("{}\0{}", self.session, change.slot()),
+            Ask::Change(change) => Self::approval_slot_of(&self.session, &change.slot()),
+            // A create has no slot of its own: each is carried out apart from the others.
+            Ask::ScheduledTask(change) => Self::approval_slot_of(
+                &self.session,
+                &change.slot().unwrap_or_else(|| self.id.clone()),
+            ),
         }
+    }
+
+    /// The approval slot of `session`'s change in `slot`.
+    pub(super) fn approval_slot_of(session: &str, slot: &str) -> String {
+        format!("{session}\0{slot}")
     }
 
     pub(super) fn event(&self) -> Event {
@@ -184,6 +204,8 @@ impl Request {
         let mut model = None;
         let mut effort = None;
         let mut compatibility = BTreeMap::new();
+        let mut scheduled_task = None;
+        let mut prompt = None;
         let action = match &self.ask {
             Ask::Change(change) => {
                 let described = change.describe();
@@ -196,9 +218,18 @@ impl Request {
                     .into_iter()
                     .filter_map(|(setting, value)| Some((setting, value?)))
                     .collect();
+                prompt = described.prompt;
                 described.action
             }
-            Ask::Session(Action::Start { transfer, .. }) => {
+            Ask::ScheduledTask(change) => {
+                scheduled_task = Some(change.asked.clone());
+                prompt = change.prompt.clone();
+                change.action
+            }
+            Ask::Session(Action::Start {
+                transfer, brief, ..
+            }) => {
+                prompt = Some(brief.clone());
                 branches = transfer
                     .as_ref()
                     .map(|transfer| transfer.branches.clone())
@@ -247,6 +278,8 @@ impl Request {
             model,
             effort,
             compatibility,
+            scheduled_task,
+            prompt,
             requested_at: self.requested_at,
         }
     }

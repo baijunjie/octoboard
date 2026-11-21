@@ -137,7 +137,16 @@ async fn ask_transferring(
     let task = {
         let state = state.clone();
         tokio::spawn(async move {
-            ask_for_session(&state, &caller, asked, transfer, false, limit).await
+            ask_for_session(
+                &state,
+                &caller,
+                asked,
+                transfer,
+                "the brief".to_string(),
+                false,
+                limit,
+            )
+            .await
         })
     };
     let deadline = std::time::Instant::now() + PATIENCE;
@@ -294,6 +303,11 @@ async fn an_approval_starts_a_session_with_no_owner_in_any_project() {
         )
     );
     assert!(matches!(&event, Event::SessionRequest { branches, .. } if branches.is_empty()));
+    // The dialog is shown the brief as the agent wrote it; nothing else of the request is text.
+    assert!(matches!(
+        &event,
+        Event::SessionRequest { prompt: Some(prompt), scheduled_task: None, .. } if prompt == "the brief"
+    ));
 
     let started = answer_by(&launcher, &request_id_of(&event), true)
         .await
@@ -404,6 +418,7 @@ async fn a_call_made_while_its_approval_is_carried_out_is_refused() {
         &caller,
         asked(CONSOLE, Some("project-1")),
         None,
+        "the brief".to_string(),
         false,
         ANSWER_TIME_LIMIT,
     )
@@ -651,6 +666,7 @@ async fn a_second_call_takes_the_place_of_the_first() {
                 &caller,
                 asked(CONSOLE, None),
                 None,
+                "the brief".to_string(),
                 false,
                 ANSWER_TIME_LIMIT,
             )
@@ -984,6 +1000,7 @@ async fn ask_automatically(
         Action::Start {
             open: asked,
             transfer: None,
+            brief: "the brief".to_string(),
         },
         true,
         ANSWER_TIME_LIMIT,
@@ -1087,6 +1104,7 @@ async fn an_automatic_approval_replaces_a_waiting_request_and_respects_an_approv
                 Action::Start {
                     open: asked(CONSOLE, None),
                     transfer: None,
+                    brief: "the brief".to_string(),
                 },
                 true,
                 ANSWER_TIME_LIMIT,
@@ -1139,6 +1157,7 @@ async fn an_automatic_approval_carries_on_when_the_call_is_dropped() {
                 Action::Start {
                     open: asked(CONSOLE, Some("project-1")),
                     transfer: None,
+                    brief: "the brief".to_string(),
                 },
                 true,
                 ANSWER_TIME_LIMIT,
@@ -1314,11 +1333,15 @@ async fn an_approval_reopens_the_session_that_holds_the_conversation() {
         reopened_owners,
         account,
         conversation,
+        prompt,
+        scheduled_task,
         ..
     } = &event
     else {
         unreachable!()
     };
+    // No text of the call is shown for a reopen, and nothing of a scheduled task.
+    assert_eq!((prompt, scheduled_task), (&None, &None));
     assert_eq!(
         (
             *action,
@@ -1409,6 +1432,8 @@ async fn an_approval_resumes_an_interrupted_holder() {
         event,
         Event::SessionRequest {
             action: SessionRequestAction::Resume,
+            prompt: None,
+            scheduled_task: None,
             ..
         }
     ));
@@ -1787,6 +1812,8 @@ async fn an_approval_opens_a_session_on_the_record() {
             action: SessionRequestAction::ResumeRecord,
             target: None,
             account: None,
+            prompt: None,
+            scheduled_task: None,
             conversation: Some(conversation),
             project: Some(project),
             ..
@@ -1948,4 +1975,192 @@ async fn a_switch_nobody_answers_times_out_without_running() {
     assert!(err.to_string().contains("nothing was changed"), "{err}");
     assert_eq!(ran.load(Ordering::SeqCst), 0);
     assert!(!state.session_requests.is_waiting_for("asker"));
+}
+
+/// A change to the scheduled task `task`, whose approval runs `perform` and returns `result`.
+fn task_change(
+    tool: &'static str,
+    action: SessionRequestAction,
+    task: &str,
+    ran: &Arc<AtomicUsize>,
+    result: Value,
+) -> TaskChange {
+    TaskChange {
+        tool,
+        action,
+        asked: crate::protocol::ScheduledTaskAsked {
+            task: Some(task.to_string()),
+            ..Default::default()
+        },
+        prompt: None,
+        perform: TaskPerform::new({
+            let ran = ran.clone();
+            move |()| async move {
+                ran.fetch_add(1, Ordering::SeqCst);
+                Ok(result)
+            }
+        }),
+    }
+}
+
+fn task_place() -> TaskPlace {
+    TaskPlace {
+        agent: crate::protocol::AgentId::CLAUDE,
+        console: CONSOLE.to_string(),
+        project: Some("project-1".to_string()),
+    }
+}
+
+/// The first approval of a scheduled task request carries its operation out once and gives its
+/// result to the waiting call, starting no session; a second answer finds nothing waiting and runs
+/// nothing more.
+#[tokio::test]
+async fn an_approved_scheduled_task_request_runs_its_operation_once_and_starts_no_session() {
+    let (state, _dir) = fixture("scheduled-approve");
+    let _asker = running(&state, "asker");
+    let ran = Arc::new(AtomicUsize::new(0));
+    let call = {
+        let (state, caller) = (state.clone(), state.session_record("asker").unwrap());
+        let change = task_change(
+            "delete_scheduled_task",
+            SessionRequestAction::DeleteScheduledTask,
+            "t-1",
+            &ran,
+            json!({ "deleted": "t-1", "note": "Deleted." }),
+        );
+        tokio::spawn(async move {
+            ask_to_change_task(&state, &caller, task_place(), change, ANSWER_TIME_LIMIT).await
+        })
+    };
+    let event = event_of(&state, "asker").await;
+    assert_eq!(
+        ran.load(Ordering::SeqCst),
+        0,
+        "nothing runs before the answer"
+    );
+    assert!(matches!(
+        &event,
+        Event::SessionRequest {
+            action: SessionRequestAction::DeleteScheduledTask,
+            kind: SessionKind::Project,
+            project: Some(project),
+            prompt: None,
+            scheduled_task: Some(asked),
+            ..
+        } if project == "project-1" && asked.task.as_deref() == Some("t-1")
+    ));
+
+    let started = answer(&state, &request_id_of(&event), true, Edits::default())
+        .await
+        .unwrap();
+    assert!(started.is_none(), "no session is started or moved");
+    let result = outcome_of(call).await.unwrap();
+    assert_eq!(result["deleted"], "t-1");
+    assert_eq!(ran.load(Ordering::SeqCst), 1);
+    assert!(pending_events(&state).is_empty());
+    let late = answer(&state, &request_id_of(&event), true, Edits::default())
+        .await
+        .unwrap_err();
+    assert_eq!(code_of(&late), error_code::SESSION_REQUEST_ANSWERED);
+    assert_eq!(ran.load(Ordering::SeqCst), 1);
+}
+
+/// A scheduled task request nobody answers within the limit ends with an error saying so and that
+/// nothing was changed (a run, that the task was not run), and runs nothing.
+#[tokio::test]
+async fn a_scheduled_task_request_nobody_answers_times_out_without_running() {
+    let (state, _dir) = fixture("scheduled-timeout");
+    let _asker = running(&state, "asker");
+    let caller = state.session_record("asker").unwrap();
+    for (tool, action, untouched, what) in [
+        (
+            "update_scheduled_task",
+            SessionRequestAction::UpdateScheduledTask,
+            "nothing was changed",
+            "request to change a scheduled task",
+        ),
+        (
+            "run_scheduled_task",
+            SessionRequestAction::RunScheduledTask,
+            "the task was not run",
+            "request to run a scheduled task",
+        ),
+    ] {
+        let ran = Arc::new(AtomicUsize::new(0));
+        let change = task_change(tool, action, "t-1", &ran, json!({}));
+        let err = ask_to_change_task(
+            &state,
+            &caller,
+            task_place(),
+            change,
+            Duration::from_millis(50),
+        )
+        .await
+        .expect_err("timed out");
+        let text = err.to_string();
+        assert!(
+            text.contains(&format!("the user did not respond to this {what}")),
+            "{text}"
+        );
+        assert!(text.contains(untouched), "{text}");
+        assert_eq!(ran.load(Ordering::SeqCst), 0, "{tool}");
+        assert!(pending_events(&state).is_empty());
+        assert!(!state.session_requests.is_waiting_for("asker"));
+    }
+}
+
+/// A scheduled task request is replaced only by one of the same tool for the same task by the
+/// same session: another task's, another tool's and another session's wait beside it, and the
+/// replaced call is told it was withdrawn and ran nothing.
+#[tokio::test]
+async fn a_scheduled_task_request_is_replaced_only_by_the_same_tool_for_the_same_task() {
+    let (state, _dir) = fixture("scheduled-replace");
+    state
+        .store
+        .insert_session(&project_session("second"))
+        .unwrap();
+    let _first = running(&state, "asker");
+    let _second = running(&state, "second");
+    let ran = Arc::new(AtomicUsize::new(0));
+    let ask = |session: &str, tool: &'static str, action, task: &str| {
+        let (state, caller) = (state.clone(), state.session_record(session).unwrap());
+        let change = task_change(tool, action, task, &ran, json!({}));
+        tokio::spawn(async move {
+            ask_to_change_task(&state, &caller, task_place(), change, ANSWER_TIME_LIMIT).await
+        })
+    };
+    let waiting = |count: usize| {
+        let state = state.clone();
+        async move {
+            let deadline = std::time::Instant::now() + PATIENCE;
+            while pending_events(&state).len() != count {
+                assert!(std::time::Instant::now() < deadline, "{count} never waited");
+                tokio::task::yield_now().await;
+            }
+        }
+    };
+    let update = SessionRequestAction::UpdateScheduledTask;
+
+    let first = ask("asker", "update_scheduled_task", update, "t-1");
+    waiting(1).await;
+    let other_task = ask("asker", "update_scheduled_task", update, "t-2");
+    waiting(2).await;
+    let other_tool = ask(
+        "asker",
+        "delete_scheduled_task",
+        SessionRequestAction::DeleteScheduledTask,
+        "t-1",
+    );
+    waiting(3).await;
+    let other_session = ask("second", "update_scheduled_task", update, "t-1");
+    waiting(4).await;
+
+    let again = ask("asker", "update_scheduled_task", update, "t-1");
+    let err = outcome_of(first).await.expect_err("replaced");
+    assert!(err.to_string().contains("withdrawn"), "{err}");
+    waiting(4).await;
+    assert_eq!(ran.load(Ordering::SeqCst), 0);
+    for call in [again, other_task, other_tool, other_session] {
+        call.abort();
+    }
 }

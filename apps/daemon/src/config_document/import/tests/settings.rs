@@ -304,6 +304,10 @@ async fn the_automatic_approvals_round_trip_in_a_full_export() {
     source.store.set_auto_approve_handoffs(true).unwrap();
     source
         .store
+        .set_auto_approve_scheduled_task_changes(true)
+        .unwrap();
+    source
+        .store
         .insert_console(&crate::test_support::console(&source_dir))
         .unwrap();
     let full = serde_json::to_value(
@@ -315,6 +319,10 @@ async fn the_automatic_approvals_round_trip_in_a_full_export() {
     assert_eq!(full["settings"]["auto_approve_resume_requests"], true);
     assert_eq!(full["settings"]["auto_approve_account_switches"], true);
     assert_eq!(full["settings"]["auto_approve_handoffs"], true);
+    assert_eq!(
+        full["settings"]["auto_approve_scheduled_task_changes"],
+        true
+    );
 
     let (target, _target_dir) = app_state("import-auto-approve-target");
     let inspection = inspect(&target, &full).await.unwrap();
@@ -327,6 +335,8 @@ async fn the_automatic_approvals_round_trip_in_a_full_export() {
     assert!(!settings.current_auto_approve_account_switches);
     assert!(settings.auto_approve_handoffs);
     assert!(!settings.current_auto_approve_handoffs);
+    assert!(settings.auto_approve_scheduled_task_changes);
+    assert!(!settings.current_auto_approve_scheduled_task_changes);
 
     apply(
         &target,
@@ -346,6 +356,7 @@ async fn the_automatic_approvals_round_trip_in_a_full_export() {
     assert!(!target.store.auto_approve_resume_requests().unwrap());
     assert!(!target.store.auto_approve_account_switches().unwrap());
     assert!(!target.store.auto_approve_handoffs().unwrap());
+    assert!(!target.store.auto_approve_scheduled_task_changes().unwrap());
     apply(
         &target,
         &full,
@@ -364,6 +375,59 @@ async fn the_automatic_approvals_round_trip_in_a_full_export() {
     assert!(target.store.auto_approve_resume_requests().unwrap());
     assert!(target.store.auto_approve_account_switches().unwrap());
     assert!(target.store.auto_approve_handoffs().unwrap());
+    assert!(target.store.auto_approve_scheduled_task_changes().unwrap());
+}
+
+/// A document written before the automatic approval of scheduled task changes existed carries no
+/// value for it, so the importing machine keeps its own, whether it is on or off, and the
+/// inspection reads as no change; the other approvals in the same section are still taken.
+#[tokio::test]
+async fn a_document_without_the_scheduled_task_approval_leaves_the_machines_own_value() {
+    let (source, source_dir) = app_state("import-scheduled-approval-older-source");
+    source.store.set_auto_approve_handoffs(true).unwrap();
+    source
+        .store
+        .insert_console(&crate::test_support::console(&source_dir))
+        .unwrap();
+    let mut older = serde_json::to_value(
+        crate::config_document::export::build(&source.store, &export::Selection::full(true))
+            .unwrap(),
+    )
+    .unwrap();
+    older["settings"]
+        .as_object_mut()
+        .unwrap()
+        .remove("auto_approve_scheduled_task_changes");
+
+    for own in [true, false] {
+        let (target, _target_dir) = app_state(&format!("import-scheduled-approval-older-{own}"));
+        target
+            .store
+            .set_auto_approve_scheduled_task_changes(own)
+            .unwrap();
+        let settings = inspect(&target, &older).await.unwrap().settings.unwrap();
+        assert_eq!(settings.auto_approve_scheduled_task_changes, own);
+        assert_eq!(settings.current_auto_approve_scheduled_task_changes, own);
+        apply(
+            &target,
+            &older,
+            Vec::new(),
+            ApplyOptions {
+                settings: carried_sections(&older),
+                accounts: None,
+                consoles: true,
+                clone_dir: true,
+                agents: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            target.store.auto_approve_scheduled_task_changes().unwrap(),
+            own
+        );
+        assert!(target.store.auto_approve_handoffs().unwrap());
+    }
 }
 
 /// The question-asking switch is on by default, so what travels is the user turning it off:

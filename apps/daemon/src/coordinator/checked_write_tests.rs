@@ -108,6 +108,70 @@ async fn a_stale_settings_write_is_refused_whole_and_names_the_current_versions(
     assert!(stored.ask_questions_as_choices);
 }
 
+/// The automatic approval of scheduled task changes is a settings field with a version of its own:
+/// a write of it is applied and broadcast, advances only that field's version, and a write based
+/// on the version before it is refused, leaving the value as the first write set it.
+#[tokio::test]
+async fn the_scheduled_task_approval_is_written_and_checked_as_a_field_of_its_own() {
+    let (state, _dir) = crate::test_support::app_state("checked-settings-scheduled-approval");
+    let read = read_settings(&state);
+    assert!(!read.auto_approve_scheduled_task_changes);
+    let field = "auto_approve_scheduled_task_changes";
+    assert!(read.versions.contains_key(field));
+    let mut events = state.subscribe();
+
+    send(
+        &state,
+        json!({
+            "type": "update_settings",
+            "auto_approve_scheduled_task_changes": true,
+            "base_versions": { field: read.versions[field] },
+        }),
+    )
+    .await
+    .unwrap();
+    assert!(state.store.auto_approve_scheduled_task_changes().unwrap());
+    assert!(matches!(
+        events.try_recv(),
+        Ok(crate::protocol::Event::SettingsUpdated { settings })
+            if settings.auto_approve_scheduled_task_changes
+    ));
+    let current = read_settings(&state);
+    assert!(current.auto_approve_scheduled_task_changes);
+    assert!(current.versions[field] > read.versions[field]);
+    for (path, version) in &read.versions {
+        if path != field {
+            assert_eq!(current.versions[path], *version, "{path} did not move");
+        }
+    }
+
+    let refused = send(
+        &state,
+        json!({
+            "type": "update_settings",
+            "auto_approve_scheduled_task_changes": false,
+            "base_versions": { field: read.versions[field] },
+        }),
+    )
+    .await;
+    let (fields, _) = conflict(refused);
+    assert_eq!(fields, field);
+    assert!(state.store.auto_approve_scheduled_task_changes().unwrap());
+
+    // Based on the current version, it is turned off again.
+    send(
+        &state,
+        json!({
+            "type": "update_settings",
+            "auto_approve_scheduled_task_changes": false,
+            "base_versions": { field: current.versions[field] },
+        }),
+    )
+    .await
+    .unwrap();
+    assert!(!state.store.auto_approve_scheduled_task_changes().unwrap());
+}
+
 #[tokio::test]
 async fn two_settings_writers_changing_different_fields_both_succeed() {
     let (state, _dir) = crate::test_support::app_state("checked-settings-different");

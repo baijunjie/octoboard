@@ -638,6 +638,7 @@ it("groups the application settings as the Settings dialog does, each group in t
     "Automatically approve resume requests",
     "Automatically approve account switches",
     "Automatically approve handoffs",
+    "Automatically approve scheduled task changes",
     "Ask questions as choices",
     "Keep sessions to their own project",
   ]);
@@ -1302,6 +1303,7 @@ it("states what turning on the automatic approvals lets agents do", async () => 
   expect(lines["Automatically approve resume requests"]?.note).toContain("request to reopen or resume a session");
   expect(lines["Automatically approve account switches"]).toEqual({ badge: "Turns on", note: "A session's request to switch the account of one of its sessions is then approved without asking you first." });
   expect(lines["Automatically approve handoffs"]).toEqual({ badge: "Turns on", note: "A session's request to hand one of its sessions off to another agent is then approved without asking you first." });
+  expect(lines["Automatically approve scheduled task changes"]).toEqual({ badge: "Turns on", note: "A session's request to create, change, enable or disable, delete or run a scheduled task is then approved without asking you first." });
 });
 
 it("says applying the file turns off asking questions as choices", async () => {

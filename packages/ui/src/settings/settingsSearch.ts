@@ -168,6 +168,7 @@ const INDEX = {
     daemonSwitch("auto_approve_resume_requests"),
     daemonSwitch("auto_approve_account_switches"),
     daemonSwitch("auto_approve_handoffs"),
+    daemonSwitch("auto_approve_scheduled_task_changes"),
     daemonSwitch("ask_questions_as_choices"),
     daemonSwitch("keep_sessions_in_own_project"),
   ],

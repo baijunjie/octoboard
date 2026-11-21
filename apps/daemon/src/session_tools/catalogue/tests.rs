@@ -17,6 +17,8 @@ fn only_the_withdrawn_calls_and_the_model_change_run_on_the_call() {
         "report",
         "transfer_session",
         "transfer_branches",
+        "list_scheduled_tasks",
+        "list_scheduled_task_runs",
     ] {
         assert!(!runs_on_the_call(tool), "{tool}");
     }
@@ -134,6 +136,13 @@ fn the_tools_offered_follow_from_kind_and_binding() {
             "bind_to_session",
             "request_session",
             "request_resume_session",
+            "list_scheduled_tasks",
+            "list_scheduled_task_runs",
+            "create_scheduled_task",
+            "update_scheduled_task",
+            "set_scheduled_task_enabled",
+            "delete_scheduled_task",
+            "run_scheduled_task",
             "report",
             "list_sessions",
             "list_session_branches",
@@ -190,6 +199,13 @@ fn the_tools_offered_follow_from_kind_and_binding() {
             "release_session",
             "request_session",
             "request_resume_session",
+            "list_scheduled_tasks",
+            "list_scheduled_task_runs",
+            "create_scheduled_task",
+            "update_scheduled_task",
+            "set_scheduled_task_enabled",
+            "delete_scheduled_task",
+            "run_scheduled_task",
             "list_sessions",
             "list_session_branches",
             "list_project_changes",
@@ -307,7 +323,13 @@ fn every_title_says_which_language_to_write_the_name_in() {
                 continue;
             }
             let schema = (tool.schema)();
-            let Some(title) = schema["properties"]["title"]["description"].as_str() else {
+            // A scheduled task's session is named in its `launch`.
+            let Some(title) = schema["properties"]["title"]["description"]
+                .as_str()
+                .or_else(|| {
+                    schema["properties"]["launch"]["properties"]["title"]["description"].as_str()
+                })
+            else {
                 continue;
             };
             assert!(title.ends_with(NAMING_LANGUAGE), "{}: {title}", tool.name);
@@ -319,11 +341,13 @@ fn every_title_says_which_language_to_write_the_name_in() {
     assert_eq!(
         naming,
         [
+            "create_scheduled_task",
             "handoff_session",
             "open_session",
             "rename_session",
             "request_resume_session",
-            "request_session"
+            "request_session",
+            "update_scheduled_task"
         ]
     );
 }
@@ -675,5 +699,53 @@ fn the_settings_tools_offer_no_remote_access() {
         let text = text.to_lowercase();
         assert!(!text.contains("remote_access"), "{name}");
         assert!(!text.contains("remote access"), "{name}");
+    }
+}
+
+/// The scheduled task tools are for console sessions and project coordinators, never workers; a
+/// coordinator is not asked for a project, and every write says it waits for the user unless they
+/// chose automatic approval.
+#[test]
+fn the_scheduled_task_tools_are_for_console_sessions_and_coordinators() {
+    let reads = ["list_scheduled_tasks", "list_scheduled_task_runs"];
+    let writes = [
+        "create_scheduled_task",
+        "update_scheduled_task",
+        "set_scheduled_task_enabled",
+        "delete_scheduled_task",
+        "run_scheduled_task",
+    ];
+    for name in reads.into_iter().chain(writes) {
+        assert!(
+            tool_by_name(SessionKind::Project, true, name).is_none(),
+            "{name}"
+        );
+        for kind in [SessionKind::Console, SessionKind::Project] {
+            assert!(tool_by_name(kind, false, name).is_some(), "{name}");
+        }
+    }
+    for name in writes {
+        for kind in [SessionKind::Console, SessionKind::Project] {
+            let tool = tool_by_name(kind, false, name).unwrap();
+            assert!(
+                tool.description.contains("approved automatically"),
+                "{name}: {}",
+                tool.description
+            );
+            assert!(WITHDRAWN_ON_CANCEL.contains(&name), "{name}");
+        }
+    }
+    for name in ["create_scheduled_task", "update_scheduled_task"] {
+        let schema = |kind| (tool_by_name(kind, false, name).unwrap().schema)();
+        assert!(schema(SessionKind::Console)["properties"]["project"].is_object());
+        assert!(schema(SessionKind::Project)["properties"]["project"].is_null());
+    }
+    // Reads need no approval and say nothing of asking.
+    for name in reads {
+        let tool = tool_by_name(SessionKind::Console, false, name).unwrap();
+        assert!(
+            !tool.description.contains("approved automatically"),
+            "{name}"
+        );
     }
 }

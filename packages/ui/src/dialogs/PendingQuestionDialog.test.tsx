@@ -33,6 +33,7 @@ const request: SessionRequest = {
 const questions: [string, Partial<State>, Partial<State>][] = [
   ["a trust prompt", { trustPrompts: [prompt] }, { trustPrompts: [{ ...prompt, session: "s-2", path: "/Users/dev/code/site" }] }],
   ["a session request", { sessionRequests: [request] }, { sessionRequests: [{ ...request, requestId: "r-2", session: "s-2" }] }],
+  ["a scheduled task request with its prompt", { sessionRequests: [{ ...request, action: "update_scheduled_task", task: "t-1", prompt: "Do it" } as SessionRequest] }, { sessionRequests: [{ ...request, requestId: "r-2", session: "s-2" }] }],
 ];
 
 const editProject = <Dialog title="Edit project" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}><input aria-label="Name" /></Dialog>;

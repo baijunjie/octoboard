@@ -306,7 +306,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   same path as resuming an interrupted session; the store lists them, `Store::list_interrupted_sessions`, and the
   adopted ones are not among them, as they never stopped), `scheduled_tasks.rs` with `scheduled_tasks/` (the
   requests of the scheduled tasks, whose launch settings are checked through `open.rs`'s `check_saved_open`, a task
-  being refused for what would refuse the session it opens; `next_run.rs` the pure function from a schedule, an
+  being refused for what would refuse the session it opens, and the check-only `check_new_scheduled_task`,
+  `check_scheduled_task_changes` and `check_run_scheduled_task`, which the MCP tools call to refuse before asking the
+  user; `next_run.rs` the pure function from a schedule, an
   instant and a time zone to the next run, and the zone itself, `local_zone`; `runs.rs` one run: it opens the session
   through the same path as `open_session` and records the run, for the scheduler and for `run_scheduled_task`;
   `scheduler.rs` the scheduler, a daemon task that `main.rs` spawns after the start-up resume and reconciliation, which
@@ -318,9 +320,11 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   record's `owner-key` and `browser-port=` tokens again and broadcasts `remote_access_updated`, all under one `changing`
   lock that a rotation of the owner key, `rotate_key`, takes too; `ways.rs`: the `Way` and its listeners, and how the owner socket, the owner pipe and the browser port are opened and the failure each says; its tests sit in topic files beside them, with `test_support.rs` holding what they share).
 - `src/session_request/` — a session asking the user to approve something (`request_session`, `request_resume_session`,
-  account switch, handoff): `mod.rs` the wait, `registry.rs` the requests the daemon holds, `request.rs` what a request
-  is, `change.rs` the account switch and handoff variant, `carry_out.rs` what an approval does, `outcome.rs` the wording
-  of the outcome.
+  account switch, handoff, a change to a scheduled task): `mod.rs` the wait, `registry.rs` the requests the daemon
+  holds, `request.rs` what a request is, `change.rs` the account switch and handoff variant, which also holds the
+  once-only `Perform` an approval runs and `run_replacing`, the unasked run the three kinds of change share,
+  `scheduled_task.rs` the scheduled task variant (`ask_to_change_task`, with nothing for the user to edit),
+  `carry_out.rs` what an approval does, `outcome.rs` the wording of the outcome.
 - `src/messaging/` — every message Octoboard writes into sessions: `delivery.rs` (gates, queueing, what became of each
   message), `outbox.rs` (the per-session ordered queue, which also keeps how a message of images or a slash command is to be written (`session::term::Shape`) and drops such a message at a handover instead of carrying it as text, sealed at a planned stop's handover, which also keeps the tickets a refusal failed, and whose holds include the one a restart puts on the queue so it is carried into the relaunched process; a daemon's tickets start from the clock, `Outbox::seeded_from_clock`, because an agent's own queue keeps a message's id across runs), `write_queue.rs`
   (`AppState`'s queuing, flushing and holds over it, and the notice of a refused message), `restart_outbox.rs` (the messages still queued at the handover,
@@ -868,7 +872,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   - `tools/` has one file per tool or small group of related tools, named for it — for example `sessions.rs`,
     `messaging.rs`, `archive.rs`, `bindings.rs`, `handoff.rs`, `transfer/` (branches and process trees), `settings.rs`,
     `pages.rs`, `memory.rs` (the memory tools, over `coordinator::memory`; the memory is resolved from the calling session),
-    `account_switch.rs`, `session_model.rs`, `history.rs`, `agents.rs` and `models.rs`, and the reads
+    `account_switch.rs`, `session_model.rs`, `history.rs`, `agents.rs`, `models.rs` and `scheduled_tasks.rs` (the seven
+    scheduled task tools of a console session and a project coordinator, whose five writes go through
+    `session_request` unless `auto_approve_scheduled_task_changes` is on), and the reads
     (`reads.rs`, `project_changes.rs`, `project_branches.rs`, `session_branches.rs`). Two files are shared wording and
     helpers rather than tools: `relaunch.rs` (what the tools that relaunch a session tell the caller) and
     `project_browse.rs` (which project a repository read may touch, and running its browse request).

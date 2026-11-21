@@ -25,6 +25,7 @@ export function documentSettings(carried: Partial<DocumentSettings> = {}): Docum
     auto_approve_resume_requests: false,
     auto_approve_account_switches: false,
     auto_approve_handoffs: false,
+    auto_approve_scheduled_task_changes: false,
     ask_questions_as_choices: false,
     keep_sessions_in_own_project: false,
     git_workflow: DEFAULT_GIT_WORKFLOW,

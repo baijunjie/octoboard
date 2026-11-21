@@ -60,9 +60,9 @@ that rule. What is the user's alone is never changed through these tools, by any
   `docs/product/per-agent-settings.md`), since a session could otherwise lift the permission prompts of the sessions
   launched after it, its own next resume included, for instance by switching Claude Code to Bypass permissions, Codex
   to Full access or Grok Build to Always-approve;
-- reading or changing whether session requests, resume requests, account switches or handoffs are approved automatically
-  (see "Approving requests automatically" in `docs/product/session-requests.md`), since a session could otherwise
-  approve its own requests;
+- reading or changing whether session requests, resume requests, account switches, handoffs or scheduled task changes
+  are approved automatically (see "Approving requests automatically" in `docs/product/session-requests.md`), since a
+  session could otherwise approve its own requests;
 - reading or changing whether usage windows are started automatically (see "Start usage windows automatically" in
   `docs/product/starting-usage-windows.md`), since that spends the user's quota;
 - reading or changing whether sessions are switched to another account at the usage limit (see "Automatically switch
@@ -260,7 +260,8 @@ Settings does, and every open window of that daemon switches to it.
 (`squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while `development` is not `in_place`, and
 keep their values while it is); an item left out, or given as `null`, stays as it is. A refused value leaves the others
 unapplied too. An `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
-`auto_approve_handoffs`, `auto_start_quota_windows`, `auto_switch_on_usage_limit`, `ask_questions_as_choices`,
+`auto_approve_handoffs`, `auto_approve_scheduled_task_changes`,
+`auto_start_quota_windows`, `auto_switch_on_usage_limit`, `ask_questions_as_choices`,
 `keep_sessions_in_own_project`, `auto_select_account`, `provider_settings` or `agent_tags` argument is ignored,
 whatever its value — the setting stays as it is and the rest of the call applies as usual; `get_settings` lists only the last three, read-only. Turning
 `auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as turning the switch on in

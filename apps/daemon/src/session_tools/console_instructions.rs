@@ -151,6 +151,11 @@ const CONSOLE_SESSION_INSTRUCTIONS_AFTER_MEMORY_TOOLS: &str =
          - `request_resume_session` — ask the user to resume a conversation by its agent \
          conversation id: the session that holds it comes back, or an independent session is \
          opened on the agent's own record of it. For when the user asked for that conversation.\n\
+         - `list_scheduled_tasks` / `list_scheduled_task_runs` / `create_scheduled_task` / \
+           `update_scheduled_task` / `set_scheduled_task_enabled` / `delete_scheduled_task` / \
+           `run_scheduled_task` — this console's scheduled tasks, the user's: change only \
+           when asked. Writes need their approval unless they chose automatic approval. A task's \
+           sessions are the user's unless `launch.bound_to` names a console session.\n\
          - `list_sessions` / `inform_session` — the running sessions everywhere (narrow them with \
            `console`, `project`, `owner`, `yours`, `kind` or `branch`; `status` is `live` \
            (the running ones) by default, `interrupted` for the interrupted ones, or `any` for \
@@ -244,9 +249,7 @@ const CONSOLE_SESSION_INSTRUCTIONS_AFTER_MEMORY_TOOLS: &str =
            running until the receiving session's process ends instead of the giving one's. \
            `from` and `to` are each you or a session of yours, and each must have a process \
            running; name the trees by the ids `get_session` lists in `processes`. A session that \
-           is working, starting or waiting for the user cannot give processes up. A handoff, an \
-           account switch, a model change and a change of account sharing carry a session's \
-           processes over by themselves.\n\
+           is working, starting or waiting for the user cannot give processes up.\n\
          - `switch_session_account` moves a session of yours to another account of its own agent. \
            The user approves it first and may change the account, model and effort; the call \
            waits for their answer, unless they have chosen to approve account \
@@ -254,8 +257,8 @@ const CONSOLE_SESSION_INSTRUCTIONS_AFTER_MEMORY_TOOLS: &str =
            relaunched resuming it on the new account, and it is sent no message for it. It \
            comes back awaiting instructions and a turn in progress is cut off, so send it the \
            next step with `instruct_session` — unless the result's `note` says it was sent a \
-           prompt to continue, which you must not repeat. Use it rather than a handoff when the \
-           same agent can go on. `list_agents` shows which accounts still have quota.\n\
+           prompt to continue, which you must not repeat. `list_agents` shows which accounts \
+           still have quota.\n\
          - `set_session_model` changes the model or reasoning effort of a session of yours, on \
            its own agent and account, without asking the user. A running session is restarted to \
            take them: its process is ended and relaunched resuming its conversation, and it is \
@@ -272,7 +275,7 @@ const CONSOLE_SESSION_INSTRUCTIONS_AFTER_MEMORY_TOOLS: &str =
          afterwards.\n\
          - `release_session` makes a child session independent without asking the user: it is \
          told it has no parent session and becomes an independent coordinator, answering to the \
-         user, and it is no longer yours afterwards. Its branches stay with it.\n\
+         user, and it is no longer yours afterwards.\n\
          - An independent project coordinator can set you as its parent session. Its first \
          report says so; it stays a coordinator, even with no children. Drive it like any child \
          session of yours. A session that comes with sessions of its own keeps them and drives \
@@ -816,11 +819,12 @@ mod tests {
         // Every console tool's name holds an underscore, and so do the few field names and values
         // the file puts in backticks; listing them keeps those from being taken for tools missing
         // from the catalogue.
-        const NON_TOOL_NAMES: [&str; 4] = [
+        const NON_TOOL_NAMES: [&str; 5] = [
             "owner_kind",
             "needs_decision",
             "idle_after_report: true",
             "console_memory",
+            "launch.bound_to",
         ];
         let named: Vec<&str> = text
             .split('`')

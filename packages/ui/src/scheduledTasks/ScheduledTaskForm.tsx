@@ -20,7 +20,8 @@ import { liveConsoleSessions } from "../sessions/order";
 import { sessionChoiceTitle, sessionDisplayTitle } from "../sessions/sessionLabel";
 import { SettingRow } from "../settings/SettingRow";
 import { useConsoleSessions, useDaemonStore } from "../store";
-import { SCHEDULE_KIND_LABELS, SCHEDULE_KINDS, type ScheduleKind, weekdayName, WEEKDAYS } from "./scheduleText";
+import { SCHEDULE_KINDS, type ScheduleKind } from "../values/scheduleKind";
+import { SCHEDULE_KIND_LABELS, weekdayName, WEEKDAYS } from "./scheduleText";
 import { NO_OWNER, NO_PROJECT } from "./taskFields";
 import type { useTaskDraft } from "./useTaskDraft";
 

@@ -147,6 +147,7 @@ function exportedSettings(state: State, sections: readonly SettingsSection[]): D
       auto_approve_resume_requests: settings.auto_approve_resume_requests,
       auto_approve_account_switches: settings.auto_approve_account_switches,
       auto_approve_handoffs: settings.auto_approve_handoffs,
+      auto_approve_scheduled_task_changes: settings.auto_approve_scheduled_task_changes,
       ask_questions_as_choices: settings.ask_questions_as_choices,
       keep_sessions_in_own_project: settings.keep_sessions_in_own_project,
     }),

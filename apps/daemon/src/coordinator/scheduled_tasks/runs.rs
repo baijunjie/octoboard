@@ -205,8 +205,7 @@ pub(super) fn run_scheduled_task_now(
     task_id: &str,
     launch: Launcher,
 ) -> Result<()> {
-    let task = state.store.require_scheduled_task(task_id)?;
-    state.refuse_while_shutting_down()?;
+    let task = super::check_run_scheduled_task(state, task_id)?;
     let state = state.clone();
     tokio::spawn(async move {
         let _ = run_task(&state, &task, ScheduledRunTrigger::RunNow, None, &launch).await;
@@ -215,7 +214,7 @@ pub(super) fn run_scheduled_task_now(
 }
 
 /// `list_scheduled_task_runs`: the task's kept runs, most recent first.
-pub(in crate::coordinator) fn list_scheduled_task_runs(
+pub(crate) fn list_scheduled_task_runs(
     state: &Arc<AppState>,
     request_id: Option<String>,
     task_id: &str,

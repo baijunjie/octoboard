@@ -152,16 +152,23 @@ const COPY: { [F in BooleanField]: Copy<F> } = {
     description: { on: "settings.autoApproveHandoffs.description.on", off: "settings.autoApproveHandoffs.description.off" },
     consequence: "configuration.import.settings.consequence.autoApproveHandoffs",
   },
-  ask_questions_as_choices: {
+  auto_approve_scheduled_task_changes: {
     section: "agentBehavior",
     order: 5,
+    label: "settings.autoApproveScheduledTaskChanges.label",
+    description: { on: "settings.autoApproveScheduledTaskChanges.description.on", off: "settings.autoApproveScheduledTaskChanges.description.off" },
+    consequence: "configuration.import.settings.consequence.autoApproveScheduledTaskChanges",
+  },
+  ask_questions_as_choices: {
+    section: "agentBehavior",
+    order: 6,
     label: "settings.askQuestionsAsChoices.label",
     description: { on: "settings.askQuestionsAsChoices.description.on", off: "settings.askQuestionsAsChoices.description.off" },
     consequence: "configuration.import.settings.consequence.askQuestionsAsChoices",
   },
   keep_sessions_in_own_project: {
     section: "agentBehavior",
-    order: 6,
+    order: 7,
     label: "settings.keepSessionsInOwnProject.label",
     description: { on: "settings.keepSessionsInOwnProject.description.on", off: "settings.keepSessionsInOwnProject.description.off" },
     consequence: "configuration.import.settings.consequence.keepSessionsInOwnProject",
