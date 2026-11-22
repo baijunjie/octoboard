@@ -170,7 +170,7 @@
             "type",
             "path"
           ],
-          "description": "Reads the file a path link names, as `probe_path_links` resolved it: a file of the project\nor of a temp root, whatever its type. Resolved again by the rules of `open_path_link`, but\nnever a directory a client named, and nothing is opened on the host."
+          "description": "Reads the file a path link names, as `probe_path_links` resolved it: a file of the project,\nof a temp root or anywhere else on the host, whatever its type. Resolved again by the rules\nof `open_path_link` (including its deadline for looking at the path, not for the read), but\nnever a directory a client named, and nothing is opened on the host."
         },
         {
           "type": "object",
@@ -494,6 +494,34 @@
             "new"
           ],
           "description": "As `ReadProjectChangeBodies`, for a change of a commit."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reply": {
+              "type": "string"
+            },
+            "offset": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "length": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "read_reply_part"
+            }
+          },
+          "required": [
+            "type",
+            "reply",
+            "offset"
+          ],
+          "description": "The part from `offset` of a reply the daemon holds after answering a request that carried\n`part_bytes` with a `reply_part`; `reply` is the handle that part named. `length` defaults to\nthat request's `part_bytes`, and is cut and raised as it is. Answered with `reply_part`."
         }
       ]
     },
@@ -509,6 +537,12 @@
         "asked_by_person": {
           "type": "boolean",
           "description": "Whether a person has just asked for this reply (opened a menu, pressed Try again or\nRefresh), rather than a client asking again while it is on screen: a `git` the cached shell\nsnapshot does not find is then looked for once more in a fresh one."
+        },
+        "part_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Deliver the reply in parts of at most this many bytes: a reply whose serialized form is\nlarger is held by the daemon and sent as `reply_part`s, the rest of them asked for with\n`read_reply_part`. Cut to `budget::MAX_REPLY_PART_BYTES` and raised to\n`budget::MIN_REPLY_PART_BYTES`. Ignored by `search_project_content`, `read_file_range` and\n`read_reply_part`."
         }
       },
       "allOf": [
@@ -1150,6 +1184,25 @@
         }
       ]
     },
+    "QuestionAnswer": {
+      "type": "object",
+      "properties": {
+        "selected": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "description": "The options chosen, by their index in the question's `options`; none when left out."
+        },
+        "text": {
+          "type": "string",
+          "description": "The user's own answer."
+        }
+      },
+      "description": "The answer to one question of a `question` interaction, in `answer_interaction`."
+    },
     "RangeFile": {
       "oneOf": [
         {
@@ -1645,6 +1698,10 @@
               "type": "string",
               "description": "With `trash_directory`, the `inspection` token of the `inspect_project_removal`\nrefusal this removal was confirmed after, which it then repeats; absent means none."
             },
+            "delete_memory": {
+              "type": "boolean",
+              "description": "Deletes the memory of the project's place as well (see `list_memories`). Refused with\n`memory_place_in_use` while another project, of any console, is at the same place.\nAbsent is false, which keeps it: `list_orphaned_memories` finds it afterwards."
+            },
             "type": {
               "type": "string",
               "const": "delete_project"
@@ -2052,6 +2109,10 @@
               },
               "description": "The compatibility switches (provider settings declaring `compatibility_with`) the\nsession holds its own value for, by setting id, with the rule `effort` has: absent for a\nswitch leaves what the session has, `true` or `false` holds that value, `null` goes back\nto following the project's (else the console's, else the agent's). An unknown setting,\nor one a launch cannot hold, is refused with `unreadable_request`."
             },
+            "reapply": {
+              "type": "boolean",
+              "description": "Treats values the session already holds as a change: a session with a process is\nrestarted as a change restarts it, its stored choices left as they are, for a process\nwhose agent was switched to other values from inside (the records show them as\n`observed_model` and `observed_effort`); an interrupted session has them recorded\nagain, answered `recorded`, with those observations forgotten. Absent is false."
+            },
             "terminal_appearance": {
               "description": "See `OpenSession::terminal_appearance`.",
               "$ref": "#/$defs/TerminalAppearance"
@@ -2065,7 +2126,7 @@
             "type",
             "session"
           ],
-          "description": "Changes the model and reasoning effort of a session that is not archived, as its own\nchoice: each absent keeps what the session has, an explicit `null` (or blank) leaves it to\nthe agent, a string pins it; at least one is given. A running session is restarted on its\naccount, resuming its conversation with them, as an account switch does without moving it;\nan interrupted one only has them recorded for its next resume. Answered with\n`session_model_set`. See `coordinator::model_change::set_session_model`."
+          "description": "Changes the model and reasoning effort of a session that is not archived, as its own\nchoice: each absent keeps what the session has, an explicit `null` (or blank) leaves it to\nthe agent, a string pins it; at least one is given. A running session is restarted on its\naccount, resuming its conversation with them, as an account switch does without moving it;\nan interrupted one has them recorded for its next resume, the model and effort its records\nshowed it running forgotten. Answered with `session_model_set`. See `coordinator::model_change::set_session_model`."
         },
         {
           "type": "object",
@@ -2156,6 +2217,83 @@
             "session"
           ],
           "description": "The user-facing history of one session, read from the agent's own conversation record."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0,
+              "description": "How many of the latest entries the first page holds; 50 when absent, at most 200."
+            },
+            "type": {
+              "type": "string",
+              "const": "subscribe_session_conversation"
+            }
+          },
+          "required": [
+            "type",
+            "session"
+          ],
+          "description": "Starts following a session's conversation on this connection: answered with\n`session_conversation_subscribed`, and the changes of it follow as events until the session\nis unsubscribed or the connection ends. Handled by the connection itself\n(`crate::coordinator::conversation_feed`), which holds the subscriptions."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "unsubscribe_session_conversation"
+            }
+          },
+          "required": [
+            "type",
+            "session"
+          ],
+          "description": "Stops following a session's conversation on this connection; answered with `ack`, also for\na session that was not followed."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "epoch": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0,
+              "description": "The `epoch` the client's entries belong to."
+            },
+            "before": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0,
+              "description": "The `seq` of the earliest entry the client holds: the page ends just before it."
+            },
+            "limit": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0,
+              "description": "How many entries the page holds at most; 50 when absent, at most 200."
+            },
+            "type": {
+              "type": "string",
+              "const": "read_session_conversation"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "epoch",
+            "before"
+          ],
+          "description": "A page of the entries before `before` of a session this connection follows, answered with\n`session_conversation`."
         },
         {
           "type": "object",
@@ -2418,6 +2556,12 @@
             "text": {
               "type": "string"
             },
+            "images": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "type": {
               "type": "string",
               "const": "send_message"
@@ -2427,7 +2571,65 @@
             "type",
             "session",
             "text"
-          ]
+          ],
+          "description": "The user's own message into a running session. `images` are images to attach, each a path\n`save_pasted_image` answered for this session, for a provider that declares\n`message_images`, at most ten; with images, `text` may be empty. Refused with\n`session_waiting_for_user` while the session waits on the user, `session_trust_pending`\nwhile its folder-trust confirmation may be up, `unreadable_request` (`field: images`) for an\nimage path that is not one of this session's or for more than ten images,\n`field_required` (`field: text`) for nothing\nto send, and `provider_unsupported` for images to a provider that takes none."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "command": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "send_command"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "command"
+          ],
+          "description": "Writes a slash command, `command`, one line beginning with `/` and its arguments, into a\nrunning session for its agent to run as one of its own commands, for a provider that\ndeclares `slash_commands`. Answered with `ack` once written. Refused as `send_message` is,\nand with `command_not_recognised` where the agent would run another command in its place\n(its completion offers a different one), the command then cleared from the input box."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "interaction": {
+              "type": "string"
+            },
+            "choice": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "answers": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/QuestionAnswer"
+              }
+            },
+            "dismiss": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "answer_interaction"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "interaction"
+          ],
+          "description": "The user's answer to the session's `interaction`, named by its `id`: `choice` for a\n`permission` prompt (with `text` for a choice that takes it), `answers` for a `question`\nprompt (one per question, in order), or `dismiss` to decline a dismissible question. The\ndaemon presses it into the agent's terminal and answers with `ack` once the prompt is seen\ngone. Refused with `interaction_not_waiting` when that prompt is no longer up (answered\nalready, in the terminal or elsewhere, or replaced), `interaction_answer_failed` when the\nkeys could not be pressed or did not take (also broadcast as a `session_notice`; the prompt\nis left for the terminal), `field_required` or `unreadable_request` for an answer that does\nnot fit the prompt, and `provider_unsupported`."
         },
         {
           "type": "object",
@@ -2438,6 +2640,9 @@
             "data": {
               "type": "string"
             },
+            "upload": {
+              "type": "string"
+            },
             "type": {
               "type": "string",
               "const": "save_pasted_image"
@@ -2445,10 +2650,169 @@
           },
           "required": [
             "type",
+            "session"
+          ],
+          "description": "Saves an image the user pasted into the terminal of a running session as a file on the daemon\nhost, for its agent to read by path: `data` is the image as a PNG, JPEG, GIF or WebP file,\nbase64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`), or `upload`\nnames an upload of this connection whose parts hold it; exactly one of the two is given.\nAnswered with `pasted_image_saved`. Refused with `unknown_session` or\n`session_not_running`, and for an upload with `upload_unavailable` or\n`upload_parts_mismatch`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "size": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "create_pasted_image_upload"
+            }
+          },
+          "required": [
+            "type",
             "session",
+            "size"
+          ],
+          "description": "Starts uploading a pasted image of `size` bytes (1 to 10 MiB) in parts, for a running\nsession; served on the control connection, which holds the parts. Answered with\n`pasted_image_upload_created`. Refused with `unknown_session`, `session_not_running`, or\n`limit_exceeded` (`image_uploads`, `image_upload_bytes`). See\n`crate::session::upload`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "upload": {
+              "type": "string"
+            },
+            "offset": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "data": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "write_pasted_image_part"
+            }
+          },
+          "required": [
+            "type",
+            "upload",
+            "offset",
             "data"
           ],
-          "description": "Saves an image the user pasted into the terminal of a running session as a file on the daemon\nhost, for its agent to read by path: `data` is the image as a PNG, JPEG, GIF or WebP file,\nbase64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`). Answered with\n`pasted_image_saved`. Refused with `unknown_session` or `session_not_running`."
+          "description": "Adds the next part of an upload: `data` is base64, at most 1 MiB decoded, and `offset` the\nbytes received before it. Answered with `ack`. Refused with `upload_unavailable`,\n`upload_parts_mismatch` or `limit_exceeded` (`upload_part_bytes`), discarding the upload."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "upload": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "delete_pasted_image_upload"
+            }
+          },
+          "required": [
+            "type",
+            "upload"
+          ],
+          "description": "Discards an upload. Answered with `ack`, also for an upload this connection no longer holds."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "description": "The file's name where it came from; the saved file is named after a safe form of it."
+            },
+            "size": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "create_attachment_upload"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "name",
+            "size"
+          ],
+          "description": "Starts uploading a file of `size` bytes (1 to 100 MiB), called `name` where it came from, in\nparts, to attach it to a running session; served on the control connection, which holds the\nupload. Answered with `attachment_upload_created`. Refused with `unknown_session`,\n`session_not_running`, or `limit_exceeded` (`attachment_uploads`,\n`attachment_upload_bytes`). See `crate::session::attachment`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "upload": {
+              "type": "string"
+            },
+            "offset": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "data": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "write_attachment_part"
+            }
+          },
+          "required": [
+            "type",
+            "upload",
+            "offset",
+            "data"
+          ],
+          "description": "Adds the next part of an attachment upload: `data` is base64, at most 1 MiB decoded, and\n`offset` the bytes received before it. Answered with `ack`. Refused with\n`upload_unavailable`, `upload_parts_mismatch` or `limit_exceeded` (`upload_part_bytes`),\ndiscarding the upload."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "upload": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "save_attachment"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "upload"
+          ],
+          "description": "Saves the file an attachment upload of this connection holds, for the session's agent to\nread by path. Answered with `attachment_saved`. Refused with `unknown_session`,\n`session_not_running`, `upload_unavailable` or `upload_parts_mismatch`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "upload": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "delete_attachment_upload"
+            }
+          },
+          "required": [
+            "type",
+            "upload"
+          ],
+          "description": "Discards an attachment upload. Answered with `ack`, also for an upload this connection no\nlonger holds."
         },
         {
           "type": "object",
@@ -2541,6 +2905,191 @@
             "session"
           ],
           "description": "The pages a session pushed. `session` is the session that pushed them, a console session\nor a project session."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "console": {
+              "type": "string",
+              "description": "The console whose memory this is; exactly one of `console` and `project` is given."
+            },
+            "project": {
+              "type": "string",
+              "description": "A project whose place's memory this is (its host and stored path, shared by every\nproject there); exactly one of `console` and `project` is given."
+            },
+            "type": {
+              "type": "string",
+              "const": "list_memories"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "The index of a memory, a console's (`console`) or a project's place's (`project`): every\nentry without its content, the most recently updated first. Answered with `memory_list`.\nNeither or both of `console` and `project` is refused with `field_required` (`field`\n`console`) or `unreadable_request`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "console": {
+              "type": "string",
+              "description": "The console whose memory this is; exactly one of `console` and `project` is given."
+            },
+            "project": {
+              "type": "string",
+              "description": "A project whose place's memory this is (its host and stored path, shared by every\nproject there); exactly one of `console` and `project` is given."
+            },
+            "memory": {
+              "type": "string",
+              "description": "The entry's id."
+            },
+            "type": {
+              "type": "string",
+              "const": "read_memory"
+            }
+          },
+          "required": [
+            "type",
+            "memory"
+          ],
+          "description": "One entry of a memory, content included, by its id. Answered with `memory_content`;\nrefused with `unknown_memory` when the memory has no entry of that id."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "console": {
+              "type": "string",
+              "description": "The console whose memory this is; exactly one of `console` and `project` is given."
+            },
+            "project": {
+              "type": "string",
+              "description": "A project whose place's memory this is (its host and stored path, shared by every\nproject there); exactly one of `console` and `project` is given."
+            },
+            "memory": {
+              "type": "string",
+              "description": "The id of the entry to update; absent creates one."
+            },
+            "summary": {
+              "type": "string",
+              "description": "One sentence summing up the content, the entry's label."
+            },
+            "content": {
+              "type": "string",
+              "description": "Markdown."
+            },
+            "local": {
+              "type": "boolean",
+              "description": "Whether a console's entry holds only on this machine: absent is false for a new entry\nand keeps the entry's value on an update. Ignored for a project's place, every entry of\nwhich holds only on this machine."
+            },
+            "version": {
+              "type": "integer",
+              "format": "int64",
+              "description": "The version of the entry the update is based on; absent creates the entry."
+            },
+            "type": {
+              "type": "string",
+              "const": "save_memory"
+            }
+          },
+          "required": [
+            "type",
+            "summary",
+            "content"
+          ],
+          "description": "Creates an entry of a memory, or updates one, written by the user. Without `memory` and\n`version` it creates an entry, with an id the daemon assigns; with both, it updates the\nentry `memory` when `version` is its current version, refused with `memory_changed` when\nit is not and with `unknown_memory` when there is no such entry. One of the two without the\nother is refused with `field_required`, naming the missing one. An entry breaking a rule is\nrefused with `invalid_memory_summary`, `memory_content_empty` or\n`memory_content_too_long`; a new one past the memory's limit with `memory_full`. Answered\nwith `ack`; every client hears of the entry saved, with its id, from `memory_saved`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "console": {
+              "type": "string",
+              "description": "The console whose memory this is; exactly one of `console` and `project` is given."
+            },
+            "project": {
+              "type": "string",
+              "description": "A project whose place's memory this is (its host and stored path, shared by every\nproject there); exactly one of `console` and `project` is given."
+            },
+            "memory": {
+              "type": "string",
+              "description": "The entry's id."
+            },
+            "type": {
+              "type": "string",
+              "const": "delete_memory"
+            }
+          },
+          "required": [
+            "type",
+            "memory"
+          ],
+          "description": "Deletes one entry of a memory by its id, refused with `unknown_memory` when there is no\nsuch entry. Answered with `ack`; every client hears of it from `memories_deleted`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "console": {
+              "type": "string",
+              "description": "The console whose memory this is; exactly one of `console` and `project` is given."
+            },
+            "project": {
+              "type": "string",
+              "description": "A project whose place's memory this is (its host and stored path, shared by every\nproject there); exactly one of `console` and `project` is given."
+            },
+            "type": {
+              "type": "string",
+              "const": "delete_memories"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "Deletes every entry of a memory. Answered with `ack`; every client hears of the entries\ndeleted from `memories_deleted`, unless there were none."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "list_orphaned_memories"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "The places whose memory no project is at any more, with how many entries each holds, the\nmost recently updated first. Answered with `orphaned_memory_list`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "host_id": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "delete_orphaned_memory"
+            }
+          },
+          "required": [
+            "type",
+            "host_id",
+            "path"
+          ],
+          "description": "Deletes the memory of a place no project is at any more, refused with\n`memory_place_in_use` while a project is at it. Answered with `ack`; every client hears of\nthe entries deleted from `memories_deleted` and of what is left behind from\n`orphaned_memory_list`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "delete_orphaned_memories"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "Deletes the memory of every place no project is at any more, at once; a place a project is\nadded at meanwhile keeps its memory. Answered with `ack`; every client hears of the entries\ndeleted from `memories_deleted`, one per place, and of what is left behind from one\n`orphaned_memory_list`."
         },
         {
           "type": "object",
@@ -2678,10 +3227,16 @@
             "auto_approve_handoffs": {
               "type": "boolean"
             },
+            "auto_approve_scheduled_task_changes": {
+              "type": "boolean"
+            },
             "ask_questions_as_choices": {
               "type": "boolean"
             },
             "keep_sessions_in_own_project": {
+              "type": "boolean"
+            },
+            "memory_enabled": {
               "type": "boolean"
             },
             "interface_language": {
@@ -3319,7 +3874,24 @@
             "type",
             "allowed"
           ],
-          "description": "Turns Allow remote access on or off for the desktop application's daemon. Answered with\n`ack` once it has taken effect, and broadcast as `remote_access_updated` (also when the\nowner socket could not be opened, which `failure` says). Refused with\n`remote_access_unavailable` where the snapshot carries no `remote_access`, and with\n`remote_access_refused_to_browser` on a connection the owner key opened, which a browser\nholds. Turning it off closes the owner socket, refuses the owner key and closes every\nconnection it opened. Not offered to agents' settings tools."
+          "description": "Turns Allow remote access on or off for the desktop application's daemon: whether another\ncomputer reaches it over its owner socket (on Windows, its owner pipe), apart from Allow\nbrowser access. Answered with `ack` once it has taken effect, and broadcast as\n`remote_access_updated` (also when the way in could not be opened, which `failure` says).\nRefused with `remote_access_unavailable` where the snapshot carries no `remote_access` or the\ndaemon is the server form's, and with `remote_access_refused_to_browser` on a connection the\nowner key opened, which a browser holds. Turning it off closes the owner socket or pipe and\nevery connection made through it, and refuses the owner key once browser access is off too.\nNot offered to agents' settings tools."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "set_browser_access"
+            }
+          },
+          "required": [
+            "type",
+            "allowed"
+          ],
+          "description": "Turns Allow browser access on or off: whether the daemon serves the browser at its loopback\nbrowser port (`remote_access.browser_port`), apart from Allow remote access. Answered with\n`ack` once it has taken effect, and broadcast as `remote_access_updated` (also when the port\ncould not be opened, which `browser_failure` says). Refused with `remote_access_unavailable`\nwhere the snapshot's `remote_access` carries no `browser_port`, and with\n`remote_access_refused_to_browser` on a connection the owner key opened. Turning it off\ncloses the port and every connection made through it, and refuses the owner key once remote\naccess is off too (the server form's daemon always holds it). Not offered to agents'\nsettings tools."
         },
         {
           "type": "object",
@@ -3332,7 +3904,7 @@
           "required": [
             "type"
           ],
-          "description": "Replaces the owner key with a new one, as `octoboardd address --rotate` does: every page\nopened with the old one is cut off. Answered with `ack`, and broadcast as\n`remote_access_updated` with the new address. Refused with `remote_access_unavailable` where\nthe snapshot carries no `remote_access` or it is not `serving`, and with\n`remote_access_refused_to_browser` on a connection the owner key opened."
+          "description": "Replaces the owner key with a new one, as `octoboardd address --rotate` does: every page\nopened with the old one is cut off. Answered with `ack`, and broadcast as\n`remote_access_updated` with the new address. Refused with `remote_access_unavailable` where\nthe snapshot carries no `remote_access` or neither `state` nor `browser_state` is\n`serving`, and with `remote_access_refused_to_browser` on a connection the owner key opened."
         },
         {
           "type": "object",
@@ -3352,7 +3924,7 @@
             "type",
             "port"
           ],
-          "description": "Sets the loopback port the desktop application's daemon serves the browser at on Windows\nwhile remote access is on (`remote_access.browser_port`). Takes effect at once: while remote\naccess is on, the old port is let go, every connection the owner key opened is closed, and\nthe new port is listened on (a port already in use is said as `failure`). Answered with\n`ack`, and broadcast as `remote_access_updated`. Refused with `remote_access_unavailable`\nwhere the snapshot's `remote_access` carries no `browser_port`, and with\n`remote_access_refused_to_browser` on a connection the owner key opened; port 0 does not\nread as a request. Not offered to agents' settings tools."
+          "description": "Sets the loopback port the daemon serves the browser at while browser access is on\n(`remote_access.browser_port`), whether or not it is on now. Takes effect at once: while\nbrowser access is on, the old port is let go, every connection made through it is closed,\nand the new port is listened on (a port already in use is said as `browser_failure`).\nAnswered with `ack`, and broadcast as `remote_access_updated`. Refused with\n`remote_access_unavailable` where the snapshot's `remote_access` carries no `browser_port`,\nand with `remote_access_refused_to_browser` on a connection the owner key opened; port 0\ndoes not read as a request. Not offered to agents' settings tools."
         },
         {
           "type": "object",
@@ -3496,6 +4068,13 @@
             "session": {
               "type": "string"
             },
+            "keep_process_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The ids of process trees (see `ProcessTree`) the user chose to keep running when the\nsession's process is ended by the archive the open makes; ignored for an archived\nsession. Absent means none."
+            },
             "type": {
               "type": "string",
               "const": "open_session_in_app"
@@ -3505,7 +4084,7 @@
             "type",
             "session"
           ],
-          "description": "Opens a session's conversation in its agent's own desktop application (the Claude app for\nClaude Code, the Codex app for Codex) on the daemon's host. Answered with `ack` once the\napplication has been asked to open. Nothing is stopped for it: refused with\n`session_already_running` while the session has a process, with `session_already_starting`\nwhile a launch or another operation holds it, with `account_sharing_in_progress` while a\nchange of its account's sharing moves the account's directory, and with\n`native_app_unavailable` for an agent with no such application, one that is not installed, a\nsession with no conversation yet, a conversation id the agent would not take, and a failed\nlaunch. Where the application may not see the conversation (the default account's directory,\nthe only one it reads, does not hold its latest record, which `probe_native_apps` tells) it\nis opened all the same. An unknown session is `unknown_session`."
+          "description": "Opens a session's conversation in its agent's own desktop application (the Claude app for\nClaude Code, the Codex app for Codex) on the daemon's host. Answered with `ack` once the\napplication has been asked to open. An archived session is opened as it is. Any other is\narchived first, as a user's `archive_session` does it, so that nothing resumes the\nconversation the application holds: the sessions bound to it are archived with it, running\nones included, and the open waits until its own process is gone; no branch or worktree is\nremoved. A session with a process must be at rest (waiting for instructions, or stopped on\nits account's usage limit). The process trees in `keep_process_ids` are kept running, as an\narchive keeps them. The session stays archived if the application then fails to open, or\nits process does not end in time. Refused, with nothing archived, with `session_working`\nwhile the session is at work (starting, mid-turn, waiting for the user, showing its\nbackground agents or running work in the background), with `session_locked` for it or a\nsession bound to it, with `session_already_starting` while a launch or another operation\nholds it, with `account_sharing_in_progress` while a change of its account's sharing moves\nthe account's directory, with `daemon_shutting_down` once a planned stop has begun, with\n`process_shares_agent_console` or `process_in_agent_command_group` for a tree that cannot\nbe kept, and with `native_app_unavailable` for an agent with no such application, one that\nis not installed, a session with no conversation yet and a conversation id the agent would\nnot take, and with `shell_environment_timeout` when the shell environment cannot be\ncaptured; `native_app_unavailable` also answers a failed launch, and `session_did_not_stop`\n(param `cause` `open_in_app`) a process that does not end, after the archive. A\n`session_working` found only by the check repeated after the chosen trees were kept leaves\nthem kept, and the session running. Where the application may not see the conversation (the\ndefault account's directory, the only one it reads, does not hold its latest record, which\n`probe_native_apps` tells) it is opened all the same. An unknown session is\n`unknown_session`."
         },
         {
           "type": "object",
@@ -3612,7 +4191,7 @@
             "type",
             "paths"
           ],
-          "description": "Asks what each of `paths` names on the daemon host: a file, a folder or nothing reachable\n(see `crate::path_links`). Answered with `path_links`."
+          "description": "Asks what each of `paths` names on the daemon host: a file, a folder or nothing reachable\n(see `crate::path_links`). A path is judged by where it resolves to, in a project root, in a\ntemp root or anywhere else; a network or device path as written, or one a symbolic link on\nthe way leads to (outside the project's own roots), is never looked at. Each is looked at\nwithin a deadline, grouped by the place they lie on and looked at a few places at a time:\nthe paths of a place that has not answered by then (a stalled mount) are nothing, and the\nothers are answered unless as many places stall as run at once, when those not yet started\nare nothing too. Answered with `path_links`."
         },
         {
           "type": "object",
@@ -3632,7 +4211,7 @@
             "type",
             "path"
           ],
-          "description": "Opens a path `probe_path_links` found with its default application on the daemon host; a\nfolder opens in the file manager."
+          "description": "Opens a path `probe_path_links` found, wherever on the host it lies, with its default\napplication on the daemon host; a folder opens in the file manager. A look the host\ndoes not answer within a deadline is refused as `unanswered`. Refused with\n`file_not_found` (`root` says where it was spelled: `project`, `temporary` or `host`) when\nnothing is there any more."
         },
         {
           "type": "object",
@@ -3652,7 +4231,7 @@
             "type",
             "path"
           ],
-          "description": "Shows a path `probe_path_links` found in the file manager on the daemon host: a file is selected\nin its folder, a folder is opened. Resolved as `open_path_link` does, but a file only the viewer\nshows is accepted, since nothing is launched. A symbolic link at the end of the path is\nselected by its own name in its folder, not followed; a root, a link whose folder lies\noutside the roots, a link in a temp root whose folder is not closed to others or that is not\nthe daemon user's (a file link in a project is not checked), and a path ending in `/`, `/.`\nor `..` are shown as what they resolve to."
+          "description": "Shows a path `probe_path_links` found in the file manager on the daemon host: a file is selected\nin its folder, a folder is opened. Resolved as `open_path_link` does, but a file only the viewer\nshows is accepted, since nothing is launched. A symbolic link at the end of the path is\nselected by its own name in its folder, not followed, when it lies inside a project root\n(for a path in a project), or inside the temp root holding the path and then only when its\nfolder and it are the daemon user's and its folder is closed to others (a file link in a\nproject is not checked), and always for a path elsewhere on the host; a root, any other\nlink, and a path ending in `/`, `/.` or `..` are shown as what they resolve to."
         },
         {
           "type": "object",
@@ -3691,6 +4270,164 @@
             "branch"
           ],
           "description": "Switches to an existing local branch in canonical wire form. A success publishes a local\nstatus re-read, without fetching or fast-forwarding. Answered after Git exits."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "list_scheduled_tasks"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "Every scheduled task. Answered with `scheduled_tasks_listed`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "console_id": {
+              "type": "string"
+            },
+            "project_id": {
+              "type": "string",
+              "description": "Absent makes a task that starts a console session of `console_id`; a project must be\none of that console's."
+            },
+            "launch": {
+              "$ref": "#/$defs/ScheduledTaskLaunch",
+              "description": "Absent is every launch setting left to its default."
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "schedule": {
+              "$ref": "#/$defs/Schedule"
+            },
+            "enabled": {
+              "type": "boolean",
+              "description": "Absent is true. A task created with false has no next run until it is turned on."
+            },
+            "type": {
+              "type": "string",
+              "const": "create_scheduled_task"
+            }
+          },
+          "required": [
+            "type",
+            "console_id",
+            "prompt",
+            "schedule"
+          ],
+          "description": "Creates a scheduled task and answers `scheduled_task_saved`. See \"Scheduled tasks\" in\n`apps/daemon/PROTOCOL.md` for what is refused."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string"
+            },
+            "console_id": {
+              "type": "string",
+              "description": "Present moves the task to that console; its project stays only when `project_id` is\nabsent and the project belongs to the new console, else `unknown_project`."
+            },
+            "project_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Absent leaves the project alone; an explicit `null` makes a console task; a value makes\na task of that project, which must belong to the resulting console."
+            },
+            "launch": {
+              "$ref": "#/$defs/ScheduledTaskLaunch"
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "schedule": {
+              "$ref": "#/$defs/Schedule"
+            },
+            "type": {
+              "type": "string",
+              "const": "update_scheduled_task"
+            }
+          },
+          "required": [
+            "type",
+            "task"
+          ],
+          "description": "Changes a scheduled task and answers `scheduled_task_saved`. A field left out is left\nalone; `launch` replaces the task's launch settings whole."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "set_scheduled_task_enabled"
+            }
+          },
+          "required": [
+            "type",
+            "task",
+            "enabled"
+          ],
+          "description": "Turns a scheduled task on or off and answers `scheduled_task_saved`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "delete_scheduled_task"
+            }
+          },
+          "required": [
+            "type",
+            "task"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "run_scheduled_task"
+            }
+          },
+          "required": [
+            "type",
+            "task"
+          ],
+          "description": "Runs a scheduled task once now, whatever its schedule and whether it is enabled, and\nanswers `ack` once the task is found; the run itself is announced with\n`scheduled_task_run_added` once its launch has settled."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "list_scheduled_task_runs"
+            }
+          },
+          "required": [
+            "type",
+            "task"
+          ],
+          "description": "A scheduled task's kept runs. Answered with `scheduled_task_runs_listed`."
         },
         {
           "type": "object",
@@ -3775,6 +4512,190 @@
           "description": "Asks which running sessions and shell terminals a planned stop followed by a daemon that\nadopts holders from `holder_floor` up to `target_version` (the next daemon's own, both\ninclusive) would not carry over, so that they would end up interrupted or closed.\n`holder_floor` is the oldest holder version the next daemon adopts; either is `null` when\nthe caller does not know it, which counts every one and answers `known: false`. Answered\nwith `handover_check`; never refused."
         }
       ]
+    },
+    "Schedule": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "run_at": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "kind": {
+              "type": "string",
+              "const": "once"
+            }
+          },
+          "required": [
+            "kind",
+            "run_at"
+          ],
+          "description": "Once, at the instant `run_at`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "minute": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "kind": {
+              "type": "string",
+              "const": "hourly"
+            }
+          },
+          "required": [
+            "kind",
+            "minute"
+          ],
+          "description": "Every hour, at `minute` past it (0 to 59)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "kind": {
+              "type": "string",
+              "const": "daily"
+            }
+          },
+          "required": [
+            "kind",
+            "time"
+          ],
+          "description": "Every day, at `time`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "kind": {
+              "type": "string",
+              "const": "weekdays"
+            }
+          },
+          "required": [
+            "kind",
+            "time"
+          ],
+          "description": "Monday to Friday, at `time`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "days": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Weekday"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "weekly"
+            }
+          },
+          "required": [
+            "kind",
+            "time",
+            "days"
+          ],
+          "description": "On each of `days`, at `time`; `days` is not empty."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "day": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "kind": {
+              "type": "string",
+              "const": "monthly"
+            }
+          },
+          "required": [
+            "kind",
+            "day",
+            "time"
+          ],
+          "description": "On day `day` of every month (1 to 31), at `time`. A month without that day runs on its last\nday, so 31 is the last day of every month."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "manual"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "Only when run by hand."
+        }
+      ],
+      "description": "When a scheduled task runs, in the local time zone of the daemon's machine."
+    },
+    "ScheduledTaskLaunch": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The started session's title; absent or blank names it as `open_session` does by default."
+        },
+        "agent": {
+          "description": "Absent takes the project's default agent, else the console's, at each run.",
+          "$ref": "#/$defs/Agent"
+        },
+        "account": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The account, by id. Absent leaves the choice to the project's reference, else the\nconsole's, at each run; an explicit `null` chooses the default account."
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Absent inherits the project's (or console's) setting at each run; an explicit `null`\nleaves the choice to the agent; a value pins the model."
+        },
+        "effort": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The reasoning effort, with the rule of `model`."
+        },
+        "compatibility": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "The compatibility switches the session holds its own value for, by setting id; one left\nout follows the project's, else the console's, else the agent's value. Absent in a request\nholds none."
+        },
+        "bound_to": {
+          "type": "string",
+          "description": "The console session a project task's session reports to; absent for none. Ignored for a\nconsole task."
+        }
+      },
+      "description": "The launch settings of a scheduled task's session, with the rules `open_session` gives the same\nfields: each is checked as `open_session` checks it when the task is saved, and read again at\nevery run."
     },
     "SessionBranchKind": {
       "type": "string",
@@ -3979,6 +4900,40 @@
         "dark"
       ],
       "description": "The appearance a client has resolved for its window, sent with a launch so Grok's theme matches\nthe terminal that will show it and so that terminal answers its program's colour queries with\nit until a client reports. It is not stored: a later launch sends its own."
+    },
+    "TimeOfDay": {
+      "type": "object",
+      "properties": {
+        "hour": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "minute": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        }
+      },
+      "required": [
+        "hour",
+        "minute"
+      ],
+      "description": "A wall-clock time of day: `hour` 0 to 23, `minute` 0 to 59."
+    },
+    "Weekday": {
+      "type": "string",
+      "enum": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ]
     }
   }
 }

@@ -645,6 +645,28 @@
       ],
       "description": "One model an agent offers, as `list_agent_models` reports it."
     },
+    "AttachmentLimits": {
+      "type": "object",
+      "properties": {
+        "max_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "The largest file taken, in bytes."
+        },
+        "max_part_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "The most one `write_attachment_part` carries, in bytes decoded."
+        }
+      },
+      "required": [
+        "max_bytes",
+        "max_part_bytes"
+      ],
+      "description": "The limits of an attachment upload (`create_attachment_upload`). A daemon that sends this in its\n`snapshot` takes attachments; one that predates them sends no `attachments`, and a client then\noffers no way to attach a file."
+    },
     "Availability": {
       "type": "string",
       "enum": [
@@ -828,6 +850,18 @@
         },
         "delivery": {
           "$ref": "#/$defs/DeliveryQuirks"
+        },
+        "interactions": {
+          "$ref": "#/$defs/InteractionKinds",
+          "description": "Which of the prompts its agent shows while a session waits on the user Octoboard publishes\nand answers (`Session.interaction`, `answer_interaction`;\n`AgentProvider::interactions`)."
+        },
+        "message_images": {
+          "type": "boolean",
+          "description": "Takes images attached to a message (`send_message`'s `images`)."
+        },
+        "slash_commands": {
+          "type": "boolean",
+          "description": "Runs a slash command sent as one (`send_command`)."
         }
       },
       "required": [
@@ -840,7 +874,10 @@
         "config_sharing",
         "mcp_inventory",
         "ends_command_groups_on_exit",
-        "delivery"
+        "delivery",
+        "interactions",
+        "message_images",
+        "slash_commands"
       ],
       "description": "What a provider can do that not every provider can, declared so that code and the UI branch\non it rather than on which provider it is."
     },
@@ -1046,6 +1083,37 @@
       ],
       "description": "One side of a change in a change listing. See \"Changes and comparisons\" in\n`apps/daemon/PROTOCOL.md`."
     },
+    "ChoiceEffect": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "other"
+          ]
+        },
+        {
+          "type": "string",
+          "const": "allow",
+          "description": "Lets this call run."
+        },
+        {
+          "type": "string",
+          "const": "allow_remember",
+          "description": "Lets this call run and records a rule that lets calls like it run without asking."
+        },
+        {
+          "type": "string",
+          "const": "deny",
+          "description": "Refuses this call."
+        },
+        {
+          "type": "string",
+          "const": "deny_remember",
+          "description": "Refuses this call and records a rule that refuses calls like it without asking."
+        }
+      ],
+      "description": "What choosing an answer does. A value a client does not know reads as `other`."
+    },
     "ChoiceOption": {
       "type": "object",
       "properties": {
@@ -1060,6 +1128,16 @@
         "value"
       ],
       "description": "One option of a choice: the `value` that is submitted, shown as `label` where there is one."
+    },
+    "ChoiceText": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "optional",
+          "description": "The choice may carry text for the agent, or none."
+        }
+      ],
+      "description": "How text goes with a choice. A value a client does not know reads as `optional`."
     },
     "CliInstallMethod": {
       "oneOf": [
@@ -2407,6 +2485,144 @@
       ],
       "description": "What a file body was actually read from, so a reply identifies the content it carries."
     },
+    "ConversationBody": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "user"
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "description": "What the user typed (a slash command as typed, `/name args`)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "octoboard"
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "description": "A message Octoboard wrote into the session: a brief, a parent session's instruction, a\nreport, shared information, a notice."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "assistant"
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "description": "Text the agent wrote: a progress note on the way or its answer."
+        },
+        {
+          "$ref": "#/$defs/ToolCallEntry",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "tool_call"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "A tool the agent called."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TodoItem"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "todos"
+            }
+          },
+          "required": [
+            "kind",
+            "items"
+          ],
+          "description": "The agent's todo list as it stands after this entry, whole."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "compaction"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "The agent compacted its context here, with the summary it wrote when the record keeps one."
+        }
+      ],
+      "description": "The kind of an entry and its own fields. A client ignores an entry whose `kind` it does not\nknow: later daemons of the same generation may add kinds."
+    },
+    "ConversationEntry": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "The entry's position in the conversation under the current `epoch`, counted from 0. An\nupdate names the entry it replaces by it."
+        },
+        "turn": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "description": "The turn it belongs to, counted from 1: a `user` or `octoboard` entry opens a turn, and\nwhat follows it shares its number. Entries before the first such entry are turn 0."
+        },
+        "at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When the record dated it, in milliseconds since the Unix epoch."
+        }
+      },
+      "required": [
+        "seq",
+        "turn"
+      ],
+      "allOf": [
+        {
+          "$ref": "#/$defs/ConversationBody"
+        }
+      ],
+      "description": "One entry of a session's conversation, as the feed publishes it."
+    },
     "ConversationLocation": {
       "oneOf": [
         {
@@ -3137,6 +3353,13 @@
           ],
           "description": "The user's own addition to the console session's instructions; absent is none."
         },
+        "memories": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DocumentMemoryEntry"
+          },
+          "description": "The console's memory entries, the most recently updated first, without its local ones,\nwhich hold only on the exporting machine. Absent in a document written before memory\ntravelled, which gives the console none. A project's place's memory never travels."
+        },
         "projects": {
           "type": "array",
           "items": {
@@ -3187,6 +3410,24 @@
         "disabled"
       ],
       "description": "What the document says of an agent's default account. Its directory is whatever the agent\nresolves on the machine, so it is not carried."
+    },
+    "DocumentMemoryEntry": {
+      "type": "object",
+      "properties": {
+        "summary": {
+          "type": "string",
+          "description": "One sentence summing up the content, the entry's label in the index."
+        },
+        "content": {
+          "type": "string",
+          "description": "Markdown."
+        }
+      },
+      "required": [
+        "summary",
+        "content"
+      ],
+      "description": "One entry of a console's memory as a document carries it: what its writer gave, without its\nid, who wrote it, when, or its version, which belong to the machine it was written on; an\nimport gives it a new id, not local."
     },
     "DocumentProject": {
       "type": "object",
@@ -3358,6 +3599,9 @@
         "auto_approve_handoffs": {
           "type": "boolean"
         },
+        "auto_approve_scheduled_task_changes": {
+          "type": "boolean"
+        },
         "ask_questions_as_choices": {
           "type": "boolean"
         },
@@ -3514,6 +3758,197 @@
             "session",
             "messages"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "session": {
+              "type": "string"
+            },
+            "epoch": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConversationEntry"
+              }
+            },
+            "has_earlier": {
+              "type": "boolean"
+            },
+            "pending": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PendingEntry"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "session_conversation_subscribed"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "session",
+            "epoch",
+            "entries",
+            "has_earlier",
+            "pending"
+          ],
+          "description": "The answer to `subscribe_session_conversation`: the latest page of the conversation, and the\nentries the agent is still producing."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "session": {
+              "type": "string"
+            },
+            "epoch": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConversationEntry"
+              }
+            },
+            "has_earlier": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "session_conversation"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "session",
+            "epoch",
+            "entries",
+            "has_earlier"
+          ],
+          "description": "The answer to `read_session_conversation`: the page before the one the client holds."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "epoch": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "appended": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConversationEntry"
+              },
+              "description": "Entries added after the last one the client holds, in order."
+            },
+            "updated": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConversationEntry"
+              },
+              "description": "Entries the client holds that changed (a tool call's result arrived), each whole and\nnamed by its `seq`."
+            },
+            "pending": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PendingEntry"
+              },
+              "description": "The entries the agent is still producing, whole; absent when they did not change, and\nempty when there are none now."
+            },
+            "type": {
+              "type": "string",
+              "const": "session_conversation_changed"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "epoch"
+          ],
+          "description": "What changed in a conversation the connection follows. Sent only to the connections that\nsubscribed to the session, never broadcast."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "epoch": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConversationEntry"
+              }
+            },
+            "has_earlier": {
+              "type": "boolean"
+            },
+            "pending": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PendingEntry"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "session_conversation_replaced"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "epoch",
+            "entries",
+            "has_earlier",
+            "pending"
+          ],
+          "description": "The conversation as the connection follows it was rewritten (the agent went back to an\nearlier point, compacted, or the record was replaced): the client drops what it holds of\nthe session and takes this as the latest page. Sent as `session_conversation_changed` is."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "session_conversation_ended"
+            }
+          },
+          "required": [
+            "type",
+            "session"
+          ],
+          "description": "The daemon stopped following a conversation this connection follows: the session was\ndeleted, or the daemon failed while reading it. A read error is no end: it is tried again\nat the next look, or, after a first read that failed part-way, once the file has changed.\nThe subscription is gone, nothing more will be sent for the session, and the client may\nsubscribe again. Sent as `session_conversation_changed` is, but never for the connection's\nown `unsubscribe_session_conversation`."
         },
         {
           "type": "object",
@@ -3871,6 +4306,10 @@
                 }
               ],
               "description": "Remote access to this daemon (Allow remote access), where the daemon follows the\ndesktop application on a host with a way in for the browser (the owner socket on Linux\nand macOS, a loopback port of its own on Windows); null elsewhere: a daemon that runs\non its own (the server form) serves its browser as it always does."
+            },
+            "attachments": {
+              "description": "The limits of a file a client attaches to a session (`create_attachment_upload`), sent\nby every daemon that takes attachments; absent from one that predates them, and a client\nthen offers no way to attach a file.",
+              "$ref": "#/$defs/AttachmentLimits"
             },
             "type": {
               "type": "string",
@@ -4407,22 +4846,22 @@
             },
             "kind": {
               "$ref": "#/$defs/SessionKind",
-              "description": "Whether the session asked for would be a console session or a project session; for\n`switch` and `handoff`, which the target is."
+              "description": "Whether the session asked for would be a console session or a project session; for\n`switch` and `handoff`, which the target is; for the scheduled task actions, which\nsession the task starts (a task's target after the change)."
             },
             "console": {
               "type": "string",
-              "description": "The console the new session would be in, or the console of the session to bring back,\nswitch or hand off."
+              "description": "The console the new session would be in, or the console of the session to bring back,\nswitch or hand off; for the scheduled task actions, the task's console after the change."
             },
             "project": {
               "type": [
                 "string",
                 "null"
               ],
-              "description": "The project the new session would be in, or the project of the session to bring back,\nswitch or hand off; null for a console session."
+              "description": "The project the new session would be in, or the project of the session to bring back,\nswitch or hand off; null for a console session; for the scheduled task actions, the\ntask's project after the change, null for a console task."
             },
             "agent": {
               "$ref": "#/$defs/Agent",
-              "description": "The agent the new session would run, or the agent of the session to bring back or\nswitch; for `handoff`, the receiving agent."
+              "description": "The agent the new session would run, or the agent of the session to bring back or\nswitch; for `handoff`, the receiving agent; for the scheduled task actions, the agent\nthe task names, else the requesting session's own, which carries no more meaning than\nthat for them."
             },
             "target": {
               "type": [
@@ -4486,6 +4925,14 @@
               },
               "description": "For `handoff`: the compatibility switches the call asked the receiving session to hold,\nby setting id; empty for every other request and where it asked for none."
             },
+            "scheduled_task": {
+              "description": "For the scheduled task actions: what the call asks for (see `ScheduledTaskAsked`).\nLeft out for every other action.",
+              "$ref": "#/$defs/ScheduledTaskAsked"
+            },
+            "prompt": {
+              "type": "string",
+              "description": "The text the requesting agent wrote for the request, verbatim: for `start`, its brief\nas handed to the new session; for `handoff`, its note to the receiving session; for\n`create_scheduled_task`, the task's prompt; for `update_scheduled_task`, the new\nprompt when the call changes it. Left out where there is none (the other actions, and\na tool call that carries no such text)."
+            },
             "requested_at": {
               "type": "integer",
               "format": "int64",
@@ -4514,7 +4961,7 @@
             "compatibility",
             "requested_at"
           ],
-          "description": "A session asked with `request_session` for a session that has no owner, or with\n`request_resume_session` to resume a conversation, or an owner called `switch_session_account`\nor `handoff_session` while the user's approval is required, and its call is waiting for the\nuser's answer. Broadcast once, when the call is made, and sent again to a client after each\n`snapshot`, oldest first, for every request still waiting."
+          "description": "A session asked with `request_session` for a session that has no owner, or with\n`request_resume_session` to resume a conversation, or an owner called `switch_session_account`\nor `handoff_session`, or a session called one of the scheduled task tools that change\nsomething, while the user's approval is required, and its call is waiting for the user's\nanswer. Broadcast once, when the call is made, and sent again to a client after each\n`snapshot`, oldest first, for every request still waiting."
         },
         {
           "type": "object",
@@ -4968,6 +5415,147 @@
                 "null"
               ]
             },
+            "tasks": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ScheduledTask"
+              }
+            },
+            "time_zone": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The IANA name of the time zone schedules are read in, the daemon machine's own local\nzone (`Europe/Berlin`), as it is when the list is sent; null when that zone has no IANA\nname (one given as a POSIX rule). A daily, weekdays, weekly or monthly schedule's time of\nday is a wall-clock time in this zone."
+            },
+            "type": {
+              "type": "string",
+              "const": "scheduled_tasks_listed"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "tasks",
+            "time_zone"
+          ],
+          "description": "The reply to `list_scheduled_tasks`: every scheduled task, oldest first. Scheduled tasks are\nnot in `snapshot`; a client that shows them asks again after every `snapshot`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "task": {
+              "$ref": "#/$defs/ScheduledTask"
+            },
+            "type": {
+              "type": "string",
+              "const": "scheduled_task_saved"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "task"
+          ],
+          "description": "The reply to `create_scheduled_task`, `update_scheduled_task` and\n`set_scheduled_task_enabled`: the task as stored. Every client is also sent\n`scheduled_task_upserted`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "$ref": "#/$defs/ScheduledTask"
+            },
+            "type": {
+              "type": "string",
+              "const": "scheduled_task_upserted"
+            }
+          },
+          "required": [
+            "type",
+            "task"
+          ],
+          "description": "A scheduled task was created or changed: the whole record."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "scheduled_task_deleted"
+            }
+          },
+          "required": [
+            "type",
+            "task"
+          ],
+          "description": "A scheduled task was deleted, by id. The tasks of a deleted console or project go with it\nand are not announced one by one: a client drops them on `console_deleted` and\n`project_deleted`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "task": {
+              "type": "string"
+            },
+            "runs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ScheduledTaskRun"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "scheduled_task_runs_listed"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "task",
+            "runs"
+          ],
+          "description": "The reply to `list_scheduled_task_runs`: the task's kept runs, most recent first."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "run": {
+              "$ref": "#/$defs/ScheduledTaskRun"
+            },
+            "type": {
+              "type": "string",
+              "const": "scheduled_task_run_added"
+            }
+          },
+          "required": [
+            "type",
+            "run"
+          ],
+          "description": "A run of a scheduled task was recorded, started or failed. The task's own\n`scheduled_task_upserted`, with its new `last_run_at`, is sent with it. A client raises the\nsystem notification of a failed run from this."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "session_id": {
               "type": "string"
             },
@@ -5076,6 +5664,130 @@
                 "null"
               ]
             },
+            "scope": {
+              "$ref": "#/$defs/MemoryScope"
+            },
+            "memories": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/MemoryIndexEntry"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "memory_list"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "scope",
+            "memories"
+          ],
+          "description": "The reply to `list_memories`: the index of a memory, the most recently updated first. A\nclient that keeps it asks again after every `snapshot`, which is what keeps it correct\nacross a `memory_saved` or `memories_deleted` it was too far behind to receive."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "entry": {
+              "$ref": "#/$defs/MemoryEntry"
+            },
+            "type": {
+              "type": "string",
+              "const": "memory_content"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "entry"
+          ],
+          "description": "The reply to `read_memory`: one entry, content included."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "entry": {
+              "$ref": "#/$defs/MemoryEntry"
+            },
+            "type": {
+              "type": "string",
+              "const": "memory_saved"
+            }
+          },
+          "required": [
+            "type",
+            "entry"
+          ],
+          "description": "An entry of a memory was created or updated, by a session's `save_memory` tool or by a\nclient's `save_memory`. Broadcast in the order the writes were made. Its `scope` names the\nmemory: a place's reaches the windows showing any project at that place."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "$ref": "#/$defs/MemoryScope"
+            },
+            "memories": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The ids of the entries deleted."
+            },
+            "type": {
+              "type": "string",
+              "const": "memories_deleted"
+            }
+          },
+          "required": [
+            "type",
+            "scope",
+            "memories"
+          ],
+          "description": "Entries of a memory were deleted, by id: by a session's `delete_memory` tool, or by a\nclient's `delete_memory`, `delete_memories`, `delete_orphaned_memory`,\n`delete_orphaned_memories` or a `delete_project` that deleted its place's memory. Never\nempty."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "places": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/OrphanedMemory"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "orphaned_memory_list"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "places"
+          ],
+          "description": "The places whose memory no project is at any more, the most recently updated first: the\nreply to `list_orphaned_memories`, and broadcast (with no `id`) whenever that may have changed: a project added or removed, a\nplace's memory deleted."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "path": {
               "type": "string"
             },
@@ -5090,6 +5802,78 @@
             "path"
           ],
           "description": "The reply to `save_pasted_image`: the absolute path, on the daemon host, of the file the image\nwas saved as."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "upload": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "pasted_image_upload_created"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "upload"
+          ],
+          "description": "The reply to `create_pasted_image_upload`: `upload` is the handle its parts and its\n`save_pasted_image` name, valid on this connection only."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "attachment_saved"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "path"
+          ],
+          "description": "The reply to `save_attachment`: the absolute path, on the daemon host, of the file the\nattachment was saved as."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "upload": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "attachment_upload_created"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "upload"
+          ],
+          "description": "The reply to `create_attachment_upload`: `upload` is the handle its parts and its\n`save_attachment` name, valid on this connection only."
         },
         {
           "type": "object",
@@ -5466,6 +6250,46 @@
             "data"
           ],
           "description": "The reply to `read_file_range`: `data` is the base64 of the bytes read from `offset`, empty\nat or past the end of the file; `size` and `version` are the file's at this read.\n`launchable` is set only when true: the file has an executable bit. What a name says the\nsystem would run is for the client to judge by the system that opens the copy."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "reply": {
+              "type": "string"
+            },
+            "offset": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "total": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "data": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "reply_part"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "reply",
+            "offset",
+            "total",
+            "data"
+          ],
+          "description": "One part of a browse reply delivered in parts: the reply to a browse request that carried\n`part_bytes` and whose reply is larger, and to each `read_reply_part`. `reply` is the handle\nof the reply the daemon holds, `total` the length in bytes of its serialized form, and `data`\nthe base64 of its bytes from `offset`. Joined in order, the parts are the reply as it would\nhave been sent whole, the id of the request that asked for it included."
         },
         {
           "type": "object",
@@ -6150,6 +6974,21 @@
         "data"
       ],
       "description": "A file body. Exactly one of `text` and `data` is set, by `kind`."
+    },
+    "FreeText": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "instead",
+          "description": "In place of the options: an answer has either selected options or text."
+        },
+        {
+          "type": "string",
+          "const": "with",
+          "description": "Beside them: an answer may have both."
+        }
+      ],
+      "description": "How a written answer goes with a question's options. A client that does not know the value\noffers no written answer."
     },
     "GitActivity": {
       "type": "string",
@@ -7360,6 +8199,12 @@
         "current_auto_approve_handoffs": {
           "type": "boolean"
         },
+        "auto_approve_scheduled_task_changes": {
+          "type": "boolean"
+        },
+        "current_auto_approve_scheduled_task_changes": {
+          "type": "boolean"
+        },
         "ask_questions_as_choices": {
           "type": "boolean"
         },
@@ -7430,6 +8275,8 @@
         "current_auto_approve_account_switches",
         "auto_approve_handoffs",
         "current_auto_approve_handoffs",
+        "auto_approve_scheduled_task_changes",
+        "current_auto_approve_scheduled_task_changes",
         "ask_questions_as_choices",
         "current_ask_questions_as_choices",
         "keep_sessions_in_own_project",
@@ -7447,6 +8294,57 @@
         "current_default_clone_dir"
       ],
       "description": "The application settings a document carries, beside the value this machine has now, so a client\ncan show what applying them would change. A key the document does not carry is reported as this\nmachine's value, so its line reads as no change."
+    },
+    "InteractionKinds": {
+      "type": "object",
+      "properties": {
+        "permission": {
+          "type": "boolean",
+          "description": "Tool permission prompts."
+        },
+        "question": {
+          "type": "boolean",
+          "description": "Questions from the agent's own ask-the-user tool."
+        }
+      },
+      "required": [
+        "permission",
+        "question"
+      ],
+      "description": "The kinds of prompt a provider's sessions publish and answer."
+    },
+    "InteractionPrompt": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/PermissionPrompt",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "permission"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "The agent asks whether it may use a tool."
+        },
+        {
+          "$ref": "#/$defs/QuestionPrompt",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "question"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "The agent's own ask-the-user tool puts one or more questions."
+        }
+      ],
+      "description": "What the prompt asks, by its `kind`. A client shows the terminal for a `kind` it does not\nknow: later daemons of the same generation may add kinds."
     },
     "KeepAwakeWhen": {
       "oneOf": [
@@ -7802,17 +8700,189 @@
         }
       ]
     },
+    "MemoryEntry": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        },
+        "id": {
+          "type": "string",
+          "description": "The entry's id, assigned by the daemon (see [`MEMORY_ID_LENGTH`])."
+        },
+        "summary": {
+          "type": "string",
+          "description": "One sentence summing up the content, the entry's only label; not unique."
+        },
+        "content": {
+          "type": "string",
+          "description": "Markdown."
+        },
+        "local": {
+          "type": "boolean",
+          "description": "Whether the entry holds only on this machine; always false in a place's memory, every entry\nof which holds only here. A console's local entries stay out of a configuration export."
+        },
+        "created_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Milliseconds since the epoch."
+        },
+        "updated_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Milliseconds since the epoch."
+        },
+        "updated_by": {
+          "$ref": "#/$defs/MemoryWriter"
+        },
+        "version": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Starts at 1 and is raised by every update."
+        }
+      },
+      "required": [
+        "scope",
+        "id",
+        "summary",
+        "content",
+        "local",
+        "created_at",
+        "updated_at",
+        "updated_by",
+        "version"
+      ],
+      "description": "One entry of a memory as stored."
+    },
+    "MemoryIndexEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "local": {
+          "type": "boolean",
+          "description": "As in [`MemoryEntry::local`]."
+        },
+        "created_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Milliseconds since the epoch."
+        },
+        "updated_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Milliseconds since the epoch."
+        },
+        "updated_by": {
+          "$ref": "#/$defs/MemoryWriter"
+        },
+        "version": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The entry's current version, as in [`MemoryEntry::version`]."
+        }
+      },
+      "required": [
+        "id",
+        "summary",
+        "local",
+        "created_at",
+        "updated_at",
+        "updated_by",
+        "version"
+      ],
+      "description": "One line of a memory's index: an entry without its content."
+    },
+    "MemoryScope": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "console_id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "console"
+            }
+          },
+          "required": [
+            "kind",
+            "console_id"
+          ],
+          "description": "A console's memory, which its console sessions keep; deleted with the console."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "host_id": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "place"
+            }
+          },
+          "required": [
+            "kind",
+            "host_id",
+            "path"
+          ],
+          "description": "A place's memory, which the project sessions of every project at the place keep: the\nproject's host and its stored path. It outlives the projects, and is deleted only when the\nuser asks."
+        }
+      ],
+      "description": "Which memory an entry belongs to."
+    },
+    "MemoryWriter": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "user"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "agent": {
+              "$ref": "#/$defs/Agent"
+            },
+            "kind": {
+              "type": "string",
+              "const": "agent"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ],
+      "description": "Who wrote an entry last: the user, in a window, or an agent, through a session's memory tools.\nAn agent's writer names the agent of the session that saved it, its id as data; `agent` is left\nout only for an entry whose agent no registered provider has any more."
+    },
     "ModelChangeOutcome": {
       "oneOf": [
         {
           "type": "string",
           "const": "unchanged",
-          "description": "The session had those values already: nothing was written or restarted."
+          "description": "The session had those values already and `reapply` was not sent: nothing was written or\nrestarted."
         },
         {
           "type": "string",
           "const": "recorded",
-          "description": "The session had no process: the values were recorded for its next resume."
+          "description": "The session had no process: the values were recorded for its next resume, and the model\nand effort its records showed it running forgotten. Also when `reapply` repeats values an\ninterrupted session already held."
         },
         {
           "type": "string",
@@ -7917,6 +8987,36 @@
         "console",
         "user"
       ]
+    },
+    "OrphanedMemory": {
+      "type": "object",
+      "properties": {
+        "host_id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "The path the projects at the place were stored with."
+        },
+        "entries": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "description": "How many entries the memory holds, at least one."
+        },
+        "updated_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When its most recently updated entry was, in milliseconds since the epoch."
+        }
+      },
+      "required": [
+        "host_id",
+        "path",
+        "entries",
+        "updated_at"
+      ],
+      "description": "A place whose memory no project is at any more: what removing its projects left behind."
     },
     "Page": {
       "type": "object",
@@ -8027,6 +9127,120 @@
         "path"
       ],
       "description": "A file in the project, as `read_project_file` names it: the file a path link names, or the one\na directory link shows."
+    },
+    "PendingEntry": {
+      "type": "object",
+      "properties": {
+        "turn": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "description": "The turn it belongs to, as for a [`ConversationEntry`]."
+        },
+        "at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When the record dated it, in milliseconds since the Unix epoch."
+        }
+      },
+      "required": [
+        "turn"
+      ],
+      "allOf": [
+        {
+          "$ref": "#/$defs/ConversationBody"
+        }
+      ],
+      "description": "An entry the agent is still producing, shown after the conversation's entries until the\nrecord holds it; it has no position yet."
+    },
+    "PendingInteraction": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "This sighting of the prompt, new each time the daemon recognises one: an answer names it,\nso that it cannot land on the prompt after."
+        },
+        "call_id": {
+          "type": "string",
+          "description": "The tool call the prompt belongs to, as the conversation feed's `tool_call.call_id` names\nit, where the agent says."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "allOf": [
+        {
+          "$ref": "#/$defs/InteractionPrompt"
+        }
+      ],
+      "description": "A prompt the session's agent is showing the user, recognised from its hooks and its screen\ntogether, which a client can answer with `answer_interaction`."
+    },
+    "PermissionChoice": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "What `answer_interaction`'s `choice` names it by."
+        },
+        "label": {
+          "type": "string",
+          "description": "Its label as the agent shows it."
+        },
+        "effect": {
+          "$ref": "#/$defs/ChoiceEffect"
+        },
+        "text": {
+          "description": "Whether text for the agent may go with it (`answer_interaction`'s `text`): absent where\nnone can.",
+          "$ref": "#/$defs/ChoiceText"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "effect"
+      ],
+      "description": "One answer a permission prompt offers."
+    },
+    "PermissionPrompt": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "The tool's name as the agent calls it."
+        },
+        "category": {
+          "description": "What kind of tool it is, as the conversation feed classes it.",
+          "$ref": "#/$defs/ToolCategory"
+        },
+        "title": {
+          "type": "string",
+          "description": "One line saying what the call would do: the command, the file, the address, the server and\ntool."
+        },
+        "detail": {
+          "type": "string",
+          "description": "The agent's own explanation of the call, where it gives one."
+        },
+        "input": {
+          "description": "The call's input as the agent wrote it, each string cut at [`INTERACTION_TEXT_LIMIT`]."
+        },
+        "input_truncated": {
+          "type": "boolean",
+          "description": "Whether a string of `input` was cut."
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PermissionChoice"
+          },
+          "description": "The answers offered, in the order the agent shows them. Only those the daemon can tell the\neffect of are listed; the others are left to the terminal."
+        }
+      },
+      "required": [
+        "tool",
+        "input",
+        "choices"
+      ],
+      "description": "A tool permission prompt."
     },
     "PlatformConnector": {
       "type": "object",
@@ -8572,6 +9786,73 @@
       ],
       "description": "What a `pull_project_branch` did to the project's current branch (`Event::ProjectBranchPulled`)."
     },
+    "Question": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "header": {
+          "type": "string",
+          "description": "A short label the agent gives the question."
+        },
+        "multi_select": {
+          "type": "boolean",
+          "description": "Whether more than one option may be chosen."
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestionOption"
+          }
+        },
+        "free_text": {
+          "description": "Whether the user may write an answer of their own, and how it goes with the options: absent\nwhere they may not.",
+          "$ref": "#/$defs/FreeText"
+        }
+      },
+      "required": [
+        "text",
+        "multi_select",
+        "options"
+      ],
+      "description": "One question."
+    },
+    "QuestionOption": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "description": "One option of a question."
+    },
+    "QuestionPrompt": {
+      "type": "object",
+      "properties": {
+        "questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Question"
+          }
+        },
+        "dismissible": {
+          "type": "boolean",
+          "description": "Whether the questions can be declined without an answer (`answer_interaction`'s\n`dismiss`)."
+        }
+      },
+      "required": [
+        "questions",
+        "dismissible"
+      ],
+      "description": "Questions from the agent's own ask-the-user tool, answered together."
+    },
     "QuotaUnavailable": {
       "type": "object",
       "properties": {
@@ -8696,11 +9977,19 @@
       "properties": {
         "allowed": {
           "type": "boolean",
-          "description": "The Allow remote access setting, as the user left it. Off unless the user turned it on. It\nis the user's alone: no agent's settings tool reads or changes it, and no configuration\nexport carries it."
+          "description": "The Allow remote access setting, as the user left it: whether another computer's\napplication, or a browser forwarding to the socket, may reach this daemon over the owner\nsocket (Linux, macOS) or the owner pipe (Windows). Off unless the user turned it on, and\nalways off in the server form's daemon, whose socket serves whatever the setting. It is the\nuser's alone: no agent's settings tool reads or changes it, and no configuration export\ncarries it."
         },
         "state": {
           "$ref": "#/$defs/RemoteAccessState",
-          "description": "What the daemon does with it right now."
+          "description": "What the daemon does with remote access right now."
+        },
+        "browser_allowed": {
+          "type": "boolean",
+          "description": "The Allow browser access setting, as the user left it: whether the daemon serves the browser\nat the loopback port `browser_port` names. Off unless the user turned it on (on Windows, a\nstore from before the setting began with the value remote access had). False wherever\n`browser_port` is null. Like `allowed`, it is the user's alone."
+        },
+        "browser_state": {
+          "$ref": "#/$defs/RemoteAccessState",
+          "description": "What the daemon does with browser access right now."
         },
         "browser_port": {
           "type": [
@@ -8710,28 +9999,28 @@
           "format": "uint16",
           "minimum": 0,
           "maximum": 65535,
-          "description": "On Windows, whose SSH server cannot forward to a socket, the loopback port the daemon serves\nthe browser at while remote access is on, in place of the owner socket, as the user set it\n(`set_remote_access_port`); set whatever `state` is. Null on every other system, where the\nbrowser goes through the owner socket. Like `allowed`, it is the user's alone."
+          "description": "The loopback port the daemon serves the browser at while browser access is on (Windows,\nmacOS and the server form), as the user set it (`set_remote_access_port`); set whatever\n`browser_state` is. Null where the daemon offers no browser port (Linux's desktop daemon),\nwhere the browser goes through the owner socket. Like `allowed`, it is the user's alone."
         },
         "address": {
           "type": [
             "string",
             "null"
           ],
-          "description": "The address a browser opens, `http://127.0.0.1:<port>/?key=<owner key>`, through the forward\nbelow; set while `state` is `serving`, null otherwise. The port is the one the forward binds\non the browser's machine, which stays the same across launches, so the address can be\nbookmarked."
+          "description": "The address a browser opens, `http://127.0.0.1:<port>/?key=<owner key>`; set while the\nbrowser port serves (the port is `browser_port`, which a browser on this computer opens as\nit is), else while `state` is `serving` and the daemon has an owner socket (the port is the\none the socket's forward binds on the browser's machine, which stays the same across\nlaunches, so the address can be bookmarked); null otherwise."
         },
         "forward_command": {
           "type": [
             "string",
             "null"
           ],
-          "description": "The command the browser's machine forwards the owner socket (on Windows, `browser_port`)\nwith, as `octoboardd address` prints it, the remote host left as `<server>` for the owner to\nfill in; set while `state` is `serving`, null otherwise."
+          "description": "The command the browser's machine forwards a port of its own to the daemon with, as\n`octoboardd address` prints it, the remote host left as `<server>` for the owner to fill in:\nto `browser_port` while the port serves, else to the owner socket; set whenever `address` is,\nnull otherwise."
         },
         "server_addresses": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "What another computer can reach this one by, for the owner to put in the forward's\n`<server>`, in the order Settings offers them: this computer's name (on macOS the Bonjour\n`<name>.local`, elsewhere the host name as the system reports it), then its IPv4 and then\nits IPv6 addresses, each as text that `ssh` takes after `user@` as it is. Loopback, unspecified, multicast and link-local addresses and\n`localhost` names are left out, as are deprecated, tentative and failed addresses where the\nsystem says so (Linux, Windows) and temporary IPv6 addresses on Linux (they are kept on\nmacOS and Windows). Read when the state is; set while `state` is `serving`, empty\notherwise, and empty while the computer reports none."
+          "description": "What another computer can reach this one by, for the owner to put in the forward's\n`<server>`, in the order Settings offers them: this computer's name (on macOS the Bonjour\n`<name>.local`, elsewhere the host name as the system reports it), then its IPv4 and then\nits IPv6 addresses, each as text that `ssh` takes after `user@` as it is. Loopback, unspecified, multicast and link-local addresses and\n`localhost` names are left out, as are deprecated, tentative and failed addresses where the\nsystem says so (Linux, Windows) and temporary IPv6 addresses on Linux (they are kept on\nmacOS and Windows). Read when the state is; set while `state` or `browser_state` is\n`serving`, empty otherwise, and empty while the computer reports none."
         },
         "failure": {
           "anyOf": [
@@ -8742,7 +10031,18 @@
               "type": "null"
             }
           ],
-          "description": "Why the daemon could not serve a browser though the setting is on; set while `state` is\n`failed`, null otherwise."
+          "description": "Why the daemon could not serve remote access though the setting is on; set while `state` is\n`failed`, null otherwise."
+        },
+        "browser_failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RemoteAccessFailure"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why the daemon could not serve the browser port though browser access is on; set while\n`browser_state` is `failed`, null otherwise."
         },
         "connection": {
           "anyOf": [
@@ -8759,14 +10059,17 @@
       "required": [
         "allowed",
         "state",
+        "browser_allowed",
+        "browser_state",
         "browser_port",
         "address",
         "forward_command",
         "server_addresses",
         "failure",
+        "browser_failure",
         "connection"
       ],
-      "description": "Where remote access to a daemon that follows the desktop application stands\n(`snapshot.remote_access`, `remote_access_updated`)."
+      "description": "Where remote access and browser access to a daemon that follows the desktop application stand\n(`snapshot.remote_access`, `remote_access_updated`), and, in the server form's daemon, where\nbrowser access stands."
     },
     "RemoteAccessFailure": {
       "type": "object",
@@ -8783,7 +10086,7 @@
         "reason",
         "detail"
       ],
-      "description": "Why the way in (the owner socket, or on Windows the browser port and the owner pipe) is not\nserved though remote access is on."
+      "description": "Why a way in (the owner socket or owner pipe of remote access, the browser port of browser\naccess) is not served though its setting is on."
     },
     "RemoteAccessFailureReason": {
       "oneOf": [
@@ -8810,12 +10113,17 @@
         {
           "type": "string",
           "const": "port_in_use",
-          "description": "On Windows, `browser_port` is already in use, by another program or another user of the\ncomputer: nothing is served until the port is changed or freed."
+          "description": "`browser_port` is already in use, by another program or another user of the computer: the\nport is not served until it is changed or freed."
+        },
+        {
+          "type": "string",
+          "const": "port_is_daemons",
+          "description": "`browser_port` is the daemon's own TCP port, which never serves the browser: the port is\nnot served until it is changed."
         },
         {
           "type": "string",
           "const": "port_failed",
-          "description": "On Windows, `browser_port` could not be listened on for another reason."
+          "description": "`browser_port` could not be listened on for another reason."
         },
         {
           "type": "string",
@@ -8830,20 +10138,20 @@
         {
           "type": "string",
           "const": "off",
-          "description": "The setting is off: no way in for the browser (owner socket, or on Windows browser port and\nowner pipe), no owner key."
+          "description": "The setting is off: the way in it opens is closed (for remote access the owner socket, or\non Windows the owner pipe; for browser access the browser port). The owner key is refused\nonce both settings are off."
         },
         {
           "type": "string",
           "const": "serving",
-          "description": "The way in is open (the owner socket, or on Windows the browser port and the owner pipe),\nserves the UI, and accepts the owner key."
+          "description": "The way in is open, serves the UI where it is a browser's, and accepts the owner key."
         },
         {
           "type": "string",
           "const": "failed",
-          "description": "The setting is on, but the way in could not be opened or the owner key could not be held\n(`failure` says which): nothing is served, and turning the setting off and on again tries\nagain, as does setting the browser port again on Windows, the same port included."
+          "description": "The setting is on, but its way in could not be opened or the owner key could not be held\n(`failure` or `browser_failure` says which): nothing of it is served, and turning the\nsetting off and on again tries again, as does setting the browser port again for browser\naccess, the same port included."
         }
       ],
-      "description": "What a daemon that follows the application does with remote access."
+      "description": "What a daemon that follows the application does with one of its two settings, remote access\n(`state`) or browser access (`browser_state`)."
     },
     "ResetCredit": {
       "type": "object",
@@ -8949,6 +10257,406 @@
         "worker"
       ]
     },
+    "Schedule": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "run_at": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "kind": {
+              "type": "string",
+              "const": "once"
+            }
+          },
+          "required": [
+            "kind",
+            "run_at"
+          ],
+          "description": "Once, at the instant `run_at`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "minute": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "kind": {
+              "type": "string",
+              "const": "hourly"
+            }
+          },
+          "required": [
+            "kind",
+            "minute"
+          ],
+          "description": "Every hour, at `minute` past it (0 to 59)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "kind": {
+              "type": "string",
+              "const": "daily"
+            }
+          },
+          "required": [
+            "kind",
+            "time"
+          ],
+          "description": "Every day, at `time`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "kind": {
+              "type": "string",
+              "const": "weekdays"
+            }
+          },
+          "required": [
+            "kind",
+            "time"
+          ],
+          "description": "Monday to Friday, at `time`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "days": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Weekday"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "weekly"
+            }
+          },
+          "required": [
+            "kind",
+            "time",
+            "days"
+          ],
+          "description": "On each of `days`, at `time`; `days` is not empty."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "day": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "time": {
+              "$ref": "#/$defs/TimeOfDay"
+            },
+            "kind": {
+              "type": "string",
+              "const": "monthly"
+            }
+          },
+          "required": [
+            "kind",
+            "day",
+            "time"
+          ],
+          "description": "On day `day` of every month (1 to 31), at `time`. A month without that day runs on its last\nday, so 31 is the last day of every month."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "manual"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "Only when run by hand."
+        }
+      ],
+      "description": "When a scheduled task runs, in the local time zone of the daemon's machine."
+    },
+    "ScheduledRunOutcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "started_independent": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "started"
+            }
+          },
+          "required": [
+            "kind",
+            "session",
+            "started_independent"
+          ],
+          "description": "The session `session` was started and handed the prompt. `started_independent` is true\nwhen the task names a console session to report to that could not take sessions by then\n(archived, deleted or still starting), so the session was started reporting to none."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "message": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "failed"
+            }
+          },
+          "required": [
+            "kind",
+            "code",
+            "params",
+            "message"
+          ],
+          "description": "No session was started: the refusal or launch failure, as an `error` reply would carry it\n(`code`, `params`, and `message`, its English account with the raw detail)."
+        }
+      ],
+      "description": "What came of a run."
+    },
+    "ScheduledRunTrigger": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "scheduled",
+          "description": "The schedule came due while the daemon was running."
+        },
+        {
+          "type": "string",
+          "const": "catch_up",
+          "description": "An occurrence missed while the daemon was not running (or the machine was asleep), made up\nonce."
+        },
+        {
+          "type": "string",
+          "const": "run_now",
+          "description": "`run_scheduled_task`."
+        }
+      ],
+      "description": "What started a run."
+    },
+    "ScheduledTask": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "console_id": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "launch": {
+          "$ref": "#/$defs/ScheduledTaskLaunch",
+          "description": "What the session is started with, as the session dialog's New conversation offers it."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "The opening task the started session is handed; never blank."
+        },
+        "schedule": {
+          "$ref": "#/$defs/Schedule"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "A disabled task does not run on its schedule."
+        },
+        "created_at": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "updated_at": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "next_run_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "description": "When the task next runs on its schedule; null for a manual-only task, a one-off whose time\nhas passed, or a disabled task."
+        },
+        "last_run_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "description": "When the task last ran; null until it first does."
+        },
+        "run_sessions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The sessions its kept runs started (runs whose outcome is `started`), most recent run first,\neach once, leaving out a session the daemon no longer holds or that is archived. Not\nstored: read from the runs and the sessions each time the task is sent, so every\n`scheduled_task_upserted` that follows a recorded run carries the session that run started.\nA session archived or deleted after the task was sent may still be listed until the task is\nnext sent."
+        }
+      },
+      "required": [
+        "id",
+        "console_id",
+        "project_id",
+        "launch",
+        "prompt",
+        "schedule",
+        "enabled",
+        "created_at",
+        "updated_at",
+        "next_run_at",
+        "last_run_at",
+        "run_sessions"
+      ],
+      "description": "A scheduled task as the daemon stores it. A console session of `console_id` is started when\n`project_id` is null, else a project session of that project."
+    },
+    "ScheduledTaskAsked": {
+      "type": "object",
+      "properties": {
+        "task": {
+          "type": "string",
+          "description": "The task an approval changes, enables, disables, deletes or runs; left out for a task to\ncreate."
+        },
+        "launch": {
+          "description": "For a create, the launch settings the task would be saved with; for an update, present\nonly when the call changes launch settings, and then the whole launch as it would be saved\n(the settings the call left out stay as the task holds them). Its `title` is the task's\nname.",
+          "$ref": "#/$defs/ScheduledTaskLaunch"
+        },
+        "schedule": {
+          "description": "For a create, the schedule the task would be saved with; for an update, present only when\nthe call changes the schedule.",
+          "$ref": "#/$defs/Schedule"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "For a create, whether the task would be saved on; for `set_scheduled_task_enabled`, what it\nis set to; left out otherwise."
+        }
+      },
+      "description": "What a `session_request` for a scheduled task change asks for, in the event's `scheduled_task`\nfield. Every field is left out where the request does not carry it, so a client reads only\nwhat is there; the task's prompt is the event's own `prompt`, since it is text an agent wrote."
+    },
+    "ScheduledTaskLaunch": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The started session's title; absent or blank names it as `open_session` does by default."
+        },
+        "agent": {
+          "description": "Absent takes the project's default agent, else the console's, at each run.",
+          "$ref": "#/$defs/Agent"
+        },
+        "account": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The account, by id. Absent leaves the choice to the project's reference, else the\nconsole's, at each run; an explicit `null` chooses the default account."
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Absent inherits the project's (or console's) setting at each run; an explicit `null`\nleaves the choice to the agent; a value pins the model."
+        },
+        "effort": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The reasoning effort, with the rule of `model`."
+        },
+        "compatibility": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "The compatibility switches the session holds its own value for, by setting id; one left\nout follows the project's, else the console's, else the agent's value. Absent in a request\nholds none."
+        },
+        "bound_to": {
+          "type": "string",
+          "description": "The console session a project task's session reports to; absent for none. Ignored for a\nconsole task."
+        }
+      },
+      "required": [
+        "compatibility"
+      ],
+      "description": "The launch settings of a scheduled task's session, with the rules `open_session` gives the same\nfields: each is checked as `open_session` checks it when the task is saved, and read again at\nevery run."
+    },
+    "ScheduledTaskRun": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "ran_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When the run started its session, or failed to."
+        },
+        "due_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "description": "The occurrence of the schedule the run stands for; null for `run_now`. A catch-up's is the\nmissed occurrence it makes up for, earlier than `ran_at`."
+        },
+        "trigger": {
+          "$ref": "#/$defs/ScheduledRunTrigger"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ScheduledRunOutcome"
+        }
+      },
+      "required": [
+        "id",
+        "task_id",
+        "ran_at",
+        "due_at",
+        "trigger",
+        "outcome"
+      ],
+      "description": "One run of a scheduled task: what started it and what came of it. The daemon keeps the last\n[`SCHEDULED_TASK_RUNS_KEPT`] of each task, and drops them with the task."
+    },
     "Session": {
       "type": "object",
       "properties": {
@@ -9042,6 +10750,10 @@
         "holder_link": {
           "description": "Whether the holder that runs the session's process can be reached: `pending` while it runs\nbut cannot be linked to, and absent while it can, or no holder runs the process. While\npending, the process goes on and the session stays claimed: it is neither interrupted nor\nresumed, and what is asked of its process fails. Never stored: it is filled in on the\nrecord a client receives (`AppState::wire_session`).",
           "$ref": "#/$defs/HolderLink"
+        },
+        "interaction": {
+          "description": "What the session's agent is asking the user, while the session is shown waiting on them\nand the daemon has recognised the prompt from the agent's hooks and its screen together;\nanswered with `answer_interaction`. Absent otherwise, the prompt then answered in the\nterminal. Never stored: it is filled in on the record a client receives\n(`AppState::wire_session`).",
+          "$ref": "#/$defs/PendingInteraction"
         },
         "has_conversation": {
           "type": "boolean",
@@ -9364,6 +11076,31 @@
           "type": "string",
           "const": "handoff",
           "description": "Hands the session `target`, which the asking session owns, off to a new session of another\nagent."
+        },
+        {
+          "type": "string",
+          "const": "create_scheduled_task",
+          "description": "Creates the scheduled task `scheduled_task` describes."
+        },
+        {
+          "type": "string",
+          "const": "update_scheduled_task",
+          "description": "Changes the scheduled task `scheduled_task.task` as `scheduled_task` and `prompt` say."
+        },
+        {
+          "type": "string",
+          "const": "set_scheduled_task_enabled",
+          "description": "Turns the scheduled task `scheduled_task.task` on or off, as `scheduled_task.enabled`\nsays."
+        },
+        {
+          "type": "string",
+          "const": "delete_scheduled_task",
+          "description": "Deletes the scheduled task `scheduled_task.task`."
+        },
+        {
+          "type": "string",
+          "const": "run_scheduled_task",
+          "description": "Runs the scheduled task `scheduled_task.task` once now."
         }
       ],
       "description": "What approving a `session_request` does."
@@ -9568,6 +11305,10 @@
           "type": "boolean",
           "description": "Whether an owner's `handoff_session` calls run without asking the user, as\n`auto_approve_session_requests` does for `request_session`, independently of the other\napprovals. Off unless the user turned it on; only the user's own client changes it."
         },
+        "auto_approve_scheduled_task_changes": {
+          "type": "boolean",
+          "description": "Whether an agent's calls that create, change, enable, disable, delete or run a scheduled\ntask run without asking the user, as `auto_approve_session_requests` does for\n`request_session`, independently of the other approvals. Off unless the user turned it on;\nonly the user's own client changes it."
+        },
         "ask_questions_as_choices": {
           "type": "boolean",
           "description": "Whether the instructions given to every session at launch ask it to put each question that\nneeds the user's decision or answer as options to pick from. On unless the user turned it\noff. Fixed per session when it starts, so a change reaches only sessions begun afterwards\n(a console session's file is rewritten at each launch, so it follows at the next one). Only\nthe user's own client changes it."
@@ -9575,6 +11316,10 @@
         "keep_sessions_in_own_project": {
           "type": "boolean",
           "description": "Whether a project session is kept to its own project: its git is refused a ref update in\nthe repository of another registered project, and its file-edit tools are refused a path\nin one. Off unless the user turned it on. The git check reads it at every ref update, so a\nchange reaches running sessions at once; the edit check keeps the value a session was\nlaunched with, so a change reaches it only in sessions launched afterwards. Only the\nuser's own client changes it."
+        },
+        "memory_enabled": {
+          "type": "boolean",
+          "description": "Whether Octoboard's memory is on: sessions are offered the memory tools, a console session's\ninstruction file and a project session's role description carry the memory's index, and\neach session's launch turns its agent's own memory off where the agent has a switch for it.\nOff unless the user turned it on. The launch-time effects follow it at each launch, so a\nchange reaches only sessions launched afterwards; a memory tool called while it is off is\nrefused at the time of the call. Turning it off deletes nothing, and the clients' memory\nrequests work whatever it says."
         },
         "interface_language": {
           "type": [
@@ -9713,8 +11458,10 @@
         "auto_approve_resume_requests",
         "auto_approve_account_switches",
         "auto_approve_handoffs",
+        "auto_approve_scheduled_task_changes",
         "ask_questions_as_choices",
         "keep_sessions_in_own_project",
+        "memory_enabled",
         "interface_language",
         "keep_awake",
         "keep_awake_when",
@@ -10178,6 +11925,176 @@
       ],
       "description": "One column of a [`DataTable`]."
     },
+    "TimeOfDay": {
+      "type": "object",
+      "properties": {
+        "hour": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "minute": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        }
+      },
+      "required": [
+        "hour",
+        "minute"
+      ],
+      "description": "A wall-clock time of day: `hour` 0 to 23, `minute` 0 to 59."
+    },
+    "TodoItem": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "description": "The agent's own word: `pending`, `in_progress`, `completed` or `cancelled`."
+        }
+      },
+      "required": [
+        "text",
+        "status"
+      ],
+      "description": "One item of a todo list."
+    },
+    "ToolCallEntry": {
+      "type": "object",
+      "properties": {
+        "call_id": {
+          "type": "string",
+          "description": "The agent's own id of the call."
+        },
+        "name": {
+          "type": "string",
+          "description": "The tool's name as the agent calls it."
+        },
+        "category": {
+          "$ref": "#/$defs/ToolCategory"
+        },
+        "title": {
+          "type": "string",
+          "description": "One line saying what the call does: the command it runs, the file it reads or edits, what\nit searches for."
+        },
+        "input": {
+          "description": "The call's input as the agent wrote it, with each string longer than 16 KiB cut."
+        },
+        "input_truncated": {
+          "type": "boolean",
+          "description": "Whether a string of `input` was cut."
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The files the call changed, each as the agent spells it: not checked, and possibly relative\nto the session's working directory. Empty for a call that changed none."
+        },
+        "status": {
+          "$ref": "#/$defs/ToolStatus"
+        },
+        "output": {
+          "type": "string",
+          "description": "What the call gave back, its first and last 8 KiB when it is longer."
+        },
+        "output_truncated": {
+          "type": "boolean",
+          "description": "Whether `output` was cut."
+        },
+        "exit_code": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The exit code of a command."
+        }
+      },
+      "required": [
+        "call_id",
+        "name",
+        "category",
+        "input",
+        "paths",
+        "status"
+      ],
+      "description": "A tool call and, once the record says so, how it ended."
+    },
+    "ToolCategory": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "other"
+          ]
+        },
+        {
+          "type": "string",
+          "const": "command",
+          "description": "Runs a shell command."
+        },
+        {
+          "type": "string",
+          "const": "file_edit",
+          "description": "Writes or edits files."
+        },
+        {
+          "type": "string",
+          "const": "file_read",
+          "description": "Reads a file or views an image."
+        },
+        {
+          "type": "string",
+          "const": "search",
+          "description": "Searches file names or contents."
+        },
+        {
+          "type": "string",
+          "const": "web",
+          "description": "Fetches or searches the web."
+        },
+        {
+          "type": "string",
+          "const": "mcp",
+          "description": "Calls a tool of an MCP server."
+        },
+        {
+          "type": "string",
+          "const": "subagent",
+          "description": "Starts or talks to a subagent."
+        }
+      ],
+      "description": "What kind of thing a tool call does, whichever agent made it. A value a client does not know\nreads as `other`."
+    },
+    "ToolStatus": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "completed"
+          ]
+        },
+        {
+          "type": "string",
+          "const": "running",
+          "description": "Called, with no result recorded yet."
+        },
+        {
+          "type": "string",
+          "const": "failed",
+          "description": "It ended in an error."
+        },
+        {
+          "type": "string",
+          "const": "declined",
+          "description": "It was not allowed to run: the user declined it, or a permission rule did."
+        }
+      ],
+      "description": "Where a tool call stands. A value a client does not know reads as `running`: a later daemon of\nthe same generation may add a state in which the call has not ended (waiting for approval)."
+    },
     "UnkeepableReason": {
       "oneOf": [
         {
@@ -10281,6 +12198,18 @@
         "equals"
       ],
       "description": "Shows its component only while the input field named `field` holds `equals`: a multiple\nchoice while its selection contains it, a toggle while it is that boolean."
+    },
+    "Weekday": {
+      "type": "string",
+      "enum": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ]
     },
     "WorktreeInfo": {
       "type": "object",

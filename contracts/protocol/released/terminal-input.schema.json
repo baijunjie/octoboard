@@ -36,7 +36,8 @@
             "type",
             "cols",
             "rows"
-          ]
+          ],
+          "description": "Asks for the terminal to be `cols` by `rows`. The terminal has the size the most recently\nactive client that has asked for one last asked for, so a client that has asked for none\nonly watches, taking no part in the size; one that asks takes part from then on, until it\nsends `watch`."
         },
         {
           "type": "object",
@@ -129,6 +130,19 @@
             "type"
           ],
           "description": "The person turned to this client's terminal: selected it, pressed on it, came back to its\nwindow while it was shown, or resized the window they work in. Makes the client the most\nrecently active one, as input does, so the terminal takes its size and the program's queries\nits display. Not sent for a reconnect in the background or a size change in a window in the\nbackground."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "watch"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "The client goes back to watching: the size it asked for and the display it reported no\nlonger count, and those of the most recently active client that has one apply in their\nplace. With no client asking for a size, the terminal keeps the one it has. A client\ntakes part again by sending `resize` (and `display`)."
         }
       ],
       "description": "Client-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY input\nand never reach this type."
