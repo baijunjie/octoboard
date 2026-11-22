@@ -313,6 +313,8 @@ html {
 
 @import "./primitives/Tooltip.css";
 
+@import "./primitives/ProgressCircle.css";
+
 @import "./components/hint/touchTarget.css";
 
 /* The dark floating surfaces: a dialog, a menu or submenu, a select's or combo box's list, a popover, a tooltip and

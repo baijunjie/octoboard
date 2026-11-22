@@ -6,6 +6,8 @@ import { Badge, BadgeAnchor } from "./Badge";
 import { Chip } from "./Chip";
 import { Code } from "./Code";
 import { Kbd, KbdContent } from "./Kbd";
+import { ProgressBar, ProgressBarTrack } from "./ProgressBar";
+import { ProgressCircle } from "./ProgressCircle";
 import { Spinner } from "./Spinner";
 import { Tag, TagGroup, TagList, TagRemoveButton } from "./Tag";
 import { mount, pressWithMouse } from "./testSupport";
@@ -142,4 +144,47 @@ it("reports the tags removed by a remove button as their texts, and keeps the bu
   expect(container.querySelectorAll("button")).toHaveLength(1);
   pressWithMouse(remove);
   expect(onRemove).toHaveBeenCalledWith(["alpha"]);
+});
+
+it("hands a progress bar the ids of the text that names and describes it, as aria-labelledby and aria-describedby", () => {
+  const { container } = mount(
+    <>
+      <p id="bar-name">Downloading version 0.2.0</p>
+      <p id="bar-hint">Takes a minute</p>
+      <ProgressBar value={25} labelledBy="bar-name" describedBy="bar-hint">
+        <ProgressBarTrack />
+      </ProgressBar>
+    </>,
+  );
+  const bar = container.querySelector('[role="progressbar"]')!;
+  expect(bar.getAttribute("aria-labelledby")).toBe("bar-name");
+  expect(bar.getAttribute("aria-describedby")).toBe("bar-hint");
+});
+
+it("leaves a progress bar without aria-labelledby and aria-describedby where none is given", () => {
+  const { container } = mount(
+    <ProgressBar value={25}>
+      <ProgressBarTrack />
+    </ProgressBar>,
+  );
+  const bar = container.querySelector('[role="progressbar"]')!;
+  expect(bar.hasAttribute("aria-labelledby")).toBe(false);
+  expect(bar.hasAttribute("aria-describedby")).toBe(false);
+});
+
+it("retints a progress circle's track only when asked to, keeping the class names it is given", () => {
+  const { container } = mount(
+    <>
+      <ProgressCircle label="Plain" value={50} className="mine" />
+      <ProgressCircle label="Contrast" value={50} className="mine" contrastTrack />
+      <ProgressCircle label="Contrast alone" value={50} contrastTrack />
+    </>,
+  );
+  const [plain, contrast, alone] = [...container.querySelectorAll('[role="progressbar"]')];
+  expect(plain!.classList.contains("app-progress-circle--contrast-track")).toBe(false);
+  expect(plain!.classList.contains("mine")).toBe(true);
+  expect(contrast!.classList.contains("app-progress-circle--contrast-track")).toBe(true);
+  expect(contrast!.classList.contains("mine")).toBe(true);
+  expect(alone!.classList.contains("app-progress-circle--contrast-track")).toBe(true);
+  expect(alone!.getAttribute("aria-label")).toBe("Contrast alone");
 });

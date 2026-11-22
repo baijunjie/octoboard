@@ -1,0 +1,6 @@
+/* A progress circle drawn on a filled surface (the rail, a selected sidebar row, a control's fill): its track is the
+   foreground at 20% in place of HeroUI's `--default`, which is close to those fills, so the part of the ring not yet
+   filled would not show there. An override of HeroUI's track colour by the user's decision. */
+.app-progress-circle--contrast-track {
+  --progress-circle-track-stroke: color-mix(in oklab, var(--foreground) 20%, transparent);
+}

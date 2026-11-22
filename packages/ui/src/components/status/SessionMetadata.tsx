@@ -25,7 +25,7 @@ function contextTone(percent: number): string {
  * its badge, its arc in the tone of how full the window is. */
 function ContextRing({ label, percent }: { label: string; percent: number }): React.ReactElement {
   return (
-    <ProgressCircle label={label} value={percent} className={`context-ring shrink-0 ${contextTone(percent)}`} trackClassName="size-3" />
+    <ProgressCircle label={label} value={percent} contrastTrack className={`context-ring shrink-0 ${contextTone(percent)}`} trackClassName="size-3" />
   );
 }
 

@@ -42,10 +42,13 @@ entry points are `docs/structure/ui.md`.
   share is a parameter or kind of the composite (P2).
 - **A hand-built element is acceptable only where HeroUI has no equivalent or cannot meet a stated requirement**; build
   it on the layer's React Aria hooks, not bare DOM events, and comment why HeroUI's is not used.
-- **Give a compound component's layout classes to its parts and put no element of your own between two parts.** HeroUI
-  variants use direct-child selectors (`.tabs--secondary > .tabs__list-container`) and parents scan their direct
-  children for parts (`Tag` for `Tag.RemoveButton`); a wrapper `div` switches the variant off or leaves the default
-  part beside yours. Where the parent takes a render-function child, wrap a part that way.
+- **Give a compound component's layout classes to its parts, and put no element of your own between two parts of a
+  component whose variants use direct-child selectors (`.tabs--secondary > .tabs__list-container`) or whose parent
+  scans its direct children for parts (`Tag` for `Tag.RemoveButton`)**: a wrapper `div` switches the variant off or
+  leaves the default part beside yours. Where the parent takes a render-function child, wrap a part that way. Its
+  stylesheet under `packages/ui/node_modules/@heroui/styles/dist/components/` shows direct-child selectors, and its
+  file under `packages/ui/node_modules/@heroui/react/dist/components/` whether the parent scans its children; a
+  component with neither (`ProgressBar`) may hold elements of yours.
 - **Never pass a react-aria-owned state attribute (`data-selected`, `data-hovered`, `data-pressed`, `data-expanded`,
   `data-disabled`, `data-focused`) to mark your own state.** The element writes over it; use another name
   (`data-current`) or a class.

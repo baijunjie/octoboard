@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { press } from "../components/alerts/detailsTestSupport";
 import { FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { LanguageProvider } from "../i18n/react";
 import type { AvailableUpdate, PlatformAdapter, UpdaterCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
@@ -71,6 +72,13 @@ async function spoken(container: HTMLElement): Promise<string> {
   return textOf(container.querySelector("[role=status]")!);
 }
 
+/** The Version row's description: the sentence, and under it the line this section keeps for the last check or the
+ * download's progress. */
+const versionDescription = (container: HTMLElement) => container.querySelector<HTMLElement>("[data-settings-search-id='updates.version'] [data-setting-description]")!;
+/** The second line under the Version row's sentence. */
+const secondLine = (container: HTMLElement) => versionDescription(container).children[1] as HTMLElement | undefined;
+const progressBar = (container: HTMLElement) => container.querySelector<HTMLElement>("[role=progressbar]");
+
 const failedMark = (container: HTMLElement) => container.querySelector<HTMLElement>("button[aria-label='Last update check']");
 
 it("shows a check that did not finish as a warning mark before the button, its popover holding the sentences, not as an alert under the row", async () => {
@@ -90,7 +98,7 @@ it("shows a check that did not finish as a warning mark before the button, its p
   // No retry button of its own (the buttons react-aria adds for dismissing are unnamed).
   expect([...popover.querySelectorAll("button")].filter((b) => b.textContent !== "")).toHaveLength(0);
   // The row's own sentence does not carry the failure.
-  expect(textOf(container.querySelector("[class*=text-app-muted]")!)).toBe("You are using version 0.1.0.");
+  expect(textOf(versionDescription(container).children[0]!)).toBe("You are using version 0.1.0.");
 });
 
 it("hands focus to the Check for updates button when the mark that holds it goes as a check starts, and leaves other focus alone", async () => {
@@ -399,4 +407,102 @@ it.each([
   await act(async () => {});
   await act(async () => button(blind.container, "Check for updates")!.click());
   expect(textOf(blind.container)).toContain(unknown);
+});
+
+it("keeps a second line under the Version row's sentence before any check has ended, empty, so the row does not grow when one does", async () => {
+  fakeTimers();
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => undefined) });
+  await act(async () => {});
+  expect(versionDescription(container).children).toHaveLength(2);
+  expect(textOf(versionDescription(container).children[0]!)).toBe("You are using version 0.1.0.");
+  expect(textOf(secondLine(container)!)).toBe("");
+  await act(async () => button(container, "Check for updates")!.click());
+  expect(versionDescription(container).children).toHaveLength(2);
+  expect(textOf(secondLine(container)!)).toBe("Last checked just now");
+});
+
+it("keeps the time of the last check on the second line while the next check runs", async () => {
+  fakeTimers();
+  let settle: (found: AvailableUpdate | undefined) => void = () => {};
+  const check = vi.fn<UpdaterCapability["check"]>().mockResolvedValueOnce(undefined).mockImplementation(() => new Promise((resolve) => (settle = resolve)));
+  const { container, store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(check) });
+  await act(async () => {});
+  await act(async () => store().check("automatic"));
+  expect(textOf(secondLine(container)!)).toBe("Last checked just now");
+  act(() => void store().check("automatic"));
+  expect(store().getState().phase).toBe("checking");
+  expect(versionDescription(container).children).toHaveLength(2);
+  expect(textOf(secondLine(container)!)).toBe("Last checked just now");
+  await act(async () => settle(undefined));
+  expect(textOf(secondLine(container)!)).toBe("Last checked just now");
+});
+
+it("keeps the time of the last check on the second line after a check that did not finish, beside the warning mark", async () => {
+  fakeTimers();
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => { throw new Error("offline"); }) });
+  await act(async () => {});
+  await act(async () => button(container, "Check for updates")!.click());
+  expect(failedMark(container)).not.toBeNull();
+  expect(versionDescription(container).children).toHaveLength(2);
+  expect(textOf(secondLine(container)!)).toBe("Last checked just now");
+});
+
+it("shows a download's progress bar in place of the last check's line, named by the row's sentence, with its percentage", async () => {
+  fakeTimers();
+  let progress: (value: { downloaded: number; total?: number }) => void = () => {};
+  const install = vi.fn((onProgress: typeof progress) => new Promise<void>(() => { progress = onProgress; }));
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND, install) });
+  await act(async () => {});
+  await act(async () => button(container, "Check for updates")!.click());
+  expect(textOf(secondLine(container)!)).toBe("Last checked just now");
+  await act(async () => button(container, "Download and install")!.click());
+  act(() => progress({ downloaded: 25, total: 100 }));
+  const bar = progressBar(container)!;
+  expect(bar).not.toBeNull();
+  expect(accessibleName(bar)).toBe("Downloading version \u{2068}0.2.0\u{2069}…");
+  // The sentence stays the description's first line, as in every phase, and the bar is its second.
+  expect(textOf(versionDescription(container).children[0]!)).toBe("Downloading version 0.2.0…");
+  expect(versionDescription(container).children[1]!.contains(bar)).toBe(true);
+  expect(bar.getAttribute("aria-valuenow")).toBe("25");
+  expect(bar.getAttribute("aria-valuetext")).toBe("25%");
+  expect(textOf(versionDescription(container))).toContain("25%");
+  expect(textOf(versionDescription(container))).not.toContain("Last checked");
+  act(() => progress({ downloaded: 150, total: 100 }));
+  expect(progressBar(container)!.getAttribute("aria-valuetext")).toBe("100%");
+});
+
+it("shows an indeterminate progress bar without a percentage while the download's size is not known", async () => {
+  fakeTimers();
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND, () => new Promise<void>(() => {})) });
+  await act(async () => {});
+  await act(async () => button(container, "Check for updates")!.click());
+  await act(async () => button(container, "Download and install")!.click());
+  const bar = progressBar(container)!;
+  expect(bar).not.toBeNull();
+  expect(accessibleName(bar)).toBe("Downloading version \u{2068}0.2.0\u{2069}…");
+  expect(bar.hasAttribute("aria-valuenow")).toBe(false);
+  expect(textOf(versionDescription(container))).not.toContain("%");
+  expect(textOf(versionDescription(container))).not.toContain("Last checked");
+});
+
+it("takes the progress bar away when the download ends, and puts the last check's line back", async () => {
+  fakeTimers();
+  let finish: () => void = () => {};
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND, () => new Promise<void>((resolve) => (finish = resolve))) });
+  await act(async () => {});
+  await act(async () => button(container, "Check for updates")!.click());
+  await act(async () => button(container, "Download and install")!.click());
+  expect(progressBar(container)).not.toBeNull();
+  await act(async () => finish());
+  expect(progressBar(container)).toBeNull();
+  expect(textOf(versionDescription(container).children[0]!)).toBe("Version 0.2.0 is installed. It takes effect after the app restarts.");
+  expect(textOf(secondLine(container)!)).toBe("Last checked just now");
+});
+
+it("shows no progress bar outside a download", async () => {
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND) });
+  await act(async () => {});
+  expect(progressBar(container)).toBeNull();
+  await act(async () => button(container, "Check for updates")!.click());
+  expect(progressBar(container)).toBeNull();
 });

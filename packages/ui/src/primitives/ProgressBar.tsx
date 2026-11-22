@@ -3,12 +3,14 @@ import React from "react";
 
 /** HeroUI's progress bar: how far a task has come, `value` out of `maxValue` (100 by default), or an `indeterminate`
  * one whose end is not known yet. `valueLabel` is the value as it is read (a count, a percentage). `children` lays out
- * its parts: a `Label` naming it, its `ProgressBarTrack` and, where the value is shown, its `ProgressBarOutput`. */
-export function ProgressBar({ value, maxValue, indeterminate, valueLabel, describedBy, className, children }: {
+ * its parts: a `Label` naming it, its `ProgressBarTrack` and, where the value is shown, its `ProgressBarOutput`. Where
+ * the text that names it is shown outside it, `labelledBy` is that text's id and it holds no `Label`. */
+export function ProgressBar({ value, maxValue, indeterminate, valueLabel, labelledBy, describedBy, className, children }: {
   value?: number;
   maxValue?: number;
   indeterminate?: boolean;
   valueLabel?: string;
+  labelledBy?: string;
   describedBy?: string;
   className?: string;
   children: React.ReactNode;
@@ -19,6 +21,7 @@ export function ProgressBar({ value, maxValue, indeterminate, valueLabel, descri
       maxValue={maxValue}
       isIndeterminate={indeterminate}
       valueLabel={valueLabel}
+      aria-labelledby={labelledBy}
       aria-describedby={describedBy}
       className={className}
     >

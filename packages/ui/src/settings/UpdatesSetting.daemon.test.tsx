@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { agentCliStatusesOf, agentCliStatusOf, agentCliUpdateOf } from "../fixtures/builders";
 import { FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { LanguageProvider } from "../i18n/react";
 import type { UpdaterCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
@@ -335,4 +336,71 @@ it("keeps the full section, with its version and buttons, in the application's l
   expect(textOf(container)).toContain("You are using version 7.7.7.");
   expect(button(container, "Check for updates")).toBeDefined();
   expect(rowLabels(container)).toEqual(expect.arrayContaining(["Check for updates automatically", "Update channel"]));
+});
+
+const NOW = 1_700_000_000_000;
+const CHECKED = (at: number, outcome: "up_to_date" | "failed" = "up_to_date") => ({ outcome, at, error: outcome === "failed" ? "daemon_update_check_failed" : null, detail: outcome === "failed" ? "offline" : null });
+const versionDescription = (container: HTMLElement) => container.querySelector<HTMLElement>("[data-settings-search-id='updates.version'] [data-setting-description]")!;
+const progressBar = (container: HTMLElement) => container.querySelector<HTMLElement>("[role=progressbar]");
+
+it("keeps a second line under the Version row's sentence, empty before any check has ended, so the row keeps its height", () => {
+  fakeTimers({ now: NOW });
+  const { container } = mount(IDLE, undefined, { notice: false });
+  expect(versionDescription(container).children).toHaveLength(2);
+  expect(textOf(versionDescription(container).children[1]!)).toBe("");
+});
+
+it.each([
+  ["idle", { phase: "idle" }],
+  ["checking", { phase: "checking" }],
+  ["a check that did not finish", { phase: "idle", last_check: CHECKED(NOW - 5 * 60_000, "failed") }],
+] as const)("words when the last check ended on the second line, kept through %s", (_name, change) => {
+  fakeTimers({ now: NOW });
+  const { container } = mount({ ...IDLE, last_check: CHECKED(NOW - 5 * 60_000), ...change }, undefined, { notice: false });
+  expect(versionDescription(container).children).toHaveLength(2);
+  expect(textOf(versionDescription(container).children[1]!)).toBe("Last checked 5 minutes ago");
+});
+
+it("says the last check was just now while it is under a minute back, as a check starts and ends", () => {
+  fakeTimers({ now: NOW });
+  const { container, daemon } = mount({ ...IDLE, last_check: CHECKED(NOW - 10_000) }, undefined, { notice: false });
+  expect(textOf(versionDescription(container).children[1]!)).toBe("Last checked just now");
+  act(() => daemon.store.setState({ daemonUpdate: { ...IDLE, phase: "checking", last_check: CHECKED(NOW - 10_000) } }));
+  expect(textOf(versionDescription(container).children[1]!)).toBe("Last checked just now");
+  act(() => daemon.store.setState({ daemonUpdate: { ...IDLE, last_check: CHECKED(NOW) } }));
+  expect(textOf(versionDescription(container).children[1]!)).toBe("Last checked just now");
+});
+
+it("shows the daemon's download as a progress bar in place of the last check's line, named by the row's sentence, with its percentage", () => {
+  fakeTimers({ now: NOW });
+  const { container } = mount({ ...IDLE, phase: "downloading", available: AVAILABLE, progress: { downloaded: 25, total: 100 }, last_check: CHECKED(NOW - 60_000) }, undefined, { notice: false });
+  const bar = progressBar(container)!;
+  expect(bar).not.toBeNull();
+  expect(accessibleName(bar)).toBe("Downloading version \u{2068}0.2.0\u{2069}…");
+  expect(bar.getAttribute("aria-valuenow")).toBe("25");
+  expect(bar.getAttribute("aria-valuetext")).toBe("25%");
+  expect(textOf(versionDescription(container))).toContain("25%");
+  expect(textOf(versionDescription(container))).not.toContain("Last checked");
+});
+
+it("shows an indeterminate progress bar without a percentage while the daemon's download has no known size", () => {
+  fakeTimers({ now: NOW });
+  const { container, daemon } = mount({ ...IDLE, phase: "downloading", available: AVAILABLE, progress: { downloaded: 25, total: null }, last_check: CHECKED(NOW - 60_000) }, undefined, { notice: false });
+  const bar = progressBar(container)!;
+  expect(bar).not.toBeNull();
+  expect(bar.hasAttribute("aria-valuenow")).toBe(false);
+  expect(textOf(versionDescription(container))).not.toContain("%");
+  expect(textOf(versionDescription(container))).not.toContain("Last checked");
+  // Once the daemon says how big the archive is, the bar turns determinate.
+  act(() => daemon.store.setState({ daemonUpdate: { ...IDLE, phase: "downloading", available: AVAILABLE, progress: { downloaded: 25, total: 50 }, last_check: CHECKED(NOW - 60_000) } }));
+  expect(progressBar(container)!.getAttribute("aria-valuetext")).toBe("50%");
+});
+
+it("puts the last check's line back, and no progress bar, once the daemon's download is done", () => {
+  fakeTimers({ now: NOW });
+  const { container, daemon } = mount({ ...IDLE, phase: "downloading", available: AVAILABLE, progress: { downloaded: 25, total: 100 }, last_check: CHECKED(NOW - 60_000) }, undefined, { notice: false });
+  expect(progressBar(container)).not.toBeNull();
+  act(() => daemon.store.setState({ daemonUpdate: { ...INSTALLED, last_check: CHECKED(NOW - 60_000) } }));
+  expect(progressBar(container)).toBeNull();
+  expect(textOf(versionDescription(container).children[1]!)).toBe("Last checked 1 minute ago");
 });

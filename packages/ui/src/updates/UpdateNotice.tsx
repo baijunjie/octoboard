@@ -12,6 +12,7 @@ import { installedMessageKey } from "./installedMessageKey";
 import { restartBlockedReason } from "./restartBlockedReason";
 import { reloadPage } from "../platform/reloadPage";
 import { releaseUrl } from "../components/text/releaseUrl";
+import { downloadFraction } from "./downloadFraction";
 import { updateNoticeKind } from "./noticeKind";
 import { useUpdates } from "./UpdatesProvider";
 import { Button, Label, ProgressBar, ProgressBarOutput, ProgressBarTrack } from "../primitives";
@@ -70,8 +71,7 @@ export function UpdateNotice({ focusTerminal }: { focusTerminal: () => void }): 
       ? t(installedMessageKey(host.updater, "notice", !!state.installedVersion, state.restartBlocked !== undefined), { version })
       : t(NOTICE_KEYS[kind], { version: kind === "reload" ? isolate(state.currentVersion ?? "") : version }));
   const restartBlocked = restartBlockedReason(t, state);
-  const progress = state.progress;
-  const percent = progress?.total ? Math.min(progress.downloaded / progress.total, 1) : undefined;
+  const percent = downloadFraction(state.progress);
   const percentText = percent === undefined ? undefined : new Intl.NumberFormat(language, { style: "percent" }).format(percent);
 
   return (

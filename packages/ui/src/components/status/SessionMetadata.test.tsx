@@ -29,6 +29,8 @@ it("leads the compact-size badge with a ring of the share used, and names the ex
   const badge = container.querySelector('[aria-hidden="true"] > span:not(.sr-only)')!;
   expect(badge.getAttribute("data-variant")).toBe("bordered");
   expect(badge.firstElementChild?.matches(".progress-circle")).toBe(true);
+  // The ring sits on the filled badge, where the default track would not show.
+  expect(badge.firstElementChild?.classList.contains("app-progress-circle--contrast-track")).toBe(true);
   const indicator = container.querySelector<HTMLElement>('[role="img"]')!;
   expect(indicator.getAttribute("aria-label")).toBe(`Context ${isolate("190,123")} tokens, Limit: ${isolate("475,000")}, ${isolate("40%")} used, ${isolate("284,877")} left`);
   expect(indicator.tabIndex).toBe(-1);

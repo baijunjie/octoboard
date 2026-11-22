@@ -8,6 +8,7 @@ import { useCurrentLanguage, useT } from "../i18n/react";
 import { useHost } from "../platform/react";
 import { Button, ProgressCircle, Tooltip } from "../primitives";
 import type { OpenSettings } from "../settings/settingsLauncher";
+import { downloadFraction } from "../updates/downloadFraction";
 import { installedMessageKey } from "../updates/installedMessageKey";
 import { restartBlockedReason } from "../updates/restartBlockedReason";
 import { useUpdates } from "../updates/UpdatesProvider";
@@ -39,7 +40,7 @@ export function RailUpdateEntry({ focusTerminal, onOpenSettingsAt }: {
     ? t(installedMessageKey(host.updater, "notice", !!state.installedVersion, state.restartBlocked !== undefined), { version })
     : t(downloading ? "updates.notice.downloading" : state.manual ? "updates.notice.manualInstall" : "updates.notice.available", { version });
   const unavailable = installed ? restartBlocked : undefined;
-  const percent = state.progress?.total ? Math.max(0, Math.min(state.progress.downloaded / state.progress.total, 1)) : undefined;
+  const percent = downloadFraction(state.progress);
   const percentText = percent === undefined ? undefined : new Intl.NumberFormat(language, { style: "percent" }).format(percent);
   const tooltip = <HeadedTooltip heading={label}><span>{message}</span>{downloading && percentText && <span className="tabular-nums">{percentText}</span>}</HeadedTooltip>;
   return (
@@ -58,7 +59,7 @@ export function RailUpdateEntry({ focusTerminal, onOpenSettingsAt }: {
         describedBy={downloading ? progressDescription : undefined}
         focusOnPress={false}
         pending={downloading || state.phase === "checking" || state.restarting}
-        pendingIndicator={downloading ? <ProgressCircle label={message} value={percent === undefined ? undefined : percent * 100} indeterminate={percent === undefined} trackClassName="size-4" /> : undefined}
+        pendingIndicator={downloading ? <ProgressCircle label={message} value={percent === undefined ? undefined : percent * 100} indeterminate={percent === undefined} contrastTrack trackClassName="size-4" /> : undefined}
         dimWhilePending={false}
         tooltip={downloading ? undefined : tooltip}
         tooltipPlacement="end"

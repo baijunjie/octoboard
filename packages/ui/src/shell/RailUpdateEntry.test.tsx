@@ -54,6 +54,8 @@ it.each([undefined, 100])("holds the download pending with a circular progress i
   expect(button.getAttribute("aria-busy")).toBe("true");
   const ring = button.querySelector('[role="progressbar"]')!;
   expect(ring).not.toBeNull();
+  // The ring sits on the filled button, where the default track would not show.
+  expect(ring.classList.contains("app-progress-circle--contrast-track")).toBe(true);
   if (total) expect(ring.getAttribute("aria-valuenow")).toBe("45");
   else expect(ring.hasAttribute("aria-valuenow")).toBe(false);
   activate(button);

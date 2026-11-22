@@ -37,10 +37,13 @@ either way that the daemon is updated on the computer it runs on (see "No update
 7. the version running being the latest on the channel;
 8. otherwise — before any check, or after a check that did not finish — only the version running.
 
-Under the sentence a second line says when the last check ended — "just now" for under a minute, otherwise how long
-ago, kept current as time passes — once a check has ended, except while a check runs or while the warning mark below
-is shown. In the desktop application that is the last check of this run of the application; in a browser it is the
-daemon's last check, the same in every page.
+Under the sentence there is always a second line, so the row keeps one height through a check and a download. Once a
+check has ended, finished or not, it says when the last check ended — "just now" for under a minute, otherwise how long
+ago, kept current as time passes — and keeps saying so while a later check runs and while the warning mark below is
+shown; before any check has ended it is empty. In the desktop application that is the last check of this run of the
+application; in a browser it is the daemon's last check, the same in every page. While an update is downloading, the
+line holds the download's progress bar instead, named by the row's sentence: filled, with the percentage at its end,
+when the download's size is known; indeterminate, with no percentage, when it is not.
 
 Beside the row one button moves the update on:
 
