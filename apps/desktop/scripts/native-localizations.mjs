@@ -17,18 +17,22 @@ const APPLE_LOCALIZATIONS = new Map([["zh-CN", "zh-Hans"], ["zh-TW", "zh-Hant"]]
 /** The Apple localization identifier of one of Octoboard's language tags. */
 export const appleLocalization = (language) => APPLE_LOCALIZATIONS.get(language) ?? language;
 
+/** The macOS permission prompts of a catalog, sorted: its `NS…UsageDescription` keys. The catalogs hold the shell's
+ * other native text as well (`src-tauri/src/localizations.rs`), which is no bundle resource. */
+const permissionKeys = (catalog) => Object.keys(catalog).filter((key) => /^NS\w+UsageDescription$/.test(key)).sort();
+
 /** Generates macOS bundle resources before Tauri builds or launches. Permission prompts use the bundle's language,
  * independently of the language selected inside the application. */
 export function generateNativeLocalizations({ appName, catalogs, outputDir, basePlist, infoPlistPath = path.join(outputDir, "Info.plist") }) {
-  const keys = Object.keys(catalogs.en).sort();
-  if (keys.length === 0 || keys.some((key) => !/^NS\w+UsageDescription$/.test(key))) throw new Error("Invalid native permission keys");
+  const keys = permissionKeys(catalogs.en);
+  if (keys.length === 0) throw new Error("Invalid native permission keys");
   const render = (text) => {
     if (typeof text !== "string" || !text.includes("{appName}") || /\{(?!appName\})/.test(text)) throw new Error("Invalid native permission template");
     return text.replaceAll("{appName}", () => appName);
   };
   for (const [language, catalog] of Object.entries(catalogs)) {
-    if (JSON.stringify(Object.keys(catalog).sort()) !== JSON.stringify(keys)) throw new Error(`Native permission keys differ for ${language}`);
-    for (const text of Object.values(catalog)) render(text);
+    if (JSON.stringify(permissionKeys(catalog)) !== JSON.stringify(keys)) throw new Error(`Native permission keys differ for ${language}`);
+    for (const key of keys) render(catalog[key]);
   }
   for (const [language, catalog] of Object.entries(catalogs)) {
     const directory = path.join(outputDir, `${appleLocalization(language)}.lproj`);

@@ -125,6 +125,12 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         // The ChatGPT app, which hosts Codex and registers `codex:`.
         native_app_scheme: Some("codex"),
         per_session_trust: false,
+        // Codex asks only inside a git repository, so a console's directory is asked about only
+        // where a repository holds it (a home directory kept in git, say). There Codex 0.167.1
+        // has no way for one launch: a `-c projects."<path>".trust_level="trusted"` override, for
+        // the directory or for the repository's root, left the confirmation up. Measured in
+        // `docs/agent-cli-reference.md`, "Folder-trust confirmations".
+        console_trust: super::ConsoleTrust::Answered,
         config_sharing: true,
         mcp_inventory: true,
         // Measured: its commands still running as it exits have their groups killed, each led by

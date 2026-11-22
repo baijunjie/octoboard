@@ -1,0 +1,88 @@
+---
+title: "Dein System bleibt, wie es war"
+description: "Octoboard lässt dein System und die Dateien deiner Agenten so, wie es sie vorgefunden hat. Was einige Funktionen hinzufügen, wie du es rückgängig machst und was nach der Deinstallation bleibt."
+---
+
+import { Aside, Code } from "@astrojs/starlight/components";
+import { commands, productName, system } from "../../../commands.ts";
+import LinuxUninstall from "../../../snippets/de/linux-uninstall.mdx";
+import WindowsUninstaller from "../../../snippets/de/windows-uninstaller.mdx";
+
+{productName} lässt dein System so, wie es es vorgefunden hat: die Konfiguration deiner Agenten und alles andere außerhalb der eigenen Ordner von {productName}. Einige wenige Funktionen legen allerdings etwas außerhalb dieser Ordner an. Diese Seite führt jede davon auf, mit dem, was sie hinzufügt, wo, und wie es rückgängig gemacht wird, und sagt, was nach der Deinstallation bleibt.
+
+## Die Regel
+
+- <strong>Was {productName} einem Agenten mitgibt, erreicht ihn bei jedem Start, und nur dort.</strong> Seine Status-Hooks, sein eigener MCP-Server und die Rolle, die es einer Sitzung beschreibt, werden beim Start des Agenten übergeben oder liegen im eigenen Ordner von {productName}. Dafür wird keine Datei von dir und keine eines Agenten bearbeitet; ein Agent, den du allein startest, läuft also ohne all das.
+- <strong>{productName} fügt deinen Einstellungen keinen eigenen Hook hinzu und entscheidet für dich nichts über den Ordner eines Projekts.</strong> Ob dem Ordner eines Projekts vertraut wird, sagst du, und der Agent hält es fest. Der einzige Ordner, für den {productName} selbst antwortet, ist der eigene Ordner einer Konsole, der {productName} gehört (siehe unten).
+- <strong>Was ein Agent für sich selbst schreibt, gehört dem Agenten.</strong> Seine Gesprächsaufzeichnungen, Caches und Protokolle, die Anmeldedaten und das Vertrauen, das er festhält, wenn seine eigene Frage beantwortet wird, schreibt er so, wie wenn du ihn ohne {productName} benutzt. Das gilt auch für die Ersteinrichtung, die das eigene Programm eines Agenten vornimmt, wenn es zum ersten Mal in einem Konfigurationsordner läuft; eine Abfrage von {productName} im Hintergrund kann sie auslösen, bevor du selbst zum ersten Mal startest (siehe unten).
+- <strong>Um die Arbeit in deinen Projekten geht es auf dieser Seite nicht.</strong> Dateien eines Projekts bearbeiten, Git-Vorgänge, Branches und Worktrees sind die Entwicklungsarbeit, für die du ein Projekt hinzufügst.
+
+## Was eine Funktion hinzufügt und wie du es rückgängig machst
+
+Jeder dieser Einträge entsteht nur durch eine Funktion, die du benutzt oder einschaltest.
+
+### Wird durch Ausschalten der Funktion rückgängig gemacht
+
+- <strong>Der Schlüssel dieses Computers auf einem entfernten Server.</strong> Nachdem du dich bei einem gesicherten Hintergrunddienst mit einem Passwort oder einer Schlüsseldatei angemeldet hast, fragt die App, bevor sie etwas hinzufügt: <strong>Schlüssel dieses Computers hinzufügen</strong> nennt die Datei und die Zeile. <strong>Schlüssel hinzufügen</strong> fügt den erlaubten SSH-Schlüsseln deines Benutzers auf diesem Server (<code dir="ltr">{commands.authorizedKeys}</code> unter Linux und macOS) eine Zeile mit der Kennzeichnung <code dir="ltr">{system.keyMark}</code> hinzu und bewahrt den privaten Schlüssel im Anmeldeinformationsspeicher dieses Computers auf (dem Anmeldeschlüsselbund unter macOS, der Anmeldeinformationsverwaltung unter Windows). <strong>Nicht hinzufügen</strong> fügt nichts hinzu, und du wirst nicht erneut gefragt. Um es rückgängig zu machen, schalte <strong>Schlüssel dieses Computers</strong> auf der Seite dieses Hintergrunddienstes unter <strong>Remote-Geräte</strong> aus oder entferne den gesicherten Hintergrunddienst: Die App löscht die Zeile aus der Datei und entfernt den privaten Schlüssel. Dasselbe tut sie, wenn du Host, Port oder Benutzer des gesicherten Hintergrunddienstes änderst. Ist der Server nicht erreichbar, kann die Zeile bleiben; die App sagt dir das, damit du sie auf dem Server selbst löschst.
+- <strong>Beim Anmelden öffnen</strong> (Windows und macOS 13 oder neuer). <strong>Einstellungen › Allgemein › Beim Anmelden öffnen</strong> nimmt {productName} in die Liste der Apps auf, die dein System beim Anmelden öffnet; die Zeile sagt das auch. Mit dem Ausschalten nimmst du es wieder aus dieser Liste.
+- <strong>Das Befehlszeilenwerkzeug</strong> (macOS). <strong>Installieren</strong> unter <strong>Einstellungen › Allgemein › Befehlszeilenwerkzeug</strong> legt einen Link namens <code dir="ltr">{system.cliName}</code> in <code dir="ltr">{system.cliDir}</code> an, oder in <code dir="ltr">{system.cliFallbackDir}</code>, wenn das System das nicht erlaubt; die Zeile sagt das schon vor dem Installieren. <strong>Entfernen</strong> löscht den Link.
+- <strong>Die Standardkonfiguration teilen.</strong> <strong>Standardkonfiguration teilen</strong>, in den Einstellungen eines Kontos unter <strong>Einstellungen › Agentenkonten</strong>, ersetzt die teilbaren Teile des Ordners dieses Kontos durch Links in den Ordner des Standardkontos, bewahrt die eigene Konfiguration des Kontos als Sicherungen daneben auf und verschiebt seinen Gesprächsverlauf in den Ordner des Standardkontos. Die Zeile sagt das, bevor du es einschaltest. Beim Ausschalten werden die Links entfernt, die Sicherungen wiederhergestellt und die Gespräche der eigenen Sitzungen des Kontos zurückverschoben. <strong>Eines bleibt:</strong> Der übrige verschobene Gesprächsverlauf bleibt im Ordner des Standardkontos, weil du beim Entfernen deine Gespräche verlieren würdest. Siehe [Shared configuration](../features/shared-configuration/).
+
+### Bleibt als deins oder als das des Agenten
+
+Diese Vorgänge schreiben etwas, das von da an dir oder dem Agenten gehört; {productName} hat also nichts Eigenes rückgängig zu machen. Wo sich ein Eintrag von Hand entfernen lässt, steht beim jeweiligen Punkt, wo er liegt.
+
+- <strong>Das Konto einer Sitzung wechseln.</strong> <strong>Konto wechseln</strong> fragt dich vorher nach einer Bestätigung. Ein Wechsel, um den ein Agent bittet, wartet auf deine Genehmigung, es sei denn, du hast <strong>Kontowechsel automatisch genehmigen</strong> eingeschaltet, und der Wechsel am Nutzungslimit geschieht nur, solange <strong>Konten beim Nutzungslimit automatisch wechseln</strong> eingeschaltet ist. Ein Wechsel kopiert das Gespräch dieser einen Sitzung in den Ordner des Zielkontos; bei Codex richtet er außerdem den eigenen Eintrag dieses Kontos zu dem Gespräch auf die Kopie aus. Das Original bleibt, wo es war, und die Kopie bleibt als Eigentum dieses Kontos. Siehe [Account continuity](../features/account-continuity/).
+- <strong>Einstellungen und Plugins, die du in einer Grok-Build-Sitzung änderst.</strong> Ist deine <code dir="ltr">config.toml</code> ein Link auf eine Datei, wird ein Design, ein Plugin-Schalter oder ein Standardmodell, das du in einer Sitzung änderst, beim Ende der Sitzung in diese Datei geschrieben, so wie Grok es selbst gespeichert hätte. Ein Plugin, das du in einer Sitzung installierst, wird in der eigenen Plugin-Registrierung deines Grok-Ordners festgehalten, sofern er eine hat.
+- <strong>Das Vertrauen von Grok Build in den Ordner eines Projekts.</strong> Sobald du zugestimmt hast, dem Ordner eines Projekts zu vertrauen (<strong>Vertrauen und fortfahren</strong> oder deine eigene Antwort im Terminal), wird der eine Eintrag, den Grok geschrieben hat, unverändert in die Vertrauensliste in deinem Grok-Ordner übernommen.
+- <strong>Aufzeichnungen einer Sitzung, die nie ein Gespräch hatte.</strong> Wenn du eine Sitzung löschst, an die du nie etwas gesendet hast, werden die eigenen Aufzeichnungen des Agenten zu ihr ohne Nachfrage mit in den Papierkorb gelegt: Sie enthalten kein Gespräch von dir. Die Aufzeichnungen einer Sitzung, die du benutzt hast, werden nur verschoben, wenn du diese Option in der Bestätigung ankreuzt. Sie lassen sich aus dem Papierkorb wiederherstellen.
+- <strong>Die Ersteinrichtung von Claude Code.</strong> In einem Konfigurationsordner, in dem Claude Code noch nie gelaufen ist, oder nach einem Update von Claude Code lässt eine Abfrage von {productName} im Hintergrund (die Nutzung eines Kontos, seine MCP-Server oder seine Agenten) Claude Code dort seine eigene Ersteinrichtung und ausstehende Migrationen ausführen, so wie es dein nächster Start getan hätte. {productName} lässt diese Änderungen, wie sie sind.
+- <strong>Ein leerer Ordner für ein neues Codex-Konto.</strong> Vor dem ersten Start oder der ersten Anmeldung eines Codex-Kontos legt {productName} den Ordner des Kontos leer an, falls es ihn noch nicht gibt: Ohne ihn verweigert Codex den Start.
+- <strong>Das Vertrauen in den eigenen Ordner einer Konsole.</strong> Eine Konsolensitzung läuft in einem eigenen Ordner von {productName}, daher beantwortet {productName} die Vertrauensfrage des Agenten dort, ohne dich zu fragen. Claude Code behält dann in seiner eigenen Vertrauensliste einen Eintrag, der nur diesen Ordner nennt und sonst nirgends eine Wirkung hat. Codex fragt nur, wenn dieser Ordner in einem Git-Repository liegt, und hält sein Vertrauen dann für das Wurzelverzeichnis dieses Repositorys fest, was das ganze Repository umfasst: Liegt dein Benutzerordner in Git, ist das dein ganzer Benutzerordner. Grok Build hält in deiner Vertrauensliste nichts fest. {productName} entfernt diese Einträge nicht, denn das wäre eine weitere Bearbeitung deiner Datei. Du kannst sie selbst entfernen: Der von Codex ist die Tabelle <code dir="ltr">[projects."&lt;repository root&gt;"]</code> in der <code dir="ltr">config.toml</code> seines Ordners, der von Claude Code der Eintrag des Ordners unter <code dir="ltr">projects</code> in seiner <code dir="ltr">.claude.json</code>.
+
+### Wird mit dem Deinstallationsbefehl rückgängig gemacht
+
+- <strong>Das Linux-Serverprogramm als Dienst.</strong> Die Installation als Dienst (siehe [Linux-Server](../install/linux/)) schreibt einen systemd-Benutzerdienst in deinen systemd-Konfigurationsordner und schaltet Lingering für deinen Benutzer ein, falls es aus war. Rückgängig gemacht wird das mit dem Deinstallationsbefehl weiter unten.
+
+<Aside>
+Unter Windows führt die App außerdem die Sprungliste ihrer Taskleistenschaltfläche mit deinen gesicherten Hintergrunddiensten. Sie hat keinen Schalter: <strong>Alle entfernen</strong>, weiter unten beschrieben, entfernt sie, und ebenso das Deinstallationsprogramm.
+</Aside>
+
+## Vor der Deinstallation
+
+Vor der Deinstallation lässt sich alles aus „Wird durch Ausschalten der Funktion rückgängig gemacht“, was gerade wirksam ist, in einem Zug entfernen; die zugehörigen Funktionen werden dabei ausgeschaltet. In der Desktop-App gibt es dafür unter <strong>Einstellungen › Bereinigung</strong> eine Zeile, <strong>Vor der Deinstallation aufräumen</strong>: Sie sagt, wie viele Einträge wirksam sind, und hat eine einzige Schaltfläche, <strong>Alle entfernen</strong>. Unter Windows erledigt das auch das Deinstallationsprogramm von selbst, und der Deinstallationsbefehl des Linux-Serverprogramms erledigt es zuerst; beides ist unten beschrieben.
+
+- <strong>Es fragt vorher.</strong> Die Bestätigung sagt, wie viele Einträge entfernt werden, mit der Liste eingeklappt unter dieser Zahl, und was erhalten bleibt. Weiter geht es erst, wenn du <strong>ENTFERNEN</strong> eingetippt hast.
+- <strong>Es zeigt das Ergebnis.</strong> Danach führt es auf, was entfernt wurde und was nicht. Zu einem Eintrag, der nicht entfernt werden konnte, etwa einem Schlüssel auf einem nicht erreichbaren Server, sagt es, was bleibt und wo.
+- <strong>Es gibt das nur im eigenen Fenster der App auf dem betreffenden Computer.</strong> In einem Browser auf einem Computer mit der Desktop-App und in einem Fenster, das einen entfernten Hintergrunddienst zeigt, sagt die Zeile nur, wo aufgeräumt wird. In einem Browser auf einem Linux-Server sagt sie, dass die Deinstallation auf dem Server zuerst aufräumt, und zeigt <code dir="ltr">{system.uninstall}</code> mit <strong>Deinstallationsbefehl kopieren</strong>, damit du ihn auf dem Server ausführst. Von dort wird nichts entfernt.
+- <strong>Nutze das nur, wenn du deinstallierst.</strong> Um einen einzelnen Eintrag rückgängig zu machen und {productName} weiter zu nutzen, schalte stattdessen dessen Funktion aus.
+- <strong>Deine Daten bleiben.</strong> Die eigenen Ordner von {productName} bleiben, ebenso der Gesprächsverlauf, den das Teilen verschoben hat.
+
+## Nach der Deinstallation
+
+Die Deinstallation entfernt das Programm.
+
+### macOS
+
+Beende {productName} und lösche es dann aus deinem Ordner „Programme“. Beim Löschen läuft nichts, also wähle zuerst <strong>Alle entfernen</strong>: Das Löschen der App entfernt nicht, was das entfernt.
+
+### Windows
+
+Verwende das Deinstallationsprogramm der App.
+
+<WindowsUninstaller />
+
+### Linux-Server
+
+<LinuxUninstall />
+
+Der Ordner, in den das Programm installiert wurde, bleibt, ebenso jede Zeile, die du hinzugefügt hast, um ihn in deinen PATH aufzunehmen.
+
+### Was bleibt
+
+Die eigenen Ordner von {productName} bleiben, sodass eine spätere Installation deine Konsolen, Sitzungen und Einstellungen wiederfindet. Um auch sie zu entfernen, lösche sie: Du verlierst dann jede Konsole, jede Sitzungsaufzeichnung und jede Einstellung.
+
+- <strong>Der Datenordner</strong>, auf dem Computer oder Server, auf dem die Sitzungen liefen: <code dir="ltr">{system.dataDir}</code> (<code dir="ltr">{system.dataDirWindows}</code> unter Windows). Unter macOS und Linux entfernt ihn <code dir="ltr">{system.removeDataDir}</code>.
+- <strong>Der eigene Ordner der Desktop-App:</strong> <code dir="ltr">{system.appDataMac}</code> unter macOS; <code dir="ltr">{system.appDataWindows}</code> und <code dir="ltr">{system.appLocalDataWindows}</code> unter Windows.
+
+Die eigenen Ordner deiner Agenten mit ihren Anmeldungen, Einstellungen und Gesprächen gehören den Agenten und bleiben, wie sie sind.

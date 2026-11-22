@@ -1,14 +1,16 @@
 ---
 title: "Windows"
-description: "Windows 10 버전 21H2 이상을 쓰는 Intel 또는 AMD 프로세서 PC(거의 모든 Windows PC)용입니다. Arm 기반 Windows 11에서는 이 x64 앱이 에뮬레이션으로 실행됩니다."
+description: "Windows 10 버전 21H2 이상을 쓰는 Intel 또는 AMD 프로세서 PC(거의 모든 Windows PC)용입니다. Arm 기반 Windows 11에서는 릴리스에 네이티브 arm64 설치 프로그램이 있으면 그것을 쓰세요. 없으면 이 x64 앱이 에뮬레이션으로 실행됩니다."
 ---
 
 import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
 import { downloads, productName } from "../../../../commands.ts";
+import WindowsUninstaller from "../../../../snippets/ko/windows-uninstaller.mdx";
 
-Windows 10 버전 21H2 이상을 쓰는 Intel 또는 AMD 프로세서(x64, 거의 모든 Windows PC) PC용입니다. Arm 기반 Windows 11에서는 이 x64 앱이 에뮬레이션으로 실행됩니다.
+Windows 10 버전 21H2 이상을 쓰는 Intel 또는 AMD 프로세서(x64, 거의 모든 Windows PC) PC용입니다. Arm 기반 Windows 11에서는 릴리스에 네이티브 arm64 설치 프로그램이 있으면 그것을 쓰세요. 없으면 이 x64 앱이 에뮬레이션으로 실행됩니다.
 
 <LinkButton href={downloads.windows}>Windows용 다운로드</LinkButton>
+<LinkButton href={downloads["windows-arm64"]} variant="secondary">Arm 기반 Windows용 다운로드</LinkButton>
 
 <Aside>Windows 앱은 베타 버전입니다.</Aside>
 
@@ -16,7 +18,7 @@ Windows 10 버전 21H2 이상을 쓰는 Intel 또는 AMD 프로세서(x64, 거�
 
 <Steps>
 
-1. 위 버튼으로 설치 프로그램을 내려받으세요. 이름이 <code dir="ltr">x64-setup.exe</code>로 끝나는 파일입니다.
+1. 위 버튼으로 설치 프로그램을 내려받으세요. 이름이 <code dir="ltr">x64-setup.exe</code>로 끝나는 파일입니다. Arm 기반 Windows에서는 두 번째 버튼을 눌러 보세요. 릴리스에 arm64 설치 프로그램이 있으면 이름이 <code dir="ltr">arm64-setup.exe</code>로 끝나는 그 파일을 내려받고, 없으면 릴리스 목록이 열립니다. 그때는 x64 설치 프로그램이 에뮬레이션으로 실행됩니다.
 2. 내려받은 파일을 열어 설치 프로그램을 실행하세요. {productName}은(는) 현재 사용자 계정에만 설치되므로 관리자 권한을 묻지 않습니다.
 
    앱에 아직 코드 서명이 없어서 Microsoft Defender SmartScreen이 “Windows의 PC 보호”라는 창을 띄울 수 있습니다. “추가 정보”를 누른 다음 “실행”을 누르세요.
@@ -38,6 +40,16 @@ Windows 10 버전 21H2 이상을 쓰는 Intel 또는 AMD 프로세서(x64, 거�
 - [Grok Build](https://docs.x.ai/build/overview)
 
 Claude Code나 Codex를 쓴다면 먼저 [Git for Windows](https://git-scm.com/download/win)를 설치하세요. 두 에이전트가 작동하려면 필요합니다.
+
+## 제거
+
+Windows 설정(앱)이나 제어판에서 {productName}의 제거 프로그램으로 제거하세요.
+
+<WindowsUninstaller />
+
+제거하기 전에 무엇이 적용 중인지 보려면 <strong>설정 › 정리 › 앱 제거 전 정리</strong>를 여세요. 거기의 <strong>모두 제거</strong>도 같은 것을 제거하며, 항목마다 결과를 보여 줍니다.
+
+그 뒤에 무엇이 남고 어떻게 지우는지는 [시스템은 그대로 둡니다](../../your-system/)에서 설명합니다.
 
 ## 업데이트
 

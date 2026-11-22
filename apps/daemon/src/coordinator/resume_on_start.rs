@@ -19,7 +19,7 @@ use std::time::Duration;
 use anyhow::Result;
 
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
-use crate::state::AppState;
+use crate::state::{AppState, StartWork};
 
 use super::resume::resume_session;
 
@@ -33,8 +33,11 @@ const START_GAP: Duration = Duration::from_millis(400);
 
 /// Whether the user asked for the interrupted sessions to be resumed at start: the setting, read
 /// now, at the daemon's start, so that a change afterwards applies to the next one; one that
-/// cannot be read counts as off.
+/// cannot be read counts as off. Never in a clean-up run (`StartWork::ResumingSessions`).
 pub fn wanted(state: &AppState) -> bool {
+    if !state.does(StartWork::ResumingSessions) {
+        return false;
+    }
     match state.store.resume_sessions_on_start() {
         Ok(wanted) => wanted,
         Err(err) => {

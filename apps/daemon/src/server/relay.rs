@@ -299,11 +299,11 @@ mod tests {
             !args.iter().any(|arg| arg.contains(&issued.key)),
             "{args:?}"
         );
-        let url = crate::adapter::hook_url("session-1", issued.port, &issued.key);
+        let url = crate::adapter::hook_url("session-1", "launch-1", issued.port, &issued.key);
         assert_eq!(
             url,
             format!(
-                "http://127.0.0.1:{}/hook/session-1?key={}",
+                "http://127.0.0.1:{}/hook/session-1/launch-1?key={}",
                 issued.port, issued.key
             )
         );

@@ -32,6 +32,7 @@ const releaseBase = `${repositoryUrl}/releases/download`;
 const downloads: Downloads = {
   macos: `${releaseBase}/desktop-v1.2.3/Octoboard_1.2.3_universal.dmg`,
   windows: `${releaseBase}/desktop-v1.2.3/Octoboard_1.2.3_x64-setup.exe`,
+  "windows-arm64": `${releaseBase}/desktop-v1.2.3/Octoboard_1.2.3_arm64-setup.exe`,
   "linux-x86_64": `${releaseBase}/desktop-v1.2.3/octoboardd_1.2.3_linux_x86_64.tar.gz`,
   "linux-aarch64": `${releaseBase}/desktop-v1.2.3/octoboardd_1.2.3_linux_aarch64.tar.gz`,
 };
@@ -194,7 +195,7 @@ test(
     assert.match(sitemap, /<loc>https:\/\/octoboard\.dev\/download\/<\/loc>/);
     assert.match(sitemap, /<loc>https:\/\/octoboard\.dev\/zh-CN\/download\/<\/loc>/);
     assert.equal(sitemap.includes("/remote/"), false);
-    for (const target of ["macos", "windows", "linux-x86_64", "linux-aarch64"]) {
+    for (const target of ["macos", "windows", "windows-arm64", "linux-x86_64", "linux-aarch64"]) {
       assert.equal(sitemap.includes(`/download/${target}/`), false);
     }
     assert.equal(sitemap.includes("install.sh"), false);
@@ -382,7 +383,7 @@ test("agent documents follow the pages and carry the download and install inform
   const home = files["index.md"];
   const llms = files["llms.txt"];
   assert.match(home, /Canonical: https:\/\/octoboard\.dev\//);
-  assert.match(home, /macOS on Apple silicon and Intel · Windows on x64 · Linux server on x86_64 and aarch64 · Beta/);
+  assert.match(home, /macOS on Apple silicon and Intel · Windows on x64 and arm64 · Linux server on x86_64 and aarch64 · Beta/);
   assert.match(home, /- macOS: Beta/);
   assert.match(home, /- Windows: Beta/);
   assert.match(home, /- Linux: Server · Beta/);
@@ -392,6 +393,9 @@ test("agent documents follow the pages and carry the download and install inform
   assert.match(page, /Canonical: https:\/\/octoboard\.dev\/download\//);
   assert.ok(page.includes(`[Download for macOS](${downloads.macos})`));
   assert.ok(page.includes(`[Download for Windows](${downloads.windows})`));
+  assert.ok(page.includes(`[Download for Windows on Arm](${downloads["windows-arm64"]})`));
+  assert.match(page, /For Windows 11 on Arm, download the arm64 installer below\./);
+  assert.equal(page.includes("the x64 app runs under emulation"), false);
   assert.ok(page.includes("curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh"));
   assert.ok(page.includes(`[x86_64 archive](${downloads["linux-x86_64"]})`));
   assert.ok(page.includes(`[aarch64 archive](${downloads["linux-aarch64"]})`));
@@ -413,7 +417,7 @@ test("agent documents follow the pages and carry the download and install inform
     const body = files[markdownFile(locale.code === "en" ? "/" : `/${locale.code}/`)];
     const catalog = messages[locale.code];
     const download = files[markdownFile(locale.code === "en" ? "/download/" : `/${locale.code}/download/`)];
-    for (const key of ["downloadMacosRequirements", "downloadWindowsRequirements"]) {
+    for (const key of ["downloadMacosRequirements", "downloadWindowsArmRequirements"]) {
       assert.ok(download.includes(catalog[key]), `${locale.code}: missing requirements: ${key}`);
     }
     const linux = [
@@ -488,7 +492,7 @@ test("agent documents follow the pages and carry the download and install inform
   assert.match(llms, /Support: support@octoboard\.dev/);
   assert.match(llms, /https:\/\/octoboard\.dev\/index\.md/);
   assert.match(llms, /https:\/\/octoboard\.dev\/ja\.md/);
-  assert.match(llms, /macOS on Apple silicon and Intel · Windows on x64 · Linux server on x86_64 and aarch64 · Beta/);
+  assert.match(llms, /macOS on Apple silicon and Intel · Windows on x64 and arm64 · Linux server on x86_64 and aarch64 · Beta/);
   assert.match(llms, /macOS: Beta/);
   assert.match(llms, /Windows: Beta/);
   assert.match(llms, /Requirements for each system, and a link to its installation guide, are on the download page\./);
@@ -500,6 +504,11 @@ test("agent documents follow the pages and carry the download and install inform
   assert.ok(llms.includes("[Read the SSH connection guide](https://octoboard.dev/docs/remote-connections/)"));
   assert.ok(llms.includes("[Read the installation guide](https://octoboard.dev/docs/install/macos/)"));
   assert.ok(llms.includes("[Read the installation guide](https://octoboard.dev/docs/install/windows/)"));
+  assert.ok(
+    llms.includes(
+      `[Download for Windows](${downloads.windows})\n- [Download for Windows on Arm](${downloads["windows-arm64"]})\n- [Read the installation guide](https://octoboard.dev/docs/install/windows/)`,
+    ),
+  );
   // Each app's guide follows its own download link, ahead of the next app's.
   assert.ok(
     llms.includes(
@@ -524,6 +533,25 @@ test("agent documents follow the pages and carry the download and install inform
   );
   for (const [name, body] of Object.entries(files)) {
     assert.equal(body.includes("{"), false, name);
+  }
+});
+
+test("agent documents name Windows on arm64 only once a release carries its installer", async () => {
+  const messages = await readLocaleMessages(
+    fileURLToPath(new URL("../i18n/locales/", import.meta.url)),
+  );
+  const files = renderAgentFiles({
+    siteUrl,
+    appName: "Octoboard",
+    operatorName: appConfig.author.name,
+    contactEmail: "support@octoboard.dev",
+    repositoryUrl,
+    downloads: { ...downloads, "windows-arm64": `${repositoryUrl}/releases` },
+    messages,
+  });
+  for (const name of ["index.md", "llms.txt"]) {
+    assert.match(files[name], /macOS on Apple silicon and Intel · Windows on x64 · Linux server on x86_64 and aarch64 · Beta/);
+    assert.equal(files[name].includes("arm64 ·"), false, name);
   }
 });
 
@@ -574,13 +602,13 @@ test("agent entry links resolve and language bundles contain only their own page
   }
 });
 
-test("the policy revision date stays on November 18 across time zones", () => {
+test("the policy revision date stays on November 24 across time zones", () => {
   const previous = process.env.TZ;
   try {
     for (const zone of ["Pacific/Honolulu", "Asia/Tokyo", "UTC"]) {
       process.env.TZ = zone;
-      assert.equal(formatPrivacyDate("en"), "November 18, 2026");
-      assert.equal(formatPrivacyDate("zh-CN"), "2026年11月18日");
+      assert.equal(formatPrivacyDate("en"), "November 24, 2026");
+      assert.equal(formatPrivacyDate("zh-CN"), "2026年11月24日");
     }
   } finally {
     if (previous === undefined) delete process.env.TZ;

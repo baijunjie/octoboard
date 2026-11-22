@@ -10,15 +10,19 @@ import type { RemoteAccess, Settings } from "../protocol";
 import { SESSION_ORDER_WORDS } from "../sessions/orderWording";
 import { ALL_COMMANDS, clientCapabilities, isAvailable, SHORTCUT_GROUPS } from "../shortcuts/commands";
 import { anyServing, browserPortFailed, hasBrowserPort, servedBrowserAddress, servedConnection, servedForwardCommand } from "./accessState";
-import { COMMAND_LINE_TOOL } from "./commandLineTool";
+import { COMMAND_LINE_DIRECTORIES, COMMAND_LINE_TOOL } from "./commandLineTool";
 import type { SettingsSectionId } from "./sections";
 import { sshServerNames, sshServerWords } from "./sshServerWords";
 
 /** What decides which settings a section shows: the platform's capabilities, whether the daemon's host can be held
- * awake, the daemon's settings, and what the reads of the system that some of them wait on have answered. */
+ * awake, whether the daemon is a desktop application's own, the daemon's settings, and what the reads of the system
+ * that some of them wait on have answered. */
 export interface SettingsSearchContext {
   platform: PlatformAdapter;
   keepAwake: boolean;
+  /** Whether the daemon is a desktop application's own, as it says of itself in its snapshot (`host.application`);
+   * absent until it has said. */
+  applicationDaemon?: boolean;
   settings: Settings;
   /** Where remote access and browser access stand, which decides what the Access section shows
    * beyond its switches (null where the daemon offers none, when the section is not listed at all). */
@@ -82,6 +86,11 @@ const KEY: PlainMessageKey = "settings.remoteAccess.group.key";
 /** Whether sessions work on a branch of their own, without which the Git section hides the items that shape it. */
 const ownBranch = ({ settings }: SettingsSearchContext) => settings.git_workflow.development !== "in_place";
 
+/** The entry of the "Clean up before uninstalling" row under one of its wordings, in the windows that word it so. */
+function uninstallCleanup(description: PlainMessageKey, shown: (context: SettingsSearchContext) => boolean): SettingsSearchEntry<"cleanup.uninstall"> {
+  return { id: "cleanup.uninstall", label: "settings.uninstall.row.label", description: [description], shown };
+}
+
 /**
  * What a search can find in each section, in the order the section shows it. The rows a section renders carry the
  * same ids (`searchId`), so a section that is not rendered is still counted from here; `settingsSearch.test.tsx`
@@ -124,7 +133,13 @@ const INDEX = {
     {
       id: "launch-at-login",
       label: "settings.launchAtLogin.label",
-      description: ["settings.launchAtLogin.description.on", "settings.launchAtLogin.description.off", "settings.launchAtLogin.description.requiresApproval"],
+      description: [
+        "settings.launchAtLogin.description.on",
+        "settings.launchAtLogin.description.off",
+        "settings.launchAtLogin.description.entry.on",
+        "settings.launchAtLogin.description.entry.off",
+        "settings.launchAtLogin.description.requiresApproval",
+      ],
       group: STARTUP,
       shown: ({ platform, reads }) => platform.launchAtLogin !== undefined && reads.launchAtLogin,
     },
@@ -132,7 +147,15 @@ const INDEX = {
     {
       id: "command-line",
       label: "settings.commandLine.label",
-      description: [(t) => t("settings.commandLine.description", { command: COMMAND_LINE_TOOL })],
+      description: [
+        (t) => t("settings.commandLine.description", { command: COMMAND_LINE_TOOL }),
+        (t) =>
+          t("settings.commandLine.state.installAdds", {
+            command: COMMAND_LINE_TOOL,
+            systemDirectory: COMMAND_LINE_DIRECTORIES.system,
+            userDirectory: COMMAND_LINE_DIRECTORIES.user,
+          }),
+      ],
       group: COMMAND_LINE,
       shown: ({ platform }) => platform.commandLine !== undefined,
     },
@@ -317,7 +340,16 @@ const INDEX = {
     group: `settings.shortcuts.group.${group}`,
     shown: ({ platform }) => isAvailable(command.availability, clientCapabilities(platform)),
   }))),
-  cleanup: [daemonSwitch("auto_delete_unresumable_archives")],
+  cleanup: [
+    daemonSwitch("auto_delete_unresumable_archives"),
+    // The cleanup before an uninstall: one row, worded by which installation the window speaks for, so one entry per
+    // wording, each shown in its own window alone (`UninstallCleanup` decides the same way). A browser shows none until
+    // the daemon has said which it is.
+    uninstallCleanup("settings.uninstall.row.description", ({ platform }) => platform.systemChanges !== undefined),
+    uninstallCleanup("settings.uninstall.elsewhere.remote", ({ platform }) => platform.systemChanges === undefined && platform.kind !== "browser"),
+    uninstallCleanup("settings.uninstall.elsewhere", ({ platform, applicationDaemon }) => platform.systemChanges === undefined && platform.kind === "browser" && applicationDaemon === true),
+    uninstallCleanup("settings.uninstall.elsewhere.server", ({ platform, applicationDaemon }) => platform.systemChanges === undefined && platform.kind === "browser" && applicationDaemon === false),
+  ],
   memory: [
     daemonSwitch("memory_enabled"),
     { id: "memory.leftBehind", label: "settings.memory.leftBehind.title", description: ["settings.memory.leftBehind.description"] },

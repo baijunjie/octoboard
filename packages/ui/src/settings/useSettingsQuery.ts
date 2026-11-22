@@ -48,13 +48,14 @@ export function useSettingsQuery({ sectionIds, sectionLabel, initialId }: {
   const language = useCurrentLanguage();
   const platform = usePlatform();
   const keepAwake = useDaemonStoreOrEmpty((s) => s.host?.keep_awake === true);
+  const applicationDaemon = useDaemonStoreOrEmpty((s) => (s.host ? s.host.application === true : undefined));
   const settings = useDaemonStoreOrEmpty((s) => s.settings);
   const remoteAccess = useDaemonStoreOrEmpty((s) => s.remoteAccess);
   const reads = useSettingsReads();
   const [query, setQuery] = useState("");
   const [currentId, setCurrentId] = useState(initialId);
   // A row that waits on a read of the system is counted from the answer on, in step with the row itself.
-  const context: SettingsSearchContext = { platform, keepAwake, settings, remoteAccess, reads: searchReads(reads) };
+  const context: SettingsSearchContext = { platform, keepAwake, applicationDaemon, settings, remoteAccess, reads: searchReads(reads) };
   const words = queryWords(query, language);
   const searching = words.length > 0;
   // The permissions are counted from what they are now, so a search keeps that read up to date.

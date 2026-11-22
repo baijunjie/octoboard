@@ -23,8 +23,8 @@ alone, are in "The surfaces that fade" below.
 - In focus mode's lists and the Git mode's change lists, the top fade begins below the section heading; see "What both
   views show" in `docs/product/focus-mode.md` and "Folding a section" in `docs/product/project-pane-git-change-list.md`
   for the headings' scrolling behavior. In Settings' Agent accounts section it begins below the agent tab strip once the
-  strip is pinned at the top (see "The agent strip" in `docs/product/agent-accounts.md`), and in its Git and Keyboard
-  shortcuts sections below a group's heading once that heading is pinned at the top (see "Group headings" in
+  strip is pinned at the top (see "The agent strip" in `docs/product/agent-accounts.md`), and in its sections whose
+  rows fall into groups below a group's heading once that heading is pinned at the top (see "Group headings" in
   `docs/product/settings.md`).
 - Only the **top and bottom** edges fade, apart from the strips that scroll sideways and fade at their sideways
   edges: focus mode's strip of console session chips (see "The switch strip" in `docs/product/focus-mode.md`), a
@@ -146,7 +146,7 @@ covers. These are:
 edge, clear of the fade, rather than arriving underneath. In focus mode's lists and the Git mode's change lists that
 space is measured below the section heading (see "What both views show" in `docs/product/focus-mode.md` and "Folding a
 section" in `docs/product/project-pane-git-change-list.md`), in Settings' Agent accounts section below the agent tab
-strip, and in its Git and Keyboard shortcuts sections below a group's heading. A strip of tabs and Settings' column of
+strip, and in its sections whose rows fall into groups below a group's heading. A strip of tabs and Settings' column of
 sections instead suppress their fade while a tab has visible keyboard focus, as above. For focus visibility in the Files panel's header controls, see "A
 panel's header" in `docs/product/right-pane-panels.md`.
 

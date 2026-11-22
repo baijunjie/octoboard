@@ -251,6 +251,63 @@ impl AppState {
         Ok(())
     }
 
+    /// [`Self::mark_conversation_started`] for a prompt the agent's hook reported, which may have
+    /// been posted by a process that has ended since. A report of a launch this run saw end never
+    /// gets here (`crate::hooks::apply`); a hook configured by an earlier build names no launch,
+    /// and one may name a launch this run never knew (an earlier run's). While a launch
+    /// holds the session and no process of it is registered, the launch has read, or is about to
+    /// read, whether there is a conversation to resume, and a mark from the ended process would
+    /// leave a launch that opened a fresh conversation saying it has one nobody prompted. The
+    /// launched process can report then too, before it is registered: `launched_since` says the
+    /// report is known to come from it, by naming the session's launch under way
+    /// ([`Self::launch_is_current`]), or else by naming a conversation
+    /// other than the one the session named when it arrived, which only a process launched since
+    /// can do (a launch that resumes the old conversation is of a session marked already). Any
+    /// other report is refused in that state, checked under the lock the claim is taken under, as
+    /// a deletion's is; the record collector marks the session later if its record shows the turn
+    /// ([`Self::mark_conversation_recorded`]).
+    pub fn mark_conversation_reported(&self, id: &str, launched_since: bool) -> Result<()> {
+        if !launched_since {
+            let live = self.live.read().expect("live sessions lock poisoned");
+            if live.launching.contains(id) && !live.sessions.contains_key(id) {
+                return Ok(());
+            }
+            // Held across the write, so a claim taken meanwhile waits for it.
+            let marked = self.store.mark_conversation_started(id)?;
+            drop(live);
+            if let Some(session) = marked {
+                self.publish_session(&session);
+            }
+            return Ok(());
+        }
+        self.mark_conversation_started(id)
+    }
+
+    /// [`Self::mark_conversation_started`] for a turn no hook reported, found in the agent's own
+    /// record of the conversation `agent_session_id` (`crate::records::collector`): recorded only
+    /// while the session still names that conversation. A session that is gone, or names another
+    /// conversation by now, is left as it is. Says whether it was recorded by this call.
+    ///
+    /// Refused while a launch or a switch holds the session: a relaunch that found no conversation
+    /// opens a fresh one and stores its id only once the process is up, so a mark against the id
+    /// still stored would end up on the new conversation, which nobody has prompted. Checked under
+    /// the lock the claim is taken under, as a deletion's is; the collector's next pass asks
+    /// again, and by then the session names the conversation it is on.
+    pub fn mark_conversation_recorded(&self, id: &str, agent_session_id: &str) -> Result<bool> {
+        let marked = {
+            let live = self.live.read().expect("live sessions lock poisoned");
+            if live.launching.contains(id) {
+                return Ok(false);
+            }
+            self.store
+                .mark_conversation_recorded(id, agent_session_id)?
+        };
+        if let Some(session) = &marked {
+            self.publish_session(session);
+        }
+        Ok(marked.is_some())
+    }
+
     /// Forgets the conversation of a session whose agent no longer has it, so that its next launch
     /// opens a fresh one, as for a session that has had no turn. The new conversation's id is
     /// recorded by its first hook, as for any session.

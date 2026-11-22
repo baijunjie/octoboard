@@ -48,12 +48,31 @@ pub(super) enum Found {
 /// daemon whose handover the command waited through, if any, which it has asked nothing: whether
 /// the one found is that daemon's successor is the caller's to judge ([`succession`]).
 pub(super) fn find_daemon(wait: Duration, through_unrecorded: bool) -> Result<Found> {
+    find_daemon_looking(wait, through_unrecorded, instance_lock::is_running)
+}
+
+/// [`find_daemon`] creating nothing, `daemon.lock` included where it is not there: for
+/// `uninstall --dry-run`, which changes nothing of the data directory.
+pub(super) fn find_daemon_unchanged(wait: Duration, through_unrecorded: bool) -> Result<Found> {
+    find_daemon_looking(
+        wait,
+        through_unrecorded,
+        instance_lock::is_running_unchanged,
+    )
+}
+
+/// [`find_daemon`], asking `is_running` whether a daemon holds the lock.
+fn find_daemon_looking(
+    wait: Duration,
+    through_unrecorded: bool,
+    is_running: fn() -> Result<bool>,
+) -> Result<Found> {
     let deadline = Instant::now() + wait;
     let mut waited = false;
     let mut watch = EndWatch::default();
     let mut after = None;
     loop {
-        let lock_held = instance_lock::is_running()?;
+        let lock_held = is_running()?;
         let noted = Owner::handover_noted();
         let pending = noted.as_ref().is_some_and(|noted| {
             let running = noted.from.identity.is_running();
@@ -93,7 +112,7 @@ pub(super) fn find_daemon(wait: Duration, through_unrecorded: bool) -> Result<Fo
             if !pending {
                 // Looked at again: a successor that took the lock since it was seen free, and
                 // recorded itself, has removed the note.
-                if instance_lock::is_running()? {
+                if is_running()? {
                     continue;
                 }
                 return Ok(Found::NotRunning { waited });
@@ -298,6 +317,7 @@ mod tests {
             browser_port: None,
             unit: None,
             predecessor,
+            clean_up_run: false,
         }
     }
 

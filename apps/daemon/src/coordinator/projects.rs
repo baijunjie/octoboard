@@ -588,11 +588,7 @@ pub(super) async fn delete_project(
         // A planned stop that no longer waits for this removal may have handed over a shell that
         // still runs in the folder, which this daemon can no longer end.
         admission.still_covered()?;
-        // Off the runtime's worker: a move across volumes copies.
-        let trash = state.host_tools.get().trash;
-        tokio::task::spawn_blocking(move || trash(&directory))
-            .await?
-            .map_err(|failure| project::trash_failed(&failure))?;
+        project::folder_to_trash(state, directory).await?;
         // Requests run concurrently, so a session may have been started in the project
         // while the folder moved, and nothing held it back. The folder is gone by now, so
         // the project is removed regardless: such a session is ended here as well as it

@@ -4,7 +4,7 @@ description: "Linux 伺服器、Mac 與 Windows 電腦上的 octoboardd 指令�
 ---
 
 import { Code } from "@astrojs/starlight/components";
-import { commands, productName, tunnel } from "../../../commands.ts";
+import { commands, productName, system, tunnel } from "../../../commands.ts";
 
 octoboardd 是執行 {productName} 的程式（應用程式裡稱它為「背景服務」）。在 Linux 伺服器上，需要你自己安裝並啟動它；在 Mac 或 Windows 電腦上，它內建於應用程式中，應用程式開啟時啟動它，結束時停止它。三種系統上的指令相同，只有下面幾處不同。
 
@@ -35,6 +35,7 @@ octoboardd 是執行 {productName} 的程式（應用程式裡稱它為「背景
 | <code dir="ltr">{commands.update}</code> | 僅限 Linux 伺服器。安裝最新版本，如[升級](../install/linux/#升級)所述。 |
 | <code dir="ltr">{commands.updateCheck}</code> | 僅限 Linux 伺服器。檢查是否有更新的版本，但不安裝。 |
 | <code dir="ltr">{commands.updateRollback}</code> | 僅限 Linux 伺服器。還原到上一次升級之前安裝的版本，並像升級一樣重新啟動，換上此版本。 |
+| <code dir="ltr">{system.uninstall}</code> | 僅限 Linux 伺服器。從伺服器上移除 octoboardd，如[解除安裝](../install/linux/#解除安裝)所述。 |
 | <code dir="ltr">{commands.version}</code> | 輸出已安裝的版本。 |
 
 想查看完整的指令清單，請執行 <code dir="ltr">{commands.help}</code>；想查看某個指令的選項，請執行 <code dir="ltr">{commands.commandHelp}</code>。清單中也包含 {productName} 自己執行的指令，你不需要手動執行。
@@ -45,5 +46,6 @@ octoboardd 是執行 {productName} 的程式（應用程式裡稱它為「背景
 
 - <strong>Mac 上的 <code dir="ltr">{commands.start}</code> 和 <code dir="ltr">{commands.stop}</code></strong> 作用於應用程式：<code dir="ltr">{commands.start}</code> 會在背景開啟應用程式，不顯示視窗；<code dir="ltr">{commands.stop}</code> 則結束它。
 - <strong><code dir="ltr">{commands.restart}</code> 與 <code dir="ltr">{commands.update}</code></strong> 會被拒絕。應用程式會自行重新啟動 octoboardd，也會自行安裝新版本。
+- <strong><code dir="ltr">{system.uninstall}</code></strong> 也會被拒絕。octoboardd 會隨應用程式一併移除：解除安裝應用程式的方法請見 [macOS](../install/macos/#解除安裝) 和 [Windows](../install/windows/#解除安裝)。
 - <strong><code dir="ltr">{commands.browserOn}</code> 和 <code dir="ltr">{commands.browserOff}</code></strong> 變更的設定與<strong>設定 › 存取</strong>中的<strong>允許瀏覽器存取</strong>相同。
 - <strong><code dir="ltr">{commands.address}</code></strong> 只有在<strong>允許瀏覽器存取</strong>開啟（在 Mac 上也可以是<strong>允許遠端存取</strong>）時才會輸出位址。這兩項設定預設都是關閉的，所以在你開啟其中一項之前，該指令只會說明這一點，不輸出位址。

@@ -1,13 +1,16 @@
 # Folder trust
 
 Each of the three agents stops the first time it runs in a folder it has not been told to trust, on a
-confirmation of its own, and waits for a person. Octoboard never makes that trust decision itself: it
-presses the agent's own confirmation on the agent's own screen, with the keystrokes a person would type —
-for a project session only once the user has given Octoboard permission, for a console session without
-asking. The agent then records the trust in its own configuration, as it does when a person answers, so
-its later launches in that folder do not ask again. Grok Build is the one agent whose record cannot reach
-the user's own configuration by itself; Octoboard carries the entry Grok wrote over, unchanged (see
-"Carrying Grok Build's trust record" below).
+confirmation of its own, and waits for a person. Octoboard never makes a project's trust decision itself.
+For a project session it presses the agent's own confirmation on the agent's own screen, with the keystrokes
+a person would type, and only once the user has given Octoboard permission. The agent then records the trust
+in its own configuration, as it does when a person answers, so its later launches in that folder do not ask
+again. Grok Build is the one agent whose record cannot reach the user's own configuration by itself; for a
+project session Octoboard carries the entry Grok wrote over, unchanged (see "Carrying Grok Build's trust
+record" below). A console session runs in a directory of Octoboard's own, so its trust is Octoboard's to
+give and the user is not asked: Grok Build is trusted there for the launch alone, and a confirmation that comes up
+in a console session, whichever agent shows it, is pressed at once (see "Console sessions' trust confirmations"
+below).
 
 ## The agents' trust confirmations
 
@@ -15,7 +18,7 @@ the user's own configuration by itself; Octoboard carries the entry Grok wrote o
 |---|---|---|---|
 | Claude Code | The first time it runs in a directory it has not been trusted with. | A two-option list, "No, exit" and "Yes, I trust this folder", with the cursor starting on "No, exit". | Its own configuration. |
 | Codex | Only when the working directory is inside a git repository Codex has not been told to trust; outside one it never asks. | A two-option folder-trust confirmation, with the cursor starting on trust and continue. Octoboard recognises both the form whose other option quits and the folder-access form whose other option returns to the Agent Command Center. | `config.toml` in the Codex home that launch uses, for the **root of the git repository**: from a subfolder it records the repository's root, and from a linked worktree the main repository's root, so the record can cover more than the project asked about. |
-| Grok Build | Only when the folder holds content Grok's trust gates, such as an `AGENTS.md`, git repository or not. | "Do you trust the contents of this directory?", with "Yes, proceed" (`y`) and "No, quit" (`n`), and no cursor. A decline exits Grok. | Its trust store, `trusted_folders.toml`, in the session's own Grok home, from which Octoboard carries it to the user's own. |
+| Grok Build | Only when the folder holds content Grok's trust gates, such as an `AGENTS.md`, git repository or not. | "Do you trust the contents of this directory?", with "Yes, proceed" (`y`) and "No, quit" (`n`), and no cursor. A decline exits Grok. | Its trust store, `trusted_folders.toml`, in the session's own Grok home, from which Octoboard carries it to the user's own for a project session. |
 
 Until its confirmation is answered the session does nothing else and reports nothing (see "What the statuses are derived
 from" in `docs/product/session-statuses.md`). Until the folder is trusted, Claude Code ignores the project's own `allow`
@@ -26,22 +29,57 @@ project's instructions, hooks or MCP servers.
 
 | Session | What happens |
 |---|---|
-| Console session | Pressed at once, without a dialog and without recording anything: its working directory is the console's own, which holds the instruction file Octoboard writes there. |
+| Console session | Pressed at once, without a dialog and without recording any permission of Octoboard's (see "Console sessions' trust confirmations" below). |
 | Project session whose project has the trust permission, of its own or through a trusted folder | Pressed at once, without a dialog. |
 | Any other project session | The user is asked in a dialog; nothing is sent until they agree. |
 
-Once Octoboard recognises a confirmation that needs the user, the session reads as *waiting for the user* and raises its
-hand everywhere that status is shown or counted (see "The raised hand" in `docs/product/session-statuses.md`). Closing
-the dialog with **Not now**, moving the terminal's cursor or a failed attempt to press the confirmation leaves the hand
-up. It comes down when Octoboard successfully presses the confirmation, the agent sends its first hook report, or, for
-Codex answered in the terminal, Octoboard sees that the confirmation has been replaced by the next screen — or, for Grok
-Build, which may run no hook at all (see "Messages held until a session can take them" in
-`docs/product/message-delivery.md`), sees that the session's screen no longer shows the confirmation, however it was
-answered. The session then shows the agent's last reported status, or its launch status if no report has arrived. An
-interrupted or archived session keeps that status instead of a trust hand.
+Once Octoboard recognises a confirmation that needs the user — a project session's that no permission covers — the
+session reads as *waiting for the user* and raises its hand everywhere that status is shown or counted (see "The raised
+hand" in `docs/product/session-statuses.md`). Closing the dialog with **Not now**, moving the terminal's cursor or a
+failed attempt to press the confirmation leaves the hand up. It comes down when Octoboard successfully presses the
+confirmation, the agent sends its first hook report, or, for Codex answered in the terminal, Octoboard sees that the
+confirmation has been replaced by the next screen — or, for Grok Build, which may run no hook at all (see "Messages held
+until a session can take them" in `docs/product/message-delivery.md`), sees that the session's screen no longer shows
+the confirmation, however it was answered. The session then shows the agent's last reported status, or its launch status
+if no report has arrived. An interrupted or archived session keeps that status instead of a trust hand.
 
-A confirmation pressed automatically for a console session or under an existing trust permission raises no hand
-unless that press fails and the confirmation still needs the user.
+A confirmation pressed automatically for a console session or under an existing trust permission raises no hand unless
+that press fails and the confirmation still needs the user.
+
+## Console sessions' trust confirmations
+
+A console session runs in the console's own working directory, `~/.octoboard/consoles/<console id>/` (see
+`docs/product/files-octoboard-owns.md`), which holds nothing but the instruction file Octoboard writes there. Trusting
+it is therefore Octoboard's to do: a console session's trust confirmation is never put to the user in the trust dialog,
+and no permission of Octoboard's is recorded for it. How the directory comes to be trusted depends on the agent:
+
+| Agent | In a console session |
+|---|---|
+| Claude Code | Its confirmation comes up the first time Claude Code runs in each console's directory — Claude Code has no documented way to trust a directory for one launch — and Octoboard presses it at once. Claude Code then records the trust in its own trust list, as an entry naming that console's directory, and does not ask again for that console. |
+| Codex | Normally nothing comes up and nothing is recorded: Codex never asks outside a git repository. Only where the console's directory lies inside a git repository — a home directory kept in git, say — does Codex ask, and no per-launch setting answers it then; Octoboard presses it at once, and Codex records the trust for the **root of that repository**, which covers more than the console's directory. |
+| Grok Build | Nothing comes up and nothing is recorded in the user's trust list. Each launch writes an entry for the console's directory into the session's own copy of the trust store in the per-session Grok home (see "The per-session Grok home" in `docs/product/per-agent-launch-specifics.md`), which Grok takes without asking; the entry goes with that home. Nothing is carried to the user's own `trusted_folders.toml` for a console session, an answer given in the terminal included. Where the session's copy of the store cannot be read as a trust store, or the entry cannot be written, none is written, and Grok's confirmation comes up: Octoboard presses it at once, as it does any console session's, and whatever Grok records for that answer stays in the session's own Grok home. |
+
+A press for a console session is made with the same keys and checks, and reported the same way when it fails, as any
+other confirmation Octoboard presses (see "How a confirmation is pressed" below): a failed press leaves a notice on the
+session and the confirmation for the user to answer in the terminal, the session reading as *waiting for the user*. A
+go-ahead for a console session's confirmation (`confirm_trust` in the daemon's client protocol) is refused with the
+error code `console_session_trust_not_asked`, whose message says that the application presses a console session's
+trust confirmation without asking.
+
+**Entries for consoles in the agents' trust lists.** The entry Claude Code records for a console's directory, and the
+one Codex records for the root of a repository holding it, stay in the user's trust list after the console is deleted
+and after Octoboard is uninstalled; Octoboard does not remove them, since removing one would be another edit of the
+user's file. Claude Code's names only that console's directory and has no effect anywhere else; Codex's covers its
+repository, as any Codex trust entry does. Grok Build records none for a console, but earlier versions of Octoboard
+carried a console's entry into Grok's `trusted_folders.toml`, where it can still be. The user can remove one where the
+agent keeps it:
+
+- **Claude Code**: the `hasTrustDialogAccepted` of the console directory's entry under `projects` (`projects["<path>"]`)
+  in its global config file — `~/.claude.json`, or `.claude.json` in the account's config directory;
+- **Grok Build**: the console directory's table, `[folders."<path>"]`, in `trusted_folders.toml` in the Grok home —
+  `~/.grok`, or the account's directory;
+- **Codex** records none for a console directory outside a git repository; for one inside a repository, the
+  `[projects."<repository root>"]` table in `config.toml` in the Codex home.
 
 ## The trust permission
 
@@ -194,6 +232,11 @@ has reached the user's own trust store (see "Carrying Grok Build's trust record"
 carry the entry — a policy that runs none of Octoboard's hooks — the press counts once the session's screen is seen no
 longer to show the confirmation, and the permission a go-ahead from the trust dialog asked for is recorded then; nothing
 has been carried to the user's trust store at that point, and a hook report that comes later still carries the entry.
+For a Grok Build console session, which carries nothing, the press counts once Grok's first hook report has come or
+the session's screen is seen no longer to show the confirmation, whichever is first, within about 12 seconds of the
+key. Only a console session's confirmation is pressed with nothing to carry: a Grok Build project session that has
+lost where its entry is carried to — one adopted after a daemon restart whose launch record could not be read, say —
+is not pressed, and the attempt fails with the notice above, leaving the confirmation for the user in the terminal.
 
 **Recognition is limited to the start of a session.** A confirmation is looked for only in the session's own terminal
 output, and only for as long as it can still come up, so the same words appearing later in a session are never taken
@@ -216,14 +259,20 @@ take them" in `docs/product/message-delivery.md`.
 
 A Grok Build session runs against a per-session Grok home (see "The per-session Grok home" in
 `docs/product/per-agent-launch-specifics.md`), so the entry Grok writes when its confirmation is accepted lands only in
-that session's copy of the trust store and would be lost with the session. Once the confirmation has been accepted —
+that session's copy of the trust store and would be lost with the session. For a project session, once the
+confirmation has been accepted —
 pressed by Octoboard, or answered by the person in the terminal — Octoboard copies exactly that one entry, as Grok wrote
 it, into `trusted_folders.toml` in the session's source home, adding it or replacing that folder's entry there, and
 leaving every other entry as it is. It holds the store's lock file, `trusted_folders.toml.lock`, exclusively while it
 reads and writes; Grok takes the same lock before it saves the store, so the two never write at once. Octoboard writes
 only an entry Grok itself wrote, never one of its own. An answer that writes no entry — a decline — changes nothing and
 is not reported. A person's answer in the terminal is carried the same way, so Grok keeps it as Claude Code and Codex
-keep an answer given in their own terminal, but it records no permission of Octoboard's.
+keep an answer given in their own terminal, but it records no permission of Octoboard's. A console session carries
+nothing (see "Console sessions' trust confirmations" above): answering it writes nothing to the user's
+`trusted_folders.toml`. A session adopted by a daemon start with its confirmation still up (see "What a daemon start
+takes over" in `docs/product/process-holders.md`) carries its entry as its launch recorded; for one launched by an
+earlier version of Octoboard, which recorded nothing about it, no entry is carried when its folder lies under the
+consoles' directory (`~/.octoboard/consoles/`), judged by where the folder really is, not by how its path is written.
 
 When the entry does not reach the user's store, nothing is written there, no permission is recorded, and a notice on
 the session says that Octoboard could not copy Grok's trust for this folder into that file, so Grok will ask again the

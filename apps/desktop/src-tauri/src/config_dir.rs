@@ -1,5 +1,6 @@
 //! The JSON files the shell keeps under the application's config directory (`window-state.json`,
-//! `settings.json`): where they live and how they are written.
+//! `settings.json`): where they live and how they are written. And where the files that must stay
+//! on this computer live (`local_data_path`).
 
 use std::fs::{self, File};
 use std::io::Write;
@@ -11,6 +12,14 @@ use tauri::{AppHandle, Manager};
 /// Where the file called `name` lives.
 pub fn config_path(app: &AppHandle, name: &str) -> tauri::Result<PathBuf> {
     Ok(app.path().app_config_dir()?.join(name))
+}
+
+/// Where the file or folder called `name` lives that must stay on this computer: under the
+/// application's local data directory, which on Windows is not the roaming one the config
+/// directory is in (a roaming profile or a redirected folder copies that one to a server), and on
+/// macOS is the config directory itself.
+pub fn local_data_path(app: &AppHandle, name: &str) -> tauri::Result<PathBuf> {
+    Ok(app.path().app_local_data_dir()?.join(name))
 }
 
 /// Written to a sibling file, flushed to disk and renamed over the old one, so a write cut short

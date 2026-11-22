@@ -1619,7 +1619,7 @@ mod tests {
         close_turn_and_report(&state, "waiting", turn("waiting-for-the-subagent"));
         state
             .hook_queues
-            .push("waiting", hand_back.to_string().into());
+            .push("waiting", bytes::Bytes::from(hand_back.to_string()));
         crate::hooks::apply::drain_hook_queue(&state, "waiting");
         assert_eq!(state.completion_notices("waiting"), 1);
         crate::test_support::runtime_advanced(COMPLETION_NOTICE_SETTLE).await;
@@ -1634,7 +1634,9 @@ mod tests {
         // A peer's message is not a notice: the report owed before it goes out.
         state.turn_started("waiting", Some("go on"));
         close_turn_and_report(&state, "waiting", turn("stopped-before-the-peer"));
-        state.hook_queues.push("waiting", peer.to_string().into());
+        state
+            .hook_queues
+            .push("waiting", bytes::Bytes::from(peer.to_string()));
         crate::hooks::apply::drain_hook_queue(&state, "waiting");
         assert_eq!(state.completion_notices("waiting"), 1);
         let heard = hub_heard_of(&hub, "stopped-before-the-peer").await;

@@ -1,14 +1,16 @@
 ---
 title: "Windows"
-description: "Intel या AMD प्रोसेसर वाले PC के लिए (लगभग सभी Windows PC), Windows 10 वर्शन 21H2 या उसके बाद के वर्शन पर। Arm पर Windows 11 में यह x64 ऐप इम्युलेशन में चलता है।"
+description: "Intel या AMD प्रोसेसर वाले PC के लिए (लगभग सभी Windows PC), Windows 10 वर्शन 21H2 या उसके बाद के वर्शन पर। Arm पर Windows 11 में, जहाँ रिलीज़ नेटिव arm64 इंस्टॉलर देती है, वही इस्तेमाल करें; नहीं तो यह x64 ऐप वहाँ एमुलेशन में चलता है।"
 ---
 
 import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
 import { downloads, productName } from "../../../../commands.ts";
+import WindowsUninstaller from "../../../../snippets/hi/windows-uninstaller.mdx";
 
-Intel या AMD प्रोसेसर वाले PC के लिए (x64; लगभग सभी Windows PC), Windows 10 वर्शन 21H2 या उसके बाद के वर्शन पर। Arm पर Windows 11 में यह x64 ऐप इम्युलेशन में चलता है।
+Intel या AMD प्रोसेसर वाले PC के लिए (x64; लगभग सभी Windows PC), Windows 10 वर्शन 21H2 या उसके बाद के वर्शन पर। Arm पर Windows 11 में, जहाँ रिलीज़ नेटिव arm64 इंस्टॉलर देती है, वही इस्तेमाल करें; नहीं तो यह x64 ऐप वहाँ एमुलेशन में चलता है।
 
 <LinkButton href={downloads.windows}>Windows के लिए डाउनलोड करें</LinkButton>
+<LinkButton href={downloads["windows-arm64"]} variant="secondary">Arm पर Windows के लिए डाउनलोड करें</LinkButton>
 
 <Aside>Windows ऐप बीटा में है।</Aside>
 
@@ -16,7 +18,7 @@ Intel या AMD प्रोसेसर वाले PC के लिए (x64;
 
 <Steps>
 
-1. ऊपर दिए बटन से इंस्टॉलर डाउनलोड करें। यह ऐसी फ़ाइल है जिसके नाम का अंत <code dir="ltr">x64-setup.exe</code> से होता है।
+1. ऊपर दिए बटन से इंस्टॉलर डाउनलोड करें। यह ऐसी फ़ाइल है जिसके नाम का अंत <code dir="ltr">x64-setup.exe</code> से होता है। Arm पर Windows में दूसरा बटन आज़माएँ: जहाँ रिलीज़ arm64 इंस्टॉलर देती है, वहाँ वह उस फ़ाइल को डाउनलोड करता है, जिसके नाम का अंत <code dir="ltr">arm64-setup.exe</code> से होता है; नहीं तो वह रिलीज़ की सूची खोलता है, और x64 इंस्टॉलर एमुलेशन में चलता है।
 2. इंस्टॉलर चलाने के लिए डाउनलोड की गई फ़ाइल खोलें। यह {productName} को सिर्फ़ आपके यूज़र अकाउंट के लिए इंस्टॉल करता है, इसलिए एडमिनिस्ट्रेटर की अनुमति नहीं माँगता।
 
    ऐप पर अभी कोड-साइन नहीं है, इसलिए Microsoft Defender SmartScreen “Windows protected your PC” दिखा सकता है। “More info” चुनें, फिर “Run anyway”।
@@ -38,6 +40,16 @@ Intel या AMD प्रोसेसर वाले PC के लिए (x64;
 - [Grok Build](https://docs.x.ai/build/overview)
 
 अगर आप Claude Code या Codex इस्तेमाल करते हैं, तो पहले [Git for Windows](https://git-scm.com/download/win) इंस्टॉल करें; उन्हें काम करने के लिए इसकी ज़रूरत होती है।
+
+## अनइंस्टॉल करें
+
+{productName} को उसके अनइंस्टॉलर से अनइंस्टॉल करें, Windows की सेटिंग्स (Apps) या Control Panel से।
+
+<WindowsUninstaller />
+
+अनइंस्टॉल करने से पहले यह देखने के लिए कि क्या लागू है, <strong>सेटिंग्स › सफ़ाई › अनइंस्टॉल करने से पहले सफ़ाई</strong> खोलें: वहाँ <strong>सब हटाएँ</strong> वही सब हटाता है, और हर आइटम का नतीजा दिखाता है।
+
+[आपका सिस्टम जैसा था वैसा ही रहता है](../../your-system/) बताता है कि बाद में क्या बचता है और उसे कैसे हटाया जाए।
 
 ## अपडेट
 

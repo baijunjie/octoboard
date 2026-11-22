@@ -34,10 +34,15 @@ impl Places {
         let home = std::env::var_os("HOME")
             .map(PathBuf::from)
             .ok_or_else(|| Error::failed("the home directory is not known"))?;
-        Ok(Self {
+        Ok(Self::in_home(&home))
+    }
+
+    /// The places for the user whose home is `home`.
+    fn in_home(home: &Path) -> Self {
+        Self {
             system: PathBuf::from("/usr/local/bin"),
             user: home.join(".local").join("bin"),
-        })
+        }
     }
 
     fn link(dir: &Path) -> PathBuf {
@@ -301,6 +306,18 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
 
     use super::*;
+
+    /// The documentation site names the link's two places as this fixture holds them.
+    #[test]
+    fn the_links_places_are_the_ones_the_docs_name() {
+        let quoted: serde_json::Value =
+            serde_json::from_str(include_str!("../../testdata/docs_system_paths.json")).unwrap();
+        let places = Places::in_home(Path::new("/home/u"));
+        let dirs = &quoted["command_line_dirs"];
+        assert_eq!(dirs["system"].as_str(), places.system.to_str());
+        let user = dirs["user"].as_str().unwrap().replacen('~', "/home/u", 1);
+        assert_eq!(Some(user.as_str()), places.user.to_str());
+    }
 
     /// A directory under the temporary one, which the test removes.
     struct Scratch(PathBuf);
@@ -589,6 +606,47 @@ mod tests {
         assert_eq!(*seen.borrow(), [format!("rm -f {}", shell_quote(&link))]);
         assert!(std::fs::symlink_metadata(&link).is_err());
         assert_eq!(state_in(&places, Some(&bundled)), State::NotInstalled);
+    }
+
+    #[test]
+    fn removing_takes_the_link_out_of_both_directories_and_leaves_nothing_of_it_in_either() {
+        let scratch = Scratch::new("remove-both");
+        let ours = scratch.bundle("Octoboard");
+        let other = scratch.bundle("Octoboard 2");
+        let places = scratch.places();
+        std::fs::create_dir_all(&places.system).unwrap();
+        std::fs::create_dir_all(&places.user).unwrap();
+        // A link to this copy in the system's directory and one an earlier copy left in the user's.
+        symlink(&ours, Places::link(&places.system)).unwrap();
+        symlink(&other, Places::link(&places.user)).unwrap();
+        remove_in(&places, Some(&ours), &|_| {
+            panic!("both are the user's to write")
+        })
+        .unwrap();
+        assert_eq!(state_in(&places, Some(&ours)), State::NotInstalled);
+        for dir in [&places.system, &places.user] {
+            assert_eq!(
+                std::fs::read_dir(dir).unwrap().count(),
+                0,
+                "{} is empty",
+                dir.display()
+            );
+        }
+    }
+
+    #[test]
+    fn installing_leaves_only_the_link_in_its_directory() {
+        let scratch = Scratch::new("install-only-link");
+        let bundled = scratch.bundle("Octoboard");
+        let places = scratch.places();
+        std::fs::create_dir_all(&places.system).unwrap();
+        install_in(&places, &bundled, &|_| panic!("no prompt is needed")).unwrap();
+        let names: Vec<_> = std::fs::read_dir(&places.system)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(names, [std::ffi::OsString::from(NAME)]);
+        assert!(!places.user.exists(), "the user's directory is not made");
     }
 
     #[test]

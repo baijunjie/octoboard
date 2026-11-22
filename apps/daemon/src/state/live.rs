@@ -1,6 +1,6 @@
 //! The running sessions with the ids being launched, and the questions asked of them.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -29,7 +29,15 @@ pub(super) struct LiveSessions {
     pub(super) model_changes: HashSet<String>,
     /// The accounts locked for a change of their sharing, by id.
     pub(super) sharing_locks: HashMap<String, SharingLockEntry>,
+    /// The launches of each session whose process has left the live map, the latest last, at most
+    /// [`ENDED_LAUNCHES_KEPT`] of them: what a hook report naming one of them is told by
+    /// ([`AppState::launch_ended`]).
+    pub(super) ended_launches: HashMap<String, VecDeque<String>>,
 }
+
+/// How many ended launches of one session are remembered. A report from a launch further back
+/// than this would have to have waited out as many relaunches.
+pub(crate) const ENDED_LAUNCHES_KEPT: usize = 16;
 
 /// A session running or holding a claim, as a change of sharing sees it.
 pub struct Running {
@@ -266,6 +274,11 @@ impl AppState {
             .is_some_and(|current| Arc::ptr_eq(current, session));
         if is_current {
             live.sessions.remove(&session.id);
+            let ended = live.ended_launches.entry(session.id.clone()).or_default();
+            if ended.len() == ENDED_LAUNCHES_KEPT {
+                ended.pop_front();
+            }
+            ended.push_back(session.launch_id.clone());
             // Under the same lock as the removal: a relaunch claiming this id the moment it leaves
             // the map would otherwise queue an instruction that this cleanup then threw away.
             // A held queue is its holder's to forward or discard.
@@ -281,12 +294,54 @@ impl AppState {
         is_current
     }
 
+    /// Whether `launch` is a launch of session `id` whose process has ended, by having left the
+    /// live map ([`Self::remove_live`]): a hook report that names it was posted by a process that
+    /// is gone, whatever runs in the session now. Only launches of this daemon's run are known.
+    pub fn launch_ended(&self, id: &str, launch: &str) -> bool {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        live.ended_launches
+            .get(id)
+            .is_some_and(|ended| ended.iter().any(|ended| ended == launch))
+    }
+
+    /// Forgets the ended launches of session `id`, whose record is gone. Kept while it is only
+    /// archived, as the turn its end cut short is (`Self::forget_ended_turn`): a report from its
+    /// last launch can still arrive, and a reopened session can be launched again.
+    pub(super) fn forget_ended_launches(&self, id: &str) {
+        self.live
+            .write()
+            .expect("live sessions lock poisoned")
+            .ended_launches
+            .remove(id);
+    }
+
+    /// Whether `launch` is known to be session `id`'s launch under way: the one its live process
+    /// is, or one this run reserved for it and still follows (`ProcessLedger::reserved_for`), its
+    /// process perhaps not registered yet. A launch an earlier run started is not known to be:
+    /// its last reports may be relayed by a holder once this run has adopted the session and
+    /// launched it again.
+    pub fn launch_is_current(&self, id: &str, launch: &str) -> bool {
+        let live = self
+            .live
+            .read()
+            .expect("live sessions lock poisoned")
+            .sessions
+            .get(id)
+            .is_some_and(|session| session.launch_id == launch);
+        live || self.process_ledger.reserved_for(launch, id)
+    }
+
     /// What the daemon drops once session `id` has left the live map ([`Self::remove_live`]):
     /// the sharing status is published again when it was the current session (`was_current`),
     /// and its bookkeeping goes either way.
     pub(crate) fn after_live_removed(self: &Arc<Self>, id: &str, was_current: bool) {
         if was_current {
             self.publish_account_sharing();
+        }
+        // A session deleted while its process ran has had its ended launches forgotten already,
+        // before this one was added to them.
+        if matches!(self.store.get_session(id), Ok(None)) {
+            self.forget_ended_launches(id);
         }
         self.forget_session_bookkeeping(id);
     }

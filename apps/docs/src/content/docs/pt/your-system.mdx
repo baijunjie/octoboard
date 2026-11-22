@@ -1,0 +1,88 @@
+---
+title: "Seu sistema fica como estava"
+description: "O Octoboard deixa o seu sistema e os arquivos dos seus agentes como os encontrou. O que alguns recursos adicionam, como desfazer cada coisa e o que fica depois de desinstalar."
+---
+
+import { Aside, Code } from "@astrojs/starlight/components";
+import { commands, productName, system } from "../../../commands.ts";
+import LinuxUninstall from "../../../snippets/pt/linux-uninstall.mdx";
+import WindowsUninstaller from "../../../snippets/pt/windows-uninstaller.mdx";
+
+O {productName} deixa o seu sistema como o encontrou: a configuração dos seus agentes e tudo o mais que está fora das pastas próprias do {productName}. Alguns poucos recursos, porém, adicionam algo fora dessas pastas. Esta página lista todos eles, com o que cada um adiciona, onde e como se desfaz, e diz o que fica depois da desinstalação.
+
+## A regra
+
+- <strong>O que o {productName} entrega a um agente chega a ele a cada inicialização, e só ali.</strong> Os hooks de status, o servidor MCP próprio e o papel que ele descreve para uma sessão são passados quando o agente inicia, ou ficam na pasta própria do {productName}. Nenhum arquivo seu nem de um agente é editado para isso; assim, um agente que você executa por conta própria inicia sem nada disso.
+- <strong>O {productName} não adiciona nenhum hook próprio aos seus ajustes e não decide nada por você sobre a pasta de um projeto.</strong> Se a pasta de um projeto é confiável, quem diz é você, e quem registra é o agente. A única pasta pela qual o {productName} responde é a pasta própria de um console, que é do {productName} (veja abaixo).
+- <strong>O que um agente escreve para si mesmo é do agente.</strong> Os registros de conversa, os caches e logs, as credenciais de um login e a confiança que ele registra quando a pergunta dele é respondida são escritos como quando você usa o agente sem o {productName}. O mesmo vale para a configuração inicial que o programa do agente faz na primeira vez em que é executado em uma pasta de configuração; uma leitura feita pelo {productName} em segundo plano pode fazê-la acontecer antes da sua primeira inicialização (veja abaixo).
+- <strong>O trabalho dentro dos seus projetos não é o assunto desta página.</strong> Editar os arquivos de um projeto, as operações do Git, os branches e os worktrees são o trabalho de desenvolvimento para o qual você adiciona um projeto.
+
+## O que um recurso adiciona e como desfazer
+
+Cada um destes itens só é adicionado por um recurso que você usa ou ativa.
+
+### Desfeito ao desativar o recurso
+
+- <strong>A chave deste computador em um servidor remoto.</strong> Depois que você faz login em um daemon remoto salvo com uma senha ou um arquivo de chave, o app pergunta antes de adicionar qualquer coisa: <strong>Adicionar a chave deste computador</strong> indica o arquivo e a linha. <strong>Adicionar chave</strong> adiciona uma linha, marcada como <code dir="ltr">{system.keyMark}</code>, às chaves SSH permitidas do seu usuário naquele servidor (<code dir="ltr">{commands.authorizedKeys}</code> no Linux e no macOS) e guarda a chave privada no armazenamento de credenciais deste computador (o chaveiro de início de sessão no macOS, o Gerenciador de Credenciais no Windows). <strong>Não adicionar</strong> não adiciona nada, e a pergunta não é feita de novo. Para desfazer, desative <strong>Chave deste computador</strong> na página desse daemon em <strong>Dispositivos remotos</strong>, ou remova o daemon salvo: o app retira a linha do arquivo e remove a chave privada. Ele faz o mesmo quando você altera o host, a porta ou o usuário do daemon salvo. Se o servidor não puder ser alcançado, a linha pode ficar; o app avisa você, para que a apague no servidor.
+- <strong>Abrir ao iniciar sessão</strong> (Windows, e macOS 13 ou posterior). <strong>Ajustes › Geral › Abrir ao iniciar sessão</strong> coloca o {productName} na lista de apps que o seu sistema abre ao iniciar sessão, e a linha diz isso. Desativar é a forma de tirá-lo dessa lista.
+- <strong>A ferramenta de linha de comando</strong> (macOS). <strong>Instalar</strong>, em <strong>Ajustes › Geral › Ferramenta de linha de comando</strong>, adiciona um link chamado <code dir="ltr">{system.cliName}</code> em <code dir="ltr">{system.cliDir}</code>, ou em <code dir="ltr">{system.cliFallbackDir}</code> se o sistema não permitir; a linha diz isso antes de você instalar. <strong>Remover</strong> apaga o link.
+- <strong>O compartilhamento da configuração padrão.</strong> <strong>Compartilhar configuração padrão</strong>, nos ajustes de uma conta em <strong>Ajustes › Contas de agentes</strong>, substitui as partes compartilháveis da pasta dessa conta por links para a pasta da conta padrão, mantém ao lado a configuração própria da conta como backups e move o histórico de conversas dela para a pasta da conta padrão. A linha diz isso antes de você ativar. Ao desativar, os links são removidos, os backups são restaurados e as conversas das sessões da própria conta são movidas de volta. <strong>Uma coisa fica:</strong> o restante do histórico de conversas que foi movido permanece na pasta da conta padrão, porque removê-lo faria você perder as suas conversas. Veja [Shared configuration](../features/shared-configuration/).
+
+### Fica como seu ou do agente
+
+Estas operações escrevem algo que, a partir de então, é seu ou do agente; portanto, o {productName} não tem nada próprio a desfazer. Quando uma entrada pode ser removida manualmente, o item diz onde ela está.
+
+- <strong>A troca de conta de uma sessão.</strong> <strong>Trocar conta</strong> pede a sua confirmação. Uma troca pedida por um agente espera a sua aprovação, a menos que você tenha ativado <strong>Aprovar automaticamente trocas de conta</strong>, e a troca no limite de uso só acontece enquanto <strong>Trocar de conta automaticamente no limite de uso</strong> estiver ativado. Uma troca copia a conversa daquela única sessão para a pasta da conta de destino; no Codex, ela também faz o registro que essa conta guarda da conversa apontar para a cópia. O original fica onde estava, e a cópia fica como própria dessa conta. Veja [Account continuity](../features/account-continuity/).
+- <strong>Ajustes e plugins que você altera dentro de uma sessão do Grok Build.</strong> Quando o seu <code dir="ltr">config.toml</code> é um link para um arquivo, um tema, a ativação de um plugin ou um modelo padrão que você altera em uma sessão é gravado nesse arquivo quando a sessão termina, como o Grok teria salvado. Um plugin que você instala em uma sessão é registrado no registro de plugins da sua pasta do Grok, se ela tiver um.
+- <strong>A confiança do Grok Build na pasta de um projeto.</strong> Depois que você concorda em confiar na pasta de um projeto (<strong>Confiar e continuar</strong>, ou a sua própria resposta no terminal), a única entrada que o Grok escreveu é levada, sem alterações, para a lista de confiança da sua pasta do Grok.
+- <strong>Registros de uma sessão que nunca teve uma conversa.</strong> Apagar uma sessão para a qual você nunca enviou nada move junto para o Lixo (a Lixeira no Windows), sem perguntar, os registros que o agente guarda dela: eles não contêm nenhuma conversa sua. Os registros de uma sessão que você usou só são movidos se você marcar essa opção na confirmação. Eles podem ser recuperados do Lixo.
+- <strong>A configuração inicial do Claude Code.</strong> Em uma pasta de configuração em que o Claude Code nunca foi executado, ou depois de uma atualização do Claude Code, uma leitura feita pelo {productName} em segundo plano (o uso de uma conta, os servidores MCP ou os agentes dela) faz o Claude Code realizar ali a própria configuração inicial e as migrações pendentes, como a sua próxima inicialização teria feito. O {productName} deixa essas alterações como estão.
+- <strong>Uma pasta vazia para uma nova conta do Codex.</strong> Antes da primeira inicialização ou do primeiro login de uma conta do Codex, o {productName} cria a pasta da conta, vazia, se ela ainda não existir: sem ela, o Codex se recusa a iniciar.
+- <strong>A confiança na pasta própria de um console.</strong> Uma sessão de console é executada em uma pasta própria do {productName}; por isso o {productName} responde ali à pergunta de confiança do agente sem perguntar a você. O Claude Code mantém então, na lista de confiança dele, uma entrada que nomeia apenas essa pasta e não tem efeito em nenhum outro lugar. O Codex só pergunta quando essa pasta está dentro de um repositório Git, e então registra a confiança para a raiz desse repositório, o que abrange o repositório inteiro: se a sua pasta pessoal está no Git, é a sua pasta pessoal inteira. O Grok Build não registra nada na sua lista de confiança. O {productName} não remove essas entradas, pois isso seria mais uma edição do seu arquivo. Você mesmo pode removê-las: a do Codex é a tabela <code dir="ltr">[projects."&lt;repository root&gt;"]</code> no <code dir="ltr">config.toml</code> da pasta dele, e a do Claude Code é a entrada da pasta em <code dir="ltr">projects</code> no <code dir="ltr">.claude.json</code> dele.
+
+### Desfeito pelo comando de desinstalação
+
+- <strong>O programa de servidor do Linux como serviço.</strong> Instalá-lo como serviço (veja [Servidor Linux](../install/linux/)) grava um serviço de usuário do systemd na sua pasta de configuração do systemd e ativa o lingering para o seu usuário se estava desativado. Isso é desfeito pelo comando de desinstalação, mais abaixo.
+
+<Aside>
+No Windows, o app também mantém a lista de atalhos do botão dele na barra de tarefas, com os seus daemons remotos salvos. Ela não tem interruptor: <strong>Remover tudo</strong>, descrito abaixo, a remove, assim como o desinstalador.
+</Aside>
+
+## Antes de desinstalar
+
+Antes de desinstalar, tudo de “Desfeito ao desativar o recurso” que está em vigor pode ser removido de uma só vez, com o recurso de cada item desativado. No app para computador, <strong>Ajustes › Limpeza</strong> tem uma linha para isso, <strong>Limpar antes de desinstalar</strong>: ela diz quantos itens estão em vigor e tem um único botão, <strong>Remover tudo</strong>. No Windows, o desinstalador também faz isso sozinho, e o comando de desinstalação do programa de servidor Linux faz isso primeiro; os dois estão descritos abaixo.
+
+- <strong>Ele pergunta antes.</strong> A confirmação diz quantos itens serão removidos, com a lista recolhida sob esse número, e o que é mantido. Ela só prossegue depois que você digita <strong>REMOVER</strong>.
+- <strong>Ele mostra o resultado.</strong> Depois, lista o que foi removido e o que não foi. Para um item que não pôde ser removido, por exemplo uma chave em um servidor que não pode ser alcançado, diz o que ficou e onde.
+- <strong>Ele só existe na janela do próprio app, naquele computador.</strong> Em um navegador num computador com o app para computador, e em uma janela que mostra um daemon remoto, a linha só diz onde a limpeza é feita. Em um navegador em um servidor Linux, ela diz que a desinstalação no servidor faz a limpeza primeiro e mostra <code dir="ltr">{system.uninstall}</code> com <strong>Copiar comando de desinstalação</strong>, para você executar no servidor. Nada é removido dali.
+- <strong>Use apenas quando for desinstalar.</strong> Para desfazer um só item e continuar usando o {productName}, desative esse recurso.
+- <strong>Ele mantém os seus dados.</strong> As pastas próprias do {productName} ficam, assim como o histórico de conversas que o compartilhamento moveu.
+
+## Depois de desinstalar
+
+Desinstalar remove o programa.
+
+### macOS
+
+Encerre o {productName} e apague-o da pasta Aplicativos. Nada é executado quando ele é apagado, então selecione <strong>Remover tudo</strong> primeiro: apagar o app não remove o que essa ação remove.
+
+### Windows
+
+Use o desinstalador do app.
+
+<WindowsUninstaller />
+
+### Servidor Linux
+
+<LinuxUninstall />
+
+A pasta em que o programa foi instalado fica, assim como qualquer linha que você adicionou para colocá-la no seu PATH.
+
+### O que fica
+
+As pastas próprias do {productName} são mantidas, de modo que uma instalação posterior encontra de novo os seus consoles, sessões e ajustes. Para removê-las também, apague-as: você perde todos os consoles, registros de sessão e ajustes.
+
+- <strong>A pasta de dados dele</strong>, no computador ou servidor em que as sessões eram executadas: <code dir="ltr">{system.dataDir}</code> (<code dir="ltr">{system.dataDirWindows}</code> no Windows). No macOS e no Linux, <code dir="ltr">{system.removeDataDir}</code> a remove.
+- <strong>A pasta própria do app para computador:</strong> <code dir="ltr">{system.appDataMac}</code> no macOS; <code dir="ltr">{system.appDataWindows}</code> e <code dir="ltr">{system.appLocalDataWindows}</code> no Windows.
+
+As pastas próprias dos seus agentes, com os logins, os ajustes e as conversas deles, são dos agentes e ficam como estão.

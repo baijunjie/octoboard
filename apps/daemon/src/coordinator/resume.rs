@@ -22,7 +22,6 @@ use crate::state::AppState;
 use crate::text::trimmed_or_none;
 
 use super::launch::{checked_launch_overrides, relaunch_session_with, LaunchEdit, LaunchOverrides};
-use super::lifecycle::trash_agent_records_with;
 use crate::accounts::choice::{account_dir, agent_can_open};
 
 /// The conversation id `requested` to resume, trimmed, or `None` for none (blank counting as
@@ -380,7 +379,10 @@ pub(crate) async fn resume_session_with_launch(
             checked
         };
         if checked.judgement.resumability == records::Resumability::Unresumable {
-            forget_gone_conversation(state, &checked.session, &shell).await?;
+            // Its next launch opens a fresh conversation. What is left of the old one in the
+            // agent's own directory stays where it is: it had a conversation, and nobody
+            // confirmed its removal.
+            state.forget_conversation(&checked.session.id)?;
         } else {
             unarchive_record(&checked, &shell).await?;
         }
@@ -483,24 +485,6 @@ async fn check_resumable(
     })
     .await
     .map_err(Into::into)
-}
-
-/// Gives up the conversation of `session`, whose record the agent no longer has, so its next
-/// launch opens a fresh one: what is still left of it on disk goes to the Trash first, while the
-/// session still names it.
-async fn forget_gone_conversation(
-    state: &Arc<AppState>,
-    session: &Session,
-    shell: &HashMap<String, String>,
-) -> Result<()> {
-    trash_agent_records_with(
-        state,
-        vec![session.clone()],
-        records::Locator::with_shell(shell.clone()),
-        state.host_tools.get().trash,
-    )
-    .await;
-    state.forget_conversation(&session.id)
 }
 
 /// The refusal of a resume whose session the agent can no longer resume: launching it would only

@@ -337,6 +337,10 @@ impl RecordStore for CodexRecords {
         super::conversation::entries(line)
     }
 
+    fn is_user_prompt(&self, line: &str) -> Option<bool> {
+        super::conversation::is_user_prompt(line)
+    }
+
     /// The common entries, and the tool calls the rollout holds.
     fn feed_reader(&self) -> Option<Box<dyn FeedReader>> {
         Some(Box::new(super::feed::CodexFeedReader::default()))

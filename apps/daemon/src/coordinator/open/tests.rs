@@ -378,6 +378,31 @@ async fn a_refused_launch_claim_leaves_no_session_row() {
     assert!(state.store.list_sessions().unwrap().is_empty());
 }
 
+/// A clean-up run opens no session: refused before a row is made or anything is published, with
+/// the reason.
+#[tokio::test]
+async fn a_clean_up_run_refuses_an_open_before_any_row_or_publish() {
+    let (state, _dir) = state_for_opening("coordinator-open-clean-up-run");
+    state.set_clean_up_run();
+    let mut events = state.subscribe();
+
+    let err = match begin_open(&state, open_request()).await {
+        Ok(_) => panic!("opened in a clean-up run"),
+        Err(err) => err,
+    };
+
+    assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN);
+    assert!(
+        format!("{err:#}").contains("so it starts no agent"),
+        "{err:#}"
+    );
+    assert!(state.store.list_sessions().unwrap().is_empty());
+    let published = std::iter::from_fn(|| events.try_recv().ok())
+        .filter(|event| matches!(event, Event::SessionUpserted { .. }))
+        .count();
+    assert_eq!(published, 0);
+}
+
 /// The role of a project session follows its parent: a coordinator under a console session, so it
 /// can open sessions of its own, and a worker under a project coordinator, which keeps
 /// orchestration two levels deep. A session with no parent is a coordinator too.

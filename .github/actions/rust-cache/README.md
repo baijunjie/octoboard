@@ -17,7 +17,7 @@ toolchain before invoking it so the compiler identity contributes to the cache k
 | `linux-musl` | The musl jobs of `linux-daemon.yml` (the daemon's tests on `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl`, on a runner of each architecture; run by the quality and release workflows) | `cargo test --locked -p octoboardd --target <musl target> --no-run` on a runner of each architecture, after installing `musl-tools`. |
 | `linux-release` | The Linux release builds (`release.yml`'s `linux` jobs, one per architecture) | `pnpm --filter @octoboard/desktop release --arch <arch> --no-sign-update` on a runner of each architecture, after installing `musl-tools`; unsigned and without the update key. |
 | `windows-check` | The Windows compilation job | None: the job saves its own cache when it runs on main. |
-| `windows-release` | The Windows release builds (`release.yml`'s Windows jobs) and the Windows installer build of the quality workflow (`windows-bundle`) | `WINDOWS_SIGNING=none pnpm --filter @octoboard/desktop release --no-sign-update`, unsigned and without the update key. |
+| `windows-release-x64`, `windows-release-arm64` | The Windows release builds of each architecture (`release.yml`'s `windows` matrix and `windows-signpath.yml`) and the Windows installer build of the quality workflow (`windows-bundle`), one profile per architecture, since each builds into its own target directory | `WINDOWS_SIGNING=none pnpm --filter @octoboard/desktop release --arch <x64\|arm64> --no-sign-update`, unsigned and without the update key. |
 
 The platform component hashes `xcodebuild -version` on macOS, uses the distribution ID and version from
 `/etc/os-release` on Linux, and is the runner OS's name on Windows. The cache keys also distinguish runner OS,
@@ -43,7 +43,7 @@ gh workflow run warm-rust-cache.yml --ref main
 ```
 
 The workflow rejects other refs. It runs the `checks`, `release`, `linux-check`, `linux-release` and `linux-musl` (each
-on an x86_64 and an aarch64 Ubuntu runner) and `windows-release` profiles on GitHub-hosted macOS, Ubuntu and Windows runners, without signing
+on an x86_64 and an aarch64 Ubuntu runner) and `windows-release-<arch>` profiles on GitHub-hosted macOS, Ubuntu and Windows runners, without signing
 secrets or publishing. The macOS release profile builds
 both architectures; the checks profile compiles its tests without executing them. Warming does not replace the full checks in the quality workflow.
 

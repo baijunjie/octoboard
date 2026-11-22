@@ -51,6 +51,8 @@ Not sure this is the way for you? [Choose how to connect](../choose-how-to-conne
 4. Under <strong>Authentication</strong>, choose <strong>Password</strong> if you sign in with your account password. Choose <strong>Key file</strong> if your server provider gave you a key file instead (often named like <code dir="ltr">id_ed25519</code> or ending in <code dir="ltr">.pem</code>), and enter where it is on this computer.
 5. Select <strong>Save</strong>, then <strong>Connect</strong>. Enter your password if it asks.
 
+   After the first sign-in, the app asks <strong>Add this computer's key</strong>. Select <strong>Add key</strong> to sign in from this computer without a password from then on, or <strong>Do not add</strong> to keep signing in as you do now.
+
    If you pasted the connection details, the server's identity (its fingerprint) came with them, and the app checks it for you. If you typed the address by hand, the app shows a fingerprint the first time. To be sure you reached the right machine, compare it with the one this command prints on the server, and connect only if they match:
 
    <Code code={commands.fingerprintCommand} lang="sh" />
@@ -107,8 +109,8 @@ Only someone who can reach {productName} through the SSH forward can use this ad
 
 - <strong>No extra public ports:</strong> {productName} only accepts connections from the host itself, so to connect from another computer you first need to sign in to the host over SSH. This is why you need SSH, or one of the [relays](../choose-how-to-connect/).
 - <strong>Check which machine you reach:</strong> the app remembers the host key, the machine's SSH identity, on the first successful connection and blocks the connection with an alert if that identity later changes.
-- <strong>No password stored:</strong> after you first sign in with a password or your own key file, the app sets up a separate SSH key for this computer to use for future sign-ins.
-- <strong>Take away a computer's access:</strong> remove that computer's entry from the host's list of allowed SSH keys (<code dir="ltr">{commands.authorizedKeys}</code> on Linux and macOS). That key then can't sign in again; a connection already open stays until it ends.
+- <strong>No password stored:</strong> the app never saves your password. After you first sign in with a password or your own key file, it asks whether to add a separate SSH key of this computer's for future sign-ins, and adds it to the host only if you select <strong>Add key</strong>.
+- <strong>Take away a computer's access:</strong> on that computer, turn off <strong>This computer's key</strong> on the daemon's page in <strong>Remote devices</strong>, or remove the saved daemon; the app then takes its key out of the host's list of allowed SSH keys, and tells you if it could not reach the host, in which case the entry may still be there. You can also remove that computer's entry from the list on the host yourself (<code dir="ltr">{commands.authorizedKeys}</code> on Linux and macOS). That key then can't sign in again; a connection already open stays until it ends.
 
 ## In a remote window
 

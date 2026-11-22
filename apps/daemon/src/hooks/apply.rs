@@ -32,8 +32,8 @@ pub fn drain_hook_queue(state: &Arc<AppState>, session_id: &str) {
         session_id,
         drained: false,
     };
-    while let Some(body) = state.hook_queues.next(session_id) {
-        apply_hook(state, session_id, &body);
+    while let Some(hook) = state.hook_queues.next(session_id) {
+        apply_hook(state, session_id, hook.launch.as_deref(), &hook.body);
         if !state.hook_queues.complete(session_id) {
             break;
         }
@@ -56,9 +56,10 @@ fn hook_agent(state: &Arc<AppState>, session_id: &str) -> Option<AgentId> {
         })
 }
 
-/// Applies one hook event to its session. The event name comes from the payload, because the hook
-/// script is argument-free.
-fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
+/// Applies one hook event to its session, posted by a hook of the launch `launch` where it named
+/// one (`crate::holder::protocol::HookMark`). The event name comes from the payload, because the
+/// hook script is argument-free.
+fn apply_hook(state: &Arc<AppState>, session_id: &str, launch: Option<&str>, body: &[u8]) {
     let payload: serde_json::Value =
         serde_json::from_slice(body).unwrap_or(serde_json::Value::Null);
     let event = hooks::event_name(&payload);
@@ -82,6 +83,14 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
         if state.apply_late_turn_event(session_id, key, outcome) {
             return;
         }
+    }
+
+    // Any other report from a launch that has ended is that process's too, arriving once its end
+    // was seen, perhaps after the session was launched again: it says nothing about what runs in
+    // the session now, nor about the conversation it is on.
+    if launch.is_some_and(|launch| state.launch_ended(session_id, launch)) {
+        tracing::debug!(session = %session_id, "ignoring a hook report from a launch that has ended");
+        return;
     }
 
     // Marked before anything of this event can release a queue: the first hook ends the trust
@@ -140,7 +149,22 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
         state.note_turn_key(session_id, key);
     }
 
-    if let Some(agent_session_id) = hooks::agent_session_id(&payload) {
+    // Whether the event is known to come from a process launched since the one that ended
+    // (`AppState::mark_conversation_reported`): it names the session's launch under way
+    // (`AppState::launch_is_current`), or else, from a hook that names no launch or one this run
+    // does not know, a conversation other than the one the session named until now. Read before
+    // the id is recorded below.
+    let reported_id = hooks::agent_session_id(&payload);
+    let launched_since = launch.is_some_and(|launch| state.launch_is_current(session_id, launch))
+        || reported_id.as_deref().is_some_and(|reported| {
+            state
+                .store
+                .get_session(session_id)
+                .ok()
+                .flatten()
+                .is_some_and(|session| session.agent_session_id.as_deref() != Some(reported))
+        });
+    if let Some(agent_session_id) = reported_id {
         if let Err(err) = state.set_agent_session_id(session_id, &agent_session_id) {
             tracing::debug!(session = %session_id, %err, "recording the agent's session id failed");
         }
@@ -175,7 +199,7 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     };
     let mut prompt_sent = false;
     if interpreter.starts_conversation(&event) {
-        if let Err(err) = state.mark_conversation_started(session_id) {
+        if let Err(err) = state.mark_conversation_reported(session_id, launched_since) {
             tracing::debug!(session = %session_id, %err, "recording the session's first turn failed");
         }
         let prompt = interpreter.submitted_prompt(&payload);

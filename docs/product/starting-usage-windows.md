@@ -28,16 +28,16 @@ The switch is a row of Settings' Agent accounts section (where it sits is in `do
 switch, **off to begin with**: whether Octoboard starts a usage window that has reset but not begun counting by sending
 one small request on its account. While the switch is off the row's description says that once it is on, a usage window
 starts counting once it resets, and while it is on that a usage window starts counting once it resets; either way it
-adds that this counts a little toward the account's usage limits. A "?" help tip at the end of the row's name ("About
-starting usage windows automatically") holds the why and how: a usage window that has reset does not start counting
-until the account's next request, so until then it shows no countdown and the longer it waits the later its next reset
-comes; with the switch on, one small request is sent on that account with the agent's cheapest model to start it. The
-daemon stores it as `auto_start_quota_windows` and keeps it, so every window shows the same; how it saves is in "How
-switches save" in `docs/product/settings.md`. A console session can neither read nor change it, since it spends the
-user's quota (see "Who reads and changes what" in `docs/product/agent-settings-tools.md`); a configuration export that
-includes the accounts carries it (see "The agent account settings an export carries" in
-`docs/product/settings-in-a-configuration.md`). When a request is sent, what it is and what it leaves behind are in the
-sections below.
+adds that for this one small request is sent on each account, which counts a little toward the account's usage limits.
+A "?" help tip at the end of the row's name ("About starting usage windows automatically") holds
+the why and how: a usage window that has reset does not start counting until the account's next request, so until then
+it shows no countdown and the longer it waits the later its next reset comes; with the switch on, one small request is
+sent on that account with the agent's cheapest model to start it. The daemon stores it as `auto_start_quota_windows` and
+keeps it, so every window shows the same; how it saves is in "How switches save" in `docs/product/settings.md`. A
+console session can neither read nor change it, since it spends the user's quota (see "Who reads and changes what" in
+`docs/product/agent-settings-tools.md`); a configuration export that includes the accounts carries it (see "The agent
+account settings an export carries" in `docs/product/settings-in-a-configuration.md`). When a request is sent, what it
+is and what it leaves behind are in the sections below.
 
 ## When an account is kicked
 
@@ -72,11 +72,13 @@ reading after it.
 
 ## How a kick runs
 
-A kick runs the agent's CLI the way a reading does (see "How a quota is read" in `docs/product/account-quota-readings.md`), from
-the home directory, as one request with no terminal: a one-word prompt, a one-line system prompt in place of the agent's
-own, as few tools as the CLI lets be left out (none at all for Claude Code and Grok Build), one turn, and, where the CLI
-can cap it, a reply of at most 128 output tokens. It runs the agent's non-interactive mode with its cheapest model at
-its lowest reasoning effort:
+A kick runs the agent's CLI the way a reading does (see "How a quota is read" in
+`docs/product/account-quota-readings.md`), Claude Code's and Codex's against the account's own directory and Grok
+Build's against a directory of Octoboard's own (see "Where Grok Build's readings run" in
+`docs/product/account-quota-readings.md`), from the home directory, as one request with no terminal: a one-word prompt,
+a one-line system prompt in place of the agent's own, as few tools as the CLI lets be left out (none at all for Claude
+Code and Grok Build), one turn, and, where the CLI can cap it, a reply of at most 128 output tokens. It runs the agent's
+non-interactive mode with its cheapest model at its lowest reasoning effort:
 
 | Agent | What is run | Model | Reasoning effort |
 |---|---|---|---|
@@ -104,16 +106,24 @@ the account is kicked again.
 
 ## What a kick leaves behind
 
-A kick leaves out as much of the user's setup as the CLI allows without changing which sign-in is used:
+None of the three agents keeps a kick in its own history. A kick leaves out as much of the user's setup as the CLI
+allows without changing which sign-in is used:
 
 - **Claude Code** keeps no conversation. The user's MCP servers are not started, no hook runs (the user's or a
   plugin's), and skills, slash commands, the user's `CLAUDE.md` and output style are left out. The rest of the user's
   settings still load, since they can decide which credentials are used, and the installed plugins are synchronised as
-  for a reading.
+  for a reading. Measured on Claude Code 2.1.330 with a real kick, it changes no setting: in its own config
+  directory it refreshes the caches it keeps in `.claude.json`, and writes a backup of that file, its model catalog cache
+  and its plugin sync state, as any run of it does.
 - **Codex** writes no session files. It runs without the user's `config.toml`, so its MCP servers, its `notify` program,
-  its plugins, apps and hooks do not start. For the same reason an account whose `config.toml` chooses another
-  credential store or another model provider cannot be kicked: its kick fails, and is logged as above.
-- **Grok Build** leaves a session record in the account's directory, and loads its own configuration, which it offers no
-  way to leave out. It does not take in Claude Code's skills, MCP servers, agents, rules or hooks, and it runs in a
-  process of its own rather than through a Grok session already running. Besides the kick's own request, it sends two
-  small requests of its own to title the session, which no option stops.
+  its plugins, apps and hooks do not start; measured on Codex 0.167.1 with a real kick, `config.toml` is left as it was,
+  and Codex writes only its model cache and its log and state databases. For the same reason an account whose
+  `config.toml` chooses another credential store or another model provider cannot be kicked: its kick fails, and is
+  logged as above.
+- **Grok Build** writes the session record of a kick in the directory of Octoboard's own its kick runs against, not in
+  the account's directory, so the kick is not in the account's Grok history; once the kick has ended, everything it left
+  in that directory is removed, the record included, so nothing piles up from kick to kick (see "Where Grok Build's
+  readings run" in `docs/product/account-quota-readings.md`). It loads the copy of the account's configuration there,
+  which it offers no way to leave out. It does not take in Claude Code's skills, MCP servers, agents, rules or hooks,
+  and it runs in a process of its own rather than through a Grok session already running. Besides the kick's own
+  request, it sends two small requests of its own to title the session, which no option stops.

@@ -11,6 +11,7 @@ import ReactDOM from "react-dom/client";
 import { observeLazyReadiness } from "../components/hooks/lazyReadiness";
 import { isLanguage, type Language } from "../i18n/languages";
 import { galleryFailure } from "../fixtures/banner";
+import type { ShellSystemChange, ShellSystemChangeResult } from "../platform";
 import { readHost } from "../platform/host";
 import { LinkForwardError } from "../platform/linkForwardError";
 import { SCENARIOS } from "./fixtures";
@@ -99,7 +100,9 @@ let daemonExited: ((detail: string) => void) | undefined;
  * stands, which opens a new tab), `backgroundRun`, `menuBarIcon` and `launchAtLogin` for a scenario that says so (the
  * General switches; none of them reaches a shell, and the login entry is a stub that keeps the last choice, its list of
  * login items refused when the scenario gives a `launchAtLoginOpenError`), the command-line tool for one that gives
- * `commandLine` (a stub that keeps where it stands, its install refused or never finishing as the scenario says), the desktop shell's `notifications` for one
+ * `commandLine` (a stub that keeps where it stands, its install refused or never finishing as the scenario says), the shell's
+ * list of what its features have in effect and its clearing for one that gives `shellSystemChanges` (a stub that lists what was
+ * left and answers the clearing as the scenario says, or refuses it unanswered), the desktop shell's `notifications` for one
  * that says `desktopNotifications` (nothing is shown or opened; the link to the system's pane only where the scenario's
  * `host` has one), the clipboard taken away for a scenario that says so, and the configuration-file capability stubbed
  * from the scenario's `configuration` (absent where it says the platform has none) so that no download or file picker
@@ -124,6 +127,9 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const launchAtLogin = scenario?.launchAtLogin === undefined ? undefined : { status: scenario.launchAtLogin };
   // The command-line tool's link, which an install makes and a remove takes away.
   const commandLine = scenario?.commandLine && { state: scenario.commandLine.state };
+  // What the shell has in effect, which a clearing takes off the list except what it could not clear.
+  const systemChanges = scenario?.shellSystemChanges && { listed: [...scenario.shellSystemChanges.changes] };
+  const sameChange = (a: ShellSystemChange, b: ShellSystemChange) => JSON.stringify(a) === JSON.stringify(b);
   return {
     ...platform,
     kind: scenario?.desktopApp ? "tauri" : platform.kind,
@@ -210,6 +216,18 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
           return (commandLine.state = { state: "installed", path: "/usr/local/bin/octoboardd", pathNote: false });
         },
         remove: async () => (commandLine.state = { state: "notInstalled" }),
+      },
+    }),
+    ...(systemChanges && {
+      systemChanges: {
+        list: async () => ({ changes: [...systemChanges.listed], failed: [...(scenario?.shellSystemChanges?.listFailed ?? [])] }),
+        clearAll: async () => {
+          const unanswered = scenario?.shellSystemChanges?.clearUnanswered;
+          if (unanswered !== undefined) throw new Error(unanswered);
+          const results: ShellSystemChangeResult[] = scenario?.shellSystemChanges?.clear ?? systemChanges.listed.map((change) => ({ change, outcome: { result: "cleared" } as const }));
+          systemChanges.listed = systemChanges.listed.filter((change) => !results.some((result) => result.outcome.result === "cleared" && sameChange(result.change, change)));
+          return { results, failed: [...(scenario?.shellSystemChanges?.clearFailed ?? [])] };
+        },
       },
     }),
     ...(scenario?.desktopNotifications && {

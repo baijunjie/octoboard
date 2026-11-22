@@ -1,0 +1,22 @@
+import { Code } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* How the Linux server program is uninstalled, which the Linux server guide and "Your system stays as it was" share. */}
+
+Run this on the server, as the user it was installed for. Nothing is downloaded.
+
+<Code code={system.uninstall} lang="sh" />
+
+It first lists everything it will do and asks you to type <code dir="ltr">{system.uninstallWord}</code>. <code dir="ltr">{system.uninstallDryRun}</code> only shows the list, and <code dir="ltr">{system.uninstallYes}</code> confirms where there is no terminal to ask in.
+
+It then turns off sharing for every account that still shares the default configuration. For that, it stops the daemon if it is running, which ends every session the daemon runs, and starts it only for this clean-up, running no sessions. After that it stops the daemon and removes the program, with its systemd service if it has one, and turns lingering off if installing the service turned it on and no other service of yours needs it.
+
+- <strong>If an account cannot stop sharing</strong>, for example because one of its sessions is working, nothing is removed and the daemon is started again as it ran: run the command again once that work is over. With <code dir="ltr">{system.uninstallKeepChanges}</code> it uninstalls without that clean-up, and leaves the links in each such account's folder, and the backups of the account's own configuration beside them, for you to delete by hand.
+- <strong>If stopping the daemon would interrupt work</strong>, nothing is removed. <code dir="ltr">{system.uninstallForce}</code> stops it all the same.
+- <strong>Run the <code dir="ltr">{system.cliName}</code> you installed.</strong> Run through a link, or as another copy of <code dir="ltr">{system.cliName}</code> than the one the {productName} daemon runs, it removes nothing and names the file to run instead.
+
+The install script's earlier command still works, and runs this one. If you installed with <code dir="ltr">{system.binDirOption}</code>, add it with the same folder.
+
+<Code code={system.uninstallScript} lang="sh" />
+
+If your <code dir="ltr">{system.cliName}</code> is too old to have the uninstall command, the script's command removes it by itself, but turns nothing off first: an account that still shares the default configuration keeps the links in its folder, which you can delete by hand.

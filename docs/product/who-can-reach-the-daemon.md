@@ -33,8 +33,9 @@ user can do everything too, through the keys and the holder secrets above.
 has no listener beyond loopback, no TLS and no credential of its own for a device. Whoever can log in over SSH as the
 daemon's Unix user can reach it, so that login is the credential: a device of the owner's is let in by its SSH key and
 revoked by removing that key — a connection already open lasts until it drops — and the login is to be kept like a
-password. The desktop application installs a key of its own on the remote machine after its first login there (see
-"Device keys" in `docs/product/remote-daemons.md`).
+password. After a login there with the password or a key file, the desktop application asks whether to add a key of
+this computer's own to the remote machine, adds it only where the owner agrees, and takes it back when the owner turns
+it off or removes the saved daemon (see "Device keys" in `docs/product/remote-daemons.md`).
 
 - **A browser** reaches the server form's daemon through the owner's own SSH forward of the daemon's browser socket to
   a port on their own machine, `ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:<port>:<socket path> <user>@<server>`,
@@ -168,10 +169,13 @@ no browser — the desktop application's while both settings are off, one whose 
 on Windows, one whose way in could not be opened — never reads, makes or accepts an owner key.
 
 The owner key is the browser's alone. On the way in it is accepted on every request, a WebSocket included, as the launch
-key is, and so opens everything the launch key opens, except replacing the owner key itself, which needs the launch key,
-and changing the desktop application's Allow remote access or Allow browser access, which only the owner can do, in the
-application's window or, for browser access, with `octoboardd browser` and the launch key; a connection the owner key
-opened can change neither.
+key is, and so opens everything the launch key opens, except replacing the owner key itself and the clean-up before
+uninstalling (listing and clearing what the daemon's features have in effect, which `octoboardd uninstall` and the
+desktop application's own window ask; see "Uninstalling the server form" in `docs/product/daemon-command-line.md`),
+which need the launch key, and changing the
+desktop application's Allow remote access or Allow browser access, which only the owner can do, in the application's
+window or, for browser access, with `octoboardd browser` and the launch key; a connection the owner key opened can
+change neither.
 The daemon's TCP port never accepts it, refusing it as any wrong key (see "Other users of the same machine" above). It
 is in no helper's key file, settings file or transcript, no holder's record, no command line, environment, log or
 startup line, and not in `daemon.key`: the launch key keeps every other use it has. `octoboardd address` prints the

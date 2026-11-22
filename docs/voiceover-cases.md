@@ -405,6 +405,7 @@ proxy and VoiceOver were stopped afterwards; `cleanup.json` records the exact ow
 | [OPEN-1 Import result dialog rename](#open-1-import-result-dialog-rename) | focus move onto a renamed dialog | Unconfirmed |
 | [OPEN-2 Startup failure page alert](#open-2-startup-failure-page-alert) | delayed `EmptyPanel` alert on a page with no focus move | Unconfirmed |
 | [OPEN-3 Unprompted question turned failed in place](#open-3-unprompted-question-turned-failed-in-place) | focus relayed off a dialog and back as its content becomes a failure | Unconfirmed |
+| [OPEN-4 Clean-up result's outcome line and the warning's read-failed alert](#open-4-clean-up-results-outcome-line-and-the-warnings-read-failed-alert) | focus moved onto a plain dialog's outcome line once the window is attended; a delayed alert hidden while it waits inside an alert dialog | Pass in the packaged app for the opening phrases, focus after closing, and the retry alert |
 
 ### NAME-1 Retained picker trigger
 
@@ -2450,6 +2451,100 @@ tree equal to main `505f1c2fc`, with the holder-runtime repair `30eb3e434`) and 
   says nothing for the hidden span, has not been listened to yet.
 - **Reuse scope.** None until confirmed.
 
+### OPEN-4 Clean-up result's outcome line and the warning's read-failed alert
+
+- **Location and state change.** Settings → Cleanup → Clean up before uninstalling, in the desktop application's own
+  window. (a) Confirming Remove all replaces the warning modal with the result dialog, titled "Result of the cleanup",
+  in the same commit. Its first line says what happened ("Everything was removed.", "5 removed, 2 could not be
+  removed."). (b) In the warning modal, opened while the daemon does not answer, Try again is pressed and the daemon
+  still does not answer: the read-failed alert ("Could not read what the daemon added") stays, and is to be spoken
+  again for that attempt.
+- **Mechanism.** (a) `packages/ui/src/settings/UninstallCleanup.tsx` (`Results`) makes the visible outcome line a
+  focusable paragraph that is not a tab stop (`tabIndex={-1}`, its own keyboard ring) and puts focus on it with
+  `useFocusWhenShown`, enabled only while `useWindowAttended` holds, with a hidden `tabIndex={-1}` relay span: the move
+  is made as the dialog opens in an attended window, or as soon as the window is attended again (after a system prompt
+  the clearing raised, such as a cancelled administrator password), and again on each later return while the result is
+  open, passing through the relay so the line takes focus anew. Focus moving into the dialog onto the line is meant to
+  read the dialog's name, role and item count, then the line, in one phrase, as SA-C's opening phrase read the dialog
+  then its focused control. No `StatusAnnouncer`, no `aria-describedby` and no alert carry the line. The dialog is a
+  plain `role="dialog"` (`focusesItselfOnOpen`, so the generic dialog does not pick its own control). Closing it hands
+  focus to the row's Remove all, or to the section's entry once that is disabled (`useFocusReturnAfterClose`, two
+  frames after the close, only when focus fell to the page); where the row's read (the one after the clearing) is still
+  out then, the choice waits for it to settle, for at most 3 s (`READ_SETTLE_MS`), and a frame more for the row to
+  render what it found. (b) `ConfirmBody` passes `ErrorAlert` the ALERT-3 wiring (`announce` after paint, `announceKey` per answered
+  attempt, `announceDelayMs` of `AFTER_FOCUS_MOVE_DELAY_MS`, `delayEachAttempt`) plus `insideAlertDialog`
+  (`packages/ui/src/components/alerts/ErrorAlert.tsx`, `useAlertAnnouncement`'s `waiting`): the warning modal is an
+  alert dialog, which WebKit exposes as an assertive live region, so while the delay runs the remounted title and
+  summary are `aria-hidden`, and the one insertion it meets is the `role="alert"` remount after the delay. Try again
+  and Details stay mounted and exposed throughout.
+- **Reference observation (Safari, earlier wiring).** 2026-11-24 JST, disposable macOS 26.2 (25C56) guest, Safari 26.2,
+  English, the gallery's fixture daemon, `feat/users-own-system` at `b6c234e0a4e44e267d49850768212b2a76d95cf7`, native
+  VoiceOver caption panel reviewed frame by frame. With `aria-describedby` to the outcome line: opening either result
+  variant captioned only `Result of the cleanup, web dialog, with 5 items, Close, button` (7 items for the variant with
+  a failure), then the button hint; neither outcome line ("Everything was removed.", "Could not confirm that
+  everything was removed.") was captioned. Closing returned focus to the selected Cleanup tab when Remove all was
+  disabled and to Remove all when it was enabled. With the read-failed alert remounted without a role as each attempt
+  answered and with `role="alert"` 1500 ms later: the first Try again captioned `Try again, button`, then a long
+  caption of the title, summary and the content after it (`… Details Try again 1 item will be`, clipped), then the
+  title and summary again on their own; the second Try again showed one complete alert caption (identical consecutive
+  speech cannot be counted from captions). Opening the warning with the failure already there captioned no
+  read-failure. These are reference observations of the replaced wiring, not on the packaged application's surface.
+- **Packaged application, earlier wiring (a) and current wiring (b).** 2026-11-24 JST, the installed ad-hoc-signed
+  Apple silicon bundle built from `feat/users-own-system` at `64dcad12dd554a585172d0f90e840649bb9346b6`, user
+  `octotest` in the macOS 26.2 (25C56) UTM guest, English, light, the app's own Settings > Cleanup on its real daemon
+  and disposable guest items; native VoiceOver caption panel recorded from the UTM window, sampled every 125 ms.
+  (a) With the outcome line `aria-hidden` and spoken from a `StatusAnnouncer` written 1500 ms after the dialog focused
+  itself: the mixed result captioned `Result of the cleanup, web dialog, with 6 items, Close, button`, then `1 removed,
+  1 could not be removed.` about 4 s later (pass); the full success, first run, captioned the title phrase and never the
+  outcome in 18 s; the repeat captioned `You are currently in web content…` and then `Everything was removed.`, never
+  the title; after cancelling the administrator prompt the clearing raised, the captions were `no action available,
+  system dialog`, then `Octoboard, Octoboard, window, Close, button, has keyboard focus` (the window's own close
+  button) and its hint, with neither the title nor `1 item could not be removed.` in 15 s. Focus after closing went to
+  the Cleanup tab with Remove all disabled, and to Remove all while it was enabled. (b) A newly appearing daemon
+  failure (the sidecar paused by PID until the list request timed out) and a repeated one each showed Try again
+  becoming available, then one complete caption `Could not read what the daemon added These items are not listed
+  below, and Remove all still tries to remove them.`, with focus kept on Try again (identical consecutive speech
+  cannot be counted from captions alone); a healthy retry removed the alert and handed focus to the count.
+- **Packaged application, focus-on-line wiring (a).** 2026-11-24 JST, the same guest and conditions, the installed
+  ad-hoc-signed bundle built from `fix/uos-cleanup-voiceover-2` at `67c042f4f` (this wiring without the wait on the
+  row's read at close). Opening phrases, each heard in three captures:
+  - All removed: `Result of the cleanup, web dialog, with 5 items Everything was removed., group` (two further
+    captures ended, the dialog closed about 9 s after confirming, before any opening phrase; excluded).
+  - Mixed (a command-line link removed, a synthetic loopback device key left): `Result of the cleanup, web dialog, with
+    6 items 1 removed, 1 could not be removed., group`.
+  - Unanswered (the link removed, the remote-key inventory failing on a malformed metadata fixture): `Result of the
+    cleanup, web dialog, with 8 items Could not confirm that everything was removed., group`.
+  - Cancelled administrator prompt (an immutable link): `no action available, system dialog`, then, as the window
+    became active again, `Octoboard, Octoboard, window 1 item could not be removed.`, then the selectable-text hint.
+    No dialog title: VoiceOver names the window it activates, then the focused line. This is accepted as VoiceOver's
+    window-activation phrasing; no passing case shows a way to have a dialog's title read on window activation.
+  Closing a full success returned to the selected Cleanup tab with Remove all disabled. Closing an unanswered result
+  returned to the enabled Remove all. The cancelled prompt's result left Remove all enabled, with no new focus caption
+  in the close clip. The mixed result returned to Cleanup. A later control on the current build showed that the
+  synthetic key can become unlisted after the app turns its authentication off, so this fixture cannot establish
+  where focus returns when an item really remains. (b) was heard again on the earlier build: one complete alert
+  caption about 3.4 s after Try again became available, focus kept on Try again.
+- **Packaged focus-return retest.** On 2026-11-24 JST, the installed ad-hoc-signed Apple silicon build at
+  `e01d4e8f2`, which includes `391354aed`, ran in the same macOS 26.2 guest. The app removed its login item and
+  left a disposable immutable command-line link after the administrator prompt was cancelled. On all three
+  closes, one item was still in effect and the VoiceOver cursor outlined the enabled Remove all. The caption
+  said `Settings, web dialog, with 4 items, Remove all, button, Cleanup, 2 matching settings, tab panel`. After
+  clearing the link's immutable flag and removing it, the full-success close put the cursor on the selected
+  Cleanup tab and captioned `Settings, web dialog, with 4 items, Cleanup, 2 matching settings, selected, tab, 1 of
+  1, Settings sections, tab group`. Remove all was disabled.
+- **Result.** Pass in the packaged application for the opening phrase of all three results, three times each, the
+  window-activation phrase after a cancelled system prompt, and focus after closing the mixed and full-success
+  results. (b) passed the caption check for the repeated and newly appearing failure.
+- **Reuse scope.** (b): `ErrorAlert` with the ALERT-3 wiring plus `insideAlertDialog` in this warning modal, for a
+  repeated and a newly appearing failure with Try again keeping focus; not other alert dialogs (the trust prompt's
+  choice warning, `ConfirmConsequences`' title). (a): focus moved onto a `tabIndex={-1}` line inside a plain dialog
+  that replaces an alert dialog in the same commit, read as the dialog's name, role and item count followed by the
+  line; and the same move made once the window is attended again after a system prompt, read as the window's name
+  followed by the line, without the dialog's title. The focus-return retest covers this Settings result with the
+  row's post-clean-up read, including when the action remains enabled and when the section entry takes focus. Not a
+  dialog opened from a button. The Safari reference does not count: the rendering-surface criterion requires the
+  packaged application's WKWebView.
+
 ## Existing `StatusAnnouncer` callers and the case each matches
 
 Compared strictly against the rules above, from the code and the recordings. Paths are relative to `packages/ui/src`.
@@ -2557,6 +2652,14 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 - Startup failure page alert (daemon-failed and crash pages): not yet listened to (OPEN-2). No case matches an alert
   inserted after the first paint on a page the window opens on, with no focus move.
 - Unprompted question turned failed in place (focus relayed off the dialog and back): not yet listened to (OPEN-3).
+- The clean-up result's outcome line, read by moving focus onto it as the result replaces the warning modal (or once
+  the window is attended again after a system prompt): heard in the packaged application (OPEN-4). Focus after closing,
+  which waits for the row's read to settle: heard in the packaged application for all three outcomes (OPEN-4).
+  The clean-up confirmation's read failures are wired as ALERT-3 (`ErrorAlert` with `announceDelayMs` and
+  `delayEachAttempt`, recovery control kept, focus handed to the remaining Try again or the count when its alert goes)
+  plus `insideAlertDialog`, which keeps the text `aria-hidden` while the delay runs, since the warning modal is an
+  assertive alert dialog that read it as well (Safari reference in OPEN-4); heard once per retry in the packaged
+  application (OPEN-4 (b)).
 - A choice-consequence warning (`ErrorAlert` with `announce` and `announceDelayMs` of `AFTER_FOCUS_MOVE_DELAY_MS`,
   mounted under a checkbox as it is ticked inside a dialog, focus kept on the checkbox, and added to the checkbox's
   `aria-describedby`): the export dialog's full-paths option and the trust prompt's folder option. No case matches it;
@@ -2564,6 +2667,12 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   warning existed, so it does not cover the ticked state. The trust prompt is an alert dialog, which WebKit exposes as an
   assertive live region (WARN-1, WARN-5), so the Alert mounting inside it may be spoken once by the dialog at once and
   again by its own delayed alert; listen for a double reading there.
+- Delayed alerts mounted inside an alert dialog without `insideAlertDialog`, so their text is not `aria-hidden` while
+  the delay runs and the dialog's own assertive region may read it before the alert does: the trust prompt's
+  `ChoiceWarning` (`packages/ui/src/dialogs/TrustPromptDialog.tsx`, the folder option ticked) and the title
+  `ConfirmConsequences` speaks with `announceTitle` (`packages/ui/src/components/dialog/ConfirmConsequences.tsx`) in a
+  confirmation that is an alert dialog. Not yet listened to; a double reading may occur in either, as the Safari reference in OPEN-4
+  heard for the clean-up warning's read failure before `insideAlertDialog` was added.
 - A `StatusAnnouncer` region whose text is present from the first render at the default delay: heard with focus kept in
   the main window (SA-H), with a menu taking focus (SA-I) and, as a region mounted with each opening of a disclosure,
   inside a dialog with the trigger focused (SA-M); not with a focus move into the pane or under a modal.

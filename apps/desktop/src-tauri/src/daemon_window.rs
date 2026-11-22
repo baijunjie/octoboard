@@ -322,12 +322,16 @@ mod tests {
             "remote_daemons_list",
             "remote_daemon_save",
             "remote_daemon_remove",
+            "remote_daemon_device_key_set",
             "remote_daemon_connect",
             "remote_daemons_status",
             "remote_daemon_disconnect",
             "remote_connect_pending_take",
             "remote_page_requested_take",
             "main_window_show",
+            // The clean-up before an uninstall, which is the application's on this computer.
+            "system_changes_list",
+            "system_changes_clear",
             // The flyout's own.
             "tray_flyout_model",
             "tray_flyout_size",

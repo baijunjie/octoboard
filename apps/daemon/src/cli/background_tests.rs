@@ -52,6 +52,10 @@ const RECORD_SERVICE_MANAGED: &str = "OCTOBOARD_TEST_STAND_IN_SERVICE_MANAGED";
 /// The variable that, set, has [`stand_in_child`] record that it follows the desktop application.
 const RECORD_APPLICATION: &str = "OCTOBOARD_TEST_STAND_IN_APPLICATION";
 
+/// The variable that, set, has [`stand_in_child`] record that it was started for a clean-up run, as
+/// the daemon of an uninstall records.
+const RECORD_CLEAN_UP_RUN: &str = "OCTOBOARD_TEST_STAND_IN_CLEAN_UP_RUN";
+
 /// The port the stand-in records unless [`RECORD_PORT`] gives another; nothing listens there, and
 /// the commands that use it do not connect.
 const PORT: u16 = 47_999;
@@ -99,7 +103,8 @@ fn stand_in_child() {
         .unwrap()
         .with_service_manager(std::env::var_os(RECORD_SERVICE_MANAGED).is_some())
         .with_predecessor(predecessor)
-        .with_owner_key(std::env::var_os(RECORD_OWNER_KEY).is_some());
+        .with_owner_key(std::env::var_os(RECORD_OWNER_KEY).is_some())
+        .with_clean_up_run(std::env::var_os(RECORD_CLEAN_UP_RUN).is_some());
     owner.record_key(TEST_KEY).unwrap();
     owner.record().unwrap();
     crate::owner_record::settle_handover();
@@ -249,6 +254,18 @@ impl StandIn {
                 .env(RECORD_AFTER, record_after.as_millis().to_string())
                 .env(RECORD_AFTER_DAEMON, predecessor_text(after));
         })
+    }
+
+    /// [`StandIn::start_now`] for one that records that it was started for a clean-up run.
+    pub(super) fn start_clean_up_run_on(home: &Path, port: u16) -> Self {
+        let mut stand_in = Self::spawn(home, |command| {
+            command
+                .env(RECORD_AFTER, "0")
+                .env(RECORD_PORT, port.to_string())
+                .env(RECORD_CLEAN_UP_RUN, "1");
+        });
+        stand_in.await_line("recorded");
+        stand_in
     }
 
     /// Starts one that records itself only once [`StandIn::record`] tells it to, and returns once
@@ -654,6 +671,53 @@ fn start_names_a_daemon_that_records_itself_while_it_waits() {
             "{} is already running: pid {}, http://127.0.0.1:{PORT}",
             crate::APP_NAME,
             stand_in.pid()
+        ),
+        "{stdout}"
+    );
+}
+
+/// The daemon of a clean-up run, which `octoboardd uninstall` starts and stops again, is named for
+/// what it is by every command that meets it: `status` says that it runs only for the clean-up of
+/// an uninstall, `start` refuses with the same words, and `restart` refuses, saying that it stops
+/// when the clean-up is done, rather than start a successor that would follow no command.
+#[test]
+fn the_commands_name_the_daemon_of_a_clean_up_run_for_what_it_is() {
+    let home = ScratchDir::new("clean-up-run-commands");
+    let stand_in = StandIn::start_clean_up_run_on(&home, PORT);
+    let pid = stand_in.pid();
+
+    let (code, stdout, stderr) = finished(command(&home, "status"));
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert_eq!(
+        said(&stdout),
+        format!(
+            "{} is running only for the clean-up of an uninstall (`octoboardd uninstall`), which \
+             stops it when it is done: pid {pid}, http://127.0.0.1:{PORT}",
+            crate::APP_NAME
+        ),
+        "{stderr}"
+    );
+
+    let (code, stdout, stderr) = finished(command(&home, &format!("start --port {PORT}")));
+    assert_eq!(code, 1, "{stdout}{stderr}");
+    assert_eq!(
+        said(&stderr),
+        format!(
+            "{} is already running only for the clean-up of an uninstall (`octoboardd \
+             uninstall`), which stops it when it is done: pid {pid}, http://127.0.0.1:{PORT}",
+            crate::APP_NAME
+        ),
+        "{stdout}"
+    );
+
+    let (code, stdout, stderr) = finished(command(&home, "restart"));
+    assert_eq!(code, 1, "{stdout}{stderr}");
+    assert_eq!(
+        said(&stderr),
+        format!(
+            "{} (pid {pid}) runs only for the clean-up of an uninstall, which stops it when it is \
+             done; not restarting it. Once it has stopped, start it with `octoboardd start`",
+            crate::APP_NAME
         ),
         "{stdout}"
     );

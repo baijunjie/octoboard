@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { currentLanguage, setLanguage } from "../i18n/language";
@@ -8,8 +8,7 @@ import type { AccountQuota, Event, ClientRequestBody, Received, ResetCredit, Res
 import type { Daemon } from "../store";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
-import { READING_WAIT_MS, ResetCreditsLine, UseResetCreditDialog, useResetFocusReturn } from "./ResetCredits";
-import { settleFrames } from "../components/dialog/dialogTestSupport";
+import { READING_WAIT_MS, ResetCreditsLine, UseResetCreditDialog } from "./ResetCredits";
 import { fakeTimers, flushPromises } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -363,37 +362,3 @@ it("holds confirm and says none is left once the reading shows no reset", () => 
   expect(submit().disabled).toBe(true);
 });
 
-function ClosesOnPress({ restore }: { restore: () => void }): React.ReactElement {
-  const handBack = useResetFocusReturn(restore);
-  return <button onClick={handBack}>close</button>;
-}
-
-it("hands focus on two frames after the dialog closed, only if it fell to the page", async () => {
-  const { daemon } = fakeDaemon(quotaOf(undefined), used("reset"));
-  withTimers();
-  const restore = vi.fn();
-  const container = mount(daemon, <ClosesOnPress restore={restore} />);
-  press(container.querySelector("button")!);
-  (document.activeElement as HTMLElement | null)?.blur();
-  await settleFrames(2);
-  expect(restore).toHaveBeenCalledOnce();
-
-  // Focus that is somewhere already is left alone.
-  const elsewhere = document.body.appendChild(document.createElement("input"));
-  onTestFinished(() => elsewhere.remove());
-  press(container.querySelector("button")!);
-  elsewhere.focus();
-  await settleFrames(2);
-  expect(restore).toHaveBeenCalledOnce();
-});
-
-it("hands focus on to nothing once the surface that opened the dialog is gone", async () => {
-  const { daemon } = fakeDaemon(quotaOf(undefined), used("reset"));
-  withTimers();
-  const restore = vi.fn();
-  const container = mount(daemon, <ClosesOnPress restore={restore} />);
-  press(container.querySelector("button")!);
-  container.render(null);
-  await settleFrames(2);
-  expect(restore).not.toHaveBeenCalled();
-});

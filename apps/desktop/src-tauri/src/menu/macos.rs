@@ -245,6 +245,16 @@ pub(super) fn remote_items(labels: &Labels, entries: &[(String, String)]) -> Vec
     items
 }
 
+/// macOS has no jump list to remove (`windows.rs`).
+pub fn delete_jump_list(_app: &AppHandle) -> Result<(), String> {
+    Ok(())
+}
+
+/// macOS has no jump list, so no process is started to remove one (`windows.rs`).
+pub fn delete_jump_list_if_asked() -> bool {
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

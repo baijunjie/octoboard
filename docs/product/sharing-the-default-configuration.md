@@ -11,7 +11,11 @@ would invalidate the copy stored for another account.
 
 The user changes the choice with **Share default configuration** in the account's settings dialog in Settings' Agent
 accounts section (see "Sharing the default configuration" in `docs/product/agent-accounts.md`). A client reads it on the
-account and sets it with the protocol request `set_account_sharing`.
+account and sets it with the protocol request `set_account_sharing`. The clean-up before uninstalling, done on the
+machine itself (in the desktop application's own window, by the Windows uninstaller, which lists nothing first, or as
+the first step of the server form's `octoboardd uninstall`), lists every account that shares or whose last change is incomplete, and turns sharing off for each of
+them, one after another, as `set_account_sharing` turns it off, refusals included (see
+`docs/product/clean-up-before-uninstalling.md`).
 
 ## The sharing choice
 
@@ -115,8 +119,9 @@ An account directory that does not exist yet is created. Then each entry of the 
   are, in the default directory. The rows are carried once: a retry before turning sharing on has ever completed
   redoes it, a later one does not.
 - **A directory the default directory lacks** is created there, empty, then linked, so whatever any account installs
-  later lands where every sharing account sees it. A configuration file the default directory lacks is skipped: the
-  account keeps it as it is, unlinked.
+  later lands where every sharing account sees it; turning sharing off does not remove it (see "What turning sharing
+  off leaves" below). A configuration file the default directory lacks is skipped: the account keeps it as it is,
+  unlinked.
 - **An entry already linked to the right place** is left as it is.
 
 An entry is left unchanged and reported when the account's conversation history there is a link of the account's own
@@ -128,16 +133,20 @@ made lead into the one recorded when the change started. Turning sharing off and
 
 ## Turning sharing off
 
-An account whose sharing was never carried out has nothing to undo, and the change completes at once. Otherwise:
+An account whose sharing was never carried out has nothing to undo, and the change completes at once. An account whose
+directory is gone has lost its links with it: only the plugin registries are rewritten (see "Plugin registries kept
+leading into the default directory" below), and the change completes once they are, or stays incomplete with
+`account_sharing_failed` when one could not be. Otherwise:
 
 1. **What the default directory records by the account's path is pointed at the default directory's own.** Codex's
    thread rows that name a rollout through the account's `sessions/` or `archived_sessions/` — Codex records the path
    it ran under — are rewritten to the default directory's path; left alone, they would name an empty directory for
    every account still sharing, and Codex refuses to resume such a thread. So are the plugin registries, so a plugin
-   installed through the account stays usable for the others: Claude Code's `plugins/installed_plugins.json` and
-   `plugins/known_marketplaces.json`, and Grok Build's `installed-plugins/registry.json`. An entry whose records could
-   not be rewritten stays linked and is reported; for Codex's database that keeps `sessions/` and `archived_sessions/`
-   linked too. On Windows, where the database is not shared, Codex has no rows to rewrite.
+   installed through the account stays usable for the others, as they are at other moments too (see "Plugin
+   registries kept leading into the default directory" below). An entry whose records could not be rewritten, or a
+   registry's entry that could not be looked up, stays linked and is reported, so a registry never names a path that
+   removing the link would break; for Codex's database that keeps `sessions/` and `archived_sessions/` linked too. On
+   Windows, where the database is not shared, Codex has no rows to rewrite.
 2. **The links are removed.** A link counts as sharing's when it leads into the default directory recorded when
    sharing was turned on, even when that directory has moved since or is gone, or into the current default directory.
    Any other entry — a file of the account's own, a link of the user's — is left alone.
@@ -165,6 +174,23 @@ An account whose sharing was never carried out has nothing to undo, and the chan
      pointed at the thread's head.
 
 Every other conversation — one run from a terminal, or by another account — stays in the default directory.
+
+### What turning sharing off leaves
+
+Once turning sharing off completes, nothing in the account's directory leads into the default directory, and what the
+account held before sharing is back, but for its conversation history, of which only the conversations of its own
+sessions come back (step 4 above). Apart from the conversation history moved into it, nothing the default directory
+held before sharing is changed: nothing of the account's configuration was merged into it, and nothing in it is left
+leading into or naming the account's directory, but for a plugin registry's path recorded under another spelling of an
+account directory that was already gone (see "Plugin registries kept leading into the default directory" below). The
+default directory keeps two things sharing added to it:
+
+- the conversation history moved into it, but for the conversations taken back;
+- the directories of the shared list it lacked, which turning sharing on created there empty (see "Turning sharing on"
+  above). They stay, and they do not matter: each is a directory the agent's own client keeps in its configuration
+  directory anyway and creates itself when it first needs it, so Octoboard only created it early. An empty one changes
+  nothing for the default account, and nothing of Octoboard depends on it or goes on having an effect through it once
+  Octoboard is uninstalled.
 
 ## When a change is carried out
 
@@ -397,6 +423,9 @@ whose account's directory shares — an account switch's relaunch included — e
   sharing on (a file the default directory lacks is skipped, a directory it lacks is created there). A directory the
   account holds as a real directory of its own is left alone.
 
+After the links, the default directory's plugin registries are rewritten (see "Plugin registries kept leading into the
+default directory" below).
+
 Nothing is repaired while the account's last change is incomplete, in either direction: its directory is left as it
 is for the user to retry the change. Nothing is repaired either when the agent's default directory is no longer the one
 the links lead into. A session that holds another directory than its account's (the account was repointed after the
@@ -417,6 +446,70 @@ affected entries, or with none listed the reason from the notice's `cause`, are 
 with what to do in the body and the rest under **Error details** (see "When a change is carried out" above), the
 notice's original message standing for the original diagnostic there. It is an expected failure, with no **Report
 issue**, and it does not stop the session.
+
+## Plugin registries kept leading into the default directory
+
+An agent run under a sharing account records a plugin in a registry that lives in the default directory, reached
+through the account's link, and records it by the path it ran under: through the account's directory. Octoboard
+points those paths at the default directory's own, so that nothing sharing leaves in the default directory depends on
+the account's directory: deleting that directory — after uninstalling Octoboard with sharing still on, say — leaves
+the default account's plugins working.
+
+| Agent | Registry | When the agent records the account's path |
+|---|---|---|
+| Claude Code | `plugins/installed_plugins.json` and `plugins/known_marketplaces.json` | `installed_plugins.json` on a plugin install, and again on a plugin update |
+| Grok Build | `installed-plugins/registry.json` | on a plugin install |
+
+Codex has no such registry: a plugin installed through the account is named in `config.toml` and copied into
+`plugins/cache/`, and no path through the account's directory is recorded.
+
+The registries are rewritten:
+
+- when sharing is turned off (see "Turning sharing off" above);
+- after each Octoboard session of the account has ended, once its exit is recorded. The account is the one the
+  session's process ran as: a session that an account switch has recorded on another account by then still counts for
+  the account it left;
+- in the repair before every launch and resume of one of its sessions, after the links are repaired (see "Repair
+  before every launch" above);
+- as the daemon stops, on an ordinary stop (see `docs/product/planned-restart-and-planned-stop.md`; a planned restart or
+  planned stop leaves the sessions running), once its sessions are ended, for every account that shares or whose last
+  change is incomplete; no account is begun once five seconds have passed, and one already begun is finished. A
+  session's own exit may not get to it before the daemon is gone, and the user may uninstall Octoboard and delete the
+  account's directory before a daemon starts again. When it does not finish in that time, the stop goes on and the next
+  daemon start does it;
+- once at daemon start, for every account that shares or whose last change is incomplete, covering the sessions that
+  ended while no daemon was running.
+
+While a session of the account runs, a registry may name the account's directory; once it has ended, it does not. A
+run of the agent from a terminal against the account's directory is not seen by Octoboard: what it leaves is rewritten
+at the next of these moments.
+
+- **A registry is rewritten in two cases.** Where the account currently links the registry's entry (`plugins/`,
+  `installed-plugins/`) into the default directory, the account's directory is replaced both as it is spelled and fully
+  resolved. Where the account's directory itself is gone, the paths recorded under the spelling the account is recorded
+  under are rewritten, since they lead nowhere, at any of these moments and when sharing is turned off for such an
+  account; a path recorded under another spelling of that directory (its resolved path, where the recorded one went
+  through a link) can no longer be recognised and stays. An account that holds that entry as its own names another
+  place by its path, which is left as it is, and so is an entry missing from an account directory that still exists.
+- **A registry that names nothing of the account's is not written** and keeps its bytes. One that is not JSON is no
+  failure unless its text names the account's directory.
+- **A file a rewrite left half done is removed.** A registry is replaced by writing the new one beside it, as
+  `.<registry's name>.octoboard-<the daemon's process id>`, and renaming it over the registry. A daemon cut off between
+  the two leaves that file behind; at each of the moments above, such a file beside a registry is removed once the
+  process that wrote it is gone and the file is more than fifteen minutes old, longer than a rewrite takes: a newer one
+  may be a rewrite under way by a daemon on another computer that shares the directory. No file of another name is
+  touched, and neither is one of a process still running.
+- **An account whose last change is incomplete is kept too**, unlike the repair, which leaves such an account's
+  directory as it is, and so is one whose default directory has moved; the registry rewritten is then the one in the
+  default directory recorded when sharing was turned on.
+- **A registry that cannot be rewritten** (one that names the account's directory but is not JSON, or one that cannot
+  be read), **or an entry that cannot be looked up** (for a reason other than its being absent: no permission, a link
+  loop), is a failure, and the registry is left as it is. Turning sharing off keeps that entry linked and the change
+  stays incomplete (`account_sharing_failed`), as step 1 there says. Before a launch whose links were repaired, it is
+  told in the `account_sharing_repair_failed` notice as an entry under its item, left `linked`, and the session
+  launches all the same; for an account whose links are not repaired (its last change incomplete, or its default
+  directory moved) it is not told. At the other moments it is only logged. A registry left so is tried again at the
+  next of these moments.
 
 ## Claude Code's auto memory
 

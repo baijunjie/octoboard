@@ -7329,6 +7329,10 @@
         "keep_awake": {
           "type": "boolean",
           "description": "Whether the host can be held awake (Prevent sleep, `Settings.keep_awake`): always on macOS\nand Windows, and on Linux only where logind answers on the system bus. When false, the\nsetting changes nothing there and a client does not offer it."
+        },
+        "application": {
+          "type": "boolean",
+          "description": "Whether the daemon is a desktop application's own: one started it and it follows that\napplication, so that what is done to the installation on this host (uninstalling it, the\nclean-up before that) is done in that application. False for a daemon that runs on its own\n(the server form). A fact of the daemon on its host, which the snapshot fills in."
         }
       },
       "required": [
@@ -7337,7 +7341,8 @@
         "file_links",
         "trash",
         "settings",
-        "keep_awake"
+        "keep_awake",
+        "application"
       ],
       "description": "The daemon host's own facts, which a client takes from the host and never from its own\nplatform, since the two may be different machines."
     },

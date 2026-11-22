@@ -25,15 +25,39 @@ Turning the switch on registers the entry and turning it off removes it; the swi
 reports. Because the entry belongs to the system, a configuration export never carries it and an import never changes
 it (see "Which settings travel" in `docs/product/settings-in-a-configuration.md`).
 
+**The row says what the switch adds to the system.** While the entry is off or on, the row's description names the
+system's list of apps opened at login and what the switch does to it (see "Launch at login" in
+`docs/product/general-settings.md`). While the entry waits for approval the description says only what "Waiting for
+approval" below gives.
+
 ## Where the entry lives
 
 - **macOS**: Octoboard's own login item, registered for the application itself. It is listed in System Settings under
-  General > Login Items, where the user can also turn it off, or leave it waiting for approval.
+  General > Login Items, where the user can also turn it off, or leave it waiting for approval. Turning the switch off
+  unregisters it.
 - **Windows**: a value named `Octoboard` under the current user's
   `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`, holding the quoted path of the running
-  executable followed by `--launched-at-login`. Task Manager's Startup apps tab can turn it off without removing it;
-  the switch then shows it as off, and turning the switch on clears that so the entry runs again. Turning the switch off
-  removes the value.
+  executable followed by `--launched-at-login`. Task Manager's Startup apps tab can turn it off without removing it, by
+  a value of the same name under
+  `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run`; the switch then shows it
+  as off, and turning the switch on clears that value so the entry runs again. Turning the
+  switch off removes both values, so nothing of the entry stays in the registry. An entry turned off
+  in Task Manager shows the switch off while its `Run` value is still there; this is accepted as it is: turning the
+  switch on and then off again, the clean-up before uninstalling, or uninstalling removes it.
+
+## When the application is uninstalled
+
+On Windows the uninstaller removes both registry values, whatever the switch shows: Tauri's own uninstaller removes the
+`Run` value and Octoboard's uninstaller hooks the `StartupApproved\Run` value. The in-app update runs
+no uninstall, so it keeps the entry as the user left it, and so does a newer setup run in passive mode (`/P`) or
+silently (`/S`). A newer setup the user runs interactively offers "Uninstall before installing", chosen by default,
+which removes both values: Launch at login is then off after the upgrade, and the switch shows it off, until the user
+turns it on again (see "Uninstalling" in `docs/product/installing-the-desktop-app.md`). Deleting the application on macOS runs nothing of Octoboard's that
+could unregister the login item. The clean-up before uninstalling counts the entry while the system holds anything of
+it — on, waiting for approval, or, on Windows, turned off in Task Manager but still in the registry, which its line in
+the confirmation marks — and its **Remove all** removes it as turning the switch off does; where the system keeps it, the result says
+where to remove it (see `docs/product/clean-up-before-uninstalling.md`). What stays of the entry where neither was done first, and how to remove
+it by hand, is in `docs/product/what-remains-after-uninstalling.md`.
 
 ## Waiting for approval
 

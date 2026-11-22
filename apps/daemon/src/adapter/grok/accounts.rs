@@ -21,6 +21,7 @@ use crate::accounts::quotas::kick::KickCommand;
 use crate::accounts::quotas::probe::QuotaProbe;
 use crate::accounts::shared_config::SharedItem;
 use crate::accounts::AccountOps;
+use crate::adapter::account_cli::{BackgroundRun, RunHome, RunWait};
 use crate::adapter::account_dir;
 use crate::protocol::AgentId;
 use crate::providers::grok::GROK_SIGN_IN_FILE;
@@ -36,6 +37,24 @@ impl AccountOps for GrokAccounts {
         Some(kick_command())
     }
 
+    /// Every background run of Grok Build is made against a directory of Octoboard's own: made
+    /// against a home Grok has not run in, each of them adds a setting to that home's
+    /// `config.toml` (`super::query_home`).
+    fn run_home(
+        &self,
+        run_homes: &Path,
+        run: BackgroundRun,
+        account_dir: &Path,
+        shell_env: &HashMap<String, String>,
+        wait: &RunWait<'_>,
+    ) -> anyhow::Result<Option<RunHome>> {
+        super::query_home::for_run(run_homes, run, account_dir, shell_env, wait).map(Some)
+    }
+
+    fn forget_run_homes(&self, run_homes: &Path, account_dir: &Path) {
+        super::query_home::forget(run_homes, account_dir);
+    }
+
     fn mcp_inventory(&self) -> Option<&'static dyn McpInventoryReader> {
         Some(&GrokMcpInventory)
     }
@@ -48,8 +67,8 @@ impl AccountOps for GrokAccounts {
         ITEMS
     }
 
-    fn plugin_registries(&self) -> &'static [(&'static str, &'static str)] {
-        PLUGIN_REGISTRIES
+    fn plugin_registries(&self) -> Option<&'static [(&'static str, &'static str)]> {
+        Some(PLUGIN_REGISTRIES)
     }
 
     fn email(

@@ -4,7 +4,7 @@ description: "Linux सर्वर, Mac और Windows PC पर octoboardd क
 ---
 
 import { Code } from "@astrojs/starlight/components";
-import { commands, productName, tunnel } from "../../../commands.ts";
+import { commands, productName, system, tunnel } from "../../../commands.ts";
 
 octoboardd वह प्रोग्राम है जो {productName} को चलाता है (ऐप इसे डेमन कहता है)। Linux सर्वर पर आप इसे खुद इंस्टॉल करके शुरू करते हैं। Mac या Windows PC पर यह ऐप के भीतर ही आता है; ऐप खुलने पर इसे शुरू करता है और बंद होने पर इसे रोक देता है। इसकी कमांड तीनों पर एक जैसी हैं, सिवाय नीचे बताए अंतरों के।
 
@@ -35,6 +35,7 @@ octoboardd वह प्रोग्राम है जो {productName} को
 | <code dir="ltr">{commands.update}</code> | केवल Linux सर्वर पर। सबसे नया वर्शन इंस्टॉल करती है, जैसा [अपग्रेड करें](../install/linux/#अपग्रेड-करें) में बताया है। |
 | <code dir="ltr">{commands.updateCheck}</code> | केवल Linux सर्वर पर। जाँचती है कि नया वर्शन आया है या नहीं, उसे इंस्टॉल किए बिना। |
 | <code dir="ltr">{commands.updateRollback}</code> | केवल Linux सर्वर पर। पिछले अपग्रेड से पहले इंस्टॉल वर्शन वापस ले आती है और अपग्रेड की तरह उसी में रीस्टार्ट करती है। |
+| <code dir="ltr">{system.uninstall}</code> | केवल Linux सर्वर पर। सर्वर से octoboardd को हटाती है, जैसा [अनइंस्टॉल करें](../install/linux/#अनइंस्टॉल-करें) में बताया है। |
 | <code dir="ltr">{commands.version}</code> | इंस्टॉल किया हुआ वर्शन प्रिंट करती है। |
 
 कमांड की पूरी सूची देखने के लिए <code dir="ltr">{commands.help}</code> चलाएँ; किसी एक कमांड के विकल्प देखने के लिए <code dir="ltr">{commands.commandHelp}</code> चलाएँ। सूची में वे कमांड भी दिखती हैं जिन्हें {productName} खुद चलाता है और जिन्हें आपको कभी हाथ से नहीं चलाना पड़ता।
@@ -45,5 +46,6 @@ octoboardd वह प्रोग्राम है जो {productName} को
 
 - <strong>Mac पर <code dir="ltr">{commands.start}</code> और <code dir="ltr">{commands.stop}</code></strong> ऐप पर काम करती हैं: <code dir="ltr">{commands.start}</code> उसे बैकग्राउंड में, बिना विंडो के खोलती है, और <code dir="ltr">{commands.stop}</code> उसे बंद कर देती है।
 - <strong><code dir="ltr">{commands.restart}</code> और <code dir="ltr">{commands.update}</code></strong> अस्वीकार कर दी जाती हैं। ऐप खुद octoboardd को रीस्टार्ट करता है और नए वर्शन इंस्टॉल करता है।
+- <strong><code dir="ltr">{system.uninstall}</code></strong> भी अस्वीकार कर दी जाती है। octoboardd ऐप के साथ ही हटता है: ऐप को [macOS](../install/macos/#अनइंस्टॉल-करें) या [Windows](../install/windows/#अनइंस्टॉल-करें) पर अनइंस्टॉल करने का तरीका देखें।
 - <strong><code dir="ltr">{commands.browserOn}</code> और <code dir="ltr">{commands.browserOff}</code></strong> वही सेटिंग बदलती हैं जो <strong>सेटिंग्स › एक्सेस</strong> में <strong>ब्राउज़र एक्सेस की अनुमति दें</strong> बदलता है।
 - <strong><code dir="ltr">{commands.address}</code></strong> पता तभी प्रिंट करती है जब <strong>ब्राउज़र एक्सेस की अनुमति दें</strong> (या Mac पर <strong>रिमोट एक्सेस की अनुमति दें</strong>) चालू हो। ये दोनों सेटिंग डिफ़ॉल्ट रूप से बंद रहती हैं, इसलिए जब तक आप कोई एक चालू न करें, कमांड यही बताती है और कोई पता प्रिंट नहीं करती।

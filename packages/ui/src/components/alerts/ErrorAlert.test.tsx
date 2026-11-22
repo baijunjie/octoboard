@@ -96,6 +96,34 @@ it("waits the focus-feedback delay for each failure attempt without replacing it
   expect(document.activeElement).toBe(retry);
 });
 
+it("inside an alert dialog, hides the announcing part from assistive technology only while its delay runs, for each attempt", async () => {
+  fakeTimers();
+  const alert = (attempt: number, insideAlertDialog = true) => (
+    <ErrorAlert title="Could not read" announce announceKey={attempt} announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} delayEachAttempt insideAlertDialog={insideAlertDialog} actions={<button type="button">Try again</button>}>
+      Connection closed.
+    </ErrorAlert>
+  );
+  const message = (container: HTMLElement) => container.querySelector('[data-slot="alert-title"]')!.parentElement!;
+  const { container, render } = mount(alert(0));
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    // Shown, but out of the alert dialog's reach, which would read it as it is put in place.
+    expect(message(container).getAttribute("aria-hidden")).toBe("true");
+    expect(message(container).getAttribute("role")).toBeNull();
+    // The recovery control is never hidden.
+    expect(container.querySelector("button")!.closest('[aria-hidden="true"]')).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS); });
+    // Then put in place once more as the one alert, the only text the dialog meets.
+    expect(message(container).hasAttribute("aria-hidden")).toBe(false);
+    expect(message(container).getAttribute("role")).toBe("alert");
+    render(alert(attempt));
+  }
+  // A failure there as the view opened is not announced, so it is never hidden; nor is one outside an alert dialog.
+  const opened = mount(<ErrorAlert title="Could not read" announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} insideAlertDialog>Connection closed.</ErrorAlert>);
+  expect(message(opened.container).hasAttribute("aria-hidden")).toBe(false);
+  const plain = mount(alert(0, false));
+  expect(message(plain.container).hasAttribute("aria-hidden")).toBe(false);
+});
+
 it("does not let an earlier attempt's pending timer announce a replacement failure before its own delay", async () => {
   fakeTimers();
   const alert = (attempt: number) => (

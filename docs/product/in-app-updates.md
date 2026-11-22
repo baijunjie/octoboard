@@ -73,7 +73,12 @@ has its own pair, is never mixed into them.
 A manifest holds the version it announces, its release notes, its publication date, its holder floor and the address
 and signature of the update for its platform: the macOS manifests, under both `darwin-aarch64` and `darwin-x86_64`,
 those of the same update archive (a release is one universal build serving both Mac architectures); the Windows
-manifests, under `windows-x86_64`, those of the NSIS installer, which is the Windows update itself. The **holder
+manifests, under `windows-x86_64` and `windows-aarch64`, those of the NSIS installer of each architecture, which is the
+Windows update itself. An x64 installation on an Arm PC of a version that knows the arm64 build asks for
+`windows-aarch64`, so its next update moves it to the native arm64 build, and reads `windows-x86_64` from a manifest that
+has no `windows-aarch64` (one published before the arm64 build). An installation of an older version asks for
+`windows-x86_64` alone: its next update installs the new x64 build, and only the update after that moves it to arm64.
+The **holder
 floor**, `holder_floor`, is the oldest version whose process holders the announced version's daemon takes over (see
 "Holders of other builds" in `docs/product/process-holders.md`), as the release names it; the running application
 reads it with the update and, with the announced version, tells which sessions a restart into the update would
@@ -99,7 +104,7 @@ run by hand later for another one): only those platforms' manifests are written,
 offered nothing for that version until it is published for them. Each version is one release `desktop-v<version>` —
 marked a prerelease when the version has a suffix — which holds, for each platform published, the `.dmg`
 (`Octoboard_<version>_universal.dmg`) and the update archive `Octoboard_<version>_universal.app.tar.gz`; the Windows
-installer `Octoboard_<version>_x64-setup.exe`; or the server form's archive of each Linux architecture with its
+installers `Octoboard_<version>_x64-setup.exe` and `Octoboard_<version>_arm64-setup.exe`; or the server form's archive of each Linux architecture with its
 `.sha256`; each update file, and each Linux archive, with its signature beside it as `.sig`. A platform published later
 adds its missing files to the release; a published file is never replaced, and a changed build ships as a new version.
 Once a release is published, the website is published again, so that its download links point at the new version (see

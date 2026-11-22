@@ -51,6 +51,8 @@ Não tem certeza de que esta é a melhor forma para você? [Escolha como se cone
 4. Em <strong>Autenticação</strong>, escolha <strong>Senha</strong> se você faz login com a senha da sua conta. Escolha <strong>Arquivo de chave</strong> se o provedor do servidor lhe deu um arquivo de chave (muitas vezes com nome como <code dir="ltr">id_ed25519</code> ou terminado em <code dir="ltr">.pem</code>) e informe onde ele está neste computador.
 5. Selecione <strong>Salvar</strong> e depois <strong>Conectar</strong>. Digite a senha se ele pedir.
 
+   Depois do primeiro login, o app pergunta <strong>Adicionar a chave deste computador</strong>. Selecione <strong>Adicionar chave</strong> para fazer login deste computador sem senha a partir de então, ou <strong>Não adicionar</strong> para continuar fazendo login como agora.
+
    Se você colou os dados de conexão, a identidade do servidor (a impressão digital) veio com eles e o app a confere para você. Se você digitou o endereço manualmente, o app mostra uma impressão digital na primeira vez. Para ter certeza de que chegou à máquina certa, compare-a com a que este comando imprime no servidor e conecte somente se forem iguais:
 
    <Code code={commands.fingerprintCommand} lang="sh" />
@@ -107,8 +109,8 @@ Só quem consegue alcançar o {productName} pelo encaminhamento SSH pode usar es
 
 - <strong>Sem portas públicas extras:</strong> o {productName} só aceita conexões do próprio host, então, para se conectar de outro computador, você primeiro precisa fazer login no host por SSH. É por isso que você precisa do SSH ou de um dos [retransmissores](../choose-how-to-connect/).
 - <strong>Confira a que máquina você chega:</strong> o app memoriza a chave do host, a identidade SSH da máquina, na primeira conexão bem-sucedida e bloqueia a conexão com um alerta se essa identidade mudar depois.
-- <strong>Nenhuma senha armazenada:</strong> depois que você faz login pela primeira vez com uma senha ou com o seu próprio arquivo de chave, o app cria uma chave SSH separada para este computador usar nos próximos logins.
-- <strong>Retire o acesso de um computador:</strong> remova a entrada desse computador da lista de chaves SSH permitidas do host (<code dir="ltr">{commands.authorizedKeys}</code> no Linux e no macOS). Essa chave não consegue mais fazer login; uma conexão já aberta continua até terminar.
+- <strong>Nenhuma senha armazenada:</strong> o app nunca salva a sua senha. Depois que você faz login pela primeira vez com uma senha ou com o seu próprio arquivo de chave, ele pergunta se deve adicionar uma chave SSH separada, própria deste computador, para os próximos logins, e só a adiciona ao host se você selecionar <strong>Adicionar chave</strong>.
+- <strong>Retire o acesso de um computador:</strong> nesse computador, desative <strong>Chave deste computador</strong> na página do daemon em <strong>Dispositivos remotos</strong>, ou remova o daemon salvo; o app então retira a chave dele da lista de chaves SSH permitidas do host, e avisa se não conseguiu alcançar o host, caso em que a entrada talvez ainda esteja lá. Você também pode remover por conta própria a entrada desse computador da lista no host (<code dir="ltr">{commands.authorizedKeys}</code> no Linux e no macOS). Essa chave não consegue mais fazer login; uma conexão já aberta continua até terminar.
 
 ## Em uma janela remota
 

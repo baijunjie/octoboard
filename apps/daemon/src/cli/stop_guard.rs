@@ -39,10 +39,21 @@ fn status_words(status: &str) -> &'static str {
     }
 }
 
+/// Why `stop` refused, having stopped nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Refusal {
+    /// Stopping would interrupt work, which was named.
+    Work,
+    /// The daemon could not be asked what stopping it would interrupt, so nothing is known of
+    /// what it runs.
+    NotAsked,
+}
+
 /// Whether `stop` of the daemon `owner` names may go ahead: `None` when it may (nothing runs that
-/// it would interrupt, or `force`), else the exit status it ends with, the reason said on stderr.
-/// A daemon that cannot be asked is taken as one that may be running work.
-pub(super) fn refusal_status(owner: &Owner, force: bool) -> Option<i32> {
+/// it would interrupt, or `force`), else which refusal it ends with, at the status [`REFUSED`],
+/// the reason said on stderr. A daemon that cannot be asked is taken as one that may be running
+/// work.
+pub(super) fn refused(owner: &Owner, force: bool) -> Option<Refusal> {
     if force {
         return None;
     }
@@ -50,7 +61,7 @@ pub(super) fn refusal_status(owner: &Owner, force: bool) -> Option<i32> {
         Some(impact) if impact.is_empty() => None,
         Some(impact) => {
             eprintln!("{}", refusal(&impact));
-            Some(REFUSED)
+            Some(Refusal::Work)
         }
         None => {
             eprintln!(
@@ -60,7 +71,7 @@ pub(super) fn refusal_status(owner: &Owner, force: bool) -> Option<i32> {
                 crate::APP_NAME,
                 owner.identity.pid.0
             );
-            Some(REFUSED)
+            Some(Refusal::NotAsked)
         }
     }
 }

@@ -714,6 +714,34 @@ impl super::Store {
         user_version(&conn).ok()
     }
 
+    /// The database at `path` opened to be read, as it is: nothing is created, moved aside or
+    /// migrated, and no row is added, whether or not a daemon holds it. An error for a file that
+    /// is not an Octoboard database at the schema version this build reads, which `open` would
+    /// change first.
+    pub fn open_unchanged(path: &Path) -> Result<Self> {
+        let conn = Connection::open_with_flags(
+            path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .with_context(|| format!("opening {}", path.display()))?;
+        conn.busy_timeout(std::time::Duration::from_secs(1))?;
+        let id = application_id(&conn)
+            .with_context(|| format!("reading the application id of {}", path.display()))?;
+        let version = user_version(&conn)
+            .with_context(|| format!("reading the schema version of {}", path.display()))?;
+        if id != APPLICATION_ID || version != SCHEMA_VERSION {
+            anyhow::bail!(
+                "the database at {} is not at the schema version this build reads without \
+                 changing it (it is at version {version}, and this build reads version \
+                 {SCHEMA_VERSION})",
+                path.display()
+            );
+        }
+        Ok(Self {
+            conn: std::sync::Mutex::new(conn),
+        })
+    }
+
     /// The copies [`migrate`] made of the database at `path` before migrating it from schema
     /// version `version`, newest first: what a build that reads `version` can be given back.
     pub fn migration_backups(path: &Path, version: i64) -> Vec<PathBuf> {
@@ -1082,6 +1110,45 @@ mod tests {
         let store = Store::open(&path).expect("initialized");
         assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
         assert!(moved_aside(&path).is_empty());
+    }
+
+    /// A database opened to be read as it is reads at this build's schema version, and writes
+    /// nothing; one an ordinary open would migrate first is refused and left at its version, with
+    /// no backup made.
+    #[test]
+    fn a_database_opened_unchanged_is_neither_migrated_nor_written() {
+        let path = temp_db("unchanged");
+        drop(Store::open(&path).expect("a current database"));
+        let before = std::fs::read(&path).unwrap();
+        let store = Store::open_unchanged(&path).expect("reads as it is");
+        assert!(store.list_accounts().unwrap().is_empty());
+        assert!(
+            store.lock().execute("DELETE FROM settings", []).is_err(),
+            "opened to be read only"
+        );
+        drop(store);
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+
+        Connection::open(&path)
+            .unwrap()
+            .pragma_update(None, "user_version", SCHEMA_VERSION - 1)
+            .expect("an earlier version");
+        let error = Store::open_unchanged(&path).err().expect("refused");
+        assert!(
+            error.to_string().contains(&format!(
+                "it is at version {}, and this build reads version {SCHEMA_VERSION}",
+                SCHEMA_VERSION - 1
+            )),
+            "{error:#}"
+        );
+        assert_eq!(
+            Store::peek_schema_version(&path),
+            Some(SCHEMA_VERSION - 1),
+            "left at its version"
+        );
+        assert!(Store::migration_backups(&path, SCHEMA_VERSION - 1).is_empty());
+        assert!(Store::open_unchanged(&path.with_file_name("absent.db")).is_err());
+        assert!(!path.with_file_name("absent.db").exists());
     }
 
     /// A file with no tables but a version stamped on it is refused rather than opened without a

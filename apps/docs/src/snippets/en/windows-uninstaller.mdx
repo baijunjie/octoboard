@@ -1,0 +1,12 @@
+import { Aside } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* What the Windows uninstaller does before it removes the app, which the Windows guide and "Your system stays as it was" share. */}
+
+Before it removes anything, the uninstaller cleans up by itself: it closes {productName} if it is running, asking first unless the uninstall is silent, and removes everything <strong>Remove all</strong> removes, without asking. It then uninstalls, whatever came of that. If something could not be removed, it says so at the end, with where each item is left, and lists it in <code dir="ltr">{system.uninstallLogWindows}</code>; a silent uninstall only writes that file.
+
+The installer and the uninstaller speak your system's language where {productName} has it, and English otherwise. The uninstaller, and its list of what it left, keep the language you installed in; a reason a feature gives for an item left may be in English.
+
+Not every uninstall runs this clean-up. The in-app update and a setup run over the installed app don't, so your keys on remote servers and your accounts' sharing stay as they were; a setup you run over it yourself still turns <strong>Launch at login</strong> off, until you turn it on again. The uninstaller of a version from before this clean-up runs none either: on such a version, select <strong>Remove all</strong> first.
+
+<Aside>With the x64 app on Windows on Arm, the uninstaller cannot close a running {productName}, and the uninstall stops with nothing removed, as does a setup run over it: quit {productName} first. The arm64 app has no such limit, and an x64 installation on an Arm PC moves to it through the in-app update.</Aside>

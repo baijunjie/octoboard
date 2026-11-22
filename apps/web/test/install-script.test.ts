@@ -177,19 +177,23 @@ function makeWorld(t: test.TestContext, shims: Shims = {}): World {
   }
   if (shims.systemctl === true) {
     // Nothing is active (so a service gets started) unless SYSTEMCTL_ACTIVE_EXIT is 0, which says the unit runs.
+    // `disable` exits SYSTEMCTL_DISABLE_EXIT (default: succeeds), as it fails where no service manager answers.
     writeExecutable(path.join(world.shim, "systemctl"), [
       'echo "systemctl $*" >> "$SHIM_LOG"',
       'case "$*" in *is-active*) exit "${SYSTEMCTL_ACTIVE_EXIT:-3}" ;; esac',
+      'case "$*" in *disable*) exit "${SYSTEMCTL_DISABLE_EXIT:-0}" ;; esac',
       "exit 0",
     ]);
   }
   if (shims.loginctl === true) {
-    // `show-user` says FAKE_LINGER (default: no); `enable-linger` exits LINGER_ENABLE_EXIT (default: succeeds).
+    // `show-user` says FAKE_LINGER (default: no); `enable-linger` exits LINGER_ENABLE_EXIT and `disable-linger`
+    // LINGER_DISABLE_EXIT (default: both succeed).
     writeExecutable(path.join(world.shim, "loginctl"), [
       'echo "loginctl $*" >> "$SHIM_LOG"',
       'case "$*" in',
       '  *show-user*) echo "${FAKE_LINGER:-no}" ;;',
       '  *enable-linger*) exit "${LINGER_ENABLE_EXIT:-0}" ;;',
+      '  *disable-linger*) exit "${LINGER_DISABLE_EXIT:-0}" ;;',
       "esac",
     ]);
   }
@@ -265,11 +269,18 @@ function publish(world: World, options: PublishOptions = {}): Published {
     const marker = `octoboardd stub ${version} ${arch}`;
     // Answers `--version` and `status` as the daemon does (`status` exits STUB_STATUS_EXIT, default 1: not running),
     // `restart` by logging what it was given, whether it still holds descriptor 9 (the update lock) and whether it could read
-    // standard input, and exiting STUB_RESTART_EXIT (default 0), and `verify-archive` as a build that predates it does, with an exit of 2.
+    // standard input, and exiting STUB_RESTART_EXIT (default 0), `stop` by logging what it was given and exiting
+    // STUB_STOP_EXIT (default 0), and `verify-archive` as a build that predates it does, with an exit of 2. With
+    // STUB_KNOWS_UNINSTALL set it is a build that has `uninstall`: `uninstall --help` succeeds, and `uninstall` logs
+    // what it was given and, on a line of its own, whether its standard input is a terminal, and exits
+    // STUB_UNINSTALL_EXIT (default 0);
+    // without it, `uninstall` is refused as an unknown command, with an exit of 2.
     writeExecutable(path.join(staging, folder, "octoboardd"), [
       'case "$1" in',
+      '  uninstall) if [ -z "${STUB_KNOWS_UNINSTALL:-}" ]; then exit 2; fi; if [ "${2:-}" = --help ]; then exit 0; fi; shift; echo "uninstall $*" >> "$SHIM_LOG"; if [ -t 0 ]; then echo "uninstall input: terminal" >> "$SHIM_LOG"; else echo "uninstall input: not a terminal" >> "$SHIM_LOG"; fi; echo "octoboardd uninstall ran"; exit "${STUB_UNINSTALL_EXIT:-0}" ;;',
       `  --version) echo "octoboardd ${version}"; exit 0 ;;`,
       '  status) exit "${STUB_STATUS_EXIT:-1}" ;;',
+      '  stop) echo "stop ${2:-}" >> "$SHIM_LOG"; exit "${STUB_STOP_EXIT:-0}" ;;',
       '  restart) if { true >&9; } 2> /dev/null; then echo "restart holding descriptor 9" >> "$SHIM_LOG"; fi; if read -r typed; then echo "restart read standard input" >> "$SHIM_LOG"; fi; echo "restart $2" >> "$SHIM_LOG"; exit "${STUB_RESTART_EXIT:-0}" ;;',
       "  verify-archive) exit 2 ;;",
       "esac",
@@ -301,6 +312,8 @@ function run(world: World, args: string[], env: Record<string, string> = {}, inp
       PATH: world.shim,
       HOME: world.home,
       TMPDIR: world.tmp,
+      // Where systemd's generators would put their units: none, unless a test makes it, and never the host's own.
+      XDG_RUNTIME_DIR: path.join(world.root, "runtime"),
       SHIM_LOG: world.log,
       SHIM_SERVED: world.served,
       OCTOBOARD_MANIFEST_BASE: `file://${world.served}`,
@@ -354,6 +367,8 @@ function writeOldBinary(world: World, options: OldBinary = {}): void {
     'case "$1" in',
     line === undefined ? "  --version) exit 2 ;;" : `  --version) echo "${line}"; exit 0 ;;`,
     '  status) exit "${STUB_STATUS_EXIT:-1}" ;;',
+    // A build from before `octoboardd uninstall`, as every build this stands for is.
+    "  uninstall) exit 2 ;;",
     verify === "ok"
       ? '  verify-archive) if [ "${2:-}" = --help ]; then exit 0; fi; echo "installed verify-archive $2 $3" >> "$SHIM_LOG"; cat "$3" > "$SHIM_LOG.sig"; exit "${VERIFY_EXIT:-0}" ;;'
       : "  verify-archive) exit 2 ;;",
@@ -1338,6 +1353,11 @@ test("--help prints the usage and exits 0 without reading anything", { skip }, (
     assert.match(result.stdout, /--stable/);
     assert.match(result.stdout, /--allow-downgrade/);
     assert.match(result.stdout, /--require-signature/);
+    assert.match(result.stdout, /install\.sh --uninstall \[--bin-dir DIR\] \[--yes\] \[--force\] \[--keep-changes\]/);
+    // The help says whose command the uninstall is.
+    assert.match(result.stdout, /hands over\s+to the installed octoboardd's own command, `octoboardd uninstall`/);
+    for (const option of ["--yes", "--force", "--keep-changes"]) assert.match(result.stdout, new RegExp(`${option}\\s+With --uninstall`));
+    assert.match(result.stdout, /--uninstall\s+Remove octoboardd/);
     assert.equal(existsSync(world.binDir), false);
   }
 });
@@ -1384,4 +1404,498 @@ test("--service installs the unit with the binary's path, and the port when one 
     assert.match(calls, /^systemctl --user enable octoboardd\.service$/m);
     assert.match(calls, /^systemctl --user start octoboardd\.service$/m);
   }
+});
+
+// --uninstall. The worlds here install first, so that what is removed is what the script itself put there.
+
+const unitFile = (world: World) => path.join(world.home, ".config", "systemd", "user", "octoboardd.service");
+const lingerRecord = (world: World) => path.join(world.home, ".octoboard", "install.lingering");
+
+function assertNothingRemoved(result: ReturnType<typeof run>, world: World, message: RegExp) {
+  assert.notEqual(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.match(result.stderr, message);
+  assert.equal(existsSync(installed(world)), true, "the binary is still there");
+}
+
+test("an install that turns lingering on notes it in the data directory, and one that does not notes nothing", { skip }, (t) => {
+  let world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"], { FAKE_USER: "tester", FAKE_LINGER: "no" }).status, 0);
+  assert.equal(readFileSync(lingerRecord(world), "utf8"), "tester\n");
+  // The directory is made for the user alone where the daemon has not made it yet.
+  assert.equal(statSync(path.join(world.home, ".octoboard")).mode & 0o077, 0);
+
+  // Lingering that was on already is not this install's to turn off.
+  world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"], { FAKE_USER: "tester", FAKE_LINGER: "yes" }).status, 0);
+  assert.equal(existsSync(lingerRecord(world)), false);
+
+  // Nor is lingering the system refused to turn on.
+  world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"], { FAKE_USER: "tester", FAKE_LINGER: "no", LINGER_ENABLE_EXIT: "1" }).status, 0);
+  assert.equal(existsSync(lingerRecord(world)), false);
+});
+
+// The hand-over: a build that has `octoboardd uninstall` does the uninstalling, and the script removes nothing itself.
+
+test("--uninstall hands over to `octoboardd uninstall` where the installed build has it, and removes nothing itself", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"]).status, 0);
+  rmSync(world.log, { force: true });
+  const result = run(world, ["--uninstall"], { STUB_KNOWS_UNINSTALL: "1", STUB_STATUS_EXIT: "0" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /octoboardd uninstall ran/);
+  // The command got no option, and the script stopped, disabled and removed nothing. With no terminal to hand it
+  // (the test's standard output is no terminal either), its standard input is the script's own.
+  assert.equal(logged(world), "uninstall \nuninstall input: not a terminal\n");
+  assert.equal(existsSync(installed(world)), true);
+  assert.equal(existsSync(unitFile(world)), true);
+  assert.doesNotMatch(result.stderr, /from before/);
+});
+
+test("--uninstall passes --yes, --force and --keep-changes on, and ends with the command's exit status", { skip }, (t) => {
+  const world = makeWorld(t);
+  publish(world);
+  assert.equal(run(world, []).status, 0);
+  rmSync(world.log, { force: true });
+  let result = run(world, ["--uninstall", "--yes", "--keep-changes", "--force"], { STUB_KNOWS_UNINSTALL: "1" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(logged(world), "uninstall --yes --keep-changes --force\nuninstall input: not a terminal\n");
+
+  // What the command refuses, the script refuses: nothing is removed behind it.
+  rmSync(world.log, { force: true });
+  result = run(world, ["--uninstall", "--yes"], { STUB_KNOWS_UNINSTALL: "1", STUB_UNINSTALL_EXIT: "1" });
+  assert.equal(result.status, 1);
+  assert.equal(existsSync(installed(world)), true);
+
+  // An install elsewhere is found by its --bin-dir.
+  const elsewhere = path.join(world.root, "opt", "bin");
+  assert.equal(run(world, ["--bin-dir", elsewhere]).status, 0);
+  rmSync(world.log, { force: true });
+  result = run(world, ["--uninstall", "--bin-dir", elsewhere, "--yes"], { STUB_KNOWS_UNINSTALL: "1" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(logged(world), "uninstall --yes\nuninstall input: not a terminal\n");
+});
+
+test("--yes, --force and --keep-changes go with --uninstall alone", { skip }, (t) => {
+  for (const option of ["--yes", "--force", "--keep-changes"]) {
+    const world = makeWorld(t);
+    writeOldBinary(world);
+    assertNothingRemoved(run(world, [option]), world, new RegExp(`${option} goes with --uninstall\\.`));
+    assert.equal(logged(world), "");
+  }
+});
+
+test("--uninstall of a build from before `octoboardd uninstall` removes it itself, and warns that nothing was cleared first", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"]).status, 0);
+  rmSync(world.log, { force: true });
+  const result = run(world, ["--uninstall", "--yes", "--keep-changes"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /warning: this octoboardd is from before `octoboardd uninstall`, so this script removes it itself, and nothing is cleared first\. An older build may have left an account sharing its agent's default configuration.*can be deleted by hand\. --yes, --force and --keep-changes have no effect here\./);
+  assert.doesNotMatch(logged(world), /^uninstall/m);
+  assert.equal(existsSync(installed(world)), false);
+  assert.equal(existsSync(unitFile(world)), false);
+});
+
+// The fallback for older builds: every test below runs it, since the stub is a build without `uninstall` unless told.
+
+test("--uninstall removes the service, the binary, its previous copy and what an update left beside them, and leaves the data directory", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world, { version: "1.2.2" });
+  assert.equal(run(world, ["--service"], { FAKE_LINGER: "yes" }).status, 0);
+  publish(world, { version: "1.2.3" });
+  assert.equal(run(world, ["--service"], { FAKE_LINGER: "yes" }).status, 0);
+  assert.equal(existsSync(path.join(world.binDir, "octoboardd.previous")), true);
+  // What a daemon's own update or rollback that was cut short leaves, and a file of the user's beside them.
+  for (const name of [".octoboardd.update-41", ".octoboardd.prev-41", ".octoboardd.rollback-7", ".octoboardd.install.99"]) writeFileSync(path.join(world.binDir, name), "");
+  writeFileSync(path.join(world.binDir, "other-tool"), "mine");
+  mkdirSync(path.join(world.home, ".octoboard"), { recursive: true });
+  writeFileSync(path.join(world.home, ".octoboard", "state"), "data");
+  rmSync(world.log, { force: true });
+
+  const result = run(world, ["--uninstall"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(readdirSync(world.binDir), ["other-tool"]);
+  assert.equal(existsSync(unitFile(world)), false);
+  const calls = logged(world);
+  assert.match(calls, /^systemctl --user disable --now octoboardd\.service$/m);
+  assert.match(calls, /^systemctl --user daemon-reload$/m);
+  assert.ok(calls.indexOf("disable --now") < calls.indexOf("daemon-reload"), "the manager is reloaded once the unit is gone");
+  // Lingering this script did not turn on is left as it is.
+  assert.doesNotMatch(calls, /loginctl/);
+  assert.equal(readFileSync(path.join(world.home, ".octoboard", "state"), "utf8"), "data");
+  assert.match(result.stdout, /Stopped and disabled the service, and removed .*octoboardd\.service\./);
+  assert.match(result.stdout, new RegExp(`Removed octoboardd from ${world.binDir}\\.`));
+  assert.match(result.stdout, new RegExp(`${world.home}/\\.octoboard, which holds the daemon's own data .* was left as it is\\. To remove it as well: rm -rf ${world.home}/\\.octoboard`));
+});
+
+test("--uninstall downloads nothing", { skip }, (t) => {
+  const world = makeWorld(t);
+  writeOldBinary(world);
+  const result = run(world, ["--uninstall"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(curlCalls(world), []);
+  assert.equal(existsSync(installed(world)), false);
+});
+
+test("--uninstall turns lingering off where the install noted turning it on, and says how where that is refused", { skip }, (t) => {
+  let world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"], { FAKE_USER: "tester", FAKE_LINGER: "no" }).status, 0);
+  let result = run(world, ["--uninstall"], { FAKE_USER: "tester" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(logged(world), /^loginctl --no-ask-password disable-linger tester$/m);
+  assert.match(result.stdout, /Turned lingering off for tester, which the install had turned on/);
+  assert.equal(existsSync(lingerRecord(world)), false);
+
+  // Refused: the note stays, so that a later run tries again, and the command is named.
+  world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"], { FAKE_USER: "tester", FAKE_LINGER: "no" }).status, 0);
+  result = run(world, ["--uninstall"], { FAKE_USER: "tester", LINGER_DISABLE_EXIT: "1" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /Turned lingering off/);
+  assert.match(result.stdout, /Turn it off with `loginctl disable-linger tester` \(it may need sudo\)\./);
+  assert.equal(existsSync(lingerRecord(world)), true);
+  assert.equal(existsSync(installed(world)), false, "the rest is removed all the same");
+});
+
+test("--uninstall stops a daemon that runs with its own command, and removes nothing where that would interrupt work", { skip }, (t) => {
+  let world = makeWorld(t, { systemctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"]).status, 0);
+  rmSync(world.log, { force: true });
+  let result = run(world, ["--uninstall"], { STUB_STATUS_EXIT: "0" });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = logged(world);
+  assert.match(calls, /^stop $/m);
+  assert.ok(calls.indexOf("stop ") < calls.indexOf("systemctl --user disable"), "the daemon is stopped before its service is disabled");
+  assert.equal(existsSync(installed(world)), false);
+
+  world = makeWorld(t, { systemctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"]).status, 0);
+  rmSync(world.log, { force: true });
+  result = run(world, ["--uninstall"], { STUB_STATUS_EXIT: "0", STUB_STOP_EXIT: "1" });
+  assertNothingRemoved(result, world, /`.*octoboardd stop` did not stop the daemon \(see what it said above\); nothing was removed\..*`.*octoboardd stop --force`/);
+  assert.equal(existsSync(unitFile(world)), true);
+  assert.doesNotMatch(logged(world), /systemctl/);
+
+  // A daemon that does not run is not asked to stop.
+  world = makeWorld(t);
+  publish(world);
+  assert.equal(run(world, []).status, 0);
+  rmSync(world.log, { force: true });
+  assert.equal(run(world, ["--uninstall"]).status, 0);
+  assert.doesNotMatch(logged(world), /^stop/m);
+});
+
+test("--uninstall with no service manager to reach removes the unit and the link that enabled it by hand", { skip }, (t) => {
+  for (const systemctl of [true, false]) {
+    const world = makeWorld(t, { systemctl: true });
+    publish(world);
+    assert.equal(run(world, ["--service"]).status, 0);
+    const wanted = path.join(path.dirname(unitFile(world)), "default.target.wants");
+    mkdirSync(wanted, { recursive: true });
+    symlinkSync(unitFile(world), path.join(wanted, "octoboardd.service"));
+    if (!systemctl) rmSync(path.join(world.shim, "systemctl"));
+    const result = run(world, ["--uninstall"], { SYSTEMCTL_DISABLE_EXIT: "1" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(existsSync(unitFile(world)), false);
+    assert.deepEqual(readdirSync(wanted), []);
+    assert.match(result.stderr, /could not reach your user's service manager/);
+    assert.equal(existsSync(installed(world)), false);
+  }
+});
+
+test("--uninstall leaves a unit that runs another file, and everything else, and asks for the install's --bin-dir", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true });
+  publish(world);
+  const elsewhere = path.join(world.root, "opt", "bin");
+  assert.equal(run(world, ["--service", "--bin-dir", elsewhere]).status, 0);
+  writeOldBinary(world);
+  rmSync(world.log, { force: true });
+  assertNothingRemoved(run(world, ["--uninstall"]), world, /octoboardd\.service runs .*opt\/bin\/octoboardd, not .*\.local\/bin\/octoboardd; nothing was removed\. If octoboardd was installed into another directory, pass that directory with --bin-dir\./);
+  assert.equal(existsSync(unitFile(world)), true);
+  assert.equal(logged(world), "");
+
+  // With the directory of the install, both go.
+  const result = run(world, ["--uninstall", "--bin-dir", elsewhere]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(unitFile(world)), false);
+  assert.equal(existsSync(path.join(elsewhere, "octoboardd")), false);
+  assert.equal(existsSync(installed(world)), true, "the other directory's file is not this run's");
+});
+
+test("--uninstall with nothing installed removes nothing and says so", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true, loginctl: true });
+  const result = run(world, ["--uninstall"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /octoboardd is not installed in .* and has no service; nothing was removed\./);
+  assert.doesNotMatch(result.stdout, /was left as it is/);
+  assert.equal(logged(world), "");
+  assert.equal(existsSync(path.join(world.home, ".octoboard")), false);
+});
+
+test("--dry-run is refused as no option of this script's, naming the command's own", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true });
+  writeOldBinary(world);
+  for (const args of [["--uninstall", "--dry-run"], ["--dry-run"]]) {
+    assertNothingRemoved(run(world, args), world, /this script has no --dry-run\. To see what uninstalling would do, run the installed octoboardd's own `octoboardd uninstall --dry-run`\./);
+  }
+  assert.equal(logged(world), "");
+});
+
+test("--uninstall takes --bin-dir and no option of an install", { skip }, (t) => {
+  for (const args of [["--service"], ["--service", "--port", "8080"], ["--beta"], ["--stable"], ["--allow-downgrade"], ["--require-signature"]]) {
+    const world = makeWorld(t, { systemctl: true });
+    writeOldBinary(world);
+    for (const order of [["--uninstall", ...args], [...args, "--uninstall"]]) {
+      assertNothingRemoved(run(world, order), world, /--uninstall removes what is installed and takes no option of an install \(.*\); only --bin-dir, --yes, --force and --keep-changes go with it\./);
+    }
+    assert.equal(logged(world), "");
+  }
+});
+
+test("--uninstall is refused as root without --bin-dir, and off Linux", { skip }, (t) => {
+  const world = makeWorld(t);
+  writeOldBinary(world);
+  assertNothingRemoved(run(world, ["--uninstall"], { FAKE_UID: "0" }), world, /running as root/);
+  assertNothingRemoved(run(world, ["--uninstall"], { FAKE_UNAME_S: "Darwin" }), world, /on Linux only, so there is nothing of it to remove here; this is Darwin/);
+});
+
+test("a second --uninstall after one that removed everything finds nothing and fails nothing", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"], { FAKE_USER: "tester", FAKE_LINGER: "no" }).status, 0);
+  assert.equal(run(world, ["--uninstall"], { FAKE_USER: "tester" }).status, 0);
+  rmSync(world.log, { force: true });
+  const again = run(world, ["--uninstall"], { FAKE_USER: "tester" });
+  assert.equal(again.status, 0, again.stderr);
+  assert.match(again.stdout, /octoboardd is not installed in .* and has no service; nothing was removed\./);
+  // The data directory the first run left is named again, and nothing is asked of systemd.
+  assert.match(again.stdout, /was left as it is\. To remove it as well: rm -rf /);
+  assert.equal(logged(world), "");
+});
+
+test("--uninstall removes a unit that is a link without touching what it leads to, and works through a linked install directory", { skip }, (t) => {
+  let world = makeWorld(t, { systemctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"]).status, 0);
+  const kept = path.join(world.root, "kept.service");
+  writeFileSync(kept, readFileSync(unitFile(world)));
+  rmSync(unitFile(world));
+  symlinkSync(kept, unitFile(world));
+  let result = run(world, ["--uninstall"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(kept), true, "the file the link led to is the user's");
+  assert.throws(() => statSync(unitFile(world)));
+  assert.equal(existsSync(installed(world)), false);
+
+  world = makeWorld(t);
+  publish(world);
+  assert.equal(run(world, []).status, 0);
+  const link = path.join(world.root, "bin-link");
+  symlinkSync(world.binDir, link);
+  result = run(world, ["--uninstall", "--bin-dir", link]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(installed(world)), false);
+  assert.equal(existsSync(link), true, "the link to the directory stays");
+});
+
+test("--uninstall compares the unit's executable as text, so an install directory with pattern characters matches only itself", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true });
+  publish(world);
+  const odd = path.join(world.root, "opt", "b.i+n[1]");
+  // The same name but for the character a pattern's `.` would stand for.
+  const near = path.join(world.root, "opt", "bXi+n[1]");
+  assert.equal(run(world, ["--service", "--bin-dir", odd]).status, 0);
+  mkdirSync(near, { recursive: true });
+  writeExecutable(path.join(near, "octoboardd"), ["exit 1"]);
+  const refused = run(world, ["--uninstall", "--bin-dir", near]);
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /nothing was removed/);
+  assert.equal(existsSync(path.join(near, "octoboardd")), true);
+  assert.equal(existsSync(unitFile(world)), true);
+
+  const result = run(world, ["--uninstall", "--bin-dir", odd]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(path.join(odd, "octoboardd")), false);
+  assert.equal(existsSync(unitFile(world)), false);
+});
+
+test("--uninstall takes the archive's own unit, which names the executable by %h, for the unit of the default directory", { skip }, (t) => {
+  let world = makeWorld(t, { systemctl: true });
+  publish(world);
+  assert.equal(run(world, []).status, 0);
+  mkdirSync(path.dirname(unitFile(world)), { recursive: true });
+  // As the server form's page has it copied by hand.
+  writeFileSync(unitFile(world), readFileSync(exampleUnit));
+  assert.match(readFileSync(unitFile(world), "utf8"), /^ExecStart=%h\/\.local\/bin\/octoboardd /m);
+  let result = run(world, ["--uninstall"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(unitFile(world)), false);
+  assert.equal(existsSync(installed(world)), false);
+
+  // The same unit beside an install into another directory is not that install's.
+  world = makeWorld(t, { systemctl: true });
+  publish(world);
+  const elsewhere = path.join(world.root, "opt", "bin");
+  assert.equal(run(world, ["--bin-dir", elsewhere]).status, 0);
+  mkdirSync(path.dirname(unitFile(world)), { recursive: true });
+  writeFileSync(unitFile(world), readFileSync(exampleUnit));
+  result = run(world, ["--uninstall", "--bin-dir", elsewhere]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /\.local\/bin\/octoboardd, not .*opt\/bin\/octoboardd; nothing was removed\..*If the unit is one you wrote yourself, it is not this script's to remove/);
+  assert.equal(existsSync(path.join(elsewhere, "octoboardd")), true);
+  assert.equal(existsSync(unitFile(world)), true);
+  assert.equal(logged(world), "");
+});
+
+test("--uninstall as another user than the files' owner removes nothing, with --bin-dir too", { skip }, (t) => {
+  // Root with the installing user's HOME kept: refused as an install is.
+  let world = makeWorld(t, { systemctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"]).status, 0);
+  rmSync(world.log, { force: true });
+  assertNothingRemoved(run(world, ["--uninstall", "--bin-dir", world.binDir], { FAKE_UID: "0" }), world, /is not the home of the user running this/);
+  assert.equal(existsSync(unitFile(world)), true);
+  assert.equal(logged(world), "");
+
+  // Root with a HOME of its own (sudo resetting it): the files are another user's, which `ls` says here.
+  world = makeWorld(t, { systemctl: true });
+  publish(world);
+  assert.equal(run(world, []).status, 0);
+  const realLs = systemTool("ls") ?? "ls";
+  rmSync(path.join(world.shim, "ls"));
+  writeExecutable(path.join(world.shim, "ls"), [
+    'case "$1 $2" in',
+    '  "-nd "*octoboardd*) echo "-rwxr-xr-x 1 4242 4242 0 Jan 1 00:00 $2" ;;',
+    `  *) exec ${realLs} "$@" ;;`,
+    "esac",
+  ]);
+  rmSync(world.log, { force: true });
+  assertNothingRemoved(run(world, ["--uninstall"], { STUB_STATUS_EXIT: "0" }), world, /octoboardd does not belong to the user running this \(uid \d+\); nothing was removed\. Run this as the user who installed octoboardd, without sudo\./);
+  assert.doesNotMatch(logged(world), /^stop/m);
+});
+
+test("--uninstall looks at whether the install directory can be written before it stops anything", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"], { FAKE_USER: "tester", FAKE_LINGER: "no" }).status, 0);
+  rmSync(world.log, { force: true });
+  chmodSync(world.binDir, 0o555);
+  let result: ReturnType<typeof run>;
+  try {
+    result = run(world, ["--uninstall"], { FAKE_USER: "tester", STUB_STATUS_EXIT: "0" });
+  } finally {
+    // Writable again before the world is removed.
+    chmodSync(world.binDir, 0o755);
+  }
+  assertNothingRemoved(result, world, /cannot be written by the user running this.*nothing was removed/);
+  assert.equal(existsSync(unitFile(world)), true);
+  assert.equal(existsSync(lingerRecord(world)), true);
+  assert.equal(logged(world), "", "nothing was stopped, disabled or turned off");
+});
+
+test("--uninstall stops a daemon that runs without a service, and asks nothing of systemd", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  assert.equal(run(world, []).status, 0);
+  rmSync(world.log, { force: true });
+  const result = run(world, ["--uninstall"], { STUB_STATUS_EXIT: "0" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Stopped the daemon\./);
+  assert.equal(logged(world), "stop \n");
+  assert.equal(existsSync(installed(world)), false);
+});
+
+test("an install that cannot note that it turned lingering on says that --uninstall will leave it on", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  // A file where the data directory would be: neither a directory to write in nor one that can be made.
+  writeFileSync(path.join(world.home, ".octoboard"), "");
+  const result = run(world, ["--service"], { FAKE_USER: "tester", FAKE_LINGER: "no" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /warning: could not note in .*\.octoboard\/install\.lingering that this turned lingering on, so --uninstall will leave it on\./);
+  assert.match(result.stdout, /Turned lingering on for tester/);
+});
+
+test("the unit is installed under XDG_CONFIG_HOME where it is set, and --uninstall removes it from there", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true });
+  publish(world);
+  const config = path.join(world.root, "xdg");
+  const unit = path.join(config, "systemd", "user", "octoboardd.service");
+  assert.equal(run(world, ["--service"], { XDG_CONFIG_HOME: config }).status, 0);
+  assert.equal(existsSync(unit), true);
+  assert.equal(existsSync(path.join(world.home, ".config")), false);
+  const result = run(world, ["--uninstall"], { XDG_CONFIG_HOME: config });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(unit), false);
+  assert.match(result.stdout, new RegExp(`removed ${unit}\\.`));
+});
+
+test("--uninstall leaves lingering on where another service of the user's is enabled, and says how to turn it off", { skip }, (t) => {
+  for (const target of ["default.target.wants", "timers.target.wants", "default.target.requires"]) {
+    const world = makeWorld(t, { systemctl: true, loginctl: true });
+    publish(world);
+    assert.equal(run(world, ["--service"], { FAKE_USER: "tester", FAKE_LINGER: "no" }).status, 0);
+    const wanted = path.join(path.dirname(unitFile(world)), target);
+    mkdirSync(wanted, { recursive: true });
+    symlinkSync("/nowhere/backup.service", path.join(wanted, "backup.service"));
+    // Octoboard's own link, which `systemctl disable` would have removed, counts for nothing.
+    symlinkSync(unitFile(world), path.join(wanted, "octoboardd.service"));
+    rmSync(world.log, { force: true });
+    const result = run(world, ["--uninstall"], { FAKE_USER: "tester" });
+    assert.equal(result.status, 0, `${target}: ${result.stderr}`);
+    assert.doesNotMatch(logged(world), /disable-linger/);
+    assert.match(result.stdout, /The install turned lingering on for tester\. It was left on, since other services of yours are enabled and may need it: backup\.service\. To turn it off all the same: `loginctl disable-linger tester`/);
+    assert.equal(existsSync(lingerRecord(world)), true);
+    assert.equal(existsSync(installed(world)), false, "the rest is removed all the same");
+  }
+});
+
+test("--uninstall leaves lingering on for a unit a generator enabled, as a podman quadlet is, and for one a target upholds or a dot-named one", { skip }, (t) => {
+  const cases: { where: (world: World) => string; unit: string }[] = [
+    // A quadlet with WantedBy=default.target: the generator links its service under the user's runtime directory.
+    { where: (world) => path.join(world.root, "runtime", "systemd", "generator", "default.target.wants"), unit: "web.service" },
+    { where: (world) => path.join(world.root, "runtime", "systemd", "generator.late", "multi-user.target.requires"), unit: "late.service" },
+    { where: (world) => path.join(world.root, "runtime", "systemd", "generator.early", "default.target.upholds"), unit: "early.service" },
+    { where: (world) => path.join(path.dirname(unitFile(world)), "default.target.upholds"), unit: "kept-up.service" },
+    { where: (world) => path.join(path.dirname(unitFile(world)), "default.target.wants"), unit: ".hidden.service" },
+  ];
+  for (const { where, unit } of cases) {
+    const world = makeWorld(t, { systemctl: true, loginctl: true });
+    publish(world);
+    assert.equal(run(world, ["--service"], { FAKE_USER: "tester", FAKE_LINGER: "no" }).status, 0);
+    mkdirSync(where(world), { recursive: true });
+    symlinkSync(`/nowhere/${unit}`, path.join(where(world), unit));
+    rmSync(world.log, { force: true });
+    const result = run(world, ["--uninstall"], { FAKE_USER: "tester" });
+    assert.equal(result.status, 0, `${unit}: ${result.stderr}`);
+    assert.doesNotMatch(logged(world), /disable-linger/, unit);
+    assert.ok(result.stdout.includes(`may need it: ${unit}. To turn it off all the same: \`loginctl disable-linger tester\``), `${unit}: ${result.stdout}`);
+    assert.equal(existsSync(lingerRecord(world)), true);
+  }
+});
+
+test("--uninstall looks for generated units under /run/user/<uid> where XDG_RUNTIME_DIR is not set, and turns lingering off where there is none", { skip }, (t) => {
+  const world = makeWorld(t, { systemctl: true, loginctl: true });
+  publish(world);
+  assert.equal(run(world, ["--service"], { FAKE_USER: "tester", FAKE_LINGER: "no" }).status, 0);
+  // A generator directory that holds only Octoboard's own link counts for nothing.
+  const wanted = path.join(world.root, "runtime", "systemd", "generator", "default.target.wants");
+  mkdirSync(wanted, { recursive: true });
+  symlinkSync(unitFile(world), path.join(wanted, "octoboardd.service"));
+  const result = run(world, ["--uninstall"], { FAKE_USER: "tester" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(logged(world), /^loginctl --no-ask-password disable-linger tester$/m);
+  assert.equal(existsSync(lingerRecord(world)), false);
+  const script = readFileSync(installScript, "utf8");
+  assert.ok(script.includes('generators="${XDG_RUNTIME_DIR:-/run/user/$uid}/systemd"'));
 });

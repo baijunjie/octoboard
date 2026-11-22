@@ -1,0 +1,88 @@
+---
+title: "Votre système reste tel qu’il était"
+description: "Octoboard laisse votre système et les fichiers de vos agents tels qu’il les a trouvés. Ce que quelques fonctionnalités ajoutent, comment l’annuler, et ce qui reste après la désinstallation."
+---
+
+import { Aside, Code } from "@astrojs/starlight/components";
+import { commands, productName, system } from "../../../commands.ts";
+import LinuxUninstall from "../../../snippets/fr/linux-uninstall.mdx";
+import WindowsUninstaller from "../../../snippets/fr/windows-uninstaller.mdx";
+
+{productName} laisse votre système tel qu’il l’a trouvé : la configuration de vos agents, et tout ce qui se trouve en dehors des dossiers propres à {productName}. Quelques fonctionnalités ajoutent toutefois quelque chose en dehors de ces dossiers. Cette page les énumère toutes, avec ce que chacune ajoute, où, et comment l’annuler, et indique ce qui reste après la désinstallation.
+
+## La règle
+
+- <strong>Ce que {productName} donne à un agent lui parvient à chaque lancement, et seulement là.</strong> Ses hooks d’état, son propre serveur MCP et le rôle qu’il décrit à une session sont transmis au démarrage de l’agent, ou conservés dans le dossier propre à {productName}. Aucun fichier à vous ni à un agent n’est modifié pour cela : un agent que vous lancez seul démarre donc sans rien de tout cela.
+- <strong>{productName} n’ajoute aucun hook à lui dans vos réglages, et ne décide rien à votre place au sujet du dossier d’un projet.</strong> C’est à vous de dire si le dossier d’un projet est de confiance, et à l’agent de l’enregistrer. Le seul dossier pour lequel {productName} répond lui-même est celui d’une console, qui appartient à {productName} (voir plus bas).
+- <strong>Ce qu’un agent écrit pour lui-même appartient à l’agent.</strong> Ses enregistrements de conversation, ses caches et ses journaux, les identifiants d’une connexion et la confiance qu’il enregistre quand on répond à sa propre question sont écrits comme lorsque vous utilisez l’agent sans {productName}. Il en va de même de la configuration initiale que le programme de l’agent effectue la première fois qu’il s’exécute dans un dossier de configuration ; une lecture faite par {productName} en arrière-plan peut la déclencher avant votre propre premier lancement (voir plus bas).
+- <strong>Le travail dans vos projets n’est pas l’objet de cette page.</strong> Modifier les fichiers d’un projet, les opérations Git, les branches et les worktrees constituent le travail de développement pour lequel vous ajoutez un projet.
+
+## Ce qu’une fonctionnalité ajoute, et comment l’annuler
+
+Chacun de ces éléments n’est ajouté que par une fonctionnalité que vous utilisez ou activez.
+
+### Annulé en désactivant la fonctionnalité
+
+- <strong>La clé de cet ordinateur sur un serveur distant.</strong> Après votre connexion à un service distant enregistré avec un mot de passe ou un fichier de clé, l’app demande avant d’ajouter quoi que ce soit : <strong>Ajouter la clé de cet ordinateur</strong> nomme le fichier et la ligne. <strong>Ajouter la clé</strong> ajoute une ligne, marquée <code dir="ltr">{system.keyMark}</code>, aux clés SSH autorisées de votre utilisateur sur ce serveur (<code dir="ltr">{commands.authorizedKeys}</code> sous Linux et macOS), et conserve la clé privée dans le magasin d’identifiants de cet ordinateur (le trousseau de session sous macOS, le Gestionnaire d’identification sous Windows). <strong>Ne pas ajouter</strong> n’ajoute rien, et la question n’est plus posée. Pour l’annuler, désactivez <strong>Clé de cet ordinateur</strong> sur la page de ce service dans <strong>Appareils distants</strong>, ou retirez le service enregistré : l’app retire la ligne du fichier et supprime la clé privée. Elle fait de même lorsque vous modifiez l’hôte, le port ou l’utilisateur du service enregistré. Si le serveur est injoignable, la ligne peut rester ; l’app vous le dit, pour que vous la supprimiez sur le serveur.
+- <strong>Ouvrir à la connexion</strong> (Windows, et macOS 13 ou version ultérieure). <strong>Réglages › Général › Ouvrir à la connexion</strong> place {productName} dans la liste des apps que votre système ouvre à la connexion, et sa ligne le dit. C’est en le désactivant que vous le retirez de cette liste.
+- <strong>L’outil en ligne de commande</strong> (macOS). <strong>Installer</strong>, sous <strong>Réglages › Général › Outil en ligne de commande</strong>, ajoute un lien nommé <code dir="ltr">{system.cliName}</code> dans <code dir="ltr">{system.cliDir}</code>, ou dans <code dir="ltr">{system.cliFallbackDir}</code> si le système ne le permet pas ; la ligne le dit avant l’installation. <strong>Supprimer</strong> supprime le lien.
+- <strong>Le partage de la configuration par défaut.</strong> <strong>Partager la configuration par défaut</strong>, dans les réglages d’un compte sous <strong>Réglages › Comptes des agents</strong>, remplace les parties partageables du dossier de ce compte par des liens vers le dossier du compte par défaut, conserve à côté la configuration propre au compte sous forme de sauvegardes, et déplace son historique de conversation dans le dossier du compte par défaut. La ligne le dit avant que vous ne l’activiez. Le désactiver retire les liens, restaure les sauvegardes et replace les conversations des propres sessions du compte. <strong>Une chose reste :</strong> le reste de l’historique de conversation déplacé reste dans le dossier du compte par défaut, car le retirer vous ferait perdre vos conversations. Voir [Shared configuration](../features/shared-configuration/).
+
+### Conservé comme vôtre ou comme celui de l’agent
+
+Ces opérations écrivent quelque chose qui vous appartient, ou appartient à l’agent, à partir de ce moment : {productName} n’a donc rien à lui à annuler. Lorsqu’une entrée peut être retirée à la main, l’élément concerné indique où elle se trouve.
+
+- <strong>Le changement de compte d’une session.</strong> <strong>Changer de compte</strong> vous demande de confirmer. Un changement demandé par un agent attend votre approbation, sauf si vous avez activé <strong>Approuver automatiquement les changements de compte</strong>, et le changement à la limite d’utilisation n’a lieu que tant que <strong>Changer automatiquement de compte à la limite d’utilisation</strong> est activé. Un changement copie la conversation de cette seule session dans le dossier du compte cible ; pour Codex, il fait aussi pointer vers la copie l’enregistrement que ce compte garde de la conversation. L’original reste où il était, et la copie reste comme appartenant à ce compte. Voir [Account continuity](../features/account-continuity/).
+- <strong>Les réglages et les plugins que vous modifiez dans une session Grok Build.</strong> Lorsque votre <code dir="ltr">config.toml</code> est un lien vers un fichier, un thème, l’activation d’un plugin ou un modèle par défaut que vous modifiez dans une session est écrit dans ce fichier à la fin de la session, comme Grok l’aurait enregistré. Un plugin que vous installez dans une session est inscrit dans le registre des plugins de votre dossier Grok, s’il en a un.
+- <strong>La confiance de Grok Build envers le dossier d’un projet.</strong> Une fois que vous avez accepté de faire confiance au dossier d’un projet (<strong>Faire confiance et continuer</strong>, ou votre propre réponse dans le terminal), l’unique entrée écrite par Grok est reportée, telle quelle, dans la liste de confiance de votre dossier Grok.
+- <strong>Les enregistrements d’une session qui n’a jamais eu de conversation.</strong> Supprimer une session à laquelle vous n’avez jamais rien envoyé place aussi dans la corbeille, sans demander, les enregistrements que l’agent en garde : ils ne contiennent aucune conversation à vous. Les enregistrements d’une session que vous avez utilisée ne sont déplacés que si vous cochez cette option dans la confirmation. Ils peuvent être récupérés dans la corbeille.
+- <strong>La configuration initiale de Claude Code.</strong> Dans un dossier de configuration où Claude Code ne s’est encore jamais exécuté, ou après une mise à jour de Claude Code, une lecture faite par {productName} en arrière-plan (la consommation d’un compte, ses serveurs MCP ou ses agents) amène Claude Code à y effectuer sa propre configuration initiale et ses migrations en attente, comme l’aurait fait votre prochain lancement. {productName} laisse ces modifications telles quelles.
+- <strong>Un dossier vide pour un nouveau compte Codex.</strong> Avant le premier lancement ou la première connexion d’un compte Codex, {productName} crée le dossier du compte, vide, s’il n’existe pas encore : sans lui, Codex refuse de démarrer.
+- <strong>La confiance envers le dossier propre à une console.</strong> Une session de console s’exécute dans un dossier propre à {productName} ; {productName} y répond donc à la question de confiance de l’agent sans vous la poser. Claude Code garde alors, dans sa propre liste de confiance, une entrée qui ne nomme que ce dossier et n’a aucun effet ailleurs. Codex ne pose la question que si ce dossier se trouve dans un dépôt Git, et enregistre alors sa confiance pour la racine de ce dépôt, ce qui couvre le dépôt entier : si votre dossier personnel est suivi par Git, c’est tout votre dossier personnel. Grok Build n’enregistre rien dans votre liste de confiance. {productName} ne retire pas ces entrées, car ce serait une modification de plus de votre fichier. Vous pouvez les retirer vous-même : celle de Codex est la table <code dir="ltr">[projects."&lt;repository root&gt;"]</code> du <code dir="ltr">config.toml</code> de son dossier, et celle de Claude Code est l’entrée du dossier sous <code dir="ltr">projects</code> dans son <code dir="ltr">.claude.json</code>.
+
+### Annulé par la commande de désinstallation
+
+- <strong>Le programme serveur Linux en tant que service.</strong> L’installer en tant que service (voir [Serveur Linux](../install/linux/)) écrit un service utilisateur systemd dans votre dossier de configuration systemd, et active le lingering pour votre utilisateur s’il était désactivé. C’est la commande de désinstallation, plus bas, qui l’annule.
+
+<Aside>
+Sous Windows, l’app tient aussi la liste de raccourcis de son bouton de la barre des tâches, avec vos services distants enregistrés. Elle n’a pas d’interrupteur : <strong>Tout retirer</strong>, décrit plus bas, la retire, tout comme le programme de désinstallation.
+</Aside>
+
+## Avant de désinstaller
+
+Avant de désinstaller, tout ce qui, dans « Annulé en désactivant la fonctionnalité », est en vigueur peut être retiré en une fois, sa fonctionnalité étant désactivée. Dans l’app de bureau, <strong>Réglages › Nettoyage</strong> comporte une ligne pour cela, <strong>Nettoyer avant la désinstallation</strong> : elle indique combien d’éléments sont en vigueur et n’a qu’un bouton, <strong>Tout retirer</strong>. Sous Windows, le programme de désinstallation s’en charge aussi de lui-même, et la commande de désinstallation du programme serveur Linux s’en charge d’abord ; les deux sont décrits ci-dessous.
+
+- <strong>Il demande d’abord.</strong> La confirmation indique combien d’éléments seront retirés, la liste étant repliée sous ce nombre, et ce qui est conservé. Elle ne va plus loin qu’une fois que vous avez saisi <strong>RETIRER</strong>.
+- <strong>Il affiche le résultat.</strong> Ensuite, il énumère ce qui a été retiré et ce qui ne l’a pas été. Pour un élément qui n’a pas pu être retiré, par exemple une clé sur un serveur injoignable, il dit ce qui reste et où.
+- <strong>Il n’existe que dans la fenêtre propre de l’app, sur l’ordinateur concerné.</strong> Dans un navigateur sur un ordinateur doté de l’app de bureau, et dans une fenêtre qui affiche un service distant, la ligne dit seulement où le nettoyage se fait. Dans un navigateur sur un serveur Linux, elle dit que la désinstallation sur le serveur nettoie d’abord et affiche <code dir="ltr">{system.uninstall}</code> avec <strong>Copier la commande de désinstallation</strong>, pour que vous l’exécutiez sur le serveur. Rien n’est retiré depuis là.
+- <strong>À n’utiliser que lorsque vous désinstallez.</strong> Pour n’annuler qu’un élément et continuer à utiliser {productName}, désactivez plutôt sa fonctionnalité.
+- <strong>Il conserve vos données.</strong> Les dossiers propres à {productName} restent, tout comme l’historique de conversation que le partage a déplacé.
+
+## Après la désinstallation
+
+La désinstallation supprime le programme.
+
+### macOS
+
+Quittez {productName}, puis supprimez-le de votre dossier Applications. Rien ne s’exécute quand il est supprimé, donc sélectionnez d’abord <strong>Tout retirer</strong> : supprimer l’app ne retire pas ce que cette action retire.
+
+### Windows
+
+Utilisez le programme de désinstallation de l’app.
+
+<WindowsUninstaller />
+
+### Serveur Linux
+
+<LinuxUninstall />
+
+Le dossier où le programme a été installé reste, tout comme toute ligne que vous avez ajoutée pour le mettre dans votre PATH.
+
+### Ce qui reste
+
+Les dossiers propres à {productName} sont conservés : une installation ultérieure retrouve ainsi vos consoles, vos sessions et vos réglages. Pour les retirer aussi, supprimez-les : vous perdez toutes les consoles, tous les enregistrements de session et tous les réglages.
+
+- <strong>Son dossier de données</strong>, sur l’ordinateur ou le serveur où les sessions s’exécutaient : <code dir="ltr">{system.dataDir}</code> (<code dir="ltr">{system.dataDirWindows}</code> sous Windows). Sous macOS et Linux, <code dir="ltr">{system.removeDataDir}</code> le supprime.
+- <strong>Le dossier propre à l’app de bureau :</strong> <code dir="ltr">{system.appDataMac}</code> sous macOS ; <code dir="ltr">{system.appDataWindows}</code> et <code dir="ltr">{system.appLocalDataWindows}</code> sous Windows.
+
+Les dossiers propres à vos agents, avec leurs connexions, leurs réglages et leurs conversations, appartiennent aux agents et restent tels quels.

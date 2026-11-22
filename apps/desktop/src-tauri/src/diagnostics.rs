@@ -88,7 +88,7 @@ pub fn data_dir() -> Option<PathBuf> {
 }
 
 /// `logs` under the data directory, as `paths::logs_dir` in the daemon.
-fn logs_dir() -> Option<PathBuf> {
+pub(crate) fn logs_dir() -> Option<PathBuf> {
     data_dir().map(|dir| dir.join("logs"))
 }
 

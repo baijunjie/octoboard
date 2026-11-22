@@ -149,7 +149,7 @@ export const sidebar: NonNullable<StarlightUserConfig["sidebar"]> = [
   {
     label: startHere.en,
     translations: startHere,
-    items: ["index"],
+    items: ["index", "your-system"],
   },
   {
     label: installation.en,

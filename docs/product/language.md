@@ -120,6 +120,9 @@ What does not follow it:
 - **The system's permission prompts.** The explanations for access requested by programs running in the
   application follow macOS's native language choice independently of the window, with the coverage described in
   "Other consents programs ask for" in `docs/product/macos-privacy-permissions.md`.
+- **The Windows installer and uninstaller.** They follow the system's display language when installing, and the
+  uninstaller, with the list of what the clean-up before uninstalling left, keeps the installation's language (see
+  "Windows" in `docs/product/installing-the-desktop-app.md`).
 
 - **Existing session names.** A created name keeps its saved wording when the UI's language changes, including one that
   used the localized default when it was created (see "The session dialog" in `docs/product/opening-sessions.md`).

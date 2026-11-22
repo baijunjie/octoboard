@@ -11,7 +11,7 @@ import { useRemoteDaemons } from "./useRemoteDaemons";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const entryOf = (id: string): RemoteDaemonEntry => ({ id, name: id, host: `${id}.example.com`, port: 22, user: "u", auth: "device", keyPath: null, fingerprint: null, octoboarddPath: null });
+const entryOf = (id: string): RemoteDaemonEntry => ({ id, name: id, host: `${id}.example.com`, port: 22, user: "u", auth: "device", keyPath: null, fingerprint: null, octoboarddPath: null, deviceKey: { declined: false, file: null, mark: null } });
 const STAGING = entryOf("staging");
 const LAB = entryOf("lab");
 
@@ -34,8 +34,9 @@ const CAPABILITY: RemoteDaemonsCapability = {
     changed = listener;
     return unsubscribe;
   },
-  save: async (entry) => ({ ...entry, id: entry.id ?? "new" }),
-  remove: async () => {},
+  save: async (entry) => ({ entry: { ...entry, id: entry.id ?? "new", deviceKey: { declined: false, file: null, mark: null } }, keyRemoval: { line: { result: "not_installed" as const }, privateKeyLeft: null } }),
+  remove: async () => ({ line: { result: "not_installed" as const }, privateKeyLeft: null }),
+  setDeviceKey: async () => ({ line: { result: "not_installed" as const }, privateKeyLeft: null }),
   connect: async () => ({ outcome: "opened" }),
   disconnect: async () => {},
   onPageRequested: () => () => {},

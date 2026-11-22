@@ -4,7 +4,8 @@ description: "无需 root 权限，即可在 Linux 服务器上安装 octoboardd
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../../commands.ts";
+import LinuxUninstall from "../../../../snippets/zh-CN/linux-uninstall.mdx";
 
 无需 root 权限，即可在 Linux 服务器上安装 octoboardd（{productName} 的服务器程序，应用里称它为“守护进程”）。可从 macOS 或 Windows 应用连接，也可在浏览器中打开，两种方式都经由 SSH。
 
@@ -80,6 +81,12 @@ octoboardd 会自行选用自己的端口，你无需知道它：<code dir="ltr"
   如果它问是否立即重新启动，输入 <code dir="ltr">y</code> 重新启动；直接按回车则暂时继续运行旧版本，之后想重新启动时再运行 <code dir="ltr">{commands.restart}</code>。
 
 如果 <code dir="ltr">{commands.update}</code> 提示无法替换程序（例如程序装在你没有写入权限的位置），改为再次运行安装命令（或服务命令）。它同样会在安全时自动重新启动，否则会提示你运行 <code dir="ltr">{commands.restart}</code>。
+
+## 卸载
+
+<LinuxUninstall />
+
+你的数据会留在 <code dir="ltr">{system.dataDir}</code> 中。[不改动你的系统](../../your-system/)说明了卸载后会留下什么，以及如何移除。
 
 ## 命令
 

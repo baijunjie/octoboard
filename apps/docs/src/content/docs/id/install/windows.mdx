@@ -1,14 +1,16 @@
 ---
 title: "Windows"
-description: "Untuk PC dengan prosesor Intel atau AMD (hampir semua PC Windows), di Windows 10 versi 21H2 atau lebih baru. Di Windows 11 on Arm, aplikasi x64 ini berjalan melalui emulasi."
+description: "Untuk PC dengan prosesor Intel atau AMD (hampir semua PC Windows), di Windows 10 versi 21H2 atau lebih baru. Di Windows 11 pada Arm, gunakan penginstal arm64 native jika rilisnya menyediakannya; jika tidak, aplikasi x64 ini berjalan di sana melalui emulasi."
 ---
 
 import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
 import { downloads, productName } from "../../../../commands.ts";
+import WindowsUninstaller from "../../../../snippets/id/windows-uninstaller.mdx";
 
-Untuk PC dengan prosesor Intel atau AMD (x64; hampir semua PC Windows), di Windows 10 versi 21H2 atau lebih baru. Di Windows 11 on Arm, aplikasi x64 ini berjalan melalui emulasi.
+Untuk PC dengan prosesor Intel atau AMD (x64; hampir semua PC Windows), di Windows 10 versi 21H2 atau lebih baru. Di Windows 11 pada Arm, gunakan penginstal arm64 native jika rilisnya menyediakannya; jika tidak, aplikasi x64 ini berjalan di sana melalui emulasi.
 
 <LinkButton href={downloads.windows}>Unduh untuk Windows</LinkButton>
+<LinkButton href={downloads["windows-arm64"]} variant="secondary">Unduh untuk Windows pada Arm</LinkButton>
 
 <Aside>Aplikasi Windows masih dalam versi beta.</Aside>
 
@@ -16,7 +18,7 @@ Untuk PC dengan prosesor Intel atau AMD (x64; hampir semua PC Windows), di Windo
 
 <Steps>
 
-1. Unduh penginstal dengan tombol di atas. File ini memiliki nama yang berakhiran <code dir="ltr">x64-setup.exe</code>.
+1. Unduh penginstal dengan tombol di atas. File ini memiliki nama yang berakhiran <code dir="ltr">x64-setup.exe</code>. Di Windows pada Arm, coba tombol kedua: jika rilisnya menyediakan penginstal arm64, tombol itu mengunduh file tersebut, yang namanya berakhiran <code dir="ltr">arm64-setup.exe</code>; jika tidak, tombol itu membuka daftar rilis, dan penginstal x64 berjalan melalui emulasi.
 2. Buka file yang diunduh untuk menjalankan penginstal. Penginstal memasang {productName} hanya untuk akun pengguna Anda, jadi tidak meminta administrator.
 
    Aplikasi ini belum ditandatangani kode, sehingga Microsoft Defender SmartScreen mungkin menampilkan “Windows melindungi PC Anda”. Pilih “Informasi lebih lanjut”, lalu “Tetap jalankan”.
@@ -38,6 +40,16 @@ Setelah jendela utama terbuka, Anda sudah selesai.
 - [Grok Build](https://docs.x.ai/build/overview)
 
 Jika Anda memakai Claude Code atau Codex, instal [Git for Windows](https://git-scm.com/download/win) lebih dulu; keduanya memerlukannya agar dapat berfungsi.
+
+## Mencopot
+
+Copot {productName} dengan pencopot pemasangannya, dari Pengaturan Windows (Aplikasi) atau Panel Kontrol.
+
+<WindowsUninstaller />
+
+Untuk melihat apa yang sedang berlaku sebelum mencopot, buka <strong>Pengaturan › Pembersihan › Bersihkan sebelum mencopot</strong>: <strong>Hapus semua</strong> di sana menghapus hal yang sama dan menampilkan hasil untuk setiap item.
+
+[Sistem Anda tetap seperti semula](../../your-system/) menjelaskan apa yang tersisa sesudahnya dan cara menghapusnya.
 
 ## Pembaruan
 

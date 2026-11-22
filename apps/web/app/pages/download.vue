@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import {
-  appRequirementsKeys,
+  appRequirementsKey,
   detectDownloadTab,
   downloadTabs,
   isDownloadTab,
+  offersWindowsArm,
   releasesUrl,
   serverDownloads,
+  windowsArmDownload,
   type DownloadTab,
   type Downloads,
 } from "../../seo/downloads";
@@ -19,6 +21,7 @@ const { locale } = useI18n();
 const docsHref = (page: Parameters<typeof docsPath>[2]) => docsPath(config.app.baseURL, locale.value, page);
 const downloads = config.public.downloads as Downloads;
 const allReleasesUrl = releasesUrl(config.public.repositoryUrl);
+const windowsArm = offersWindowsArm(downloads, config.public.repositoryUrl);
 useSeoMeta({
   title: () => t("downloadSeoTitle"),
   description: () => t("downloadSeoDescription"),
@@ -120,7 +123,10 @@ onBeforeUnmount(() => window.removeEventListener("hashchange", onHashChange));
         </div>
         <template v-if="tab.id !== 'linux'">
           <a :href="downloads[tab.id]" class="button">{{ t("downloadButton", { platform: tab.name }) }}</a>
-          <p>{{ t(appRequirementsKeys[tab.id]) }}</p>
+          <p>{{ t(appRequirementsKey(tab.id, windowsArm)) }}</p>
+          <a v-if="tab.id === 'windows' && windowsArm" :href="downloads[windowsArmDownload.id]" class="text-link">
+            {{ t("downloadWindowsArm") }}<span class="link-arrow" aria-hidden="true" />
+          </a>
         </template>
         <template v-else>
           <p>{{ t("downloadLinuxDescription") }}</p>

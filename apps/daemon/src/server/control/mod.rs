@@ -543,7 +543,10 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
         agent_cli_statuses: state.agent_clis.statuses(),
         daemon_update: state.daemon_update.status().map(Box::new),
         home_dir: crate::paths::known_home_dir().map(|home| home.to_string_lossy().into_owned()),
-        host: crate::platform::HostFacts::current().into(),
+        host: crate::protocol::HostInfo::of(
+            crate::platform::HostFacts::current(),
+            state.follows_application(),
+        ),
         keep_awake_held: state.keep_awake_held(),
         shell_terminals: state.shell_terminals.list(),
         remote_access: state.remote_access.info(state),
@@ -938,6 +941,19 @@ mod tests {
         // Reading advances nothing: the same snapshot again carries the same versions.
         let (again, _, _) = stamped(&state);
         assert_eq!(again[0].versions, consoles[0].versions);
+    }
+
+    /// The snapshot says whether the daemon is a desktop application's own, which `remote_access`
+    /// does not tell: the server form's daemon that serves the browser carries one too.
+    #[test]
+    fn the_snapshot_says_whether_the_daemon_is_an_applications_own() {
+        let (state, _dir) = crate::test_support::app_state("snapshot-application");
+        let application = |state: &Arc<AppState>| {
+            serde_json::to_value(snapshot(state).unwrap()).unwrap()["host"]["application"].clone()
+        };
+        assert_eq!(application(&state), false);
+        state.set_follows_application();
+        assert_eq!(application(&state), true);
     }
 
     /// The snapshot says where remote access stands only for a daemon that follows the desktop

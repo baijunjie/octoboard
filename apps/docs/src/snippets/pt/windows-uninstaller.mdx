@@ -1,0 +1,12 @@
+import { Aside } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* What the Windows uninstaller does before it removes the app, which the Windows guide and "Your system stays as it was" share. */}
+
+Antes de remover qualquer coisa, o desinstalador faz a limpeza sozinho: fecha o {productName} se estiver aberto, perguntando antes, exceto numa desinstalação silenciosa, e remove sem perguntar tudo o que <strong>Remover tudo</strong> remove. Depois desinstala, seja qual for o resultado. Se algo não pôde ser removido, ele avisa no final, com onde cada item ficou, e o lista em <code dir="ltr">{system.uninstallLogWindows}</code>; uma desinstalação silenciosa só grava esse arquivo.
+
+O instalador e o desinstalador usam o idioma do seu sistema quando o {productName} o tem, e inglês caso contrário. O desinstalador, e a lista do que ele deixou, mantêm o idioma em que você instalou; o motivo que um recurso dá para um item que ficou pode estar em inglês.
+
+Nem toda desinstalação faz essa limpeza. A atualização pelo app e um instalador executado por cima do app instalado não a fazem, então as suas chaves em servidores remotos e o compartilhamento das suas contas ficam como estavam; um instalador que você mesmo executa por cima ainda desativa <strong>Abrir ao iniciar sessão</strong>, até você ativá-lo de novo. O desinstalador de uma versão anterior a essa limpeza também não faz nenhuma: numa versão assim, selecione <strong>Remover tudo</strong> primeiro.
+
+<Aside>Com o app x64 no Windows on Arm, o desinstalador não consegue fechar o {productName} aberto, e a desinstalação para sem remover nada, assim como um instalador executado por cima: encerre o {productName} antes. O app arm64 não tem esse limite, e uma instalação x64 num PC Arm passa para ele pela atualização do app.</Aside>

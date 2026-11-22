@@ -24,7 +24,7 @@ vi.mock("./DaemonSwitchSetting", async (importOriginal) => {
   };
 });
 
-const HOST = { os: "linux", path_style: "unix", file_links: true, trash: "trash", settings: "settings" } as const;
+const HOST = { os: "linux", path_style: "unix", file_links: true, trash: "trash", settings: "settings", application: true } as const;
 
 function Sync() {
   useKeepAwakeSync();

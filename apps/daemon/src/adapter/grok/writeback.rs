@@ -12,6 +12,9 @@ use crate::providers::grok::GROK_CONFIG_FILE;
 
 /// Keys a sharing account's session may copy from its `config.toml` onto the shared file.
 ///
+/// The plugin switches are not copied from a session whose home holds a plugin directory of its
+/// own: a plugin it installed is lost with that home, and its switch would outlive it.
+///
 /// The session file stays a real copy, so the MCP block appended to it is never this write. The
 /// bytes go to the canonical target the account's link resolved to at launch, and the link is not
 /// replaced; if by the time the process exits the entry is no longer a link resolving there,
@@ -124,8 +127,14 @@ impl SharedConfigWriteback {
             .with_context(|| format!("reading {}", self.session_config.display()))?
             .parse()
             .context("the session's configuration is not valid TOML")?;
-        let changes =
+        let mut changes =
             ConfigSlice::from_table(&session).changes(&self.baseline, self.launch_model.as_deref());
+        if self.plugins_are_the_sessions_own() {
+            // What the session installed is in its own home and goes with it, so a switch naming
+            // it would be left in the shared file for a plugin that no longer exists.
+            changes.enabled = None;
+            changes.disabled = None;
+        }
         if changes.is_empty() {
             return Ok(());
         }
@@ -156,6 +165,20 @@ impl SharedConfigWriteback {
         }
         replace_beside(target, merged.as_bytes(), Permissions::KeptOrPrivate)
             .with_context(|| format!("writing {}", target.display()))
+    }
+
+    /// Whether the per-session home holds a plugin directory of its own, not a link to the source
+    /// home's: the source home had none when the session's home was built, and Grok made one.
+    fn plugins_are_the_sessions_own(&self) -> bool {
+        let Some(home) = self.session_config.parent() else {
+            return false;
+        };
+        let plugins = home.join(super::plugin_paths::PLUGINS_DIR);
+        std::fs::symlink_metadata(&plugins).is_ok()
+            && crate::platform::fs::read_alias(&plugins)
+                .ok()
+                .flatten()
+                .is_none()
     }
 
     /// The account entry is still a link that resolves to the file it resolved to at launch. A

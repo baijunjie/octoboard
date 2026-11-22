@@ -81,6 +81,7 @@ export const tunnel = {
 export const downloads = {
   macos: `${websiteUrl}download/macos/`,
   windows: `${websiteUrl}download/windows/`,
+  "windows-arm64": `${websiteUrl}download/windows-arm64/`,
   "linux-x86_64": `${websiteUrl}download/linux-x86_64/`,
   "linux-aarch64": `${websiteUrl}download/linux-aarch64/`,
   releases: `${site.repositoryUrl.replace(/\/$/, "")}/releases`,
@@ -99,4 +100,35 @@ export const accountFolders = {
   claude: "~/.claude-1",
   codex: "~/.codex-1",
   grok: "~/.grok-1",
+} as const;
+
+// What "Your system stays as it was" quotes: where the things a feature adds outside the product's own folders are, and
+// the product's own folders. Copied from the daemon's `data_dir()` (`apps/daemon/src/paths.rs`), the desktop
+// application's identifier (`identifier` in `apps/desktop/src-tauri/tauri.conf.json`, which names its folders), the
+// mark it gives a device key's line (`apps/desktop/src-tauri/src/`), the name and the two locations of its command-line
+// link (`/usr/local/bin`, and `~/.local/bin` where that is refused: `apps/desktop/src-tauri/src/command_line/macos.rs`),
+// the daemon's uninstall command, its options and the word it asks for (`apps/daemon/src/cli/uninstall.rs`), the
+// install script's uninstall option, which hands over to that command, and its install-folder option
+// (`apps/web/public/install.sh`), and the file the Windows uninstaller's clean-up lists what it left in
+// (`apps/desktop/src-tauri/src/system_changes/headless.rs`, `apps/desktop/src-tauri/windows/installer-hooks.nsh`).
+export const system = {
+  dataDir: "~/.octoboard",
+  dataDirWindows: "%USERPROFILE%\\.octoboard",
+  removeDataDir: "rm -rf ~/.octoboard",
+  appDataMac: "~/Library/Application Support/dev.octoboard.desktop",
+  appDataWindows: "%APPDATA%\\dev.octoboard.desktop",
+  appLocalDataWindows: "%LOCALAPPDATA%\\dev.octoboard.desktop",
+  keyMark: `${productName} on <this computer's name>`,
+  cliName: "octoboardd",
+  cliDir: "/usr/local/bin",
+  cliFallbackDir: "~/.local/bin",
+  uninstall: "octoboardd uninstall",
+  uninstallWord: "REMOVE",
+  uninstallYes: "--yes",
+  uninstallDryRun: "--dry-run",
+  uninstallKeepChanges: "--keep-changes",
+  uninstallForce: "--force",
+  binDirOption: "--bin-dir",
+  uninstallLogWindows: "%USERPROFILE%\\.octoboard\\logs\\uninstall-clean-up.log",
+  uninstallScript: `curl --proto '=https' --tlsv1.2 -fsSL ${websiteUrl}install.sh | sh -s -- --uninstall`,
 } as const;

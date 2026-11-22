@@ -76,6 +76,7 @@ export function ReviewRow({ lead, control, children }: { lead: React.ReactNode; 
 export const STATUS_TONE = {
   success: "text-success-soft-foreground",
   accent: "text-accent-soft-foreground",
+  warning: "text-warning-soft-foreground",
   danger: "text-danger-soft-foreground",
   muted: "text-app-muted",
 } as const;

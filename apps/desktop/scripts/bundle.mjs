@@ -5,6 +5,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { WINDOWS_TARGETS } from "../../../scripts/lib/windows-toolchain.mjs";
 
 export const appDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const repoRoot = path.dirname(path.dirname(appDir));
@@ -17,10 +18,25 @@ export const UNIVERSAL_TARGET = "universal-apple-darwin";
 // The architectures a universal build is made of, each a Rust target the build compiles for.
 export const UNIVERSAL_ARCHITECTURES = ["aarch64-apple-darwin", "x86_64-apple-darwin"];
 export const universalBundleDir = path.join(repoRoot, "target", UNIVERSAL_TARGET, "release", "bundle");
-// The Windows release is one x64 build, which lands under its target's own directory too.
-export const WINDOWS_TARGET = "x86_64-pc-windows-msvc";
-export const windowsReleaseDir = path.join(repoRoot, "target", WINDOWS_TARGET, "release");
-export const windowsBundleDir = path.join(windowsReleaseDir, "bundle");
+// The Windows release is one build per architecture (named as the installer's name carries it, see `WINDOWS_ARCHES` in
+// `release-manifest.mjs`), each its Rust target's (`WINDOWS_TARGETS`, the one table the Windows cross-check reads too),
+// which lands under that target's own directory too.
+export { WINDOWS_TARGETS };
+
+// The Rust target of the Windows architecture `arch`.
+export function windowsTarget(arch) {
+  const target = WINDOWS_TARGETS[arch];
+  if (!target) throw new Error(`"${arch}" is not a Windows release architecture; it is one of ${Object.keys(WINDOWS_TARGETS).join(", ")}.`);
+  return target;
+}
+
+export function windowsReleaseDir(arch) {
+  return path.join(repoRoot, "target", windowsTarget(arch), "release");
+}
+
+export function windowsBundleDir(arch) {
+  return path.join(windowsReleaseDir(arch), "bundle");
+}
 // The Tauri CLI's entry script, run with the current Node: a package manager's `.bin/tauri` is a shell script or a
 // `.cmd` file that `execFileSync` cannot start on every platform.
 export const tauriCli = path.join(appDir, "node_modules", "@tauri-apps", "cli", "tauri.js");

@@ -444,6 +444,23 @@ pub struct DetectionMarkers {
     pub generic: &'static [&'static str],
 }
 
+/// How a provider's launch in a console's own directory comes to be trusted
+/// (`Capabilities::console_trust`, `crate::session::trust`). A console's directory is Octoboard's
+/// own, so trusting it is Octoboard's to do and nobody is asked; what differs is whether the agent
+/// records it in the user's trust list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsoleTrust {
+    /// The provider's launch plan trusts the console's directory for that launch alone, in a way
+    /// measured to record nothing in the user's own trust list, so its confirmation does not come
+    /// up for a console session. One that comes up all the same is answered like any other
+    /// console's.
+    PerLaunch,
+    /// The provider has no such way: where its confirmation comes up for a console session,
+    /// Octoboard answers it without asking, and the agent records the console's directory in its
+    /// own trust list as it does for any answer.
+    Answered,
+}
+
 /// What a provider can do that not every provider can, declared so that code and the UI branch
 /// on it rather than on which provider it is.
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
@@ -465,6 +482,12 @@ pub struct Capabilities {
     /// Keeps the trust its confirmation grants in a per-session home, from where Octoboard carries
     /// it to the user's own configuration.
     pub per_session_trust: bool,
+    /// How a console's own directory comes to be trusted by the provider: the generic trust layer
+    /// and the provider's own launch plan both follow it. Every descriptor sets it, from what was
+    /// measured of the provider's CLI. Not sent to a client: nothing in a window follows it.
+    #[serde(skip)]
+    #[cfg_attr(test, ts(skip))]
+    pub console_trust: ConsoleTrust,
     /// Its accounts can share the default account's configuration.
     pub config_sharing: bool,
     /// Can list an account's MCP servers and platform connectors (`read_account_mcp_inventory`).

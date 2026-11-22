@@ -441,6 +441,7 @@ impl ProcessLedger {
             launch.clone(),
             Launch {
                 session_id: Some(session_id.to_string()),
+                reserved_here: true,
                 containments: vec![containment.clone()],
                 ..Launch::default()
             },
@@ -452,6 +453,15 @@ impl ProcessLedger {
                 launch,
                 containment,
             },
+        })
+    }
+
+    /// Whether this run reserved the launch `launch_id` for the session `session_id`
+    /// ([`Self::begin_launch`]) and still follows it: what tells a hook report of a launch this
+    /// run is starting or running from one of a launch an earlier run started.
+    pub fn reserved_for(&self, launch_id: &str, session_id: &str) -> bool {
+        self.book().launches.get(launch_id).is_some_and(|launch| {
+            launch.reserved_here && launch.session_id.as_deref() == Some(session_id)
         })
     }
 

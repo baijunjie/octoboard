@@ -22,7 +22,8 @@ daemon's own; see [`../processes/ledger/README.md`](../processes/ledger/README.m
 
 - `protocol.rs` — the frames of the link: JSON text for control, binary for output and tails. A receiver ignores a
   message or field it does not know, and an enum that can grow has a `serde(other)` variant, so builds a little apart keep
-  talking (the file's module doc states the rule).
+  talking (the file's module doc states the rule). It also holds the hook route's mark (`HookMark`, `hook_path`):
+  which launch of which session a hook event is from, which a holder relays as the hook route's parameter.
 - `registry.rs` — the owner-only `<holder id>.json` a holder is found by (`paths::holders_dir`; the directory is passed
   in, so tests use their own). It holds the port, the secret the link is opened with and the holder process's identity.
 - `compat.rs` — which holders a daemon adopts, by semantic version: `FLOOR` up to the daemon's own. The daemon

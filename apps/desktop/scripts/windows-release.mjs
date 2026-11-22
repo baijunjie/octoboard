@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { installerLayout, INSTALLER_DIR } from "../../../scripts/fetch-conpty.mjs";
 import { repoRoot } from "./bundle.mjs";
-import { windowsInstallerName } from "./release-manifest.mjs";
+import { WINDOWS_ARCHES, windowsInstallerName } from "./release-manifest.mjs";
 
 // How the installer and the executables in it are code-signed (`WINDOWS_SIGNING`):
 // - `none`: not at all; Windows SmartScreen warns on the download.
@@ -177,22 +177,59 @@ export function filesEndingWith(listing, tail) {
   return listing.filter((file) => `/${file.replaceAll("\\", "/").toLowerCase()}`.endsWith(wanted));
 }
 
-// The ConPTY files whose contents differ from the package's: `listing` holds the installer's extracted files, and
-// `fetched` is the directory `fetch-conpty.mjs --installer` filled. A file the installer lacks counts as different.
-export function conptyMismatches(listing, fetched) {
+// The ConPTY files whose contents differ from the package's: `listing` holds the extracted files of the installer of
+// the architecture `arch`, and `fetched` is the directory `fetch-conpty.mjs --installer --arch <arch>` filled. A file
+// the installer lacks counts as different.
+export function conptyMismatches(listing, fetched, arch) {
   const mismatches = [];
-  for (const { target } of installerLayout()) {
+  for (const { target } of installerLayout(arch)) {
     const found = filesEndingWith(listing, target);
     if (found.length !== 1 || sha256(found[0]) !== sha256(path.join(fetched, target))) mismatches.push(target);
   }
   return mismatches;
 }
 
+// The PE machine field of each Windows architecture's executables.
+const PE_MACHINES = { x64: 0x8664, arm64: 0xaa64 };
+
+// The architecture a PE file is built for, from the machine field of its COFF header (`x64`, `arm64`), or null for a
+// file that is not a PE file or is built for another machine.
+export function peArchitecture(bytes) {
+  if (bytes.length < 0x40 || bytes.readUInt16LE(0) !== 0x5a4d) return null;
+  const header = bytes.readUInt32LE(0x3c);
+  if (header + 6 > bytes.length || bytes.readUInt32LE(header) !== 0x00004550) return null;
+  const machine = bytes.readUInt16LE(header + 4);
+  return Object.keys(PE_MACHINES).find((arch) => PE_MACHINES[arch] === machine) ?? null;
+}
+
+// The installer's files built for another architecture than the one each must have, as `<file>: <found>`: our two
+// executables and `conpty.dll` are the installer's architecture `arch` (the daemon loads the DLL), and each
+// `OpenConsole.exe` the architecture of its subdirectory. The byte comparison with the fetched package cannot catch a
+// wrong architecture, since the bundler packs the same fetched directory it is compared with. A missing file is left
+// to the other checks.
+export function architectureMismatches(listing, arch, read = readFileSync) {
+  const expected = [
+    ["Octoboard.exe", arch],
+    ["octoboardd.exe", arch],
+    ...installerLayout(arch).map(({ target }) => [target, target.includes("/") ? target.split("/")[0] : arch]),
+  ];
+  const mismatches = [];
+  for (const [tail, wanted] of expected) {
+    const found = filesEndingWith(listing, tail);
+    if (found.length !== 1) continue;
+    const actual = peArchitecture(read(found[0]));
+    if (actual !== wanted) mismatches.push(`${tail}: ${actual ?? "not an x64 or arm64 PE file"}`);
+  }
+  return mismatches;
+}
+
 // Looks inside the installer, extracted with 7-Zip into a directory of its own: which of our executables carry a
 // signature (all must, unless the mode is `none`), whether the ConPTY files are Microsoft's, byte for byte, and
-// with Microsoft's signature (reported only). NSIS builds the uninstaller itself while it compiles the installer, so
-// it is not among the files and no mode signs it.
-export function verifyInstaller({ setup, mode, signtool }) {
+// with Microsoft's signature (reported only), compared with the ConPTY layout of the installer's architecture `arch`,
+// which the build fetched last, and whether each executable is built for the architecture it must have
+// (`architectureMismatches`). NSIS builds the uninstaller itself while it compiles the installer, so it is not among
+// the files and no mode signs it.
+export function verifyInstaller({ setup, mode, signtool, arch }) {
   const sevenZip = findSevenZip();
   if (!sevenZip) {
     if (mode !== "none") throw new Error("Cannot look inside the installer to check what is signed: 7z.exe was not found. Install 7-Zip.");
@@ -212,11 +249,13 @@ export function verifyInstaller({ setup, mode, signtool }) {
     });
     if (mode !== "none") assertSigned(signtool, own);
     for (const file of own) reportSignature(signtool, file);
-    const mismatches = conptyMismatches(listing, path.resolve(repoRoot, INSTALLER_DIR));
+    const mismatches = conptyMismatches(listing, path.resolve(repoRoot, INSTALLER_DIR), arch);
     if (mismatches.length > 0) {
       throw new Error(`The installer's ${mismatches.join(", ")} is not the package's file; Microsoft's ConPTY files must go in untouched.`);
     }
-    for (const { target } of installerLayout()) reportSignature(signtool, filesEndingWith(listing, target)[0]);
+    const wrong = architectureMismatches(listing, arch);
+    if (wrong.length > 0) throw new Error(`The ${arch} installer holds files built for another architecture: ${wrong.join(", ")}.`);
+    for (const { target } of installerLayout(arch)) reportSignature(signtool, filesEndingWith(listing, target)[0]);
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
@@ -231,19 +270,22 @@ export function removeInstallers(dir) {
   }
 }
 
-// The installer and its signature in `dir`, a Windows build's output copied beside the Mac one: the installer named
-// for this version and the signature present and not older than it. A few seconds of slack, since downloading a
-// workflow artifact writes the two files one after the other.
+// Each architecture's installer and its signature in `dir`, the Windows builds' output copied beside the Mac one, in
+// the order of `WINDOWS_ARCHES`: the installer named for this version and that architecture, and the signature present
+// and not older than it. A few seconds of slack, since downloading a workflow artifact writes the two files one after
+// the other.
 export function windowsReleaseFiles(dir, productName, version) {
-  const installer = path.join(dir, windowsInstallerName(productName, version));
-  const signature = `${installer}.sig`;
-  for (const file of [installer, signature]) {
-    if (!existsSync(file)) throw new Error(`${file} does not exist. The Windows build of ${version} makes ${path.basename(installer)} and its .sig.`);
-  }
-  if (statSync(signature).mtimeMs + 5000 < statSync(installer).mtimeMs) {
-    throw new Error(`${signature} is older than ${installer}, so it is left over from an earlier build. Sign the update again.`);
-  }
-  return { installer, signature };
+  return WINDOWS_ARCHES.map((arch) => {
+    const installer = path.join(dir, windowsInstallerName(productName, version, arch));
+    const signature = `${installer}.sig`;
+    for (const file of [installer, signature]) {
+      if (!existsSync(file)) throw new Error(`${file} does not exist. The Windows ${arch} build of ${version} makes ${path.basename(installer)} and its .sig.`);
+    }
+    if (statSync(signature).mtimeMs + 5000 < statSync(installer).mtimeMs) {
+      throw new Error(`${signature} is older than ${installer}, so it is left over from an earlier build. Sign the update again.`);
+    }
+    return { arch, installer, signature };
+  });
 }
 
 export const signFileScript = path.join(path.dirname(fileURLToPath(import.meta.url)), "sign-file.mjs");

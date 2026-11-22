@@ -4,17 +4,19 @@ use std::path::Path;
 #[path = "unix.rs"]
 mod unix;
 #[cfg(unix)]
-pub(super) use unix::{check_private, create_private_dir, private_file_options};
+pub(super) use unix::{check_private, create_private_dir, open_plain_file, private_file_options};
 
 #[cfg(not(unix))]
-pub(super) use private::{check_private, create_private_dir, private_file_options};
+pub(super) use private::{
+    check_private, create_private_dir, open_plain_file, private_file_options,
+};
 
 #[cfg(not(unix))]
 mod private {
-    use std::fs::{self, OpenOptions};
+    use std::fs::{self, File, OpenOptions};
     use std::path::Path;
 
-    // The temp directory already belongs to this user.
+    // The local data directory is inside this user's profile, which is the user's alone.
     pub(in super::super) fn check_private(_root: &Path, _ours: &Path) -> std::io::Result<()> {
         Ok(())
     }
@@ -30,6 +32,21 @@ mod private {
         let mut options = OpenOptions::new();
         options.write(true);
         options
+    }
+
+    /// Opens `path` for reading and answers the file only where what was opened is a plain file.
+    /// Opening waits for nothing here: the temporary directory is the user's own, and a file
+    /// system pipe is not something a path in it names.
+    pub(in super::super) fn open_plain_file(path: &Path) -> std::io::Result<File> {
+        let file = File::open(path)?;
+        if file.metadata()?.is_file() {
+            Ok(file)
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("{} is not a plain file", path.display()),
+            ))
+        }
     }
 }
 

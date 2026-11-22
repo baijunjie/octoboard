@@ -217,7 +217,7 @@ it("opens on keyboard focus, and not on hover while the hidden sidebar floats in
 
 /** The rail in the application's own window, with the remote daemons the shell reports connected. */
 async function railWithRemoteDaemons(connected: RemoteDaemonStatus[]): Promise<HTMLElement> {
-  const entry = (id: string, name: string) => ({ id, name, host: `${id}.example.com`, port: 22, user: "u", auth: "device" as const, keyPath: null, fingerprint: null, octoboarddPath: null });
+  const entry = (id: string, name: string) => ({ id, name, host: `${id}.example.com`, port: 22, user: "u", auth: "device" as const, keyPath: null, fingerprint: null, octoboarddPath: null, deviceKey: { declined: false, file: null, mark: null } });
   const platform: PlatformAdapter = {
     kind: "tauri",
     host: MAC_HOST,
@@ -225,8 +225,9 @@ async function railWithRemoteDaemons(connected: RemoteDaemonStatus[]): Promise<H
       list: async () => [entry("staging", "Staging"), entry("lab", "Home lab")],
       status: async () => connected,
       onChanged: () => () => {},
-      save: async (saved) => ({ ...saved, id: saved.id ?? "new" }),
-      remove: async () => {},
+      save: async (saved) => ({ entry: { ...saved, id: saved.id ?? "new", deviceKey: { declined: false, file: null, mark: null } }, keyRemoval: { line: { result: "not_installed" as const }, privateKeyLeft: null } }),
+      remove: async () => ({ line: { result: "not_installed" as const }, privateKeyLeft: null }),
+      setDeviceKey: async () => ({ line: { result: "not_installed" as const }, privateKeyLeft: null }),
       connect: async () => ({ outcome: "opened" }),
       disconnect: async () => {},
       onPageRequested: () => () => {},

@@ -31,6 +31,17 @@ pub fn trash_failed(failure: &TrashFailure) -> anyhow::Error {
     )
 }
 
+/// Moves `directory`, the folder of a project the user chose to remove with it, to the Trash,
+/// raising [`trash_failed`] when the Trash did not take it. Whether the folder may go is settled
+/// before this.
+pub async fn folder_to_trash(state: &AppState, directory: PathBuf) -> Result<()> {
+    // Off the runtime's worker: a move across volumes copies.
+    let trash = state.host_tools.get().trash;
+    tokio::task::spawn_blocking(move || trash(&directory))
+        .await?
+        .map_err(|failure| trash_failed(&failure))
+}
+
 /// A refusal of a move to the Trash, kept so that it can be said again.
 #[derive(Clone, Debug)]
 struct Refusal {

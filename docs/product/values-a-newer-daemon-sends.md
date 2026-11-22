@@ -8,7 +8,8 @@ keeps working, and such a value:
 
 - **is never shown by its wire value**, and never explained with the words of another state;
 - **decides nothing**: no action is offered or enabled because of it, and it does not count a record as running, at
-  work, blocking or used up;
+  work, blocking or used up, but for the clean-up before uninstalling, where it keeps the action available (see "The
+  clean-up before uninstalling" below);
 - **leaves its record shown** as the sections below say.
 
 ## Sessions
@@ -61,6 +62,18 @@ window does not know reads as off until it is set.
 In the import review, a git workflow line whose wanted value is unknown is left out, and one whose current value is
 unknown shows the wanted value alone; When to prevent sleep's current value is treated the same way (see "Settings in
 the review" in `docs/product/configuration-export-and-import-dialogs.md`).
+
+## The clean-up before uninstalling
+
+No window receives the daemon's list over the protocol: the desktop application's main window gets this computer's
+daemon's items from the application, which asks its own daemon for them on a local route, and the running daemon
+that answers may be of another build than the application. An item of a kind the application does not know is not
+listed, counted or named: it is reported beside the known items as the daemon's part not read in full, so the row says
+that not everything in effect could be read, the confirmation shows the alert **Could not read what the daemon
+added**, and **Remove all** stays available because of it (see "The row" in
+`docs/product/clean-up-before-uninstalling.md`). Clearing asks the daemon to clear it with the rest, the daemon knowing
+what it is; the result reports it the same way, under **Could not remove what the daemon added**, some of it possibly
+removed.
 
 ## Values read as a known one
 

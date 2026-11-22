@@ -2,6 +2,13 @@
 //! and the saved remote daemons in a category of their own under the Remote menu's name. Each line
 //! starts the application's executable with an argument `remote::launch_action` reads, which the
 //! single-instance plugin hands to the running application (`lifecycle/windows.rs`).
+//!
+//! Windows keeps the list for the application outside the application's own folders. `delete`
+//! removes it: for the clean-up before the application is uninstalled, and for the uninstaller,
+//! which starts the executable with [`DELETE_ARGUMENT`] (`windows/installer-hooks.nsh`). The
+//! uninstaller of Tauri's own template also deletes the list kept under the bundle's identifier;
+//! `set` names no application id, and which of the two names the list a given process wrote is
+//! not something this code knows, so `delete` asks for both.
 
 #[cfg(windows)]
 use windows::core::{Interface, HSTRING, PWSTR};
@@ -32,6 +39,29 @@ use crate::remote::{DEVICES_ARGUMENT, MAIN_WINDOW_ARGUMENT, OPEN_ARGUMENT};
 pub struct Line {
     pub title: String,
     pub arguments: String,
+}
+
+/// The argument the uninstaller starts the executable with to have the jump list removed and
+/// nothing else done, followed by the bundle's identifier; the installer hooks name the same one,
+/// which `apps/desktop/scripts/installer-hooks.test.mjs` checks.
+pub const DELETE_ARGUMENT: &str = "--delete-jump-list";
+
+/// Whether `args`, a process's own with the executable first, ask for the jump list to be removed
+/// and nothing else: the argument alone, or followed by one application id, which is then given.
+/// `None` for any other arguments.
+pub fn asks_to_delete<I, S>(args: I) -> Option<Option<String>>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let mut rest = args.into_iter().skip(1);
+    if rest.next()?.as_ref() != std::ffi::OsStr::new(DELETE_ARGUMENT) {
+        return None;
+    }
+    let id = rest
+        .next()
+        .map(|id| id.as_ref().to_string_lossy().into_owned());
+    rest.next().is_none().then_some(id)
 }
 
 /// The jump list's tasks and its category of saved remote daemons, from the labels and the saved
@@ -100,6 +130,34 @@ pub fn set(category: &str, tasks: &[Line], daemons: &[Line]) -> windows::core::R
         let collection = collection_of(&executable, tasks)?;
         list.AddUserTasks(&collection.cast::<IObjectArray>()?)?;
         list.CommitList()
+    }
+}
+
+/// Windows 11 returns `S_OK` from `DeleteList` for an absent list, with either the implicit or
+/// an explicit application ID. A failure from either request therefore needs to be reported
+/// even when Windows accepted the other request.
+#[cfg(any(windows, test))]
+fn removal_outcome<E>(own: Result<(), E>, named: Option<Result<(), E>>) -> Result<(), E> {
+    own.and(named.unwrap_or(Ok(())))
+}
+
+#[cfg(windows)]
+/// Removes the application's jump list, from the taskbar and from where Windows keeps it: the list
+/// of this executable with no application id named, as `set` makes it, and the one kept under
+/// `application_id` where one is given (the bundle's identifier). Both are asked for whatever the
+/// first answers (`removal_outcome` says what that comes to). On the main thread, as `set`.
+pub fn delete(application_id: Option<&str>) -> windows::core::Result<()> {
+    // SAFETY: plain COM calls on an interface this function creates and holds; the null string is
+    // what the call takes for the calling process's own list, and the named id is an `HSTRING`
+    // that outlives its call.
+    unsafe {
+        // As in `set`: counted where COM is set up already, and not depended on otherwise.
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let list: ICustomDestinationList =
+            CoCreateInstance(&DestinationList, None, CLSCTX_INPROC_SERVER)?;
+        let own = list.DeleteList(windows::core::PCWSTR::null());
+        let named = application_id.map(|id| list.DeleteList(&HSTRING::from(id)));
+        removal_outcome(own, named)
     }
 }
 
@@ -174,6 +232,44 @@ mod tests {
             let args = std::iter::once("octoboard.exe").chain(line.arguments.split(' '));
             assert!(crate::remote::launch_action(args).is_some(), "{line:?}");
         }
+    }
+
+    #[test]
+    fn only_the_argument_alone_or_with_one_application_id_asks_for_the_jump_list_to_be_removed() {
+        assert_eq!(
+            asks_to_delete(["octoboard.exe", DELETE_ARGUMENT]),
+            Some(None)
+        );
+        assert_eq!(
+            asks_to_delete(["octoboard.exe", DELETE_ARGUMENT, "dev.example.app"]),
+            Some(Some("dev.example.app".to_owned()))
+        );
+        assert_eq!(asks_to_delete(["octoboard.exe"]), None);
+        assert_eq!(asks_to_delete([DELETE_ARGUMENT]), None);
+        assert_eq!(
+            asks_to_delete(["octoboard.exe", DELETE_ARGUMENT, "id", "more"]),
+            None
+        );
+        assert_eq!(
+            asks_to_delete(["octoboard.exe", "--other", DELETE_ARGUMENT]),
+            None
+        );
+        // No line of the list itself is that argument, or a click on one would remove the list.
+        let (tasks, daemons) = lines("a", "b", &[("id".to_owned(), "name".to_owned())]);
+        for line in tasks.iter().chain(&daemons) {
+            let args = std::iter::once("octoboard.exe").chain(line.arguments.split(' '));
+            assert_eq!(asks_to_delete(args), None, "{line:?}");
+        }
+    }
+
+    #[test]
+    fn removing_the_list_requires_success_from_each_requested_id() {
+        assert_eq!(removal_outcome::<&str>(Ok(()), None), Ok(()));
+        assert_eq!(removal_outcome(Ok::<(), &str>(()), Some(Ok(()))), Ok(()));
+        assert_eq!(removal_outcome(Ok(()), Some(Err("named"))), Err("named"));
+        assert_eq!(removal_outcome(Err("own"), Some(Ok(()))), Err("own"));
+        assert_eq!(removal_outcome(Err("own"), Some(Err("named"))), Err("own"));
+        assert_eq!(removal_outcome(Err("own"), None), Err("own"));
     }
 
     #[test]

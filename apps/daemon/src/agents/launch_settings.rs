@@ -373,7 +373,12 @@ async fn resolve(state: &Arc<AppState>, request: Resolve) -> Result<Resolved> {
             };
             take().unwrap_or_default()
         });
-        let listing = catalogue.list(&shell_env, dir, COMMAND_TIMEOUT);
+        let listing = catalogue.list(
+            &shell_env,
+            dir,
+            &crate::paths::agent_query_homes_dir(),
+            COMMAND_TIMEOUT,
+        );
         #[cfg(test)]
         let listing = state.agent_models.seeded(agent, dir).unwrap_or(listing);
         let configured = configuration

@@ -449,6 +449,7 @@ fn run(steps: &[Op]) {
                 let parent = std::env::var(PARENT_VARIABLE)
                     .ok()
                     .and_then(|pid| pid.parse().ok())
+                    .map(crate::platform::proc::Parent::read)
                     .expect("started by a fixture process");
                 crate::platform::proc::watch_parent(parent, || std::process::exit(0));
             }

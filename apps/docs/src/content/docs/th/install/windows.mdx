@@ -1,14 +1,16 @@
 ---
 title: "Windows"
-description: "สำหรับพีซีที่ใช้ตัวประมวลผล Intel หรือ AMD (เกือบทุกเครื่อง) บน Windows 10 เวอร์ชัน 21H2 ขึ้นไป บน Windows 11 บน Arm แอป x64 นี้ทำงานผ่านการจำลอง"
+description: "สำหรับพีซีที่ใช้ตัวประมวลผล Intel หรือ AMD (เกือบทุกเครื่อง) บน Windows 10 เวอร์ชัน 21H2 ขึ้นไป สำหรับ Windows 11 บน Arm ให้ใช้ตัวติดตั้ง arm64 แบบเนทีฟเมื่อรุ่นที่เผยแพร่นั้นมีให้ หากไม่มี แอป x64 นี้จะทำงานผ่านการจำลอง"
 ---
 
 import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
 import { downloads, productName } from "../../../../commands.ts";
+import WindowsUninstaller from "../../../../snippets/th/windows-uninstaller.mdx";
 
-สำหรับพีซีที่ใช้ตัวประมวลผล Intel หรือ AMD (x64 ซึ่งคือพีซี Windows เกือบทุกเครื่อง) บน Windows 10 เวอร์ชัน 21H2 ขึ้นไป บน Windows 11 บน Arm แอป x64 นี้ทำงานผ่านการจำลอง
+สำหรับพีซีที่ใช้ตัวประมวลผล Intel หรือ AMD (x64 ซึ่งคือพีซี Windows เกือบทุกเครื่อง) บน Windows 10 เวอร์ชัน 21H2 ขึ้นไป สำหรับ Windows 11 บน Arm ให้ใช้ตัวติดตั้ง arm64 แบบเนทีฟเมื่อรุ่นที่เผยแพร่นั้นมีให้ หากไม่มี แอป x64 นี้จะทำงานผ่านการจำลอง
 
 <LinkButton href={downloads.windows}>ดาวน์โหลดสำหรับ Windows</LinkButton>
+<LinkButton href={downloads["windows-arm64"]} variant="secondary">ดาวน์โหลดสำหรับ Windows บน Arm</LinkButton>
 
 <Aside>แอป Windows อยู่ในช่วงเบต้า</Aside>
 
@@ -16,7 +18,7 @@ import { downloads, productName } from "../../../../commands.ts";
 
 <Steps>
 
-1. ดาวน์โหลดตัวติดตั้งด้วยปุ่มด้านบน เป็นไฟล์ที่ชื่อลงท้ายด้วย <code dir="ltr">x64-setup.exe</code>
+1. ดาวน์โหลดตัวติดตั้งด้วยปุ่มด้านบน เป็นไฟล์ที่ชื่อลงท้ายด้วย <code dir="ltr">x64-setup.exe</code> สำหรับ Windows บน Arm ให้ลองปุ่มที่สอง เมื่อรุ่นที่เผยแพร่นั้นมีตัวติดตั้ง arm64 ปุ่มนี้จะดาวน์โหลดไฟล์ที่ชื่อลงท้ายด้วย <code dir="ltr">arm64-setup.exe</code> หากไม่มี ปุ่มนี้จะเปิดรายการรุ่นที่เผยแพร่ และตัวติดตั้ง x64 จะทำงานผ่านการจำลอง
 2. เปิดไฟล์ที่ดาวน์โหลดมาเพื่อรันตัวติดตั้ง ตัวติดตั้งจะติดตั้ง {productName} ให้เฉพาะบัญชีผู้ใช้ของคุณ จึงไม่ขอสิทธิ์ผู้ดูแลระบบ
 
    แอปยังไม่ได้ลงนามรหัส (code-signed) Microsoft Defender SmartScreen จึงอาจแสดงข้อความ “Windows protected your PC” ให้เลือก “More info” แล้วเลือก “Run anyway”
@@ -38,6 +40,16 @@ import { downloads, productName } from "../../../../commands.ts";
 - [Grok Build](https://docs.x.ai/build/overview)
 
 หากคุณใช้ Claude Code หรือ Codex ให้ติดตั้ง [Git for Windows](https://git-scm.com/download/win) ก่อน เพราะทั้งสองต้องใช้
+
+## ถอนการติดตั้ง
+
+ถอนการติดตั้ง {productName} ด้วยตัวถอนการติดตั้งของแอป จากการตั้งค่าของ Windows (แอป) หรือแผงควบคุม
+
+<WindowsUninstaller />
+
+หากต้องการดูว่ามีอะไรมีผลอยู่ก่อนถอนการติดตั้ง ให้เปิด <strong>การตั้งค่า › การล้างข้อมูล › เก็บกวาดก่อนถอนการติดตั้ง</strong> ซึ่ง <strong>ลบทั้งหมด</strong> ที่นั่นจะลบสิ่งเดียวกันและแสดงผลของแต่ละรายการ
+
+[ระบบของคุณยังคงเหมือนเดิม](../../your-system/) บอกว่าหลังจากนั้นเหลืออะไรและลบได้อย่างไร
 
 ## การอัปเดต
 

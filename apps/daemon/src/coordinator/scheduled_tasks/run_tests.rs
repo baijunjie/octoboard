@@ -313,6 +313,32 @@ async fn run_now_runs_any_task_and_leaves_its_schedule() {
     assert!(err.to_string().contains("unknown scheduled task nope"));
 }
 
+/// In a clean-up run, Run now is refused before anything is run: no run is recorded, failed or
+/// otherwise, the task is left as it was and nothing is launched.
+#[tokio::test]
+async fn run_now_is_refused_in_a_clean_up_run_and_leaves_no_run() {
+    let (state, _dir) = state_for_opening("scheduled-run-now-clean-up");
+    let manual = task("t", Schedule::Manual, None, false);
+    state.store.insert_scheduled_task(&manual).unwrap();
+    state.set_clean_up_run();
+    let stand_ins = StandIns::new();
+
+    let err = run_scheduled_task_now(&state, "t", stand_ins.launcher()).unwrap_err();
+
+    assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN);
+    assert!(
+        format!("{err:#}").contains("so it starts no agent"),
+        "{err:#}"
+    );
+    assert!(state
+        .store
+        .list_scheduled_task_runs("t")
+        .unwrap()
+        .is_empty());
+    assert_eq!(stored(&state, "t").last_run_at, None);
+    assert!(stand_ins.launched().is_empty());
+}
+
 /// A launch that fails leaves a failed run with the failure's code and account, and no session.
 #[tokio::test]
 async fn a_failed_launch_is_recorded_as_a_failed_run() {

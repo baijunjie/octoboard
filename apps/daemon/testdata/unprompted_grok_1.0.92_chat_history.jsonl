@@ -1,0 +1,2 @@
+{"type":"system","content":"Invented system prompt."}
+{"type":"user","content":[{"type":"text","text":"<system-reminder>\nInvented reminder.\n</system-reminder>"}],"synthetic_reason":"system_reminder"}

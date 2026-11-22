@@ -1,14 +1,16 @@
 ---
 title: "Windows"
-description: "Для компьютеров с процессором Intel или AMD (почти все компьютеры с Windows), Windows 10 версии 21H2 или новее. В Windows 11 на Arm это приложение x64 работает через эмуляцию."
+description: "Для компьютеров с процессором Intel или AMD (почти все компьютеры с Windows), Windows 10 версии 21H2 или новее. В Windows 11 на Arm используйте нативный установщик arm64, если он есть в выпуске; иначе это приложение x64 работает там через эмуляцию."
 ---
 
 import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
 import { downloads, productName } from "../../../../commands.ts";
+import WindowsUninstaller from "../../../../snippets/ru/windows-uninstaller.mdx";
 
-Для компьютеров с процессором Intel или AMD (x64; почти все компьютеры с Windows), Windows 10 версии 21H2 или новее. В Windows 11 на Arm это приложение x64 работает через эмуляцию.
+Для компьютеров с процессором Intel или AMD (x64; почти все компьютеры с Windows), Windows 10 версии 21H2 или новее. В Windows 11 на Arm используйте нативный установщик arm64, если он есть в выпуске; иначе это приложение x64 работает там через эмуляцию.
 
 <LinkButton href={downloads.windows}>Скачать для Windows</LinkButton>
+<LinkButton href={downloads["windows-arm64"]} variant="secondary">Скачать для Windows на Arm</LinkButton>
 
 <Aside>Приложение для Windows находится на стадии беты.</Aside>
 
@@ -16,7 +18,7 @@ import { downloads, productName } from "../../../../commands.ts";
 
 <Steps>
 
-1. Скачайте установщик кнопкой выше. Это файл, имя которого заканчивается на <code dir="ltr">x64-setup.exe</code>.
+1. Скачайте установщик кнопкой выше. Это файл, имя которого заканчивается на <code dir="ltr">x64-setup.exe</code>. В Windows на Arm попробуйте вторую кнопку: если в выпуске есть установщик arm64, она скачивает этот файл, имя которого заканчивается на <code dir="ltr">arm64-setup.exe</code>; иначе она открывает список выпусков, и установщик x64 работает через эмуляцию.
 2. Откройте скачанный файл, чтобы запустить установщик. Он устанавливает {productName} только для вашей учётной записи, поэтому права администратора не запрашиваются.
 
    Приложение пока не имеет цифровой подписи, поэтому Microsoft Defender SmartScreen может показать сообщение «Windows защитила ваш компьютер». Нажмите «Подробнее», затем «Выполнить в любом случае».
@@ -38,6 +40,16 @@ import { downloads, productName } from "../../../../commands.ts";
 - [Grok Build](https://docs.x.ai/build/overview)
 
 Если вы пользуетесь Claude Code или Codex, сначала установите [Git for Windows](https://git-scm.com/download/win): без него они не работают.
+
+## Удаление
+
+Удалите {productName} его программой удаления — из «Параметров» Windows (раздел «Приложения») или из панели управления.
+
+<WindowsUninstaller />
+
+Чтобы перед удалением увидеть, что сейчас действует, откройте <strong>Настройки › Очистка › Очистка перед удалением приложения</strong>: <strong>Убрать всё</strong> там убирает то же самое и показывает результат по каждому элементу.
+
+На странице [Ваша система остаётся прежней](../../your-system/) сказано, что остаётся после этого и как это убрать.
 
 ## Обновления
 

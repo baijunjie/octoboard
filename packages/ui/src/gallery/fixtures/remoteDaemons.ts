@@ -33,6 +33,10 @@ const crowdedState = snapshotState({
   sessions,
 });
 
+/** Where this computer's key was installed on a server, and the mark of its line, for an entry that signs in with it. */
+const KEY_FILE = "~/.ssh/authorized_keys";
+const KEY_MARK = "Octoboard on Ann’s MacBook Pro";
+
 const entryOf = (id: string, name: string, host: string, auth: RemoteDaemonEntry["auth"], overrides: Partial<RemoteDaemonEntry> = {}): RemoteDaemonEntry => ({
   id,
   name,
@@ -43,6 +47,7 @@ const entryOf = (id: string, name: string, host: string, auth: RemoteDaemonEntry
   keyPath: auth === "key" ? "~/.ssh/id_ed25519" : null,
   fingerprint: null,
   octoboarddPath: null,
+  deviceKey: auth === "device" ? { declined: false, file: KEY_FILE, mark: KEY_MARK } : { declined: false, file: null, mark: null },
   ...overrides,
 });
 
@@ -50,6 +55,8 @@ export const staging = entryOf("staging", "Staging", "staging.example.com", "dev
 export const production = entryOf("production", "Production", "prod.example.com", "device", { fingerprint: "SHA256:aGFsbGVyeWZpbmdlcnByaW50Zm9ycHJvZHVjdGlvbg" });
 export const buildServer = entryOf("build", "Build server", "10.0.4.17", "password", { port: 2222, user: "ci" });
 export const homeLab = entryOf("home-lab", "Home lab", "lab.local", "key");
+/** Signs in with a password and has said no to this computer's key, so its page offers to turn the key on. */
+export const workstation = entryOf("workstation", "Office workstation", "ws-12.corp.example.com", "password", { deviceKey: { declined: true, file: null, mark: null } });
 export const relay = entryOf("relay", "Edge relay in the Frankfurt data centre", "relay-fra-02.edge.example.net", "key", { user: "octoboard" });
 
 /** What the Remote devices page lists: every state a saved daemon can be in. */
@@ -116,7 +123,7 @@ export const remoteDaemonsScenarios: Scenario[] = [
     category: "normal",
     title: "Remote devices page with saved remote daemons",
     description:
-      "The Remote devices page, a page of the main window like a console's sessions: the rail's button is drawn as the current item, a filled circle (a console button shows the current one the same way, behind its avatar), and the top bar's breadcrumb reads Remote devices, then the selected device. The sidebar lists the saved remote daemons as session-style rows: the Server glyph, the name and, where one is connected, a status glyph with a tooltip (a green chain link for Connected, a green browser window for Opened in browser, and a grey spinner for Reconnecting); the long-named relay is cut off at the row's end. The first, Staging, is selected, with its settings form in the content area: the header with its name, badge, address in monospace and Open (it is connected), the form in three cards, Connection (details, name, then user, host and SSH port on one row), Sign-in (this computer's key as its authentication) and Advanced (the path of octoboardd, the pinned host key with Clear), then Save and Revert, which stay disabled until something is changed, and a Remove card at the bottom. Choose a narrow width to see the sidebar become a drawer that the top bar's toggle opens.",
+      "The Remote devices page, a page of the main window like a console's sessions: the rail's button is drawn as the current item, a filled circle (a console button shows the current one the same way, behind its avatar), and the top bar's breadcrumb reads Remote devices, then the selected device. The sidebar lists the saved remote daemons as session-style rows: the Server glyph, the name and, where one is connected, a status glyph with a tooltip (a green chain link for Connected, a green browser window for Opened in browser, and a grey spinner for Reconnecting); the long-named relay is cut off at the row's end. The first, Staging, is selected, with its settings form in the content area: the header with its name, badge, address in monospace and Open (it is connected), the form in cards, Connection (details, name, then user, host and SSH port on one row), Sign-in (a line saying connections sign in with this computer's key, in place of the Authentication choice, since this computer's key is added to Staging's server) and Advanced (the path of octoboardd, the pinned host key with Clear), then Save and Revert, which stay disabled until something is changed, and under them the cards of This computer's key (its switch on, with the line saying it is added for the user and host) and Remove. Choose a narrow width to see the sidebar become a drawer that the top bar's toggle opens.",
     state,
     desktopApp: true,
     remoteDaemons: { entries: SAVED, status: [...CONNECTED] },
@@ -146,6 +153,19 @@ export const remoteDaemonsScenarios: Scenario[] = [
     desktopApp: true,
     remoteDaemons: { entries: SAVED, status: [...CONNECTED] },
     steps: [showPage, (ui) => selectDevice(ui, relay), (ui) => ui.focus(ui.t("remoteDaemons.form.port")), (ui) => ui.type("2200")],
+  },
+
+  {
+    id: "remote-devices-device-key",
+    group: GROUP,
+    category: "normal",
+    title: "Remote device with this computer's key turned off",
+    description:
+      "Office workstation, which has said no to this computer's key, selected: its Sign-in card still offers the Authentication choice (Password and Key file), and the This computer's key card under the form has its switch off, with the line saying what turning it on does. Staging, which has the key added, and Build server, which has not been asked yet, are in the list: selecting them shows the switch on, with the line saying it is added for the user and host (and the Sign-in card then only says connections sign in with the key), or on with the line saying it is not added yet and the next connection asks first.",
+    state,
+    desktopApp: true,
+    remoteDaemons: { entries: [staging, workstation, buildServer] },
+    steps: [showPage, (ui) => selectDevice(ui, workstation)],
   },
 
   {
@@ -240,6 +260,22 @@ export const remoteDaemonsScenarios: Scenario[] = [
   },
 
   {
+    id: "remote-devices-device-key-offer",
+    group: GROUP,
+    category: "normal",
+    title: "Remote devices page asking to add this computer's key",
+    description:
+      "A password sign-in that worked on a server that has none of this computer's key: the Add this computer's key dialog stands over the page, saying what is written (one line to the authorized keys file, for the user and host as chips, marked with this computer's name, which is drawn as a monospace literal), that the private key is kept in this computer's credential store and removed again with the remote daemon or the key's switch, and that declining means no further asking. The footer has no Cancel; the close button ends the connection. Add key is the primary action, with Do not add beside it.",
+    state,
+    desktopApp: true,
+    remoteDaemons: {
+      entries: [buildServer, homeLab],
+      outcomes: { build: { outcome: "device_key_offered", mark: KEY_MARK, file: KEY_FILE } },
+    },
+    steps: [showPage, (ui) => ui.press(connectOf(ui, buildServer)), (ui) => ui.type("hunter2"), (ui) => ui.press(ui.t("remoteDaemons.connect"))],
+  },
+
+  {
     id: "remote-devices-fingerprint",
     group: GROUP,
     category: "normal",
@@ -264,6 +300,18 @@ export const remoteDaemonsScenarios: Scenario[] = [
     desktopApp: true,
     remoteDaemons: { entries: [staging, homeLab] },
     steps: [showPage, (ui) => ui.press(homeLab.name), (ui) => ui.press(ui.t("remoteDaemons.removeLabel", { name: homeLab.name }))],
+  },
+
+  {
+    id: "remote-devices-remove-device-key",
+    group: GROUP,
+    category: "normal",
+    title: "Remove remote daemon that has this computer's key",
+    description: "Remove at the bottom of Staging's page, whose key is added to its server, asks first in the destructive confirmation naming the entry, and its message also says that this computer's key is removed from the server and its private key from this computer; the server and its daemon otherwise stay the same. Nothing is taken back until Remove is confirmed.",
+    state,
+    desktopApp: true,
+    remoteDaemons: { entries: [staging, homeLab] },
+    steps: [showPage, (ui) => ui.press(ui.t("remoteDaemons.removeLabel", { name: staging.name }))],
   },
 
   {
@@ -337,6 +385,48 @@ export const remoteDaemonsScenarios: Scenario[] = [
       outcomes: { staging: { outcome: "unreachable", detail: "ssh: connect to host staging.example.com port 22: Connection timed out" } },
     },
     steps: [showPage, (ui) => ui.press(connectOf(ui, staging))],
+  },
+
+  {
+    id: "remote-devices-key-left-on-server",
+    group: GROUP,
+    category: "exceptional",
+    title: "Remote devices page after this computer's key could not be removed from a server",
+    description:
+      "The key of Staging was turned off (the Turn off this computer's key confirmation was answered) but the server could not be reached to take its line out: the alert titled Could not remove this computer’s key from the server says the key could not be removed from the host, so the line marked with the mark (a monospace literal) may still be in the file for the user, and to delete it on the server if it is; the host and the user are chips and so is the file, and the sentence that the private key was removed from this computer ends the body; the shell's own words are behind Error details. Staging has gone back to the Authentication choice, with the key's switch off.",
+    state,
+    desktopApp: true,
+    remoteDaemons: {
+      entries: [staging, production],
+      keyRemovals: {
+        staging: {
+          line: { result: "left_on_host", mark: KEY_MARK, file: KEY_FILE, host: staging.host, user: staging.user, detail: "ssh: connect to host staging.example.com port 22: Connection timed out" },
+          privateKeyLeft: null,
+        },
+      },
+    },
+    steps: [showPage, (ui) => ui.press(ui.t("remoteDaemons.form.auth.device")), (ui) => ui.press(ui.t("remoteDaemons.deviceKey.turnOff.confirm"))],
+  },
+
+  {
+    id: "remote-devices-private-key-left",
+    group: GROUP,
+    category: "exceptional",
+    title: "Remote devices page after this computer's private key could not be removed",
+    description:
+      "The key of Staging was turned off and its line was taken out of the server, but the system's credential store would not remove the private key: one alert, titled Could not remove this computer’s private key, says the store did not remove the key kept for the user on the host (both chips) and that the owner removes it there, naming the item and the account as chips; the store's own words are behind Error details. No alert about the server follows, since its line is gone. Staging has gone back to the Authentication choice, with the key's switch off.",
+    state,
+    desktopApp: true,
+    remoteDaemons: {
+      entries: [staging, production],
+      keyRemovals: {
+        staging: {
+          line: { result: "removed" },
+          privateKeyLeft: { service: "dev.octoboard.desktop.remote-daemon-key", account: staging.id, host: staging.host, user: staging.user, detail: "The keychain is locked: User interaction is not allowed." },
+        },
+      },
+    },
+    steps: [showPage, (ui) => ui.press(ui.t("remoteDaemons.form.auth.device")), (ui) => ui.press(ui.t("remoteDaemons.deviceKey.turnOff.confirm"))],
   },
 
   {

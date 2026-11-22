@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use tokio::sync::mpsc;
 
-use super::connect::quiet_request;
+use super::connect::restoring_request;
 use super::ConnectOutcome;
 use crate::config_dir::{config_path, write_json};
 use crate::diagnostics::diagnostic;
@@ -181,7 +181,8 @@ pub fn begin(app: &AppHandle, stays_in_background: bool) {
             let order = super::next_order();
             let told = told.clone();
             tauri::async_runtime::spawn(async move {
-                let outcome = super::connect::connect(&app, quiet_request(&id), Some(order)).await;
+                let outcome =
+                    super::connect::connect(&app, restoring_request(&id), Some(order)).await;
                 let opened = matches!(outcome, Ok(ConnectOutcome::Opened));
                 match outcome {
                     Ok(ConnectOutcome::Opened) => {}

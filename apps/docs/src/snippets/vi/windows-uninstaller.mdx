@@ -1,0 +1,12 @@
+import { Aside } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* What the Windows uninstaller does before it removes the app, which the Windows guide and "Your system stays as it was" share. */}
+
+Trước khi xóa bất cứ thứ gì, trình gỡ cài đặt tự dọn dẹp: nó đóng {productName} nếu đang chạy, hỏi trước trừ khi gỡ cài đặt im lặng, và xóa mà không hỏi mọi thứ <strong>Xóa tất cả</strong> xóa. Sau đó nó gỡ cài đặt, dù kết quả thế nào. Nếu có gì không xóa được, nó cho biết ở cuối, kèm nơi từng mục còn lại, và liệt kê chúng trong <code dir="ltr">{system.uninstallLogWindows}</code>; gỡ cài đặt im lặng chỉ ghi tệp đó.
+
+Trình cài đặt và trình gỡ cài đặt dùng ngôn ngữ của hệ thống nếu {productName} có ngôn ngữ đó, nếu không thì dùng tiếng Anh. Trình gỡ cài đặt, cùng danh sách những gì nó để lại, giữ ngôn ngữ bạn đã dùng khi cài đặt; lý do mà một tính năng đưa ra cho một mục còn lại có thể bằng tiếng Anh.
+
+Không phải lần gỡ cài đặt nào cũng chạy bước dọn dẹp này. Bản cập nhật trong ứng dụng và trình cài đặt chạy đè lên ứng dụng đã cài thì không, nên các khóa của bạn trên máy chủ từ xa và việc chia sẻ của các tài khoản vẫn giữ nguyên; trình cài đặt bạn tự chạy đè lên vẫn tắt <strong>Mở khi đăng nhập</strong>, cho đến khi bạn bật lại. Trình gỡ cài đặt của phiên bản có trước bước dọn dẹp này cũng không chạy: với phiên bản như vậy, hãy chọn <strong>Xóa tất cả</strong> trước.
+
+<Aside>Với ứng dụng x64 trên Windows on Arm, trình gỡ cài đặt không thể đóng {productName} đang chạy, và việc gỡ cài đặt dừng lại mà không xóa gì, trình cài đặt chạy đè lên cũng vậy: hãy thoát {productName} trước. Ứng dụng arm64 không có giới hạn này, và bản cài x64 trên PC Arm chuyển sang nó qua bản cập nhật trong ứng dụng.</Aside>

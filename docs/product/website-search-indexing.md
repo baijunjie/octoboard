@@ -105,9 +105,9 @@ Agent-readable files are published at the deployment root and are crawlable:
   privacy page `privacy.md`. Another language's homepage is `<route code>.md`, so Simplified Chinese is `zh-CN.md`. Its
   other pages use the same filenames within the locale directory, such as `zh-CN/download.md`.
 - `llms.txt`, in English. Its notes state that Octoboard is free and open source under the MIT License, and cover
-  the supported systems and processors (macOS on Apple silicon and Intel, Windows on x64, the Linux server on x86_64
-  and aarch64), beta status, each platform's availability, the pointer to the download page, the newest macOS and
-  Windows downloads, each followed by a link to that app's English installation guide on the documentation site, the
+  the supported systems and processors (macOS on Apple silicon and Intel, Windows on x64, and on arm64 once a release
+  carries its installer, as the homepage's platform line says too, the Linux server on x86_64 and aarch64), beta status, each platform's availability, the pointer to the download page, the newest macOS and
+  Windows downloads (with the arm64 Windows installer's link once a release carries one), each followed by a link to that app's English installation guide on the documentation site, the
   Linux server's description, supported architectures, install command under its "Install on the server" heading,
   archive links, and links to the documentation site's English Linux server guide and Connect over SSH guide (as on the
   download page's Linux panel, without the panel's title), a link to the documentation site's English home, the link to

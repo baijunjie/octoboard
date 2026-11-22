@@ -1,7 +1,8 @@
 //! The Windows entry: a value of the current user's `Run` key that starts the app with
 //! `--launched-at-login`. Task Manager's Startup apps tab turns it off without removing it, by a
-//! value under `StartupApproved\Run`, which is read here and cleared when the user turns the switch
-//! on. Linux has no entry.
+//! value under `StartupApproved\Run`, which is read here, cleared when the user turns the switch
+//! on, and removed with the entry when it is turned off, so that nothing of the entry stays in the
+//! registry. Linux has no entry.
 
 use super::Status;
 
@@ -137,6 +138,21 @@ pub fn status() -> Result<Status, String> {
     })
 }
 
+/// Whether the registry holds anything of the entry: its `Run` value, also where Task Manager
+/// turned it off, or what Task Manager wrote about it. Apart from [`status`], which is what the
+/// switch shows.
+#[cfg(windows)]
+pub fn present() -> Result<bool, String> {
+    let name = crate::menu::APP_NAME;
+    Ok(registry::read(registry::RUN_KEY, name, false).is_some()
+        || registry::read(registry::APPROVED_KEY, name, true).is_some())
+}
+
+#[cfg(not(windows))]
+pub fn present() -> Result<bool, String> {
+    Ok(false)
+}
+
 #[cfg(windows)]
 pub fn set(enabled: bool) -> Result<Status, String> {
     let name = crate::menu::APP_NAME;
@@ -148,6 +164,8 @@ pub fn set(enabled: bool) -> Result<Status, String> {
         registry::delete(registry::APPROVED_KEY, name)?;
     } else {
         registry::delete(registry::RUN_KEY, name)?;
+        // What Task Manager wrote about the entry says nothing once the entry is gone.
+        registry::delete(registry::APPROVED_KEY, name)?;
     }
     status()
 }

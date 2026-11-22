@@ -1,0 +1,22 @@
+import { Code } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* How the Linux server program is uninstalled, which the Linux server guide and "Your system stays as it was" share. */}
+
+以当初安装它的用户身份，在服务器上运行下面的命令。它不会下载任何东西。
+
+<Code code={system.uninstall} lang="sh" />
+
+它会先列出将要做的每一件事，并请你输入 <code dir="ltr">{system.uninstallWord}</code>。<code dir="ltr">{system.uninstallDryRun}</code> 只显示这份清单；在没有终端可供询问的地方，用 <code dir="ltr">{system.uninstallYes}</code> 来确认。
+
+随后，它会为每个仍在共享默认配置的账户关闭共享。为此，守护进程在运行时它会先停止守护进程，这会结束守护进程运行的每个会话；再只为这次清理启动守护进程，不运行任何会话。之后它停止守护进程，移除程序以及它的 systemd 服务（如果有）；如果是安装服务时开启了 lingering，且你的其他服务都不需要它，还会关闭 lingering。
+
+- <strong>如果某个账户无法停止共享</strong>，例如它有会话正在工作，就什么都不会移除，守护进程也会按原来的方式重新启动：等那项工作结束后再运行一次这条命令。加上 <code dir="ltr">{system.uninstallKeepChanges}</code> 则不做这次清理就卸载，并把每个这类账户文件夹里的链接，以及旁边该账户自身配置的备份，留给你手动删除。
+- <strong>如果停止守护进程会打断工作</strong>，就什么都不会移除。加上 <code dir="ltr">{system.uninstallForce}</code> 则照样停止它。
+- <strong>请运行你安装的那个 <code dir="ltr">{system.cliName}</code>。</strong>通过链接运行，或者用 {productName} 守护进程所运行的那份以外的 <code dir="ltr">{system.cliName}</code> 副本运行时，它不会移除任何东西，并写明应改为运行哪个文件。
+
+安装脚本原先的命令仍然可用，它运行的就是上面这条命令。如果安装时用了 <code dir="ltr">{system.binDirOption}</code>，请加上它并指定同一个文件夹。
+
+<Code code={system.uninstallScript} lang="sh" />
+
+如果你的 <code dir="ltr">{system.cliName}</code> 旧到还没有卸载命令，脚本的命令会自己移除它，但事先不会关闭任何东西：仍在共享默认配置的账户，其文件夹里的链接会留下，你可以手动删除。

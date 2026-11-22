@@ -16,6 +16,7 @@ use crate::platform::fs;
 use crate::protocol::{error_code, CodedError};
 
 pub mod identity;
+pub mod json_paths;
 pub mod links;
 pub mod listing;
 pub mod place;

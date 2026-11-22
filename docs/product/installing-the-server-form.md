@@ -88,6 +88,7 @@ The website publishes the install script at its root, so it is run as:
 ```sh
 curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh
 curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -- --service [--port N]
+curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -- --uninstall [--bin-dir DIR] [--yes] [--force] [--keep-changes]
 ```
 
 | Option | Meaning |
@@ -99,6 +100,8 @@ curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -
 | `--allow-downgrade` | Install the channel's newest version even when it is older than the installed one. |
 | `--require-signature` | Stop, installing nothing, when the archive's signature cannot be checked, instead of going on with its SHA-256 alone (see step 3 below). |
 | `--bin-dir DIR` | Install into `DIR` instead of `~/.local/bin`; a relative directory is taken from the current directory. |
+| `--uninstall` | Install nothing, and hand over to the installed `octoboardd uninstall` instead (see "Uninstalling" below). Takes `--bin-dir` where the install had it, and `--yes`, `--force` and `--keep-changes`; no option of an install: given with one, it is an error naming that option. |
+| `--yes`, `--force`, `--keep-changes` | With `--uninstall`: passed on to `octoboardd uninstall` (uninstall without asking; stop the daemon whatever work that interrupts; do not clear first what Octoboard's features have in effect outside `~/.octoboard`). Given without `--uninstall`, each is an error. |
 | `-h`, `--help` | Print the usage and exit. |
 
 Both `--port N` and `--port=N`, and both forms of `--bin-dir`, are accepted. Any other argument is an error. Without
@@ -207,9 +210,12 @@ With `--service`, after installing the binary, the script:
     `journalctl --user -u octoboardd`;
 - finally, when lingering is not on for the user, turns it on with `loginctl enable-linger <user>`, never asking for a
   password (polkit lets users turn it on for themselves by default), and says it did, so that the service starts at boot
-  and keeps running after logout. Only when that is refused does it say that user services stop at logout and do not
-  start at boot until lingering is on, and to turn it on once with `loginctl enable-linger <user>`, which may need
-  `sudo`.
+  and keeps running after logout. Having turned it on, it notes that it did in `~/.octoboard/install.lingering`, holding
+  the user's name, creating `~/.octoboard` for the user alone where it does not exist yet, so that the uninstall
+  (`octoboardd uninstall`, see "Uninstalling" below) turns lingering off again; where the note cannot be written it
+  says, in a warning, that the uninstall will leave lingering on. Lingering that was already on gets no note. Only when turning it on is refused does it say that user services
+  stop at logout and do not start at boot until lingering is on, and to turn it on once with
+  `loginctl enable-linger <user>`, which may need `sudo`.
 
 ### Checking an archive's signature
 
@@ -248,3 +254,87 @@ The restart is a planned restart: every session and shell terminal keeps running
 new binary, takes them over, on the same port for a daemon started with `octoboardd start`, and on a port the system assigns again for
 one the service runs, unless the unit names one with `--port`; no address a user opens names the daemon's own port. The owner key stays the same, so an address `octoboardd address` printed before still opens the
 daemon, through the forward it prints (see "The UI the daemon serves" in `docs/product/server-form.md`).
+
+## Uninstalling
+
+The server form is uninstalled with its own command, run on the server as the user it was installed for, with nothing
+downloaded:
+
+```sh
+octoboardd uninstall
+```
+
+It first clears what Octoboard's features have in effect on the system outside `~/.octoboard` (each account that shares
+its agent's default configuration), which only `octoboardd` can clear and nothing clears once it is removed: a daemon
+that runs is stopped first, and the clearing is done by a daemon the command starts only for it, which runs no sessions.
+Where something stays in effect, nothing is removed and the daemon it stopped is started again as it ran (through its
+service, or in the background). Otherwise it removes what the install set up, leaving `~/.octoboard`. What it does, in order, its options (`--yes`,
+`--force`, `--keep-changes`, `--dry-run`) and its exit statuses are in "Uninstalling the server form" in
+`docs/product/daemon-command-line.md`.
+
+The install script's one-liner still works, and hands over to that command:
+
+```sh
+curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -- --uninstall
+```
+
+with `--bin-dir DIR` where the install was given one, and `--yes`, `--force` and `--keep-changes`, which it passes on;
+no option of an install goes with it. It makes the same checks of the user as an install (step 1 of "The install
+script" above): it refuses to run as root without `--bin-dir`, and a `$HOME` that does not belong to the user running
+it. Off Linux it refuses, saying there is nothing of it to remove there. Any failure of its own prints a message
+starting `octoboardd install:` on the error output and exits with status 1. Then it looks at `octoboardd` in the install
+directory: where that executable knows the command (asked with `octoboardd uninstall --help`), it runs `octoboardd
+uninstall` with the options passed on, taking the terminal for its input where the script itself was piped in and a
+terminal is there, so that the command can ask, and ends with the command's exit status.
+
+**Only for a build from before the command** does the script remove the installation itself, as it always has. It warns
+first that nothing is cleared first, that an older build may have left an account sharing its agent's default
+configuration (entries of the account's directory then being links into the default account's directory, which can be
+deleted by hand), and that `--yes`, `--force` and `--keep-changes` have no effect there. Then, in order:
+
+1. **Nothing installed**: where the install directory holds none of the files below, there is no unit, and
+   `~/.octoboard` holds no `install.lingering`, it says that `octoboardd` is not installed in that directory and has no
+   service, that nothing was removed, and to pass the same `--bin-dir` where it was installed with one.
+2. **A unit that runs another file**: it reads the program of the unit's first `ExecStart` line, its first word, taking
+   a leading `%h/` as the user's home directory, so both the unit the script writes (which names the executable by its
+   full path) and the archive's own `octoboardd.service` copied by hand
+   (`ExecStart=%h/.local/bin/octoboardd --service-managed`) count for the default install directory. Where that program
+   is not `octoboardd` in this install directory, it stops, removing nothing, naming the file the unit runs; it says to
+   pass `--bin-dir` with the directory where `octoboardd` was installed into another one, and that a unit the user wrote
+   is not the script's to remove.
+3. **Files it could not remove**: where any of the files below does not belong to the user running the script (as when
+   run under `sudo` with `--bin-dir`), it stops, removing nothing, and says to run it as the user who installed
+   `octoboardd`, without `sudo`; where the install directory holds any of them and cannot be written by that user, it
+   stops, removing nothing, saying so. Both are checked before anything is stopped.
+4. **The daemon**: where the installed `octoboardd` answers `octoboardd status` (a daemon of this user runs), it stops
+   it with `octoboardd stop`. Where that does not stop it, whatever the reason (work that stopping would interrupt, or a
+   daemon still running), it stops, removing nothing, and says that `octoboardd stop` did not stop the daemon, pointing
+   at what that command said; where that named work stopping would interrupt, `octoboardd stop --force` stops it all
+   the same and ends its sessions as interrupted, after which the uninstall is run again (see "Running in the
+   background from the command line" in `docs/product/daemon-command-line.md`).
+5. **The unit**, where there is one: `systemctl --user disable --now octoboardd.service`, then the unit file
+   `octoboardd.service` is deleted from `$XDG_CONFIG_HOME/systemd/user/` (`~/.config/systemd/user/` without it), the
+   user's manager is reloaded and the unit's failed state reset. Where `systemctl` is missing or the user's manager
+   cannot be reached, the unit file and the link that enabled it, `default.target.wants/octoboardd.service` beside it,
+   are deleted by hand, and a warning says so, and that a service still running stops at logout or with
+   `systemctl --user stop octoboardd`.
+6. **Lingering**, only where `~/.octoboard/install.lingering` says the install turned it on (see "Installing it as a
+   service" above). Where another service of the user's is enabled — a link in any `*.wants/`, `*.requires/` or
+   `*.upholds/` folder of `${XDG_CONFIG_HOME:-~/.config}/systemd/user/`, or of the generators' directories of the user's
+   runtime directory, other than `octoboardd.service` — it leaves lingering on and the note in place, names those units, and says that
+   `loginctl disable-linger <user>`, which may need `sudo`, turns it off all the same. Otherwise it turns lingering off
+   with `loginctl disable-linger <user>`, never asking for a password, deletes the note and says so. Where that is
+   refused, the note stays and it says to turn lingering off with `loginctl disable-linger <user>`, which may need
+   `sudo`. Lingering that was on before the install, and lingering an install by a script that kept no note turned on,
+   are left as they are.
+7. **The files**, in the install directory: `octoboardd`, `octoboardd.previous` and every `.octoboardd.*` file, what an
+   update, a rollback or an interrupted install leaves beside the executable (see "Beside the server form's executable"
+   in `docs/product/files-octoboard-owns.md`). A file that cannot be deleted is an error. The directory itself stays,
+   and so does any line the user added to put it on the `PATH`.
+8. **`~/.octoboard`**, the daemon's own data (its consoles, session records, settings and logs), is left as it is,
+   where it exists; it says so, with `rm -rf ~/.octoboard` as the way to remove it too. This is said in case 1 as well.
+
+A browser on the daemon offers no clean-up of its own: Settings' Cleanup section says that it is part of uninstalling on
+the server, with `octoboardd uninstall` (see "Which installation it speaks for" in
+`docs/product/clean-up-before-uninstalling.md`). What stays on the server afterwards, and how to remove it by hand, is in
+`docs/product/what-remains-after-uninstalling.md`.

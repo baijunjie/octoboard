@@ -63,10 +63,17 @@ pub struct HostInfo {
     /// and Windows, and on Linux only where logind answers on the system bus. When false, the
     /// setting changes nothing there and a client does not offer it.
     pub keep_awake: bool,
+    /// Whether the daemon is a desktop application's own: one started it and it follows that
+    /// application, so that what is done to the installation on this host (uninstalling it, the
+    /// clean-up before that) is done in that application. False for a daemon that runs on its own
+    /// (the server form). A fact of the daemon on its host, which the snapshot fills in.
+    pub application: bool,
 }
 
-impl From<HostFacts> for HostInfo {
-    fn from(facts: HostFacts) -> Self {
+impl HostInfo {
+    /// The host as `facts` describe it, with what the platform does not say: whether the daemon
+    /// is a desktop application's own (`application`), which whoever announces the host knows.
+    pub fn of(facts: HostFacts, application: bool) -> Self {
         Self {
             os: match facts.os {
                 HostOs::Macos => HostOsName::Macos,
@@ -87,6 +94,7 @@ impl From<HostFacts> for HostInfo {
                 SettingsName::Settings => HostSettingsName::Settings,
             },
             keep_awake: facts.keep_awake,
+            application,
         }
     }
 }
@@ -97,14 +105,17 @@ mod tests {
 
     #[test]
     fn the_host_is_announced_in_the_wire_spelling() {
-        let host = serde_json::to_value(HostInfo::from(HostFacts {
-            os: HostOs::Windows,
-            path_style: PathStyle::Windows,
-            file_links: false,
-            trash: TrashName::RecycleBin,
-            settings: SettingsName::Settings,
-            keep_awake: false,
-        }))
+        let host = serde_json::to_value(HostInfo::of(
+            HostFacts {
+                os: HostOs::Windows,
+                path_style: PathStyle::Windows,
+                file_links: false,
+                trash: TrashName::RecycleBin,
+                settings: SettingsName::Settings,
+                keep_awake: false,
+            },
+            false,
+        ))
         .unwrap();
         assert_eq!(
             host,
@@ -115,21 +126,27 @@ mod tests {
                 "trash": "recycle_bin",
                 "settings": "settings",
                 "keep_awake": false,
+                "application": false,
             })
         );
-        let linux = serde_json::to_value(HostInfo::from(HostFacts {
-            os: HostOs::Linux,
-            path_style: PathStyle::Unix,
-            file_links: true,
-            trash: TrashName::Trash,
-            settings: SettingsName::Settings,
-            keep_awake: true,
-        }))
+        let linux = serde_json::to_value(HostInfo::of(
+            HostFacts {
+                os: HostOs::Linux,
+                path_style: PathStyle::Unix,
+                file_links: true,
+                trash: TrashName::Trash,
+                settings: SettingsName::Settings,
+                keep_awake: true,
+            },
+            true,
+        ))
         .unwrap();
         assert_eq!(linux["trash"], "trash");
         assert_eq!(linux["settings"], "settings");
         assert_eq!(linux["keep_awake"], true);
-        let here = serde_json::to_value(HostInfo::from(HostFacts::current())).unwrap();
+        // Said by whoever announces the host, not by the platform's facts.
+        assert_eq!(linux["application"], true);
+        let here = serde_json::to_value(HostInfo::of(HostFacts::current(), false)).unwrap();
         assert_eq!(here["os"] == "macos", cfg!(target_os = "macos"));
         assert_eq!(
             here["path_style"],

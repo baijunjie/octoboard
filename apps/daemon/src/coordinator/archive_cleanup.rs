@@ -32,7 +32,7 @@ const SCAN_EVERY_MILLIS: i64 = 24 * 60 * 60 * 1000;
 /// Where a scan gets the locator that finds the agents' records.
 type LocatorSource = Arc<dyn Fn() -> Locator + Send + Sync>;
 
-/// How a scan moves an agent record to the Trash.
+/// How a scan would move an agent record to the Trash.
 type TrashRecord = Arc<dyn Fn(&Path) -> Result<(), TrashFailure> + Send + Sync>;
 
 /// Starts the task that scans the archive: once now, which also catches up on the time the
@@ -45,7 +45,7 @@ pub fn spawn(state: &Arc<AppState>) {
         CHECK_EVERY,
         SCAN_EVERY_MILLIS,
         Arc::new(Locator::default),
-        Arc::new(state.host_tools.get().trash),
+        Arc::new(coordinator::lifecycle::host_trash(state)),
     );
 }
 
@@ -82,16 +82,21 @@ fn scan_due(last_scan: Option<i64>, now: i64, every_millis: i64) -> bool {
 
 /// One scan: deletes the archived sessions the agent has proven gone
 /// ([`Resumability::Unresumable`]; unknown never counts), then removes the branches and worktrees
-/// they bound with nothing forced and moves the agent's remaining records to the Trash. Nothing is
-/// scanned while the user has turned the cleanup off, and a setting that cannot be read counts as
-/// off, as the scan only destroys; it is read on each scan and again before each delete, so a
-/// change needs no restart and takes hold mid-scan. What the branch removal leaves is logged and
-/// no client is told, as nobody asked for the deletion. Pinned and locked sessions are skipped
-/// before judging. A group (an archived session with the sessions bound to it, at both levels)
-/// goes only whole: one member that is resumable, unknown, pinned, locked or not archived keeps
-/// all of it, as a delete of its owner would take the member along. Failures are logged and never
-/// stop the scan. None runs once a planned stop has raised its handover barrier, and one under way
-/// then deletes no further group (see `crate::state::ChangeAdmission`).
+/// they bound with nothing forced. What is left of the agent's own records of a session that had a
+/// conversation stays where it is, as nobody confirmed the deletion; only a session that never had
+/// one would have its records moved to the Trash, and then only when none of them holds a prompt
+/// the user sent or leaves that unknown (`coordinator::lifecycle`'s check of the records). A scan
+/// deletes no such session today, as only a session with a conversation is ever proven
+/// unresumable. Nothing is scanned while the user has turned the cleanup off, and a setting that
+/// cannot be read counts as off, as the scan only destroys; it is read on each scan and again
+/// before each delete, so a change needs no restart and takes hold mid-scan. What the branch
+/// removal leaves is logged and no client is told, as nobody asked for the deletion. Pinned and
+/// locked sessions are skipped before judging. A group (an archived session with the sessions
+/// bound to it, at both levels) goes only whole: one member that is resumable, unknown, pinned,
+/// locked or not archived keeps all of it, as a delete of its owner would take the member along.
+/// Failures are logged and never stop the scan. None runs once a planned stop has raised its
+/// handover barrier, and one under way then deletes no further group (see
+/// `crate::state::ChangeAdmission`).
 async fn scan(state: &Arc<AppState>, locator: LocatorSource, trash: TrashRecord) {
     // Held to the end, the branches and records removed after the deletion included.
     let Ok(_admission) = state.admit_change() else {
@@ -125,9 +130,12 @@ async fn scan(state: &Arc<AppState>, locator: LocatorSource, trash: TrashRecord)
         state.track_change(),
     )
     .await;
-    coordinator::lifecycle::trash_agent_records_with(state, deleted, locator(), move |path| {
-        trash(path)
-    })
+    coordinator::lifecycle::trash_unconfirmed_agent_records_with(
+        state,
+        deleted,
+        locator(),
+        move |path| trash(path),
+    )
     .await;
 }
 
@@ -342,7 +350,8 @@ mod tests {
             )
         }
 
-        /// A subagent folder left without its transcript: the record the Trash is to take.
+        /// A subagent folder left without its transcript: what is left of a used session's
+        /// records in the agent's own directory.
         fn leftover(&self, id: &str) -> PathBuf {
             let folder = self
                 .dir
@@ -441,13 +450,21 @@ mod tests {
         deleted
     }
 
-    /// Only an archived session proven unresumable is deleted, with its agent records trashed:
-    /// pinned, locked and resumable ones are kept, and so is one whose answer is unknown.
+    /// Only an archived session proven unresumable is deleted: pinned, locked and resumable ones
+    /// are kept, and so is one whose answer is unknown. What is left of the deleted session's
+    /// records in its agent's directory stays where it was.
     #[tokio::test]
     async fn the_cleanup_deletes_only_unresumable_archived_sessions() {
         let (state, dir) = console_with_project_and_accounts("archive-cleanup-lone");
         let account = Account::new(&dir, &["resumable"]);
         let leftover = account.leftover("gone");
+        // A whole copy of the conversation in another account, as an earlier switch leaves one:
+        // the session's own account decides that it is gone, and the copy is not the scan's to move.
+        let copy = dir
+            .join("claude-a/projects/-work")
+            .join(format!("{}.jsonl", Account::native("gone")));
+        std::fs::create_dir_all(copy.parent().unwrap()).unwrap();
+        std::fs::write(&copy, "{}\n").unwrap();
         // Grok restores a missing session from its remote registry, so its absence proves nothing.
         for session in [
             account.session("gone", None),
@@ -474,7 +491,9 @@ mod tests {
             session_ids(&state),
             ["locked", "not-archived", "pinned", "resumable", "unknown"]
         );
-        assert_eq!(*trashed.lock().unwrap(), [leftover]);
+        assert!(trashed.lock().unwrap().is_empty());
+        assert!(leftover.is_dir(), "the used session's records are left");
+        assert!(copy.is_file(), "the copy in the other account is left");
     }
 
     /// With the setting off a scan deletes nothing, trashes nothing and does not even look for the
@@ -511,11 +530,13 @@ mod tests {
             .unwrap();
         scan(&state, account.locator(), trash).await;
         assert!(session_ids(&state).is_empty());
-        assert_eq!(*trashed.lock().unwrap(), [leftover]);
+        assert!(trashed.lock().unwrap().is_empty());
+        assert!(leftover.is_dir(), "the used session's records are left");
     }
 
-    /// A group goes whole or not at all, and the sessions of every member go to the Trash. The
-    /// hubs are console sessions, as a bound coordinator binds to one in practice.
+    /// A group goes whole or not at all, and what is left of every member's records stays in the
+    /// agent's directory. The hubs are console sessions, as a bound coordinator binds to one in
+    /// practice.
     #[tokio::test]
     async fn the_cleanup_deletes_a_group_only_when_every_member_is_unresumable() {
         use SessionStatus::{Idle, Interrupted};
@@ -565,7 +586,7 @@ mod tests {
             // And a bound session goes alone.
             account.session("dead-bound", Some("running-hub")),
         ];
-        // Each session that would go leaves a folder only the Trash can take.
+        // Each session that would go has a folder left in its agent's directory.
         let gone = [
             "dead-bound",
             "dead-coordinator",
@@ -588,10 +609,11 @@ mod tests {
         let mut events = state.subscribe();
         scan(&state, account.locator(), trash).await;
         assert_eq!(deleted_in(&mut events), gone);
-        let mut trashed = trashed.lock().unwrap().clone();
-        trashed.sort();
-        leftovers.sort();
-        assert_eq!(trashed, leftovers);
+        assert!(trashed.lock().unwrap().is_empty());
+        assert_eq!(leftovers.len(), gone.len());
+        for leftover in leftovers {
+            assert!(leftover.is_dir(), "{} was moved", leftover.display());
+        }
     }
 
     /// A locked member keeps its group, and the scan goes on to the others.

@@ -476,6 +476,17 @@ pub fn directory_writable(dir: &Path) -> bool {
         .is_ok_and(|metadata| metadata.is_dir() && !metadata.permissions().readonly())
 }
 
+/// Whether what is at `path` is this user's to remove: on Windows that is what removing it says,
+/// so anything that exists counts.
+pub fn owned_by_user(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok()
+}
+
+/// There is no user runtime directory of a service manager on Windows.
+pub fn user_runtime_dir() -> Option<PathBuf> {
+    None
+}
+
 /// A directory's entries cannot be flushed through a handle on Windows; the rename is left to the
 /// file system's own journal.
 pub fn sync_directory(_dir: &Path) -> io::Result<()> {

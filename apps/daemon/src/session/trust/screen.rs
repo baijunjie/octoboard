@@ -98,6 +98,11 @@ pub(super) fn screen_of(agent: AgentId) -> &'static Screen {
     crate::adapter::provider(agent).screen().trust_screen()
 }
 
+/// How `agent`'s provider has a console's directory trusted (`Capabilities::console_trust`).
+pub(super) fn console_trust_of(agent: AgentId) -> ConsoleTrust {
+    agent.descriptor().capabilities.console_trust
+}
+
 /// How much recent output is searched for the screen. Each screen's first drawing is a few KiB at
 /// most (Codex's, with the frame it is drawn over, about 4.3 KiB); the rest is room for it to
 /// arrive in pieces and for what comes before it.
@@ -398,6 +403,11 @@ pub struct TrustState {
     adopted: AtomicBool,
     /// An answer has been started. A session is answered at most once.
     pub(super) answered: AtomicBool,
+    /// The session records its trust in a home of its own and nothing of it is the user's to
+    /// keep: a console session of a provider whose launch was to trust the console's directory
+    /// itself (`Capabilities::console_trust`), said by [`super::on_sighting`] before its screen is
+    /// pressed. Only such a session is pressed with no carrier ([`super::press::press_yes`]).
+    pub(super) carries_nothing: AtomicBool,
     /// Octoboard's press of the screen succeeded.
     pub(super) pressed: AtomicBool,
     /// The screen has been seen to go with no hook to say so: the person answered it in the
@@ -437,6 +447,7 @@ impl TrustState {
             input_box_seen: AtomicBool::new(false),
             adopted: AtomicBool::new(false),
             answered: AtomicBool::new(false),
+            carries_nothing: AtomicBool::new(false),
             pressed: AtomicBool::new(false),
             dismissed: AtomicBool::new(false),
             carry: Mutex::new(CarryRendezvous::default()),

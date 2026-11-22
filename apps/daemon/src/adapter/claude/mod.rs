@@ -156,7 +156,12 @@ impl ClaudeProvider {
     /// it. That is accepted: the daemon owns the session's terminal, so one that is gone has taken
     /// the session with it.
     fn settings_json(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> String {
-        let url = hook_url(spec.session_id, spec.daemon_port, spec.daemon_key);
+        let url = hook_url(
+            spec.session_id,
+            spec.launch_id,
+            spec.daemon_port,
+            spec.daemon_key,
+        );
         let http = spec.agent_version.is_some_and(|v| v >= HTTP_HOOKS_SINCE) && {
             let project = canonical_project(spec.cwd);
             http_hooks_allowed(&url, &settings_files(spec, pinned, &project), &project)
@@ -166,6 +171,7 @@ impl ClaudeProvider {
             "command": hook_command(
                 spec.self_exe,
                 spec.session_id,
+                spec.launch_id,
                 spec.daemon_port,
                 spec.key_file,
             ),
@@ -1063,7 +1069,8 @@ mod tests {
                     assert_eq!(handler["timeout"], HTTP_HOOK_TIMEOUT_SECS);
                     assert_eq!(handler["type"], "http", "{version:?}");
                     assert_eq!(
-                        handler["url"], "http://127.0.0.1:4321/hook/session-1?key=feedface",
+                        handler["url"],
+                        "http://127.0.0.1:4321/hook/session-1/launch-1?key=feedface",
                         "{version:?}"
                     );
                     assert!(handler.get("async").is_none(), "{version:?}");
@@ -1077,8 +1084,8 @@ mod tests {
                     assert_eq!(
                         handler["command"],
                         format!(
-                            "exec '/opt/octoboard/octoboardd' hook --session 'session-1' --port \
-                             4321 --key-file '{}' 2>/dev/null",
+                            "exec '/opt/octoboard/octoboardd' hook --session 'session-1' --launch \
+                             'launch-1' --port 4321 --key-file '{}' 2>/dev/null",
                             fixture.key_file.display()
                         ),
                         "{event} {version:?}"
@@ -1337,7 +1344,7 @@ mod tests {
         let settings = settings_of(&plan);
         assert_eq!(
             settings["hooks"]["Stop"][0]["hooks"][0]["url"],
-            "http://127.0.0.1:4321/hook/session-1?key=feedface"
+            "http://127.0.0.1:4321/hook/session-1/launch-1?key=feedface"
         );
         #[cfg(unix)]
         {

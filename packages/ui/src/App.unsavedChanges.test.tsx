@@ -59,7 +59,7 @@ const REPORT = taskOf("t-report", "Morning report");
 const CLEANUP = taskOf("t-cleanup", "Weekly cleanup");
 const RUN: ScheduledTaskRun = { id: "r-1", task_id: REPORT.id, ran_at: 1, due_at: null, trigger: "run_now", outcome: { kind: "started", session: started.id, started_independent: false } };
 
-const KEYED: RemoteDaemonEntry = { id: "keyed", name: "Keyed", host: "keyed.example.com", port: 22, user: "deploy", auth: "password", keyPath: null, fingerprint: null, octoboarddPath: null };
+const KEYED: RemoteDaemonEntry = { id: "keyed", name: "Keyed", host: "keyed.example.com", port: 22, user: "deploy", auth: "password", keyPath: null, fingerprint: null, octoboarddPath: null, deviceKey: { declined: false, file: null, mark: null } };
 const DESKTOP: PlatformAdapter = {
   kind: "tauri",
   host: MAC_HOST,
@@ -67,8 +67,9 @@ const DESKTOP: PlatformAdapter = {
     list: async () => [KEYED],
     status: async () => [],
     onChanged: () => () => {},
-    save: async (entry) => ({ ...entry, id: entry.id ?? "new" }),
-    remove: async () => {},
+    save: async (entry) => ({ entry: { ...entry, id: entry.id ?? "new", deviceKey: { declined: false, file: null, mark: null } }, keyRemoval: { line: { result: "not_installed" as const }, privateKeyLeft: null } }),
+    remove: async () => ({ line: { result: "not_installed" as const }, privateKeyLeft: null }),
+    setDeviceKey: async () => ({ line: { result: "not_installed" as const }, privateKeyLeft: null }),
     connect: async () => ({ outcome: "opened" }),
     disconnect: async () => {},
     onPageRequested: () => () => {},

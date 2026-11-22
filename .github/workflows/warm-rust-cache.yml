@@ -73,10 +73,16 @@ jobs:
           profile: linux-check
       - run: /usr/bin/time -v node scripts/cargo.mjs check --locked
 
-  # The Windows release builds (`release.yml`'s Windows jobs and `quality.yml`'s `windows-bundle`) share this profile.
-  # The unsigned installer warms it, built without signing credentials or the update key, as `windows-bundle` builds it.
+  # The Windows release builds (`release.yml`'s Windows jobs, `windows-signpath.yml` and `quality.yml`'s
+  # `windows-bundle`) share these profiles, one per architecture (`windows-release-x64`, `windows-release-arm64`): each
+  # architecture's target directory differs, so one cache warmed by x64 alone would leave arm64 to build from nothing.
+  # The unsigned installer warms each, built without signing credentials or the update key, as `windows-bundle` builds it.
   windows:
     needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
     runs-on: windows-latest
     defaults:
       run:
@@ -93,12 +99,12 @@ jobs:
       - run: rustup toolchain install
       - uses: ./.github/actions/rust-cache
         with:
-          profile: windows-release
+          profile: windows-release-${{ matrix.arch }}
       - run: pnpm install --frozen-lockfile
       - name: Compile the unsigned installer
         env:
           WINDOWS_SIGNING: none
-        run: pnpm --filter @octoboard/desktop release --no-sign-update
+        run: pnpm --filter @octoboard/desktop release --arch ${{ matrix.arch }} --no-sign-update
 
   # The Linux release (`release.yml`'s `linux` jobs) uses this profile on a runner of each architecture, warmed by the
   # same unsigned build.

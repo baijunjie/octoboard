@@ -324,6 +324,27 @@ pub fn directory_writable(dir: &Path) -> bool {
     unsafe { libc::access(path.as_ptr(), libc::W_OK | libc::X_OK) == 0 }
 }
 
+/// Whether the file, link or directory at `path` itself (a link is not followed) belongs to the
+/// user this process runs as. False where it cannot be read.
+pub fn owned_by_user(path: &Path) -> bool {
+    // SAFETY: `geteuid` takes no arguments and cannot fail.
+    let me = unsafe { libc::geteuid() };
+    std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.uid() == me)
+}
+
+/// The user's runtime directory, where the user's service manager keeps what it generates:
+/// `XDG_RUNTIME_DIR`, else the directory the system makes for the user at login.
+pub fn user_runtime_dir() -> Option<PathBuf> {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| {
+            // SAFETY: `geteuid` takes no arguments and cannot fail.
+            let me = unsafe { libc::geteuid() };
+            Some(PathBuf::from(format!("/run/user/{me}")))
+        })
+}
+
 /// Flushes the entries of the directory `dir` to the disk, so that a rename in it survives a crash.
 pub fn sync_directory(dir: &Path) -> io::Result<()> {
     File::open(dir)?.sync_all()

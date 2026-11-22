@@ -45,6 +45,9 @@ pub enum StopKind {
 /// Why a planned restart, or a planned stop a client asks for, is refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RestartRefusal {
+    /// The daemon makes a clean-up run (`super::clean_up_run`): it stops when the clean-up is
+    /// done, and a successor would follow nobody and stay. Only a restart is refused with it.
+    CleanUpRun,
     /// The daemon follows an application (`--parent-pid`), which starts the daemon it talks to
     /// itself.
     FollowsApplication,
@@ -71,6 +74,7 @@ impl RestartRefusal {
     /// The refusal's name, as `POST /restart` and `POST /planned-stop` answer it.
     pub fn code(self) -> &'static str {
         match self {
+            Self::CleanUpRun => "clean_up_run",
             Self::FollowsApplication => "follows_application",
             Self::StopInProgress => "stop_in_progress",
             Self::HoldersInService => "holders_in_service",
@@ -82,6 +86,10 @@ impl RestartRefusal {
     /// What the refusal says, in English, for a log or a caller that shows it as it is.
     pub fn message(self) -> &'static str {
         match self {
+            Self::CleanUpRun => {
+                "the daemon runs only for the clean-up of an uninstall and stops when that is \
+                 done; start it again once it has stopped"
+            }
             Self::FollowsApplication => {
                 "the daemon follows an application, which restarts the daemon it talks to itself"
             }
@@ -286,12 +294,16 @@ impl AppState {
         }
     }
 
-    /// Refuses a planned restart as [`RestartRefusal`] says; where it is not refused, claims the
+    /// Refuses a planned restart as [`RestartRefusal`] says, a clean-up run's first, whoever asks
+    /// (a client, the restart signal, a command of another build); where it is not refused, claims the
     /// restart from the holders, which admit no new program inside the daemon's service from then
     /// on ([`crate::holder::client::Holders::claim_planned_stop`]). The claim is released when
     /// dropped, so a stop that is then not made (refused, or another asked for first) leaves
     /// admission as it was; [`settle`] keeps it once the stop is made.
     fn claim_restart(&self) -> Result<Option<StopClaim>, RestartRefusal> {
+        if let Some(refusal) = self.clean_up_run_refusal() {
+            return Err(refusal);
+        }
         judge_restart(
             self.follows_application(),
             self.daemon_update.download_running(),
@@ -306,6 +318,9 @@ impl AppState {
     /// the request as that stop's. The answer may no longer hold by the time the restart is asked
     /// for, which is judged again then.
     pub fn restart_refusal(&self) -> Option<RestartRefusal> {
+        if let Some(refusal) = self.clean_up_run_refusal() {
+            return Some(refusal);
+        }
         foresee_restart(
             self.follows_application(),
             self.daemon_update.download_running(),
@@ -315,6 +330,12 @@ impl AppState {
             self.stop_asked(),
             || self.agent_clis.any_updating(),
         )
+    }
+
+    /// The refusal of a planned restart that comes before every other, met or foreseen: a
+    /// clean-up run's.
+    fn clean_up_run_refusal(&self) -> Option<RestartRefusal> {
+        self.clean_up_run().then_some(RestartRefusal::CleanUpRun)
     }
 
     /// [`Self::claim_restart`] without the refusal for following an application, which a
@@ -783,7 +804,8 @@ mod tests {
         // A `match` with no wildcard, so that a new refusal cannot be left out of the list.
         fn listed(refusal: RestartRefusal) -> RestartRefusal {
             match refusal {
-                RestartRefusal::FollowsApplication
+                RestartRefusal::CleanUpRun
+                | RestartRefusal::FollowsApplication
                 | RestartRefusal::StopInProgress
                 | RestartRefusal::HoldersInService
                 | RestartRefusal::AgentUpdateRunning
@@ -791,6 +813,7 @@ mod tests {
             }
         }
         let all = [
+            listed(RestartRefusal::CleanUpRun),
             listed(RestartRefusal::FollowsApplication),
             listed(RestartRefusal::StopInProgress),
             listed(RestartRefusal::HoldersInService),
@@ -846,6 +869,34 @@ mod tests {
         assert_eq!(claimed.get(), 2, "a refused restart claims nothing");
     }
 
+    /// A clean-up run refuses a planned restart, foreseen and asked for, whoever asks and whatever
+    /// else holds, since its successor would follow nobody and stay; a planned stop, which is how
+    /// it ends when its command is gone, it takes.
+    #[tokio::test]
+    async fn a_clean_up_run_refuses_a_planned_restart_and_takes_a_planned_stop() {
+        let (state, _dir) = app_state("stop-clean-up-run");
+        state.set_clean_up_run();
+        assert_eq!(state.restart_refusal(), Some(RestartRefusal::CleanUpRun));
+        assert_eq!(
+            state.request_planned_restart(),
+            Err(RestartRefusal::CleanUpRun)
+        );
+        assert_eq!(
+            state.request_planned_restart_unless_stopping(),
+            Err(RestartRefusal::CleanUpRun)
+        );
+        assert!(!state.stop_asked());
+        assert_eq!(RestartRefusal::CleanUpRun.code(), "clean_up_run");
+        assert_eq!(
+            state.request_planned_stop_unless_holders_in_service(),
+            Ok(())
+        );
+        assert_eq!(
+            state.await_stop().await,
+            StopKind::Planned { successor: false }
+        );
+    }
+
     /// Every refusal is foreseen, by the same ordered rule the restart is judged by: a `match` with
     /// no wildcard, so that a new refusal has to be given the inputs that foresee it.
     #[test]
@@ -853,6 +904,9 @@ mod tests {
         fn inputs(refusal: RestartRefusal) -> (bool, bool, bool, bool, bool, bool) {
             // (follows, downloading, managed, holders in service, stopping, updating)
             match refusal {
+                // Judged ahead of these inputs, from the daemon's own mode
+                // (`a_clean_up_run_refuses_a_planned_restart_and_takes_a_planned_stop`).
+                RestartRefusal::CleanUpRun => (false, false, false, false, false, false),
                 RestartRefusal::FollowsApplication => (true, false, false, false, false, false),
                 RestartRefusal::DaemonUpdateRunning => (false, true, false, false, false, false),
                 RestartRefusal::HoldersInService => (false, false, true, true, false, false),

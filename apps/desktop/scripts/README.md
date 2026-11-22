@@ -33,7 +33,7 @@ in the environment wins.
   while Octoboard runs, refuses to replace a symlink or another application, stages the copy on the destination volume
   and keeps the previous bundle for rollback if the replacement fails.
 - `release.mjs` (`pnpm release`) — picks the host's release build: `release-macos.mjs`, the universal, signed and
-  notarized macOS build, `release-windows.mjs`, the x64 NSIS installer with its signing modes (below), or
+  notarized macOS build, `release-windows.mjs`, the NSIS installer of one architecture (x64 or arm64) with its signing modes (below), or
   `release-linux.mjs`, the daemon's Linux server archive for the host's architecture (below).
 - `release-desktop.mjs` (`pnpm release:version`) — prepares a version commit in an isolated worktree, checks it and
   pushes it with its annotated tag to start release CI (see "Releasing by tag"); `--platforms` makes a version for some
@@ -132,19 +132,25 @@ test needs a copy that was quarantined on its way.
 
 ## Windows release builds
 
-`pnpm release` on Windows (x64 only, `x86_64-pc-windows-msvc`; arm64 comes later) runs `rustup target add`, then
-`tauri build --target x86_64-pc-windows-msvc --bundles nsis --locked`. `beforeBuildCommand` in
-`tauri.windows.conf.json` fetches the ConPTY files and builds the daemon and the UI first. The output is
-`target/x86_64-pc-windows-msvc/release/bundle/nsis/Octoboard_<version>_x64-setup.exe`; stale installers and `.sig` files
-are deleted first. The NSIS installer is the update artifact itself: the updater downloads it and runs it. The update
+`pnpm release` on Windows builds one architecture, `--arch x64|arm64` (the machine's own by default; an x64 Node emulated
+on an ARM64 machine reads the machine's): its Rust target is `x86_64-pc-windows-msvc` or `aarch64-pc-windows-msvc`, which
+it adds with `rustup target add`, then runs `tauri build --target <target> --bundles nsis --locked`. arm64 is
+cross-compiled on an x64 machine as readily as built on an arm64 one, given Visual Studio's MSVC ARM64 build tools and
+LLVM's `clang` on the PATH, which `ring`'s build script compiles its C for arm64 with (not verified: no arm64 installer
+has yet been built on a Windows host, nor cross-built on the hosted runner).
+`beforeBuildCommand` in `tauri.windows.conf.json` fetches the ConPTY files of the target's architecture (the arm64
+installer carries the arm64 `conpty.dll`, which its daemon loads, and both hosts) and builds the daemon for the target
+and the UI first. The output is `target/<target>/release/bundle/nsis/Octoboard_<version>_<x64|arm64>-setup.exe`; stale
+installers and `.sig` files are deleted first. The NSIS installer is the update artifact itself: the updater downloads it and runs it. The update
 key variables are left out of the build's environment as on macOS, `--no-sign-update` leaves the update signature to
 `pnpm sign-update`, and without it `TAURI_SIGNING_PRIVATE_KEY` is required and the script writes `<installer>.sig` with
 it, after the checks below and so after the last step that could change the installer's bytes. Nothing may touch the
 installer afterwards.
 
 ```sh
-# Unsigned installer, no update key (what the `windows-bundle` job of Code quality builds)
+# Unsigned installer, no update key (what the `windows-bundle` job of Code quality builds, once per architecture)
 pnpm --filter @octoboard/desktop release --no-sign-update
+pnpm --filter @octoboard/desktop release --arch arm64 --no-sign-update
 # Unsigned installer and its update signature (TAURI_SIGNING_PRIVATE_KEY in .env.secret or the environment)
 pnpm --filter @octoboard/desktop release
 ```
@@ -170,7 +176,9 @@ provider.
   break its signature; the installer is left in `target/signpath/installer/`) and `finish --signed <dir>` (checks the
   signed installer, puts it in the bundle directory, checks the result). The conpty files are in neither submission.
   The NSIS uninstaller is generated inside `makensis` and so is not signed. Add `--no-sign-update` to each when the
-  update is signed by `pnpm sign-update` afterwards.
+  update is signed by `pnpm sign-update` afterwards. Each stage takes the same `--arch` as the others of its
+  architecture, and both architectures share `target/signpath/`: run all three stages of one architecture before
+  starting the other's, or the second build overwrites the files the first one submitted.
 
 After the build, `release` looks inside the installer (extracted with 7-Zip, `7z.exe`, which a runner has; without it
 the check is skipped for `none` and fails otherwise). Outside `none`, `signtool verify /pa /v` must accept the
@@ -227,8 +235,8 @@ section is the procedure.
 
 macOS is the universal build in `target/universal-apple-darwin/release/bundle` and is checked with macOS tools, so a
 macOS publish runs on a Mac. Windows comes as `--windows-dir <dir>`, required with Windows (and refused without it): `<dir>` holds
-`Octoboard_<version>_x64-setup.exe` and its `.sig`, as the Windows build and `sign-update` (or the release workflow's `sign` job) left them (the installer
-named for the version, the `.sig` present and not older than it). Linux comes as `--linux-dir <dir>`, required with Linux
+`Octoboard_<version>_x64-setup.exe` and `Octoboard_<version>_arm64-setup.exe`, each with its `.sig`, as the Windows builds and `sign-update` (or the release workflow's `sign` job) left them (each installer
+named for the version, its `.sig` present and not older than it); the Windows manifests carry both, under `windows-x86_64` and `windows-aarch64`. Linux comes as `--linux-dir <dir>`, required with Linux
 (and refused without it): `<dir>` holds, for each of x86_64 and aarch64, `octoboardd_<version>_linux_<arch>.tar.gz` with its
 `.sha256` (which must match the archive) and `.sig` (no older than it), as `pnpm release` on a host of each architecture
 and `sign-update` (or the release workflow's `sign` job) left them, so both architectures' builds are gathered into one directory first. A publish without macOS
@@ -305,7 +313,10 @@ uncommitted notes file outside the tracked tree or in an ignored location so the
 message is the same text shown on the release page and in the application's update notice; Markdown headings are
 preserved. `--platforms <list>` releases only those platforms: the tag message then ends with a blank line and
 `Platforms: macos,linux` (the selection), which is not part of the notes. Without it the version is for all three
-platforms.
+platforms. Adding Windows later to a version tagged before the arm64 build was added must start the workflow by hand
+from that tag's ref (`gh workflow run release.yml --ref desktop-v<version> -f tag=desktop-v<version> -f
+platforms=windows`): a run of the current workflow file builds both architectures, and the older tag's scripts know
+only x64.
 
 The version must be a semantic version strictly newer than the current one, without build metadata. The command
 refuses an existing local or remote version tag, release branch or release worktree. `.worktrees/` must be ignored
@@ -328,8 +339,8 @@ The command:
 4. Runs `pnpm verify --release --fresh --head <release-commit>` locally on the version commit, regardless of the
    changed files or previous passes. This checks identity, application lint, production UI types, application UI
    tests, desktop script tests, Rust formatting, clippy, both Rust crates' tests and the Windows cross-check of both
-   crates and a link of the daemon's executable (`pnpm check:windows`, whichever platforms the version selects), so a
-   change that breaks the Windows build cannot be tagged. That check needs cargo-xwin, the `x86_64-pc-windows-msvc` Rust target, LLVM's clang
+   crates and a link of the daemon's executable, for both Windows targets (`pnpm check:windows`, whichever platforms the version selects), so a
+   change that breaks either Windows build cannot be tagged. That check needs cargo-xwin, the `x86_64-pc-windows-msvc` and `aarch64-pc-windows-msvc` Rust targets, LLVM's clang
    (Homebrew's is put first on the PATH by itself) and the MSVC CRT and Windows SDK, downloaded once with
    `XWIN_ACCEPT_LICENSE=1 pnpm check:windows`, which accepts their license. Website and gallery-only checks are
    excluded. It then runs `pnpm verify --base <fetched-remote-main> --head <release-commit>` for every unpushed main
@@ -371,9 +382,13 @@ The workflow:
 2. After `validate` passes, the Windows build, `macos` (`macos-26`) and `linux` run in parallel, each only when its
    platform is selected; none waits for another. The Windows build follows `WINDOWS_SIGNING`, which `validate` hands on as
    an output:
-   - `none` and `command`: the job `windows` (`windows-latest`) is one `release --no-sign-update`.
+   - `none` and `command`: the job `windows` (`windows-latest`) is a matrix over the architecture, each leg one
+     `release --arch <x64|arm64> --no-sign-update`; arm64 is cross-compiled there.
    - `signpath`: each SignPath request waits for an approval given by hand, and a GitHub-hosted job is ended after
-     six hours, so the route is five jobs that pass artifacts on, each with its own limit well under that.
+     six hours, so the route is five jobs that pass artifacts on, each with its own limit well under that. They are
+     `.github/workflows/windows-signpath.yml`, which the job `windows-signpath` calls once per architecture (each job
+     hands the next an artifact's id as a job output, which a matrix job's legs would overwrite), so a release waits for
+     four approvals; every artifact's name ends in `-<arch>`, and the steps below run with `--arch <arch>`.
      `windows-signpath-build` runs `--stage build` and uploads the executables (`unsigned-binaries`);
      `windows-signpath-sign-binaries` (`ubuntu-latest`) submits them with
      `signpath/github-action-submit-signing-request`, waits at most four hours (`wait-for-completion-timeout-in-seconds`,
@@ -393,8 +408,8 @@ The workflow:
      there only to give the installer's file name under the bundler's naming; `finish` runs on a fresh runner, and
      the signed installer replaces what the bundler would have produced.
 
-   Either way the unsigned installer is uploaded as the artifact `windows-installer`, and no Windows job holds the update
-   key. The Windows build jobs restore the `windows-release` dependency cache.
+   Either way each architecture's installer is uploaded as the artifact `windows-installer-<arch>`, and no Windows job
+   holds the update key. The Windows build jobs restore the `windows-release` dependency cache.
 3. `macos` restores the universal-build Rust dependency cache, then builds, signs and notarizes with
    `pnpm --filter @octoboard/desktop release --no-sign-update`; it never holds the update key. The signing certificate and the Developer ID G2 intermediate go
    into a keychain that exists for that run only, and the API key is written to a temporary file; both are removed
@@ -420,8 +435,8 @@ The workflow:
    code (every dependency's install and build scripts) never hold it. `sign` runs none of it: on a fresh runner it reads
    the tag's checkout only for the version and the product name, takes `.github/signer` from the workflow's own commit
    (so a tag made before it can still be released by hand), installs the Tauri CLI that directory pins by integrity with
-   `npm ci --ignore-scripts`, downloads `macos-update`, `windows-installer` and the Linux artifacts, and signs exactly
-   the selected platforms' update files by their expected names (`Octoboard.app.tar.gz`, the installer,
+   `npm ci --ignore-scripts`, downloads `macos-update`, the `windows-installer-*` and the Linux artifacts, and signs exactly
+   the selected platforms' update files by their expected names (`Octoboard.app.tar.gz`, both installers,
    both architectures' archives) with `tauri signer sign --app-version <version>`, which binds each signature to the
    version and the file's name. It uploads the `.sig` files as `update-signatures`. `.github/signer` pins the CLI's
    version; bump it together with the workspace's `@tauri-apps/cli` in `apps/desktop/package.json`, since a signature
@@ -433,7 +448,7 @@ The workflow:
    Windows and `--linux-dir` for Linux, which checks every signature against the public key before it publishes. Before that
    it attests the build provenance of the files it is about to upload: `Check the release` runs the same script with
    `--dry-run`, so that only files its checks accept are attested; `List the files to attest` names, per selected
-   platform, the macOS disk image and update archive, the Windows installer and the Linux archives (not the `.sha256` and
+   platform, the macOS disk image and update archive, the Windows installers and the Linux archives (not the `.sha256` and
    `.sig` files or the manifests), with `ls`, so that a missing file fails; and `actions/attest-build-provenance`
    (pinned by commit SHA) attests them before `Publish`, so that no file is published without one. It is the only job whose
    token may write (`contents: write`, for `gh`; every other job reads, and

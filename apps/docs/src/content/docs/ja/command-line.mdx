@@ -4,7 +4,7 @@ description: "Linux サーバー、Mac、Windows PC での octoboardd のコマ�
 ---
 
 import { Code } from "@astrojs/starlight/components";
-import { commands, productName, tunnel } from "../../../commands.ts";
+import { commands, productName, system, tunnel } from "../../../commands.ts";
 
 octoboardd は {productName} を動かすプログラムです（アプリでは「デーモン」と呼びます）。Linux サーバーでは、自分でインストールして起動します。Mac や Windows PC ではアプリに含まれていて、アプリが開くと起動し、終了すると停止します。コマンドは 3 つの環境で共通で、違いは以下のとおりです。
 
@@ -35,6 +35,7 @@ octoboardd は {productName} を動かすプログラムです（アプリでは
 | <code dir="ltr">{commands.update}</code> | Linux サーバーのみ。最新のバージョンをインストールします。[アップグレード](../install/linux/#アップグレード)と同じです。 |
 | <code dir="ltr">{commands.updateCheck}</code> | Linux サーバーのみ。新しいバージョンが出ているかどうかを確認します。インストールはしません。 |
 | <code dir="ltr">{commands.updateRollback}</code> | Linux サーバーのみ。直前のアップグレードより前にインストールされていたバージョンに戻し、アップグレードのときと同じようにそのバージョンで再起動します。 |
+| <code dir="ltr">{system.uninstall}</code> | Linux サーバーのみ。サーバーから octoboardd を削除します。[アンインストール](../install/linux/#アンインストール)と同じです。 |
 | <code dir="ltr">{commands.version}</code> | インストールされているバージョンを表示します。 |
 
 コマンドの一覧は <code dir="ltr">{commands.help}</code> で、1 つのコマンドのオプションは <code dir="ltr">{commands.commandHelp}</code> で確認できます。一覧には {productName} が内部で実行するコマンドも含まれますが、これらを手動で実行することはありません。
@@ -45,5 +46,6 @@ octoboardd は {productName} を動かすプログラムです（アプリでは
 
 - <strong>Mac での <code dir="ltr">{commands.start}</code> と <code dir="ltr">{commands.stop}</code></strong> は、アプリに作用します。<code dir="ltr">{commands.start}</code> はウィンドウなしでアプリをバックグラウンドで開き、<code dir="ltr">{commands.stop}</code> はアプリを終了します。
 - <strong><code dir="ltr">{commands.restart}</code> と <code dir="ltr">{commands.update}</code></strong> は拒否されます。octoboardd の再起動も新しいバージョンのインストールも、アプリが自分で行います。
+- <strong><code dir="ltr">{system.uninstall}</code></strong> も拒否されます。octoboardd はアプリと一緒に削除されます。アプリのアンインストール方法は [macOS](../install/macos/#アンインストール) と [Windows](../install/windows/#アンインストール) で説明しています。
 - <strong><code dir="ltr">{commands.browserOn}</code> と <code dir="ltr">{commands.browserOff}</code></strong> は、<strong>設定 › アクセス</strong>の<strong>ブラウザアクセスを許可</strong>と同じ設定を変更します。
 - <strong><code dir="ltr">{commands.address}</code></strong> は、<strong>ブラウザアクセスを許可</strong>（Mac では<strong>リモートアクセスを許可</strong>）がオンのときだけアドレスを表示します。この 2 つの設定は初期状態でオフなので、どちらかをオンにするまでは、その旨を表示し、アドレスは表示しません。

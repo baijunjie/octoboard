@@ -10,6 +10,8 @@ import { appleLocalization, generateNativeLocalizations } from "./native-localiz
 const read = (file) => readFileSync(new URL(file, import.meta.url), "utf8");
 const catalogs = Object.fromEntries(readdirSync(new URL("../src-tauri/localizations/", import.meta.url)).filter((file) => file.endsWith(".json")).sort().map((file) => [file.slice(0, -5), JSON.parse(read(`../src-tauri/localizations/${file}`))]));
 const basePlist = read("../src-tauri/Info.template.plist");
+// The macOS permission prompts of a catalog; the rest is the shell's other native text (`src/localizations.rs`).
+const permissions = (catalog) => Object.fromEntries(Object.entries(catalog).filter(([key]) => /^NS\w+UsageDescription$/.test(key)));
 
 test("provides a native permission catalog for every offered bundle language", () => {
   const array = /<key>CFBundleLocalizations<\/key>\s*<array>([\s\S]*?)<\/array>/.exec(basePlist)?.[1] ?? "";
@@ -23,7 +25,7 @@ test("generates all native purposes with the configured identity and valid bundl
   try {
     const appName = 'Test & <App> "Name"';
     generateNativeLocalizations({ appName, catalogs, outputDir, basePlist });
-    assert.equal(Object.keys(catalogs.en).length, 15);
+    assert.equal(Object.keys(permissions(catalogs.en)).length, 15);
     const config = JSON.parse(read("../src-tauri/tauri.macos.conf.json"));
     assert.equal(config.bundle.macOS.infoPlist, "Info.plist");
     for (const language of Object.keys(catalogs)) {
@@ -37,7 +39,7 @@ test("generates all native purposes with the configured identity and valid bundl
       if (process.platform === "darwin") {
         execFileSync("plutil", ["-lint", file]);
         const values = JSON.parse(execFileSync("plutil", ["-convert", "json", "-o", "-", file], { encoding: "utf8" }));
-        for (const [key, template] of Object.entries(catalogs[language])) assert.equal(values[key], template.replaceAll("{appName}", appName));
+        for (const [key, template] of Object.entries(permissions(catalogs[language]))) assert.equal(values[key], template.replaceAll("{appName}", appName));
       }
     }
     const plist = path.join(outputDir, "Info.plist");
@@ -47,7 +49,7 @@ test("generates all native purposes with the configured identity and valid bundl
       const values = JSON.parse(execFileSync("plutil", ["-convert", "json", "-o", "-", plist], { encoding: "utf8" }));
       assert.equal(values.CFBundleDevelopmentRegion, "en");
       assert.ok(values.CFBundleLocalizations.includes("zh-Hans"));
-      for (const [key, template] of Object.entries(catalogs.en)) assert.equal(values[key], template.replaceAll("{appName}", appName));
+      for (const [key, template] of Object.entries(permissions(catalogs.en))) assert.equal(values[key], template.replaceAll("{appName}", appName));
     }
   } finally {
     rmSync(outputDir, { recursive: true, force: true });
@@ -78,7 +80,7 @@ test("the CLI writes the same permission plist for Tauri dev embedding and bundl
     const config = JSON.parse(read("../src-tauri/tauri.macos.conf.json"));
     assert.equal(path.join(desktop, "src-tauri", config.bundle.macOS.infoPlist), developmentPlist);
     const content = readFileSync(developmentPlist, "utf8");
-    for (const [key, template] of Object.entries(catalogs.en)) {
+    for (const [key, template] of Object.entries(permissions(catalogs.en))) {
       assert.ok(content.includes(`<key>${key}</key>`));
       assert.ok(content.includes(template.replaceAll("{appName}", "Test application")));
     }
@@ -123,4 +125,51 @@ test("every catalog the shell's build script watches exists", () => {
 test("refuses missing translations and unresolved template parameters", () => {
   assert.throws(() => generateNativeLocalizations({ appName: "Test", catalogs: { ...catalogs, "zh-CN": {} }, outputDir: "unused", basePlist }), /keys differ/);
   assert.throws(() => generateNativeLocalizations({ appName: "Test", catalogs: { en: { NSCameraUsageDescription: "{appName} {unknown}" } }, outputDir: "unused", basePlist }), /template/);
+});
+
+test("the shell reads every catalog, and only the permission prompts become bundle resources", () => {
+  const sources = [...read("../src-tauri/src/localizations.rs").matchAll(/\("([^"]+)", include_str!\("\.\.\/localizations\/([^"]+)\.json"\)\)/g)];
+  assert.deepEqual(sources.map((match) => match[1]), sources.map((match) => match[2]), "each tag reads its own file");
+  assert.deepEqual(sources.map((match) => match[1]).sort(), Object.keys(catalogs).sort());
+  const outputDir = mkdtempSync(path.join(tmpdir(), "native-localizations-other-"));
+  try {
+    generateNativeLocalizations({ appName: "Test", catalogs, outputDir, basePlist });
+    assert.doesNotMatch(readFileSync(path.join(outputDir, "en.lproj", "InfoPlist.strings"), "utf8"), /uninstallCleanUp/);
+  } finally {
+    rmSync(outputDir, { recursive: true, force: true });
+  }
+});
+
+// A message's placeholders, sorted.
+const placeholders = (text) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort();
+
+test("every catalog has the shell's other native text in full, with English's placeholders", () => {
+  const other = (catalog) => Object.keys(catalog).filter((key) => !/^NS\w+UsageDescription$/.test(key)).sort();
+  assert.ok(other(catalogs.en).length > 0);
+  for (const [language, catalog] of Object.entries(catalogs)) {
+    assert.deepEqual(other(catalog), other(catalogs.en), language);
+    for (const key of other(catalog)) {
+      assert.deepEqual(placeholders(catalog[key]), placeholders(catalogs.en[key]), `${key} in ${language}`);
+      assert.ok(catalog[key].length > 0, `${key} in ${language}`);
+    }
+  }
+});
+
+test("in Arabic, each left-to-right value of the shell's other native text is set off by left-to-right marks", () => {
+  // Names, hosts, paths and reasons are left-to-right text inside a right-to-left sentence; a Win32 message box shows
+  // them in order only between marks. The parts of a list, the seconds and the count are already Arabic or digits.
+  const own = new Set(["parts", "seconds", "count"]);
+  for (const [key, text] of Object.entries(catalogs.ar).filter(([key]) => key.startsWith("uninstallCleanUp."))) {
+    for (const match of text.matchAll(/\{(\w+)\}/g)) {
+      if (own.has(match[1])) continue;
+      assert.equal(text[match.index - 1], "‎", `${key}: before {${match[1]}}`);
+      assert.equal(text[match.index + match[0].length], "‎", `${key}: after {${match[1]}}`);
+    }
+  }
+});
+
+test("in French, the shell's other native text puts a narrow no-break space before a colon or semicolon", () => {
+  for (const [key, text] of Object.entries(catalogs.fr).filter(([key]) => key.startsWith("uninstallCleanUp."))) {
+    assert.doesNotMatch(text, / [:;]|[^\u202f][:;]/, key);
+  }
 });

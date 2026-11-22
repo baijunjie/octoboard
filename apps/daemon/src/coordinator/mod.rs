@@ -70,6 +70,8 @@ mod messages;
 pub mod model_change;
 pub mod native_app;
 pub mod open;
+#[cfg(all(test, unix))]
+mod own_directories_tests;
 pub mod pages;
 pub mod planned_stop;
 pub mod processes;
@@ -81,6 +83,7 @@ pub mod resume_on_start;
 pub mod scheduled_tasks;
 pub mod settings;
 pub mod stop_check;
+pub mod system_changes;
 #[cfg(test)]
 mod test_support;
 pub mod unlinked;

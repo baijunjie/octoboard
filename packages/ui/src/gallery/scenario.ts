@@ -1,7 +1,7 @@
 import type { ThirdPartyLicenses } from "../about/thirdPartyLicenses";
 import type { StartupCause } from "../daemon";
 import type { Language } from "../i18n/languages";
-import type { AvailableUpdate, CommandLineError, CommandLineState, HostFacts, LaunchAtLoginStatus, LinkForwardError, MacosPermissionsStatus, RemoteDaemonConnectOutcome, RemoteDaemonEntry, RemoteDaemonStatus, RemoteForward, UpdateProgress } from "../platform";
+import type { AvailableUpdate, CommandLineError, CommandLineState, HostFacts, LaunchAtLoginStatus, LinkForwardError, MacosPermissionsStatus, RemoteDaemonConnectOutcome, RemoteDaemonEntry, RemoteDaemonStatus, RemoteDeviceKeyRemoval, RemoteForward, ShellSystemChange, ShellSystemChangeResult, ShellSystemChangesFailure, UpdateProgress } from "../platform";
 import type { Fixture } from "../fixtures/fixture";
 import type { Step } from "../fixtures/interact";
 import type { Preferences } from "../fixtures/preferences";
@@ -55,6 +55,10 @@ export interface RemoteDaemonsFixture {
   /** What a press on an entry ends in, by its id; an entry without one never finishes connecting. A press that asks to
    * hold the connection for the browser (`browser`) is answered with its address, and the entry then counts as held. */
   outcomes?: Record<string, RemoteDaemonConnectOutcome>;
+  /** What taking back the key of an entry that has this computer's key installed (`auth` "device") comes to, by its id:
+   * the line removed from its server and the private key gone from this computer unless this says otherwise, for
+   * example the line left on its server (`line`) or the private key left in the credential store (`privateKeyLeft`). */
+  keyRemovals?: Record<string, RemoteDeviceKeyRemoval>;
 }
 
 /** One daemon's tab of the notification-area flyout. */
@@ -114,6 +118,25 @@ export interface CommandLineFixture {
    * finishes, so the row stays with the pressed button pending; `{ error }` refuses as the shell does, with the
    * `CommandLineError` it gives. */
   install?: "pending" | { error: CommandLineError };
+}
+
+/** What the desktop shell lists as in effect and answers to clearing it (`PlatformAdapter.systemChanges`): the
+ * application's own items and this computer's daemon's (the accounts that share) in one list. Only the local daemon's
+ * window of the desktop application has one, so it is for a `desktopApp` scenario that is not a `remoteWindow`. */
+export interface ShellSystemChangesFixture {
+  /** What is in effect when the window opens, in the order the shell lists it (the saved remote daemons' device keys,
+   * launch at login, the command-line link, the accounts that share); none is the empty state. */
+  changes: ShellSystemChange[];
+  /** The parts that cannot tell what they have in effect when listing, as the shell answers beside `changes`: the
+   * `daemon` kind is this computer's daemon not answering, any other a feature of the application. */
+  listFailed?: ShellSystemChangesFailure[];
+  /** What clearing answers, one result per item as the shell does; by default every item is cleared. An item whose
+   * outcome is not `cleared` stays listed afterwards, and so does one that has no result. */
+  clear?: ShellSystemChangeResult[];
+  /** The parts that failed as a whole when clearing, beside `clear`, whose items `clear` then leaves out. */
+  clearFailed?: ShellSystemChangesFailure[];
+  /** The shell does not answer the clearing at all: it is refused with this text, and nothing is cleared. */
+  clearUnanswered?: string;
 }
 
 export interface Scenario extends Fixture {
@@ -213,6 +236,12 @@ export interface Scenario extends Fixture {
   /** The macOS application can link its `octoboardd` into the PATH, so the Command line group of General is shown, the
    * tool standing as this says when the window opens. Needs a `host` that offers it (`MAC_HOST`). */
   commandLine?: CommandLineFixture;
+  /** The window is the local daemon's in the desktop application, which lists and clears what its own features and its
+   * daemon have in effect outside their directories (Settings > Cleanup, the "Clean up before uninstalling" row), the
+   * one place the action is offered. Without it the window is a browser's or a remote daemon's, and the row is one
+   * sentence saying where the cleanup is done, which in a browser `state.host.application` decides (a desktop
+   * application's own daemon, or one that runs on its own). */
+  shellSystemChanges?: ShellSystemChangesFixture;
   /** The platform offers the desktop shell's remote daemons, listing these, so the rail has its Remote devices
    * button under the consoles (alone, and in a `desktopApp`, which is the window that has it). Saving and removing
    * change the list. */
@@ -221,7 +250,7 @@ export interface Scenario extends Fixture {
    * what is the application's own rather than a daemon's is absent (the rail's Remote devices button, the Access,
    * Permissions and Updates sections), as in the shell's window of that kind. Give the `host` the shell gives such a
    * window (`REMOTE_WINDOW_HOST` of `fixtures/remoteWindow.ts`) and leave out the capabilities a remote window is not
-   * given (`backgroundRun`, `menuBarIcon`, `launchAtLogin`, `commandLine`, `updater`). The daemon's host is its own, as `state.host`
+   * given (`backgroundRun`, `menuBarIcon`, `launchAtLogin`, `commandLine`, `shellSystemChanges`, `updater`). The daemon's host is its own, as `state.host`
    * says. */
   remoteWindow?: { name: string };
   /** The ports of this computer the remote window's shell forwards to its daemon's machine, in the order they were made:

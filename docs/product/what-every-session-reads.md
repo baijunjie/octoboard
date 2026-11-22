@@ -440,8 +440,10 @@ And each record carries what tells sessions apart and what an owner decides on:
 - `origin`: `console` for a session started with `open_session`; `user` for one the user opened and for one opened
   through `request_session` or `request_resume_session`. A session that takes another's place in a handoff carries the
   original's.
-- `has_conversation`: whether a turn was ever taken in the session, or it was opened on an existing conversation. It
-  does not say that the agent still holds the conversation's record; a `resume_session` that finds it gone is refused
+- `has_conversation`: whether a turn was ever taken in the session — as the agent reports it, or as the agent's own
+  record of the conversation shows it when no report arrived — or it was opened on an existing conversation (see "Done,
+  awaiting instructions and child sessions working" in `docs/product/session-statuses.md`). It does not say that the
+  agent still holds the conversation's record; a `resume_session` that finds it gone is refused
   (`conversation_unresumable`).
 - `resumable`, in `get_session`'s record of an interrupted or archived session only — and in
   `list_archived_sessions`'s with `check_resumable` (see "Listing archived sessions" above): whether the agent still

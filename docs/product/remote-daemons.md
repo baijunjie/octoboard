@@ -37,7 +37,8 @@ PC's).
   system's own items and a separator, and the **taskbar's jump list**: Remote devices and this PC's window as its
   tasks, and the saved remote daemons in a category of their own named after the Remote menu. Windows labels them in
   sentence case, as its own menus are. A jump list item starts the application when it is not running, and reaches the
-  running one otherwise.
+  running one otherwise. Once the clean-up before uninstalling has removed the jump list, the application does not
+  write it again until it next starts (see `docs/product/clean-up-before-uninstalling.md`).
 
 They are worded in the main window's language and follow a change of it, and of the saved remote daemons, at once.
 
@@ -64,8 +65,10 @@ way to connect, add, edit or remove one, nor shows the Remote devices page.
 ## Saved remote daemons
 
 The application keeps the remote daemons the owner has added, for each: a name, the SSH host, the SSH port, the user,
-how to authenticate, the host key fingerprint pinned for it, and the path of `octoboardd` on that machine where it is
-not found by itself. They are this computer's, in `remote-daemons.json` beside the window state (see
+how to authenticate, the host key fingerprint pinned for it, the path of `octoboardd` on that machine where it is
+not found by itself, and what it knows of this computer's key there: whether the owner said no to it or turned it off,
+and, for a key it installed, the file its line was added to and what the line is marked with (see "Device keys"
+below). They are this computer's, in `remote-daemons.json` beside the window state (see
 `docs/product/files-octoboard-owns.md`); no daemon holds them, and no configuration export carries them. **No password
 or passphrase is ever stored**, there or anywhere: one is asked for when a connection needs it, and kept in memory only
 for that connection's reconnections.
@@ -85,18 +88,21 @@ A new remote daemon and a saved one are filled in on the same form, on the Remot
   host.
 - **User**, **Host** and **SSH port** (1 to 65535, 22 to begin with), each required; a host or user with a space in it
   is refused.
-- **Authentication**: **Password**, the remote user's password, asked for at each connection; **Key file**, a private
-  key file on this computer, whose path is then asked for (`~` standing for the home folder) and whose passphrase is
-  asked for at a connection only where the key has one; and, only for a daemon this computer's own key has already been
-  installed for, **This computer's key** (see "Device keys" below).
+- **Authentication**: **Password**, the remote user's password, asked for at each connection; or **Key file**, a
+  private key file on this computer, whose path is then asked for (`~` standing for the home folder) and whose
+  passphrase is asked for at a connection only where the key has one. A daemon whose host has this computer's key
+  added signs in with that key instead: the form says so in place of the choice, which comes back once the key is
+  turned off (see "Device keys" below). The key is never chosen on the form.
 - **Path of octoboardd**, empty to begin with, which leaves it to be found by itself (see "Connecting" below).
 - **Pinned host key**, shown for a saved daemon and for a new one once a fingerprint is pinned: the fingerprint, with
   **Clear**, which unpins it so that the host key shown at the next connection is confirmed again; or, with none
   pinned, a line saying it is pinned when the host key is confirmed at the first connection. A fingerprint is never
   typed in.
 
-A saved daemon whose host, port or user is changed is a new SSH destination: the device key kept for it is dropped,
-and one that authenticated with This computer's key authenticates with a password until a key is installed there again.
+A saved daemon whose host, port or user is changed is a new SSH destination. Where this computer's key is added for
+it, the form warns of this before the save (see "The form" in `docs/product/remote-devices-page.md`), and saving the
+change first takes the key back from the host it was added on (see "Taking the key back" below); the daemon then signs
+in with a password, and its next connection asks about the key for the new destination.
 
 ## Connecting
 
@@ -117,7 +123,9 @@ reports" below says:
    `docs/product/daemon-command-line.md`): its owner key, the protocol generation it speaks and its release version. A
    daemon of another protocol generation than the application's is refused here, before any window opens (see "A
    version mismatch" below).
-5. **Installing this computer's key**, after a login with the password or a key file (see "Device keys" below).
+5. **This computer's key**, after a login with the password or a key file: the owner is asked whether to add it, the
+   connection ending with the question, and it is added only where they agree (see "Asking before the key is added"
+   below).
 6. **Showing the daemon**: the application listens on a loopback port of its own, which the system assigns, and opens
    the daemon's window there with the owner key; each connection the window opens through that port is carried to the
    daemon by one run of `octoboardd proxy` over the SSH connection. The daemon never listens beyond its own machine's
@@ -152,7 +160,10 @@ below), and the reconnection of a window whose connection dropped (see "A droppe
 - **The sign-in is refused**: an alert asking to check the user and the password or key file.
 - **The key file cannot be read or decoded, or its passphrase is wrong**: an alert saying so.
 - **This computer's key is no longer accepted** (it was removed on the host): the password dialog, saying the server no
-  longer accepts this computer's key and that signing in with the password adds it again.
+  longer accepts this computer's key and to sign in with the password instead. Once signed in, the owner is asked
+  about the key again, as at a first connection; it is not added again without asking.
+- **This computer's key could be added**, after a sign-in with the password or a key file: the question described in
+  "Asking before the key is added" below.
 - **`octoboardd` is not found**: a dialog listing where it was looked for and asking for its path on the server;
   **Save and connect** saves the path with the daemon and connects again.
 - **No daemon is running** on a server: a confirmation saying so, whose **Start daemon** runs `octoboardd start` on the
@@ -169,8 +180,8 @@ below), and the reconnection of a window whose connection dropped (see "A droppe
 - **Any other failure**, one the application does not recognise included, is unexpected: its alert says something
   unexpected went wrong and offers **Report issue**.
 
-The password, the passphrase and a fingerprint just confirmed are kept for the retries of that one connection, and
-dropped when it ends.
+The password, the passphrase, a fingerprint just confirmed and the answer about this computer's key are kept for the
+retries of that one connection, and dropped when it ends.
 
 ### A version mismatch
 
@@ -205,26 +216,161 @@ address its page shows opens as written, on this computer (see "Loopback address
 
 ## Device keys
 
-**After the first login with the remote user's password or a key file, the application installs a key of this
-computer's own and signs in with it from then on**, so later connections ask for nothing.
+**The application can sign in to a saved remote daemon with a key of this computer's own**, so later connections sign
+in without asking for a password or passphrase. It is added to the remote host only where the owner agrees to it, the device's page shows whether it is
+there (see "This computer's key" in `docs/product/remote-devices-page.md`), and it is taken back from the host and from
+this computer when the owner turns it off or removes the saved daemon. Adding and removing this key's line is the only
+change the application makes to a remote host's files.
 
 - The key is an Ed25519 key pair made for that saved daemon. The private key is kept in the system's credential store —
   the login keychain on macOS, the Credential Manager on Windows — and never leaves the computer; only the public key is
   sent. Nothing else of the remote daemons is kept there.
-- The public key is appended to the remote user's authorized keys, as `ssh-copy-id` does: `~/.ssh/authorized_keys` on a
-  Linux or macOS host, created private where it does not exist, the entries already there left as they are, and
-  nothing added where the key is already there. On a Windows host it is the file that user's login reads: for an
-  administrator `%ProgramData%\ssh\administrators_authorized_keys`, given, where it is created, the access rights the
-  SSH server requires (Administrators and SYSTEM only), and for any other user `~\.ssh\authorized_keys`. The entry is
-  marked `Octoboard on <this computer's name>`, so it can be told apart and removed there.
-- The key is used only once a connection made with it has been accepted; the saved daemon then authenticates with
-  **This computer's key**. Where installing it fails, the window opens all the same, and the next connection asks for
-  the password again and tries again.
-- **Revoking a device** is removing its line from the authorized keys on the remote machine; a connection already open
-  lasts until it drops. The application then reports that the server no longer accepts this computer's key and asks for
-  the password, which installs it again. Listing or removing installed keys from within the application is not offered.
-- The private key is removed from the credential store when the saved daemon is removed, or when its host, port or user
-  is changed.
+- Its line is the public key, marked `Octoboard on <this computer's name>`, so it can be told apart there. It goes in
+  the remote user's authorized keys: `~/.ssh/authorized_keys` on a Linux or macOS host; on a Windows host the file that
+  user's login reads, for an administrator `%ProgramData%\ssh\administrators_authorized_keys`, and for any other user
+  `~\.ssh\authorized_keys`.
+
+A saved daemon's key is in one of three states, which the interface words in terms of adding the key; below, a key
+that is added is also called installed:
+
+- **Added**: its line is on the host, and the saved daemon signs in with it.
+- **Not added, asked for at the next connection**: what a new saved daemon starts as, and what turning the key on
+  leads to.
+- **Off**: the owner said no when asked, or turned it off. Nothing is added and nothing is asked until it is turned
+  on again.
+
+### Asking before the key is added
+
+After a sign-in with the remote user's password or a key file, once the daemon has been reached and read, a saved
+daemon whose key is neither installed nor off adds nothing: the connection ends with a question, shown as any question
+of a connection is (see "What a connection asks or reports" above), and nothing has been written on the host. The
+question, **Add this computer's key**, names the daemon and says:
+
+- what is added: one line, this computer's public key, with its mark shown as a monospace literal (the text the owner
+  would look for in the file), and nothing else in the file changed;
+- where: the file, for that user on that host — `~/.ssh/authorized_keys` on a Linux or macOS host, and on a Windows
+  host the full path of the file that user's login reads, which the host is asked for without anything being written;
+- what it does: later connections from this computer sign in with it without asking for a password or passphrase;
+- that the private key is kept in the system's credential store, and that removing the remote daemon or turning its key
+  off removes the line and the private key;
+- that without it connections keep signing in as they do, the question is not asked again, and the key can be turned on
+  later on the daemon's page.
+
+**Add key** and **Do not add** each connect again with that answer, without asking for anything already given; the
+close button ends the connection with nothing installed, and the next connection asks again. That holds for the
+question that follows a key the host stopped accepting too (see "Installing the key" below): closing it ends a
+connection the owner had already signed in to with the password, and connecting again asks for the password and then
+the question again. The question comes after
+the seconds a connection takes, so it opens with focus on the dialog itself rather than on Add key (see "Where keyboard
+focus starts in a confirmation" in `docs/product/dialogs.md`).
+
+- **Add key** installs the key, and the connection goes on (see "Installing the key" below).
+- **Do not add** installs nothing, and the connection goes on with what the owner signed in with. The answer is
+  remembered for that saved daemon, whose key is off from then on. It is noted before anything else — before the host
+  is spoken to again, and even where a window already shows that daemon — so it stands even where that reconnection
+  fails, and noting it changes nothing else. Where this computer still holds a key for it (one the host stopped
+  accepting, say), a connection takes that key back: its line is taken out of the host's file where it is still there,
+  and the private key is removed from the credential store. A saved daemon whose key is installed goes on being shown
+  as installed until then, and signs in with a password afterwards. The connection made with the answer does it; where
+  that connection fails, the next sign-in with the password does it, asking nothing.
+- **A host that cannot say which file its keys are in** (a Windows host that does not answer the request for it) is not
+  asked about: the connection goes on with what the owner signed in with, and the next one asks again.
+
+Connections made at launch ask nothing about the key and add none (see "Bringing remote windows back at launch"
+below), nor does the reconnection of a window (see "A dropped connection" below). A connection asked for from a menu
+hands the question to the Remote devices page, as any of its questions (see "What is handed to the page" in
+`docs/product/remote-devices-page.md`).
+
+### Installing the key
+
+- The line is appended as `ssh-copy-id` does: the file and, on a Linux or macOS host, `~/.ssh` are created private
+  where they do not exist, the lines already there are left as they are, and nothing is added where the key is already
+  there. On a Windows host, an administrator's file created here is given the access rights the SSH server requires
+  (Administrators and SYSTEM only); an existing file's access rights are left as they are.
+- The key is used only once a connection made with it has been accepted; the saved daemon then signs in with it, and
+  keeps the file and the mark of its line.
+- **An install that fails leaves nothing behind**: a key the host does not accept is taken out of its file again, and
+  a key pair made for that attempt is removed from the credential store. A key installed for a saved daemon that can
+  no longer record it — one removed or pointed elsewhere meanwhile, or whose saved remote daemons cannot be written —
+  is taken back at once, over the connection still open. Either way the window opens all the same, and the next
+  connection asks again.
+- **A key the host no longer accepts** (its line was removed there): a connection already open lasts until it drops.
+  The next connection reports that the server no longer accepts this computer's key and asks for the password; once
+  signed in, the owner is asked about the key again, as at a first connection. A saved daemon whose private key this
+  computer no longer holds asks for the password, and then about the key, in the same way.
+
+### Turning the key off and on
+
+The device's page turns the key off or on (see "This computer's key" in `docs/product/remote-devices-page.md`).
+
+- **Off, where the key is installed**: the key is taken back (see "Taking the key back" below) and the saved daemon is
+  kept. It then signs in with a password, asked for at its next connection, unless the owner chooses a key file on the
+  form, and it is not asked about the key.
+- **A window already open on a daemon whose key was taken back** — turned off, the saved daemon removed or pointed
+  elsewhere — keeps its connection until it drops. After that its reconnections are refused: a reconnection signs in
+  with what the connection was made with, the key that is gone, and asks nothing (see "A dropped connection" below).
+  The way back is to close the window, or choose Disconnect, and connect again where the daemon is still saved, which
+  asks for the password.
+- **Off, where nothing is installed**: nothing changes on the host; the answer is only remembered.
+- **On**: installs nothing by itself; the next connection asks before adding the key.
+
+### Taking the key back
+
+The key is taken back when the saved daemon is removed, when its key is turned off, and when a save stops it signing
+in with the key — a change of host, port or user — in which case it is taken back from the host it was installed on,
+before the change is saved. Taking it back:
+
+- connects to the host with the key itself and takes out exactly the line that carries this key, keeping every byte
+  of every other line: lines in another encoding, with a NUL or with CRLF endings stay as they were, a last line with
+  no line ending keeps having none, and a byte order mark stays. The file is rewritten in place, never replaced: on a
+  Linux or macOS host it stays the same file with its owner, permissions and links, and on a Windows host it keeps its
+  access rights; it stays, empty, where that line was its only one. Nothing of the application's is left on the host;
+- then removes the private key from the credential store.
+
+Removing a saved daemon, saving it and turning its key off wait for a connection being made to that daemon to end,
+and a connection asked for meanwhile waits for them, so a key being installed is recorded before the daemon is removed
+or pointed elsewhere, and is then taken back.
+
+**A host that cannot be reached, that refuses the key, or whose file does not hold the line** — the host reads its
+keys from another file, or the line was moved — and a key this computer no longer holds, do not hold up the removal,
+the save or the switch: it goes on, and the private key is removed all the same. The line is never reported as
+removed. The application cannot tell these cases apart for certain, so an error alert, **Could not remove this
+computer's key from the server**, says only that this computer's key could not be removed from the host, so the line
+with its mark (shown as a monospace literal) may still be in the file for the user there — in the user's authorized
+keys, where the application does not know the file — and that, if it is, the owner deletes it on the server to remove
+the key. It adds that the private key was removed from this computer only where it was. What the host said is under
+its Error details.
+
+**A credential store that does not remove the private key** (a locked keychain, say) does not hold them up either. A
+second error alert, **Could not remove this computer's private key**, says the credential store did not remove the
+private key kept for the user on the host, and names its item — its service and account — for the owner to remove it
+there; what the store said is under its Error details. It comes on its own, or after the first.
+
+**A rewrite of the host's file cut short** — the write failed and the file's content could not be put back — may leave
+the user's authorized keys incomplete, which does not hold the removal, the save or the switch up either, and the
+private key is removed all the same. Instead of the first alert, an error alert titled as the server's authorized keys
+possibly being incomplete says that removing this computer's key from the host was cut short while the user's
+authorized keys were being rewritten, so keys may be missing from them; it names the copy of their earlier content the
+host keeps, to restore the file from, since until then the keys it held may not sign in. What the host said is under
+its Error details.
+
+A key an earlier version of the application installed — a saved daemon that signs in with this computer's key but
+holds no record of the file and the mark — counts as installed and is taken back in the same way. Where such a key is
+left on its host, the alert names the mark this computer gives its keys and the user's authorized keys, without a file.
+
+### Taking every key back at once
+
+The application can take back every installed key in one go, speaking to the hosts side by side, so that one that
+does not answer holds up no other. It acts on the saved daemons whose key is installed: it takes each key back and
+turns that daemon's key off. It also acts on a saved daemon that no longer signs in with the key but whose private key
+the credential store still holds, because the store did not remove it when the key was taken back: it removes that
+private key, and changes nothing on the host or in the saved daemon. It reports, for each saved daemon it acted on,
+what became of its line and its private key (as above). Any other saved daemon is left as it was: one never asked is
+still asked at its next connection. It is reached only through **Remove all** in the clean-up before uninstalling, in
+the main window's Settings, whose confirmation lists a private key left that way as an item of its own, marked as the
+private key only, and whose result shows, under each key not removed, what became of it (see `docs/product/clean-up-before-uninstalling.md`).
+The Windows uninstaller's clean-up takes every key back the same way, with nothing listed first, and names what stays
+at its end ("The Windows uninstaller's clean-up" there).
 
 ## The remote window
 
@@ -240,7 +386,9 @@ differences:
   window shows, and its Settings change, the language the remote daemon holds (see "The language the daemon holds" in
   `docs/product/language.md`). What is the application's own is not offered there: Launch at login, Keep running in the
   background and Show menu bar icon in General (see `docs/product/general-settings.md`), the Permissions section, the
-  Access section, and the application's updates (below). Appearance, the terminal font size and the keyboard
+  Access section, and the application's updates (below). Cleanup's Clean up before uninstalling row has no action there and
+  only says where the clean-up is done (see "Which installation it speaks for" in
+  `docs/product/clean-up-before-uninstalling.md`). Appearance, the terminal font size and the keyboard
   shortcuts are the application's, shared with every window.
 - **Nothing is opened on the remote machine, and nothing of this computer is offered for the daemon's files**: no File
   manager, Default application or System terminal under Open in (see `docs/product/sidebar-project-rows.md` and "A row's
@@ -338,7 +486,9 @@ very gesture that quits the application counts as open; one held for the browser
 At the next launch they are all connected again at once, asking nothing, and each window opens where it was left. One
 whose connection needs something the application cannot supply without asking — a password, a passphrase, a host key
 to confirm — or that fails, a version mismatch included, opens no dialog and no window, and stays unconnected until the
-owner connects it. A launch at login that keeps the application in the background brings none back. None of these
+owner connects it. One that would be asked about this computer's key goes on without it, adding nothing and leaving
+the question for a connection the owner makes. A launch at login that keeps the application in the background brings
+none back. None of these
 connections shows the Remote devices page.
 
 **Where the main window was hidden at quit**, it is held hidden while the remote windows are connected, and stays hidden

@@ -4,7 +4,8 @@ description: "Cài octoboardd, chương trình máy chủ của Octoboard, lên 
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../../commands.ts";
+import LinuxUninstall from "../../../../snippets/vi/linux-uninstall.mdx";
 
 Cài octoboardd, chương trình máy chủ của {productName} (ứng dụng gọi nó là daemon), lên máy chủ Linux mà không cần quyền root. Truy cập từ ứng dụng macOS hoặc Windows, hoặc từ trình duyệt, đều qua SSH.
 
@@ -80,6 +81,12 @@ octoboardd tự chọn một cổng riêng mà bạn không bao giờ cần bi�
   Nếu nó hỏi có khởi động lại ngay không, trả lời <code dir="ltr">y</code> để khởi động lại, hoặc nhấn Enter để tạm giữ phiên bản cũ tiếp tục chạy. Để khởi động lại sau, chạy <code dir="ltr">{commands.restart}</code>.
 
 Nếu <code dir="ltr">{commands.update}</code> báo không thay được chương trình, chẳng hạn vì nó được cài ở nơi bạn không có quyền ghi, hãy chạy lại lệnh cài đặt (hoặc lệnh dịch vụ). Nó khởi động lại theo cách tương tự khi an toàn, và nếu không thì sẽ bảo bạn chạy <code dir="ltr">{commands.restart}</code>.
+
+## Gỡ cài đặt
+
+<LinuxUninstall />
+
+Dữ liệu của bạn vẫn nằm trong <code dir="ltr">{system.dataDir}</code>. [Hệ thống của bạn vẫn như cũ](../../your-system/) cho biết sau đó còn lại gì và cách xóa.
 
 ## Lệnh
 

@@ -10,19 +10,21 @@
 //! failure, and only where the agent's own reply rules out every other way of being signed in: an
 //! API key, a cloud provider or a custom provider also leaves a quota request refused or empty.
 //! A probe runs in the login-shell snapshot with the agent's configuration-directory variable
-//! pointed at the account's directory, and with the CLI told to load as little of the user's setup
-//! as it can without losing its sign-in.
+//! pointed at the account's directory, or, for a provider whose CLI would change the account's
+//! configuration there, at a directory of Octoboard's own that the provider builds from it
+//! (`AccountOps::run_home`); and with the CLI told to load as little of the user's setup as it can
+//! without losing its sign-in.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
 use super::diagnostics::{redact, stderr_tail, truncate, ProbeTrace, LINE_LIMIT, MAX_NOTES};
-use crate::adapter::account_cli::{self, NotRun};
+use crate::adapter::account_cli::{self, BackgroundRun, NotRun, RunWait};
 use crate::adapter::provider;
 use crate::agents::json_rpc;
 use crate::processes::subprocess::{
@@ -123,10 +125,13 @@ pub(crate) fn is_second_response(value: &Value) -> bool {
 /// reports as a failure. Notes in `trace` what is worth logging of the run: the process's pid,
 /// how long it ran, its stderr, whether Octoboard had to end it, what the agent said that made
 /// the account read as not signed in, and any error-like line it printed besides the reply.
+/// `run_homes` is where a provider keeps the directories of Octoboard's own it runs a probe
+/// against (`AccountOps::run_home`).
 pub(super) fn probe(
     agent: AgentId,
     shell_env: &HashMap<String, String>,
     config_dir: Option<&Path>,
+    run_homes: &Path,
     timeout: Duration,
     cancel: &AtomicBool,
     trace: &mut ProbeTrace,
@@ -134,20 +139,35 @@ pub(super) fn probe(
     let Some(conversation) = provider(agent).accounts().and_then(|ops| ops.quota_probe()) else {
         return Err(failed(agent, "it has no quota to read"));
     };
-    let mut run = account_cli::admitted_command(agent, shell_env, config_dir, conversation.args())
-        .map_err(|refused| match refused {
-            NotRun::DirMissing(dir) => config_dir_missing(agent, &dir.to_string_lossy()),
-            NotRun::BinaryNotFound(binary) => QuotaUnavailable::new(
-                code::BINARY_NOT_FOUND,
-                refused.detail(),
-                &[("binary", binary)],
-            ),
-            NotRun::BinaryRefused(refusal) => QuotaUnavailable {
-                code: refusal.code,
-                params: refusal.params,
-                message: refusal.message,
-            },
-        })?;
+    // What the probe waits for its directory comes out of the time it is given.
+    let deadline = Instant::now() + timeout;
+    let mut run = account_cli::admitted_command_in(
+        agent,
+        shell_env,
+        config_dir,
+        BackgroundRun::QuotaReading,
+        run_homes,
+        &RunWait {
+            until: deadline,
+            cancel: Some(cancel),
+        },
+        conversation.args(),
+    )
+    .map_err(|refused| match refused {
+        NotRun::DirMissing(dir) => config_dir_missing(agent, &dir.to_string_lossy()),
+        NotRun::HomeNotPrepared(_) => failed(agent, &refused.detail()),
+        NotRun::BinaryNotFound(binary) => QuotaUnavailable::new(
+            code::BINARY_NOT_FOUND,
+            refused.detail(),
+            &[("binary", binary)],
+        ),
+        NotRun::BinaryRefused(refusal) => QuotaUnavailable {
+            code: refusal.code,
+            params: refusal.params,
+            message: refusal.message,
+        },
+    })?;
+    let timeout = deadline.saturating_duration_since(Instant::now());
     let bounds = Bounds::agent_query(timeout, OUTPUT_LIMIT);
     // The reply that is read, and the part of another reply that says who is signed in: the two
     // arrive in either order.

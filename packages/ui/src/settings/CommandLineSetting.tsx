@@ -13,7 +13,7 @@ import type { CommandLineError, CommandLineState } from "../platform";
 import { commandLineError } from "../platform/commandLineError";
 import { usePlatform } from "../platform/react";
 import { Button } from "../primitives";
-import { COMMAND_LINE_TOOL } from "./commandLineTool";
+import { COMMAND_LINE_DIRECTORIES, COMMAND_LINE_TOOL } from "./commandLineTool";
 import { SettingRow } from "./SettingRow";
 import { useSectionRefocus } from "./useSectionRefocus";
 
@@ -22,6 +22,8 @@ type Change = "install" | "remove";
 /** The command-line tool, a link named `octoboardd` to the application's own: where it stands, read when the dialog opens
  * and again whenever the window gets focus back (it can be changed from a terminal), and the actions that fit: install
  * where there is none, reinstall where it runs another copy or leads nowhere (or is fine), remove where there is one.
+ * Where it is not installed the row also says what installing adds and where, since the link goes outside the
+ * application's own directories (P9 in `docs/conventions/principles.md`).
  * The state, a state that could not be read and a failure of a change are said in the row, never in a dialog; a failure
  * is an alert in the row, worded by the shell's code with its own words behind Details. While a change is out its
  * button is pending and the other disabled, a read of the state made meanwhile is skipped, and the answer of a read
@@ -100,6 +102,18 @@ export function CommandLineSetting(): React.ReactElement | null {
   const status = state ? (
     <>
       <div>{stateWords(state)}</div>
+      {state.state === "notInstalled" && (
+        <div>
+          <Message
+            id="settings.commandLine.state.installAdds"
+            params={{
+              command: <InlineReference monospace>{COMMAND_LINE_TOOL}</InlineReference>,
+              systemDirectory: pathChip(COMMAND_LINE_DIRECTORIES.system),
+              userDirectory: pathChip(COMMAND_LINE_DIRECTORIES.user),
+            }}
+          />
+        </div>
+      )}
       {state.state === "installed" && state.pathNote && (
         <div><Message id="settings.commandLine.state.pathNote" params={{ pathVariable: <InlineReference monospace>PATH</InlineReference> }} /></div>
       )}
@@ -122,7 +136,7 @@ export function CommandLineSetting(): React.ReactElement | null {
               title={t(failure.change === "install" ? "settings.commandLine.error.installTitle" : "settings.commandLine.error.removeTitle")}
               details={failure.error.detail && failure.error.code !== "foreign_link" ? <DiagnosticBlock>{failure.error.detail}</DiagnosticBlock> : undefined}
             >
-              {failureWords(failure.error)}
+              {commandLineFailureWords(failure.error)}
             </ErrorAlert>
           )}
           <AttendedStatusAnnouncer text={outcome && (outcome.count % 2 === 0 ? `${outcome.text}\u00A0` : outcome.text)} clearAfterRead />
@@ -173,8 +187,9 @@ function stateText(t: Translate, state: CommandLineState): string {
 
 /** Why a change failed, by the shell's code. A foreign link's `detail` is the target the link leads to, said in the
  * sentence. A code that speaks of a path but came with none (or a foreign link with no target), and `failed`, say
- * only that the change could not be made: the shell's own words are behind Details. */
-function failureWords({ code, path, detail }: CommandLineError): React.ReactElement {
+ * only that the change could not be made: the shell's own words are behind Details. Also what the clean-up before an
+ * uninstall says of a link it could not remove (`UninstallCleanup`). */
+export function commandLineFailureWords({ code, path, detail }: CommandLineError): React.ReactElement {
   if (path !== null) {
     if (code === "refused") return <Message id="settings.commandLine.error.refused" params={{ path: pathChip(path) }} />;
     if (code === "not_a_link") return <Message id="settings.commandLine.error.notALink" params={{ path: pathChip(path) }} />;

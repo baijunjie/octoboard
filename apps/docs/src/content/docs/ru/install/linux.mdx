@@ -4,7 +4,8 @@ description: "Установите octoboardd, серверную програм
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../../commands.ts";
+import LinuxUninstall from "../../../../snippets/ru/linux-uninstall.mdx";
 
 Установите octoboardd, серверную программу {productName} (в приложении она называется «служба»), на сервере Linux без прав root. Подключайтесь к ней из приложения для macOS или Windows либо из браузера, в обоих случаях по SSH.
 
@@ -80,6 +81,12 @@ octoboardd сам выбирает свой порт, и знать его ва�
   Если она спросит, перезапустить ли сейчас, ответьте <code dir="ltr">y</code>, чтобы перезапустить, или нажмите Enter, чтобы пока оставить работать старую версию. Чтобы перезапустить позже, выполните <code dir="ltr">{commands.restart}</code>.
 
 Если <code dir="ltr">{commands.update}</code> сообщает, что не может заменить программу, например потому, что она установлена в место, куда у вас нет прав записи, выполните вместо этого команду установки (или команду установки службы) ещё раз. Она перезапустится так же, когда это безопасно, а иначе подскажет выполнить <code dir="ltr">{commands.restart}</code>.
+
+## Удаление
+
+<LinuxUninstall />
+
+Ваши данные остаются в <code dir="ltr">{system.dataDir}</code>. На странице [Ваша система остаётся прежней](../../your-system/) сказано, что остаётся после этого и как это убрать.
 
 ## Команды
 

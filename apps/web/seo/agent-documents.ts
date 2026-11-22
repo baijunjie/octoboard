@@ -4,10 +4,13 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   appDownloads,
-  appRequirementsKeys,
+  appRequirementsKey,
+  heroPlatformsKey,
+  offersWindowsArm,
   installCommand,
   releasesUrl,
   serverDownloads,
+  windowsArmDownload,
   type Downloads,
 } from "./downloads.ts";
 import { formatPrivacyDate } from "./privacy-date.ts";
@@ -151,13 +154,17 @@ function linuxParts(copy: AgentCopy, text: Text, onDownloadPage: boolean, locale
 
 // Each app's download, followed by the guide to installing that app.
 function appLinks(copy: AgentCopy, text: Text): string {
+  const armOffered = offersWindowsArm(copy.downloads, copy.repositoryUrl);
   return appDownloads
     .map(
       (target) => {
         const label = text("downloadButton", { platform: target.name });
         const href = copy.downloads[target.id];
         const download = `- ${href === releasesUrl(copy.repositoryUrl) ? label : link(label, href)}`;
-        return `${download}\n- ${guideLink(copy, text, "en", docsPages[target.id])}`;
+        const arm = target.id === "windows" && armOffered
+          ? `\n- ${link(text("downloadWindowsArm"), copy.downloads[windowsArmDownload.id])}`
+          : "";
+        return `${download}${arm}\n- ${guideLink(copy, text, "en", docsPages[target.id])}`;
       },
     )
     .join("\n");
@@ -168,6 +175,7 @@ function downloadMarkdown(copy: AgentCopy, locale: SiteLocale): string {
   const params = valuesFor(copy);
   const text: Text = (key, values = {}) => message(messages, key, { ...params, ...values });
   const canonical = copy.siteUrl + localizedPath(locale.code, "download/");
+  const armOffered = offersWindowsArm(copy.downloads, copy.repositoryUrl);
   return document([
     heading(1, text("downloadPageTitle")),
     `Canonical: ${canonical}`,
@@ -175,7 +183,8 @@ function downloadMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     ...appDownloads.flatMap((target) => [
       heading(2, target.name),
       link(text("downloadButton", { platform: target.name }), copy.downloads[target.id]),
-      text(appRequirementsKeys[target.id]),
+      text(appRequirementsKey(target.id, armOffered)),
+      target.id === "windows" && armOffered && link(text("downloadWindowsArm"), copy.downloads[windowsArmDownload.id]),
       guideLink(copy, text, locale.code, docsPages[target.id]),
     ]),
     ...linuxParts(copy, text, true, locale.code),
@@ -207,7 +216,7 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     text("brandSloganMeaning"),
     text("workspaceIntroduction"),
     text("heroStatus"),
-    text("heroAvailability"),
+    text(heroPlatformsKey(offersWindowsArm(copy.downloads, copy.repositoryUrl))),
     link(text("heroSecondary"), copy.repositoryUrl),
     text("workspaceAgentLabel"),
     heroAgents.map((agent) => agent.name).join(", "),
@@ -340,7 +349,7 @@ function llmsTxt(copy: AgentCopy): string {
     flatten(message(english, key, { ...params, ...values }));
   const notes = [
     text("workspaceIntroduction"),
-    text("heroAvailability"),
+    text(heroPlatformsKey(offersWindowsArm(copy.downloads, copy.repositoryUrl))),
     ...[...availablePlatforms, ...plannedPlatforms].map(
       (platform) => `${platform.name}: ${text(platform.status)}`,
     ),

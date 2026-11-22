@@ -61,13 +61,21 @@ export interface ConfirmDialogProps {
   size?: "sm" | "md" | "lg";
   /** For an action that cannot be undone and loses a lot: the word the user has to type before
    * Confirm is enabled, shown in capitals. What is typed shows in capitals too, and is compared
-   * ignoring case, so a script without case (Chinese) works unchanged. The one string is both the prompt's word and
-   * what is compared, so the two cannot drift apart: a caller never passes a second copy for either. */
+   * ignoring case (`typedWordKey`), so a script without case (Chinese) works unchanged. The one string is both the
+   * prompt's word and what is compared, so the two cannot drift apart: a caller never passes a second copy for either. */
   typeToConfirm?: string;
   /** May reject — the shared error alert reports the failure and this dialog stays open, so the
    * caller does not need its own try/catch around the request. */
   onConfirm: () => Promise<void>;
   onCancel: () => void;
+}
+
+/** The form of a typed word that `typeToConfirm` compares: its capitals in `language`, with the dotted and dotless
+ * i of Turkish and Azerbaijani taken as one letter (`İ` folded into `I`), so "kaldir" typed on a keyboard without `ı`,
+ * "kaldır", and a capital `I` or `İ` typed under any language all match KALDIR. In every language and for every word:
+ * no word is told apart by that dot alone. */
+export function typedWordKey(text: string, language: string): string {
+  return text.toLocaleUpperCase(language).replace(/\u0130/g, "I");
 }
 
 export function ConfirmDialog({
@@ -100,7 +108,7 @@ export function ConfirmDialog({
   const [typed, setTyped] = useState("");
   const typedField = useTrimmedField(typed, setTyped);
   const word = typeToConfirm?.toLocaleUpperCase(language);
-  const confirmed = !confirmDisabled && (word === undefined || typed.toLocaleUpperCase(language) === word);
+  const confirmed = !confirmDisabled && (typeToConfirm === undefined || typedWordKey(typed, language) === typedWordKey(typeToConfirm, language));
 
   // An unprompted question puts focus on itself at mount and for each new subject, so an Enter typed elsewhere, or
   // repeated from the press that answered the previous question, cannot land on Confirm.

@@ -7,6 +7,8 @@ use crate::coordinator::handle;
 use crate::protocol::{notice_code, AgentAvailability, Availability, RequestBody, SessionStatus};
 use crate::test_support::{self, code_of, ScratchDir};
 
+mod keeping;
+
 /// A console with accounts `claude-a`, `codex-a` and `grok-a` (directories `<dir>/<id>`), and
 /// each agent's default directory at `<dir>/default-<agent>`, created.
 struct Fixture {
@@ -422,6 +424,77 @@ async fn resumed_with(fixture: &Fixture, session: &str) -> Option<PathBuf> {
     let launches = Launches::default();
     resume(fixture, session, &launches).await.unwrap();
     launches.given().pop().expect("launched")
+}
+
+/// A clean-up run launches no agent, whoever asks: the claim of a launch is refused as a stopping
+/// daemon refuses it, with the reason, before anything is done for it; and a launch claimed
+/// before the daemon became one is refused at the launch itself, the last gate, with nothing
+/// started.
+#[tokio::test]
+async fn a_clean_up_run_refuses_a_resume_and_starts_no_agent() {
+    let refused_as_a_clean_up_run = |refused: &anyhow::Error| {
+        assert_eq!(
+            crate::protocol::error_parts(refused).0,
+            crate::protocol::error_code::DAEMON_SHUTTING_DOWN
+        );
+        assert!(
+            format!("{refused:#}").contains("so it starts no agent"),
+            "{refused:#}"
+        );
+    };
+    let fixture = Fixture::new();
+    claude_setup(&fixture);
+    fixture.session("s", AgentId::CLAUDE);
+    let claim = fixture.state.begin_launch("s").unwrap();
+    fixture.state.set_clean_up_run();
+    let launches = Launches::default();
+    let refused = crate::coordinator::launch::relaunch_session_with(
+        &fixture.state,
+        &claim,
+        "s",
+        None,
+        false,
+        None,
+        None,
+        launches.launch(false),
+    )
+    .await
+    .unwrap_err();
+    refused_as_a_clean_up_run(&refused);
+    assert!(launches.given().is_empty(), "{:?}", launches.given());
+    assert!(fixture.state.live_session("s").is_none());
+    drop(claim);
+    refused_as_a_clean_up_run(&fixture.state.begin_launch("s").err().expect("claimed"));
+}
+
+/// A restart in a clean-up run (an account switch, a model change) is refused before the
+/// session's process is ended: it would not be relaunched.
+#[tokio::test]
+async fn a_clean_up_run_refuses_a_restart_before_it_ends_the_session_s_process() {
+    let fixture = Fixture::new();
+    claude_setup(&fixture);
+    let running = idle_session(&fixture, "idle", AgentId::CLAUDE);
+    fixture.state.set_clean_up_run();
+    let failed = crate::coordinator::restart::run(
+        &fixture.state,
+        "idle",
+        |err| err,
+        |_, _| async { anyhow::bail!("the restart went on to its relaunch") as Result<()> },
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        crate::protocol::error_parts(&failed.error).0,
+        crate::protocol::error_code::DAEMON_SHUTTING_DOWN
+    );
+    assert!(
+        format!("{:#}", failed.error).contains("so it starts no agent"),
+        "{:#}",
+        failed.error
+    );
+    assert!(!failed.ended_process);
+    assert!(fixture.state.live_session("idle").is_some());
+    assert!(!running.poll_exit(), "its process was ended");
 }
 
 #[tokio::test]
@@ -2324,6 +2397,35 @@ async fn an_idle_session_does_not_block_and_is_resumed_after_the_change() {
     assert!(fixture.state.sharing_locked("claude-a").is_none());
 }
 
+/// In a clean-up run the change ends the account's idle session and resumes none: the stop that
+/// follows the clearing would end it again.
+#[tokio::test]
+async fn in_a_clean_up_run_an_idle_session_is_ended_and_not_resumed_after_the_change() {
+    let fixture = Fixture::new();
+    let (_, account) = claude_setup(&fixture);
+    let first = idle_session(&fixture, "idle", AgentId::CLAUDE);
+    let launches = Launches::default();
+    launches.resume_through(&fixture.state, false);
+    fixture.state.set_clean_up_run();
+
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
+    assert!(first.poll_exit());
+    assert!(is_link(&account.join("settings.json")));
+    assert!(launches.given().is_empty(), "{:?}", launches.given());
+    assert!(fixture.state.live_session("idle").is_none());
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .get_session("idle")
+            .unwrap()
+            .unwrap()
+            .status,
+        SessionStatus::Interrupted
+    );
+    assert!(fixture.state.sharing_locked("claude-a").is_none());
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn an_idle_session_is_resumed_after_a_change_that_failed() {
@@ -3210,6 +3312,36 @@ async fn a_change_of_sharing_whose_resume_fails_keeps_what_the_process_started_u
     assert_eq!(listed.len(), 1, "{listed:?}");
     assert!(listed[0].id.starts_with(&format!("{child}:")));
     assert!(listed[0].kept && listed[0].session_id.is_none());
+}
+
+/// In a clean-up run nothing is relaunched and nothing is kept for the user: what the session's
+/// process started is stopped with it, so that none of it runs on after the uninstall.
+#[tokio::test(flavor = "multi_thread")]
+async fn in_a_clean_up_run_a_change_of_sharing_stops_what_an_idle_sessions_process_started() {
+    let fixture = Fixture::new();
+    claude_setup(&fixture);
+    let (first, child) =
+        idle_session_that_started_a_server(&fixture, fixture.session("idle", AgentId::CLAUDE));
+    let _guard = test_support::KillOnDrop(vec![child]);
+    let started = relaunch_as_a_launch_does(&fixture, false);
+    fixture.state.set_clean_up_run();
+
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
+
+    assert!(first.poll_exit());
+    assert!(
+        started.lock().unwrap().is_empty(),
+        "relaunched all the same"
+    );
+    assert!(
+        test_support::stops_running(&fixture.state, child).await,
+        "kept running past the change"
+    );
+    let listed = fixture
+        .state
+        .process_ledger
+        .trees_of_project(&[], "project-1", &[]);
+    assert!(listed.is_empty(), "{listed:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

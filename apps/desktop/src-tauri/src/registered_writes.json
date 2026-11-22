@@ -1,0 +1,54 @@
+{
+  "about": "The desktop shell's files that may write: read by scripts/verify/registered-writes.mjs, which fails on a raw write in any other production file (scripts/verify/README.md, \"Registered writes\"). Paths are relative to this directory; one ending in \"/\" is a directory and everything under it, and the most specific entry decides for a file. An entry of the kind `exception`, and a new exception, need the product owner's approval (docs/conventions/principles.md, P9).",
+  "exceptions": {
+    "device-key": {
+      "approved": "This device's key for a saved remote daemon: one line in the remote user's authorized keys, and its private half in the system's credential store.",
+      "doc": {
+        "file": "docs/product/launching-agents.md",
+        "section": "What Octoboard never modifies"
+      },
+      "cleanup": "remote::DeviceKeys"
+    },
+    "launch-at-login": {
+      "approved": "Launch at login: the macOS login item, or the `Run` value of the Windows registry.",
+      "doc": {
+        "file": "docs/product/launching-agents.md",
+        "section": "What Octoboard never modifies"
+      },
+      "cleanup": "launch_at_login::LoginEntry"
+    },
+    "command-line-link": {
+      "approved": "The command-line tool's link, in `/usr/local/bin` or `~/.local/bin`.",
+      "doc": {
+        "file": "docs/product/launching-agents.md",
+        "section": "What Octoboard never modifies"
+      },
+      "cleanup": "command_line::Link"
+    }
+  },
+  "entries": [
+    { "path": "config_dir.rs", "kind": "primitive", "writes": "A JSON file written whole at the path its caller names.", "readers": ["config_path", "local_data_path"] },
+    { "path": "app_settings.rs", "kind": "own", "writes": "`settings.json` in the application's config directory." },
+    { "path": "window_state.rs", "kind": "own", "writes": "The window state files in the application's config directory." },
+    { "path": "remote/entries.rs", "kind": "own", "writes": "`remote-daemons.json` in the application's config directory." },
+    { "path": "remote/restore.rs", "kind": "own", "writes": "`remote-windows.json` in the application's config directory." },
+    { "path": "remote/files/macos.rs", "kind": "own", "writes": "Copies of a remote daemon's files under the application's local data directory, their lock and the mark that they came from elsewhere (the quarantine attribute, the zone identifier)." },
+    { "path": "remote/files/mod.rs", "kind": "own", "writes": "Copies of a remote daemon's files under the application's local data directory, their lock and the mark that they came from elsewhere (the quarantine attribute, the zone identifier)." },
+    { "path": "remote/files/unix.rs", "kind": "own", "writes": "Copies of a remote daemon's files under the application's local data directory, their lock and the mark that they came from elsewhere (the quarantine attribute, the zone identifier)." },
+    { "path": "remote/files/windows.rs", "kind": "own", "writes": "Copies of a remote daemon's files under the application's local data directory, their lock and the mark that they came from elsewhere (the quarantine attribute, the zone identifier)." },
+    { "path": "diagnostics.rs", "kind": "own", "writes": "`~/.octoboard/logs/desktop.log` and its rotation." },
+    { "path": "sidecar/quit_note.rs", "kind": "own", "writes": "`~/.octoboard/application-quit`." },
+    { "path": "system_changes/headless.rs", "kind": "own", "writes": "`~/.octoboard/logs/uninstall-clean-up.log`, written and removed, and what the clean-up before the uninstall left, in the file the Windows uninstaller names, which is written only in the installation's own folder (a path anywhere else is refused, with nothing written) and which the uninstaller deletes once read." },
+    { "path": "menu/jump_list.rs", "kind": "installation", "writes": "The Windows taskbar's jump list of the application, written when the menus are built and deleted by the clean-up and the uninstaller." },
+    { "path": "updater/macos.rs", "kind": "installation", "writes": "The application itself, replaced by the updater library at the user's update." },
+    { "path": "updater/windows.rs", "kind": "installation", "writes": "The application itself, replaced by the updater library at the user's update." },
+    { "path": "remote/authorized_keys.rs", "kind": "exception", "exceptions": ["device-key"], "writes": "One line added to, or removed from, the remote user's authorized keys, over SSH.", "entry_points": ["change_authorized_keys"] },
+    { "path": "remote/connect.rs", "kind": "exception", "exceptions": ["device-key"], "writes": "Asks for the device key's line to be added, once the user answered the window's question." },
+    { "path": "remote/key_removal.rs", "kind": "exception", "exceptions": ["device-key"], "writes": "Asks for the device key's line to be removed." },
+    { "path": "remote/credentials.rs", "kind": "exception", "exceptions": ["device-key"], "writes": "The device key's private half in the login keychain or the Credential Manager." },
+    { "path": "launch_at_login/macos.rs", "kind": "exception", "exceptions": ["launch-at-login"], "writes": "The macOS login item; the value `Octoboard` under the current user's `Run` key." },
+    { "path": "launch_at_login/windows.rs", "kind": "exception", "exceptions": ["launch-at-login"], "writes": "The macOS login item; the value `Octoboard` under the current user's `Run` key." },
+    { "path": "command_line/macos.rs", "kind": "exception", "exceptions": ["command-line-link"], "writes": "The link `octoboardd` in `/usr/local/bin` or `~/.local/bin`, which it may create." },
+    { "path": "configuration_file.rs", "kind": "user_path", "writes": "The exported configuration document, at the path the user picked in the system's save dialog." }
+  ]
+}

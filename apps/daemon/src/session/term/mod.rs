@@ -178,8 +178,15 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     let key_file =
         crate::key_file::write(&scratch, &helpers.key).context("writing the session's key file")?;
     let hook_script = if capabilities.hook_script {
-        adapter::write_hook_script(&scratch, &helpers.exe, session_id, helpers.port, &key_file)
-            .context("writing the session's hook script")?
+        adapter::write_hook_script(
+            &scratch,
+            &helpers.exe,
+            session_id,
+            process_tag.launch_id(),
+            helpers.port,
+            &key_file,
+        )
+        .context("writing the session's hook script")?
     } else {
         adapter::hook_script_path(&scratch)
     };
@@ -216,6 +223,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         user_language: user_language.as_deref(),
         new_agent_session_id: &new_agent_session_id,
         resume_agent_session_id: resume_agent_session_id.as_deref(),
+        launch_id: process_tag.launch_id(),
         cwd,
         task: task.as_deref(),
         scratch: &scratch,

@@ -61,10 +61,11 @@ resumable or unknown (see "When a conversation can no longer be resumed" in
   whole group is kept for the user. An unresumable archived session whose owner is not archived is deleted on its own.
 - A session that changed while it was being checked — reopened, pinned, locked, bound or independent — is kept, with its
   group, until a later check.
-- **A deletion is the same as the user's** (see "Deleting archived sessions" above): the session disappears from every
-  client, and its bound branches and worktrees are removed with nothing forced. In addition, what is left of its
-  agent's own records — a Claude Code subagents' directory left without its transcript, say — is moved to the Trash,
-  as if the confirmation's cleanup option had been ticked (see "Moving the agent's own records to the Trash" below).
+- **A deletion is the same as the user's with the confirmation's cleanup option left unticked** (see "Deleting
+  archived sessions" above): the session disappears from every client, and its bound branches and worktrees are removed
+  with nothing forced. What is left of its agent's own records — a Claude Code subagents' directory left without its
+  transcript, say — stays in the agent's directory, in every account that holds it (see "Moving the agent's own records
+  to the Trash" below).
 - **Nobody is told**: no confirmation, alert or notice is shown. Each deletion, and any branch or worktree that could
   not be removed, is only written to the daemon's log.
 - **It can be turned off** with the switch in Settings' Cleanup section (see "Automatically delete archived sessions
@@ -86,8 +87,10 @@ Its row and card offer a Delete shortcut under the same conditions (see "Session
 A session is unused, whatever its status, while all of these hold:
 
 - **It has no conversation yet.** The first prompt its agent reports as submitted makes it used for good, whether the
-  user typed it or Octoboard wrote it in; a session opened to resume a conversation is used from the moment it is opened
-  (see `docs/product/resuming-a-conversation-by-its-session-id.md`).
+  user typed it or Octoboard wrote it in, and so does a prompt sent to it that the agent's own record of the
+  conversation holds when no report arrives; a session opened to resume a conversation is used from the moment it is
+  opened (see `docs/product/resuming-a-conversation-by-its-session-id.md`). When a session has a conversation is set in
+  "Done, awaiting instructions and child sessions working" in `docs/product/session-statuses.md`.
 - **It is bound to no owner, or the user opened it.** A session the user opened bound to an owner — choosing a
   console session under "Report to" in the session dialog, or opening it from a console session's focus mode (see
   "A console session's focus mode" in `docs/product/focus-mode.md`) — can be unused. A session an agent started with
@@ -101,8 +104,8 @@ of these hold: deleting it is refused until its launch has settled, while archiv
 **Deleting an unused session needs no confirmation**, including when it is archived. Whether its agent has created
 records does not affect the shortcut or add a confirmation: Claude Code, Codex and Grok Build follow the same rule.
 Its agent records are automatically moved to the system Trash under the rules in "Moving the agent's own records to
-the Trash" below. The session must still be unused when deletion takes place; if it no longer qualifies, deletion
-is refused and an error is shown.
+the Trash" below, unless they turn out to hold a prompt sent to it or may hold one. The session must still be unused
+when deletion takes place; if it no longer qualifies, deletion is refused and an error is shown.
 
 Deleting removes the session's record as described in "Deleting archived sessions" above, its bound branches and
 worktrees included, with nothing forced since nothing is asked. Its process is stopped, and nothing is left in the
@@ -116,6 +119,11 @@ unknown session.
 - The check is made at the moment of the delete: a session that has become used by then — a prompt submitted at the
   same moment wins — is refused as in "Deleting archived sessions" above, and keeps its record and its process. So is a
   session being launched, resumed or switched to another account at that moment.
+- A session whose first prompt reached its agent's record with no report counts as unused until Octoboard next reads
+  that record, up to about a second (see "Done, awaiting instructions and child sessions working" in
+  `docs/product/session-statuses.md`), until a later prompt when the first is a line Octoboard cannot place, and for
+  good when Octoboard has no id of its conversation. Deleted meanwhile, it goes with no confirmation; its agent records
+  stay where they are (see "Moving the agent's own records to the Trash" below).
 - An unused session can stop existing while a session is being bound to it. Opening a session bound to an owner that
   was deleted meanwhile is refused, with nothing launched; binding or handing a session to an owner that was deleted
   meanwhile is refused, and changes nothing (see
@@ -124,11 +132,45 @@ unknown session.
 ## Moving the agent's own records to the Trash
 
 **Deleting one session automatically moves the records of every removed session with no conversation to the Trash**,
-including such archived descendants of a deleted owner. This applies even when the confirmation's cleanup option
-is left unticked. Deleting all archived sessions at once always requires opting in to record cleanup. The automatic
-deletion of archived sessions whose conversation is gone, and reopening a session whose archived owner's conversation
-is gone (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`), always move
-the records of the sessions concerned, under the rules below.
+including such archived descendants of a deleted owner, unless those records hold, or may hold, a prompt sent to the
+session (see below). This applies even when the confirmation's cleanup option is left unticked. Deleting all archived
+sessions at once always requires opting in to record cleanup.
+
+**Why deleting one session moves some records without asking.** A session has no conversation until its agent
+reports a submitted prompt or its agent's own record shows one, unless it was opened to resume a conversation (see
+"Done, awaiting instructions and child sessions working" in `docs/product/session-statuses.md`). The records of such a
+session hold no conversation of the user's, so deleting the session takes them too. Claude Code and Codex write no
+record of a session until something is typed into it, a local command such as `/clear` included (Claude Code 2.1.330,
+Codex 0.167.1). Grok Build writes the session's directory on launch, but Octoboard finds that directory only by a file
+Grok Build does not write before the first prompt (Grok Build 1.0.92), so the directory of a Grok Build session never
+prompted is neither read nor moved: it stays where it is. A used session's records hold the user's conversation, and
+move only when the user ticks the confirmation's option.
+
+**Before moving a session's records on the ground that it has no conversation, the deletion reads them.** Every copy
+found (in every account looked in, as below) is read from its start until its first prompt sent to the session, told as
+in "Done, awaiting instructions and child sessions working" in `docs/product/session-statuses.md`. If any copy holds
+one, or one cannot be read through, or holds before any prompt a line Octoboard cannot place (one longer than 8 MiB,
+Grok Build's list of attached images on a line of its own and the others that section lists), or Octoboard cannot tell
+a sent prompt in that agent's records, the session's records are all left where they are. The session is deleted all
+the same, and nothing tells the user that its records were kept. This covers every deletion that moves records without
+the user's tick: the user's own with the option left unticked, the unconfirmed deletion of an unused session, and the
+automatic deletion. With the option ticked,
+the records move with no such reading. A session Octoboard has no agent id of the conversation for (see "Done, awaiting
+instructions and child sessions working" in `docs/product/session-statuses.md`) has no records found, so none are moved.
+
+**No deletion the user did not confirm with that option ticked moves a used session's records**, even when the agent
+itself no longer has the conversation. So:
+
+- the automatic deletion of archived sessions whose conversation is gone (see "Deleting archived sessions whose
+  conversation is gone" above) moves records as a deletion with the option left unticked does; since every session it
+  deletes had a conversation (a session with none is always resumable, see "When a conversation can no longer be
+  resumed" in `docs/product/archiving-and-resuming-sessions.md`), it leaves every deleted session's records where they
+  are;
+- reopening a session whose archived owner's conversation is gone (see "Archiving, interruption and resuming" in
+  `docs/product/archiving-and-resuming-sessions.md`) moves nothing: what is left of the owner's old conversation stays
+  in the agent's directory. The owner no longer names that conversation once relaunched into a fresh one, so no later
+  deletion of the owner moves those leftovers either, with the option ticked or not; they are the agent's own from then
+  on.
 
 For a deletion that asks for confirmation, Octoboard checks the agent's own files across the accounts described
 below for **every session the deletion removes**, including archived descendants. The result is **present** when any
@@ -151,8 +193,7 @@ button's label is set in "What a confirmation's confirm button names" in `docs/p
 runs, the button shows as pending and the confirmation stays open until it has finished, including moving the records
 when the option is ticked; the option cannot be changed meanwhile.
 
-- **The records are moved to the system Trash, never deleted outright**, after the sessions themselves are deleted
-  (for an archived owner relaunched into a fresh conversation, before it is relaunched).
+- **The records are moved to the system Trash, never deleted outright**, after the sessions themselves are deleted.
   For each agent they are:
 
   | Agent | What is moved |

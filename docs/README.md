@@ -289,8 +289,16 @@ Where to start, by question:
 ### Desktop app, daemon and website
 
 - [Installing the desktop app](product/installing-the-desktop-app.md) — what the macOS and Windows apps run on, where
-  releases are published, and installing (WebView2, the agents' CLIs, Developer Mode, SmartScreen on the unsigned
-  Windows installer).
+  releases are published, installing (WebView2, the agents' CLIs, Developer Mode, SmartScreen on the unsigned
+  Windows installer) and uninstalling (what the Windows uninstaller removes).
+- [The clean-up before uninstalling](product/clean-up-before-uninstalling.md) — the row in Settings' Cleanup section
+  and its confirmation: what Octoboard's features have in effect outside its own directories, the one action that
+  removes all of it once its word is typed, the result per item, and which installation each window speaks for;
+  and the same clean-up as the Windows uninstaller runs it by itself, with how its result is told.
+- [What remains after uninstalling](product/what-remains-after-uninstalling.md) — for the macOS and Windows apps and
+  the server form: what each switch undoes before uninstalling, what uninstalling removes, what stays in Octoboard's own
+  directories and elsewhere (command-line link, login entry, jump list, device keys, the system's records, the agents'
+  trust entries, sharing's and account switches' leftovers), and how to remove each by hand.
 - [Application lifecycle](product/application-lifecycle.md) — the desktop form from startup to quit: starting the
   daemon and restarting one that dies, losing the daemon connection, a daemon of another version, one window per
   daemon and remote windows, closing, quitting and restarting, restoring remote windows, crashes and forced
@@ -307,8 +315,8 @@ Where to start, by question:
   terminals over to their holders: how one is asked for, who starts the next daemon, `--service-managed`, what a
   planned stop keeps, while the terminals are handed over, and an ordinary stop during a planned stop.
 - [Installing the server form](product/installing-the-server-form.md) — what the Linux server build runs on, what a
-  release holds for Linux (archives, `.sha256`, `.sig`, the Linux manifests), the install script with `--service`, and
-  the ways to upgrade.
+  release holds for Linux (archives, `.sha256`, `.sig`, the Linux manifests), the install script with `--service`, the
+  ways to upgrade, and uninstalling with `--uninstall`.
 - [Who can reach the daemon](product/who-can-reach-the-daemon.md) — the daemon's access model in both forms: loopback
   only, the launch key and where helpers keep it, the owner key a browser address carries (on the browser's way in
   alone) and its trade-off, SSH as the only remote path, remote access to the desktop app's daemon (Allow remote
@@ -322,8 +330,8 @@ Where to start, by question:
   never acted on.
 - [The Remote devices page](product/remote-devices-page.md) — the main window's page for listing, adding, editing,
   removing and connecting saved remote daemons: opening and leaving it and its place in Back/Forward, the device list
-  in the sidebar, the settings form and its Paste button, questions and failures handed to it, and using it while the
-  local daemon cannot be used.
+  in the sidebar, the settings form and its Paste button, the switch of this computer's key on a saved device,
+  questions and failures handed to it, and using it while the local daemon cannot be used.
 - [Scheduled tasks](product/scheduled-tasks.md) — having Octoboard start a session at a set time: what a task holds,
   the schedule kinds and the daemon machine's time zone, due runs, the single catch-up after a missed run, Run now, the
   account fallback, run records, the failed-run notification, what saving checks, and what deleting a console, project

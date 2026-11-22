@@ -153,13 +153,15 @@ export function planManifestWrites(version, platform, current) {
 }
 
 // The macOS release is one universal build, so one archive serves both Mac platforms of the manifest: the keys the
-// updater looks a Mac up by. Windows is the x64 installer. Linux has one archive per architecture, each under its own
-// key, named after what `uname -m` prints there.
+// updater looks a Mac up by. Windows has one installer per architecture, named with the architecture as the bundler
+// writes it (`WINDOWS_ARCHES`), each under the updater's key for it (`WINDOWS_PLATFORMS`, in the same order). Linux has
+// one archive per architecture, each under its own key, named after what `uname -m` prints there.
 export const DARWIN_PLATFORMS = ["darwin-aarch64", "darwin-x86_64"];
-export const WINDOWS_PLATFORM = "windows-x86_64";
+export const WINDOWS_ARCHES = ["x64", "arm64"];
+export const WINDOWS_PLATFORMS = ["windows-x86_64", "windows-aarch64"];
 export const LINUX_ARCHES = ["x86_64", "aarch64"];
 export const LINUX_PLATFORMS = LINUX_ARCHES.map((arch) => `linux-${arch}`);
-const MANIFEST_PLATFORMS = { macos: DARWIN_PLATFORMS, windows: [WINDOWS_PLATFORM], linux: LINUX_PLATFORMS };
+const MANIFEST_PLATFORMS = { macos: DARWIN_PLATFORMS, windows: WINDOWS_PLATFORMS, linux: LINUX_PLATFORMS };
 
 export function tag(version) {
   return `desktop-v${version}`;
@@ -171,9 +173,11 @@ export function archiveName(productName, version) {
   return `${productName}_${version}_universal.app.tar.gz`;
 }
 
-// The name Tauri gives the NSIS installer, which is published as it is: it carries the version already.
-export function windowsInstallerName(productName, version) {
-  return `${productName}_${version}_x64-setup.exe`;
+// The name Tauri gives the NSIS installer of one architecture (`WINDOWS_ARCHES`), which is published as it is: it
+// carries the version and the architecture already.
+export function windowsInstallerName(productName, version, arch) {
+  if (!WINDOWS_ARCHES.includes(arch)) throw new Error(`"${arch}" is not a Windows release architecture.`);
+  return `${productName}_${version}_${arch}-setup.exe`;
 }
 
 // The name Tauri gives the universal disk image, which is published as it is. The website derives its macOS download
@@ -201,7 +205,7 @@ export function repositorySlug(repositoryUrl) {
 }
 
 // What the versioned release holds for one platform, by name: `files`, published as they are (the macOS disk image and
-// the update archive, the Windows installer, or each Linux archive and its `.sha256`), and `updates`, the files the
+// the update archive, each Windows installer, or each Linux archive and its `.sha256`), and `updates`, the files the
 // manifest points to, each with the manifest keys it serves (`keys`) and the name its signature is published under
 // (`signature`). `publish-release.mjs` publishes under these names, and `releaseAssets` tells a release's assets apart
 // by them. The release workflow's `sign` and `publish` jobs list the same files by hand (what they sign and attest), so
@@ -215,8 +219,11 @@ export function releaseLayout(platform, { productName, version }) {
     };
   }
   if (platform === "windows") {
-    const installer = windowsInstallerName(productName, version);
-    return { files: [installer], updates: [{ name: installer, keys: [WINDOWS_PLATFORM], signature: `${installer}.sig` }] };
+    const installers = WINDOWS_ARCHES.map((arch) => windowsInstallerName(productName, version, arch));
+    return {
+      files: installers,
+      updates: installers.map((name, i) => ({ name, keys: [WINDOWS_PLATFORMS[i]], signature: `${name}.sig` })),
+    };
   }
   if (platform === "linux") {
     const archives = LINUX_ARCHES.map((arch) => linuxArchiveName(version, arch));
@@ -269,7 +276,7 @@ export function readHolderFloor(root) {
 
 // The manifest the updater reads for one platform: the version, its notes and date and, for each platform key the
 // build serves, the update's address and the signature, which is the content of its `.sig` file. `entries` maps every
-// key of the platform to its update: the archive serving both Macs (`macos`), the installer (`windows`), or each
+// key of the platform to its update: the archive serving both Macs (`macos`), each architecture's installer (`windows`), or each
 // architecture's archive (`linux`), whose entries carry its SHA-256 (`sha256`, lowercase hex) too, which the install
 // script checks. A manifest carries only its own platform's entries: another platform's has a manifest of its own,
 // which an entry kept from an older release would contradict. `holderFloor` is the build's holder floor

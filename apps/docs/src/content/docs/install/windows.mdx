@@ -1,14 +1,16 @@
 ---
 title: "Windows"
-description: "For PCs with an Intel or AMD processor (almost all Windows PCs), on Windows 10 version 21H2 or later. On Windows 11 on Arm, this x64 app runs under emulation."
+description: "For PCs with an Intel or AMD processor (almost all Windows PCs), on Windows 10 version 21H2 or later. On Windows 11 on Arm, use the native arm64 installer where the release offers one; otherwise this x64 app runs there under emulation."
 ---
 
 import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
 import { downloads, productName } from "../../../commands.ts";
+import WindowsUninstaller from "../../../snippets/en/windows-uninstaller.mdx";
 
-For PCs with an Intel or AMD processor (x64; almost all Windows PCs), on Windows 10 version 21H2 or later. On Windows 11 on Arm, this x64 app runs under emulation.
+For PCs with an Intel or AMD processor (x64; almost all Windows PCs), on Windows 10 version 21H2 or later. On Windows 11 on Arm, use the native arm64 installer where the release offers one; otherwise this x64 app runs there under emulation.
 
 <LinkButton href={downloads.windows}>Download for Windows</LinkButton>
+<LinkButton href={downloads["windows-arm64"]} variant="secondary">Download for Windows on Arm</LinkButton>
 
 <Aside>The Windows app is in beta.</Aside>
 
@@ -16,7 +18,7 @@ For PCs with an Intel or AMD processor (x64; almost all Windows PCs), on Windows
 
 <Steps>
 
-1. Download the installer with the button above. It's a file whose name ends in <code dir="ltr">x64-setup.exe</code>.
+1. Download the installer with the button above. It's a file whose name ends in <code dir="ltr">x64-setup.exe</code>. On Windows on Arm, try the second button: where the release offers an arm64 installer, it downloads that file, whose name ends in <code dir="ltr">arm64-setup.exe</code>; otherwise it opens the list of releases, and the x64 installer runs under emulation.
 2. Open the downloaded file to run the installer. It installs {productName} for your user account only, so it doesn't ask for an administrator.
 
    The app is not code-signed yet, so Microsoft Defender SmartScreen may show “Windows protected your PC”. Select “More info”, then “Run anyway”.
@@ -38,6 +40,16 @@ When the main window opens, you're done.
 - [Grok Build](https://docs.x.ai/build/overview)
 
 If you use Claude Code or Codex, install [Git for Windows](https://git-scm.com/download/win) first; they need it to work.
+
+## Uninstall
+
+Uninstall {productName} with its uninstaller, from Windows' Settings (Apps) or Control Panel.
+
+<WindowsUninstaller />
+
+To see what is in effect before you uninstall, open <strong>Settings › Cleanup › Clean up before uninstalling</strong>: <strong>Remove all</strong> there removes the same, and shows the result for each item.
+
+[Your system stays as it was](../../your-system/) says what is left afterwards and how to remove it.
 
 ## Updates
 

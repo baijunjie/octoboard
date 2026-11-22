@@ -70,7 +70,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use clap::Parser;
 
-use state::{AppState, StopKind};
+use state::{AppState, StartWork, StopKind};
 use store::Store;
 
 /// The product name, from `config/app.json` (see `build.rs`), for the wording the daemon itself
@@ -103,6 +103,9 @@ fn main() -> Result<()> {
         .listen_fd
         .zip(cli.port)
         .map(|(fd, port)| platform::listener_handover::adopt(fd, port));
+    // Next, while the application that started the daemon waits for its first line: the process
+    // its pid names now is the application.
+    let parent = cli.parent_pid.map(platform::proc::Parent::read);
     processes::ledger::forget_inherited_tag();
     let (key, handed_over_from) = if cli.key_stdin {
         let (key, from) = read_key_from_stdin()?;
@@ -118,14 +121,18 @@ fn main() -> Result<()> {
         .build()?;
     let state = std::sync::OnceLock::new();
     let exit_status = runtime.block_on(run_daemon(
-        cli.parent_pid,
+        parent,
         Listen {
             port: cli.port,
             handed: handed_listener,
         },
         key,
         handed_over_from,
-        cli.service_managed,
+        StartedAs {
+            service_managed: cli.service_managed,
+            clean_up_run: cli.clean_up_run,
+            follow_process: cli.follow_process,
+        },
         log_file,
         &state,
     ));
@@ -223,19 +230,20 @@ fn init_logging() -> log_file::LogFile {
 }
 
 /// Runs the daemon where `listen` says, with `key` when one is given, else a key of its own;
-/// `handed_over_from` is the daemon that handed `key` over, as far as it said. `service_managed` is
-/// `--service-managed`. `state_out` is given the daemon's state once it exists, for `main` to read
+/// `handed_over_from` is the daemon that handed `key` over, as far as it said. `started_as` is how
+/// it was asked to run. `state_out` is given the daemon's state once it exists, for `main` to read
 /// what is still running after this returns, error or not. Returns the status to exit with, when
 /// it is not 0.
 async fn run_daemon(
-    parent_pid: Option<u32>,
+    parent: Option<platform::proc::Parent>,
     listen: Listen,
     key: Option<String>,
     handed_over_from: Option<owner_record::Predecessor>,
-    service_managed: bool,
+    started_as: StartedAs,
     log_file: log_file::LogFile,
     state_out: &std::sync::OnceLock<Arc<AppState>>,
 ) -> Result<Option<i32>> {
+    let parent_pid = parent.map(|parent| parent.pid);
     // Held for the whole run, up to the start of a successor: see `instance_lock` for what a
     // second daemon would do to the first one's sessions.
     let lock = instance_lock::acquire()?;
@@ -288,24 +296,30 @@ async fn run_daemon(
         processes::ledger::ProcessLedger::new(&paths::data_dir()),
     ));
     let _ = state_out.set(state.clone());
+    if started_as.clean_up_run {
+        state.set_clean_up_run();
+    }
     // The browser's own socket, where this daemon serves the browser: it runs without the desktop
     // application and embeds the UI, on a host with such sockets. Bound under the instance lock,
     // which a stale socket file's removal needs. A daemon that cannot bind it, or cannot hold the
     // owner key the socket is for, serves no browser and runs on for everything else.
-    let browser_listener =
-        if parent_pid.is_none() && !server::ui::EMBEDDED.is_empty() && browser::socket::AVAILABLE {
-            match browser::socket::bind(&paths::data_dir()) {
-                Ok(listener) => Some(listener),
-                Err(err) => {
-                    tracing::warn!(
-                        "the browser socket could not be opened; no browser is served: {err:#}"
-                    );
-                    None
-                }
+    let browser_listener = if state.does(StartWork::ServingOthers)
+        && parent_pid.is_none()
+        && !server::ui::EMBEDDED.is_empty()
+        && browser::socket::AVAILABLE
+    {
+        match browser::socket::bind(&paths::data_dir()) {
+            Ok(listener) => Some(listener),
+            Err(err) => {
+                tracing::warn!(
+                    "the browser socket could not be opened; no browser is served: {err:#}"
+                );
+                None
             }
-        } else {
-            None
-        };
+        }
+    } else {
+        None
+    };
     // Read or made before the owner record, which says whether the daemon accepts one, is written.
     // The socket is for the owner key: without one held, it is let go and no browser is served.
     let holds_owner_key = state
@@ -323,9 +337,11 @@ async fn run_daemon(
         // Remote access, where the user allowed it: the owner socket opened and the owner key held
         // before the owner record, which says whether the daemon takes the key, is written; served
         // with the other clients below.
-        state
-            .remote_access
-            .begin(&state, paths::data_dir(), !server::ui::EMBEDDED.is_empty());
+        if state.does(StartWork::ServingOthers) {
+            state
+                .remote_access
+                .begin(&state, paths::data_dir(), !server::ui::EMBEDDED.is_empty());
+        }
     } else if browser_listener.is_some() {
         // The server form: the socket and the owner key are its own, and the browser port opens
         // when the stored setting says (off to begin with), before the owner record is written.
@@ -338,7 +354,7 @@ async fn run_daemon(
     // Resolved once: the refusal of a planned restart and the choice of its successor read the
     // same answer.
     state.set_service_managed(platform::proc::restarted_by_service_manager(
-        service_managed,
+        started_as.service_managed,
     ));
     // The screens the previous daemon's planned stop saved, which the adoption below restores.
     state.load_restart_screens(&paths::restart_screens_path());
@@ -375,7 +391,9 @@ async fn run_daemon(
     // Until the reconcile below has read the previous run's ledger file, adopting a launch must
     // neither stop what that file says was kept nor write over it.
     state.process_ledger.await_reconcile();
-    state.install_auto_switch(coordinator::auto_switch::hooks());
+    if state.does(StartWork::AutomaticAccountSwitch) {
+        state.install_auto_switch(coordinator::auto_switch::hooks());
+    }
     // What the holders kept running while no daemon was is taken over before anything that would
     // end it: the sessions marked interrupted, the run directory cleared, the previous run's
     // processes stopped.
@@ -420,6 +438,13 @@ async fn run_daemon(
         );
     }
     clear_run_dir(&paths::run_dir(), &adopted.scratch_dirs);
+    // A session of a sharing account that ended while no daemon watched it may have left its
+    // account's spelling in the default directory's plugin registries. Not waited for: it touches
+    // nothing a start depends on.
+    tokio::spawn({
+        let state = state.clone();
+        async move { accounts::shared_config::keep_registries_at_start(&state).await }
+    });
     // A switch that died with the previous daemon may have left a staging directory in an account's
     // config directory. The default accounts' directories are not known until the shell has been
     // read, so only the ones Octoboard has been told of are swept.
@@ -485,6 +510,7 @@ async fn run_daemon(
                 .with_browser_port(state.remote_access.recorded_port(&state))
                 .with_unit(unit)
                 .with_predecessor(predecessor)
+                .with_clean_up_run(state.clean_up_run())
         });
     match &owner {
         Some(owner) => {
@@ -517,33 +543,53 @@ async fn run_daemon(
         tracing::warn!(%err, path = %port_file.display(), "writing the port file failed");
     }
 
-    if let Some(parent_pid) = parent_pid {
-        spawn_parent_watch(state.clone(), parent_pid);
+    if let Some(parent) = parent {
+        spawn_parent_watch(state.clone(), parent);
+    }
+    // The command a clean-up run was started by: gone, it leaves the sessions to their holders.
+    if let Some(followed) = started_as.follow_process {
+        state.follow_process(followed);
     }
 
     // Off the runtime rather than ahead of the line above: a ten-second shell snapshot must not
     // put that cost on every application launch, and clients are served before it lands either way
     // (see `apps/daemon/src/agents/availability.rs`).
-    agents::availability::spawn_determine(state.clone());
+    if state.does(StartWork::AgentAvailability) {
+        agents::availability::spawn_determine(state.clone());
+    }
     // The server form's update: checks on a schedule where this build and host carry one.
-    self_update::start(&state, parent_pid.is_some(), &paths::data_dir());
-    records::collector::spawn(&state);
-    accounts::quotas::spawn(&state);
-    coordinator::archive_cleanup::spawn(&state);
+    if state.does(StartWork::SelfUpdate) {
+        self_update::start(&state, parent_pid.is_some(), &paths::data_dir());
+    }
+    if state.does(StartWork::RecordCollector) {
+        records::collector::spawn(&state);
+    }
+    if state.does(StartWork::Quotas) {
+        accounts::quotas::spawn(&state);
+    }
+    if state.does(StartWork::ArchiveCleanup) {
+        coordinator::archive_cleanup::spawn(&state);
+    }
     // Resuming the interrupted sessions and stopping what the previous run's agents left, unless
     // a holder that could not be linked to may run a session no record places: then both wait
     // until it is linked to or gone.
     coordinator::unlinked::start_resume_and_reconcile(&state);
     // After the adoption above, so a catch-up launch does not race the start-up; it ends with
     // either kind of stop, leaving what comes due then to the next daemon.
-    coordinator::scheduled_tasks::scheduler::spawn(&state);
+    if state.does(StartWork::ScheduledTasks) {
+        coordinator::scheduled_tasks::scheduler::spawn(&state);
+    }
     // Probed once before the server starts answering, on a blocking thread (it may wait on the
     // host's bus, which the probe itself bounds), so that a snapshot only reads the answer kept.
     let _ = tokio::task::spawn_blocking(platform::sleep::available).await;
-    keep_awake::spawn(&state);
-    // Likewise off the runtime: it runs `git` in every project's directory, a few at a time.
-    project_git::remote::reconcile_remote_urls(&state);
-    project_git::watch::start(&state);
+    if state.does(StartWork::KeepAwake) {
+        keep_awake::spawn(&state);
+    }
+    if state.does(StartWork::ProjectGit) {
+        // Likewise off the runtime: it runs `git` in every project's directory, a few at a time.
+        project_git::remote::reconcile_remote_urls(&state);
+        project_git::watch::start(&state);
+    }
 
     let browser = browser_listener.map(|listener| {
         tracing::info!(
@@ -720,6 +766,16 @@ fn spawn_restart_requests(state: Arc<AppState>, mut requests: platform::proc::Re
     });
 }
 
+/// How the daemon was asked to run: under a service manager that starts its successor
+/// (`--service-managed`), and for a clean-up run, which leaves out the work `state::StartWork`
+/// lists (`--clean-up-run`), until the process `follow_process` names is gone
+/// (`--follow-process`).
+struct StartedAs {
+    service_managed: bool,
+    clean_up_run: bool,
+    follow_process: Option<platform::proc::ProcessIdentity>,
+}
+
 /// Where the daemon listens: the port asked for (`--port`), else one the system assigns, and the
 /// listener a predecessor handed over for it (`--listen-fd`), as far as taking it over went.
 struct Listen {
@@ -810,6 +866,9 @@ async fn stop_all_processes(state: &Arc<AppState>) {
     .await
     .ok();
     coordinator::unlinked::interrupt_at_stop(state);
+    // Not in the stop that escalates a planned one: the daemon that took the terminals over keeps
+    // the registries at its own start, and two daemons rewriting one file share no lock.
+    accounts::shared_config::keep_registries_at_stop(state).await;
 }
 
 /// Runs `work`, a step of a planned stop, to its end, asking for an ordinary stop should the host
@@ -930,10 +989,11 @@ async fn wait_for_quit_endings() {
 /// told the daemon of (`state::application_note`) ends every session, as an ordinary stop does;
 /// the application gone with no such note (a crash, a kill, the update restart) is a planned stop,
 /// which leaves the sessions running in their holders for the next launch to adopt.
-fn spawn_parent_watch(state: Arc<AppState>, parent_pid: u32) {
+fn spawn_parent_watch(state: Arc<AppState>, parent: platform::proc::Parent) {
+    let parent_pid = parent.pid;
     // The callback may run on a thread of the host's own (Windows), outside the runtime.
     let runtime = tokio::runtime::Handle::current();
-    platform::proc::watch_parent(parent_pid, move || {
+    platform::proc::watch_parent(parent, move || {
         runtime.spawn(async move {
             let kind = state
                 .stop_for_gone_application(state::application_note::INPUT_END_WAIT)
@@ -1121,7 +1181,10 @@ mod tests {
             .build()
             .expect("a runtime")
             .block_on(async {
-                super::spawn_parent_watch(state.clone(), parent_pid);
+                super::spawn_parent_watch(
+                    state.clone(),
+                    crate::platform::proc::Parent::read(parent_pid),
+                );
                 assert_eq!(state.await_stop().await, crate::state::StopKind::Ordinary);
             });
         std::fs::write(&done, "reached").expect("the marker was written");

@@ -46,7 +46,14 @@ export const DOCS_READS_WEB = [
   "apps/web/seo/site-seo.ts",
   "apps/web/site.config.ts",
   "apps/web/seo/downloads.ts",
+  "apps/web/public/install.sh",
 ];
+// What a docs test (`src/commands.test.ts`) holds the facts "Your system stays as it was" quotes to: the daemon's
+// uninstall command as a fixture its own tests (`cli/mod.rs`, `cli/uninstall.rs`) hold to the source, ...
+export const DOCS_READS_DAEMON = ["apps/daemon/testdata/docs_uninstall_command.json"];
+// ... and the desktop application's identifier, its installer hooks, and the link's places and the clean-up's log as
+// a fixture its own tests (`command_line/macos.rs`, `system_changes/headless.rs`) hold to the source.
+export const DOCS_READS_NATIVE = ["apps/desktop/src-tauri/testdata/docs_system_paths.json", "apps/desktop/src-tauri/tauri.conf.json", "apps/desktop/src-tauri/windows/installer-hooks.nsh"];
 
 // The manifest whose `exports` map is how the website resolves `@octoboard/ui`.
 export const WEB_RESOLVES_UI = ["packages/ui/package.json"];
@@ -94,15 +101,27 @@ export const DAEMON_READS_MARKDOWN = ["apps/daemon/PROTOCOL.md", "apps/daemon/sr
 // `scope.test.mjs` fails when a new read of that kind is not named here.
 // A daemon test (`interface_language.rs`) parses the UI's language list.
 export const DAEMON_READS_UI = ["packages/ui/src/i18n/languages.ts"];
-// A UI test (`bundleLocalizations.test.ts`) compares the bundle's languages with the shell's Info.plist template.
-export const UI_READS_NATIVE = ["apps/desktop/src-tauri/Info.template.plist"];
+// A UI test (`bundleLocalizations.test.ts`) compares the bundle's languages with the shell's Info.plist template, and
+// another (`commandLineTool.test.ts`) holds the directories the command-line tool's row names to the ones the shell
+// links in.
+// A desktop script test (`installer-hooks.test.mjs`) reads the UI's language list and the names of its message
+// catalogs, to hold the Windows installer's languages to the UI's.
+export const DESKTOP_READS_UI = ["packages/ui/src/i18n/languages.ts", "packages/ui/src/i18n/messages/"];
+export const UI_READS_NATIVE = ["apps/desktop/src-tauri/Info.template.plist", "apps/desktop/src-tauri/src/command_line/macos.rs"];
 // Desktop script tests read the native permission catalogs, the template and the macOS overlay's bundle resource
 // mappings (`native-localizations.test.mjs`), and the Windows installer hooks with the base and Windows configurations
-// whose shipped files the hooks list (`installer-hooks.test.mjs`).
-export const DESKTOP_READS_NATIVE = ["apps/desktop/src-tauri/localizations/", "apps/desktop/src-tauri/Info.template.plist", "apps/desktop/src-tauri/tauri.macos.conf.json", "apps/desktop/src-tauri/tauri.conf.json", "apps/desktop/src-tauri/tauri.windows.conf.json", "apps/desktop/src-tauri/windows/installer-hooks.nsh"];
+// whose shipped files the hooks list (`installer-hooks.test.mjs`), which also holds the registry key and the argument
+// the hooks name to the shell's own (`launch_at_login/windows.rs`, `menu/jump_list.rs`), and the argument and status
+// of the clean-up before the uninstall (`system_changes/headless.rs`).
+export const DESKTOP_READS_NATIVE = ["apps/desktop/src-tauri/src/launch_at_login/windows.rs", "apps/desktop/src-tauri/src/menu/jump_list.rs", "apps/desktop/src-tauri/src/system_changes/headless.rs", "apps/desktop/src-tauri/localizations/", "apps/desktop/src-tauri/Info.template.plist", "apps/desktop/src-tauri/tauri.macos.conf.json", "apps/desktop/src-tauri/tauri.conf.json", "apps/desktop/src-tauri/tauri.windows.conf.json", "apps/desktop/src-tauri/windows/installer-hooks.nsh"];
 // A daemon test (`platform/build_files.rs`) holds the name the Windows installer hooks give a file they move aside to
 // the one the daemon removes, and another (`self_update/tests.rs`) holds the daemon's update key to the updater's.
 export const DAEMON_READS_NATIVE = ["apps/desktop/src-tauri/windows/installer-hooks.nsh", "apps/desktop/src-tauri/tauri.conf.json"];
+// A desktop shell test (`system_changes/daemon.rs`) reads the bodies of the daemon's clean-up routes that a daemon test
+// (`coordinator/system_changes/wire.rs`) writes them as, and others (`sidecar/mod.rs`) hold the shell's copies of the
+// clean-up run option and the instance lock's exit status to the values daemon tests (`cli/mod.rs`,
+// `instance_lock.rs`) pin in `shell_contract.json`.
+export const NATIVE_READS_DAEMON = ["apps/daemon/testdata/system_changes_wire.json", "apps/daemon/testdata/shell_contract.json"];
 // A website test (`install-script.test.ts`) holds the install script's public key to the updater's.
 export const WEB_READS_NATIVE = ["apps/desktop/src-tauri/tauri.conf.json"];
 // The same test holds the example systemd unit's port to the configured server port, and checks the install script's
@@ -123,6 +142,12 @@ export const UI_READS_DAEMON = ["apps/daemon/src/providers/", "apps/daemon/testd
 export const UI_IMPORTS_NATIVE = ["apps/desktop/src-tauri/icons/128x128.png"];
 // A verify test (`rerun.test.mjs`) reads the reporter that shares `REPORT_ENV` with `rerun.mjs`.
 export const VERIFY_READS_UI = ["packages/ui/src/test/failedFilesReporter.ts"];
+
+// The registered writes check (`registered-writes.mjs`), a step of every plan, holds each exception of the crates'
+// registrations to the product doc section that states it, so that document counts although it is Markdown under
+// `docs/`: a change to it alone would otherwise run nothing, and renaming the section would pass its own push. The
+// check fails on a document an exception names that is not listed here.
+export const VERIFY_READS_DOCS = ["docs/product/launching-agents.md"];
 
 export const ALL_PACKAGES = ["verify", "ui", "web", "docs", "desktop", "daemon", "native"];
 const JS_PACKAGES = ["verify", "ui", "web", "docs", "desktop"];
@@ -170,7 +195,9 @@ export const RULES = [
   { match: [...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS, ...WEB_RESOLVES_UI], consumers: ["verify", "ui", "web"], why: "the website imports these modules, builds its preview from them, or resolves the package through its `exports` map" },
   { match: DOCS_IMPORTS_FROM_UI, consumers: ["verify", "ui", "docs"], why: "the docs build their locale table from the UI's language list, resolved through its `exports` map" },
   { match: DOCS_RUNS_UI_GALLERY, consumers: ["verify", "ui", "docs"], why: "the docs' screenshot script, run by hand, imports the gallery sweep's browser and dev server helpers" },
-  { match: DOCS_READS_WEB, consumers: ["verify", "web", "docs"], why: "the docs import the website's logo and wordmark, and a docs test reads the website's redirect, address and download modules and its navigation labels" },
+  { match: DOCS_READS_WEB, consumers: ["verify", "web", "docs"], why: "the docs import the website's logo and wordmark, and a docs test reads the website's redirect, address and download modules, its navigation labels and the install script" },
+  { match: DOCS_READS_DAEMON, consumers: ["verify", "daemon", "docs"], why: "a docs test reads the uninstall command's quoted facts, which daemon tests hold to the source" },
+  { match: DOCS_READS_NATIVE, consumers: ["verify", "native", "docs"], why: "a docs test reads the desktop application's identifier, installer hooks and quoted paths" },
   { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon"], why: "the wire protocol is kept in step across the daemon and the UI: the UI reads the generated types, which the daemon writes from its own, and a UI test (`daemonCodes.test.ts`) reads the daemon's code registry from `protocol/codes.rs`" },
   { match: PROTOCOL_SCHEMA, consumers: ["verify", "daemon"], why: "the protocol schema is written by a daemon test from the daemon's types, and the same test fails when it is stale; the compatibility guard reads it and its release snapshot" },
   { match: DESKTOP_CONTRACT, consumers: ["verify", "ui", "native"], why: "the UI side of the contract with the desktop shell" },
@@ -178,14 +205,17 @@ export const RULES = [
   { match: DAEMON_READS_UI, consumers: ["verify", "ui", "daemon"], why: "a daemon test parses it" },
   { match: UI_READS_DAEMON, consumers: ["verify", "ui", "daemon"], why: "a UI test reads them" },
   { match: UI_READS_NATIVE, consumers: ["verify", "ui", "native"], why: "a UI test reads it" },
+  { match: DESKTOP_READS_UI, consumers: ["verify", "ui", "desktop"], why: "a desktop script test holds the installer's languages to the UI's language list and catalogs" },
   { match: DESKTOP_READS_NATIVE, consumers: ["verify", "desktop", "native"], why: "desktop script tests read the native permission catalogs, template, the macOS bundle resource mappings, and the Windows installer hooks with the configurations whose files they list" },
   { match: DAEMON_READS_NATIVE, consumers: ["verify", "daemon", "native"], why: "a daemon test reads it" },
+  { match: NATIVE_READS_DAEMON, consumers: ["verify", "daemon", "native"], why: "desktop shell tests read the bodies a daemon test writes and the values daemon tests pin for the shell" },
   { match: WEB_READS_NATIVE, consumers: ["verify", "web", "native"], why: "a website test holds the install script's key to the updater's" },
   { match: WEB_READS_DAEMON, consumers: ["verify", "web", "daemon"], why: "a website test holds the example unit's port to the install script's and verifies the daemon's signed update fixtures" },
   { match: WEB_READS_DOCS, consumers: ["verify", "web", "docs"], why: "a website test checks that every docs page the website links to exists in every language" },
   { match: WEB_IMPORTS_DESKTOP, consumers: ["verify", "web", "desktop"], why: "a website test imports the release manifest builder" },
   { match: UI_READS_ELSEWHERE, consumers: ["verify", "ui"], why: "a UI test reads it" },
   { match: VERIFY_READS_UI, consumers: ["verify", "ui"], why: "a verify test reads it" },
+  { match: VERIFY_READS_DOCS, consumers: ["verify"], why: "the registered writes check reads the section each registered exception names in it" },
   { match: UI_IMPORTS_NATIVE, consumers: ["verify", "ui", "web"], builds: ["ui"], why: "the UI bundle inlines it, and the website's preview of the app is built from that bundle" },
   { match: DAEMON_READS_MARKDOWN, consumers: ["verify", "daemon"], why: "read by the daemon with `include_str!`, compiled in or as a test's input" },
 

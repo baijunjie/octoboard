@@ -4,6 +4,7 @@ import { ALL_PACKAGES } from "./scope.mjs";
 
 const VERIFY_TESTS = { label: "verify tests", cmd: ["node", "--test", "scripts/**/*.test.mjs"] };
 const PROVIDER_NEUTRAL_CHECK = { label: "provider-neutral core", cmd: ["node", "scripts/verify/provider-neutral.mjs"] };
+const REGISTERED_WRITES_CHECK = { label: "registered writes", cmd: ["node", "scripts/verify/registered-writes.mjs"] };
 const IDENTITY_CHECK = { label: "identity check", cmd: ["node", "scripts/sync-identity.mjs", "--check"] };
 const pnpm = (label, args, extra = {}) => ({ label, cmd: ["pnpm", ...args], ...extra });
 // The cache lives under `node_modules` like the root `pnpm lint`'s: a cache file in the repository
@@ -41,10 +42,10 @@ export function checkSteps(scope) {
     ];
     if (scope.group && !RELEASE_GROUPS.includes(scope.group)) throw new Error(`Unknown release check group: ${scope.group}`);
     const groups = { frontend, native, windows: [WINDOWS_STEP] };
-    return lightFirst([IDENTITY_CHECK, PROVIDER_NEUTRAL_CHECK, ...(scope.group ? groups[scope.group] : Object.values(groups).flat())]);
+    return lightFirst([IDENTITY_CHECK, PROVIDER_NEUTRAL_CHECK, REGISTERED_WRITES_CHECK, ...(scope.group ? groups[scope.group] : Object.values(groups).flat())]);
   }
   const packages = scope.mode === "full" ? ALL_PACKAGES : scope.packages;
-  const steps = scope.mode === "unread" ? [] : [IDENTITY_CHECK, PROVIDER_NEUTRAL_CHECK];
+  const steps = scope.mode === "unread" ? [] : [IDENTITY_CHECK, PROVIDER_NEUTRAL_CHECK, REGISTERED_WRITES_CHECK];
   if (packages.includes("verify")) steps.push(lint("verify lint", ["scripts", "eslint.config.mjs"]), VERIFY_TESTS);
   if (packages.includes("ui")) steps.push(
     lint("ui lint", ["packages/ui"]),

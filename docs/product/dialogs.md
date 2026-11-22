@@ -54,8 +54,9 @@ A confirmation opens with keyboard focus on its confirm button, so Enter confirm
   dialogs" below). Its failure modal starts on the dialog too (see "The failure modal" in
   `docs/product/error-alerts.md`).
 - **A confirmation that comes up on its own once a request it follows has been answered** — the confirmation of a merge
-  after **Pull current branch** (see "Confirming a merge" in `docs/product/project-git-actions.md`) — opens with focus
-  on the dialog itself as well, since the user may be typing elsewhere by then, and so does its failure modal.
+  after **Pull current branch** (see "Confirming a merge" in `docs/product/project-git-actions.md`), or the question
+  whether to add this computer's key that ends a connection to a remote daemon (see "Asking before the key is added"
+  in `docs/product/remote-daemons.md`) — opens with focus on the dialog itself as well, since the user may be typing elsewhere by then, and so does its failure modal.
 
 ## Where a question the user did not ask for stands among other dialogs
 

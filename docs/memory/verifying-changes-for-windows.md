@@ -48,6 +48,12 @@ machine's heavy-step slot. Copy `Octoboard.exe`, `octoboardd.exe` and the x64 `c
 own: what looks for the installed daemon there, a remote host lookup included, finds it only at that path. The jump
 list, the system menu, the flyout and the pipe all ran from that layout.
 
+For arm64 (`--target aarch64-pc-windows-msvc`, with the arm64 `conpty.dll`), also put `arm64-clang-shim/` under
+cargo-xwin's cache first on the PATH, as `scripts/cargo.mjs` does (any `pnpm check:windows arm64` run writes it):
+without it `ring`'s build script fails, and switching cargo-xwin to its `clang` backend is no way around it. On Windows
+on Arm, the x64 build cannot show an uninstall or a setup run while Octoboard runs, whatever the change: there the
+uninstaller's Restart Manager check stops with "Failed to kill Octoboard"; check those cases with the arm64 build.
+
 ## Script a Windows GUI step as one task, and change appearance the way Settings does
 
 Applies when a GUI step on Windows is driven from a script (a scheduled task on the user's desktop) and read off a
@@ -68,9 +74,9 @@ have, and the opposite setup hides defects:
 - An administrator's or an elevated process can make file symlinks, so every path for a host without file links
   (configuration sharing reported unavailable, a console's `CLAUDE.md` written as a plain file) never runs, and Codex
   behaves differently when run as administrator.
-- A session over OpenSSH runs at High integrity, inside a kill-on-close job, and passes the inherited "ignore Ctrl-C"
-  flag to everything it starts, so what it shows about elevation, Ctrl-C and process containment is not what the
-  desktop app's daemon sees.
+- A session over OpenSSH runs inside a kill-on-close job and passes the inherited "ignore Ctrl-C" flag to everything
+  it starts; an administrator's runs at High integrity there (a standard user's at Medium, as on its desktop). So what
+  it shows about elevation, Ctrl-C and process containment is not what the desktop app's daemon sees.
 - An interactive scheduled task (`schtasks ... /IT`) does run on the user's desktop, but a daemon started from one
   may not see the desktop app's process containment. Seen once, on Windows 11 ARM64 with the x64 build emulated, for a
   task created with `/IT /RU <user>` on an administrator account with UAC off: the daemon's log said its job does not
@@ -80,6 +86,16 @@ have, and the opposite setup hides defects:
 Building and running the test suite over ssh is fine; a behaviour that any of the above can change is confirmed in the
 setup above. What each of these does to the daemon is in `docs/architecture.md`, "Known pitfalls of the Tauri / Rust
 approach".
+
+## Reach a Windows VM from a Rust test on the Mac through a forwarded port
+
+Applies when a test binary built on the Mac connects to a Windows machine on the local network itself, such as the live
+Windows device-key test in `apps/desktop/src-tauri/src/remote/authorized_keys.rs` (its `OCTOBOARD_TEST_WINDOWS_SSH_*` variables
+are described there). macOS local-network privacy answers such a binary's connection with "No route to host", while
+`ssh` from the terminal reaches the same address, so the failure says nothing about the code. Forward a loopback port
+first, `ssh -f -N -L 127.0.0.1:22922:127.0.0.1:22 <user>@<vm>`, point the test at it
+(`OCTOBOARD_TEST_WINDOWS_SSH_HOST=127.0.0.1`, `OCTOBOARD_TEST_WINDOWS_SSH_PORT=22922`), and end the forward by its pid
+afterwards.
 
 ## Learn what Windows itself does by calling its own API on Windows, not from documentation or ReactOS
 

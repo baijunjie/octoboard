@@ -545,6 +545,8 @@ pub(super) async fn start_process(
     // the stop has stopped waiting, as a launch claimed before the barrier and started after the
     // wait would start a terminal the stop never lists.
     let _tracked = state.track_change_unless_passed()?;
+    // Every launch of an agent comes through here, which a clean-up run refuses.
+    state.admit_launch()?;
     // Stamped now, not when the terminal is built after the shell snapshot and the spawn, so a
     // display a client reports in the meantime is the newer of the two.
     let display = crate::terminal::display::DisplaySeed::new(

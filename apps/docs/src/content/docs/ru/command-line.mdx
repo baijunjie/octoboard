@@ -4,7 +4,7 @@ description: "Команды octoboardd на сервере Linux, на Mac и �
 ---
 
 import { Code } from "@astrojs/starlight/components";
-import { commands, productName, tunnel } from "../../../commands.ts";
+import { commands, productName, system, tunnel } from "../../../commands.ts";
 
 octoboardd — программа, которая запускает {productName} (в приложении она называется «служба»). На сервере Linux вы устанавливаете и запускаете её сами. На Mac и на компьютере с Windows она входит в приложение: оно запускает её при открытии и останавливает при закрытии. Команды на всех трёх одинаковы, кроме различий ниже.
 
@@ -35,6 +35,7 @@ octoboardd — программа, которая запускает {productNam
 | <code dir="ltr">{commands.update}</code> | Только на сервере Linux. Устанавливает самую новую версию, как описано в разделе [Обновление](../install/linux/#обновление). |
 | <code dir="ltr">{commands.updateCheck}</code> | Только на сервере Linux. Проверяет, вышла ли более новая версия, не устанавливая её. |
 | <code dir="ltr">{commands.updateRollback}</code> | Только на сервере Linux. Возвращает версию, которая была установлена до последнего обновления, и перезапускается в неё, как при обновлении. |
+| <code dir="ltr">{system.uninstall}</code> | Только на сервере Linux. Удаляет octoboardd с сервера, как описано в разделе [Удаление](../install/linux/#удаление). |
 | <code dir="ltr">{commands.version}</code> | Выводит установленную версию. |
 
 Полный список команд показывает <code dir="ltr">{commands.help}</code>; параметры одной команды показывает <code dir="ltr">{commands.commandHelp}</code>. В списке есть и команды, которые {productName} выполняет сам и которые вам никогда не нужно выполнять вручную.
@@ -45,5 +46,6 @@ octoboardd — программа, которая запускает {productNam
 
 - <strong><code dir="ltr">{commands.start}</code> и <code dir="ltr">{commands.stop}</code> на Mac</strong> действуют на приложение: <code dir="ltr">{commands.start}</code> открывает его в фоне, без окна, а <code dir="ltr">{commands.stop}</code> закрывает.
 - <strong><code dir="ltr">{commands.restart}</code> и <code dir="ltr">{commands.update}</code></strong> отклоняются. Приложение само перезапускает octoboardd и устанавливает новые версии.
+- <strong><code dir="ltr">{system.uninstall}</code></strong> тоже отклоняется. octoboardd удаляется вместе с приложением: как удалить приложение, описано для [macOS](../install/macos/#удаление) и [Windows](../install/windows/#удаление).
 - <strong><code dir="ltr">{commands.browserOn}</code> и <code dir="ltr">{commands.browserOff}</code></strong> меняют ту же настройку, что и <strong>Разрешить доступ из браузера</strong> в разделе <strong>Настройки › Доступ</strong>.
 - <strong><code dir="ltr">{commands.address}</code></strong> выводит адрес, только пока включено <strong>Разрешить доступ из браузера</strong> (а на Mac — <strong>Разрешить удалённый доступ</strong>). По умолчанию обе настройки выключены, поэтому, пока вы не включите одну из них, команда сообщает об этом и не выводит адрес.

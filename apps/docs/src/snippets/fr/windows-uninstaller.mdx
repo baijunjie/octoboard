@@ -1,0 +1,12 @@
+import { Aside } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* What the Windows uninstaller does before it removes the app, which the Windows guide and "Your system stays as it was" share. */}
+
+Avant de supprimer quoi que ce soit, le programme de désinstallation nettoie de lui-même : il ferme {productName} s’il est ouvert, en demandant d’abord sauf pour une désinstallation silencieuse, et retire sans rien demander tout ce que <strong>Tout retirer</strong> retire. Il désinstalle ensuite, quel qu’en soit le résultat. Si quelque chose n’a pas pu être retiré, il le dit à la fin, avec l’endroit où reste chaque élément, et l’énumère dans <code dir="ltr">{system.uninstallLogWindows}</code> ; une désinstallation silencieuse écrit seulement ce fichier.
+
+Le programme d’installation et le programme de désinstallation parlent la langue de votre système si {productName} la propose, et l’anglais sinon. Le programme de désinstallation et sa liste de ce qu’il a laissé gardent la langue dans laquelle vous avez installé ; une raison qu’une fonctionnalité donne pour un élément laissé peut être en anglais.
+
+Toutes les désinstallations n’exécutent pas ce nettoyage. La mise à jour depuis l’app et un programme d’installation lancé par-dessus l’app installée ne le font pas : vos clés sur les serveurs distants et le partage de vos comptes restent tels quels ; un programme d’installation que vous lancez vous-même par-dessus désactive tout de même <strong>Ouvrir à la connexion</strong>, jusqu’à ce que vous le réactiviez. Le programme de désinstallation d’une version antérieure à ce nettoyage n’en exécute aucun non plus : sur une telle version, sélectionnez d’abord <strong>Tout retirer</strong>.
+
+<Aside>Avec l’app x64 sous Windows on Arm, le programme de désinstallation ne peut pas fermer {productName} s’il est ouvert, et la désinstallation s’arrête sans rien supprimer, tout comme un programme d’installation lancé par-dessus : quittez d’abord {productName}. L’app arm64 n’a pas cette limite, et une installation x64 sur un PC Arm passe à celle-ci par la mise à jour depuis l’app.</Aside>

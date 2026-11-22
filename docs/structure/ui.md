@@ -101,7 +101,7 @@ their cascade order does not depend on which screen opened first.
   `host.terms`, with forms (`{trashTo}`, `{trashFrom}`, `{systemSettingsAcc}`) where a language inflects the word and a
   capitalised name (`{MenuBarIcon}`) where a message starts with it. A caller never passes them; `catalog.test.ts`
   checks every one is filled in every language for every host.
-- `src/format/` — small pure formatting helpers (relative time, sizes, `Reason`, wire-path display) and `hostPath`, the one module that reads and shows the daemon host's absolute paths by its `path_style` (`isAbsolute`, `split`, `basename`, `parent`, `display` with the `~` rule that applies on Unix hosts only, `isPathLike` for terminal links, home expansion); every such rule takes the style as an argument, taken from `snapshot.host` by `useHostPaths()` (`components/hooks/`), and defaults to `unix` before the first snapshot. Project-relative wire paths stay `/`-separated and never go through it.
+- `src/format/` — small pure formatting helpers (relative time, sizes, `Reason`, wire-path display), `dataDirectory.ts` (where the daemon keeps its data and logs on its host, spelled for that host's `path_style`, for telling the user and never for building a path), and `hostPath`, the one module that reads and shows the daemon host's absolute paths by its `path_style` (`isAbsolute`, `split`, `basename`, `parent`, `display` with the `~` rule that applies on Unix hosts only, `isPathLike` for terminal links, home expansion); every such rule takes the style as an argument, taken from `snapshot.host` by `useHostPaths()` (`components/hooks/`), and defaults to `unix` before the first snapshot. Project-relative wire paths stay `/`-separated and never go through it.
 - `src/providers/` — one presentation module per provider (`claude.ts`, `codex.ts`, `grok.ts`: mark, quota colour and
   the `provider.<id>.*` catalog messages, among them the trust, sharing and directory-hint wording that `types.ts`'s
   `ProviderMessageName` names; each also owns the copy of every setting its descriptor declares
@@ -188,7 +188,7 @@ their cascade order does not depend on which screen opened first.
   (test host for what reads `useRemoteDevices`); and `useRemoteDaemons.ts` (the shell's
   saved entries and which are connected, read again as the shell says they changed), `useRemoteDaemonConnect.tsx` (one
   connection in progress and every question or failure of it: password, host key, version mismatch, in the window that asked),
-  `RemoteDaemonPrompts.tsx` (the prompts), `useRemoteForwards.ts` and
+  `RemoteDaemonPrompts.tsx` (the prompts), `RemoteDeviceKeyCard.tsx` (the card that says whether this computer's key is installed on a saved device's server and turns it on or off) and `deviceKeyRemoval.tsx` (telling the owner what taking the key back left behind, which the line stays on a host and which private key stays), `useRemoteForwards.ts` and
   `ForwardedPorts.tsx` (a remote window's forwarded ports, read from the shell, and the list drawn with Stop),
   `connectionDetails.ts` (reading the
   `octoboard+ssh://` line that fills the form), `connectionState.ts`, `port.ts`, and `remoteDaemonsOffered.ts` (the rail has
@@ -280,7 +280,7 @@ their cascade order does not depend on which screen opened first.
   pending button for the change out, and a failed change as an alert in the row worded by the shell's `CommandLineError` code
   (`src/platform/commandLineError.ts`), its outcome announced through `AttendedStatusAnnouncer`;
   `AppearanceSection.tsx` the Appearance section (`ThemeSetting.tsx`, `MarkdownStyleSetting.tsx` and `TerminalFontSizeSetting.tsx`,
-  the terminals' font size, a `NumberField` from `src/primitives/`), `CleanupSection.tsx` the Cleanup section;
+  the terminals' font size, a `NumberField` from `src/primitives/`), `CleanupSection.tsx` the Cleanup section, whose second row is `UninstallCleanup.tsx` (the cleanup before uninstalling: one row that says whether anything Octoboard's features added outside its own directories is in effect, from `PlatformAdapter.systemChanges`, which answers the application's items and its own daemon's in one list, and the one action, offered only in the local window; its warning modal holds the list, read again as it opens, and the typed confirmation, and the result takes the modal's place);
   `accounts/` the Agent accounts section, where `AgentProviderSettings.tsx` renders every setting the daemon serves for an agent
   and `providerSettingCopy.tsx` is the copy and help of any provider setting, shared with the dialogs that hold a setting's value,
   `MemorySection.tsx` the Memory section (the switch for Octoboard's memory, and the memory that removed projects left
@@ -473,6 +473,7 @@ are the helper list; the rules that go beyond "use helper X" are in `docs/conven
 | Let an open menu take an advertised window command | `ActionMenuItem.commandShortcut` (`src/components/menus/menuEntries.ts`) pairs its displayed binding with its matcher; `useWindowShortcut` (`src/shortcuts/`) delegates a matched, consumed command during a modal through `runMenuCommand` (`src/components/menus/menuCommands.ts`). `MenuItems` registers through `registerMenuCommand` and owns the active root menu's eligibility |
 | An account's record, login or key among the daemon's lists | `accountRecordOf`, `accountLoginOf`, `loginIsActive` and `accountKey` (`src/accounts/accountRecords.ts`) |
 | Retry a focus move across frames until its target exists (with an optional `onGiveUp`), or run after a few frames | `tryEachFrame` and `afterFrames` (`src/components/focus/`) |
+| Hand focus back to the surface that opened a dialog once it has closed, where its restore found nothing (the opener gone, disabled or never focused) | `useFocusReturnAfterClose` (`src/components/focus/useFocusReturnAfterClose.ts`) |
 | A menu with a filter field that narrows its items by typing | `ActionMenu`'s `filter` prop (`src/components/menus/ActionMenu.tsx`), which draws the filtered presentation through `FilteredMenuItems` (`src/components/menus/FilteredMenuItems.tsx`: the field, the items and the no-match line) over the layer's `MenuFilter` (`src/primitives/MenuFilter.tsx`); `onOpened` tells a caller the menu opened. The console-session new-session menu (`src/sidebar/NewSessionMenu.tsx`) is the first user |
 | The placeholder of a search field | the shared catalog key `common.search` (`FileFilterField` has no `placeholder` prop) |
 | The Git workflow items a setting offers | `GIT_WORKFLOW_ITEMS` and `GIT_WORKFLOW_ITEM_KEYS` (`src/git/gitWorkflow.ts`) |

@@ -1,7 +1,7 @@
 //! Making a connection to a remote daemon: the SSH connection, `octoboardd` found on the host, the
-//! requested action run, the owner key read and the generation checked, a device key installed, and
-//! the loopback port and its tunnel set up, then the daemon shown in a window of its own, or the
-//! browser. One window at most shows a daemon, however many entries name it,
+//! requested action run, the owner key read and the generation checked, a device key installed
+//! where the owner has agreed to it, and the loopback port and its tunnel set up, then the daemon
+//! shown in a window of its own, or the browser. One window at most shows a daemon, however many entries name it,
 //! and a second request for a daemon a connection is being made to waits for that one.
 
 use std::collections::HashMap;
@@ -12,15 +12,17 @@ use russh::keys::PrivateKey;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::watch;
 
-use super::credentials::{self, Store};
+use super::authorized_keys::{self, ChangeError, KeyChange};
+use super::credentials::Store;
 use super::entries::{self, Entry};
+use super::key_removal;
 use super::octoboardd::{self, Address, Remote, Shell};
 use super::outcome::{Action, ConnectOutcome, ConnectRequest, SecretKindName};
+use super::saved::Saved;
 use super::ssh::{self, ConnectError, RunError, Secret, Session, Target};
 use super::{
-    browser, connections_changed, device_key, forward, key_service, next_order, pin, tunnel,
-    use_device_key, window_closed, Live, RemoteState, Via, BROWSER_LABEL_PREFIX,
-    CONNECTION_UP_EVENT, FORWARDS_CHANGED_EVENT,
+    browser, connections_changed, device_key, forward, next_order, tunnel, window_closed, Live,
+    RemoteState, Via, BROWSER_LABEL_PREFIX, CONNECTION_UP_EVENT, FORWARDS_CHANGED_EVENT,
 };
 use crate::daemon_window::{self, RemoteDaemon};
 use crate::diagnostics::diagnostic;
@@ -82,7 +84,8 @@ impl Connecting {
     }
 }
 
-/// A connection that asks the owner for nothing: no secret, no fingerprint confirmed, no action.
+/// A connection that gives nothing of the owner's: no secret, no fingerprint confirmed, no action,
+/// no answer about this device's key. What it needs of the owner it ends with, as its outcome.
 pub(super) fn quiet_request(id: &str) -> ConnectRequest {
     ConnectRequest {
         id: id.to_owned(),
@@ -90,6 +93,17 @@ pub(super) fn quiet_request(id: &str) -> ConnectRequest {
         confirm_fingerprint: None,
         action: None,
         browser: false,
+        device_key: None,
+        without_asking: false,
+    }
+}
+
+/// A connection made at launch, which asks nothing: a `quiet_request` that also goes on without
+/// this device's key where the owner would have to be asked about it.
+pub(super) fn restoring_request(id: &str) -> ConnectRequest {
+    ConnectRequest {
+        without_asking: true,
+        ..quiet_request(id)
     }
 }
 
@@ -160,12 +174,13 @@ struct Reached {
 }
 
 /// Tells the shell the host's SSH server runs a command through, with one run of `SHELL_PROBE`.
-async fn detect_shell(session: &Session) -> Result<Shell, ConnectOutcome> {
-    let output = session
-        .run(octoboardd::SHELL_PROBE)
-        .await
-        .map_err(run_failed)?;
+pub(super) async fn shell_of(session: &Session) -> Result<Shell, RunError> {
+    let output = session.run(octoboardd::SHELL_PROBE).await?;
     Ok(Shell::classify(&String::from_utf8_lossy(&output.stdout)))
+}
+
+async fn detect_shell(session: &Session) -> Result<Shell, ConnectOutcome> {
+    shell_of(session).await.map_err(run_failed)
 }
 
 /// Runs `address --json` with each place `octoboardd` may be until one is found; the `octoboardd`
@@ -295,50 +310,233 @@ async fn reach_over(
     }
 }
 
+/// What a connection does about this device's key once its host is reached.
+#[derive(Debug, PartialEq, Eq)]
+enum KeyStep {
+    /// Nothing: it signed in with the key, the owner said no before, or it asks nothing.
+    Nothing,
+    /// The owner is asked, and the connection ended until they answer.
+    Ask,
+    /// The owner said yes: the key is installed.
+    Install,
+    /// The owner said no: nothing is installed, and the answer is remembered.
+    Decline,
+}
+
+/// What the connection `request` asks for does about this device's key, signed in with `secret`
+/// to the daemon `entry` names. The owner's answer is taken only for a connection made with their
+/// own password or key file; one made with the device key has it installed already.
+fn key_step(entry: &Entry, request: &ConnectRequest, secret: &Secret) -> KeyStep {
+    if matches!(secret, Secret::DeviceKey(_)) {
+        return KeyStep::Nothing;
+    }
+    match request.device_key {
+        Some(true) => KeyStep::Install,
+        Some(false) => KeyStep::Decline,
+        // A no that was noted and not carried out, the connection made with it having failed: the
+        // entry still says its key is installed, and this sign-in takes it back.
+        None if entry.device_key.declined && entry.has_device_key() => KeyStep::Decline,
+        None if entry.device_key.declined || request.without_asking => KeyStep::Nothing,
+        None => KeyStep::Ask,
+    }
+}
+
+/// What the owner is asked before this device's key is installed over `reached`: the mark of the
+/// line that would be added, and the file it would be added to. Nothing is written by asking.
+async fn key_offer(reached: &Reached) -> Result<ConnectOutcome, String> {
+    let shell = reached.remote.shell;
+    Ok(ConnectOutcome::DeviceKeyOffered {
+        mark: device_key::comment(&device_key::device_name()),
+        file: authorized_keys::authorized_keys_file(&reached.session, shell).await?,
+    })
+}
+
+/// A device key installed on a host: the file its line was added to and what the line is marked
+/// with, as the owner is told of them, and the key.
+struct Installed {
+    file: String,
+    mark: String,
+    key: Arc<PrivateKey>,
+}
+
+/// Takes the line of `key` out of the host's file over the connection `reached` made, where it is
+/// there; `whose` says which key it is, where that fails.
+async fn take_line_out(reached: &Reached, key: &PrivateKey, whose: &str) {
+    match key_removal::remove_line(&reached.session, reached.remote.shell, key).await {
+        Ok(()) | Err(ChangeError::NotFound) => {}
+        Err(err) => diagnostic!("cannot take {whose} out of the host's authorized keys: {err}"),
+    }
+}
+
+/// Removes the device key kept for `entry` from `store`, `whose` saying which key it is where the
+/// store does not remove it.
+fn forget_key(store: &dyn Store, service: &str, entry: &Entry, whose: &str) {
+    if let Err(err) = device_key::forget(store, service, &entry.id) {
+        diagnostic!(
+            "cannot remove {whose} of {} from the credential store: {err}",
+            entry.id
+        );
+    }
+}
+
 /// Installs this device's key for the remote user over the connection `reached` made with the
-/// owner's own password or key, checks that the host accepts it, and makes it what the connection's
-/// reconnections sign in with; whether it was installed. A connection already made with the device
-/// key installs nothing. The key pair is made once per entry and kept in `store` under `service`.
+/// owner's own password or key, and checks that the host accepts it. Called only once the owner
+/// has agreed to it. The key pair is made once per entry and kept in `store` under `service`.
+/// An install that fails leaves nothing behind: a key the host does not accept is taken out of
+/// its file again, and a key pair made for this attempt is removed from the credential store.
 async fn install_device_key(
     store: &dyn Store,
     service: &str,
     entry: &Entry,
-    reached: &mut Reached,
-) -> Result<bool, String> {
-    if matches!(reached.target.secret, Secret::DeviceKey(_)) {
-        return Ok(false);
+    reached: &Reached,
+) -> Result<Installed, String> {
+    let shell = reached.remote.shell;
+    let file = authorized_keys::authorized_keys_file(&reached.session, shell).await?;
+    let kept = device_key::load_or_make(store, service, &entry.id)?;
+    let installed = add_key(reached, &kept.key, file).await;
+    if installed.is_err() && kept.made {
+        forget_key(
+            store,
+            service,
+            entry,
+            "the device key made for a failed install",
+        );
     }
-    let key = device_key::load_or_make(store, service, &entry.id)?;
-    let line = device_key::authorized_line(&key, &device_key::device_name())?;
-    let body = device_key::public_body(&key)?;
-    let output = reached
-        .session
-        .run(&device_key::install_command(
-            reached.remote.shell,
-            &line,
-            &body,
-        ))
+    installed
+}
+
+/// Adds the line of `key` to the host's `file` over the connection `reached` made, and checks
+/// that the host accepts the key; a key it does not accept is taken out again.
+async fn add_key(
+    reached: &Reached,
+    key: &Arc<PrivateKey>,
+    file: String,
+) -> Result<Installed, String> {
+    let mark = device_key::comment(&device_key::device_name());
+    let line = device_key::authorized_line(key, &mark)?;
+    let body = device_key::public_body(key)?;
+    let add = KeyChange::Add {
+        line: &line,
+        body: &body,
+    };
+    authorized_keys::change_authorized_keys(&reached.session, reached.remote.shell, add)
         .await
         .map_err(|err| err.to_string())?;
-    if output.status != Some(0) {
-        return Err(format!(
-            "adding the key to the host's authorized keys ended with {:?}: {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
-    }
     // A host may read keys from elsewhere, or refuse a file it finds too open: the key is used only
     // once a connection made with it has been accepted.
     let with_key = Target {
-        secret: Secret::DeviceKey(key),
+        secret: Secret::DeviceKey(key.clone()),
         ..reached.target.clone()
     };
-    let check = ssh::connect(&with_key)
-        .await
-        .map_err(|err| format!("the host did not accept the installed key: {err:?}"))?;
-    check.disconnect().await;
-    reached.target = with_key;
-    Ok(true)
+    match ssh::connect(&with_key).await {
+        Ok(check) => {
+            check.disconnect().await;
+            Ok(Installed {
+                file,
+                mark,
+                key: key.clone(),
+            })
+        }
+        Err(err) => {
+            take_line_out(reached, key, "the key the host did not accept").await;
+            Err(format!(
+                "the host did not accept the installed key: {err:?}"
+            ))
+        }
+    }
+}
+
+/// Installs this device's key over `reached` and has `record` write down for its saved daemon
+/// that it is installed; from then on the connection's reconnections sign in with the key. Where
+/// `record` says it could not (the saved daemon is gone or names another destination, or its file
+/// could not be written), the line is taken out again over the connection still open and the key
+/// removed from `store`: a line on a host that no saved daemon says is installed would stay there
+/// unseen.
+async fn install_and_record(
+    store: &dyn Store,
+    service: &str,
+    entry: &Entry,
+    reached: &mut Reached,
+    record: impl FnOnce(&Installed) -> bool,
+) -> Result<(), String> {
+    let installed = install_device_key(store, service, entry, reached).await?;
+    if record(&installed) {
+        reached.target.secret = Secret::DeviceKey(installed.key);
+        return Ok(());
+    }
+    take_line_out(reached, &installed.key, "the key no saved daemon records").await;
+    forget_key(
+        store,
+        service,
+        entry,
+        "the device key no saved daemon records",
+    );
+    Err("the installed key could not be recorded for its saved daemon, and was taken back".into())
+}
+
+/// Leaves the host and this device without the key the owner said no to, over the connection
+/// `reached` made: a key kept for the entry (one the host stopped accepting, say) has its line
+/// taken out where it is still there, and is removed from the credential store.
+async fn drop_declined_key(store: &dyn Store, service: &str, entry: &Entry, reached: &Reached) {
+    let Some(key) = device_key::load(store, service, &entry.id) else {
+        return;
+    };
+    take_line_out(reached, &key, "the declined device key").await;
+    forget_key(store, service, entry, "the declined device key");
+}
+
+/// Notes the owner's no to this device's key for `entry`, where `request` carries one, before
+/// the host is spoken to: the answer is remembered whatever becomes of the connection, so the
+/// owner is not asked again because a reconnection failed. Nothing else of the entry changes yet:
+/// one whose key is installed goes on saying so until the connection has taken the key out of the
+/// host (`settle_key`), so that a failed reconnection leaves no line that no entry shows. The
+/// entry as it then is saved.
+fn record_answer(saved: &Saved<'_>, mut entry: Entry, request: &ConnectRequest) -> Entry {
+    if request.device_key == Some(false) {
+        saved.note_declined_device_key(&entry.id);
+        entries::note_declined_device_key(std::slice::from_mut(&mut entry), &request.id);
+    }
+    entry
+}
+
+/// Does what `key_step` says about this device's key over the connection `reached` made for
+/// `entry`, one of the daemons `saved` keeps. A connection that has to ask the owner is ended, and
+/// the question is what it ends with; every other step lets it go on, a failed install included.
+async fn settle_key(
+    saved: &Saved<'_>,
+    entry: &Entry,
+    request: &ConnectRequest,
+    reached: &mut Reached,
+) -> Result<(), ConnectOutcome> {
+    let identity = entry.identity();
+    match key_step(entry, request, &reached.target.secret) {
+        KeyStep::Nothing => {}
+        KeyStep::Ask => match key_offer(reached).await {
+            Ok(offer) => {
+                reached.session.disconnect().await;
+                return Err(offer);
+            }
+            // A host that does not say where its keys are kept is not asked about: the connection
+            // goes on with what the owner signed in with, and the next one asks again.
+            Err(err) => diagnostic!("cannot offer a device key for {identity}: {err}"),
+        },
+        KeyStep::Install => {
+            let record = |installed: &Installed| {
+                saved.use_device_key(&entry.id, &identity, &installed.file, &installed.mark)
+            };
+            let installed =
+                install_and_record(saved.store, &saved.service, entry, reached, record).await;
+            // The window opens all the same; the next connection asks again.
+            if let Err(err) = installed {
+                diagnostic!("cannot install a device key on {identity}: {err}");
+            }
+        }
+        KeyStep::Decline => {
+            drop_declined_key(saved.store, &saved.service, entry, reached).await;
+            saved.decline_device_key(&entry.id);
+        }
+    }
+    Ok(())
 }
 
 /// The window's query with `key` in place of the key it carried, everything else kept.
@@ -427,18 +625,20 @@ pub(super) async fn connect(
     request: ConnectRequest,
     order: Option<u64>,
 ) -> Result<ConnectOutcome, String> {
-    let entry = super::remote_daemons_list(app.clone())?
-        .into_iter()
-        .find(|entry| entry.id == request.id)
+    let saved = super::saved(app)?;
+    // A request for a daemon a connection is being made to waits for it, and then shows its window;
+    // one for a daemon that is being removed or pointed elsewhere waits for that, and connects to
+    // what is then saved.
+    let (entry, _making) = saved
+        .hold(&request.id)
+        .await
         .ok_or_else(|| "This remote daemon has been removed.".to_owned())?;
-    let identity = entry.identity();
-    let state = app.state::<RemoteState>();
-    // A request for a daemon a connection is being made to waits for it, and then shows its window.
-    let _making = state.connecting.wait_and_begin(&identity).await;
-    if let Some(shown) = show_existing(app, &identity) {
+    // Before anything else can end this: the answer is the owner's whatever becomes of the request.
+    let entry = record_answer(&saved, entry, &request);
+    if let Some(shown) = show_existing(app, &entry.identity()) {
         return Ok(shown);
     }
-    match hold(app, &entry, &request, order).await {
+    match hold(app, &saved, &entry, &request, order).await {
         Ok(held) => Ok(show(app, held)),
         Err(outcome) => Ok(outcome),
     }
@@ -453,33 +653,26 @@ struct Held {
     remote: RemoteDaemon,
 }
 
-/// Holds a connection to the daemon `entry` names: reaches it, installs this device's key where it
-/// can, and serves its tunnel on a loopback port, kept in `RemoteState` under the label of a window
-/// registered for it, or of the browser.
+/// Holds a connection to the daemon `entry` names: reaches it, asks about this device's key or does
+/// as the owner answered (`key_step`), and serves its tunnel on a loopback port, kept in
+/// `RemoteState` under the label of a window registered for it, or of the browser.
 async fn hold(
     app: &AppHandle,
+    saved: &Saved<'_>,
     entry: &Entry,
     request: &ConnectRequest,
     order: Option<u64>,
 ) -> Result<Held, ConnectOutcome> {
     let identity = entry.identity();
-    let service = key_service(app);
-    let store = credentials::system();
     let device_key = match entry.auth {
-        entries::Auth::Device => device_key::load(store, &service, &entry.id),
+        entries::Auth::Device => device_key::load(saved.store, &saved.service, &entry.id),
         _ => None,
     };
     let mut reached = reach(entry, request, device_key).await?;
     if entry.fingerprint.is_none() {
-        pin(app, &entry.id, &reached.session.fingerprint);
+        saved.pin(&entry.id, &reached.session.fingerprint);
     }
-    match install_device_key(store, &service, entry, &mut reached).await {
-        Ok(true) => use_device_key(app, &entry.id, &identity),
-        Ok(false) => {}
-        // The window opens all the same; the next connection asks for the password again, and
-        // tries again.
-        Err(err) => diagnostic!("cannot install a device key on {identity}: {err}"),
-    }
+    settle_key(saved, entry, request, &mut reached).await?;
     let bound = tunnel::bind().await.and_then(|listener| {
         let port = listener.local_addr()?.port();
         Ok((listener, port))
@@ -625,6 +818,9 @@ fn browser_key_changed(app: &AppHandle, label: &str, port: u16, key: &str) {
 
 #[cfg(test)]
 mod tests {
+    // Used by the tests that run a host's commands for real, which need a POSIX `sh`.
+    #[cfg(unix)]
+    use super::super::credentials;
     use super::super::live;
     use super::super::ssh::test_server::{Behaviour, TestServer};
     use super::*;
@@ -664,16 +860,15 @@ mod tests {
             key_path: None,
             fingerprint: Some(server.fingerprint.clone()),
             octoboardd_path: None,
+            device_key: Default::default(),
         }
     }
 
     fn request(action: Option<Action>) -> ConnectRequest {
         ConnectRequest {
-            id: "e".into(),
             secret: Some("right".into()),
-            confirm_fingerprint: None,
             action,
-            browser: false,
+            ..quiet_request("e")
         }
     }
 
@@ -897,41 +1092,90 @@ mod tests {
         }
     }
 
+    /// What a `Saved` borrows, kept by the test.
+    #[cfg(unix)]
+    #[derive(Default)]
+    struct Kept {
+        lock: Mutex<()>,
+        connecting: Connecting,
+        store: credentials::Memory,
+    }
+
+    /// The saved daemons kept in `home`, holding `entry`, with their keys in the test's store.
+    #[cfg(unix)]
+    fn saved_in<'a>(
+        kept: &'a Kept,
+        home: &crate::config_dir::test_support::Scratch,
+        entry: &Entry,
+    ) -> Saved<'a> {
+        let path = home.0.join(entries::FILE_NAME);
+        entries::save(&path, std::slice::from_ref(entry)).unwrap();
+        Saved {
+            path,
+            lock: &kept.lock,
+            connecting: &kept.connecting,
+            store: &kept.store,
+            service: "svc".into(),
+        }
+    }
+
+    #[cfg(unix)]
+    fn answering(answer: bool) -> ConnectRequest {
+        ConnectRequest {
+            device_key: Some(answer),
+            ..request(None)
+        }
+    }
+
+    #[cfg(unix)]
+    fn keys_of(home: &crate::config_dir::test_support::Scratch) -> std::path::PathBuf {
+        home.0.join(".ssh/authorized_keys")
+    }
+
     #[cfg(unix)]
     #[tokio::test]
-    async fn a_password_login_installs_a_device_key_that_later_connections_sign_in_with() {
+    async fn a_yes_installs_the_key_records_it_and_later_connections_sign_in_with_it() {
         let (server, home) = host_with_home("install").await;
-        let store = credentials::Memory::default();
+        let kept = Kept::default();
         let entry = entry(&server);
-        let mut reached = reach(&entry, &request(None), None).await.unwrap();
-        assert!(install_device_key(&store, "svc", &entry, &mut reached)
-            .await
-            .unwrap());
+        let saved = saved_in(&kept, &home, &entry);
+        let mut reached = reach(&entry, &answering(true), None).await.unwrap();
+        assert_eq!(
+            settle_key(&saved, &entry, &answering(true), &mut reached).await,
+            Ok(())
+        );
         // The connection's reconnections sign in with the key from now on.
         assert!(matches!(reached.target.secret, Secret::DeviceKey(_)));
-        let key = device_key::load(&store, "svc", "e").unwrap();
-        let installed = std::fs::read_to_string(home.0.join(".ssh/authorized_keys")).unwrap();
+        let key = device_key::load(&kept.store, "svc", "e").unwrap();
+        let installed = std::fs::read_to_string(keys_of(&home)).unwrap();
         assert_eq!(installed.lines().count(), 1);
         assert!(installed.contains(&device_key::public_body(&key).unwrap()));
-        assert!(installed.contains(" Octoboard on "), "{installed}");
+        // The saved daemon says the key is installed, where its line is and what it is marked
+        // with, as the file has it.
+        let recorded = saved.list().remove(0);
+        assert_eq!(recorded.auth, entries::Auth::Device);
+        assert_eq!(
+            recorded.device_key.file.as_deref(),
+            Some("~/.ssh/authorized_keys")
+        );
+        let mark = recorded.device_key.mark.clone().unwrap();
+        assert!(mark.starts_with("Octoboard on "), "{mark}");
+        assert!(installed.trim_end().ends_with(&mark), "{installed}");
         reached.session.disconnect().await;
 
-        // With no password given, the device entry connects with its key, and installs nothing
-        // more.
-        let device = device_entry(&server);
-        let mut again = reach(&device, &without_secret(), Some(key.clone()))
+        // With no password given, the saved daemon connects with its key, and nothing more is
+        // asked or installed.
+        let mut again = reach(&recorded, &without_secret(), Some(key.clone()))
             .await
             .unwrap();
-        assert!(!install_device_key(&store, "svc", &device, &mut again)
-            .await
-            .unwrap());
         assert_eq!(
-            std::fs::read_to_string(home.0.join(".ssh/authorized_keys")).unwrap(),
-            installed
+            settle_key(&saved, &recorded, &without_secret(), &mut again).await,
+            Ok(())
         );
+        assert_eq!(std::fs::read_to_string(keys_of(&home)).unwrap(), installed);
         // A device entry whose key is not kept here asks for the password.
         assert_eq!(
-            outcome(&device, &without_secret()).await,
+            outcome(&recorded, &without_secret()).await,
             Err(ConnectOutcome::SecretNeeded {
                 kind: SecretKindName::Password
             })
@@ -940,7 +1184,7 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn a_device_key_removed_on_the_host_refuses_that_device_alone_until_its_password_installs_it_again(
+    async fn a_device_key_removed_on_the_host_refuses_that_device_alone_and_its_password_sign_in_asks_about_the_key_again(
     ) {
         let (server, home) = host_with_home("revoke").await;
         let (laptop, desktop) = (
@@ -949,22 +1193,24 @@ mod tests {
         );
         let entry = entry(&server);
         for store in [&laptop, &desktop] {
-            let mut reached = reach(&entry, &request(None), None).await.unwrap();
-            assert!(install_device_key(store, "svc", &entry, &mut reached)
+            let reached = reach(&entry, &request(None), None).await.unwrap();
+            install_device_key(store, "svc", &entry, &reached)
                 .await
-                .unwrap());
+                .map(|_| ())
+                .unwrap();
+            reached.session.disconnect().await;
         }
         let laptop_key = device_key::load(&laptop, "svc", "e").unwrap();
         let desktop_key = device_key::load(&desktop, "svc", "e").unwrap();
-        let file = home.0.join(".ssh/authorized_keys");
+        let file = keys_of(&home);
         let laptop_body = device_key::public_body(&laptop_key).unwrap();
-        let kept: String = std::fs::read_to_string(&file)
+        let without_laptop: String = std::fs::read_to_string(&file)
             .unwrap()
             .lines()
             .filter(|line| !line.contains(&laptop_body))
             .map(|line| format!("{line}\n"))
             .collect();
-        std::fs::write(&file, kept).unwrap();
+        std::fs::write(&file, &without_laptop).unwrap();
 
         let device = device_entry(&server);
         assert_eq!(
@@ -976,14 +1222,22 @@ mod tests {
         assert!(reach(&device, &without_secret(), Some(desktop_key))
             .await
             .is_ok());
-        // The password signs the refused device in, and installs its key again.
-        let mut relogin = reach(&device, &request(None), Some(laptop_key.clone()))
+        // The password signs the refused device in, and nothing is added again by that alone: the
+        // owner is asked first, as at a first connection.
+        let relogin = reach(&device, &request(None), Some(laptop_key.clone()))
             .await
             .unwrap();
         assert!(matches!(relogin.target.secret, Secret::Password(_)));
-        assert!(install_device_key(&laptop, "svc", &device, &mut relogin)
+        assert_eq!(
+            key_step(&device, &request(None), &relogin.target.secret),
+            KeyStep::Ask
+        );
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), without_laptop);
+        // On a yes the key is installed again, and signs in.
+        install_device_key(&laptop, "svc", &device, &relogin)
             .await
-            .unwrap());
+            .map(|_| ())
+            .unwrap();
         assert!(reach(&device, &without_secret(), Some(laptop_key))
             .await
             .is_ok());
@@ -991,17 +1245,312 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn a_key_that_could_not_be_installed_leaves_the_connection_on_the_password() {
+    async fn a_key_that_could_not_be_installed_leaves_the_connection_on_the_password_and_no_key_behind(
+    ) {
         let (server, home) = host_with_home("blocked").await;
         // `~/.ssh` is a file, so nothing can be made in it.
         std::fs::write(home.0.join(".ssh"), b"").unwrap();
+        let kept = Kept::default();
+        let entry = entry(&server);
+        let saved = saved_in(&kept, &home, &entry);
+        let mut reached = reach(&entry, &answering(true), None).await.unwrap();
+        let failed = install_device_key(&kept.store, "svc", &entry, &reached)
+            .await
+            .map(|_| ())
+            .unwrap_err();
+        assert!(
+            failed.starts_with("changing the host's authorized keys ended with Some(1)"),
+            "{failed}"
+        );
+        // The key pair made for this attempt is not kept: nothing would show it.
+        assert!(kept.store.accounts().is_empty());
+        // The connection goes on all the same, signed in as the owner did, and the saved daemon
+        // does not say a key is installed.
+        assert_eq!(
+            settle_key(&saved, &entry, &answering(true), &mut reached).await,
+            Ok(())
+        );
+        assert!(matches!(reached.target.secret, Secret::Password(_)));
+        assert_eq!(saved.list(), std::slice::from_ref(&entry));
+        assert!(kept.store.accounts().is_empty());
+        // A key that was kept before this attempt is not this attempt's to remove.
+        let before = device_key::load_or_make(&kept.store, "svc", "e")
+            .unwrap()
+            .key;
+        assert!(install_device_key(&kept.store, "svc", &entry, &reached)
+            .await
+            .is_err());
+        assert_eq!(
+            device_key::load(&kept.store, "svc", "e")
+                .unwrap()
+                .public_key(),
+            before.public_key()
+        );
+        reached.session.disconnect().await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_key_the_host_does_not_accept_is_taken_out_of_its_file_again() {
+        let (server, home) = host_with_home("unaccepted").await;
+        std::fs::create_dir_all(home.0.join(".ssh")).unwrap();
+        std::fs::write(keys_of(&home), "ssh-rsa AAAAother laptop\n").unwrap();
         let store = credentials::Memory::default();
         let entry = entry(&server);
         let mut reached = reach(&entry, &request(None), None).await.unwrap();
-        assert!(install_device_key(&store, "svc", &entry, &mut reached)
+        // The connection that checks the installed key is refused, here because it expects another
+        // host key, as it is on a host that does not accept the key it was just given.
+        reached.target.pinned = Some("SHA256:other".into());
+        let failed = install_device_key(&store, "svc", &entry, &reached)
             .await
-            .is_err());
+            .map(|_| ())
+            .unwrap_err();
+        assert!(
+            failed.starts_with("the host did not accept the installed key: HostKeyMismatch"),
+            "{failed}"
+        );
+        // The line was added and taken out again, and the key made for it is not kept.
+        assert!(server
+            .commands()
+            .iter()
+            .any(|command| command.contains("grep -a -vF")));
+        assert_eq!(
+            std::fs::read_to_string(keys_of(&home)).unwrap(),
+            "ssh-rsa AAAAother laptop\n"
+        );
+        assert!(store.accounts().is_empty());
+        reached.session.disconnect().await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_key_that_cannot_be_recorded_for_its_saved_daemon_is_taken_back_at_once() {
+        // The saved daemon was removed, or pointed elsewhere, or its file could not be written,
+        // by the time the key was installed: nothing may stay on the host that no entry shows.
+        let (server, home) = host_with_home("unrecorded").await;
+        let store = credentials::Memory::default();
+        let entry = entry(&server);
+        let mut reached = reach(&entry, &answering(true), None).await.unwrap();
+        let mut seen = None;
+        let refused = install_and_record(&store, "svc", &entry, &mut reached, |installed| {
+            // Installed at this moment: the line is in the file.
+            seen = Some(std::fs::read_to_string(keys_of(&home)).unwrap());
+            assert_eq!(installed.file, "~/.ssh/authorized_keys");
+            false
+        })
+        .await;
+        assert_eq!(
+            refused,
+            Err(
+                "the installed key could not be recorded for its saved daemon, and was taken back"
+                    .to_owned()
+            )
+        );
+        assert_eq!(seen.unwrap().lines().count(), 1);
+        assert_eq!(std::fs::read_to_string(keys_of(&home)).unwrap(), "");
+        assert!(store.accounts().is_empty());
+        // The connection is still the one the owner signed in with.
         assert!(matches!(reached.target.secret, Secret::Password(_)));
+        assert!(reached.session.run("true").await.is_ok());
+        reached.session.disconnect().await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_key_installed_while_its_saved_daemon_was_removed_is_taken_back() {
+        let (server, home) = host_with_home("removed-meanwhile").await;
+        let kept = Kept::default();
+        let entry = entry(&server);
+        let saved = saved_in(&kept, &home, &entry);
+        let mut reached = reach(&entry, &answering(true), None).await.unwrap();
+        // The saved daemon goes while the connection is under way.
+        entries::save(&saved.path, &[]).unwrap();
+        assert_eq!(
+            settle_key(&saved, &entry, &answering(true), &mut reached).await,
+            Ok(())
+        );
+        assert_eq!(std::fs::read_to_string(keys_of(&home)).unwrap(), "");
+        assert!(kept.store.accounts().is_empty());
+        assert!(saved.list().is_empty());
+        assert!(matches!(reached.target.secret, Secret::Password(_)));
+        reached.session.disconnect().await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn asking_ends_the_connection_with_the_question_and_writes_nothing_on_the_host() {
+        let (server, home) = host_with_home("asked").await;
+        let kept = Kept::default();
+        let entry = entry(&server);
+        let saved = saved_in(&kept, &home, &entry);
+        let mut reached = reach(&entry, &request(None), None).await.unwrap();
+        let before = server.commands().len();
+        assert_eq!(
+            settle_key(&saved, &entry, &request(None), &mut reached).await,
+            Err(ConnectOutcome::DeviceKeyOffered {
+                mark: device_key::comment(&device_key::device_name()),
+                file: "~/.ssh/authorized_keys".into(),
+            })
+        );
+        // The connection is ended: it is made again with the owner's answer, or not at all.
+        tokio::time::timeout(crate::test_support::PATIENCE, reached.session.closed())
+            .await
+            .expect("the connection that asked is ended");
+        // Nothing was run on the host to ask, its home holds nothing of the application's, no key
+        // was made, and the saved daemon is as it was.
+        assert_eq!(server.commands().len(), before);
+        assert!(!home.0.join(".ssh").exists());
+        assert!(kept.store.accounts().is_empty());
+        assert_eq!(saved.list(), [entry]);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_no_is_remembered_installs_nothing_and_the_connection_goes_on_with_the_password() {
+        let (server, home) = host_with_home("declined").await;
+        let kept = Kept::default();
+        let asked = entry(&server);
+        let saved = saved_in(&kept, &home, &asked);
+        // The answer is recorded before the host is spoken to.
+        let entry = record_answer(&saved, asked.clone(), &answering(false));
+        assert!(entry.device_key.declined);
+        assert_eq!(saved.list(), std::slice::from_ref(&entry));
+        let mut reached = reach(&entry, &answering(false), None).await.unwrap();
+        assert_eq!(
+            settle_key(&saved, &entry, &answering(false), &mut reached).await,
+            Ok(())
+        );
+        assert!(!home.0.join(".ssh").exists());
+        assert!(kept.store.accounts().is_empty());
+        assert_eq!(saved.list(), std::slice::from_ref(&entry));
+        // The connection is the one the owner signed in with, and still carries commands.
+        assert!(matches!(reached.target.secret, Secret::Password(_)));
+        assert!(reached.session.run("true").await.is_ok());
+        reached.session.disconnect().await;
+        // The next connection asks nothing.
+        assert_eq!(
+            key_step(&entry, &request(None), &Secret::Password("right".into())),
+            KeyStep::Nothing
+        );
+        // A request that carries no answer, or a yes, records nothing.
+        for unanswered in [request(None), answering(true)] {
+            assert_eq!(record_answer(&saved, asked.clone(), &unanswered), asked);
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_no_is_remembered_though_the_connection_made_with_it_then_fails() {
+        let (server, home) = host_with_home("declined-failed").await;
+        let kept = Kept::default();
+        let asked = entry(&server);
+        let saved = saved_in(&kept, &home, &asked);
+        let wrong = ConnectRequest {
+            secret: Some("wrong".into()),
+            ..answering(false)
+        };
+        let entry = record_answer(&saved, asked, &wrong);
+        assert!(matches!(
+            reach(&entry, &wrong, None).await.err(),
+            Some(ConnectOutcome::AuthFailed { .. })
+        ));
+        // The owner is not asked again because the reconnection failed.
+        assert!(saved.list()[0].device_key.declined);
+        assert_eq!(
+            key_step(
+                &saved.list()[0],
+                &request(None),
+                &Secret::Password("right".into())
+            ),
+            KeyStep::Nothing
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_no_to_a_key_this_computer_still_holds_takes_its_line_out_and_forgets_it() {
+        let (server, home) = host_with_home("declined-held").await;
+        let kept = Kept::default();
+        let entry = entry(&server);
+        let saved = saved_in(&kept, &home, &entry);
+        let mut first = reach(&entry, &answering(true), None).await.unwrap();
+        assert_eq!(
+            settle_key(&saved, &entry, &answering(true), &mut first).await,
+            Ok(())
+        );
+        first.session.disconnect().await;
+        let file = keys_of(&home);
+        std::fs::write(
+            &file,
+            format!(
+                "ssh-rsa AAAAother laptop\n{}",
+                std::fs::read_to_string(&file).unwrap()
+            ),
+        )
+        .unwrap();
+        // Signed in with the password again, the owner says no this time.
+        let installed = saved.list().remove(0);
+        assert_eq!(installed.auth, entries::Auth::Device);
+        // The no is noted before the host is spoken to, and the key still shown as installed: a
+        // reconnection that failed now would leave nothing on the host that the entry hides.
+        let device = record_answer(&saved, installed.clone(), &answering(false));
+        assert_eq!(device.auth, entries::Auth::Device);
+        assert!(device.device_key.declined);
+        assert_eq!(device.device_key.file, installed.device_key.file);
+        assert_eq!(saved.list(), std::slice::from_ref(&device));
+        let wrong = ConnectRequest {
+            secret: Some("wrong".into()),
+            ..answering(false)
+        };
+        assert!(matches!(
+            reach(&device, &wrong, None).await.err(),
+            Some(ConnectOutcome::AuthFailed { .. })
+        ));
+        assert_eq!(saved.list(), std::slice::from_ref(&device));
+        assert_eq!(kept.store.accounts(), ["e"]);
+        // The next sign-in with the password carries the no out, whether or not it repeats it.
+        assert_eq!(
+            key_step(&device, &request(None), &Secret::Password("right".into())),
+            KeyStep::Decline
+        );
+        let mut reached = reach(&device, &request(None), None).await.unwrap();
+        assert_eq!(
+            settle_key(&saved, &device, &request(None), &mut reached).await,
+            Ok(())
+        );
+        reached.session.disconnect().await;
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "ssh-rsa AAAAother laptop\n"
+        );
+        assert!(kept.store.accounts().is_empty());
+        // The saved daemon signs in with a password and says no key is installed.
+        let now = saved.list().remove(0);
+        assert_eq!(now.auth, entries::Auth::Password);
+        assert!(now.device_key.declined);
+        assert_eq!(now.device_key.file, None);
+    }
+
+    #[tokio::test]
+    async fn a_windows_host_that_does_not_name_its_keys_file_is_not_asked_about() {
+        let server = TestServer::start(Behaviour {
+            shell: Shell::Cmd,
+            ..Behaviour::default()
+        })
+        .await;
+        let reached = reach(&entry(&server), &request(None), None).await.unwrap();
+        // The stand-in host prints nothing for the script that asks for the file, as a host that
+        // could not say would: the owner is not asked about a file that cannot be named.
+        assert_eq!(
+            key_offer(&reached).await,
+            Err("asking the host for its authorized keys file ended with Some(0): ".to_owned())
+        );
+        let asked = server.commands().pop().unwrap();
+        assert!(
+            asked.starts_with("powershell.exe -NoProfile -NonInteractive -EncodedCommand "),
+            "{asked}"
+        );
+        reached.session.disconnect().await;
     }
 
     #[tokio::test]
@@ -1115,13 +1664,11 @@ mod tests {
             key_path: None,
             fingerprint: None,
             octoboardd_path: None,
+            device_key: Default::default(),
         };
         let mut asked = ConnectRequest {
-            id: "e2e".into(),
             secret: Some(parts[3].into()),
-            confirm_fingerprint: None,
-            action: None,
-            browser: false,
+            ..quiet_request("e2e")
         };
         // A first connection shows the fingerprint and connects only once it is confirmed.
         let Err(ConnectOutcome::HostKeyUnknown { fingerprint }) = reach(&entry, &asked, None).await
@@ -1246,16 +1793,15 @@ mod tests {
             key_path: Some("~/.ssh/id_rsa".into()),
             fingerprint: None,
             octoboardd_path: None,
+            device_key: Default::default(),
         }
     }
 
     fn asking(secret: Option<&str>, confirm: Option<&str>) -> ConnectRequest {
         ConnectRequest {
-            id: "e".into(),
             secret: secret.map(str::to_owned),
             confirm_fingerprint: confirm.map(str::to_owned),
-            action: None,
-            browser: false,
+            ..quiet_request("e")
         }
     }
 
@@ -1447,11 +1993,78 @@ mod tests {
     }
 
     #[test]
-    fn the_quiet_request_asks_the_owner_for_nothing() {
+    fn the_quiet_request_gives_nothing_of_the_owner_s() {
         let quiet = quiet_request("e");
         assert_eq!(quiet.id, "e");
         assert!(quiet.secret.is_none() && quiet.confirm_fingerprint.is_none());
         assert!(quiet.action.is_none() && !quiet.browser);
+        // It carries no answer about this device's key, and ends with the question where the
+        // owner has to be asked; a connection made at launch goes on without the key instead.
+        assert!(quiet.device_key.is_none() && !quiet.without_asking);
+        let restoring = restoring_request("e");
+        assert!(restoring.without_asking && restoring.device_key.is_none());
+        assert!(restoring.secret.is_none() && restoring.action.is_none());
+    }
+
+    #[test]
+    fn the_owner_is_asked_about_the_device_key_once_and_their_answer_is_done() {
+        let password = Secret::Password("pw".into());
+        let key_file = Secret::Key {
+            path: "/k".into(),
+            passphrase: None,
+        };
+        let device = Secret::DeviceKey(Arc::new(device_key::generate().unwrap()));
+        let entry = plain_entry(entries::Auth::Password);
+        let answered = |answer| ConnectRequest {
+            device_key: answer,
+            ..asking(Some("pw"), None)
+        };
+        // A sign-in with the owner's own password or key file asks first.
+        for secret in [&password, &key_file] {
+            assert_eq!(key_step(&entry, &answered(None), secret), KeyStep::Ask);
+            assert_eq!(
+                key_step(&entry, &answered(Some(true)), secret),
+                KeyStep::Install
+            );
+            assert_eq!(
+                key_step(&entry, &answered(Some(false)), secret),
+                KeyStep::Decline
+            );
+        }
+        // A no is remembered: nothing is asked and nothing installed.
+        let mut declined = entry.clone();
+        declined.device_key.declined = true;
+        assert_eq!(
+            key_step(&declined, &answered(None), &password),
+            KeyStep::Nothing
+        );
+        // A connection made at launch asks nothing, and installs nothing.
+        assert_eq!(
+            key_step(&entry, &restoring_request("e"), &key_file),
+            KeyStep::Nothing
+        );
+        // A connection signed in with the key has it installed already, whatever it was sent.
+        for answer in [None, Some(true), Some(false)] {
+            assert_eq!(
+                key_step(&entry, &answered(answer), &device),
+                KeyStep::Nothing
+            );
+        }
+        // A device key entry signed in to with the password, its key refused or lost, is asked
+        // again like any other.
+        let mut refused = plain_entry(entries::Auth::Device);
+        assert_eq!(key_step(&refused, &answered(None), &password), KeyStep::Ask);
+        // One whose no was noted while its key was still installed has the key taken back by the
+        // next sign-in with the password, with nothing asked.
+        refused.device_key.declined = true;
+        assert_eq!(
+            key_step(&refused, &answered(None), &password),
+            KeyStep::Decline
+        );
+        assert_eq!(
+            key_step(&refused, &answered(None), &device),
+            KeyStep::Nothing
+        );
     }
 
     #[test]
@@ -1474,6 +2087,7 @@ mod tests {
             key_path: None,
             fingerprint: None,
             octoboardd_path: None,
+            device_key: Default::default(),
         };
         assert_eq!(second.identity(), "ssh:owner@host:22");
         assert_eq!(

@@ -78,6 +78,47 @@ pub(crate) fn names_running_image(path: &std::path::Path) -> bool {
     matches!((at, image), (Ok(at), Ok(image)) if at.identity == image.identity)
 }
 
+/// The executable another process runs ([`image_of`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Image {
+    /// The file itself, whatever it has been renamed to or replaced by since the process began.
+    pub(crate) identity: super::fs::Identity,
+    /// Where the host says the file is now, for naming it; for a file that is gone, where it
+    /// was, marked as [`Image::removed_from`] reads it.
+    pub(crate) path: std::path::PathBuf,
+}
+
+/// What Linux appends to the path of a process image whose file is gone.
+const IMAGE_REMOVED: &str = " (deleted)";
+
+impl Image {
+    /// Where the file was, for one that is gone from its path (replaced or removed under the
+    /// running process); `None` for a file that is still there.
+    pub(crate) fn removed_from(&self) -> Option<std::path::PathBuf> {
+        let path = self.path.to_str()?;
+        path.strip_suffix(IMAGE_REMOVED)
+            .map(std::path::PathBuf::from)
+    }
+}
+
+/// The executable the process `pid` runs, as [`names_running_image`] tells this process's own:
+/// by the file, not by a path, which an update replaces under a running daemon. Only Linux says
+/// (`/proc/<pid>/exe`), and only of a process the user may look into; an error elsewhere, and
+/// for a process that is gone.
+pub(crate) fn image_of(pid: ProcessId) -> io::Result<Image> {
+    if !cfg!(target_os = "linux") {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "this host does not say which executable another process runs",
+        ));
+    }
+    let link = std::path::PathBuf::from(format!("/proc/{}/exe", pid.0));
+    Ok(Image {
+        identity: super::fs::identity(&link, super::fs::Links::Follow)?,
+        path: std::fs::read_link(&link)?,
+    })
+}
+
 /// Whether the host is one the daemon can update its own executable on, and the release build
 /// it would fetch exists for: Linux on x86-64 or ARM64. What a self-update (`crate::self_update`)
 /// asks before offering one.
@@ -129,6 +170,15 @@ pub(crate) use windows::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ProcessId(pub u32);
 
+impl ProcessId {
+    /// When the process that holds this pid now started, in milliseconds since the Unix epoch;
+    /// `None` when no running process holds it.
+    pub fn holder_started_at_ms(self) -> Option<i64> {
+        proc_table::start_of(self.0 as i32)
+            .map(|start| (proc_table::epoch_micros(start) / 1000) as i64)
+    }
+}
+
 /// What the host groups processes by where it lets them be listed by group: on Unix the id of a
 /// terminal session, which is its leader's pid. A host that tells a launch's processes by the
 /// [`Containment`] alone has none.
@@ -176,6 +226,30 @@ impl ProcessIdentity {
             pid: ProcessId(pid.parse().ok().filter(|pid| *pid > 0)?),
             start_micros: start.parse().ok()?,
         })
+    }
+}
+
+/// The process the daemon was told to follow (`--parent-pid`), as it was when the daemon started:
+/// read first thing in `main`, while the application that started the daemon waits for it, so
+/// that a process given the pid later is not taken for it ([`watch_parent`]).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Parent {
+    pub pid: u32,
+    /// The process that had the pid then; `None` where none had. Windows follows the process by
+    /// a handle instead.
+    #[cfg_attr(windows, allow(dead_code))]
+    identity: Option<ProcessIdentity>,
+}
+
+impl Parent {
+    pub(crate) fn read(pid: u32) -> Self {
+        Self {
+            pid,
+            identity: proc_table::start_of(pid as i32).map(|start_micros| ProcessIdentity {
+                pid: ProcessId(pid),
+                start_micros,
+            }),
+        }
     }
 }
 

@@ -4,7 +4,8 @@ description: "root 권한 없이 Linux 서버에 Octoboard 서버 프로그램�
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../../commands.ts";
+import LinuxUninstall from "../../../../snippets/ko/linux-uninstall.mdx";
 
 root 권한 없이 Linux 서버에 {productName} 서버 프로그램인 octoboardd(앱에서는 ‘데몬’이라고 부릅니다)를 설치합니다. macOS나 Windows 앱 또는 브라우저에서 SSH를 통해 접속합니다.
 
@@ -80,6 +81,12 @@ octoboardd는 자체 포트를 스스로 고르며, 그 포트는 알 필요가 
   지금 다시 시작할지 물으면 <code dir="ltr">y</code>라고 답해 다시 시작하거나, Enter를 눌러 일단 이전 버전을 계속 실행하세요. 나중에 다시 시작하려면 <code dir="ltr">{commands.restart}</code>을(를) 실행하세요.
 
 <code dir="ltr">{commands.update}</code>이(가) 프로그램을 교체할 수 없다고 하면(예: 쓰기 권한이 없는 곳에 설치된 경우), 대신 설치 명령(또는 서비스 명령)을 다시 실행하세요. 안전할 때는 같은 방식으로 다시 시작하고, 그렇지 않으면 <code dir="ltr">{commands.restart}</code>을(를) 실행하라고 알려 줍니다.
+
+## 제거
+
+<LinuxUninstall />
+
+데이터는 <code dir="ltr">{system.dataDir}</code>에 남습니다. 그 뒤에 무엇이 남고 어떻게 지우는지는 [시스템은 그대로 둡니다](../../your-system/)에서 설명합니다.
 
 ## 명령
 

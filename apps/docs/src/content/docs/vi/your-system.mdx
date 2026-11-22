@@ -1,0 +1,88 @@
+---
+title: "Hệ thống của bạn vẫn như cũ"
+description: "Octoboard để hệ thống của bạn và các tệp riêng của tác tử nguyên trạng như lúc đầu. Một vài tính năng thêm gì, cách hoàn tác từng thứ, và còn lại gì sau khi gỡ cài đặt."
+---
+
+import { Aside, Code } from "@astrojs/starlight/components";
+import { commands, productName, system } from "../../../commands.ts";
+import LinuxUninstall from "../../../snippets/vi/linux-uninstall.mdx";
+import WindowsUninstaller from "../../../snippets/vi/windows-uninstaller.mdx";
+
+{productName} để hệ thống của bạn nguyên trạng như lúc đầu: cấu hình của các tác tử, và mọi thứ khác nằm ngoài các thư mục riêng của {productName}. Chỉ một vài tính năng có thêm thứ gì đó ra ngoài các thư mục ấy. Trang này liệt kê tất cả, kèm theo nó thêm gì, ở đâu và hoàn tác thế nào, đồng thời cho biết còn lại gì sau khi bạn gỡ cài đặt.
+
+## Quy tắc
+
+- <strong>Những gì {productName} đưa cho tác tử đến với nó ở mỗi lần khởi chạy, và chỉ ở đó.</strong> Các hook trạng thái, máy chủ MCP riêng và vai trò mà {productName} mô tả cho phiên được truyền vào khi tác tử khởi động, hoặc được giữ trong thư mục riêng của {productName}. Không tệp nào của bạn hay của tác tử bị chỉnh sửa vì việc đó, nên một tác tử bạn tự chạy riêng sẽ khởi động mà không có thứ nào trong số này.
+- <strong>{productName} không thêm hook nào của riêng nó vào cài đặt của bạn, và không quyết định thay bạn điều gì về thư mục của một dự án.</strong> Có tin cậy thư mục của một dự án hay không là do bạn nói, còn tác tử ghi lại. Thư mục duy nhất mà {productName} tự trả lời là thư mục riêng của bảng điều khiển, vốn là của {productName} (xem bên dưới).
+- <strong>Những gì tác tử tự ghi cho mình là của tác tử.</strong> Bản ghi hội thoại, bộ nhớ đệm và nhật ký, thông tin đăng nhập, và sự tin cậy mà nó ghi lại khi câu hỏi của chính nó được trả lời đều được ghi giống như khi bạn dùng tác tử mà không có {productName}. Việc thiết lập ban đầu mà chương trình của chính tác tử thực hiện khi chạy lần đầu trong một thư mục cấu hình cũng vậy; một lần đọc do {productName} thực hiện ở chế độ nền có thể khiến việc này diễn ra trước lần khởi chạy đầu tiên của chính bạn (xem bên dưới).
+- <strong>Công việc bên trong dự án của bạn không phải là chủ đề của trang này.</strong> Chỉnh sửa tệp của dự án, các thao tác Git, nhánh và cây làm việc chính là công việc phát triển mà bạn thêm dự án để làm.
+
+## Một tính năng thêm gì, và cách hoàn tác
+
+Mỗi mục dưới đây chỉ được thêm bởi một tính năng mà bạn dùng hoặc bật.
+
+### Hoàn tác bằng cách tắt tính năng
+
+- <strong>Khóa của máy tính này trên máy chủ từ xa.</strong> Sau khi bạn đăng nhập vào một daemon từ xa đã lưu bằng mật khẩu hoặc tệp khóa, ứng dụng hỏi trước khi thêm bất cứ thứ gì: hộp thoại <strong>Thêm khóa của máy tính này</strong> nêu rõ tệp và dòng. <strong>Thêm khóa</strong> thêm một dòng, được đánh dấu <code dir="ltr">{system.keyMark}</code>, vào các khóa SSH được phép của người dùng của bạn trên máy chủ đó (<code dir="ltr">{commands.authorizedKeys}</code> trên Linux và macOS), và giữ khóa riêng trong kho thông tin xác thực của máy tính này (chuỗi khóa đăng nhập trên macOS, Trình quản lý thông tin xác thực trên Windows). <strong>Không thêm</strong> thì không thêm gì và sẽ không hỏi lại. Để hoàn tác, hãy tắt <strong>Khóa của máy tính này</strong> trên trang của daemon đó trong <strong>Thiết bị từ xa</strong>, hoặc gỡ bỏ daemon đã lưu: ứng dụng xóa dòng đó khỏi tệp và xóa khóa riêng. Ứng dụng cũng làm như vậy khi bạn đổi máy chủ, cổng hoặc người dùng của daemon đã lưu. Nếu không kết nối được với máy chủ, dòng đó có thể còn lại; ứng dụng sẽ báo cho bạn biết, để bạn tự xóa trên máy chủ.
+- <strong>Mở khi đăng nhập</strong> (Windows, và macOS 13 trở lên). <strong>Cài đặt › Chung › Mở khi đăng nhập</strong> đưa {productName} vào danh sách ứng dụng mà hệ thống mở khi đăng nhập, và hàng cài đặt này có nói rõ điều đó. Tắt công tắc này là cách đưa nó ra khỏi danh sách ấy.
+- <strong>Công cụ dòng lệnh</strong> (macOS). <strong>Cài đặt</strong> trong <strong>Cài đặt › Chung › Công cụ dòng lệnh</strong> thêm một liên kết tên <code dir="ltr">{system.cliName}</code> vào <code dir="ltr">{system.cliDir}</code>, hoặc vào <code dir="ltr">{system.cliFallbackDir}</code> nếu hệ thống không cho phép; hàng cài đặt này nói rõ điều đó trước khi bạn cài. <strong>Gỡ bỏ</strong> xóa liên kết ấy.
+- <strong>Chia sẻ cấu hình mặc định.</strong> <strong>Chia sẻ cấu hình mặc định</strong>, trong phần cài đặt của một tài khoản ở <strong>Cài đặt › Tài khoản tác tử</strong>, thay các phần có thể chia sẻ trong thư mục của tài khoản đó bằng liên kết đến thư mục của tài khoản mặc định, giữ cấu hình riêng của tài khoản làm bản sao lưu ngay bên cạnh, và chuyển lịch sử hội thoại của nó vào thư mục của tài khoản mặc định. Hàng cài đặt này nói rõ điều đó trước khi bạn bật. Tắt đi thì các liên kết bị gỡ, các bản sao lưu được khôi phục và hội thoại của các phiên thuộc chính tài khoản ấy được chuyển về. <strong>Có một thứ ở lại:</strong> phần còn lại của lịch sử hội thoại đã chuyển vẫn nằm trong thư mục của tài khoản mặc định, vì xóa nó sẽ làm bạn mất các cuộc hội thoại. Xem [Shared configuration](../features/shared-configuration/).
+
+### Giữ lại như của bạn hoặc của tác tử
+
+Các thao tác này ghi ra thứ mà từ đó trở đi là của bạn hoặc của tác tử, nên {productName} không có gì của riêng mình để hoàn tác. Nếu một mục có thể xóa bằng tay, phần mô tả sẽ cho biết nó nằm ở đâu.
+
+- <strong>Chuyển tài khoản của một phiên.</strong> <strong>Chuyển tài khoản</strong> yêu cầu bạn xác nhận. Lần chuyển do tác tử yêu cầu sẽ chờ bạn chấp thuận, trừ khi bạn đã bật <strong>Tự động chấp thuận chuyển tài khoản</strong>, còn lần chuyển khi đạt giới hạn sử dụng chỉ xảy ra khi <strong>Tự động chuyển tài khoản khi đạt giới hạn sử dụng</strong> đang bật. Một lần chuyển sao chép hội thoại của riêng phiên đó vào thư mục của tài khoản đích; với Codex, nó còn trỏ bản ghi của chính tài khoản ấy về cuộc hội thoại sang bản sao. Bản gốc vẫn ở nguyên chỗ cũ, còn bản sao ở lại như của riêng tài khoản ấy. Xem [Account continuity](../features/account-continuity/).
+- <strong>Cài đặt và plugin bạn thay đổi trong một phiên Grok Build.</strong> Khi <code dir="ltr">config.toml</code> của bạn là liên kết đến một tệp, thì chủ đề, công tắc plugin hoặc mô hình mặc định mà bạn thay đổi trong phiên sẽ được ghi vào tệp ấy khi phiên kết thúc, giống như Grok tự lưu. Plugin bạn cài trong phiên được ghi vào sổ đăng ký plugin riêng của thư mục Grok của bạn, nếu có.
+- <strong>Sự tin cậy của Grok Build đối với thư mục của một dự án.</strong> Sau khi bạn đồng ý tin cậy thư mục của một dự án (chọn <strong>Tin cậy và tiếp tục</strong>, hoặc tự trả lời trong terminal), đúng một mục mà Grok đã ghi được mang nguyên vẹn sang danh sách tin cậy trong thư mục Grok của bạn.
+- <strong>Bản ghi của một phiên chưa từng có hội thoại.</strong> Khi bạn xóa một phiên mà bạn chưa từng gửi gì vào, các bản ghi của chính tác tử về phiên ấy cũng được chuyển vào Thùng rác cùng với nó mà không hỏi: chúng không chứa cuộc hội thoại nào của bạn. Bản ghi của một phiên bạn đã dùng chỉ được chuyển đi nếu bạn đánh dấu tùy chọn đó trong hộp xác nhận. Có thể khôi phục chúng từ Thùng rác.
+- <strong>Thiết lập lần chạy đầu của Claude Code.</strong> Trong một thư mục cấu hình mà Claude Code chưa từng chạy, hoặc sau khi Claude Code được cập nhật, một lần đọc do {productName} thực hiện ở chế độ nền (mức sử dụng của một tài khoản, các máy chủ MCP hoặc các tác tử của nó) khiến Claude Code thực hiện tại đó việc thiết lập lần chạy đầu và các bước di chuyển dữ liệu còn chờ của chính nó, giống như lần khởi chạy kế tiếp của bạn sẽ làm. {productName} để nguyên các thay đổi đó.
+- <strong>Một thư mục trống cho tài khoản Codex mới.</strong> Trước lần khởi chạy hoặc đăng nhập đầu tiên của một tài khoản Codex, {productName} tạo thư mục của tài khoản đó, để trống, nếu nó chưa tồn tại: không có nó, Codex từ chối khởi động.
+- <strong>Sự tin cậy đối với thư mục riêng của bảng điều khiển.</strong> Phiên của bảng điều khiển chạy trong một thư mục riêng của {productName}, nên {productName} trả lời câu hỏi tin cậy của tác tử ở đó mà không hỏi bạn. Sau đó Claude Code giữ trong danh sách tin cậy của chính nó một mục chỉ nêu tên thư mục ấy, và không có tác dụng ở bất kỳ nơi nào khác. Codex chỉ hỏi khi thư mục ấy nằm trong một kho Git, rồi ghi sự tin cậy cho thư mục gốc của kho đó, tức là bao trùm toàn bộ kho: nếu thư mục nhà của bạn được quản lý bằng Git thì đó là toàn bộ thư mục nhà. Grok Build không ghi gì vào danh sách tin cậy của bạn. {productName} không xóa các mục này, vì làm vậy sẽ là thêm một lần chỉnh sửa tệp của bạn. Bạn có thể tự xóa: mục của Codex là bảng <code dir="ltr">[projects."&lt;repository root&gt;"]</code> trong <code dir="ltr">config.toml</code> ở thư mục của nó, còn mục của Claude Code là mục của thư mục ấy dưới <code dir="ltr">projects</code> trong <code dir="ltr">.claude.json</code> của nó.
+
+### Hoàn tác bằng lệnh gỡ cài đặt
+
+- <strong>Chương trình máy chủ Linux chạy dưới dạng dịch vụ.</strong> Cài nó dưới dạng dịch vụ (xem [Máy chủ Linux](../install/linux/)) sẽ ghi một dịch vụ người dùng systemd vào thư mục cấu hình systemd của bạn, và bật lingering cho người dùng của bạn nếu trước đó đang tắt. Cách hoàn tác là lệnh gỡ cài đặt ở bên dưới.
+
+<Aside>
+Trên Windows, ứng dụng còn duy trì danh sách nhảy của nút trên thanh tác vụ, gồm các daemon từ xa bạn đã lưu. Danh sách này không có công tắc: <strong>Xóa tất cả</strong>, được mô tả bên dưới, sẽ xóa nó, và trình gỡ cài đặt cũng vậy.
+</Aside>
+
+## Trước khi gỡ cài đặt
+
+Trước khi gỡ cài đặt, mọi thứ thuộc phần “Hoàn tác bằng cách tắt tính năng” đang có hiệu lực đều có thể được xóa trong một lần, cùng với việc tắt tính năng của từng mục. Trong ứng dụng máy tính, <strong>Cài đặt › Dọn dẹp</strong> có một hàng dành cho việc này, <strong>Dọn dẹp trước khi gỡ cài đặt</strong>: hàng này cho biết có bao nhiêu mục đang có hiệu lực và chỉ có một nút, <strong>Xóa tất cả</strong>. Trên Windows, trình gỡ cài đặt cũng tự làm việc này, còn lệnh gỡ cài đặt của chương trình máy chủ Linux làm việc đó trước tiên; cả hai được mô tả bên dưới.
+
+- <strong>Nó hỏi trước.</strong> Hộp xác nhận cho biết bao nhiêu mục sẽ bị xóa, với danh sách được thu gọn bên dưới con số đó, và những gì được giữ lại. Nó chỉ tiếp tục sau khi bạn gõ <strong>XÓA</strong>.
+- <strong>Nó hiển thị kết quả.</strong> Sau đó, nó liệt kê những gì đã xóa và những gì chưa. Với mục không xóa được, ví dụ một khóa trên máy chủ không kết nối được, nó cho biết còn lại gì và ở đâu.
+- <strong>Nó chỉ có trong cửa sổ của chính ứng dụng, trên máy tính đó.</strong> Trong trình duyệt trên máy tính có ứng dụng máy tính, và trong cửa sổ hiển thị một daemon từ xa, hàng này chỉ cho biết việc dọn dẹp được làm ở đâu. Trong trình duyệt mở máy chủ Linux, nó cho biết việc gỡ cài đặt trên máy chủ sẽ dọn dẹp trước, và hiển thị <code dir="ltr">{system.uninstall}</code> cùng <strong>Sao chép lệnh gỡ cài đặt</strong> để bạn chạy trên máy chủ. Không có gì bị xóa từ đó.
+- <strong>Chỉ dùng khi bạn đang gỡ cài đặt.</strong> Để hoàn tác một mục và tiếp tục dùng {productName}, hãy tắt tính năng đó.
+- <strong>Nó giữ dữ liệu của bạn.</strong> Các thư mục riêng của {productName} ở lại, và lịch sử hội thoại mà việc chia sẻ đã chuyển đi cũng vậy.
+
+## Sau khi gỡ cài đặt
+
+Gỡ cài đặt sẽ xóa chương trình.
+
+### macOS
+
+Thoát {productName}, rồi xóa nó khỏi thư mục Ứng dụng. Không có gì chạy khi nó bị xóa, nên hãy chọn <strong>Xóa tất cả</strong> trước: xóa ứng dụng không xóa những gì thao tác này xóa.
+
+### Windows
+
+Dùng trình gỡ cài đặt của ứng dụng.
+
+<WindowsUninstaller />
+
+### Máy chủ Linux
+
+<LinuxUninstall />
+
+Thư mục đã cài chương trình vẫn còn, và mọi dòng bạn đã thêm để đưa nó vào PATH cũng vậy.
+
+### Những gì còn lại
+
+Các thư mục riêng của {productName} được giữ lại, nên lần cài đặt sau sẽ thấy lại các bảng điều khiển, phiên và cài đặt của bạn. Để xóa cả chúng, hãy xóa các thư mục này: bạn sẽ mất mọi bảng điều khiển, bản ghi phiên và cài đặt.
+
+- <strong>Thư mục dữ liệu</strong>, trên máy tính hoặc máy chủ nơi các phiên đã chạy: <code dir="ltr">{system.dataDir}</code> (<code dir="ltr">{system.dataDirWindows}</code> trên Windows). Trên macOS và Linux, <code dir="ltr">{system.removeDataDir}</code> sẽ xóa nó.
+- <strong>Thư mục riêng của ứng dụng máy tính:</strong> <code dir="ltr">{system.appDataMac}</code> trên macOS; <code dir="ltr">{system.appDataWindows}</code> và <code dir="ltr">{system.appLocalDataWindows}</code> trên Windows.
+
+Các thư mục riêng của tác tử, cùng với thông tin đăng nhập, cài đặt và hội thoại của chúng, là của tác tử và vẫn giữ nguyên.

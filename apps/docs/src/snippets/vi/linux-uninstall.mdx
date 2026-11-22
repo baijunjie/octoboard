@@ -1,0 +1,22 @@
+import { Code } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* How the Linux server program is uninstalled, which the Linux server guide and "Your system stays as it was" share. */}
+
+Chạy lệnh này trên máy chủ, bằng người dùng đã cài đặt nó. Không có gì được tải về.
+
+<Code code={system.uninstall} lang="sh" />
+
+Trước tiên, nó liệt kê mọi việc sẽ làm và yêu cầu bạn gõ <code dir="ltr">{system.uninstallWord}</code>. <code dir="ltr">{system.uninstallDryRun}</code> chỉ hiển thị danh sách đó, còn <code dir="ltr">{system.uninstallYes}</code> xác nhận ở nơi không có terminal để hỏi.
+
+Sau đó, nó tắt chia sẻ cho mọi tài khoản vẫn đang chia sẻ cấu hình mặc định. Để làm việc đó, nó dừng daemon nếu daemon đang chạy, việc này kết thúc mọi phiên mà daemon chạy, rồi khởi động daemon chỉ cho lần dọn dẹp này, không chạy phiên nào. Tiếp theo, nó dừng daemon và xóa chương trình cùng dịch vụ systemd của nó nếu có, và tắt lingering nếu việc cài đặt dịch vụ đã bật nó và không có dịch vụ nào khác của bạn cần đến nó.
+
+- <strong>Nếu một tài khoản không thể ngừng chia sẻ</strong>, ví dụ vì một phiên của nó đang làm việc, thì không có gì bị xóa và daemon được khởi động lại như trước: hãy chạy lại lệnh khi công việc đó kết thúc. Với <code dir="ltr">{system.uninstallKeepChanges}</code>, nó gỡ cài đặt mà không dọn dẹp như vậy, và để lại các liên kết trong thư mục của từng tài khoản đó, cùng các bản sao lưu cấu hình riêng của tài khoản bên cạnh, cho bạn tự xóa.
+- <strong>Nếu việc dừng daemon sẽ làm gián đoạn công việc</strong>, không có gì bị xóa. <code dir="ltr">{system.uninstallForce}</code> vẫn dừng nó.
+- <strong>Hãy chạy đúng <code dir="ltr">{system.cliName}</code> mà bạn đã cài.</strong> Khi được chạy qua một liên kết, hoặc từ một bản <code dir="ltr">{system.cliName}</code> khác với bản mà daemon {productName} đang chạy, nó không xóa gì và cho biết tệp cần chạy thay vào đó.
+
+Lệnh cũ của tập lệnh cài đặt vẫn hoạt động và chạy lệnh này. Nếu bạn đã cài đặt với <code dir="ltr">{system.binDirOption}</code>, hãy thêm tùy chọn đó với cùng thư mục.
+
+<Code code={system.uninstallScript} lang="sh" />
+
+Nếu <code dir="ltr">{system.cliName}</code> của bạn quá cũ để có lệnh gỡ cài đặt, lệnh của tập lệnh sẽ tự xóa nó, nhưng không tắt gì trước: tài khoản vẫn đang chia sẻ cấu hình mặc định sẽ giữ các liên kết trong thư mục của nó, bạn có thể tự xóa chúng.

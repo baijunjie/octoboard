@@ -1,0 +1,12 @@
+import { Aside } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* What the Windows uninstaller does before it removes the app, which the Windows guide and "Your system stays as it was" share. */}
+
+Prima di rimuovere qualsiasi cosa, il programma di disinstallazione fa pulizia da sé: chiude {productName} se è aperto, chiedendo prima tranne in una disinstallazione silenziosa, e rimuove senza chiedere tutto ciò che rimuove <strong>Rimuovi tutto</strong>. Poi disinstalla, qualunque sia il risultato. Se qualcosa non è stato possibile rimuoverlo, lo dice alla fine, con il punto in cui resta ogni elemento, e lo elenca in <code dir="ltr">{system.uninstallLogWindows}</code>; una disinstallazione silenziosa scrive solo quel file.
+
+Il programma di installazione e quello di disinstallazione usano la lingua del tuo sistema se {productName} la offre, e l’inglese altrimenti. Il programma di disinstallazione, e il suo elenco di ciò che ha lasciato, mantengono la lingua in cui hai installato; il motivo che una funzione dà per un elemento rimasto può essere in inglese.
+
+Non ogni disinstallazione esegue questa pulizia. L’aggiornamento dall’app e un programma di installazione eseguito sopra l’app installata non la eseguono, quindi le tue chiavi sui server remoti e la condivisione dei tuoi account restano com’erano; un programma di installazione che esegui tu stesso sopra disattiva comunque <strong>Apri al login</strong>, finché non lo riattivi. Neanche il programma di disinstallazione di una versione precedente a questa pulizia ne esegue: su una versione così, seleziona prima <strong>Rimuovi tutto</strong>.
+
+<Aside>Con l’app x64 su Windows on Arm, il programma di disinstallazione non può chiudere {productName} se è aperto, e la disinstallazione si ferma senza rimuovere nulla, come un programma di installazione eseguito sopra: esci prima da {productName}. L’app arm64 non ha questo limite, e un’installazione x64 su un PC Arm passa a essa tramite l’aggiornamento dall’app.</Aside>

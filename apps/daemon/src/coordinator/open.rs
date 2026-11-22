@@ -309,6 +309,8 @@ pub(super) fn resolve_open_with(
 /// Everything of opening a session that precedes launching its agent: the refusals, the record
 /// (`starting`) and its publication.
 async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<StartingSession> {
+    // Refused before a row is inserted or a session published: a clean-up run opens none.
+    state.admit_launch()?;
     let ResolvedOpen {
         kind,
         cwd,

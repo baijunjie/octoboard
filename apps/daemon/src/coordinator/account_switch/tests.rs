@@ -232,6 +232,45 @@ async fn a_session_handed_to_another_owner_meanwhile_is_not_switched() {
     assert_eq!((after.account_id, after.config_dir), (None, None));
 }
 
+/// A clean-up run refuses an account switch before anything is done for it: the session is not
+/// shown as switching, nothing is published, and its process runs on.
+#[tokio::test]
+async fn a_clean_up_run_refuses_a_switch_before_the_session_is_shown_as_switching() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-switch-clean-up-run");
+    let mut worker = bound_session("worker", SessionStatus::Idle, "hub");
+    worker.has_conversation = true;
+    state.store.insert_session(&worker).unwrap();
+    let live = idle_stand_in("worker");
+    state.register_live(live.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, live.clone());
+    state.set_clean_up_run();
+    let mut events = state.subscribe();
+
+    let err = switch_session_account_with(
+        &state,
+        "worker",
+        Some(Some("claude-a".to_string())),
+        Some("hub"),
+        None,
+        LaunchEdit::default(),
+        shell_env(&dir),
+        |_| panic!("a refused switch launches nothing"),
+    )
+    .await
+    .expect_err("a clean-up run");
+
+    assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN);
+    assert!(
+        format!("{err:#}").contains("so it starts no agent"),
+        "{err:#}"
+    );
+    assert!(events.try_recv().is_err(), "something was published");
+    assert!(!live.poll_exit(), "the process was left running");
+    let after = state.store.get_session("worker").unwrap().unwrap();
+    assert_eq!(after.status, SessionStatus::Idle);
+    assert_eq!((after.account_id, after.config_dir), (None, None));
+}
+
 /// The default account resolves from one shell snapshot, taken once, and that same snapshot is
 /// what the relaunch is handed; an account with a directory of its own needs none. A session
 /// with no conversation has nothing to relocate whichever side is the default.

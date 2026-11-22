@@ -4,7 +4,7 @@ description: "Perintah octoboardd di server Linux, Mac, dan PC Windows: memulai,
 ---
 
 import { Code } from "@astrojs/starlight/components";
-import { commands, productName, tunnel } from "../../../commands.ts";
+import { commands, productName, system, tunnel } from "../../../commands.ts";
 
 octoboardd adalah program yang menjalankan {productName} (aplikasi menyebutnya daemon). Di server Linux, Anda memasang dan memulainya sendiri. Di Mac atau PC Windows, program ini sudah ada di dalam aplikasi, yang memulainya saat dibuka dan menghentikannya saat ditutup. Perintahnya sama di ketiganya, kecuali perbedaan di bawah.
 
@@ -35,6 +35,7 @@ Jalankan perintah sebagai pengguna yang menjalankan {productName}. Perintah ini 
 | <code dir="ltr">{commands.update}</code> | Hanya untuk server Linux. Memasang versi terbaru, seperti pada [Pembaruan](../install/linux/#pembaruan). |
 | <code dir="ltr">{commands.updateCheck}</code> | Hanya untuk server Linux. Memeriksa apakah ada versi yang lebih baru, tanpa memasangnya. |
 | <code dir="ltr">{commands.updateRollback}</code> | Hanya untuk server Linux. Mengembalikan versi yang terpasang sebelum pembaruan terakhir dan memulai ulang ke versi itu, seperti pada pembaruan. |
+| <code dir="ltr">{system.uninstall}</code> | Hanya untuk server Linux. Mencopot octoboardd dari server, seperti pada [Mencopot](../install/linux/#mencopot). |
 | <code dir="ltr">{commands.version}</code> | Mencetak versi yang terpasang. |
 
 Untuk daftar lengkap perintah, jalankan <code dir="ltr">{commands.help}</code>; untuk opsi satu perintah, jalankan <code dir="ltr">{commands.commandHelp}</code>. Daftar itu juga menampilkan perintah yang dijalankan {productName} sendiri dan tidak pernah Anda jalankan secara manual.
@@ -45,5 +46,6 @@ Aplikasi menjalankan octoboardd untuk Anda, jadi beberapa perintah berperilaku b
 
 - <strong><code dir="ltr">{commands.start}</code> dan <code dir="ltr">{commands.stop}</code> di Mac</strong> bekerja pada aplikasi: <code dir="ltr">{commands.start}</code> membukanya di latar belakang, tanpa jendela, dan <code dir="ltr">{commands.stop}</code> menutupnya.
 - <strong><code dir="ltr">{commands.restart}</code> dan <code dir="ltr">{commands.update}</code></strong> ditolak. Aplikasi sendiri yang memulai ulang octoboardd dan memasang versi baru.
+- <strong><code dir="ltr">{system.uninstall}</code></strong> juga ditolak. octoboardd ikut terhapus bersama aplikasinya: lihat cara mencopot aplikasi di [macOS](../install/macos/#mencopot) atau [Windows](../install/windows/#mencopot).
 - <strong><code dir="ltr">{commands.browserOn}</code> dan <code dir="ltr">{commands.browserOff}</code></strong> mengubah pengaturan yang sama dengan <strong>Izinkan akses browser</strong> di <strong>Pengaturan › Akses</strong>.
 - <strong><code dir="ltr">{commands.address}</code></strong> hanya mencetak alamat selama <strong>Izinkan akses browser</strong> (atau, di Mac, <strong>Izinkan akses jarak jauh</strong>) aktif. Kedua pengaturan itu nonaktif secara bawaan, jadi sebelum Anda mengaktifkan salah satunya, perintah ini menyatakannya dan tidak mencetak alamat.

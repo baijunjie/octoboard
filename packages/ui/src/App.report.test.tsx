@@ -76,7 +76,7 @@ function mountApp(narrow = false) {
       type: "snapshot",
       hosts: [...(state.hosts?.values() ?? [])], consoles: [...state.consoles.values()], projects: [...state.projects.values()],
       sessions: [...state.sessions.values()], trusted_directories: [], settings: state.settings, git_statuses: [], providers: state.providers,
-      agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], agent_cli_statuses: [], daemon_update: null, home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings", keep_awake: false }, keep_awake_held: false, shell_terminals: [], remote_access: null, attachments: { max_bytes: 104857600, max_part_bytes: 1048576 },
+      agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], agent_cli_statuses: [], daemon_update: null, home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings", keep_awake: false, application: true }, keep_awake_held: false, shell_terminals: [], remote_access: null, attachments: { max_bytes: 104857600, max_part_bytes: 1048576 },
     });
   };
   const push = (session: string, id: string) => receive({ type: "page_created", page: pageOf(id, session, markdownContent(id), 0) });

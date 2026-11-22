@@ -8,7 +8,7 @@ import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
 import { accountOf, agentCliStatusOf, agentCliUpdateOf, MACOS_MACHINE, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState, WINDOWS_MACHINE } from "../../fixtures/builders";
 import { withCliStatus } from "../../fixtures/fixtureAgentClis";
-import { CommandLineError } from "../../platform";
+import { CommandLineError, type ShellSystemChange, type ShellSystemChangeResult, type ShellSystemChangesFailure } from "../../platform";
 import { browserHost } from "../../platform/host";
 import { MAC_HOST, WINDOWS_HOST } from "../../test/hosts";
 import { noneAddedState } from "./empty";
@@ -768,6 +768,118 @@ const TRASH_REFUSALS = [
   },
 ] as const satisfies readonly { key: string; error: FixtureError; title: string; description: string }[];
 
+/** What the desktop application has in effect outside its own directories, in the order the shell lists it: this
+ * computer's key on two saved remote daemons, whose lines are on their servers, and a private key left in the credential
+ * store of a third (no `onServer`; its host name is long, to show a fact clipped) whose key was turned off earlier, the login
+ * entry the user turned off in the system's own list (`turnedOff`, which stays there), the command-line link, and the
+ * two accounts of this computer's daemon that share their agent's default configuration. */
+const STAGING_KEY = { kind: "device_key", id: "staging", name: "Staging", host: "staging.example.com", user: "deploy", onServer: true } as const satisfies ShellSystemChange;
+const PRODUCTION_KEY = { kind: "device_key", id: "production", name: "Production", host: "prod.example.com", user: "deploy", onServer: true } as const satisfies ShellSystemChange;
+const BUILD_KEY = { kind: "device_key", id: "build", name: "Build server", host: "build-runner-07.internal.eu-central-1.example.com", user: "deploy", onServer: false } as const satisfies ShellSystemChange;
+const LOGIN_ENTRY = { kind: "launch_at_login", turnedOff: false } as const satisfies ShellSystemChange;
+const LOGIN_ENTRY_TURNED_OFF = { kind: "launch_at_login", turnedOff: true } as const satisfies ShellSystemChange;
+const COMMAND_LINE_LINK = { kind: "command_line", path: "/usr/local/bin/octoboardd" } as const satisfies ShellSystemChange;
+const WORK_SHARING = { kind: "account_sharing", account: "a-work", name: "Work", agent: "claude" } as const satisfies ShellSystemChange;
+const PERSONAL_SHARING = { kind: "account_sharing", account: "a-codex", name: "Personal", agent: "codex" } as const satisfies ShellSystemChange;
+const SHELL_IN_EFFECT: ShellSystemChange[] = [STAGING_KEY, PRODUCTION_KEY, BUILD_KEY, LOGIN_ENTRY_TURNED_OFF, COMMAND_LINE_LINK, WORK_SHARING, PERSONAL_SHARING];
+
+/** What clearing them comes to when the server of Production cannot be reached and Personal has a session running: the
+ * line of Production stays in the authorized keys there (its private key is gone from this computer), Personal still
+ * shares as the daemon refuses to change an account in use, and the other five are cleared. */
+const SHELL_CLEARED_BUT_TWO: ShellSystemChangeResult[] = [
+  { change: STAGING_KEY, outcome: { result: "cleared" } },
+  {
+    change: PRODUCTION_KEY,
+    outcome: {
+      result: "device_key_left",
+      removal: {
+        line: {
+          result: "left_on_host",
+          mark: "Octoboard on Ann’s MacBook Pro",
+          file: "~/.ssh/authorized_keys",
+          host: PRODUCTION_KEY.host,
+          user: PRODUCTION_KEY.user,
+          detail: "ssh: connect to host prod.example.com port 22: Connection timed out",
+        },
+        privateKeyLeft: null,
+      },
+    },
+  },
+  { change: BUILD_KEY, outcome: { result: "cleared" } },
+  { change: LOGIN_ENTRY_TURNED_OFF, outcome: { result: "cleared" } },
+  { change: COMMAND_LINE_LINK, outcome: { result: "cleared" } },
+  { change: WORK_SHARING, outcome: { result: "cleared" } },
+  {
+    change: PERSONAL_SHARING,
+    outcome: {
+      result: "account_sharing_left",
+      failure: { code: "account_in_use", params: { name: "Personal", sessions: "1" }, message: "account `Personal` is in use" },
+    },
+  },
+];
+
+/** What clearing the key of Production and the login entry comes to when the connection to Production broke while its
+ * authorized keys were being rewritten: the login entry is cleared, and the server's file may be incomplete, its earlier
+ * content kept in a copy there. */
+const SHELL_FILE_INCOMPLETE: ShellSystemChangeResult[] = [
+  {
+    change: PRODUCTION_KEY,
+    outcome: {
+      result: "device_key_left",
+      removal: {
+        line: {
+          result: "file_incomplete",
+          host: PRODUCTION_KEY.host,
+          user: PRODUCTION_KEY.user,
+          copy: "~/.ssh/authorized_keys.octoboard-backup",
+          detail: "ssh: connection to prod.example.com closed while writing ~/.ssh/authorized_keys",
+        },
+        privateKeyLeft: null,
+      },
+    },
+  },
+  { change: LOGIN_ENTRY, outcome: { result: "cleared" } },
+];
+
+/** This computer's daemon not answering when its accounts are read, and when they are changed. */
+const DAEMON_LIST_FAILED = { kind: "daemon", detail: "the accounts could not be read" } as const satisfies ShellSystemChangesFailure;
+/** A feature of the application that cannot tell what it has: the saved remote daemons' file could not be read. */
+const DEVICE_KEYS_LIST_FAILED = { kind: "device_key", detail: "the saved remote daemons could not be read: Permission denied (os error 13)" } as const satisfies ShellSystemChangesFailure;
+const DAEMON_CLEAR_FAILED = { kind: "daemon", detail: "the accounts could not be changed" } as const satisfies ShellSystemChangesFailure;
+
+/** A daemon that runs on its own on a Linux server, as a browser meets it: it says it is not a desktop application's own
+ * (`host.application`). */
+const serverState: Scenario["state"] = {
+  ...browserState,
+  host: { os: "linux", path_style: "unix", file_links: true, trash: "trash", settings: "settings", keep_awake: false, application: false },
+  homeDir: "/home/dev",
+};
+
+/** A desktop application's own daemon as a browser meets it: it says it is one (`host.application`). */
+const applicationDaemonState: Scenario["state"] = {
+  ...browserState,
+  ...MACOS_MACHINE,
+};
+
+/** Presses Remove all and waits for the modal to have asked the shell again, so that its Confirm is no longer pending
+ * and its count is that of what will be removed. The word is not typed. */
+const openConfirmation: Step[] = [
+  (ui) => ui.press(ui.t("settings.uninstall.clear.action")),
+  (ui) => ui.waitForText(ui.t("settings.uninstall.confirm.summary")),
+  (ui) => ui.waitUntil((doc) => doc.querySelector(".app-button--pending") === null, "the confirmation's Confirm, which is pending while the shell is asked again"),
+];
+
+/** Types the word the confirmation asks for into its field, which the confirmation's Confirm waits for. */
+const typeToConfirm: Step[] = [
+  (ui) => ui.focus(ui.t("dialog.typeToConfirm.label", { word: ui.t("dialog.typeToConfirm.remove") })),
+  (ui) => ui.type(ui.t("dialog.typeToConfirm.remove")),
+];
+
+const openCleanup: Step[] = [
+  (ui) => ui.press(ui.t("rail.settings")),
+  (ui) => ui.press(ui.t("settings.section.cleanup")),
+];
+
 export const settingsScenarios: Scenario[] = [
   {
     id: "settings-general",
@@ -796,7 +908,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Desktop General settings",
-    description: "The desktop app on macOS, every group in order of use. The Language row, with no group heading, comes first; then Sorting, then Terminals, holding only the terminal-cleanup switch. Power: \"Prevent sleep\", on, so \"When to prevent sleep\" follows it as a select reading \"While sessions work\"; at Phone width (390px) the select stretches beneath its label, and switching Prevent sleep off removes that row with the list motion. Window: \"Keep running in the background\", on, above \"Show menu bar icon\", on. Startup: \"Launch at login\", on, above \"Resume sessions on start\", on, whose description ends with the sentence that a logout, restart or shutdown quits the app without asking (only the macOS app says it). Command line: the \"Command-line tool\" row, \"Not installed.\", with an Install button as its only button. Startup and Command line are below the fold of a short window, so scroll the dialog to them. Each group heading stays clear while pinned; as the next group replaces it, only the outgoing heading fades at its pinned boundary, on the opaque dialog surface. The incoming heading and controls below it keep their usual appearance.",
+    description: "The desktop app on macOS, every group in order of use. The Language row, with no group heading, comes first; then Sorting, then Terminals, holding only the terminal-cleanup switch. Power: \"Prevent sleep\", on, so \"When to prevent sleep\" follows it as a select reading \"While sessions work\"; at Phone width (390px) the select stretches beneath its label, and switching Prevent sleep off removes that row with the list motion. Window: \"Keep running in the background\", on, above \"Show menu bar icon\", on. Startup: \"Launch at login\", on, whose description ends with the sentence that the app is in the list of apps macOS opens at login until the switch is turned off (switched off, it reads that turning it on adds the app to that list and turning it off removes it), above \"Resume sessions on start\", on, whose description ends with the sentence that a logout, restart or shutdown quits the app without asking (only the macOS app says it). Command line: the \"Command-line tool\" row, \"Not installed.\", with an Install button as its only button. Startup and Command line are below the fold of a short window, so scroll the dialog to them. Each group heading stays clear while pinned; as the next group replaces it, only the outgoing heading fades at its pinned boundary, on the opaque dialog surface. The incoming heading and controls below it keep their usual appearance.",
     state: resumingState,
     host: MAC_HOST,
     desktopApp: true,
@@ -1063,13 +1175,159 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-cleanup",
     group: GROUP,
     category: "normal",
-    title: "Cleanup",
-    description: "The section after Keyboard shortcuts, directly above Configuration, with one row and no group heading: \"Automatically delete archived sessions whose conversation is gone\", on, its description saying when archived sessions are checked and that pinned and locked sessions are kept. Switch it off to read the description that starts with \"Once this is on\".",
-    state: browserState,
+    title: "Cleanup, in a browser on the desktop app's daemon",
+    description: "The section after Keyboard shortcuts, directly above Configuration, holding two plain rows with no group heading. The first is \"Automatically delete archived sessions whose conversation is gone\", on, its description saying when archived sessions are checked and that pinned and locked sessions are kept; switch it off to read the description that starts with \"Once this is on\". The second is \"Clean up before uninstalling\", which here is one sentence with no status line, no Remove all and no command: the cleanup is run where the app is being uninstalled, so open Settings in the app's own window on that computer. A browser on a desktop application's own daemon cannot speak for its installation.",
+    state: applicationDaemonState,
+    steps: openCleanup,
+  },
+  {
+    id: "settings-cleanup-server",
+    group: GROUP,
+    category: "normal",
+    title: "Cleanup, in a browser on a server's daemon",
+    description: "A browser on a daemon that runs on its own on a server, with no desktop application. The \"Clean up before uninstalling\" row, under the automatic-deletion row, is one sentence saying that uninstalling the app from this server cleans up first, and to run the command on the server itself, as it is not run from a browser; under the row stands the command, octoboardd uninstall, in a copy box with a copy button. There is no status line and no Remove all.",
+    state: serverState,
+    steps: openCleanup,
+  },
+  {
+    id: "settings-cleanup-nothing",
+    group: GROUP,
+    category: "normal",
+    title: "Cleanup, before uninstalling, nothing in effect",
+    description: "The desktop app's own window, on the \"Clean up before uninstalling\" row under the automatic-deletion row. A status line above its description reads \"Nothing to remove.\", and the danger Remove all button at the row's end is unavailable, faded, with no tooltip of its own: the status line is the reason.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    shellSystemChanges: { changes: [] },
+    steps: openCleanup,
+  },
+  {
+    id: "settings-cleanup-several",
+    group: GROUP,
+    category: "normal",
+    title: "Cleanup, before uninstalling, several in effect",
+    description: "The desktop app's own window, on the \"Clean up before uninstalling\" row with items in effect. Above its description, which says what the cleanup removes, that it is for uninstalling the app and that a single one is undone at its own feature's switch, a status line counts the items: \"7 items in effect\" (three of this computer's keys, one of them kept as its private key only; Launch at login, turned off in the system's list but still there; the Command-line tool; and two accounts that share their agent's default configuration). The row lists none of them and has no alert. The danger Remove all button at the row's end is available.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    shellSystemChanges: { changes: SHELL_IN_EFFECT },
+    steps: openCleanup,
+  },
+  {
+    id: "settings-cleanup-confirm",
+    group: GROUP,
+    category: "normal",
+    title: "Cleanup, before uninstalling, confirmation",
+    description: "Remove all was pressed in the window of \"Cleanup, before uninstalling, several in effect\" and the shell has been asked again, so Confirm is no longer pending; the word has not been typed. A warning modal titled \"Remove all before uninstalling\" has one sentence saying that, before uninstalling, it removes what the app's features added outside its own folders and turns those features off. Under it a text disclosure, its label after a small triangle, reads \"7 items will be removed\", closed, and a muted line says the app's own data and the conversation history that sharing moved are kept. The field \"Type REMOVE to confirm\" is empty, and the red Remove all is unavailable beside Cancel.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    shellSystemChanges: { changes: SHELL_IN_EFFECT },
+    steps: [...openCleanup, ...openConfirmation],
+  },
+  {
+    id: "settings-cleanup-confirm-open",
+    group: GROUP,
+    category: "normal",
+    title: "Cleanup, before uninstalling, confirmation with the list open",
+    description: "The confirmation of \"Cleanup, before uninstalling, confirmation\" with \"7 items will be removed\" opened. The list is one line per item, each a single line that never wraps: the kind in the text colour (\"This computer's key\" on each of the three keys, \"Launch at login\", \"Command-line tool\", \"Shared default configuration\" on each of the two accounts), then its fact in muted text (user@host and the path in monospace; the agent and the account name), then its badge on the same line (\"Private key only\" on the key kept as its private key only, \"Turned off, still there\" on Launch at login). The Build server key's long host is clipped with a fade at its end and shows its full text in a tooltip while clipped; the command-line path is clipped at its start. Each of the two Shared default configuration lines ends in a small circled-i mark after the account name, on the same line; there is no sentence under the list. Resting the pointer on the mark, or pressing it, opens a popover saying that this account's idle sessions are restarted when it stops sharing and their conversations continue. The line on what is kept follows below, outside the fold.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    shellSystemChanges: { changes: SHELL_IN_EFFECT },
+    steps: [...openCleanup, ...openConfirmation, (ui) => ui.press(ui.t("settings.uninstall.confirm.items", { count: SHELL_IN_EFFECT.length }))],
+  },
+  {
+    id: "settings-cleanup-result-left",
+    group: GROUP,
+    category: "exceptional",
+    title: "Cleanup, before uninstalling, result with items left",
+    description: "Remove all was pressed and confirmed in the window of \"Cleanup, before uninstalling, several in effect\" with the word typed (the steps do the typing and confirming). The modal is replaced by \"Result of the cleanup\", which opens with one summary line led by a warning triangle, \"5 removed, 2 could not be removed.\" Under it the two items that were not removed are blocks of their own, stacked with a gap, each with the rounded hairline outline of a flat card and a red circled ! leading it, then its item line as the block's title (a single line, as in the confirmation); the one short sentence saying why and the closed triangle disclosure \"Details\" hang under the title's text, not under the glyph. The first block is This computer's key, deploy@prod.example.com, whose sentence says it could not be removed from the server and the line may still be there, its Details holding the line marked Octoboard on Ann's MacBook Pro that may still be in ~/.ssh/authorized_keys on prod.example.com for the user to delete, with the system's own words in a block; the second is Shared default configuration, Codex and Personal, whose sentence is the daemon's own, that sharing cannot be changed while 1 of its sessions is working, naming the account in a chip, and which has no Details. Below the blocks, the closed triangle disclosure \"5 removed\". Close is the one button. Behind it the row reads \"2 items in effect\".",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    shellSystemChanges: { changes: SHELL_IN_EFFECT, clear: SHELL_CLEARED_BUT_TWO },
+    steps: [...openCleanup, ...openConfirmation, ...typeToConfirm, (ui) => ui.confirm(), (ui) => ui.waitForText(ui.t("settings.uninstall.result.title"))],
+  },
+  {
+    id: "settings-cleanup-result-left-open",
+    group: GROUP,
+    category: "exceptional",
+    title: "Cleanup, before uninstalling, result with items left, lists open",
+    description: "\"Cleanup, before uninstalling, result with items left\" with \"5 removed\" opened into plain item lines without any outline (the kinds, with their facts and badges, none with a reason), each led by a green circled check in the same column as the red glyphs of the blocks above, so the texts of both lists line up. The first block's Details is opened inside its own outline: the line marked Octoboard on Ann's MacBook Pro that may still be in ~/.ssh/authorized_keys on prod.example.com for the user to delete, with the system's own words in a block. The second block has no Details, as the sharing was refused because a session is working.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    shellSystemChanges: { changes: SHELL_IN_EFFECT, clear: SHELL_CLEARED_BUT_TWO },
     steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.cleanup")),
+      ...openCleanup,
+      ...openConfirmation,
+      ...typeToConfirm,
+      (ui) => ui.confirm(),
+      (ui) => ui.waitForText(ui.t("settings.uninstall.result.title")),
+      (ui) => ui.press(ui.t("settings.uninstall.result.removed", { count: SHELL_CLEARED_BUT_TWO.filter(({ outcome }) => outcome.result === "cleared").length })),
+      (ui) => ui.press(ui.t("error.details")),
     ],
+  },
+  {
+    id: "settings-cleanup-result-daemon-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Cleanup, before uninstalling, the daemon failed beside results",
+    description: "Remove all was pressed and confirmed in the desktop app's own window with the key of Production and Launch at login on the app's side and Work and Personal on the daemon's, the daemon not answering when cleared. \"Result of the cleanup\" opens with one summary line led by a warning triangle, \"1 removed, 1 could not be removed.\" It is followed by a red alert titled \"Could not remove what the daemon added\", saying some of its items may have been removed and to open this again to see what is still in effect, with a Details button at its end opening a popover with the daemon's text. Under the alert stands the one item of the app that stayed as a block with the rounded hairline outline of a flat card, led by a red circled !: This computer's key, deploy@prod.example.com as its title, with the sentence that the server's authorized keys may be incomplete and a closed triangle disclosure \"Details\" under the title's text, holding that the file's rewriting was cut short and its earlier content is kept in ~/.ssh/authorized_keys.octoboard-backup there, with the system's own words in a block. Below the block, the closed triangle disclosure \"1 removed\" (Launch at login). Close is the one button. Behind it the row reads \"3 items in effect\", the key and the two accounts that still share.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    shellSystemChanges: { changes: [PRODUCTION_KEY, LOGIN_ENTRY, WORK_SHARING, PERSONAL_SHARING], clear: SHELL_FILE_INCOMPLETE, clearFailed: [DAEMON_CLEAR_FAILED] },
+    steps: [...openCleanup, ...openConfirmation, ...typeToConfirm, (ui) => ui.confirm(), (ui) => ui.waitForText(ui.t("settings.uninstall.result.title"))],
+  },
+  {
+    id: "settings-cleanup-read-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Cleanup, before uninstalling, the daemon cannot be read",
+    description: "The desktop app's own window where this computer's daemon does not answer what it has in effect, while the app lists its Launch at login entry. The row behind reads \"Could not read everything that is in effect.\" in place of a count. Remove all was pressed and the modal has asked the shell again. Under its one sentence stands a compact red alert titled \"Could not read what the daemon added\", whose description says these items are not listed below and that Remove all, in a chip, still tries to remove them; at its end a Details button opening a popover with the daemon's text, then Try again. Below it the closed triangle disclosure \"1 item will be removed\" holds the one line, Launch at login with no badge; then a muted sentence says that an account that is sharing stops sharing and its idle sessions are restarted, their conversations continuing, and the line on what is kept speaks of the app's own data and the conversation history that sharing moved, since the daemon's accounts may share; the field \"Type REMOVE to confirm\" is empty with the red Remove all unavailable until it is typed: the app answered with an item, so Confirm is offered. Try again asks again and gets the same answer.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    shellSystemChanges: { changes: [LOGIN_ENTRY], listFailed: [DAEMON_LIST_FAILED] },
+    steps: [...openCleanup, ...openConfirmation],
+  },
+  {
+    id: "settings-cleanup-read-failed-both",
+    group: GROUP,
+    category: "exceptional",
+    title: "Cleanup, before uninstalling, the app and the daemon cannot be read",
+    description: "The desktop app's own window where one of the app's features (the saved remote daemons) cannot tell what it has and this computer's daemon does not answer, while the app lists Launch at login and the command-line link. Remove all was pressed and the modal has asked the shell again. Under its one sentence stand two compact red alerts, \"Could not read what the app added on this computer\" and then \"Could not read what the daemon added\", each saying these items are not listed below and that Remove all, in a chip, still tries to remove them, each with a Details button; only the second, the last, has Try again, which reads both again. Below them the closed disclosure \"2 items will be removed\", the muted sentence on what happens to the idle sessions of an account that is sharing, and the line on what is kept, which speaks of the conversation history that sharing moved. The field \"Type REMOVE to confirm\" is empty with the red Remove all unavailable until it is typed.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    shellSystemChanges: { changes: [LOGIN_ENTRY, COMMAND_LINE_LINK], listFailed: [DEVICE_KEYS_LIST_FAILED, DAEMON_LIST_FAILED] },
+    steps: [...openCleanup, ...openConfirmation],
+  },
+  {
+    id: "settings-cleanup-result-all",
+    group: GROUP,
+    category: "normal",
+    title: "Cleanup, before uninstalling, everything removed",
+    description: "Remove all was pressed and confirmed in the window of \"Cleanup, before uninstalling, several in effect\" with the word typed (the steps do the typing and confirming), and the shell cleared every item. The modal is replaced by \"Result of the cleanup\", which opens with one line led by a green circled check, \"Everything was removed.\", the dialog's description; under it only the closed triangle disclosure \"7 removed\", with no alert and no block. Close is the one button. Behind it the row reads \"Nothing to remove.\" and its Remove all is unavailable; closing the result puts focus on the Cleanup section's entry, since the row's button is unavailable.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    shellSystemChanges: { changes: SHELL_IN_EFFECT },
+    steps: [...openCleanup, ...openConfirmation, ...typeToConfirm, (ui) => ui.confirm(), (ui) => ui.waitForText(ui.t("settings.uninstall.result.title"))],
+  },
+  {
+    id: "settings-cleanup-result-unanswered",
+    group: GROUP,
+    category: "exceptional",
+    title: "Cleanup, before uninstalling, the clearing not answered",
+    description: "Remove all was pressed and confirmed in the window of \"Cleanup, before uninstalling, several in effect\", and the shell did not answer the clearing at all. \"Result of the cleanup\" opens with one line led by a warning triangle, \"Could not confirm that everything was removed.\", since no listed item is known to be left, then a red alert titled \"Could not remove what the app added on this computer\", saying some of its items may have been removed and to open this again to see what is still in effect, with a Details button holding the shell's text. There is no item block and no removed count. Close is the one button. Behind it the row still reads \"7 items in effect\".",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    shellSystemChanges: { changes: SHELL_IN_EFFECT, clearUnanswered: "the shell did not answer: the request timed out" },
+    steps: [...openCleanup, ...openConfirmation, ...typeToConfirm, (ui) => ui.confirm(), (ui) => ui.waitForText(ui.t("settings.uninstall.result.title"))],
   },
   {
     id: "settings-memory",
@@ -2074,7 +2332,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, sharing the default configuration",
-    description: "Work's Account settings, opened from the second entry of its ⋮ menu, in a modal with no footer button: the body starts with the bold name Work, its muted email dev@work.octoboard.example on the line under it, with nothing after the name (plan, login state, config directory and usage are in the details), and under it Share default configuration as the row above Disable account: the label with its help button, the description under it, which says turning it on links the account's configuration and history to Studio laptop's directory, with the renamed default account shown as a reference chip, and the switch at the end, off and usable, with nothing else under it. The help button holds what is shared and never shared, what turning sharing off does and what changing it does to idle sessions. The default account's settings dialog has no such row.",
+    description: "Work's Account settings, opened from the second entry of its ⋮ menu, in a modal with no footer button: the body starts with the bold name Work, its muted email dev@work.octoboard.example on the line under it, with nothing after the name (plan, login state, config directory and usage are in the details), and under it Share default configuration as the row above Disable account: the label with its help button, the description under it, which says turning it on links the account's configuration to Studio laptop's directory and moves its conversation history there, where it stays after sharing is turned off, with the renamed default account shown as a reference chip, and the switch at the end, off and usable, with nothing else under it. The help button holds what is linked and what is moved, what is never shared, what stays and what is moved back once sharing is off, and what changing it does to idle sessions. The default account's settings dialog has no such row.",
     state: sharingEmailState,
     steps: accountSettings("Work"),
   },
@@ -2083,7 +2341,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: account shares the renamed default account's configuration",
-    description: "Client's sharing switch is on. Its description says the configuration and history are already linked to Studio laptop's directory, using the renamed default account's actual name as a reference chip.",
+    description: "Client's sharing switch is on. Its description says the configuration is linked to Studio laptop's directory and the conversation history has been moved there, where it stays after sharing is turned off, using the renamed default account's actual name as a reference chip.",
     state: sharingEmailState,
     steps: accountSettings("Client"),
   },
@@ -2139,7 +2397,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code sharing explanation",
-    description: "In Work's settings dialog the help button beside Share default configuration is touched with a finger, so the explanation stays open in a popover. It says what is shared, configuration and conversation history, then what is never shared: login credentials, .claude.json (noting it holds user-scope MCP servers) and plans/, the two paths as chips. The popover keeps the same narrow width whatever the window, so a chip that does not fit at the end of a line moves to the next one whole, and no empty chip fragment is left behind at the end of the line above. The next paragraph is what turning sharing off does, and the last that changing sharing ends the account's 2 idle sessions and resumes them afterwards; what turning sharing on does is the row's own description, not in the tip.",
+    description: "In Work's settings dialog the help button beside Share default configuration is touched with a finger, so the explanation stays open in a popover. It says that configuration is linked to the default account's directory and conversation history is moved into it, then what is never shared: login credentials, .claude.json (noting it holds user-scope MCP servers) and plans/, the two paths as chips. The popover keeps the same narrow width whatever the window, so a chip that does not fit at the end of a line moves to the next one whole, and no empty chip fragment is left behind at the end of the line above. The next paragraph says that after sharing is turned off the account's conversation history stays in the default account's directory, except the conversations of its own sessions, which are moved back into its directory, and the last that changing sharing ends the account's 2 idle sessions and resumes them afterwards.",
     state: sharingHelpState("claude"),
     steps: openSharingHelp("Work"),
   },

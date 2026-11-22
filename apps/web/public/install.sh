@@ -3,6 +3,7 @@
 #
 #   curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh
 #   curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -- --service [--port N]
+#   curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -- --uninstall
 #
 # It reads the newest version from the release manifest of the chosen channel, downloads the archive for this
 # machine's architecture, checks its SHA-256 and its signature, and replaces ~/.local/bin/octoboardd in one rename
@@ -10,6 +11,17 @@
 # restarted into the new file where that interrupts no session (`octoboardd restart --if-safe`); otherwise it keeps
 # running on the old file until `octoboardd restart`. Run it again to upgrade. With --service it also installs and
 # starts a systemd user unit that starts the daemon at boot.
+#
+# With --uninstall it installs nothing and removes what an install put on the system: the systemd user unit, lingering
+# where the install turned it on (which it notes in ~/.octoboard/install.lingering), octoboardd, octoboardd.previous and
+# the hidden .octoboardd.* files an update or a rollback leaves beside them. Lingering stays on where another service
+# of the user's is enabled. It leaves ~/.octoboard, the daemon's own data, and says how to remove it.
+#
+# Uninstalling is octoboardd's own command, `octoboardd uninstall`, which needs no download: --uninstall here only
+# finds the installed octoboardd and hands over to it, with --yes, --force and --keep-changes passed on. That command
+# first clears what Octoboard's features have in effect on this system outside ~/.octoboard, which only octoboardd
+# can clear. Only for an octoboardd from before that command does this script remove the installation itself, as it
+# always has (the part marked as the fallback for older builds below), and such a build clears nothing first.
 #
 # The signature is checked with `minisign` where it is installed, else with the octoboardd being upgraded, which has
 # the release key built in (`octoboardd verify-archive`). Where neither can (a first install without minisign) the
@@ -23,6 +35,12 @@
 #   --allow-downgrade     Install the channel's newest release even when it is older than the installed one.
 #   --require-signature   Stop instead of installing when the signature cannot be checked.
 #   --bin-dir DIR         Install into DIR instead of ~/.local/bin.
+#   --uninstall           Remove octoboardd and what the install set up, instead of installing, by handing over to
+#                         `octoboardd uninstall` (with --bin-dir where the install had it; no option of an install).
+#   --yes                 With --uninstall: uninstall without asking (passed on to `octoboardd uninstall`).
+#   --force               With --uninstall: stop the daemon whatever work that interrupts (passed on).
+#   --keep-changes        With --uninstall: do not clear what Octoboard's features have in effect outside
+#                         ~/.octoboard first (passed on).
 #   -h, --help            Print this help.
 #
 # Without --beta or --stable, the channel is stable, unless the installed build is a prerelease newer than the stable
@@ -37,6 +55,9 @@ manifest_base_default="https://github.com/baijunjie/octoboard/releases/download/
 # The public half of the update key the release signs every archive with (the desktop application's updater trusts
 # the same key).
 update_pubkey="RWSVMIwih++1gX8lYHjtWtYI6FzRxgcQVkKLHTqLgNw0lz27touOK8GB"
+# The file of the daemon's data directory that says this script turned lingering on, holding the user's name; with it
+# --uninstall turns lingering off again, and without it leaves lingering as it is.
+linger_record="install.lingering"
 
 say() { printf '%s\n' "$*"; }
 warn() { printf 'octoboardd install: warning: %s\n' "$*" >&2; }
@@ -51,6 +72,7 @@ Installs octoboardd, the Octoboard daemon for a Linux server, into ~/.local/bin.
 
 Usage: install.sh [--service [--port N]] [--beta | --stable] [--allow-downgrade] [--require-signature]
                   [--bin-dir DIR]
+       install.sh --uninstall [--bin-dir DIR] [--yes] [--force] [--keep-changes]
 
   --service             Install the systemd user unit octoboardd.service, enable it and start it.
   --port N              The port the service's daemon itself listens on (default: one the system assigns).
@@ -60,6 +82,17 @@ Usage: install.sh [--service [--port N]] [--beta | --stable] [--allow-downgrade]
   --require-signature   Stop when the download's signature cannot be checked (minisign is not installed and
                         no installed octoboardd can check it), instead of going on with its SHA-256 alone.
   --bin-dir DIR         Install into DIR instead of ~/.local/bin.
+  --uninstall           Remove octoboardd, octoboardd.previous and what an update left beside them, the systemd
+                        user unit, and lingering where the install turned it on and no other service of
+                        yours is enabled, instead of installing. It leaves ~/.octoboard, the daemon's data.
+                        Takes --bin-dir where the install had it, and no option of an install. It hands over
+                        to the installed octoboardd's own command, \`octoboardd uninstall\`, which you can run
+                        directly instead: that first clears what Octoboard's features have in effect on this
+                        system outside ~/.octoboard, then stops the daemon and removes the installation.
+  --yes                 With --uninstall: uninstall without asking first.
+  --force               With --uninstall: stop the daemon whatever work that interrupts.
+  --keep-changes        With --uninstall: do not clear first what Octoboard's features have in effect outside
+                        ~/.octoboard; it stays in place.
   -h, --help            Print this help.
 
 Without --beta or --stable, a beta newer than the stable release is upgraded to the newest beta. Run it again to
@@ -211,8 +244,23 @@ main() {
   require_signature=false
   bin_dir="${HOME:?HOME is not set}/.local/bin"
   bin_dir_given=false
+  uninstall=false
+  # The options `octoboardd uninstall` takes, passed on to it as they were given.
+  uninstall_options=""
+  # The last option given that only an install takes, which --uninstall refuses: every option but the ones that go
+  # with --uninstall, listed here and in its refusal, so that an option added later is an install's unless it is
+  # added here.
+  install_option=""
   while [ $# -gt 0 ]; do
     case "$1" in
+      --uninstall | --bin-dir | --bin-dir=* | --yes | --force | --keep-changes | --dry-run | -h | --help) ;;
+      *) install_option=${1%%=*} ;;
+    esac
+    case "$1" in
+      --uninstall) uninstall=true ;;
+      # `octoboardd uninstall --dry-run` is the command's own; this script does nothing it could only show.
+      --dry-run) fail "this script has no --dry-run. To see what uninstalling would do, run the installed octoboardd's own \`octoboardd uninstall --dry-run\`." ;;
+      --yes | --force | --keep-changes) uninstall_options="$uninstall_options $1" ;;
       --service) service=true ;;
       --port)
         [ $# -ge 2 ] || fail "--port needs a port number."
@@ -246,6 +294,12 @@ main() {
     esac
     shift
   done
+  if [ "$uninstall" = true ] && [ -n "$install_option" ]; then
+    fail "--uninstall removes what is installed and takes no option of an install ($install_option); only --bin-dir, --yes, --force and --keep-changes go with it."
+  fi
+  if [ -n "$uninstall_options" ] && [ "$uninstall" = false ]; then
+    fail "${uninstall_options# } goes with --uninstall."
+  fi
   if [ "$port_given" = true ]; then
     [ "$service" = true ] || fail "--port is the port of the service, so it goes with --service."
     case "$port" in
@@ -267,6 +321,11 @@ main() {
     *) bin_dir="$(pwd)/$bin_dir" ;;
   esac
   while [ "${bin_dir%/}" != "$bin_dir" ] && [ "$bin_dir" != / ]; do bin_dir=${bin_dir%/}; done
+  if [ "$uninstall" = true ]; then
+    [ "$(uname -s)" = Linux ] || fail "octoboardd is installed this way on Linux only, so there is nothing of it to remove here; this is $(uname -s)."
+    uninstall
+    return 0
+  fi
   if [ "$service" = true ]; then
     command -v systemctl > /dev/null 2>&1 || fail "--service installs a systemd user unit, and systemctl is not installed."
     # The path goes into the unit's ExecStart line as it is, so nothing systemd or the sed that writes it interprets.
@@ -438,11 +497,152 @@ install_service() {
   user=$(id -un)
   if [ "$(loginctl show-user "$user" --property=Linger --value 2> /dev/null || true)" != yes ]; then
     if loginctl --no-ask-password enable-linger "$user" > /dev/null 2>&1; then
+      record_lingering "$user"
       say "Turned lingering on for $user, so the service starts at boot and keeps running after you log out."
     else
       say "Your user services stop when you log out and do not start at boot until lingering is on. Turn it on once with \`loginctl enable-linger $user\` (it may need sudo)."
     fi
   fi
+}
+
+# Notes that this run turned lingering on for the user $1, in the daemon's data directory (made as the daemon makes it,
+# for the user alone, where the daemon has not made it yet).
+record_lingering() {
+  data_dir="$HOME/.octoboard"
+  if { [ -d "$data_dir" ] || (umask 077 && mkdir -p "$data_dir") 2> /dev/null; } \
+    && { printf '%s\n' "$1" > "$data_dir/$linger_record"; } 2> /dev/null; then
+    return 0
+  fi
+  warn "could not note in $data_dir/$linger_record that this turned lingering on, so --uninstall will leave it on."
+}
+
+# Uninstalls what an install into $bin_dir put on the system. The installed octoboardd does it where it knows how
+# (`octoboardd uninstall`, asked for its help, which a build from before the command refuses): this hands over to it
+# and ends with its exit status. Standard input is the terminal where there is one, so that the command can ask
+# although this script was piped in; with none, the command needs --yes, and says so.
+#
+# The rest is the fallback for older builds, kept as it was: it removes what an install into $bin_dir put on the system, in the order that leaves nothing running from a file that is
+# gone, and only once everything that could stop it half way has been looked at: the unit runs this executable, the
+# files are the running user's and their directory can be written. Then a daemon that runs is stopped by its own
+# command (where that does not stop it, nothing is removed), the unit is disabled and removed, lingering is turned off
+# where the install's note says it turned it on and no other service of the user's is enabled, and the files in
+# $bin_dir go last. The daemon's data directory is left, and named.
+uninstall() {
+  binary="$bin_dir/octoboardd"
+  if [ -f "$binary" ] && [ -x "$binary" ] && "$binary" uninstall --help > /dev/null 2>&1; then
+    # shellcheck disable=SC2086 # The options are words of this script's own, split on purpose.
+    if [ ! -t 0 ] && [ -t 1 ] && (: < /dev/tty) 2> /dev/null; then
+      exec "$binary" uninstall $uninstall_options < /dev/tty
+    fi
+    # shellcheck disable=SC2086
+    exec "$binary" uninstall $uninstall_options
+  fi
+  # The fallback for older builds, from here to the end of the function.
+  if [ -f "$binary" ] || [ -L "$binary" ]; then
+    warn "this octoboardd is from before \`octoboardd uninstall\`, so this script removes it itself, and nothing is cleared first. An older build may have left an account sharing its agent's default configuration: entries of that account's directory are then links into the default account's directory (~/.claude, say), which can be deleted by hand. --yes, --force and --keep-changes have no effect here."
+  fi
+  unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+  unit="$unit_dir/octoboardd.service"
+  data_dir="$HOME/.octoboard"
+  has_unit=false
+  if [ -f "$unit" ] || [ -L "$unit" ]; then has_unit=true; fi
+  has_files=false
+  for file in "$binary" "$bin_dir/octoboardd.previous" "$bin_dir"/.octoboardd.*; do
+    if [ -f "$file" ] || [ -L "$file" ]; then has_files=true; fi
+  done
+  if [ "$has_unit" = false ] && [ "$has_files" = false ] && [ ! -f "$data_dir/$linger_record" ]; then
+    say "octoboardd is not installed in $bin_dir and has no service; nothing was removed. If it was installed with --bin-dir, pass the same --bin-dir."
+    say_data_left
+    return 0
+  fi
+  # The unit this script writes runs the installed file by its full path; one copied by hand from the archive runs
+  # it by %h, the user's home. A unit that runs another file is the unit of an install into another directory, or one
+  # the user wrote, and neither is this run's to remove.
+  if [ "$has_unit" = true ]; then
+    unit_program=$(sed -n 's/^ExecStart=//p' "$unit" 2> /dev/null | head -n 1)
+    unit_program=${unit_program%% *}
+    case "$unit_program" in
+      %h/*) unit_program="$HOME/${unit_program#%h/}" ;;
+    esac
+    [ "$unit_program" = "$binary" ] \
+      || fail "$unit runs ${unit_program:-nothing this script can read}, not $binary; nothing was removed. If octoboardd was installed into another directory, pass that directory with --bin-dir. If the unit is one you wrote yourself, it is not this script's to remove: remove it yourself, or run this with the directory its ExecStart names."
+  fi
+  # Run as another user than the one who installed (under sudo with --bin-dir), this would remove that user's files
+  # and leave their unit and their daemon, which are looked for under this user's home.
+  for file in "$binary" "$bin_dir/octoboardd.previous" "$bin_dir"/.octoboardd.*; do
+    if [ -f "$file" ] || [ -L "$file" ]; then
+      [ "$(ls -nd "$file" 2> /dev/null | awk '{ print $3 }')" = "$uid" ] \
+        || fail "$file does not belong to the user running this (uid $uid); nothing was removed. Run this as the user who installed octoboardd, without sudo."
+    fi
+  done
+  if [ "$has_files" = true ] && [ ! -w "$bin_dir" ]; then
+    fail "$bin_dir cannot be written by the user running this, so the files in it could not be removed; nothing was removed."
+  fi
+
+  if [ -f "$binary" ] && [ -x "$binary" ] && "$binary" status > /dev/null 2>&1; then
+    "$binary" stop < /dev/null \
+      || fail "\`$binary stop\` did not stop the daemon (see what it said above); nothing was removed. Where it named work that stopping would interrupt, \`$binary stop --force\` stops it all the same and ends its sessions as interrupted; then run this again."
+    say "Stopped the daemon."
+  fi
+
+  if [ "$has_unit" = true ]; then
+    if command -v systemctl > /dev/null 2>&1 && systemctl --user disable --now octoboardd.service > /dev/null 2>&1; then
+      rm -f "$unit"
+      systemctl --user daemon-reload > /dev/null 2>&1 || :
+      systemctl --user reset-failed octoboardd.service > /dev/null 2>&1 || :
+      say "Stopped and disabled the service, and removed $unit."
+    else
+      # No service manager to ask (no user session, or no systemd any more): what enabling made is a link among the
+      # units the default target wants, removed here with the unit itself.
+      rm -f "$unit" "$unit_dir/default.target.wants/octoboardd.service"
+      warn "systemctl --user could not reach your user's service manager, so $unit and the link that enabled it were removed without it. If the service still runs, it stops when you log out, or with \`systemctl --user stop octoboardd\`."
+    fi
+  fi
+
+  if [ -f "$data_dir/$linger_record" ]; then
+    user=$(id -un)
+    # The note says the install turned lingering on, not that nothing else needs it now: a service the user enabled
+    # since would stop starting at boot without it. Enabled is a link among the units a target wants, requires or
+    # upholds, in the user's unit directory or, for a unit a generator makes (a podman quadlet), in the generators'
+    # directories of the user's runtime directory; a unit's name may begin with a dot. `systemctl list-unit-files`
+    # is not asked: it also names what the distribution enables for every user, which would keep lingering on for all.
+    other_units=""
+    generators="${XDG_RUNTIME_DIR:-/run/user/$uid}/systemd"
+    for dir in "$unit_dir" "$generators/generator" "$generators/generator.early" "$generators/generator.late"; do
+      for kind in wants requires upholds; do
+        for link in "$dir"/*."$kind"/* "$dir"/*."$kind"/.[!.]*; do
+          if [ -e "$link" ] || [ -L "$link" ]; then
+            [ "${link##*/}" = octoboardd.service ] || other_units="$other_units ${link##*/}"
+          fi
+        done
+      done
+    done
+    if [ -n "$other_units" ]; then
+      say "The install turned lingering on for $user. It was left on, since other services of yours are enabled and may need it:$other_units. To turn it off all the same: \`loginctl disable-linger $user\` (it may need sudo)."
+    elif command -v loginctl > /dev/null 2>&1 && loginctl --no-ask-password disable-linger "$user" > /dev/null 2>&1; then
+      rm -f "$data_dir/$linger_record"
+      say "Turned lingering off for $user, which the install had turned on."
+    else
+      say "The install turned lingering on for $user, and it could not be turned off here. Turn it off with \`loginctl disable-linger $user\` (it may need sudo)."
+    fi
+  fi
+
+  for file in "$binary" "$bin_dir/octoboardd.previous" "$bin_dir"/.octoboardd.*; do
+    if [ -f "$file" ] || [ -L "$file" ]; then
+      rm -f "$file" || fail "could not remove $file."
+    fi
+  done
+  if [ "$has_files" = true ]; then
+    say "Removed octoboardd from $bin_dir."
+  fi
+  say_data_left
+}
+
+# Says that the daemon's data directory stays, and how to remove it, where there is one.
+say_data_left() {
+  data_dir="$HOME/.octoboard"
+  [ -d "$data_dir" ] || return 0
+  say "$data_dir, which holds the daemon's own data (your consoles, session records, settings and logs), was left as it is. To remove it as well: rm -rf $data_dir"
 }
 
 main "$@"

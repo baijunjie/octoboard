@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use super::link::{self, DirsError};
-use super::{default_dir, describe, items_param, moves, sharing_in_progress};
+use super::{default_dir, describe, items_param, keep, moves, sharing_in_progress};
 use crate::adapter::provider;
 use crate::hostfs::dir_key;
 use crate::protocol::{notice_code, Account, Notice, Session, SharingCause, SharingItemFailure};
@@ -40,7 +40,7 @@ pub async fn before_launch(state: &Arc<AppState>, session: &Session) -> Result<P
     if !links_anything(&account) {
         return Ok(Prepared::default());
     }
-    let _guard = state.account_sharing.locks.lock(account.agent).await;
+    let guard = state.account_sharing.locks.lock(account.agent).await;
     let Some(account) = account_of(state, session)? else {
         return Ok(Prepared::default());
     };
@@ -56,23 +56,35 @@ pub async fn before_launch(state: &Arc<AppState>, session: &Session) -> Result<P
     let memory_item = provider(agent)
         .accounts()
         .and_then(|ops| ops.shared_memory_item());
-    let checked = tokio::task::spawn_blocking(move || {
-        let recorded = moves::resolve_or_spelled(Path::new(&start.default_dir));
-        if incomplete {
-            let shared = links_conversations_into(memory_item, &dir, &recorded).then_some(recorded);
-            return Repair::Skipped(shared);
-        }
-        if moves::resolve_or_spelled(&current) != recorded {
-            return Repair::DefaultMoved { recorded, current };
-        }
-        Repair::Done(
-            link::Dirs::new(&dir, &recorded, false).map(|dirs| {
+    let started_into = PathBuf::from(&start.default_dir);
+    let checked = {
+        let dir = dir.clone();
+        tokio::task::spawn_blocking(move || {
+            let recorded = moves::resolve_or_spelled(Path::new(&start.default_dir));
+            if incomplete {
+                let shared =
+                    links_conversations_into(memory_item, &dir, &recorded).then_some(recorded);
+                return Repair::Skipped(shared);
+            }
+            if moves::resolve_or_spelled(&current) != recorded {
+                return Repair::DefaultMoved { recorded, current };
+            }
+            Repair::Done(link::Dirs::new(&dir, &recorded, false).map(|dirs| {
                 dirs.map(|dirs| (link::repair(agent, &dirs, &start.stamp), dirs.default))
-            }),
-        )
+            }))
+        })
+        .await?
+    };
+    // Whatever became of the repair, and after it, so an item it linked again counts: what an
+    // earlier session left in the default directory's plugin registries by the account's spelling
+    // is pointed at the default directory's own. Outside the agent's lock, which request handling
+    // takes: a registry is the agent's file, of any size, and it is read and parsed here.
+    drop(guard);
+    let unkept = tokio::task::spawn_blocking(move || {
+        keep::registries_in_default(agent, &dir, &started_into)
     })
     .await?;
-    let (shared_default_dir, notices) = repair_notices(&account, checked);
+    let (shared_default_dir, notices) = repair_notices(&account, checked, unkept);
     Ok(Prepared {
         shared_default_dir,
         notices,
@@ -81,7 +93,7 @@ pub async fn before_launch(state: &Arc<AppState>, session: &Session) -> Result<P
 
 /// Whether the account's directory may hold links sharing made: it shares, or the last change of
 /// its sharing, either way, is incomplete.
-fn links_anything(account: &Account) -> bool {
+pub(super) fn links_anything(account: &Account) -> bool {
     account.share_default_config || account.share_default_config_incomplete
 }
 
@@ -112,8 +124,16 @@ enum Repair {
 }
 
 /// What a repair of `account`'s directory comes to for the launch: the shared directory, and a
-/// notice for each thing it could not fix or must not let pass.
-fn repair_notices(account: &Account, repair: Repair) -> (Option<PathBuf>, Vec<Notice>) {
+/// notice for each thing it could not fix or must not let pass. `unkept` are the plugin registries
+/// that still name the account's directory, told with what a repair that ran could not fix.
+fn repair_notices(
+    account: &Account,
+    repair: Repair,
+    unkept: Vec<SharingItemFailure>,
+) -> (Option<PathBuf>, Vec<Notice>) {
+    if !unkept.is_empty() && !matches!(repair, Repair::Done(Ok(Some(_)))) {
+        tracing::warn!(account = %account.id, failures = ?unkept, "some of a sharing account's plugin registries still name its directory");
+    }
     let repair_failed = |message: String, cause: SharingCause, failures: &[SharingItemFailure]| {
         Notice::new(
             notice_code::ACCOUNT_SHARING_REPAIR_FAILED,
@@ -145,7 +165,10 @@ fn repair_notices(account: &Account, repair: Repair) -> (Option<PathBuf>, Vec<No
         Repair::Done(repaired) => repaired,
     };
     let (repaired, default) = match repaired {
-        Ok(Some(repaired)) => repaired,
+        Ok(Some((mut repaired, default))) => {
+            repaired.failures.extend(unkept);
+            (repaired, default)
+        }
         Ok(None) => return (None, Vec::new()),
         Err(err) => {
             let (cause, detail) = err.cause_and_detail();
@@ -189,7 +212,7 @@ fn repair_notices(account: &Account, repair: Repair) -> (Option<PathBuf>, Vec<No
 }
 
 /// The account `session` launches under, when the session holds that account's directory.
-fn account_of(state: &AppState, session: &Session) -> Result<Option<Account>> {
+pub(super) fn account_of(state: &AppState, session: &Session) -> Result<Option<Account>> {
     let Some(id) = session.account_id.as_deref() else {
         return Ok(None);
     };

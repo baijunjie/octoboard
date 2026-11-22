@@ -1,0 +1,12 @@
+import { Aside } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* What the Windows uninstaller does before it removes the app, which the Windows guide and "Your system stays as it was" share. */}
+
+제거 프로그램은 무엇이든 지우기 전에 스스로 정리합니다. {productName}이(가) 실행 중이면 종료하는데, 자동 제거가 아니면 먼저 묻습니다. 그리고 <strong>모두 제거</strong>가 제거하는 모든 것을 묻지 않고 제거합니다. 그 결과가 어떻든 이어서 앱을 제거합니다. 제거하지 못한 것이 있으면 끝에서 각 항목이 남은 위치와 함께 알려 주고, <code dir="ltr">{system.uninstallLogWindows}</code>에 그 목록을 남깁니다. 자동 제거는 이 파일만 남깁니다.
+
+설치 프로그램과 제거 프로그램은 {productName}이(가) 시스템 언어를 지원하면 그 언어로, 아니면 영어로 표시됩니다. 제거 프로그램과 남은 항목 목록은 설치할 때의 언어를 그대로 씁니다. 다만 기능이 남은 항목에 대해 알려 주는 이유는 영어일 수 있습니다.
+
+모든 제거가 이 정리를 실행하지는 않습니다. 앱 내 업데이트와 설치된 앱 위에 실행한 설치 프로그램은 정리를 실행하지 않으므로, 원격 서버에 있는 키와 계정의 공유는 그대로 남습니다. 다만 직접 위에 실행한 설치 프로그램은 <strong>로그인 시 열기</strong>를 끄며, 다시 켤 때까지 꺼진 상태로 둡니다. 이 정리가 생기기 전 버전의 제거 프로그램도 정리를 실행하지 않습니다. 그런 버전에서는 먼저 <strong>모두 제거</strong>를 선택하세요.
+
+<Aside>Windows on Arm의 x64 앱에서는 제거 프로그램이 실행 중인 {productName}을(를) 종료할 수 없어, 아무것도 제거하지 않은 채 제거가 멈춥니다. 그 위에 실행한 설치 프로그램도 마찬가지입니다. 먼저 {productName}을(를) 종료하세요. arm64 앱에는 이런 제한이 없으며, Arm PC의 x64 설치는 앱 내 업데이트를 통해 arm64 앱으로 옮겨 갑니다.</Aside>

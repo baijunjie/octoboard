@@ -104,6 +104,10 @@ pub struct LaunchSpec<'a> {
     pub new_agent_session_id: &'a str,
     /// The agent's own session id, set when this launch resumes an existing conversation.
     pub resume_agent_session_id: Option<&'a str>,
+    /// This launch's own id, as its processes are tagged with (`crate::processes::ledger`), which
+    /// its status hooks report back with the session's (`crate::holder::protocol::HookMark`): a
+    /// report from a launch that has ended is then ignored, whenever it arrives.
+    pub launch_id: &'a str,
     pub cwd: &'a Path,
     /// Initial task, rendered as the agent's positional prompt argument. Only on a fresh launch.
     pub task: Option<&'a str>,
@@ -913,6 +917,7 @@ pub mod tests {
                 ask_questions_as_choices: self.ask_questions_as_choices,
                 user_language: self.user_language.as_deref(),
                 new_agent_session_id: &self.new_agent_session_id,
+                launch_id: "launch-1",
                 resume_agent_session_id: None,
                 cwd: &self.cwd,
                 task: None,

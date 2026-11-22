@@ -1,0 +1,8 @@
+# A custom permission for the app's commands of the clean-up before the application is uninstalled; see
+# `exit-lifecycle.toml` for why an app-defined command needs a file like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-system-changes"
+description = "Allows the local daemon's window to list what the application's features have in effect outside its own directories (this device's keys on remote servers, the login entry, the command-line link), and to clear all of it at once before the application is uninstalled."
+commands.allow = ["system_changes_list", "system_changes_clear"]

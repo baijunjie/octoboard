@@ -150,6 +150,34 @@ mod tests {
         }
     }
 
+    /// A provider that shares entries of its configuration directory states which of them record
+    /// the path a plugin was installed under, so sharing keeps them leading into the default
+    /// account's directory; a registry it names sits in an item it shares.
+    #[test]
+    fn a_provider_that_shares_entries_states_its_plugin_registries() {
+        for agent in AgentId::ALL {
+            let Some(ops) = provider(agent).accounts() else {
+                continue;
+            };
+            match ops.plugin_registries() {
+                None => assert!(
+                    catalogued_items(agent).is_empty(),
+                    "{agent:?} shares entries without stating its plugin registries"
+                ),
+                Some(registries) => {
+                    for (item, file) in registries {
+                        assert!(
+                            catalogued_items(agent)
+                                .iter()
+                                .any(|shared| shared.name == *item),
+                            "{agent:?}: `{item}/{file}` is in no shared item"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     /// A thread database is catalogued only where a registry keeps its rows in step, and a
     /// provider with no account operations shares nothing and keeps no registry.
     #[test]

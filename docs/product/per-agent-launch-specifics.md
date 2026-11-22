@@ -112,7 +112,8 @@ run in the native program's place. A `codex.exe` found in none of these layouts 
 The launch conditions that are visible:
 
 - project trust is not passed: in a git repository Codex has not been told to trust, its own folder-trust confirmation
-  appears, and Octoboard presses it under the user's permission (see `docs/product/folder-trust.md`);
+  appears, and Octoboard presses it under the user's permission, or, in a console session, without asking (see
+  `docs/product/folder-trust.md`);
 - Codex's check for a newer version at startup is turned off for that launch (`check_for_update_on_startup=false`), so
   that its update prompt does not come up ahead of the trust confirmation; the user's own setting is left as it is;
 - the items of Codex's terminal title are set for that launch to its activity, the thread's name and the project's name
@@ -302,16 +303,19 @@ Some of its entries are **copies** taken at launch rather than links. Two are fi
 knowing:
 
 - the Grok configuration file: an edit to the source file while a session is running is not picked up by that session.
-  With a plain source `config.toml`, settings the session saves are lost when the session ends. With a source
-  `config.toml` that is a link to an existing file — an account sharing the default configuration, or any home whose
-  `config.toml` the user has linked elsewhere, such as into a dotfiles repository — selected settings are carried into
-  the file the link leads to after the process exits and before the per-session home is removed, leaving the link in
-  place: `ui.theme`, `plugins.enabled`, `plugins.disabled`, and `models.default`. Only values that differ from the copy
-  taken at launch are carried; each plugin list is carried whole, an empty one included, but removing a key does not
-  remove it from the linked file. A model equal to the model passed at launch is excluded, including when the user
-  explicitly selects it again. Reasoning effort, Octoboard's MCP entry, what a compatibility switch adds (see
-  `docs/product/compatibility-between-agents.md`) and every other setting stay in the copy. The
-  next launch reads the source file afresh.
+  **A theme, a plugin switch or the default model changed in a session reaches the file the source `config.toml` links
+  to, as Grok would have saved it there; with a plain source `config.toml`, it is lost with the session**, as is every
+  other setting the session saves. Any change made in the session counts, whoever made it. A source `config.toml` is
+  linked for an account sharing the default configuration, or in any home whose `config.toml` the user has linked
+  elsewhere, such as into a dotfiles repository; the link must lead to an existing file. The settings are carried after
+  the process exits and before the per-session home is removed, leaving the link in place, and they are exactly
+  `ui.theme`, `plugins.enabled`, `plugins.disabled` and `models.default`. Only values that differ from the copy taken at
+  launch are carried; each plugin list is carried whole, an empty one included, but removing a key does not remove it
+  from the linked file. The plugin lists are not carried from a session whose per-session home has a plugin directory of
+  its own (see the paragraphs on installed plugins below). A model equal to the model passed at launch is excluded,
+  including when the user explicitly selects it again. Reasoning effort, Octoboard's MCP entry, what a compatibility
+  switch adds (see `docs/product/compatibility-between-agents.md`) and every other setting stay in the copy. The next
+  launch reads the source file afresh.
 
   The link must still lead to the same file it led to at launch: a link removed, broken or redirected to another file
   receives nothing. Sessions exiting under the same daemon merge only what they changed into the current file: changes
@@ -320,15 +324,60 @@ knowing:
   editor can still race with this. A failure to write is logged, and the per-session home is still removed, so the
   settings it would have carried are lost; so are they if the Octoboard daemon itself stops while the session is
   running.
-- the trust store, `trusted_folders.toml`: copied as it is, with nothing added, so a folder the user has not trusted
-  Grok with shows Grok's own trust confirmation. The one entry Grok writes into the copy when that confirmation is
-  accepted is the exception to its being lost: it is carried into the source home's store (see "Carrying Grok Build's
-  trust record" in `docs/product/folder-trust.md`).
+- the trust store, `trusted_folders.toml`: for a project session copied as it is, with nothing added, so a folder the
+  user has not trusted Grok with shows Grok's own trust confirmation. The one entry Grok writes into the copy when that
+  confirmation is accepted is the exception to its being lost: it is carried into the source home's store (see
+  "Carrying Grok Build's trust record" in `docs/product/folder-trust.md`). For a console session the copy is given an
+  entry for the console's directory, so Grok does not ask, and nothing is carried (see "Console sessions' trust
+  confirmations" in `docs/product/folder-trust.md`).
 
 Grok's built-in bundles and its sandbox files — `bundled/`, `bundles/`, `hooks-paths` and `sandbox.toml` — are copies
 taken on every launch as well, a directory copied whole, whichever of them the source home holds. A bundle update Grok
 downloads during a session lands in Octoboard's copy and is not kept; the next launch copies whatever the user's own
 `grok` has fetched since.
+
+**A plugin installed in a session is the user's, and its registry entry is made to name it through the source home.**
+Grok installs a plugin into `installed-plugins/<name>` under its home and records it in
+`installed-plugins/registry.json`. The per-session home's `installed-plugins/` is a link to the source home's, so the
+plugin's files and its registry entry land in the source home's own directory, but Grok writes the entry's path through
+the per-session home, which is removed with the session. Left so, the user's own `grok` still lists the plugin, cannot
+update one from a git source and may no longer load it. Octoboard therefore rewrites those paths in the source home's
+registry:
+
+- after the session's process exits and before the per-session home is removed (after the settings above are carried),
+  every entry whose path lies under this session's per-session home is pointed at the same path under the source home's
+  `installed-plugins/`, spelled `<source home>/installed-plugins/<name>`, as Grok records it when run against the source
+  home;
+- before each launch, before Grok starts, entries an earlier process left under this session's own per-session home,
+  and entries under the per-session home of another session that no longer exists or now leads to another plugin
+  directory (a daemon that stopped without seeing that session exit), are pointed at the directory the plugins are in,
+  by its resolved path. An entry reaches a registry only through a per-session home whose link led to that registry's
+  directory, whichever account the session ran as, so that directory is where the plugin's files are; this session's
+  own spelling of it is not used for another session's entry. A per-session home that still leads to this directory is
+  a running session's, and its entries are left for its own exit. A session resumed on another account gets its
+  per-session home built anew under the same path: what an earlier process of it left in the first account's registry
+  is then under a home that leads elsewhere, and is settled at the next Grok Build launch from that account.
+
+Only the `path` of an entry recorded under a per-session home changes; every other entry is left as it is. A registry
+with nothing to rewrite is not written at all and stays byte for byte as it was: a missing one is not created, and one
+that is not JSON is left alone. A registry reached through a link is written where the link leads, and the link stays. A
+file a rewrite cut off by the daemon's end left staged beside the registry (`.registry.json.octoboard-<process id>`) is
+removed before the next rewrite, once the process that wrote it is gone and the file is more than fifteen minutes old,
+and no file of another name is touched. A failure is logged and holds up neither the launch nor the removal of the
+per-session home. Grok's own processes do not wait for Octoboard: the registry is replaced only while it still holds
+what Octoboard read, yet a plugin install another Grok process saves at that very moment can be lost. For an account
+that shares the default configuration, the path so written runs through the account's directory, and is then pointed at
+the default directory's own like any such path (see "Plugin registries kept leading into the default directory" in
+`docs/product/sharing-the-default-configuration.md`). Whether the plugin is switched on is a setting in `config.toml`,
+carried back only as described above for that file.
+
+This applies to every Grok Build account, the default one included, whenever the source home has an
+`installed-plugins/` directory, as a home Grok 1.0.62 or later has run against does. Where it has none, the per-session
+home gets a plugin directory of its own: a plugin installed in the session, its files and its registry, are the
+session's and are lost with it, and nothing is written to the source home's registry. From such a session the plugin
+switches (`plugins.enabled` and `plugins.disabled`) are not carried into a linked `config.toml` either, so no switch is
+left there for a plugin that went with the session; a switch the user changed in that session for a plugin of the
+source home's own is not carried with them. The theme and the default model are carried as ever.
 
 Three entries of the source home are left out altogether. Its `hooks/` directory is not linked: the per-session home's
 `hooks/` holds Octoboard's own hooks alone (its status hooks and, where it is injected, the cross-project guard), so
@@ -368,7 +417,7 @@ session still runs, against a per-session Grok home built differently from the o
   `GROK_AUTH_PATH`, that value is left as it is;
 - the Grok configuration file and the trust store are copies under the rules above: with a plain source `config.toml`,
   settings saved in the session stay in the session's copy, and the trust entry Grok writes when its confirmation is
-  accepted is carried into the user's own `trusted_folders.toml`.
+  accepted in a project session is carried into the user's own `trusted_folders.toml`.
 
 A host that makes file links builds the home as described above.
 

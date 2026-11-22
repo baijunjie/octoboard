@@ -23,7 +23,7 @@ use bytes::Bytes;
 
 use super::launches::Launches;
 use super::relay::{Failure, Relays};
-use crate::holder::protocol::RelayRoute;
+use crate::holder::protocol::{HookMark, RelayRoute};
 use crate::request_guard::{headers_allowed, same_secret, supplied_key};
 
 /// What the helper routes work on.
@@ -35,6 +35,7 @@ pub(super) struct Helpers {
 pub(super) fn router(helpers: Arc<Helpers>) -> Router {
     Router::new()
         .route("/hook/:session", post(report_hook))
+        .route("/hook/:session/:launch", post(report_launch_hook))
         .route("/git-ref/:session", post(report_git_ref))
         .route("/context-window/:session", post(report_context_window))
         .route("/revert-gate/:session", post(ask_revert_gate))
@@ -107,6 +108,20 @@ async fn report_hook(
     body: Bytes,
 ) -> Response {
     queued(&helpers, RelayRoute::Hook, session, body)
+}
+
+/// A hook that names its launch ([`HookMark`]), relayed with the session and the launch as one
+/// parameter, as the daemon's own route of the same path takes them.
+async fn report_launch_hook(
+    State(helpers): State<Arc<Helpers>>,
+    Path((session, launch)): Path<(String, String)>,
+    body: Bytes,
+) -> Response {
+    let mark = HookMark {
+        session,
+        launch: Some(launch),
+    };
+    queued(&helpers, RelayRoute::Hook, mark.param(), body)
 }
 
 async fn report_git_ref(
@@ -301,6 +316,7 @@ mod tests {
         let wrong = "0".repeat(key.len());
         for path in [
             "/hook/s1",
+            "/hook/s1/l1",
             "/git-ref/s1",
             "/context-window/s1",
             "/revert-gate/s1",
@@ -341,6 +357,18 @@ mod tests {
             panic!("not a relay");
         };
         assert_eq!((body.as_slice(), waits), (&b"first"[..], false));
+        // A hook that names its launch is relayed with it, as the daemon's route takes it.
+        assert!(post(port, &key, "/hook/s1/l1", b"second").await.is_ok());
+        let FromHolder::Relay {
+            route, param, body, ..
+        } = next(&mut frames).await
+        else {
+            panic!("not a relay");
+        };
+        assert_eq!(
+            (route, param.as_str(), body.as_slice()),
+            (RelayRoute::Hook, "s1/l1", &b"second"[..])
+        );
     }
 
     #[tokio::test]
@@ -445,6 +473,7 @@ mod tests {
         let mut cases: Vec<(String, &[&str], StatusCode)> = Vec::new();
         for path in [
             "/hook/s1",
+            "/hook/s1/l1",
             "/git-ref/s1",
             "/context-window/s1",
             "/revert-gate/s1",

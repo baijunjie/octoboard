@@ -1,0 +1,12 @@
+import { Aside } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* What the Windows uninstaller does before it removes the app, which the Windows guide and "Your system stays as it was" share. */}
+
+Bevor es etwas entfernt, räumt das Deinstallationsprogramm von selbst auf: Es schließt {productName}, falls es läuft, mit einer Rückfrage, außer bei einer stillen Deinstallation, und entfernt ohne Rückfrage alles, was <strong>Alle entfernen</strong> entfernt. Danach deinstalliert es, was auch immer dabei herauskam. Konnte etwas nicht entfernt werden, sagt es das am Ende, mit dem Ort, an dem jeder Eintrag bleibt, und führt es in <code dir="ltr">{system.uninstallLogWindows}</code> auf; eine stille Deinstallation schreibt nur diese Datei.
+
+Installationsprogramm und Deinstallationsprogramm sprechen die Sprache deines Systems, wenn {productName} sie hat, und sonst Englisch. Das Deinstallationsprogramm und seine Liste dessen, was es zurückgelassen hat, bleiben in der Sprache, in der du installiert hast; ein Grund, den eine Funktion für einen zurückgelassenen Eintrag angibt, kann auf Englisch sein.
+
+Nicht jede Deinstallation führt diese Bereinigung aus. Das In-App-Update und ein Setup, das über die installierte App läuft, tun es nicht, sodass deine Schlüssel auf entfernten Servern und das Teilen deiner Konten bleiben, wie sie waren; ein Setup, das du selbst darüber ausführst, schaltet <strong>Beim Anmelden öffnen</strong> trotzdem aus, bis du es wieder einschaltest. Auch das Deinstallationsprogramm einer Version von vor dieser Bereinigung führt keine aus: Wähle bei einer solchen Version zuerst <strong>Alle entfernen</strong>.
+
+<Aside>Mit der x64-App unter Windows on Arm kann das Deinstallationsprogramm ein laufendes {productName} nicht schließen, und die Deinstallation bricht ab, ohne etwas zu entfernen, ebenso ein Setup, das darüber läuft: Beende {productName} vorher. Die arm64-App hat diese Einschränkung nicht, und eine x64-Installation auf einem Arm-PC wechselt über das In-App-Update zu ihr.</Aside>

@@ -20,6 +20,7 @@ use crate::accounts::quotas::kick::KickCommand;
 use crate::accounts::quotas::probe::QuotaProbe;
 use crate::accounts::shared_config::SharedItem;
 use crate::accounts::AccountOps;
+use crate::adapter::account_cli::{BackgroundRun, RunHome, RunWait};
 use crate::providers::claude::CLAUDE_RECORDS_DIR;
 
 pub(crate) struct ClaudeAccounts;
@@ -27,6 +28,23 @@ pub(crate) struct ClaudeAccounts;
 impl AccountOps for ClaudeAccounts {
     fn quota_probe(&self) -> Option<&'static dyn QuotaProbe> {
         Some(&ClaudeQuota)
+    }
+
+    /// Against the account's own directory. Claude Code finds its sign-in through that directory
+    /// and loses it under another, so its runs cannot be given one of Octoboard's. Measured on
+    /// 2.1.330 (`docs/agent-cli-reference.md`, "What the background runs write into an account's
+    /// configuration"): in a directory Claude Code has run in, none of them changes a
+    /// configuration file; in one it has not, they carry out its own first-run set-up, which is
+    /// what it does at the user's next launch and is left as it is.
+    fn run_home(
+        &self,
+        _run_homes: &Path,
+        _run: BackgroundRun,
+        _account_dir: &Path,
+        _shell_env: &HashMap<String, String>,
+        _wait: &RunWait<'_>,
+    ) -> anyhow::Result<Option<RunHome>> {
+        Ok(None)
     }
 
     fn kick_command(&self) -> Option<KickCommand> {
@@ -45,8 +63,8 @@ impl AccountOps for ClaudeAccounts {
         ITEMS
     }
 
-    fn plugin_registries(&self) -> &'static [(&'static str, &'static str)] {
-        PLUGIN_REGISTRIES
+    fn plugin_registries(&self) -> Option<&'static [(&'static str, &'static str)]> {
+        Some(PLUGIN_REGISTRIES)
     }
 
     /// Where Claude Code keeps auto memory, which the shared directory is given for.

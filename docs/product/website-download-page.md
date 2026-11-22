@@ -29,10 +29,12 @@ Every link into the documentation site opens it in the page's language.
 **macOS panel**: a download button for macOS, then that it is for Apple silicon and Intel Macs on macOS 11 or later,
 then a "Read the installation guide" link to the documentation site's macOS guide.
 
-**Windows panel**: a download button for Windows, then that it is for x64 on Windows 10 version 21H2 or later, that on
-Windows 11 on Arm the x64 app runs under emulation, and that the installer downloads Microsoft Edge WebView2 when it is
-missing, which needs an internet connection; then a "Read the installation guide" link to the documentation site's
-Windows guide.
+**Windows panel**: a download button for Windows, then that it is for x64 on Windows 10 version 21H2 or later, and that
+the installer downloads Microsoft Edge WebView2 when it is missing, which needs an internet connection. Once a release
+carries the arm64 installer (the Windows on Arm download below resolves to a file rather than the releases page), the
+panel says that Windows 11 on Arm takes the arm64 installer below and shows a "Download for Windows on Arm" link to it;
+before that, it says instead that on Windows 11 on Arm the x64 app runs under emulation, and shows no such link. Last
+comes a "Read the installation guide" link to the documentation site's Windows guide.
 
 **Linux panel**: an introduction says that it installs `octoboardd`, the Octoboard daemon, on a Linux server without
 root, reachable from the macOS or Windows app or from a browser over SSH, and that it supports x86_64 and aarch64 on any
@@ -78,7 +80,9 @@ site is generated, from the Stable manifests (see "Where updates come from" in `
 "What a release holds" in `docs/product/installing-the-server-form.md`):
 
 - **macOS**: the disk image `Octoboard_<version>_universal.dmg` of the version `stable.json` announces;
-- **Windows**: the installer `stable-windows.json` names for `windows-x86_64`;
+- **Windows**: the installer `stable-windows.json` names for `windows-x86_64`, and for Windows on Arm the one it names
+  for `windows-aarch64` (a manifest without that entry, published before the arm64 build, leaves that one link on the
+  releases page);
 - **Linux x86_64 and aarch64**: the archives `stable-linux.json` names for `linux-x86_64` and `linux-aarch64`.
 
 A manifest that does not exist yet (answered `404`) leaves its platform's links pointing at the repository's releases
@@ -93,12 +97,13 @@ published, the release workflow starts the website's publication from `main` (se
 
 ## Fixed download addresses
 
-Four addresses always lead to the newest download:
+Five addresses always lead to the newest download:
 
 | Address | Leads to |
 |---|---|
 | `/download/macos/` | the macOS disk image |
-| `/download/windows/` | the Windows installer |
+| `/download/windows/` | the Windows x64 installer |
+| `/download/windows-arm64/` | the Windows arm64 installer, or the releases page while no release carries one |
 | `/download/linux-x86_64/` | the Linux x86_64 archive |
 | `/download/linux-aarch64/` | the Linux aarch64 archive |
 

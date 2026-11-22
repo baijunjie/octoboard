@@ -23,9 +23,9 @@ export const REMOTE_WINDOW_HOST = remoteWindowHost(MAC_HOST);
 /** The title bar's own host: the Windows application's, less what a remote window is not given. */
 const WINDOWS_REMOTE_HOST = remoteWindowHost(WINDOWS_HOST);
 
-/** The host of a remote daemon: a Linux server, which cannot be held awake. */
+/** The host of a remote daemon: a Linux server, which cannot be held awake, with a daemon that runs on its own. */
 const LINUX_MACHINE = {
-  host: { os: "linux", path_style: "unix", file_links: true, trash: "trash", settings: "settings", keep_awake: false },
+  host: { os: "linux", path_style: "unix", file_links: true, trash: "trash", settings: "settings", keep_awake: false, application: false },
   homeDir: "/home/deploy",
 } as const satisfies { host: HostInfo; homeDir: string };
 
@@ -90,6 +90,17 @@ export const remoteWindowScenarios: Scenario[] = [
     remoteWindow: { name: staging.name },
     remoteDaemons: REMOTE_DAEMONS,
     steps: [(ui) => ui.press(ui.t("rail.settings"))],
+  },
+  {
+    id: "settings-cleanup-remote-window",
+    group: "Settings",
+    category: "normal",
+    title: "Cleanup in a remote daemon's window",
+    description:
+      "Settings > Cleanup of the window opened on Staging. Under the automatic-deletion row (the remote daemon's own setting), the \"Clean up before uninstalling\" row holds only its label and one sentence saying this window shows a remote daemon, that the cleanup before uninstalling the app from this computer is run in Settings of its own window here, and that a daemon on a server is cleaned up when it is uninstalled, on that server. It has no status line, no Remove all, and the daemon is asked nothing.",
+    state: remoteState,
+    ...REMOTE_WINDOW,
+    steps: [(ui) => ui.press(ui.t("rail.settings")), (ui) => ui.press(ui.t("settings.section.cleanup"))],
   },
   {
     id: "remote-window-title-bar",

@@ -1,0 +1,44 @@
+{
+  "about": "The bodies of the daemon's local clean-up routes, POST /system-changes and POST /system-changes/clear, as the daemon writes them: apps/daemon/src/coordinator/system_changes/wire.rs serializes its types into exactly these, and apps/desktop/src-tauri/src/system_changes/daemon.rs reads them, so the shell's copy of the shapes cannot drift from the daemon's.",
+  "listed": {
+    "changes": [
+      {
+        "kind": "account_sharing",
+        "account": "acct-1",
+        "name": "Work",
+        "agent": "claude",
+        "config_dir": "/home/u/.claude-work"
+      }
+    ]
+  },
+  "cleared": {
+    "results": [
+      {
+        "change": {
+          "kind": "account_sharing",
+          "account": "acct-1",
+          "name": "Work",
+          "agent": "claude",
+          "config_dir": "/home/u/.claude-work"
+        },
+        "kept": { "dir": "/home/u/.claude", "entries": ["projects"] }
+      },
+      {
+        "change": {
+          "kind": "account_sharing",
+          "account": "acct-1",
+          "name": "Work",
+          "agent": "claude",
+          "config_dir": "/home/u/.claude-work"
+        },
+        "failure": { "code": "account_in_use", "params": { "name": "Work" }, "message": "in use" }
+      }
+    ],
+    "failed": [
+      {
+        "kind": "account_sharing",
+        "failure": { "code": "internal_error", "params": {}, "message": "unreadable" }
+      }
+    ]
+  }
+}

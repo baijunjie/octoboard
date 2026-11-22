@@ -30,6 +30,7 @@ mod host_facts;
 mod languages;
 mod launch_at_login;
 mod lifecycle;
+mod localizations;
 mod menu;
 mod notification_settings;
 mod notifications;
@@ -40,6 +41,7 @@ mod recovery;
 mod remote;
 mod remote_login;
 mod sidecar;
+mod system_changes;
 // The addresses of the System Settings panes the shell opens: the privacy grants, notifications and
 // login items.
 #[cfg(target_os = "macos")]
@@ -59,7 +61,7 @@ use background::BackgroundState;
 use diagnostics::diagnostic;
 use exit::{begin_quit, confirm_quit, frontend_exit_heartbeat, request_quit, ExitState};
 use menu::{set_menu_labels, ui_event_for};
-use sidecar::{mark_daemon_stopping, start_daemon, DaemonState};
+use sidecar::{mark_daemon_stopping, start_daemon, DaemonState, StartFor};
 
 /// The label of the main window, the local daemon's; the windows of other daemons are
 /// `daemon_window`'s.
@@ -74,9 +76,43 @@ pub fn answer_permission_probe() -> bool {
     permissions::answer_probe_if_asked()
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    let app = lifecycle::register_first(tauri::Builder::default())
+/// Removes the Windows taskbar's jump list when this process was started for that alone (by the
+/// uninstaller, see `menu/jump_list.rs`), and says whether it was, for `main` to exit before
+/// anything of the app starts.
+pub fn delete_jump_list_if_asked() -> bool {
+    menu::delete_jump_list_if_asked()
+}
+
+/// Runs the clean-up before the uninstall when this process was started for that alone (by the
+/// Windows uninstaller, see `system_changes/headless.rs`), and then ends the process with what it
+/// came to; `false` when it was not, for `main` to go on. The application it runs in has what the
+/// shell's code reaches for and no window, and is not the single instance: it is never handed to a
+/// running application, which the uninstaller has ended, and it does not run beside one.
+pub fn clean_up_before_uninstall_if_asked() -> bool {
+    let Some(asked) = system_changes::headless::asked(std::env::args_os()) else {
+        return false;
+    };
+    if !system_changes::headless::has_uninstaller() {
+        return false;
+    }
+    let context = context();
+    let identifier = context.config().identifier.clone();
+    system_changes::headless::run(
+        || equipped(tauri::Builder::default()).build(context),
+        asked,
+        &identifier,
+    )
+}
+
+/// The application's configuration and assets, as the build embeds them.
+fn context() -> tauri::Context {
+    tauri::generate_context!()
+}
+
+/// `builder` with the plugins and the state the shell's code reaches for, whichever way the
+/// application runs: with its windows, or without one for the clean-up before the uninstall.
+fn equipped(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    builder
         .plugin(tauri_plugin_shell::init())
         // Carries no daemon traffic either: the frontend asks for a notification, which the
         // plugin shows off macOS (on macOS the shell shows it itself, `notifications/`), and the
@@ -100,6 +136,11 @@ pub fn run() {
         .manage(window_state::TrackedWindows::default())
         .manage(remote::RemoteState::default())
         .manage(remote::RestoreState::default())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let app = equipped(lifecycle::register_first(tauri::Builder::default()))
         .invoke_handler(tauri::generate_handler![
             frontend_exit_heartbeat,
             begin_quit,
@@ -133,6 +174,7 @@ pub fn run() {
             remote::remote_daemons_list,
             remote::remote_daemon_save,
             remote::remote_daemon_remove,
+            remote::remote_daemon_device_key_set,
             remote::remote_daemon_connect,
             remote::remote_daemons_status,
             remote::remote_daemon_disconnect,
@@ -147,6 +189,8 @@ pub fn run() {
             remote::files::remote_file_open,
             remote::files::remote_file_discard,
             remote::main_window_show,
+            system_changes::system_changes_list,
+            system_changes::system_changes_clear,
             tray::flyout::tray_flyout_model,
             tray::flyout::tray_flyout_size,
             tray::flyout::tray_flyout_choose,
@@ -236,7 +280,7 @@ pub fn run() {
             let handle = app.handle().clone();
             thread::spawn(move || {
                 // The outcome is kept in the daemon's state, which the window is built from.
-                let _ = start_daemon(&handle);
+                let _ = start_daemon(&handle, StartFor::Application);
                 let opening = handle.clone();
                 let queued = handle.run_on_main_thread(move || open_window_for(&opening));
                 if let Err(err) = queued {
@@ -246,7 +290,7 @@ pub fn run() {
             });
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context())
         .expect("error while building tauri application");
 
     app.run(|app_handle, event| match event {

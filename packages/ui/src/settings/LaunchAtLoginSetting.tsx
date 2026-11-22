@@ -12,7 +12,9 @@ import { useSettingsReads } from "./settingsReads";
 
 /** Whether the system opens the app when the user logs in. Rendered only where the shell can register it
  * (`GeneralSection`), and once the dialog's read of the system's state (`useLaunchAtLogin`, which the search
- * counts the row by too) has answered (`shown`). What the switch shows is the system's own state. A registration the
+ * counts the row by too) has answered (`shown`). What the switch shows is the system's own state, and its description
+ * also says what the switch adds to the system and takes away again, the entry in the system's list of what opens at
+ * login (P9 in `docs/conventions/principles.md`). A registration the
  * system holds for the user's approval shows as on, with the description saying where to allow it and a button that
  * opens that list. */
 export function LaunchAtLoginSetting(): React.ReactElement | null {
@@ -28,7 +30,7 @@ export function LaunchAtLoginSetting(): React.ReactElement | null {
   const requiresApproval = status === "requiresApproval";
   const description = requiresApproval
     ? <Message id="settings.launchAtLogin.description.requiresApproval" />
-    : t(on ? "settings.launchAtLogin.description.on" : "settings.launchAtLogin.description.off");
+    : `${t(on ? "settings.launchAtLogin.description.on" : "settings.launchAtLogin.description.off")}${t("common.sentenceSeparator")}${t(on ? "settings.launchAtLogin.description.entry.on" : "settings.launchAtLogin.description.entry.off")}`;
 
   const openSettings = async () => {
     try {

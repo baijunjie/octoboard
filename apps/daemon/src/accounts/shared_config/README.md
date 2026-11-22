@@ -25,11 +25,12 @@ What lives where:
 Internals, by file: `link.rs` and `moves.rs` turn sharing on and off item by item and repair links an agent replaced
 (with the file-move primitives: across volumes, backup naming, merging directories); `take_back.rs` moves the account's
 own conversations back out of the default directory when sharing is turned off; `registries.rs` keeps the plugin
-registries' recorded paths consistent with shared or unshared items, and a provider's thread database is kept
-consistent through its `ThreadRegistry` (`apps/daemon/src/accounts/thread_registry.rs`; Codex's is
-`adapter/codex/threads.rs`), which the account switch's copy uses too; `cli_reads.rs`
-is the admission of agent CLI runs outside a session against a running change. `link.rs` also holds the
-constructors of `SharingCause` and `SharingItemFailure` (defined in `protocol/accounts.rs`).
+registries' recorded paths consistent with shared or unshared items, and `keep.rs` keeps the default directory free of
+paths through a sharing account's directory (the registries pointed back after each of the account's sessions, before
+its launches, at stop and at start), and a provider's thread database is kept consistent through its `ThreadRegistry`
+(`apps/daemon/src/accounts/thread_registry.rs`; Codex's is `adapter/codex/threads.rs`), which the account switch's copy
+uses too; `cli_reads.rs` is the admission of agent CLI runs outside a session against a running change. `link.rs` also
+holds the constructors of `SharingCause` and `SharingItemFailure` (defined in `protocol/accounts.rs`).
 
 ## External interfaces
 
@@ -44,6 +45,8 @@ Exported from `mod.rs` (defined there unless a file is named):
 - `own_conversations` (`take_back.rs`) — the conversations turning sharing off takes back.
 - `before_launch` (`launch.rs`) — before a session launches or resumes: refuses while its account's change runs, and
   repairs links.
+- `keep_registries_after_exit`, `keep_registries_at_stop`, `keep_registries_at_start` (`keep.rs`) — point the plugin
+  registries back at the default directory after a sharing account's session ends, as the daemon stops and as it starts.
 - `refuse_if_changing`, `before_switch_copy` — refuse opening a session, a handoff or an account switch while a change
   of the account involved runs.
 - `Sharing` — what `AppState` holds: the per-agent locks.

@@ -157,6 +157,12 @@ impl RecordStore for GrokRecords {
         super::conversation::entries(line)
     }
 
+    /// A `user` line of the chat history that Grok did not put there itself
+    /// (`super::conversation::is_user_prompt`).
+    fn is_user_prompt(&self, line: &str) -> Option<bool> {
+        super::conversation::is_user_prompt(line)
+    }
+
     fn feed_reader(&self) -> Option<Box<dyn FeedReader>> {
         Some(Box::new(super::feed::GrokFeedReader::default()))
     }

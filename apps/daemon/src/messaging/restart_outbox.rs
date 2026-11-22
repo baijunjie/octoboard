@@ -26,7 +26,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use crate::hostfs::replace::{remove_replaced, replace_beside, Permissions};
-use crate::state::AppState;
+use crate::state::{AppState, StartWork};
 
 /// The version of the file's format this build writes and reads; a file of another is dropped. A
 /// field added with a serde default and skipped when empty keeps it: an earlier build reads a newer
@@ -101,10 +101,15 @@ impl AppState {
     /// `path` for the next daemon, replacing whatever is there; with nothing queued for a running
     /// session, removes the file. Called by a planned stop once its terminals are handed over, when
     /// no drain begins another write. Returns how many messages were saved. **Blocks**, for up to
-    /// [`SEAL_DRAIN_WAIT`] on a drain still writing, and on the file.
+    /// [`SEAL_DRAIN_WAIT`] on a drain still writing, and on the file. A clean-up run, which read
+    /// none ([`StartWork::QueuedMessages`]), takes no message from now on either and leaves the
+    /// file as it found it.
     pub fn save_restart_outbox(&self, path: &Path) -> usize {
         let token = uuid::Uuid::new_v4().simple().to_string();
         let mut sealed = self.outbox.seal(SEAL_DRAIN_WAIT);
+        if !self.does(StartWork::QueuedMessages) {
+            return 0;
+        }
         sealed.sort_by(|a, b| a.0.cmp(&b.0));
         let mut messages = Vec::new();
         for (session, queue) in sealed {
@@ -157,8 +162,12 @@ impl AppState {
     /// Queues again, in order, the messages the previous daemon's planned stop left at `path`,
     /// deleting the file, and writes them once the adoption is over into the sessions adopted with
     /// the launch each was queued for; the rest are forgotten. Called at start, once the adoption
-    /// has begun and before anything is adopted. **Blocks** on the file.
+    /// has begun and before anything is adopted. **Blocks** on the file. A clean-up run queues none
+    /// and leaves the file ([`StartWork::QueuedMessages`]).
     pub fn load_restart_outbox(self: &Arc<Self>, path: &Path) {
+        if !self.does(StartWork::QueuedMessages) {
+            return;
+        }
         let Some(file) = load_and_delete(path) else {
             return;
         };
@@ -258,6 +267,36 @@ mod tests {
         next.end_adoption();
         assert!(next.outbox.is_row_queued(7));
         assert_eq!(next.take_queued("s"), ["one", "kept", "two"]);
+    }
+
+    /// A clean-up run between two daemons neither reads the file nor replaces it at a planned
+    /// stop of its own: the messages are still there for the daemon that starts to stay.
+    #[tokio::test]
+    async fn a_clean_up_run_leaves_the_queued_messages_for_a_daemon_that_stays() {
+        let (state, dir) = app_state("restart-outbox-clean-up");
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        state.queue_message("s", "one");
+        let path = dir.join("restart-outbox.json");
+        assert_eq!(state.save_restart_outbox(&path), 1);
+        let saved = std::fs::read(&path).unwrap();
+
+        let (run, _run_dir) = app_state("restart-outbox-clean-up-run");
+        run.set_clean_up_run();
+        run.begin_adoption();
+        run.load_restart_outbox(&path);
+        run.register_live(live.clone());
+        run.end_adoption();
+        assert_eq!(run.queued_count("s"), 0);
+        assert_eq!(run.save_restart_outbox(&path), 0);
+        assert_eq!(std::fs::read(&path).unwrap(), saved);
+
+        let (next, _next_dir) = app_state("restart-outbox-clean-up-next");
+        next.begin_adoption();
+        next.load_restart_outbox(&path);
+        next.register_live(live.clone());
+        next.end_adoption();
+        assert_eq!(next.take_queued("s"), ["one"]);
     }
 
     /// A session the next daemon does not run in the launch the messages were queued for gets

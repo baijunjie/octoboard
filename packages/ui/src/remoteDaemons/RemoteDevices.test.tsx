@@ -8,7 +8,7 @@ import { closeOpenTooltip, enter, openTooltip } from "../components/hint/tooltip
 import { ActionableError } from "../errors/actionableError";
 import { setLanguage } from "../i18n/language";
 import { LanguageProvider } from "../i18n/react";
-import type { PlatformAdapter, RemoteDaemonConnectOutcome, RemoteDaemonHandedOutcome, RemoteDaemonEntry, RemoteDaemonEntryInput, RemoteDaemonStatus } from "../platform";
+import type { PlatformAdapter, RemoteDaemonConnectOutcome, RemoteDaemonHandedOutcome, RemoteDaemonEntry, RemoteDaemonEntryInput, RemoteDaemonSaved, RemoteDaemonStatus, RemoteDeviceKeyRemoval } from "../platform";
 import { acknowledgeAllAlerts } from "../test/alertQueue";
 import { fakeTimers, runOutTimers } from "../test/clock";
 import { MAC_HOST } from "../test/hosts";
@@ -30,14 +30,21 @@ const STAGING: RemoteDaemonEntry = {
   keyPath: null,
   fingerprint: null,
   octoboarddPath: null,
+  deviceKey: { declined: false, file: null, mark: null },
 };
 const KEYED: RemoteDaemonEntry = { ...STAGING, id: "keyed", name: "Keyed", auth: "key", keyPath: "~/.ssh/id_ed25519" };
 const DEVICE: RemoteDaemonEntry = { ...STAGING, id: "device", name: "Device", auth: "device" };
 
 const list = vi.fn(async (): Promise<RemoteDaemonEntry[]> => [STAGING]);
 const status = vi.fn(async (): Promise<RemoteDaemonStatus[]> => []);
-const save = vi.fn(async (entry: RemoteDaemonEntryInput): Promise<RemoteDaemonEntry> => ({ ...entry, id: entry.id ?? "new" }));
-const remove = vi.fn(async (_id: string) => {});
+const NOT_INSTALLED: RemoteDeviceKeyRemoval = { line: { result: "not_installed" }, privateKeyLeft: null };
+const REMOVED: RemoteDeviceKeyRemoval = { line: { result: "removed" }, privateKeyLeft: null };
+const LEFT_LINE = { result: "left_on_host", mark: "Octoboard on Desk", file: "~/.ssh/authorized_keys", host: "staging.example.com", user: "deploy", detail: "Unreachable(\"timed out\")" } as const;
+const LEFT: RemoteDeviceKeyRemoval = { line: LEFT_LINE, privateKeyLeft: null };
+const KEY_KEPT = { service: "app.octoboard.desktop.remote-daemon-key", account: "device", host: "staging.example.com", user: "deploy", detail: "the keychain is locked" };
+const save = vi.fn(async (entry: RemoteDaemonEntryInput): Promise<RemoteDaemonSaved> => ({ entry: { ...entry, id: entry.id ?? "new", deviceKey: { declined: false, file: null, mark: null } }, keyRemoval: NOT_INSTALLED }));
+const remove = vi.fn(async (_id: string): Promise<RemoteDeviceKeyRemoval> => NOT_INSTALLED);
+const setDeviceKey = vi.fn(async (_id: string, _enabled: boolean): Promise<RemoteDeviceKeyRemoval> => NOT_INSTALLED);
 const connect = vi.fn(async (_request: unknown): Promise<RemoteDaemonConnectOutcome> => ({ outcome: "opened" }));
 const disconnect = vi.fn(async (_id: string) => {});
 const showUpdates = vi.fn(async () => {});
@@ -47,7 +54,8 @@ beforeEach(() => {
   list.mockReset().mockResolvedValue([STAGING]);
   status.mockReset().mockResolvedValue([]);
   save.mockClear();
-  remove.mockClear();
+  remove.mockReset().mockResolvedValue(NOT_INSTALLED);
+  setDeviceKey.mockReset().mockResolvedValue(NOT_INSTALLED);
   disconnect.mockClear();
   showUpdates.mockClear();
   connect.mockReset().mockResolvedValue({ outcome: "opened" });
@@ -75,6 +83,7 @@ const DESKTOP: PlatformAdapter = {
     },
     save: (entry) => save(entry),
     remove: (id) => remove(id),
+    setDeviceKey: (id, enabled) => setDeviceKey(id, enabled),
     connect: (request) => connect(request),
     disconnect: (id) => disconnect(id),
     onPageRequested: (listener) => {
@@ -173,11 +182,262 @@ it("connects with this computer's key without asking, and asks for the password 
   await pressTile(container, "Device");
   expect(sentRequest()).toEqual({ id: "device", secret: null, confirmFingerprint: null, action: null, browser: false });
   expect(modal()!.textContent).toContain("Enter password");
-  expect(modal()!.textContent).toContain("no longer accepts this computer’s key");
+  expect(modal()!.textContent).toContain("The server no longer accepts this computer’s key. Sign in with the password instead.");
   await type(firstInput(modal()!), "hunter2");
   await press(modal()!, "Connect");
   expect(connect).toHaveBeenCalledTimes(2);
   expect(sentRequest()).toEqual({ id: "device", secret: "hunter2", confirmFingerprint: null, action: null, browser: false });
+});
+
+/** Signs in to Staging with the password, which the shell answers by asking about this computer's key. */
+async function offeredKey(container: HTMLElement) {
+  connect.mockResolvedValueOnce({ outcome: "device_key_offered", mark: "Octoboard on Desk", file: "~/.ssh/authorized_keys" });
+  await pressTile(container);
+  await type(firstInput(modal()!), "hunter2");
+  await press(modal()!, "Connect");
+}
+
+it("asks before this computer's key is installed, naming the line, the file and the server, and installs it on a yes", async () => {
+  const container = await mount();
+  await offeredKey(container);
+  // Asked without the answer: the shell wrote nothing.
+  expect(sentRequest()).toEqual({ id: "staging", secret: "hunter2", confirmFingerprint: null, action: null, browser: false });
+  const question = modal()!.textContent!.replace(/[\u2068\u2069]/g, "");
+  expect(question).toContain("Add this computer’s key");
+  expect(question).toContain("A key of this computer’s own can be added to Staging");
+  expect(question).toContain("Adding it writes one line to ~/.ssh/authorized_keys for deploy@staging.example.com: this computer’s public key, marked Octoboard on Desk.");
+  expect(question).toContain("Removing this remote daemon, or turning its key off, removes the line and the private key.");
+  expect(question).toContain("you are not asked again");
+  // Its buttons are the two answers; the way out is the close button.
+  expect(buttonNamed(modal()!, "Cancel")).toBeUndefined();
+  // It came up by itself after the connection's seconds, so an Enter meant for something else answers nothing.
+  expect(document.activeElement).not.toBe(buttonNamed(modal()!, "Add key"));
+  await press(modal()!, "Add key");
+  expect(connect).toHaveBeenCalledTimes(2);
+  expect(sentRequest()).toEqual({ id: "staging", secret: "hunter2", confirmFingerprint: null, action: null, browser: false, deviceKey: true });
+  expect(modal()).toBeUndefined();
+});
+
+it("installs nothing on a no, connecting again with the password and the answer for the shell to remember", async () => {
+  const container = await mount();
+  await offeredKey(container);
+  await press(modal()!, "Do not add");
+  expect(connect).toHaveBeenCalledTimes(2);
+  expect(sentRequest()).toEqual({ id: "staging", secret: "hunter2", confirmFingerprint: null, action: null, browser: false, deviceKey: false });
+  expect(modal()).toBeUndefined();
+});
+
+it("ends the connection when the question about this computer's key is closed, sending no answer", async () => {
+  const container = await mount();
+  await offeredKey(container);
+  await act(async () => modal()!.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
+  expect(modal()).toBeUndefined();
+  expect(connect).toHaveBeenCalledTimes(1);
+});
+
+it("asks about this computer's key for the browser's connection too, and holds the answered one for the browser", async () => {
+  connect.mockResolvedValueOnce({ outcome: "generation_mismatch", remoteGeneration: 1, localGeneration: 2, remoteVersion: "0.9.0", localVersion: "1.0.0" });
+  connect.mockResolvedValueOnce({ outcome: "device_key_offered", mark: "Octoboard on Desk", file: "~/.ssh/authorized_keys" });
+  const container = await mount();
+  await pressTile(container);
+  await type(firstInput(modal()!), "hunter2");
+  await press(modal()!, "Connect");
+  await press(modal()!, "Open in browser");
+  await press(modal()!, "Do not add");
+  expect(sentRequest()).toEqual({ id: "staging", secret: "hunter2", confirmFingerprint: null, action: null, browser: true, deviceKey: false });
+});
+
+it("takes up the question about this computer's key a connection made from a menu was left with", async () => {
+  list.mockResolvedValue([KEYED]);
+  await mount();
+  await act(async () => handOver!([{ id: "keyed", outcome: { outcome: "device_key_offered", mark: "Octoboard on Desk", file: "~/.ssh/authorized_keys" } }]));
+  expect(modal()!.textContent).toContain("Add this computer’s key");
+  await press(modal()!, "Add key");
+  expect(sentRequest()).toEqual({ id: "keyed", secret: null, confirmFingerprint: null, action: null, browser: false, deviceKey: true });
+});
+
+const keySwitch = (container: ParentNode) => container.querySelector<HTMLInputElement>('main input[role="switch"]')!;
+/** The accessible description of the key's switch: the text of what its `aria-describedby` names. */
+const keyDescription = (container: ParentNode) => document.getElementById(keySwitch(container).getAttribute("aria-describedby") ?? "")?.textContent?.replace(/[\u2068\u2069]/g, "");
+const INSTALLED: RemoteDaemonEntry = { ...DEVICE, deviceKey: { declined: false, file: "~/.ssh/authorized_keys", mark: "Octoboard on Desk" } };
+
+it("says where this computer's key is installed, with its switch on, and how a daemon without it signs in", async () => {
+  list.mockResolvedValue([INSTALLED, STAGING]);
+  const container = await mount();
+  const page = () => container.querySelector("main")!.textContent!.replace(/[\u2068\u2069]/g, "");
+  expect(keySwitch(container).checked).toBe(true);
+  const INSTALLED_LINE = "Added for deploy@staging.example.com. Connections from this computer sign in with it without asking for a password or passphrase.";
+  expect(page()).toContain(INSTALLED_LINE);
+  // The switch is on in two states: its line is its accessible description, which tells them apart.
+  expect(keyDescription(container)).toBe(INSTALLED_LINE);
+  expect(page()).toContain("Connections sign in with this computer’s key.");
+  expect(container.querySelector("main input[type=radio]")).toBeNull();
+  // One without the key says how it signs in, and that the next connection asks.
+  await act(async () => rowNamed(container, "Staging").click());
+  expect(keySwitch(container).checked).toBe(true);
+  expect(page()).toContain("Not added yet. The next connection asks before adding it to the server.");
+  expect(keyDescription(container)).toBe("Not added yet. The next connection asks before adding it to the server.");
+  expect([...container.querySelectorAll<HTMLInputElement>("main input[type=radio]")].find((radio) => radio.checked)!.labels![0].textContent).toBe("Password");
+});
+
+it("counts a key an earlier version installed as installed, though nothing says where its line is", async () => {
+  list.mockResolvedValue([DEVICE]);
+  const container = await mount();
+  expect(keySwitch(container).checked).toBe(true);
+  expect(container.querySelector("main")!.textContent).toContain("Added for");
+});
+
+it("turns an installed key off only after asking, removing it from the server and keeping the remote daemon", async () => {
+  list.mockResolvedValue([INSTALLED]);
+  setDeviceKey.mockResolvedValue(REMOVED);
+  const container = await mount();
+  await act(async () => keySwitch(container).click());
+  expect(setDeviceKey).not.toHaveBeenCalled();
+  const question = modal()!.textContent!;
+  expect(question).toContain("Turn off this computer’s key");
+  expect(question).toContain("This computer’s key will be removed from");
+  expect(question).toContain("Its line is taken out of the server’s authorized keys, and the private key is removed from this computer.");
+  list.mockResolvedValue([{ ...STAGING, id: "device", name: "Device", deviceKey: { declined: true, file: null, mark: null } }]);
+  await press(modal()!, "Turn off and remove");
+  expect(setDeviceKey).toHaveBeenCalledExactlyOnceWith("device", false);
+  expect(remove).not.toHaveBeenCalled();
+  expect(modal()).toBeUndefined();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+  // The remote daemon stays, its switch off, saying what turning it on does.
+  expect(heading(container)).toBe("Device");
+  expect(keySwitch(container).checked).toBe(false);
+  const OFF_LINE = "Once this is on, the next connection asks before adding this computer’s key to the server. Once it is added, later connections sign in with it.";
+  expect(container.querySelector("main")!.textContent).toContain(OFF_LINE);
+  expect(keyDescription(container)).toBe(OFF_LINE);
+});
+
+it("leaves an installed key as it is when turning it off is cancelled", async () => {
+  list.mockResolvedValue([INSTALLED]);
+  const container = await mount();
+  await act(async () => keySwitch(container).click());
+  await press(modal()!, "Cancel");
+  expect(setDeviceKey).not.toHaveBeenCalled();
+  expect(keySwitch(container).checked).toBe(true);
+});
+
+it("turns a declined key on again at once, which installs nothing until the next connection asks", async () => {
+  const declined = { ...STAGING, deviceKey: { declined: true, file: null, mark: null } };
+  list.mockResolvedValue([declined]);
+  const container = await mount();
+  expect(keySwitch(container).checked).toBe(false);
+  list.mockResolvedValue([STAGING]);
+  await act(async () => keySwitch(container).click());
+  expect(setDeviceKey).toHaveBeenCalledExactlyOnceWith("staging", true);
+  expect(modal()).toBeUndefined();
+  expect(keySwitch(container).checked).toBe(true);
+  // Off again, with nothing installed, asks nothing either.
+  await act(async () => keySwitch(container).click());
+  expect(setDeviceKey).toHaveBeenLastCalledWith("staging", false);
+  expect(modal()).toBeUndefined();
+});
+
+it("raises an alert when the switch of this computer's key fails", async () => {
+  const declined = { ...STAGING, deviceKey: { declined: true, file: null, mark: null } };
+  list.mockResolvedValue([declined]);
+  setDeviceKey.mockRejectedValue(new Error("cannot write"));
+  const container = await mount();
+  await act(async () => keySwitch(container).click());
+  expect(alert().title).toBe("Could not change this computer’s key");
+});
+
+/** What the alert about a line left on a server says, without the isolates around what is substituted into it. */
+const leftMessage = () => (alert().error as ActionableError).message.replace(/[\u2068\u2069]/g, "");
+
+it("tells which line stays on a server that could not be reached when a key is turned off, the switch done all the same", async () => {
+  list.mockResolvedValue([INSTALLED]);
+  setDeviceKey.mockResolvedValue(LEFT);
+  const container = await mount();
+  await act(async () => keySwitch(container).click());
+  await press(modal()!, "Turn off and remove");
+  expect(alert().title).toBe("Could not remove this computer’s key from the server");
+  expect(leftMessage()).toBe(
+    "This computer’s key could not be removed from staging.example.com, so the line marked Octoboard on Desk may still be in ~/.ssh/authorized_keys for deploy there. If it is, delete it on the server to remove the key. The private key was removed from this computer.",
+  );
+  expect((alert().error as ActionableError).detail).toBe("Unreachable(\"timed out\")");
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
+});
+
+it("tells of a private key the credential store did not remove, naming its item, and never says it was removed", async () => {
+  list.mockResolvedValue([INSTALLED]);
+  // The line went from the server; the keychain kept the private key.
+  setDeviceKey.mockResolvedValue({ line: { result: "removed" }, privateKeyLeft: KEY_KEPT });
+  const container = await mount();
+  await act(async () => keySwitch(container).click());
+  await press(modal()!, "Turn off and remove");
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  expect(alert().title).toBe("Could not remove this computer’s private key");
+  expect(leftMessage()).toBe(
+    "The system’s credential store did not remove the private key kept for deploy on staging.example.com. Remove it there yourself: its item is app.octoboard.desktop.remote-daemon-key, with the account device.",
+  );
+  expect((alert().error as ActionableError).detail).toBe("the keychain is locked");
+});
+
+it("tells of a server's file left incomplete, naming the copy the server kept, as an alert of its own", async () => {
+  list.mockResolvedValue([INSTALLED]);
+  setDeviceKey.mockResolvedValue({ line: { result: "file_incomplete", host: "staging.example.com", user: "deploy", copy: "/tmp/tmp.Ab12/before", detail: ".ssh/authorized_keys may be incomplete" }, privateKeyLeft: null });
+  const container = await mount();
+  await act(async () => keySwitch(container).click());
+  await press(modal()!, "Turn off and remove");
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  expect(alert().title).toBe("The server’s authorized keys may be incomplete");
+  expect(leftMessage()).toBe(
+    "Removing this computer’s key from staging.example.com was cut short while the authorized keys of deploy were being rewritten, so keys may be missing from them. Their earlier content is kept on the server in /tmp/tmp.Ab12/before. Restore the file from that copy: until then, the keys it held may not sign in.",
+  );
+  expect((alert().error as ActionableError).detail).toBe(".ssh/authorized_keys may be incomplete");
+});
+
+it("tells of both where the line stays on the server and the private key stays on this computer", async () => {
+  list.mockResolvedValue([INSTALLED]);
+  remove.mockResolvedValue({ line: LEFT_LINE, privateKeyLeft: KEY_KEPT });
+  const container = await mount();
+  await act(async () => rowButton(container, "Remove", "Device").click());
+  list.mockResolvedValue([]);
+  await press(modal()!, "Remove");
+  const [line, key] = errorAlerts.getSnapshot();
+  expect(line.title).toBe("Could not remove this computer’s key from the server");
+  // The private key was not removed, so the alert about the line does not say it was.
+  expect((line.error as ActionableError).message).not.toContain("The private key was removed from this computer.");
+  expect(key.title).toBe("Could not remove this computer’s private key");
+});
+
+it("says removing a remote daemon with this computer's key removes the key too, and tells of a line left behind", async () => {
+  list.mockResolvedValue([INSTALLED]);
+  // A key an earlier version installed: the shell does not know its file.
+  remove.mockResolvedValue({ line: { ...LEFT_LINE, file: null }, privateKeyLeft: null });
+  const container = await mount();
+  await act(async () => rowButton(container, "Remove", "Device").click());
+  expect(modal()!.textContent).toContain("This computer’s key is removed from the server, and its private key from this computer.");
+  list.mockResolvedValue([]);
+  await press(modal()!, "Remove");
+  expect(remove).toHaveBeenCalledExactlyOnceWith("device");
+  expect(alert().title).toBe("Could not remove this computer’s key from the server");
+  expect(leftMessage()).toContain("the line marked Octoboard on Desk may still be in the authorized keys of deploy there. If it is, delete it on the server");
+  // The remote daemon is removed all the same.
+  expect(heading(container)).toBe("No remote daemons yet");
+});
+
+it("says nothing about a key when removing a remote daemon that has none", async () => {
+  const container = await mount();
+  await act(async () => rowButton(container, "Remove").click());
+  expect(modal()!.textContent).toContain("The server and its daemon stay the same.");
+  expect(modal()!.textContent).not.toContain("private key");
+  await press(modal()!, "Remove");
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+});
+
+it("tells of the line left on the server a saved daemon was pointed away from, the change saved all the same", async () => {
+  list.mockResolvedValue([INSTALLED]);
+  save.mockResolvedValueOnce({ entry: { ...STAGING, id: "device", name: "Device", user: "ops" }, keyRemoval: LEFT });
+  const container = await mount();
+  await type(field("User"), "ops");
+  await press(container, "Save");
+  expect(save).toHaveBeenCalledOnce();
+  expect(alert().title).toBe("Could not remove this computer’s key from the server");
 });
 
 it("shows the fingerprint of a host not pinned yet and retries with it once confirmed, keeping the password", async () => {
@@ -834,7 +1094,7 @@ it("saves a new device and shows it selected", async () => {
   await addFromSidebar(container);
   await type(field("Host"), "box.example.com");
   await type(field("User"), "me");
-  const created = { id: "new", name: "box.example.com", host: "box.example.com", port: 22, user: "me", auth: "password" as const, keyPath: null, fingerprint: null, octoboarddPath: null };
+  const created = { id: "new", name: "box.example.com", host: "box.example.com", port: 22, user: "me", auth: "password" as const, keyPath: null, fingerprint: null, octoboarddPath: null, deviceKey: { declined: false, file: null, mark: null } };
   list.mockResolvedValue([STAGING, created]);
   await press(container, "Save");
   expect(save).toHaveBeenCalledExactlyOnceWith({ id: null, name: "box.example.com", host: "box.example.com", port: 22, user: "me", auth: "password", keyPath: null, fingerprint: null, octoboarddPath: null });
@@ -847,7 +1107,8 @@ it("saves a change to the shown device without changing what is shown", async ()
   const container = await mount();
   await type(field("User"), "ops");
   await press(container, "Save");
-  expect(save).toHaveBeenCalledExactlyOnceWith({ ...STAGING, user: "ops" });
+  const { deviceKey: _deviceKey, ...sent } = STAGING;
+  expect(save).toHaveBeenCalledExactlyOnceWith({ ...sent, user: "ops" });
   expect(heading(container)).toBe("Staging");
 });
 
@@ -967,7 +1228,7 @@ const filledNew = async (container: ParentNode) => {
   await type(field("Host"), "box.example.com");
   await type(field("User"), "me");
 };
-const CREATED: RemoteDaemonEntry = { id: "new", name: "box.example.com", host: "box.example.com", port: 22, user: "me", auth: "password", keyPath: null, fingerprint: null, octoboarddPath: null };
+const CREATED: RemoteDaemonEntry = { id: "new", name: "box.example.com", host: "box.example.com", port: 22, user: "me", auth: "password", keyPath: null, fingerprint: null, octoboarddPath: null, deviceKey: { declined: false, file: null, mark: null } };
 
 it("selects a device that was added only once the list holds it, and selects nothing in between", async () => {
   list.mockResolvedValue([STAGING, KEYED]);

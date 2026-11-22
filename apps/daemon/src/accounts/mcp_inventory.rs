@@ -72,7 +72,7 @@ pub(crate) trait McpInventoryReader: Send + Sync {
 pub(crate) fn not_run_unavailable(refused: &NotRun) -> McpInventoryUnavailable {
     let reason = match refused {
         NotRun::BinaryNotFound(_) | NotRun::BinaryRefused(_) => McpInventoryFailure::CliMissing,
-        NotRun::DirMissing(_) => McpInventoryFailure::Failed,
+        NotRun::DirMissing(_) | NotRun::HomeNotPrepared(_) => McpInventoryFailure::Failed,
     };
     McpInventoryUnavailable::new(reason, Some(refused.detail()))
 }

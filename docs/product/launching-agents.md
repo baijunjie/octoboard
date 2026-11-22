@@ -6,7 +6,10 @@ What each agent's launch does differently is in `docs/product/per-agent-launch-s
 
 ## What Octoboard never modifies
 
-This is the guarantee the whole design rests on:
+Octoboard leaves the user's own system — the agents' configuration and everything else outside Octoboard's own
+directories — as it finds it, apart from what this section lists. What Octoboard does inside a project the user added
+and in its repository — the project's files, git operations, a session's branches and worktrees — is development work,
+outside that promise; the first point below says what Octoboard itself does there.
 
 - **Octoboard installs nothing into a project.** Outside the Git operations below, it writes no instruction file,
   no settings file and no hook of its own, and changes none of the project's. What the session's agent itself writes
@@ -14,9 +17,9 @@ This is the guarantee the whole design rests on:
   whole thing and is not Octoboard's doing. Removing a project removes an association and leaves the directory
   alone, unless the user chooses to move the folder to the system Trash with it (see "Moving the project folder to
   the Trash" in `docs/product/removing-projects.md`).
-  Octoboard changes a project's files only through an authorized fast-forward, a merge the user confirmed, **Switch
-  branch** or **Restore file changes**, and does not push except at the user's word. A branch that is behind its
-  upstream and has no commits of its own is fast-forwarded, which moves its working tree — on its own once
+  In the project's own worktree, Octoboard changes files only through an authorized fast-forward, a merge the user
+  confirmed, **Switch branch** or **Restore file changes**, and does not push except at the user's word. A branch that
+  is behind its upstream and has no commits of its own is fast-forwarded, which moves its working tree — on its own once
   **Automatically pull repositories** has been turned on (see "Automatically pulling repositories" in
   `docs/product/project-git-status.md`), or for one project when the user chooses **Pull current branch**. A branch that
   has diverged from its upstream is changed only by Pull current branch, and only once the user confirms: its upstream
@@ -30,40 +33,138 @@ This is the guarantee the whole design rests on:
   the project's own worktree to an existing local branch when chosen, preserving local changes Git can carry safely (see
   "Switching the local branch" in `docs/product/project-git-actions.md`). A check's fetch of remote refs is separate: it
   does not move the working tree and it does not push (see "What one check does" in
-  `docs/product/project-git-status.md`).
-- **The user's own agent configuration is never written to, with five narrow exceptions.** Octoboard does not edit
-  `~/.claude.json`, `~/.codex/`, `~/.grok/`, an account's config directory, or anything else the agent reads as the
-  user's global setup, and it never makes a trust decision of its own in any of them. The first exception is switching a
-  session to another account: it copies that one session's conversation — its record and what the agent keeps of the
-  conversation beside it — into the target account's directory, adding it there or replacing an earlier copy, by way of
-  a transient `.octoboard-switch` directory at the root of the target directory, so a failure never leaves a
-  half-written item among the agent's own (what is copied for each agent, and how a failed copy is undone, are in
-  "Carrying the conversation" in `docs/product/switching-session-accounts.md`). It touches no settings file of the
-  agent's, nothing of other sessions in either directory, and it leaves the originals where they were. The second
-  belongs to the same switch, for a Codex session: Codex remembers each thread in a database in its home (or wherever
-  the home's `sqlite_home` setting or `CODEX_SQLITE_HOME` puts it) and resumes the rollout that database names, so a
-  target account that held the thread earlier would resume an older branch of it however whole the copied conversation
-  is. The switch therefore updates the `rollout_path` that database keeps of that thread to the carried head where it
-  leads to another file, and changes nothing else in it; if it cannot, the switch fails before the session is relaunched
-  (see "Carrying the conversation" in `docs/product/switching-session-accounts.md`). The third is Grok Build's trust
-  store: once Grok's own trust confirmation has been accepted, the one entry Grok wrote into its session's copy of the
-  store is carried, unchanged, into the user's own (see "Carrying Grok Build's trust record" in
-  `docs/product/folder-trust.md`). The fourth is an account set to share the agent's default configuration: its
-  directory's shareable entries are replaced by links into the default account's directory, its configuration set aside
-  as backups and its conversation history moved into the default directory, the links repaired before each of its
-  sessions launches, and all of it undone when sharing is turned off, together with the paths the default directory's
-  Codex thread database and plugin registries record through the account (see
-  `docs/product/sharing-the-default-configuration.md`). The fifth is settings saved in a Grok Build session whose source
-  `config.toml` is a link: after the process exits, selected changes are carried into the file that link leads to,
-  leaving the link in place (see "The per-session Grok home" in `docs/product/per-agent-launch-specifics.md`). Creating
-  a Codex account's directory that does not exist yet, empty, before its first launch is not an exception: Codex refuses
-  to start without it, and nothing of the user's is in it.
+  `docs/product/project-git-status.md`). Archiving or deleting sessions removes the branches they worked on and the
+  linked worktrees that have them checked out, where git can do so safely (see
+  `docs/product/branch-and-worktree-cleanup.md`).
+- **What Octoboard gives an agent reaches it on each launch, and only there.** Its hooks, its MCP server, the role
+  description and the user's choices it carries (see "What is injected on every launch" below) are passed as launch
+  arguments, environment variables, or files Octoboard writes in its own directory, `~/.octoboard` (see "How each agent
+  is given the injection" in `docs/product/per-agent-launch-specifics.md`). Octoboard does not edit `~/.claude.json`,
+  `~/.codex/`, `~/.grok/`, an account's config directory, or anything else the agent reads as the user's global setup,
+  adds no hook of its own to the user's settings, and makes no trust decision of its own in any of them other than a
+  console's own directory, whose trust the agent then records as it does for any answer (see below). Nothing a
+  session changes in the files Octoboard wrote for its launch is carried back into the user's own, except Grok Build's
+  trust entry and Grok Build's settings saved in a session, both listed below.
+- **Octoboard's own writes into the user's agent configuration are the operations listed below**, each with what sets
+  it off.
 
-Where an agent stops to ask whether to trust a folder, Octoboard decides nothing on its behalf: it presses the
-agent's own confirmation, with the keystrokes a person would type — for a project session only after the user has
-given Octoboard permission, for a console session in the console's own working directory without asking — and the
-agent records the trust in its own configuration, as it does when a person answers. See
-`docs/product/folder-trust.md`.
+**What an agent writes for itself is not Octoboard's change.** An agent's CLI writes as it does in the user's own use
+of it: its conversation records, its caches and logs, a login's credentials, and the trust it records when its own
+trust confirmation is answered. So do the commands of an agent's CLI that Octoboard runs as part of what the user asked
+for, the agent doing what the user asked: an account's login (see `docs/product/logging-accounts-in.md`), an MCP
+server's sign-in or sign-out (see "Signing an account in to and out of an MCP server" in
+`docs/product/account-mcp-servers-and-connectors.md`), a CLI update (see "Updating" in
+`docs/product/agent-cli-updates.md`), and, before a conversation is resumed, `codex unarchive` for a Codex conversation
+Codex itself archived and stopping a Claude Code background session that holds the conversation (both in "Archiving,
+interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`).
+
+**Octoboard's own background runs of an agent's CLI** — reading an account's quota, starting a usage window and the
+other short runs listed in "How a run of an agent's CLI is stopped" in `docs/product/account-quota-readings.md` — leave
+behind what "What reading a quota leaves behind" in `docs/product/account-quota-readings.md` and "What a kick leaves
+behind" in `docs/product/starting-usage-windows.md` describe. Grok Build's quota reading, model listing and kick run in
+a directory of Octoboard's own and leave the account's `config.toml` as it was (see "Where Grok Build's readings run"
+in `docs/product/account-quota-readings.md`). In a config directory Claude Code has not run in before, Claude Code's
+quota reading, `claude mcp list` and `claude agents --json` carry out Claude Code's own first-run set-up there, which
+changes its configuration files as its next launch by the user would have (see "Claude Code's first-run set-up" in
+`docs/product/account-quota-readings.md`). Codex's quota reading, model listing and MCP inventory change no
+configuration file of Codex's.
+
+Where an agent stops to ask whether to trust a folder, Octoboard decides nothing about a project on its behalf. In a
+project session it presses the agent's own confirmation, with the keystrokes a person would type, only after the user
+has given Octoboard permission, and the agent records the trust in its own configuration, as it does when a person
+answers. A console session runs in a directory of Octoboard's own, whose trust is Octoboard's to give: Claude Code's
+and Codex's confirmations there are pressed without asking, and the agent records the trust as for any answer — an
+entry naming the console's directory in Claude Code's trust list, or, only where a git repository holds that
+directory, an entry for the repository's root in Codex's `config.toml` — which stays after the console is deleted and
+after Octoboard is uninstalled. Grok Build is trusted there for the launch alone, recording nothing in the user's trust
+list. See "Console sessions' trust confirmations" in `docs/product/folder-trust.md`.
+
+A macOS run on 2026-11-24 opened consoles on signed-in accounts in a local build with its own app identifier and
+daemon data directory. Without keyboard input, Claude Code 2.1.330 reached its composer and its `.claude.json`
+gained `hasTrustDialogAccepted = true` for the newly created console directory. The terminal observer first saw
+the composer after the confirmation had already cleared. Grok Build 1.0.92 reached its composer without a trust
+confirmation and its console entry was present in the session's copy of `trusted_folders.toml`. The source
+`trusted_folders.toml`, Grok Build's `config.toml` and login store, and Claude Code's settings files stayed
+byte for byte unchanged. The agents also wrote their ordinary runtime state, including Claude Code's startup
+and project session metadata, and Grok Build's session files and tip cursor.
+
+**The operations that write into the user's agent configuration**, each with what it writes and where:
+
+- **Switching a session's account** — the user's **Switch account**, after its confirmation; an owner's switch, once
+  the user approves it or under **Automatically approve account switches**, which the user turned on; or the automatic
+  switch at the usage limit, while the user has **Automatically switch accounts at the usage limit** on (see
+  `docs/product/switching-session-accounts.md` and `docs/product/automatic-account-switch.md`). It copies that one
+  session's conversation — its record and what the agent keeps of the conversation beside it — into the target
+  account's directory, adding it there or replacing an earlier copy, by way of a transient `.octoboard-switch`
+  directory at the root of the target directory, so a failure never leaves a half-written item among the agent's own.
+  For a Codex session it also sets the `rollout_path` the target account's thread database keeps of that thread to the
+  carried head, where it leads to another file, and changes nothing else in that database: Codex resumes the rollout
+  the database names, so a target account that held the thread earlier would otherwise resume an older branch of it.
+  If that cannot be done, the switch fails before the session is relaunched. The switch touches no settings file of
+  the agent's and nothing of other sessions in either directory, and leaves the originals where they were. What is
+  copied for each agent, and how a failed copy is undone, are in "Carrying the conversation" in
+  `docs/product/switching-session-accounts.md`.
+- **Sharing the default configuration** — the account's **Share default configuration** switch in Settings. Turning
+  it on writes into both directories: in the sharing account's, the shareable entries are replaced by links into the
+  default account's directory and its own configuration is set aside as backups; in the default directory, the
+  account's conversation history is moved in, its prompt histories (`history.jsonl`) and Codex's thread-name index
+  (`session_index.jsonl`) are appended to the default directory's, its Codex thread rows are carried into the default
+  directory's thread database, added or pointed at the account's rollouts (not on Windows, where that database is not
+  shared), and a directory the default directory lacks is created there, empty. Before each of the account's sessions
+  launches, the links are repaired under the same rules. The paths the default directory's plugin registries record
+  through the account are pointed at the default directory's own after each of the account's sessions ends, before each
+  of its launches, as the daemon stops and once at daemon start (see "Plugin registries kept leading into the default
+  directory" in `docs/product/sharing-the-default-configuration.md`). Turning sharing off removes the links and
+  restores the backups, points what the default directory's Codex thread database and plugin registries record through
+  the account at the default directory's own, and moves the conversations of the account's own Octoboard sessions back
+  into the account, the shared thread database forgetting the threads moved out and their names copied into the
+  account's `session_index.jsonl`; every other conversation stays in the default directory. The detail of each is in
+  `docs/product/sharing-the-default-configuration.md`.
+- **Grok Build's trust entry for a project's folder** — once Grok's own trust confirmation has been accepted in a
+  project session: pressed by Octoboard after the user agreed in the trust dialog or under the trust permission the
+  user gave, or answered by the user in the session's terminal. The one entry Grok wrote into its session's copy of
+  the trust store is carried, unchanged, into `trusted_folders.toml` in the session's source Grok home, every other
+  entry there left as it is (see "Carrying Grok Build's trust record" in `docs/product/folder-trust.md`). Nothing is
+  carried for a console session, whose directory is trusted in the session's own copy of the store alone, for that
+  launch (see "Console sessions' trust confirmations" there).
+- **Grok Build's settings and plugin installs saved in a session** — a session whose source `config.toml` is a link to
+  a file: a theme, plugin switch or default model changed in the session is written, when the process exits, to the
+  file the link leads to, as Grok itself would have saved it, and the link is left in place; the plugin switches are
+  left out where the session's plugins were its per-session home's own and went with it. A session whose source
+  Grok home has an `installed-plugins/` directory: a plugin installed in the session is recorded by Grok in that
+  directory's `registry.json` through the session's per-session home, and the `path` of each such entry is rewritten
+  to the source home's own `installed-plugins/` — when the process exits, and, for entries an earlier process of the
+  session or a session whose per-session home no longer exists left, before each launch — every other entry and the
+  rest of the registry left as they are (both in "The per-session Grok home" in
+  `docs/product/per-agent-launch-specifics.md`).
+- **Moving the agent's own records to the Trash** — deleting one session, for the sessions it removes that have no
+  conversation yet and whose records, read first, hold no prompt sent to them; a deletion whose confirmation's option
+  to move the records is ticked, for every session it removes. The agent's own records of those sessions are moved
+  from the accounts' directories into the system Trash. No other deletion moves a used session's records, even when the agent itself no longer has the conversation: the automatic
+  deletion of archived sessions whose conversation is gone, and reopening a session whose archived owner's conversation
+  is gone, leave them where they are. Which records are taken, and from which accounts, is in "Moving the agent's own
+  records to the Trash" in `docs/product/deleting-sessions.md`.
+
+Creating a Codex account's directory that does not exist yet, empty, before its first launch or sign-in is not one of
+these: Codex refuses to start without it, and nothing of the user's is in it.
+
+Outside the agents' configuration, the desktop application and the server form put these in place:
+
+- at the user's word: the command-line link, made by **Install** and removed by **Remove** (see "Command-line tool" in
+  `docs/product/general-settings.md`); the login entry, macOS's login item or the Windows `Run` value, added and
+  removed by **Launch at login** (see `docs/product/launch-at-login.md`); and, through the server form's install
+  script, the `octoboardd` executable in its install directory and, with `--service`, the systemd user unit in the
+  user's systemd configuration directory and lingering for the user, turned on with `loginctl enable-linger` (see
+  "Installing it as a service" in `docs/product/installing-the-server-form.md`); and a key of this computer's own on a
+  remote daemon's host, one line in the remote user's authorized keys, added after a password or key-file sign-in only
+  once the owner answers **Add key** to the window's question, and taken back from the host, with its private half from
+  the credential store, when it is turned off on the device's page, the saved daemon is removed, or its host, port or
+  user changes (see "Device keys" in
+  `docs/product/remote-daemons.md`);
+- with the server form's updates: `octoboardd.previous` beside its executable (see
+  `docs/product/files-octoboard-owns.md`);
+- by itself: the Windows taskbar's jump list of the remote daemons (see "Where remote daemons are reached from" in
+  `docs/product/remote-daemons.md`).
 
 Claude Code's folder trust and Codex's permission preset affect what Octoboard can promise for a session (see
 `docs/product/per-agent-launch-specifics.md` and "The raised hand" in `docs/product/session-statuses.md`). Their
@@ -71,12 +172,19 @@ configuration files are read at launch and never rewritten. Claude Code's trust 
 confirmation. All three agents' permission choices can be overridden for every account of the agent
 in Settings; see "Approval modes" in `docs/product/per-agent-settings.md`.
 
-Octoboard supplies the injection **per launch**, without writing it into the agents' configuration files. An agent may
-retain native session settings in its saved conversation: Codex's Custom permission choice preserves saved permissions
-on resume (see "Approval modes" in `docs/product/per-agent-settings.md`). A project's own configuration still loads as
-it does outside Octoboard: its instruction file, skills, hooks and permission rules take effect, because the session
-runs with the project's directory as its working directory and nothing suppresses the agent's normal discovery of them.
-A hook the project itself defines and Octoboard's own hook both run, in the same session.
+An agent may retain native session settings in its saved conversation: Codex's Custom permission choice preserves
+saved permissions on resume (see "Approval modes" in `docs/product/per-agent-settings.md`). A project's own
+configuration still loads as it does outside Octoboard: its instruction file, skills, hooks and permission rules take
+effect, because the session runs with the project's directory as its working directory and nothing suppresses the
+agent's normal discovery of them. A hook the project itself defines and Octoboard's own hook both run, in the same
+session.
+
+**What an uninstall leaves.** The injection needs no uninstall: none of it was ever written into the user's or an
+agent's files, so an agent run on its own after Octoboard is gone starts without Octoboard's hooks, MCP server or role
+description. What the operations above wrote stays as it was left, the agent's or the user's own from then on. What
+stays of everything this section lists once Octoboard is uninstalled — in Octoboard's own directories, in the agents'
+files and elsewhere on the system — with where it is and how to remove it by hand, is in
+`docs/product/what-remains-after-uninstalling.md`.
 
 ## What is injected on every launch
 
@@ -203,8 +311,9 @@ can use, replacing the files or links left there.
 
 Claude Code reads `CLAUDE.md`, Codex reads `AGENTS.md`, and Grok Build reads both: with links it loads the shared text
 once, and without them it reads the full copy and takes the import line as written. A console's working directory is
-not a git repository, and Grok reads the instruction files there once the folder is trusted, which Octoboard's press
-of a console session's trust confirmation sees to (see `docs/product/folder-trust.md`). Console sessions of every
+not a git repository, and Grok reads the instruction files there once the folder is trusted, which the entry each
+Grok console launch writes into its session's own copy of the trust store sees to (see "Console sessions' trust
+confirmations" in `docs/product/folder-trust.md`). Console sessions of every
 agent, running together or not, read the same instruction text, and the file names Octoboard's tools without any
 agent's prefix. Each console session's role description points it to the file by the name its own agent reads.
 

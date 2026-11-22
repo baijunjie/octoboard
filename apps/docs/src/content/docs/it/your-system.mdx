@@ -1,0 +1,88 @@
+---
+title: "Il tuo sistema resta com’era"
+description: "Octoboard lascia il tuo sistema e i file dei tuoi agenti come li ha trovati. Che cosa aggiungono alcune funzioni, come si annulla ciascuna aggiunta e che cosa resta dopo la disinstallazione."
+---
+
+import { Aside, Code } from "@astrojs/starlight/components";
+import { commands, productName, system } from "../../../commands.ts";
+import LinuxUninstall from "../../../snippets/it/linux-uninstall.mdx";
+import WindowsUninstaller from "../../../snippets/it/windows-uninstaller.mdx";
+
+{productName} lascia il tuo sistema come l’ha trovato: la configurazione dei tuoi agenti e tutto il resto che sta fuori dalle cartelle proprie di {productName}. Alcune funzioni, però, aggiungono qualcosa fuori da quelle cartelle. Questa pagina le elenca tutte, con che cosa aggiunge ciascuna, dove e come si annulla, e dice che cosa resta dopo la disinstallazione.
+
+## La regola
+
+- <strong>Ciò che {productName} dà a un agente gli arriva a ogni avvio, e solo lì.</strong> I suoi hook di stato, il suo server MCP e il ruolo che descrive a una sessione vengono passati all’avvio dell’agente, oppure conservati nella cartella propria di {productName}. Per questo non viene modificato nessun file tuo né di un agente: un agente che esegui da solo parte quindi senza niente di tutto ciò.
+- <strong>{productName} non aggiunge nessun hook proprio alle tue impostazioni e non decide nulla al posto tuo sulla cartella di un progetto.</strong> Se la cartella di un progetto è attendibile lo dici tu, e lo registra l’agente. L’unica cartella per cui {productName} risponde è quella propria di una console, che è di {productName} (vedi sotto).
+- <strong>Ciò che un agente scrive per sé è dell’agente.</strong> I suoi registri delle conversazioni, le cache e i log, le credenziali di un accesso e l’attendibilità che registra quando si risponde alla sua domanda vengono scritti come quando usi l’agente senza {productName}. Lo stesso vale per la configurazione iniziale che il programma dell’agente esegue la prima volta che gira in una cartella di configurazione; una lettura fatta da {productName} in background può farla avvenire prima del tuo primo avvio (vedi sotto).
+- <strong>Il lavoro dentro i tuoi progetti non è l’argomento di questa pagina.</strong> Modificare i file di un progetto, le operazioni Git, i branch e i worktree sono il lavoro di sviluppo per cui aggiungi un progetto.
+
+## Che cosa aggiunge una funzione e come annullarlo
+
+Ognuno di questi elementi viene aggiunto solo da una funzione che usi o attivi.
+
+### Si annulla disattivando la funzione
+
+- <strong>La chiave di questo computer su un server remoto.</strong> Dopo che hai effettuato l’accesso a un servizio remoto salvato con una password o un file della chiave, l’app chiede prima di aggiungere qualsiasi cosa: <strong>Aggiungi la chiave di questo computer</strong> indica il file e la riga. <strong>Aggiungi chiave</strong> aggiunge una riga, contrassegnata con <code dir="ltr">{system.keyMark}</code>, alle chiavi SSH autorizzate del tuo utente su quel server (<code dir="ltr">{commands.authorizedKeys}</code> su Linux e macOS) e conserva la chiave privata nell’archivio credenziali di questo computer (il portachiavi di login su macOS, Gestione credenziali su Windows). <strong>Non aggiungere</strong> non aggiunge nulla e la domanda non viene più posta. Per annullare, disattiva <strong>Chiave di questo computer</strong> nella pagina di quel servizio in <strong>Dispositivi remoti</strong>, oppure rimuovi il servizio salvato: l’app toglie la riga dal file e rimuove la chiave privata. Fa lo stesso quando cambi l’host, la porta o l’utente del servizio salvato. Se il server non è raggiungibile, la riga può restare; l’app te lo dice, perché tu la elimini sul server.
+- <strong>Apri al login</strong> (Windows, e macOS 13 o versioni successive). <strong>Impostazioni › Generali › Apri al login</strong> inserisce {productName} nell’elenco delle app che il tuo sistema apre al login, e la sua riga lo dice. Disattivarlo è il modo per toglierlo da quell’elenco.
+- <strong>Lo strumento da riga di comando</strong> (macOS). <strong>Installa</strong>, in <strong>Impostazioni › Generali › Strumento da riga di comando</strong>, aggiunge un collegamento chiamato <code dir="ltr">{system.cliName}</code> in <code dir="ltr">{system.cliDir}</code>, oppure in <code dir="ltr">{system.cliFallbackDir}</code> se il sistema non lo consente; la riga lo dice prima dell’installazione. <strong>Rimuovi</strong> elimina il collegamento.
+- <strong>La condivisione della configurazione predefinita.</strong> <strong>Condividi configurazione predefinita</strong>, nelle impostazioni di un account in <strong>Impostazioni › Account degli agenti</strong>, sostituisce le parti condivisibili della cartella di quell’account con collegamenti alla cartella dell’account predefinito, conserva accanto la configurazione propria dell’account come copie di backup e sposta la sua cronologia delle conversazioni nella cartella dell’account predefinito. La riga lo dice prima che tu la attivi. Disattivandola, i collegamenti vengono rimossi, le copie di backup ripristinate e le conversazioni delle sessioni proprie dell’account riportate indietro. <strong>Una cosa resta:</strong> il resto della cronologia delle conversazioni spostata resta nella cartella dell’account predefinito, perché rimuoverla ti farebbe perdere le conversazioni. Vedi [Shared configuration](../features/shared-configuration/).
+
+### Resta come tuo o dell’agente
+
+Queste operazioni scrivono qualcosa che da quel momento è tuo o dell’agente, quindi {productName} non ha nulla di proprio da annullare. Dove una voce si può rimuovere a mano, l’elemento dice dove si trova.
+
+- <strong>Il cambio di account di una sessione.</strong> <strong>Cambia account</strong> ti chiede conferma. Un cambio richiesto da un agente attende la tua approvazione, a meno che tu non abbia attivato <strong>Approva automaticamente i cambi account</strong>, e il cambio al limite di utilizzo avviene solo finché <strong>Cambia automaticamente account al limite di utilizzo</strong> è attivo. Un cambio copia la conversazione di quella sola sessione nella cartella dell’account di destinazione; per Codex, fa anche puntare alla copia il registro che quell’account tiene della conversazione. L’originale resta dov’era, e la copia resta come propria di quell’account. Vedi [Account continuity](../features/account-continuity/).
+- <strong>Impostazioni e plugin che modifichi dentro una sessione di Grok Build.</strong> Se il tuo <code dir="ltr">config.toml</code> è un collegamento a un file, un tema, l’attivazione di un plugin o un modello predefinito che modifichi in una sessione viene scritto in quel file al termine della sessione, come lo avrebbe salvato Grok. Un plugin che installi in una sessione viene registrato nel registro dei plugin della tua cartella di Grok, se ne ha uno.
+- <strong>L’attendibilità che Grok Build dà alla cartella di un progetto.</strong> Dopo che hai accettato di considerare attendibile la cartella di un progetto (<strong>Considera attendibile e continua</strong>, oppure la tua risposta nel terminale), l’unica voce scritta da Grok viene riportata, senza modifiche, nell’elenco di attendibilità della tua cartella di Grok.
+- <strong>I registri di una sessione che non ha mai avuto una conversazione.</strong> Eliminando una sessione a cui non hai mai inviato nulla, i registri che l’agente ne conserva vengono spostati con essa nel Cestino, senza chiedere: non contengono nessuna tua conversazione. I registri di una sessione che hai usato vengono spostati solo se selezioni quell’opzione nella conferma. Si possono recuperare dal Cestino.
+- <strong>La configurazione iniziale di Claude Code.</strong> In una cartella di configurazione in cui Claude Code non è mai stato eseguito, o dopo un aggiornamento di Claude Code, una lettura fatta da {productName} in background (l’utilizzo di un account, i suoi server MCP o i suoi agenti) fa sì che Claude Code esegua lì la propria configurazione iniziale e le migrazioni in sospeso, come avrebbe fatto il tuo avvio successivo. {productName} lascia quelle modifiche come sono.
+- <strong>Una cartella vuota per un nuovo account Codex.</strong> Prima del primo avvio o del primo accesso di un account Codex, {productName} crea la cartella dell’account, vuota, se non esiste ancora: senza di essa Codex si rifiuta di avviarsi.
+- <strong>L’attendibilità della cartella propria di una console.</strong> Una sessione di console viene eseguita in una cartella propria di {productName}, quindi lì {productName} risponde alla domanda di attendibilità dell’agente senza chiedertelo. Claude Code conserva poi, nel proprio elenco di attendibilità, una voce che nomina solo quella cartella e non ha effetto altrove. Codex pone la domanda solo se quella cartella si trova dentro un repository Git, e allora registra l’attendibilità per la radice di quel repository, che copre l’intero repository: se la tua cartella Inizio è sotto Git, si tratta di tutta la cartella Inizio. Grok Build non registra nulla nel tuo elenco di attendibilità. {productName} non rimuove queste voci, perché sarebbe un’altra modifica del tuo file. Puoi rimuoverle tu: quella di Codex è la tabella <code dir="ltr">[projects."&lt;repository root&gt;"]</code> nel <code dir="ltr">config.toml</code> della sua cartella, e quella di Claude Code è la voce della cartella sotto <code dir="ltr">projects</code> nel suo <code dir="ltr">.claude.json</code>.
+
+### Si annulla con il comando di disinstallazione
+
+- <strong>Il programma server per Linux come servizio.</strong> Installarlo come servizio (vedi [Server Linux](../install/linux/)) scrive un servizio utente di systemd nella tua cartella di configurazione di systemd e attiva il lingering per il tuo utente se era disattivato. Si annulla con il comando di disinstallazione, più sotto.
+
+<Aside>
+Su Windows, l’app tiene anche la jump list del suo pulsante sulla barra delle applicazioni, con i tuoi servizi remoti salvati. Non ha un interruttore: <strong>Rimuovi tutto</strong>, descritto più sotto, la rimuove, e così il programma di disinstallazione.
+</Aside>
+
+## Prima di disinstallare
+
+Prima di disinstallare, tutto ciò che tra le voci di «Si annulla disattivando la funzione» è in vigore può essere rimosso in una volta sola, disattivando la relativa funzione. Nell’app desktop, <strong>Impostazioni › Pulizia</strong> ha una riga apposita, <strong>Pulisci prima della disinstallazione</strong>: dice quanti elementi sono in vigore e ha un solo pulsante, <strong>Rimuovi tutto</strong>. Su Windows lo fa anche il programma di disinstallazione da sé, e il comando di disinstallazione del programma server per Linux lo fa per prima cosa; entrambi sono descritti più sotto.
+
+- <strong>Prima chiede.</strong> La conferma dice quanti elementi verranno rimossi, con l’elenco ripiegato sotto quel numero, e che cosa viene conservato. Procede solo dopo che hai digitato <strong>RIMUOVI</strong>.
+- <strong>Mostra il risultato.</strong> Al termine elenca che cosa è stato rimosso e che cosa no. Per un elemento che non è stato possibile rimuovere, per esempio una chiave su un server non raggiungibile, dice che cosa resta e dove.
+- <strong>C’è solo nella finestra propria dell’app, su quel computer.</strong> In un browser su un computer con l’app desktop, e in una finestra che mostra un servizio remoto, la riga dice soltanto dove si fa la pulizia. In un browser su un server Linux, dice che la disinstallazione sul server fa prima pulizia e mostra <code dir="ltr">{system.uninstall}</code> con <strong>Copia il comando di disinstallazione</strong>, perché tu lo esegua sul server. Da lì non viene rimosso nulla.
+- <strong>Usalo solo quando stai disinstallando.</strong> Per annullare un solo elemento e continuare a usare {productName}, disattiva invece quella funzione.
+- <strong>Conserva i tuoi dati.</strong> Le cartelle proprie di {productName} restano, e così la cronologia delle conversazioni spostata dalla condivisione.
+
+## Dopo la disinstallazione
+
+La disinstallazione rimuove il programma.
+
+### macOS
+
+Esci da {productName}, poi eliminalo dalla cartella Applicazioni. Quando viene eliminato non viene eseguito nulla, quindi seleziona prima <strong>Rimuovi tutto</strong>: eliminare l’app non rimuove ciò che questa azione rimuove.
+
+### Windows
+
+Usa il programma di disinstallazione dell’app.
+
+<WindowsUninstaller />
+
+### Server Linux
+
+<LinuxUninstall />
+
+La cartella in cui è stato installato il programma resta, e così ogni riga che hai aggiunto per metterla nel tuo PATH.
+
+### Che cosa resta
+
+Le cartelle proprie di {productName} vengono lasciate, così un’installazione successiva ritrova le tue console, le sessioni e le impostazioni. Per rimuovere anche quelle, eliminale: perdi tutte le console, i registri delle sessioni e le impostazioni.
+
+- <strong>La sua cartella dei dati</strong>, sul computer o sul server in cui venivano eseguite le sessioni: <code dir="ltr">{system.dataDir}</code> (<code dir="ltr">{system.dataDirWindows}</code> su Windows). Su macOS e Linux, <code dir="ltr">{system.removeDataDir}</code> la rimuove.
+- <strong>La cartella propria dell’app desktop:</strong> <code dir="ltr">{system.appDataMac}</code> su macOS; <code dir="ltr">{system.appDataWindows}</code> e <code dir="ltr">{system.appLocalDataWindows}</code> su Windows.
+
+Le cartelle proprie dei tuoi agenti, con i loro accessi, le impostazioni e le conversazioni, sono degli agenti e restano come sono.

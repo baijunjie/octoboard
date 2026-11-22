@@ -327,9 +327,12 @@ it that way, with the reasons that are not visible in the code.
 - **Windows 10 21H2 is the floor and Windows 11 the verified target.** ConPTY needs Windows 10 1809 and WebView2
   Evergreen is required. Windows 11 is where the ConPTY behaviours the terminal layer depends on were fixed and
   measured, and the bundled console host (below) is what takes the terminal's behaviour out of the OS version's hands.
-  Nothing was measured on Windows 10 or on x64 hardware. Windows builds are x64 only, and on Windows on Arm the app and
-  the daemon run under emulation. Git for Windows is a requirement, since both Claude Code and Codex need it for their
-  own shell tooling and Octoboard's git hooks run under its `sh`.
+  Nothing was measured on Windows 10 or on x64 hardware. Windows builds are made for x64 and for arm64, the arm64 one
+  cross-compiled on the x64 runner; the measurements above were taken with the x64 build emulated on Windows on Arm,
+  where the NSIS uninstaller's Restart Manager check also matches the emulator's translation cache service and aborts
+  while the app runs, which the native arm64 build avoids (seen on a Windows 11 on Arm VM; the hosted cross-build is
+  not verified until a release runs it). Git for Windows is a requirement, since both Claude Code and Codex need it for their own shell
+  tooling and Octoboard's git hooks run under its `sh`.
 - **Windows is checked from a Mac and on a Windows runner.** The local command is `pnpm check:windows` (`CLAUDE.md`,
   "Repository checks"; what it covers in `docs/structure/tooling.md`), and the hosted jobs in `docs/structure/tooling.md`, "Hosted Windows checks". Spikes
   and debugging run in a Windows 11 virtual machine, and a native x64 machine is what a release is spot-checked on.

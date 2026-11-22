@@ -75,6 +75,7 @@ mod compatibility;
 mod config;
 mod conversation;
 mod feed;
+mod home;
 mod hooks;
 mod interaction;
 mod login;
@@ -391,7 +392,7 @@ impl AgentProvider for CodexProvider {
         // it, so an account pointed at a directory the user has yet to create is created here. A
         // resume that needs the directory's conversation has already been refused above.
         if let Some(dir) = pinned {
-            std::fs::create_dir_all(dir).map_err(|err| {
+            home::create_missing(dir).map_err(|err| {
                 CodedError::raised(
                     error_code::CONFIG_DIR_UNREACHABLE,
                     format!(

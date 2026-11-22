@@ -91,6 +91,39 @@ counts and mirrors the UI's `quitHolders`; the asking and the refusal's wording 
 without `--force`; the desktop application's own copy of `octoboardd` (macOS) starts and quits the application instead of
 a daemon of its own, in `src/cli/application.rs` over `platform/application/` (launching the bundle through `open`,
 finding the application as the daemon's parent and asking it to quit with `SIGUSR1`, `platform::proc::request_application_quit`).
+`uninstall [--yes] [--force] [--keep-changes] [--dry-run]` (`src/cli/uninstall.rs`) removes the server form's installation
+from the machine it is on, fetching nothing; it is refused for the desktop application's own daemon and where `update`
+does not apply (a build the install script did not install), each in its own words (`AskedOf::refusal`). It first checks
+everything that could stop it half way (the systemd user unit, with its drop-ins applied, runs this executable; the files,
+the unit and its drop-ins are the running user's and their directories writable; a daemon that runs runs one of the
+installation's files, told by `platform::proc::image_of`, and `stop`'s check, `stop_guard::refused`, would not refuse its
+stop), then runs the
+clean-up (`src/cli/cleanup.rs`, an internal module, no command of its own), then stops the daemon as `stop` does (refused
+the same way without `--force`), then removes the unit, lingering where the install's note says it turned it on and no
+other enabled unit of the user's needs it, and the files with the executable last; nothing is removed where a step cannot
+be done, and `--keep-changes` skips the clean-up. The clean-up asks what the daemon's features have in effect outside
+Octoboard's own directories, of the running daemon (found as `stop` finds it, through the owner record) on the loopback
+routes `POST /system-changes` and `POST /system-changes/clear` (`src/server/system_changes.rs`) with the launch key from
+that record, or, with none running, reads it from the store under the instance lock (`instance_lock::hold`), or for
+`--dry-run` as it is, without the lock (`Store::open_unchanged`); clearing is
+only ever done through a daemon started for it: where something is in effect `uninstall` stops an ordinary daemon
+that runs, then starts one with `background::start_for_clean_up`, by itself and never through the unit, and where the
+clean-up leaves something starts the ordinary one again as it ran (`Ran`: `systemctl --user start` for an active unit,
+else `background::start_again`): a daemon started with `--clean-up-run`, an
+option the help does not list, which the desktop application's Windows uninstaller starts its bundled daemon with as
+well. Such a daemon leaves out the work `state::StartWork` lists (`src/state/clean_up_run.rs`, the one place that says
+what a clean-up run does and does not do; `main.rs`, `coordinator/resume_on_start.rs`,
+`coordinator/account_sharing.rs` and `messaging/restart_outbox.rs` ask it with `AppState::does`), launches no agent
+(`AppState::admit_launch`, asked before anything is done for a launch, at the claim of one, `open`'s `begin_open`,
+`restart::run` and a model change, and again by `coordinator::launch::start_process`, which every launch goes
+through), says what
+it is in its owner record (`Owner::clean_up_run`, the token `clean-up-run`, which `status`, `start` and `restart`
+read), refuses a planned restart (`RestartRefusal::CleanUpRun`) and, started by `uninstall`, follows that command's
+process by its pid and start time (`--follow-process`, hidden; `AppState::follow_process`) and makes a planned stop
+once it is gone; where its ordinary stop is refused, `uninstall` has it make that planned stop itself
+(`background::hand_back`); `cleanup.rs` also holds the texts that name
+each item and each result. `uninstall.rs` reaches the daemon, `systemctl` and `loginctl` through the `Host` trait and
+the paths through `Installation`, so its tests inject them. No client connection and no MCP tool reaches it.
 The CLI
 modes other processes start are `hook`, `git-ref`, `gate-hook`, `guard-hook`, `status-line`, `mcp` and `holder`: their
 dispatch, with the user's modes, is `src/cli/mod.rs`, and their code is `src/cli/hook.rs` (`hook`), a provider's
@@ -107,7 +140,8 @@ listening), call the daemon its owner record names with its recorded key (`src/s
 `owner_record::Owner::recorded_in`, with the data directory passed in from `src/cli/mod.rs`). `guard-hook` is the one
 mode that calls no daemon: it takes neither of them, only the list file that the launch wrote (`--list`):
 
-- `hook` — posts an agent's hook payload from stdin to `POST /hook/:session`.
+- `hook` — posts an agent's hook payload from stdin to `POST /hook/:session/:launch` (`POST /hook/:session` for a
+  hook script an earlier build wrote, which names no launch).
 - `git-ref` — posts created branches and moved refs a session's `reference-transaction` hook saw.
 - `gate-hook` — run by a session's `reference-transaction` and `pre-push` dispatchers: asks the daemon whether the
   revert gate applies and whether the repository belongs to another registered project, runs the gate in-process, and
@@ -145,7 +179,7 @@ application-wide git workflow values and a project's overrides are combined: `ef
 `protocol/`), `host_tools.rs` (`HostTools`, the seam tests substitute stand-ins behind, `git` among them: the one place
 a project's git gets the user's `git`, handed out by pace with `Tools::git_for`, which `isolated_git` and
 `isolated_git_per_request` give browse reads), `instance_lock.rs` (one daemon per data directory, which it creates
-private, and whether one runs), `interface_language.rs` (the languages the interface is offered in, mirroring the UI's
+private, whether one runs, and `hold`, the lock a command takes to read the store while none runs), `interface_language.rs` (the languages the interface is offered in, mirroring the UI's
 `i18n/languages.ts`), `key_file.rs` (a session's owner-only key file in its scratch directory: its path, `write` and
 `read`), `log_file.rs` (the rotated `daemon.log`, and a holder's own `holder-<id>.log`), `loopback.rs` (the std-only
 HTTP client to a loopback address, the daemon's or a holder's, that the CLI modes, the git hook modes and the MCP stdio
@@ -162,7 +196,7 @@ owner-only key record, `daemon.key`, which four things read: `address`; `stop` a
 a successor by its key where its record does not name its predecessor; `stop` on Windows and `restart` on every host,
 which ask over loopback; and the git hook modes' fallback; the `_in` reads take the data directory from their caller),
 `request_body.rs` (the layers that read a request's body before anything answers, the daemon's listener and the holders' alike: a refused request's is read and thrown away, only an admitted one's is held, up to a limit of 2 MiB), `request_guard.rs` (the Origin/Host rules, the key compare and the key generator that the daemon's guard and the
-holders' helper routes and secret share), `paths.rs` (where Octoboard keeps its files under the data directory),
+holders' helper routes and secret share), `paths.rs` (where Octoboard keeps its files under the data directory; `registered_writes.json` beside it names the files that may write, which the registered writes check in `scripts/verify/registered-writes.mjs` reads),
 `text.rs` (`trimmed_or_none`, free text as stored, and `without_paste_wrapper`, a prompt with the wrapper an agent puts
 around a paste taken off), `time.rs` (the clock, `now_millis`, `now_micros` and `now_secs`, and the RFC 3339, compact
 and readable timestamps) and `wire_path.rs` (`RelPath`, the canonical wire form of a path or branch name, made and
@@ -182,7 +216,8 @@ the pnpm package `@octoboard/daemon`, only to run that cargo build after the UI'
 `store/test_support.rs`, `session/test_support.rs` and the `layering_tests/` directory) sit beside the code they test, and `apps/daemon/testdata/`
 holds the captured agent screens and records tests replay, `testdata/restart_impact_cases.json`, the cases of what a
 restart would interrupt that the restart check's test and the UI's `useAppExit.test.ts` both run, `testdata/quit_holders_cases.json`, the quit-holder
-rule that the stop check (`coordinator/stop_check.rs`) and the UI's quit confirmation both run the same way, and
+rule that the stop check (`coordinator/stop_check.rs`) and the UI's quit confirmation both run the same way,
+`testdata/system_changes_wire.json`, the bodies of the clean-up's two local routes that the daemon's `coordinator/system_changes/wire.rs` serializes into and the desktop shell's `system_changes/daemon.rs` reads, `testdata/shell_contract.json`, the clean-up run's option and the instance lock's exit status that the desktop shell's `sidecar/mod.rs` holds to the daemon's, `testdata/docs_uninstall_command.json`, the `octoboardd uninstall` options and confirmation word that `apps/docs/src/commands.test.ts` holds the documentation site to, and
 `testdata/self_update/`, a signed test archive and its test key for the self-update's tests. `apps/daemon/dist/` holds hand-written distribution files, not build output
 (`dist/systemd/octoboardd.service`, an example systemd user unit for running the daemon in the background on Linux,
 which the Linux release archive ships and the website's `install.sh` installs with `--service`).
@@ -208,7 +243,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   key, and marks every admitted request with an `Admission` that `control/mod.rs` and `terminal.rs` watch to close a
   connection the owner key admitted once that key is rotated), `keys.rs` the routes about the keys: `GET /key-check`,
   which a page uses to tell a key the daemon refuses from a daemon it cannot reach, and `POST /owner-key/rotate`, which
-  the launch key alone may call), `ui.rs` the embedded browser UI, served as the browser router's fallback on the same
+  the launch key alone may call), `system_changes.rs` the routes `octoboardd uninstall` and the desktop application's own window
+  ask, `POST /system-changes` and `POST /system-changes/clear`, for the launch key alone (a request the owner key admitted is refused; the clearing runs
+  as a task of its own, so it is not cut short when the caller goes), `ui.rs` the embedded browser UI, served as the browser router's fallback on the same
   origin as the protocol routes (empty, so serving nothing, without the `embedded-ui` feature), `relay.rs` the handler
   of the helper requests a holder relays (it runs the same `callbacks::handle` the HTTP routes run, once
   `AppState::end_adoption` says the adopted sessions exist: reports that arrive before are held in order, questions wait
@@ -220,7 +257,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   and the daemon's version the `hello` frame states, `daemon_update.rs` the daemon's own update status
   (`DaemonUpdateStatus`) and its channel, `host.rs` `HostInfo`, the snapshot's `host` (os, path style, file links,
   whether the host can be held awake, and how the host names its Trash and settings app, built from
-  `platform::HostFacts`), `bindings/` the test that renders the types (and the generation) into
+  `platform::HostFacts`, and `application`, whether the daemon is a desktop application's own, which the snapshot fills
+  from `AppState::follows_application`), `bindings/` the test that renders the types (and the generation) into
   `packages/ui/src/protocol.generated.ts` (`mod.rs`), opening the string enums of every type the daemon sends as
   `Received<…>` (`received.rs`) and laying each declaration out one field to a line (`layout.rs`), `schema.rs` the one
   that renders them as JSON Schema into `contracts/protocol/`, `crosscheck.rs` the one that holds the two renderings to
@@ -249,7 +287,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   such as the one another device's application runs over SSH (the owner endpoint is the browser socket on Linux and
   macOS and the owner pipe on Windows; `proxy` carries bytes between its standard input and output and the endpoint, and
   `address --json` prints the owner key, the protocol generation and the release version of the daemon there),
-  `connection.rs` the `connection` mode, which prints the connection details (`connection_details`) as a line and a QR
+  `uninstall.rs` the user's `uninstall` and `cleanup.rs` its clean-up step, `connection.rs` the `connection` mode, which prints the connection details (`connection_details`) as a line and a QR
   code, `update.rs` the user's `update [--check] [--rollback] [--channel] [--yes | --no-restart]` (the server form's
   update from the command line, over `self_update/`, refused for a daemon that follows the application),
   `restart_check.rs` what `restart` and `update` ask the daemon before a planned restart (`POST /restart-check`) and
@@ -269,7 +307,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   a model change, the other helpers also serve a sharing change; the wait for a stopped process to be recorded down is
   `launch::wait_until_stopped`, which restarts, account sharing and the open in the agent's application all use), `bindings` (binding a session to an owner, for the MCP
   `bind_to_session` tool and the user's `bind_session` request alike), `lifecycle` (archiving, deleting, and a session's
-  own archive when its work is finished: `lifecycle/finished.rs`), `handoff`, `native_app` (opening a session's
+  own archive when its work is finished: `lifecycle/finished.rs`; `lifecycle/record_trash.rs` is where the Trash is taken for the agent's records of deleted sessions, `host_trash`, and the move of them, which archive clean-up uses too), `handoff`, `native_app` (opening a session's
   conversation in its agent's desktop application, `open_session_in_app`, which archives a session that is not archived
   first, and the `probe_native_apps` answer: which
   agents' applications are installed and which sessions' conversations they can see), `account_switch`, `model_change`,
@@ -297,7 +335,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   linked to, interrupted once it is gone; the screen a planned stop saved for a session whose holder is gone at the next
   start becomes its preview, `unlinked::keep_screens_as_previews`), `planned_stop.rs` (the daemon's planned stop: every
   terminal handed over to its holder, each handed-over screen saved for the next daemon, the holders parted from and
-  left running, nothing ended or recorded; an ordinary stop asked for meanwhile cuts it short), `stop_check.rs` (what a stop would interrupt, `stop_impact`), `handover_check.rs` (the
+  left running, nothing ended or recorded; an ordinary stop asked for meanwhile cuts it short), `stop_check.rs` (what a stop would interrupt, `stop_impact`), `system_changes.rs` (the daemon's part of the clean-up before Octoboard is uninstalled, which only `octoboardd uninstall` and the desktop application's own window reach, through the local routes of `server/system_changes.rs`: `EXCEPTIONS`, the daemon's registered exceptions to P9 that have something to undo, each with what of it is in effect, read from the store alone, and clear all of it, held in its feature's module as `account_sharing::EXCEPTION` is; `list`, `listed` and `cleared`; `system_changes/wire.rs` the answers' types, `SystemChange`, `SystemChangesListed` and `SystemChangesCleared` among them, which are no part of the protocol), `handover_check.rs` (the
   `handover_check` request: given the next daemon's holder floor and version, which running sessions and shell
   terminals, and which shell terminals of holders not yet reached, a planned stop followed by that daemon would not
   carry over, judged by `holder::compat::Range`; and `restart_impact`, the same read as a window asks the user about it,
@@ -340,7 +378,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   listing, and `gate.rs` with `KeyedGates`, the keyed mutex branch cleanup shares.
 - `src/branch_cleanup/` — cleaning up branches and worktrees bound to archived or deleted sessions.
 - `src/removal_safety/` — which folder may be moved to the Trash or which linked worktree removed without taking away
-  what belongs to something else; `project.rs` is the part for removing a project's folder.
+  what belongs to something else; `project.rs` is the part for removing a project's folder, including the move itself, `folder_to_trash`.
 - [`src/session_git_hooks/`](../../apps/daemon/src/session_git_hooks/README.md) — the git hooks of a project session and
   the `git-ref` and `gate-hook` modes.
 - `src/cross_project_guard/` — keeping a project session to its own project, in two layers behind the Agent behavior
@@ -361,14 +399,15 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 ### Storage and state
 
 - `src/store/` — the coordinator's SQLite `Store`: `schema.rs` (the current schema, the `MIGRATIONS` that bring an older
-  database up to it and the checks on a file before it is opened, `Store::SCHEMA_VERSION` and the reads of a file's schema version and of the copies a migration kept (`Store::peek_schema_version`, `Store::migration_backups`) that the self-update's rollback checks use; `schema/v{N}.sql` keeps each released past version's
+  database up to it and the checks on a file before it is opened, `Store::SCHEMA_VERSION` and the reads of a file's schema version and of the copies a migration kept (`Store::peek_schema_version`, `Store::migration_backups`) that the self-update's rollback checks use, and `Store::open_unchanged`, a store read as it is, which `uninstall --dry-run` reads; `schema/v{N}.sql` keeps each released past version's
   schema for the migration tests once there is one), `rows.rs`, one file per table family (`settings.rs` the application
   settings, `memory.rs` the entries of each console's memory and of each place's (a host and a directory), `provider_settings.rs` the user's explicit choices of each provider's settings and the value in effect of
   every one, `held_terminals.rs` which holder runs each session's launch and each shell terminal, and the names users
   gave shell terminals, `scheduled_tasks.rs` the scheduled tasks and the last runs kept of each), and `failure.rs`, the store's own `Result` and `StoreError`, which codes the SQLite failures to read or
   write Octoboard's database the user can fix (read-only data folder, full disk, a file that cannot be opened or read)
   as `store_write_failed`.
-- `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (running sessions, claims, status,
+- `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (whether the daemon was started for a
+  clean-up run and what such a run leaves out, `clean_up_run.rs`; running sessions, claims, status,
   titles, turns, the tool calls a turn's hooks reported open or waiting on the user (`tool_calls.rs`, which also lowers a session's hand once the prompt it waited on has left the screen: `AppState::interaction_left`), the background
   work each session's agent said it left running (`background.rs`) with its copy in the data directory that survives a
   daemon restart (`background_store.rs`, `paths::background_tasks_path`), sharing status, git
@@ -455,7 +494,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `project_live_roots`); `changes.rs` lists the worktree's changes and `change_read.rs` reads one change for them, for
   `compare.rs` and for `commits.rs`; `content.rs` encodes a body for the wire; `content_search/` searches the files' contents for `search_project_content` (`mod.rs` the parallel walk with ripgrep's libraries (`ignore`, `globset`, `grep-searcher`, `grep-regex`) and the batches its matches are handed back in, `mask.rs` the file mask, `line.rs` a matching line's clipped text and UTF-16 ranges, `refusal.rs` why a pattern or a mask is refused), streamed through `lane.rs`'s `Lane::submit_stream` (an `ack`, then events carved out of the request's reservation) from `mod.rs`'s `search_content`; `live.rs` reads the live files under a scope: a whole regular file (`read_file`, and `read_resolved` for a path already resolved, which `path_links::read` uses too), a part of one (`read_range`, answering `read_file_range`, which a client copying a file reads it in parts with), and what a content search opens without following a link: a file (`open_searchable`) and the directory it is limited to (`directory_within`).
 - `src/hostfs/` — host filesystem work: bounded reads, regular-file reads and appends, device/inode identity, listing,
-  whole-file replacement, Trash, small entry steps (`modified`, `remove_any`, `is_same_path`), `dir_key`, and the one
+  whole-file replacement, `json_paths.rs` (rewriting only the string literals of another program's JSON file that hold a moved path, keeping every other byte, and not writing a file with nothing to move), Trash, small entry steps (`modified`, `remove_any`, `is_same_path`), `dir_key`, and the one
   place a path is resolved against the disk (`canonical`, over `platform::names::canonical`) and compared as written
   (`lexical_key`, `lexically_within`, over `platform::names::lexical_key`); `links.rs` (`leads_into`) walks a path's
   spelling component by component, following each symbolic link by reading its target and never looking at a prefix
@@ -662,7 +701,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   its executable with (`directory_writable`, `sync_directory`, and `create_new_like`, the staging file made new and
   never through a link) (contract tests in `fs/contract_tests.rs` hold every host to the same behaviour), and which
   process holds a lock on a file where the host lists them (`lock_holder`, Linux's `/proc/locks`, read by
-  `fs/lock_table.rs`); `names/` how the host spells names (a name as bytes and back, the components a client may send,
+  `fs/lock_table.rs`), and what `uninstall` asks of the host (`owned_by_user`, whether a file is the running user's, and
+  `user_runtime_dir`, where the user's service manager keeps what it generates); `names/` how the host spells names (a name as bytes and back, the components a client may send,
   git bytes as a path, the lexical comparison key of a path, the path style, whether a spelling reaches a network or
   device place (`reaches_network_or_device`: the Windows UNC and device namespaces, the Unix automount trees) and
   whether a link target in the device namespace is a local volume after all (`names_local_volume`, Windows only), the
@@ -696,7 +736,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   not recorded, asking every other over loopback; on Windows there is no signal and `request_restart` fails as
   unsupported), whether a systemd service runs the daemon as its main process (`restarted_by_service_manager`), the
   executable it runs (`running_image`, `running_image_file` and `names_running_image`, which read the open image,
-  `/proc/self/exe` on Linux, so that an update replacing the file does not change what they say; `image_source`, for the
+  `/proc/self/exe` on Linux, so that an update replacing the file does not change what they say; `image_of`, the same of
+another process, `/proc/<pid>/exe`, on Linux alone; `image_source`, for the
   holder build copy; `self_update_host`, whether the host has a release to update to), whether a failure to run a
   program was its file being busy (`is_text_busy`, `ETXTBSY`), `systemd.rs` (with `systemd_stub.rs` on other Unix hosts)
   which systemd user service the daemon is the main process of (`user_service_unit`), what systemd says of a user unit
@@ -731,9 +772,10 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   is the command-line, environment and working-directory encoder shared by terminal and pipe-backed server creation; on
   Windows the pseudoconsole is ConPTY, run on the bundled `conpty.dll` beside the daemon's executable when it loads,
   which starts `OpenConsole.exe` from the same directory or from a subdirectory named for the machine's native
-  architecture (`x64` or `arm64`, which an x64 daemon emulated on ARM64 reads as `arm64`): the installer ships the x64
-  `conpty.dll` with an `OpenConsole.exe` in each of the two subdirectories (`scripts/fetch-conpty.mjs --installer`), so
-  the x64 DLL on x64 hardware loads `x64\OpenConsole.exe` and under emulation on ARM64 finds `arm64\OpenConsole.exe`;
+  architecture (`x64` or `arm64`, which an x64 daemon emulated on ARM64 reads as `arm64`): each architecture's installer
+  ships the `conpty.dll` of its own architecture, which its daemon loads, with an `OpenConsole.exe` in each of the two
+  subdirectories (`scripts/fetch-conpty.mjs --installer --arch <arch>`), so the DLL loads `x64\OpenConsole.exe` on x64
+  hardware and `arm64\OpenConsole.exe` on ARM64, natively or under emulation;
   with no DLL, or one that fails to load, the system's pseudoconsole is used (a failed load is logged as a warning), and
   a DLL that finds no `OpenConsole.exe` starts the inbox console host, which is logged as a warning); on Windows the
   output is drained after a close that races the last reader's drop, quit keys of a polite stop wait behind a bracketed
@@ -784,7 +826,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `edit_targets` and `deny_edit`, whose defaults read no paths and produce no refusal), what is common to every
   provider's payloads, the per-session ordered queue of events, and applying an event through the session's provider's
   interpreter (`apply.rs`, which also has the provider's record store arm the record watch the interpreter asks for, and
-  starts the session's own server queue when a turn is cancelled).
+  starts the session's own server queue when a turn is cancelled). Which launch of which session a hook event is from
+  (`HookMark`, `hook_path`) is in `src/holder/protocol.rs`, beside the relay routes, since a holder relays it and the
+  holder sits below this layer.
 - `src/keep_awake/` — Prevent sleep: the task `main` starts that holds the host awake (through `platform::sleep`) while
   `Settings.keep_awake` is on and either `keep_awake_when` is `always` or a session is working (the UI's `sessionIsWorking`,
   kept from the session events), releases at once when that turns false, and reports whether it holds
@@ -795,7 +839,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   names, whether a missing record settles anything, the record a hook payload hints at, unarchiving, whether a record's
   head moves during a turn, and how the text a user typed reads out of a line). `locate.rs` finds them (the
   hook's hint, the account directories walked, `record_paths` for every record of a session), `removal.rs` says which
-  paths a deletion removes, `resumability.rs` judges whether a conversation can be resumed, `carried.rs` the record a
+  paths a deletion removes, `resumability.rs` judges whether a conversation can be resumed, `user_prompt.rs` whether a
+  record holds a prompt the user sent (`RecordStore::is_user_prompt`; what marks a conversation no hook reported, and
+  what a deletion asks before it moves the records of a session that counts as unused), `carried.rs` the record a
   switch of accounts carries and what travels with it, `switch_continue.rs` whether a relaunched session is sent a
   prompt to carry on (its text is `messaging/texts.rs`), whether its last turn stopped on the usage limit, and
   `wait_for_usage_limit`, the wait for the record to say so, used by the automatic account switch and by `messaging/usage_limit.rs`; then the one collector that persists what the records show,
@@ -840,7 +886,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   ships several, as on ARM64 Windows), `codex/rollout_watch.rs` the Codex failed-turn watch and `codex/rollout_files.rs`
   Codex's rollout file-name and segment-chain rules; `models.rs` is a provider's `ModelCatalogue`, and `accounts.rs` its
   `AccountOps` with the parts `quota.rs` (`QuotaProbe`), `login.rs` (`LoginFlow`) and `shared_config.rs` (the items it
-  shares); Codex also has `reset_credit.rs` (`ResetCredits`), `threads.rs` (its `ThreadRegistry`), `unarchive.rs` (its
+  shares); Codex also has `home.rs` (`create_missing`, the one place a Codex home that does not exist yet is created, for a launch and for sign-in), `reset_credit.rs` (`ResetCredits`), `threads.rs` (its `ThreadRegistry`), `unarchive.rs` (its
   unarchiving of a rollout), `app_server.rs` (the app-server start and handshake every account-level use of `codex
   app-server` shares: the quota probe, reset credit, login and MCP inventory reading, which starts it with
   `CODEX_INVENTORY_APP_SERVER_ARGS`, Apps and plugins left on; a session's private server reuses only its handshake
@@ -857,7 +903,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   that applies the permission preset), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`);
   Codex, Claude Code and Grok also have `mcp_inventory.rs` (their `McpInventoryReader`: Codex's over the app server,
   Claude Code's over `claude auth status` and `claude mcp list`, Grok's over `grok mcp list` and `grok mcp doctor`,
-  servers only), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the
+  servers only), and Grok `trust.rs` (its `TrustCarrier`), `plugin_paths.rs` (pointing the user's plugin registry back at the source home after a session's process exits and before a launch, since Grok records a plugin under the session's own `GROK_HOME`, which is removed when the session ends) and `query_home.rs` (the directories of Octoboard's own that Grok's background runs, its quota reading, model listing and kick, are made against in place of an account's directory, since Grok writes into the home it runs in)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the
   hook URL, command and script (the command and script name the session's key file, not the key) and the cross-project
   guard's command, script and JSON group (`guard_command`, `write_guard_script`, `add_guard_group`, whose event name is
   passed by the provider; Claude Code registers the command in its JSON hooks, Grok Build the script in its JSON hooks,

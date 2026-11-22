@@ -11,9 +11,13 @@
 //! window or quitting the application ends the SSH connection and nothing on the remote daemon.
 //!
 //! After a first connection authenticated with the remote user's own password or key, the
-//! application installs a key of this device's own for the remote user and connects with it from
-//! then on (`device_key`), its private key kept in the system's credential store (`credentials`)
-//! for as long as the entry names the same destination.
+//! application asks the owner whether to install a key of this device's own for the remote user,
+//! and where they agree connects with it from then on (`device_key`), its private key kept in the
+//! system's credential store (`credentials`). The key is taken back, its line out of the host's
+//! file and the private key out of the credential store, when the saved daemon is removed or
+//! pointed elsewhere, when its key is turned off, and for all of them at once before an uninstall
+//! (`key_removal`). The host's file is written from one place alone (`authorized_keys`), and the
+//! saved daemons are read and changed through one place too (`saved`).
 //!
 //! The owner reaches a remote daemon from the Remote devices page the main window provides
 //! (`page::request_page`, from the Remote Devices item), which lists, adds and connects to the
@@ -29,6 +33,7 @@
 //! are `outcome`'s.
 
 mod actions;
+mod authorized_keys;
 mod browser;
 mod connect;
 mod credentials;
@@ -36,10 +41,12 @@ mod device_key;
 mod entries;
 pub mod files;
 mod forward;
+mod key_removal;
 mod octoboardd;
 mod outcome;
 pub mod page;
 mod restore;
+mod saved;
 mod ssh;
 mod tunnel;
 
@@ -51,7 +58,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::watch;
 
 use crate::config_dir::config_path;
-use crate::diagnostics::diagnostic;
+use crate::system_changes::{Answer, Change, Cleared, Exception, Outcome};
 pub use actions::{
     handle_menu_item, launch_action, menu_entries, run_menu_action, MenuAction, DEVICES_ARGUMENT,
     MAIN_WINDOW_ARGUMENT, OPEN_ARGUMENT, OPEN_ITEM_PREFIX,
@@ -62,10 +69,15 @@ pub use actions::menu_action;
 #[cfg(target_os = "macos")]
 pub use actions::{DEVICES_ITEM_ID, MAIN_WINDOW_ITEM_ID};
 pub use entries::{Entry, EntryInput};
+use key_removal::KeyReport;
+#[cfg(test)]
+pub use key_removal::PrivateKeyLeft;
+pub use key_removal::{KeyRemoval, LineRemoval};
 pub use outcome::{ConnectOutcome, ConnectRequest, ConnectionState, Status, ViaName};
 pub use restore::{
     begin as begin_restore, holding_main, remember as remember_windows, RestoreState,
 };
+pub use saved::SavedEntry;
 
 /// What the application keeps of the remote windows it has open.
 #[derive(Default)]
@@ -296,98 +308,133 @@ pub fn main_window_show(app: AppHandle) {
     actions::show_main_window(&app);
 }
 
-fn entries_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    config_path(app, entries::FILE_NAME).map_err(|err| err.to_string())
+/// The saved remote daemons of this application (`saved`): the entries' file under the
+/// application's config directory, with their device keys in the system's credential store under
+/// the application's own service.
+fn saved(app: &AppHandle) -> Result<saved::Saved<'_>, String> {
+    let state = app.state::<RemoteState>().inner();
+    Ok(saved::Saved {
+        path: config_path(app, entries::FILE_NAME).map_err(|err| err.to_string())?,
+        lock: &state.entries,
+        connecting: &state.connecting,
+        store: credentials::system(),
+        service: credentials::service(&app.config().identifier),
+    })
 }
 
 /// The remote daemons the owner has added.
 #[tauri::command]
 pub fn remote_daemons_list(app: AppHandle) -> Result<Vec<Entry>, String> {
-    let state = app.state::<RemoteState>();
-    let _lock = state.entries.lock().unwrap_or_else(|e| e.into_inner());
-    Ok(entries::load(&entries_path(&app)?))
+    Ok(saved(&app)?.list())
 }
 
 /// Saves a remote daemon, new or changed, as the dialog shows it: every field is taken as given,
 /// the pinned host key fingerprint included, so a dialog that shows the pin sends it back and one
-/// that sends `null` removes it. The UI keeps the pin when the owner pastes nothing over it.
+/// that sends `null` removes it. The UI keeps the pin when the owner pastes nothing over it. A
+/// save that gives up the entry's device key takes the key back first, and says what became of it.
 #[tauri::command]
-pub fn remote_daemon_save(app: AppHandle, entry: EntryInput) -> Result<Entry, String> {
-    let saved = save_entry(&app, entry)?;
+pub async fn remote_daemon_save(app: AppHandle, entry: EntryInput) -> Result<SavedEntry, String> {
+    let saved = saved(&app)?.save(entry).await?;
     // Outside the entries' lock: rebuilding the menus reads them again, on the main thread, which
     // may be this one.
     entries_changed(&app);
     Ok(saved)
 }
 
-fn save_entry(app: &AppHandle, entry: EntryInput) -> Result<Entry, String> {
-    let state = app.state::<RemoteState>();
-    let _lock = state.entries.lock().unwrap_or_else(|e| e.into_inner());
-    let app = app.clone();
-    let path = entries_path(&app)?;
-    let mut all = entries::load(&path);
-    let previous = entry
-        .id
-        .as_ref()
-        .and_then(|id| all.iter().find(|existing| &existing.id == id).cloned());
-    let saved = entries::upsert(&mut all, entry, entries::new_id)?;
-    entries::save(&path, &all).map_err(|err| err.to_string())?;
-    if previous.is_some_and(|previous| saved.outlives_device_key_of(&previous)) {
-        device_key::forget(credentials::system(), &key_service(&app), &saved.id);
-    }
-    Ok(saved)
-}
-
-/// Removes a remote daemon and its device key; a window open on it stays until it is closed.
+/// Removes a remote daemon, its device key taken back first; a window open on it stays until it is
+/// closed.
 #[tauri::command]
-pub fn remote_daemon_remove(app: AppHandle, id: String) -> Result<(), String> {
-    {
-        let state = app.state::<RemoteState>();
-        let _lock = state.entries.lock().unwrap_or_else(|e| e.into_inner());
-        let path = entries_path(&app)?;
-        let mut all = entries::load(&path);
-        all.retain(|entry| entry.id != id);
-        entries::save(&path, &all).map_err(|err| err.to_string())?;
-        device_key::forget(credentials::system(), &key_service(&app), &id);
-    }
-    // Outside the entries' lock, as `remote_daemon_save` says.
+pub async fn remote_daemon_remove(app: AppHandle, id: String) -> Result<KeyRemoval, String> {
+    let removal = saved(&app)?.remove(&id).await?;
     entries_changed(&app);
-    Ok(())
+    Ok(removal)
 }
 
-/// The credential store service the device keys of this application are kept under.
-fn key_service(app: &AppHandle) -> String {
-    credentials::service(&app.config().identifier)
+/// Turns this device's key on or off for the remote daemon `id`: off takes an installed key back
+/// and keeps the saved daemon; on has its next connection ask before installing one.
+#[tauri::command]
+pub async fn remote_daemon_device_key_set(
+    app: AppHandle,
+    id: String,
+    enabled: bool,
+) -> Result<KeyRemoval, String> {
+    let removal = saved(&app)?.set_device_key(&id, enabled).await?;
+    entries_changed(&app);
+    Ok(removal)
 }
 
-/// Switches the entry `id` to the device key installed for `identity`.
-fn use_device_key(app: &AppHandle, id: &str, identity: &str) {
-    let state = app.state::<RemoteState>();
-    let _lock = state.entries.lock().unwrap_or_else(|e| e.into_inner());
-    let Ok(path) = entries_path(app) else {
-        return;
-    };
-    let mut all = entries::load(&path);
-    if entries::use_device_key(&mut all, id, identity) {
-        if let Err(err) = entries::save(&path, &all) {
-            diagnostic!("cannot switch {id} to its device key: {err}");
-        }
+/// This device's keys as the shell registers them for the clean-up before the application is
+/// uninstalled (`crate::system_changes`): the saved remote daemons with a key installed, and those
+/// with only a private half left in the credential store; and taking every one of them back, which
+/// turns the key off for each. Reached through that clean-up alone, in the local daemon's window.
+pub struct DeviceKeys;
+
+impl Exception for DeviceKeys {
+    fn kind(&self) -> &'static str {
+        "device_key"
+    }
+
+    fn in_effect<'a>(&'a self, app: &'a AppHandle) -> Answer<'a, Change> {
+        Box::pin(async move {
+            Ok(saved(app)?
+                .with_device_key()?
+                .iter()
+                .map(key_change)
+                .collect())
+        })
+    }
+
+    fn clear_all<'a>(&'a self, app: &'a AppHandle) -> Answer<'a, Cleared> {
+        Box::pin(async move {
+            let reports = saved(app)?.remove_all_device_keys().await?;
+            entries_changed(app);
+            Ok(reports.into_iter().map(key_cleared).collect())
+        })
     }
 }
 
-/// Pins `fingerprint` for the entry `id` once a first connection confirmed by the owner has
-/// authenticated.
-fn pin(app: &AppHandle, id: &str, fingerprint: &str) {
-    let state = app.state::<RemoteState>();
-    let _lock = state.entries.lock().unwrap_or_else(|e| e.into_inner());
-    let Ok(path) = entries_path(app) else {
-        return;
-    };
-    let mut all = entries::load(&path);
-    if entries::pin(&mut all, id, fingerprint) {
-        if let Err(err) = entries::save(&path, &all) {
-            diagnostic!("cannot pin the host key of {id}: {err}");
-        }
+/// The device key of the saved daemon `entry`, as the clean-up lists it: installed on the host
+/// where the entry signs in with it, and otherwise only its private half, kept on this computer.
+fn key_change(entry: &Entry) -> Change {
+    Change::DeviceKey {
+        id: entry.id.clone(),
+        name: entry.name.clone(),
+        host: entry.host.clone(),
+        user: entry.user.clone(),
+        on_server: entry.has_device_key(),
+    }
+}
+
+/// What taking one device key back came to, as the clean-up tells it: cleared where its line is
+/// off the host and its private half out of the credential store, and otherwise both parts as
+/// they were answered.
+fn key_cleared(report: KeyReport) -> Cleared {
+    let KeyReport {
+        id,
+        name,
+        host,
+        user,
+        on_server,
+        removal,
+    } = report;
+    // A file left possibly incomplete is not a key cleared: the owner has it to restore.
+    let gone = matches!(
+        removal.line,
+        LineRemoval::Removed | LineRemoval::NotInstalled
+    ) && removal.private_key_left.is_none();
+    Cleared {
+        change: Change::DeviceKey {
+            id,
+            name,
+            host,
+            user,
+            on_server,
+        },
+        outcome: if gone {
+            Outcome::Cleared
+        } else {
+            Outcome::DeviceKeyLeft { removal }
+        },
     }
 }
 
@@ -540,6 +587,81 @@ mod tests {
     }
 
     #[test]
+    fn the_clean_up_tells_a_key_cleared_only_when_both_its_parts_are_gone() {
+        let report = |removal: KeyRemoval| KeyReport {
+            id: "e".into(),
+            name: "Build server".into(),
+            host: "build.example".into(),
+            user: "dev".into(),
+            on_server: true,
+            removal,
+        };
+        let change = Change::DeviceKey {
+            id: "e".into(),
+            name: "Build server".into(),
+            host: "build.example".into(),
+            user: "dev".into(),
+            on_server: true,
+        };
+        let removed = KeyRemoval {
+            line: LineRemoval::Removed,
+            private_key_left: None,
+        };
+        assert_eq!(
+            key_cleared(report(removed)),
+            Cleared {
+                change: change.clone(),
+                outcome: Outcome::Cleared,
+            }
+        );
+        // A private half kept with no line on the host, and removed: cleared, as a key of that kind.
+        let private_only = KeyReport {
+            on_server: false,
+            ..report(KeyRemoval::nothing())
+        };
+        assert_eq!(key_cleared(private_only).outcome, Outcome::Cleared);
+        let line_left = KeyRemoval {
+            line: LineRemoval::LeftOnHost {
+                mark: "Octoboard on Desk".into(),
+                file: Some("~/.ssh/authorized_keys".into()),
+                host: "build.example".into(),
+                user: "dev".into(),
+                detail: "unreachable".into(),
+            },
+            private_key_left: None,
+        };
+        let private_key_left = KeyRemoval {
+            line: LineRemoval::Removed,
+            private_key_left: Some(key_removal::PrivateKeyLeft {
+                service: "service".into(),
+                account: "e".into(),
+                host: "build.example".into(),
+                user: "dev".into(),
+                detail: "locked".into(),
+            }),
+        };
+        // The host's file left possibly incomplete is a key not cleared, with the copy named.
+        let file_incomplete = KeyRemoval {
+            line: LineRemoval::FileIncomplete {
+                host: "build.example".into(),
+                user: "dev".into(),
+                copy: "~/.ssh/authorized_keys.octoboard".into(),
+                detail: "the disk is full".into(),
+            },
+            private_key_left: None,
+        };
+        for removal in [line_left, private_key_left, file_incomplete] {
+            assert_eq!(
+                key_cleared(report(removal.clone())),
+                Cleared {
+                    change: change.clone(),
+                    outcome: Outcome::DeviceKeyLeft { removal },
+                }
+            );
+        }
+    }
+
+    #[test]
     fn only_the_local_window_may_use_the_remote_daemons_and_no_answer_carries_a_secret() {
         assert!(
             include_str!("../../capabilities/default.json").contains("\"allow-remote-daemons\"")
@@ -552,6 +674,7 @@ mod tests {
             "remote_daemons_list",
             "remote_daemon_save",
             "remote_daemon_remove",
+            "remote_daemon_device_key_set",
             "remote_daemon_connect",
             "remote_daemons_status",
             "remote_daemon_disconnect",
@@ -561,8 +684,9 @@ mod tests {
         ] {
             assert!(permission.contains(&format!("\"{command}\"")), "{command}");
         }
-        // What the list hands a page is where and how to connect, never a password, a passphrase,
-        // a device key or an owner key.
+        // What the list hands a page is where and how to connect, and what the entry keeps about
+        // this device's key (the owner's answer, the file and the mark of its line), never a
+        // password, a passphrase, a device key or an owner key.
         let entry = Entry {
             id: "e".into(),
             name: "n".into(),
@@ -573,8 +697,20 @@ mod tests {
             key_path: None,
             fingerprint: Some("SHA256:x".into()),
             octoboardd_path: None,
+            device_key: entries::DeviceKey {
+                declined: false,
+                file: Some("~/.ssh/authorized_keys".into()),
+                mark: Some("Octoboard on Desk".into()),
+            },
         };
-        let serde_json::Value::Object(fields) = serde_json::to_value(entry).unwrap() else {
+        let handed = serde_json::to_value(&entry).unwrap();
+        assert_eq!(
+            handed["deviceKey"],
+            serde_json::json!({
+                "declined": false, "file": "~/.ssh/authorized_keys", "mark": "Octoboard on Desk"
+            })
+        );
+        let serde_json::Value::Object(fields) = handed else {
             panic!("an entry is an object");
         };
         let mut names: Vec<&str> = fields.keys().map(String::as_str).collect();
@@ -583,6 +719,7 @@ mod tests {
             names,
             [
                 "auth",
+                "deviceKey",
                 "fingerprint",
                 "host",
                 "id",

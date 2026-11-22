@@ -1,0 +1,88 @@
+---
+title: "Tu sistema queda como estaba"
+description: "Octoboard deja tu sistema y los archivos de tus agentes tal como los encontró. Lo que añaden unas pocas funciones, cómo se deshace cada cosa y qué queda tras desinstalar."
+---
+
+import { Aside, Code } from "@astrojs/starlight/components";
+import { commands, productName, system } from "../../../commands.ts";
+import LinuxUninstall from "../../../snippets/es/linux-uninstall.mdx";
+import WindowsUninstaller from "../../../snippets/es/windows-uninstaller.mdx";
+
+{productName} deja tu sistema tal como lo encontró: la configuración de tus agentes y todo lo demás que está fuera de las carpetas propias de {productName}. Unas pocas funciones sí añaden algo fuera de esas carpetas. Esta página las enumera todas, con lo que añade cada una, dónde y cómo se deshace, y explica qué queda después de desinstalar.
+
+## La regla
+
+- <strong>Lo que {productName} le da a un agente le llega en cada inicio, y solo ahí.</strong> Sus hooks de estado, su propio servidor MCP y el rol que le describe a una sesión se pasan cuando el agente arranca, o se guardan en la carpeta propia de {productName}. Para ello no se edita ningún archivo tuyo ni de un agente, así que un agente que ejecutes por tu cuenta arranca sin nada de eso.
+- <strong>{productName} no añade ningún hook propio a tus ajustes ni decide nada por ti sobre la carpeta de un proyecto.</strong> Si se confía en la carpeta de un proyecto lo dices tú, y lo anota el agente. La única carpeta por la que responde {productName} es la propia de una consola, que es de {productName} (ver más abajo).
+- <strong>Lo que un agente escribe para sí mismo es del agente.</strong> Sus registros de conversación, sus cachés y registros, las credenciales de un inicio de sesión y la confianza que anota cuando se responde a su propia pregunta se escriben igual que cuando usas el agente sin {productName}. Lo mismo vale para la configuración inicial que el programa del agente hace la primera vez que se ejecuta en una carpeta de configuración; una lectura que {productName} hace en segundo plano puede desencadenarla antes de tu primer inicio (ver más abajo).
+- <strong>El trabajo dentro de tus proyectos no es el tema de esta página.</strong> Editar los archivos de un proyecto, las operaciones de Git, las ramas y los worktrees son el trabajo de desarrollo para el que añades un proyecto.
+
+## Qué añade una función y cómo deshacerlo
+
+Cada uno de estos elementos solo lo añade una función que usas o activas.
+
+### Se deshace desactivando la función
+
+- <strong>La clave de este equipo en un servidor remoto.</strong> Después de iniciar sesión en un servicio remoto guardado con una contraseña o un archivo de clave, la app pregunta antes de añadir nada: <strong>Añadir la clave de este equipo</strong> indica el archivo y la línea. <strong>Añadir clave</strong> añade una línea, marcada como <code dir="ltr">{system.keyMark}</code>, a las claves SSH permitidas de tu usuario en ese servidor (<code dir="ltr">{commands.authorizedKeys}</code> en Linux y macOS), y guarda la clave privada en el almacén de credenciales de este equipo (el llavero de inicio de sesión en macOS, el Administrador de credenciales en Windows). <strong>No añadir</strong> no añade nada y no se vuelve a preguntar. Para deshacerlo, desactiva <strong>Clave de este equipo</strong> en la página de ese servicio en <strong>Dispositivos remotos</strong>, o quita el servicio guardado: la app elimina la línea del archivo y la clave privada. Hace lo mismo cuando cambias el host, el puerto o el usuario del servicio guardado. Si no se puede llegar al servidor, la línea puede quedarse; la app te lo dice, para que la borres en el servidor.
+- <strong>Abrir al iniciar sesión</strong> (Windows, y macOS 13 o posterior). <strong>Ajustes › General › Abrir al iniciar sesión</strong> pone {productName} en la lista de apps que tu sistema abre al iniciar sesión, y su fila lo dice. Desactivarlo es la forma de sacarlo de esa lista.
+- <strong>La herramienta de línea de comandos</strong> (macOS). <strong>Instalar</strong>, en <strong>Ajustes › General › Herramienta de línea de comandos</strong>, añade un enlace llamado <code dir="ltr">{system.cliName}</code> en <code dir="ltr">{system.cliDir}</code>, o en <code dir="ltr">{system.cliFallbackDir}</code> si el sistema no lo permite; la fila lo dice antes de que instales. <strong>Quitar</strong> elimina el enlace.
+- <strong>Compartir la configuración predeterminada.</strong> <strong>Compartir configuración predeterminada</strong>, en los ajustes de una cuenta dentro de <strong>Ajustes › Cuentas de agentes</strong>, sustituye las partes compartibles de la carpeta de esa cuenta por enlaces a la carpeta de la cuenta predeterminada, conserva junto a ellos la configuración propia de la cuenta como copias de seguridad y mueve su historial de conversaciones a la carpeta de la cuenta predeterminada. La fila lo dice antes de que lo actives. Al desactivarlo se quitan los enlaces, se restauran las copias de seguridad y se devuelven las conversaciones de las sesiones propias de la cuenta. <strong>Una cosa se queda:</strong> el resto del historial de conversaciones que se movió permanece en la carpeta de la cuenta predeterminada, porque quitarlo te haría perder tus conversaciones. Consulta [Shared configuration](../features/shared-configuration/).
+
+### Queda como tuyo o del agente
+
+Estas operaciones escriben algo que desde entonces es tuyo o del agente, así que {productName} no tiene nada propio que deshacer. Cuando una entrada se puede quitar a mano, el elemento dice dónde está.
+
+- <strong>Cambiar la cuenta de una sesión.</strong> <strong>Cambiar de cuenta</strong> te pide confirmación. Un cambio que pide un agente espera tu aprobación, salvo que hayas activado <strong>Aprobar automáticamente los cambios de cuenta</strong>, y el cambio al alcanzar el límite de uso solo ocurre mientras <strong>Cambiar automáticamente de cuenta al alcanzar el límite de uso</strong> está activado. Un cambio copia la conversación de esa única sesión a la carpeta de la cuenta de destino; en Codex, además hace que el registro que esa cuenta guarda de la conversación apunte a la copia. El original se queda donde estaba, y la copia queda como propia de esa cuenta. Consulta [Account continuity](../features/account-continuity/).
+- <strong>Ajustes y plugins que cambias dentro de una sesión de Grok Build.</strong> Si tu <code dir="ltr">config.toml</code> es un enlace a un archivo, un tema, la activación de un plugin o un modelo predeterminado que cambies en una sesión se escribe en ese archivo al terminar la sesión, tal como lo habría guardado Grok. Un plugin que instales en una sesión se anota en el registro de plugins propio de tu carpeta de Grok, si lo tiene.
+- <strong>La confianza de Grok Build en la carpeta de un proyecto.</strong> Una vez que has aceptado confiar en la carpeta de un proyecto (<strong>Confiar y continuar</strong>, o tu propia respuesta en el terminal), la única entrada que escribió Grok se lleva, sin cambios, a la lista de confianza de tu carpeta de Grok.
+- <strong>Registros de una sesión que nunca tuvo una conversación.</strong> Al eliminar una sesión a la que nunca enviaste nada, los registros que el agente guarda de ella se mueven con ella a la papelera (la papelera de reciclaje en Windows), sin preguntar: no contienen ninguna conversación tuya. Los registros de una sesión que usaste solo se mueven si marcas esa opción en la confirmación. Se pueden recuperar de la papelera.
+- <strong>La configuración inicial de Claude Code.</strong> En una carpeta de configuración en la que Claude Code no se ha ejecutado nunca, o tras una actualización de Claude Code, una lectura que {productName} hace en segundo plano (el uso de una cuenta, sus servidores MCP o sus agentes) hace que Claude Code lleve a cabo allí su propia configuración inicial y sus migraciones pendientes, como lo habría hecho tu siguiente inicio. {productName} deja esos cambios como están.
+- <strong>Una carpeta vacía para una cuenta nueva de Codex.</strong> Antes del primer inicio o del primer inicio de sesión de una cuenta de Codex, {productName} crea la carpeta de la cuenta, vacía, si aún no existe: sin ella, Codex se niega a arrancar.
+- <strong>La confianza en la carpeta propia de una consola.</strong> Una sesión de consola se ejecuta en una carpeta propia de {productName}, así que {productName} responde ahí a la pregunta de confianza del agente sin preguntarte. Claude Code conserva entonces, en su propia lista de confianza, una entrada que solo nombra esa carpeta y no tiene efecto en ningún otro sitio. Codex solo pregunta cuando esa carpeta está dentro de un repositorio de Git, y entonces anota su confianza para la raíz de ese repositorio, lo que abarca el repositorio entero: si tu carpeta de inicio está en Git, es toda tu carpeta de inicio. Grok Build no anota nada en tu lista de confianza. {productName} no quita esas entradas, porque sería otra edición de tu archivo. Puedes quitarlas tú: la de Codex es la tabla <code dir="ltr">[projects."&lt;repository root&gt;"]</code> del <code dir="ltr">config.toml</code> de su carpeta, y la de Claude Code es la entrada de la carpeta bajo <code dir="ltr">projects</code> en su <code dir="ltr">.claude.json</code>.
+
+### Se deshace con el comando de desinstalación
+
+- <strong>El programa de servidor de Linux como servicio.</strong> Instalarlo como servicio (ver [Servidor Linux](../install/linux/)) escribe un servicio de usuario de systemd en tu carpeta de configuración de systemd y activa lingering para tu usuario si estaba desactivado. Se deshace con el comando de desinstalación, más abajo.
+
+<Aside>
+En Windows, la app mantiene además la lista de accesos directos de su botón de la barra de tareas, con tus servicios remotos guardados. No tiene interruptor: <strong>Quitar todo</strong>, descrito más abajo, la quita, y también el desinstalador.
+</Aside>
+
+## Antes de desinstalar
+
+Antes de desinstalar, todo lo de «Se deshace desactivando la función» que esté en vigor se puede quitar de una vez, desactivando su función. En la app de escritorio, <strong>Ajustes › Limpieza</strong> tiene una fila para ello, <strong>Limpiar antes de desinstalar</strong>: dice cuántos elementos están en vigor y tiene un solo botón, <strong>Quitar todo</strong>. En Windows también lo hace el desinstalador por sí mismo, y el comando de desinstalación del programa de servidor Linux lo hace primero; ambos se describen más abajo.
+
+- <strong>Pregunta antes.</strong> La confirmación dice cuántos elementos se quitarán, con la lista plegada bajo esa cifra, y qué se conserva. Solo continúa cuando hayas escrito <strong>QUITAR</strong>.
+- <strong>Muestra el resultado.</strong> Después enumera lo que se quitó y lo que no. De un elemento que no se pudo quitar, por ejemplo una clave en un servidor al que no se puede llegar, dice lo que queda y dónde.
+- <strong>Solo está en la ventana propia de la app, en ese equipo.</strong> En un navegador en un equipo con la app de escritorio, y en una ventana que muestra un servicio remoto, la fila solo dice dónde se hace la limpieza. En un navegador sobre un servidor Linux, dice que la desinstalación en el servidor limpia primero y muestra <code dir="ltr">{system.uninstall}</code> con <strong>Copiar el comando de desinstalación</strong>, para que lo ejecutes en el servidor. Desde allí no se quita nada.
+- <strong>Úsalo solo cuando vayas a desinstalar.</strong> Para deshacer un solo elemento y seguir usando {productName}, desactiva esa función en su lugar.
+- <strong>Conserva tus datos.</strong> Las carpetas propias de {productName} se quedan, igual que el historial de conversaciones que movió la configuración compartida.
+
+## Después de desinstalar
+
+Desinstalar elimina el programa.
+
+### macOS
+
+Cierra {productName} y elimínalo de tu carpeta Aplicaciones. No se ejecuta nada al eliminarlo, así que selecciona primero <strong>Quitar todo</strong>: eliminar la app no quita lo que eso quita.
+
+### Windows
+
+Usa el desinstalador de la app.
+
+<WindowsUninstaller />
+
+### Servidor Linux
+
+<LinuxUninstall />
+
+La carpeta en la que se instaló el programa se queda, igual que cualquier línea que añadiste para ponerla en tu PATH.
+
+### Lo que queda
+
+Las carpetas propias de {productName} se conservan, de modo que una instalación posterior vuelve a encontrar tus consolas, sesiones y ajustes. Para quitarlas también, elimínalas: pierdes todas las consolas, los registros de sesión y los ajustes.
+
+- <strong>Su carpeta de datos</strong>, en el equipo o servidor donde se ejecutaban las sesiones: <code dir="ltr">{system.dataDir}</code> (<code dir="ltr">{system.dataDirWindows}</code> en Windows). En macOS y Linux, <code dir="ltr">{system.removeDataDir}</code> la elimina.
+- <strong>La carpeta propia de la app de escritorio:</strong> <code dir="ltr">{system.appDataMac}</code> en macOS; <code dir="ltr">{system.appDataWindows}</code> y <code dir="ltr">{system.appLocalDataWindows}</code> en Windows.
+
+Las carpetas propias de tus agentes, con sus inicios de sesión, ajustes y conversaciones, son de los agentes y se quedan como están.

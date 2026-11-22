@@ -1,18 +1,19 @@
 # Account quota readings
 
 How Octoboard reads the account quotas described in `docs/product/account-quotas.md`, for the accounts its "Which
-accounts have a quota" section names: how a quota is read, the sign-in email a reading carries, when readings are
-taken, what a reading leaves behind, how a run of an agent's CLI is stopped and what the daemon's log records of
-readings.
+accounts have a quota" section names: how a quota is read, the sign-in email a reading carries, when readings are taken,
+what a reading leaves behind (Claude Code's first-run set-up included), where Grok Build's readings run, how a run of an
+agent's CLI is stopped and what the daemon's log records of readings.
 
 ## How a quota is read
 
 Octoboard asks the agent's own CLI, given the environment a session of that account would get: the login shell's
-environment, with the agent's configuration directory set to the account's directory (left as the shell has it for
-the default account). It runs from the home directory, with no terminal. The CLI looks after its own sign-in, Keychain
-access and token refresh; Octoboard never uses a credential and never contacts a service of its own. It reads the
-agent's local sign-in record only to take the account's email from it (see "The account's sign-in email" below). Each
-agent is asked over the channel it offers its own front ends:
+environment, with the agent's configuration directory set to the account's directory (left as the shell has it for the
+default account) — except Grok Build, whose reading runs against a directory of Octoboard's own that reaches the
+account's sign-in (see "Where Grok Build's readings run" below). It runs from the home directory, with no terminal. The
+CLI looks after its own sign-in, Keychain access and token refresh; Octoboard never uses a credential and never contacts
+a service of its own. It reads the agent's local sign-in record only to take the account's email from it (see "The
+account's sign-in email" below). Each agent is asked over the channel it offers its own front ends:
 
 | Agent | What is run | What it is asked |
 |---|---|---|
@@ -152,7 +153,63 @@ Some writes into the account's directory cannot be avoided:
 - **Claude Code** synchronises the user's installed plugins and registers the running process under `sessions/`; the
   registration is cleared by a later start of Claude Code.
 - **Codex** writes its model cache, its log databases and a temporary directory it clears on its next start.
-- **Grok Build** writes its model cache, its session search index and its log.
+- **Grok Build** writes into a directory of Octoboard's own instead, its model cache, session search index and log
+  included; a sign-in it refreshes during the reading is saved to the account's `auth.json` (see "Where Grok Build's
+  readings run" below).
+
+### Claude Code's first-run set-up
+
+In a config directory Claude Code has not run in before, or one with migrations pending after an update of Claude
+Code, Claude Code's quota reading, the `claude mcp list` of an MCP inventory (see "How a Claude Code account is read" in
+`docs/product/account-mcp-servers-and-connectors.md`) with the `claude auth status` before it, and `claude agents
+--json` each carry out Claude Code's own first-run set-up and pending migrations there, as its next launch by the user
+would have done: measured on Claude Code 2.1.330, `.claude.json` gains its first-run keys (`firstStartTime`,
+`firstStartVersion`, `machineID`, `migrationVersion` and others, `userID` too for all but `claude auth status`), a
+backup of it is written under the config directory's `backups/`, and a `theme` kept in `.claude.json` is moved into
+`settings.json`. Octoboard leaves
+these changes as they are. In a config directory Claude Code has run in, none of these runs changes a configuration
+file. Codex's quota reading, model listing and MCP inventory change no configuration file of Codex's in either case;
+Grok Build's readings run in a directory of Octoboard's own (see "Where Grok Build's readings run" below).
+
+## Where Grok Build's readings run
+
+Grok Build's quota reading, its model listing (`grok models`, see "The models offered" in
+`docs/product/model-and-reasoning-effort.md`) and its kick (see "How a kick runs" in
+`docs/product/starting-usage-windows.md`) never run against the account's own directory: run against a Grok home it
+has not run in before, each of these commands appends `[marketplace] default_skills_installs_purged = true` to that
+home's `config.toml`, the kick's before any request is sent. Each runs instead against a directory of Octoboard's own,
+`~/.octoboard/agent-query-homes/grok/<digest>/quota/`, `…/models/` or `…/kick/`, where `<digest>` is a digest of the
+account's directory as it really is on disk, so two spellings of one directory share it. The directory is kept between
+runs. An account's directories are removed when the account is removed (before its directory is moved to the Trash,
+where that option is ticked) and when the account is pointed at another directory, which removes those kept for the
+directory it leaves; they are found by the account's directory as it is written too, so they go even when that
+directory itself is gone. What they hold, and who can read it, is in `docs/product/files-octoboard-owns.md`.
+
+Before every run the directory is given a fresh copy of the account's `config.toml` — or none, where the account has
+none — so an edit of the account's configuration is picked up at the next run. The sign-in is not copied: the run is
+given the account's own `auth.json` through `GROK_AUTH_PATH`, so it reads as the account and a sign-in Grok refreshes
+is saved where the account keeps it; where the login shell's environment already sets `GROK_AUTH_PATH`, that value is
+left as it is. Grok takes that file's lock beside it, `auth.json.lock`, so a refresh by one of these runs and one by
+the user's own `grok` wait on each other. The account's `config.toml` is left as it was. What Grok writes while it
+initialises and runs — its documentation, logs, caches, its model cache, the session record of a kick and the marker
+above — lands in Octoboard's directory. Because the copy of `config.toml` is fresh every run, Grok appends its marker
+and repeats its first-run step there each time; measured on Grok Build 1.0.92, that changes nothing outside the
+directory. Grok's log grows with every run, so the directory's `logs/` is removed before each. The quota reading's and
+the model listing's directories keep everything else Grok laid down in them between runs. The kick's does not: once
+a kick has ended, everything it left in `…/kick/` is removed — the copy of `config.toml`, the session record, logs and
+caches alike — all but the directory's lock file, so nothing piles up from kick to kick and Grok lays the directory
+down afresh at the next kick.
+
+Each directory is held by one run at a time: a run of the same kind for the same account that finds it held waits for
+it within the run's own time limit — the reading's and the kick's 60 seconds, the model listing's fifteen — and the
+time spent waiting comes out of that limit. A quota reading or a kick gives the wait up at once when the daemon shuts
+down. When the directory cannot be prepared or is still held when the wait ends, the run is not made: the quota
+reading is a failed reading, the model listing gives the command's failure as the reason there is none (see
+"While the list is being fetched, and when there is none" in `docs/product/model-and-reasoning-effort.md`), and the
+kick is a failed kick (see "When an account is kicked" in `docs/product/starting-usage-windows.md`). None falls back to
+the account's own directory.
+
+Claude Code's and Codex's quota readings and kicks, and Codex's model listing, run against the account's directory.
 
 ## How a run of an agent's CLI is stopped
 

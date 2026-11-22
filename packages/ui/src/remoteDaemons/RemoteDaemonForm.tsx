@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 
+import { ChoiceWarning } from "../components/alerts/ChoiceWarning";
 import { PasteButton } from "../components/controls/PasteButton";
 import { useDialogAction } from "../components/dialog/dialogHooks";
 import { useUnsavedChanges } from "../components/dialog/UnsavedChanges";
@@ -82,8 +83,12 @@ function differs(key: keyof Fields, left: Fields, right: Fields): boolean {
  * as the host. Connection details `octoboardd connection` printed on the server, pasted into the first field, fill the
  * host, port, user, the path of `octoboardd`, the name where they carry one, and the host key to pin. The pinned host
  * key is shown and can be cleared, so that a server whose key has really changed can be confirmed again on the next
- * connection. This device's own key is offered only to an entry the shell has already switched to it, since the shell
- * installs it at a sign-in with one of the others. `onSave` sends the entry; a rejection is shown and the draft kept. A
+ * connection. An entry the shell has switched to this device's own key says so in place of the choice between a
+ * password and a key file, which comes back once the key is turned off (`RemoteDeviceKeyCard`): the shell installs the
+ * key at a sign-in with one of the others, once the owner agrees, and takes it back where it is turned off. It takes
+ * it back too when such an entry is saved for another host, port or user, where the key was never added: while the
+ * draft holds such a change, a warning under the sign-in line says the save removes the key from where it is, and the
+ * three fields are described by it. `onSave` sends the entry; a rejection is shown and the draft kept. A
  * caller that shows another entry gives the form another `key`, which drops the draft.
  */
 export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }: {
@@ -96,6 +101,7 @@ export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }:
 }): React.ReactElement {
   const t = useT();
   const fingerprintLabelId = useId();
+  const repointWarningId = useId();
   const saved = fieldsOf(entry);
   const [draft, setDraft] = useState<Partial<Fields>>({});
   const [details, setDetails] = useState("");
@@ -125,6 +131,9 @@ export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }:
     });
   }, [entry]);
   const dirty = (Object.keys(fields) as (keyof Fields)[]).some((key) => differs(key, fields, saved));
+  // The key was added for the saved destination alone: saving another one takes it back from there first.
+  const repointed = entry?.auth === "device" && (["host", "port", "user"] as const).some((key) => differs(key, fields, saved)) ? entry : undefined;
+  const repointDescribedBy = repointed ? repointWarningId : undefined;
   const portNumber = parsePort(fields.port);
   const hostError = fields.host.trim() ? undefined : t("remoteDaemons.form.host.required");
   const portError = portNumber === undefined ? t("remoteDaemons.form.port.invalid") : undefined;
@@ -218,24 +227,32 @@ export function RemoteDaemonForm({ entry, onSave, onCancel, autoFocus = false }:
             not; the row mirrors in right-to-left like any row of controls, the fields' own text staying left to right. */}
         <div className="flex flex-col gap-5 @md:flex-row">
           <div className="min-w-0 @md:w-40 @md:shrink-0">
-            <TextInput label={t("remoteDaemons.form.user")} value={fields.user} onChange={(user) => change({ user })} placeholder={example(EXAMPLES.user)} dir="ltr" errorMessage={marks.shown("user", userError)} onBlur={() => marks.leave("user")} />
+            <TextInput label={t("remoteDaemons.form.user")} value={fields.user} onChange={(user) => change({ user })} placeholder={example(EXAMPLES.user)} dir="ltr" describedBy={repointDescribedBy} errorMessage={marks.shown("user", userError)} onBlur={() => marks.leave("user")} />
           </div>
           <div className="min-w-0 flex-1">
-            <TextInput label={t("remoteDaemons.form.host")} value={fields.host} onChange={(host) => change({ host })} placeholder={example(EXAMPLES.host)} dir="ltr" errorMessage={marks.shown("host", hostError)} onBlur={() => marks.leave("host")} />
+            <TextInput label={t("remoteDaemons.form.host")} value={fields.host} onChange={(host) => change({ host })} placeholder={example(EXAMPLES.host)} dir="ltr" describedBy={repointDescribedBy} errorMessage={marks.shown("host", hostError)} onBlur={() => marks.leave("host")} />
           </div>
           <div className="@md:w-28 @md:shrink-0">
-            <TextInput label={t("remoteDaemons.form.port")} value={fields.port} onChange={(port) => change({ port })} placeholder={example(EXAMPLES.port)} dir="ltr" errorMessage={marks.shown("port", portError)} onBlur={() => marks.leave("port")} />
+            <TextInput label={t("remoteDaemons.form.port")} value={fields.port} onChange={(port) => change({ port })} placeholder={example(EXAMPLES.port)} dir="ltr" describedBy={repointDescribedBy} errorMessage={marks.shown("port", portError)} onBlur={() => marks.leave("port")} />
           </div>
         </div>
       </FormCard>
       <FormCard title={t("remoteDaemons.form.section.signIn")}>
-        <RadioGroup variant="secondary" label={t("remoteDaemons.form.auth")} value={fields.auth} onChange={(value) => change({ auth: value as RemoteDaemonAuth })}>
-          <Radio value="password">{t("remoteDaemons.form.auth.password")}</Radio>
-          <Radio value="key">{t("remoteDaemons.form.auth.key")}</Radio>
-          {entry?.auth === "device" && (
-            <Radio value="device" description={t("remoteDaemons.form.auth.device.description")}>{t("remoteDaemons.form.auth.device")}</Radio>
-          )}
-        </RadioGroup>
+        {entry?.auth === "device" ? (
+          <>
+            <p className="text-sm">{t("remoteDaemons.deviceKey.signsIn")}</p>
+            {repointed && (
+              <ChoiceWarning id={repointWarningId} title={t("remoteDaemons.deviceKey.repoint.title")} remedy={t("remoteDaemons.deviceKey.repoint.remedy")}>
+                <Message id="remoteDaemons.deviceKey.repoint.body" params={{ destination: <InlineReference monospace dir="ltr" wrap>{`${repointed.user}@${repointed.host}`}</InlineReference> }} />
+              </ChoiceWarning>
+            )}
+          </>
+        ) : (
+          <RadioGroup variant="secondary" label={t("remoteDaemons.form.auth")} value={fields.auth} onChange={(value) => change({ auth: value as RemoteDaemonAuth })}>
+            <Radio value="password">{t("remoteDaemons.form.auth.password")}</Radio>
+            <Radio value="key">{t("remoteDaemons.form.auth.key")}</Radio>
+          </RadioGroup>
+        )}
         {fields.auth === "key" && (
           <TextInput
             label={t("remoteDaemons.form.keyPath")}

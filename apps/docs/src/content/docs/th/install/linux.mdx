@@ -4,7 +4,8 @@ description: "ติดตั้ง octoboardd ซึ่งเป็นโปร
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../../commands.ts";
+import LinuxUninstall from "../../../../snippets/th/linux-uninstall.mdx";
 
 ติดตั้ง octoboardd ซึ่งเป็นโปรแกรมเซิร์ฟเวอร์ของ {productName} (แอปเรียกว่า “ดีมอน”) บนเซิร์ฟเวอร์ Linux โดยไม่ต้องใช้สิทธิ์ root เข้าถึงได้จากแอป macOS หรือ Windows หรือจากเบราว์เซอร์ ทั้งสองวิธีผ่าน SSH
 
@@ -80,6 +81,12 @@ octoboardd เลือกพอร์ตของตัวเองโดยท
   หากมันถามว่าจะรีสตาร์ททันทีหรือไม่ ให้ตอบ <code dir="ltr">y</code> เพื่อรีสตาร์ท หรือกด Enter เพื่อให้เวอร์ชันเก่าทำงานต่อไปก่อน หากต้องการรีสตาร์ทภายหลัง ให้รัน <code dir="ltr">{commands.restart}</code>
 
 หาก <code dir="ltr">{commands.update}</code> แจ้งว่าแทนที่โปรแกรมไม่ได้ เช่นเพราะติดตั้งไว้ในที่ที่คุณเขียนไม่ได้ ให้รันคำสั่งติดตั้ง (หรือคำสั่งบริการ) อีกครั้งแทน มันจะรีสตาร์ทในแบบเดียวกันเมื่อปลอดภัย และหากไม่ ก็จะบอกให้คุณรัน <code dir="ltr">{commands.restart}</code>
+
+## ถอนการติดตั้ง
+
+<LinuxUninstall />
+
+ข้อมูลของคุณจะยังอยู่ใน <code dir="ltr">{system.dataDir}</code> [ระบบของคุณยังคงเหมือนเดิม](../../your-system/) บอกว่าหลังจากนั้นเหลืออะไรและลบได้อย่างไร
 
 ## คำสั่ง
 

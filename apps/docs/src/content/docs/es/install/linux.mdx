@@ -4,7 +4,8 @@ description: "Instala octoboardd, el programa de servidor de Octoboard, en un se
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../../commands.ts";
+import LinuxUninstall from "../../../../snippets/es/linux-uninstall.mdx";
 
 Instala octoboardd, el programa de servidor de {productName} (la app lo llama el servicio), en un servidor Linux sin root. Accede a él desde la app para macOS o Windows, o desde un navegador, ambos por SSH.
 
@@ -80,6 +81,12 @@ octoboardd elige un puerto propio que nunca necesitas conocer: la dirección y e
   Si pregunta si quieres reiniciar ahora, responde <code dir="ltr">y</code> para reiniciar o pulsa Intro para seguir usando por ahora la versión anterior. Para reiniciar más tarde, ejecuta <code dir="ltr">{commands.restart}</code>.
 
 Si <code dir="ltr">{commands.update}</code> indica que no puede reemplazar el programa, por ejemplo porque se instaló en un lugar donde no puedes escribir, ejecuta de nuevo el comando de instalación (o el del servicio). Se reinicia del mismo modo cuando es seguro y, si no, te indica que ejecutes <code dir="ltr">{commands.restart}</code>.
+
+## Desinstalar
+
+<LinuxUninstall />
+
+Tus datos se quedan en <code dir="ltr">{system.dataDir}</code>. [Tu sistema queda como estaba](../../your-system/) explica qué queda después y cómo quitarlo.
 
 ## Comandos
 

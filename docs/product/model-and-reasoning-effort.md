@@ -123,7 +123,7 @@ lag behind the agent's releases:
 |---|---|
 | Claude Code | Its four version-free aliases, best first — Fable, Opus, Sonnet and Haiku — which Claude Code itself resolves to the newest model of each family. A pick therefore never names a version and never goes stale. Nothing is run to list them: what each stands for and whether the account can use it are read from the model catalogue Claude Code keeps on disk for the account. |
 | Codex | Codex's own catalogue, by the name each entry carries, in the order Codex itself ranks them; entries it marks as not for listing are left out. |
-| Grok Build | The models Grok offers, in the order Grok itself lists them, by the display names Grok records in its own home and by their ids where it records none; models Grok marks as hidden are left out. |
+| Grok Build | The models `grok models` lists, in the order Grok itself lists them, by the display names Grok records in the model cache that run refreshes and by their ids where it records none; models Grok marks as hidden are left out. The command runs against a directory of Octoboard's own rather than the account's, so that cache is the one there (see "Where Grok Build's readings run" in `docs/product/account-quota-readings.md`). |
 
 What is stored, and passed to the agent, is the identifier behind the entry — Claude Code's alias, or the Codex or Grok
 Build catalogue's own id — not the name shown.
@@ -222,7 +222,7 @@ agent's CLI is stopped" in `docs/product/account-quota-readings.md`).
 The agent cannot always be asked: its binary does not resolve on the user's login shell `PATH`, the shell environment
 could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), the command failed or did
 not finish in time, or what it printed held no model that could be read. For a Codex or Grok Build account the user owns
-whose config directory does not exist the command is not run at all, so the directory is never created by it, and the reason is that the command failed. None of those stops the dialog, and it is about
+whose config directory does not exist the command is not run at all, so the directory is never created by it, and the reason is that the command failed; so it is for a Grok Build account whose listing's own directory cannot be prepared or is still held by another listing when its fifteen seconds run out (see "Where Grok Build's readings run" in `docs/product/account-quota-readings.md`). None of those stops the dialog, and it is about
 the whole field rather than the value it holds, so the reason is said by an amber warning mark right after the Model
 field's label, named that the models could not be loaded. In the console dialog's table of console-session and
 project-session settings, the mark follows the Model row's name, once; where the table is stacked, with the setting's

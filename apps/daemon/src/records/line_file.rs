@@ -113,17 +113,41 @@ pub fn read_from(path: &Path, offset: u64, mut visit: impl FnMut(&str)) -> std::
 
 /// Reads every line of the file at `path` from its start, the unfinished last one too, or only the
 /// first `end` bytes when there is one, until `visit` breaks. For a one-off pass over a record
-/// that is not read again from where it stopped. A read that fails part-way returns its error
-/// after the lines before it were visited, saying whether it had read a line by then.
+/// that is not read again from where it stopped. A pass that ends says whether it skipped a line
+/// on the way ([`Pass`]). A read that fails part-way returns its error after the lines before it
+/// were visited, saying whether it had read a line by then.
 pub fn read_whole_until(
     path: &Path,
     end: Option<u64>,
     mut visit: impl FnMut(&str) -> ControlFlow<()>,
-) -> Result<(), ReadFailure> {
-    let mut read_a_line = false;
-    scan(path, 0, end, true, &mut read_a_line, |_, line| visit(line))
-        .map(drop)
-        .map_err(|error| ReadFailure { error, read_a_line })
+) -> Result<Pass, ReadFailure> {
+    let mut seen = Seen::default();
+    match scan(path, 0, end, true, &mut seen, |_, line| visit(line)) {
+        Ok(_) => Ok(Pass {
+            skipped_a_line: seen.skipped_a_line,
+        }),
+        Err(error) => Err(ReadFailure {
+            error,
+            read_a_line: seen.read_a_line,
+        }),
+    }
+}
+
+/// A one-off pass that ended, at the end of what it was to read or where `visit` broke.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pass {
+    /// Whether a line before the pass ended was read and not visited, being past [`LINE_LIMIT`] or
+    /// not UTF-8: what the visited lines did not hold, that line may have.
+    pub skipped_a_line: bool,
+}
+
+/// What a scan met besides the lines it visited.
+#[derive(Default)]
+struct Seen {
+    /// A complete line was read, visited or skipped.
+    read_a_line: bool,
+    /// A line was skipped, complete or the unfinished last one.
+    skipped_a_line: bool,
 }
 
 /// A one-off pass that failed.
@@ -159,28 +183,35 @@ fn scan_lines(
     end: Option<u64>,
     mut visit: impl FnMut(u64, &str),
 ) -> std::io::Result<u64> {
-    scan(path, offset, end, false, &mut false, |position, line| {
-        visit(position, line);
-        ControlFlow::Continue(())
-    })
+    scan(
+        path,
+        offset,
+        end,
+        false,
+        &mut Seen::default(),
+        |position, line| {
+            visit(position, line);
+            ControlFlow::Continue(())
+        },
+    )
 }
 
 /// [`scan_lines`] that also visits an unfinished last line when `unfinished`, and stops when
-/// `visit` breaks, answering the offset past the last complete line visited. `read_a_line` is set
-/// once a complete line has been read, visited or skipped, so a caller sees it after a failure too.
+/// `visit` breaks, answering the offset past the last complete line visited. `seen` is filled in
+/// as the scan goes, so a caller sees it after a failure too.
 fn scan(
     path: &Path,
     offset: u64,
     end: Option<u64>,
     unfinished: bool,
-    read_a_line: &mut bool,
+    seen: &mut Seen,
     visit: impl FnMut(u64, &str) -> ControlFlow<()>,
 ) -> std::io::Result<u64> {
     let mut reader = open(path, offset)?;
     if let Some(end) = end {
         reader = Box::new(reader.take(end.saturating_sub(offset)));
     }
-    scan_reader(reader, offset, unfinished, read_a_line, visit)
+    scan_reader(reader, offset, unfinished, seen, visit)
 }
 
 /// [`scan`] over `reader`, which is positioned at `offset`. A read the OS interrupted is retried,
@@ -189,7 +220,7 @@ fn scan_reader(
     mut reader: impl BufRead,
     offset: u64,
     unfinished: bool,
-    read_a_line: &mut bool,
+    seen: &mut Seen,
     mut visit: impl FnMut(u64, &str) -> ControlFlow<()>,
 ) -> std::io::Result<u64> {
     let mut complete = offset;
@@ -203,11 +234,14 @@ fn scan_reader(
             Err(err) => return Err(err),
         };
         if buffer.is_empty() {
-            if unfinished && !oversized {
-                if let Ok(line) = std::str::from_utf8(&line) {
-                    if !line.is_empty() {
+            if unfinished {
+                match std::str::from_utf8(&line) {
+                    Ok(_) if oversized => seen.skipped_a_line = true,
+                    Ok("") => {}
+                    Ok(line) => {
                         let _ = visit(complete, line);
                     }
+                    Err(_) => seen.skipped_a_line = true,
                 }
             }
             return Ok(complete);
@@ -225,13 +259,14 @@ fn scan_reader(
         position += length as u64;
         reader.consume(length);
         if end.is_some() {
-            *read_a_line = true;
-            if !oversized {
-                if let Ok(line) = std::str::from_utf8(&line) {
+            seen.read_a_line = true;
+            match std::str::from_utf8(&line) {
+                Ok(line) if !oversized => {
                     if visit(complete, line).is_break() {
                         return Ok(position);
                     }
                 }
+                _ => seen.skipped_a_line = true,
             }
             complete = position;
             line.clear();
@@ -314,6 +349,39 @@ mod tests {
         assert_eq!(lines, ["a\n", "b"]);
     }
 
+    /// A pass says whether it left a line unvisited: one past the limit or not UTF-8, complete or
+    /// the unfinished last one, and only up to where the pass stopped.
+    #[test]
+    fn a_pass_says_whether_it_skipped_a_line() {
+        let path = ScratchFile::new("line-file-skipped", "record.jsonl");
+        let pass = |content: &[u8], stop_at: Option<&str>| {
+            std::fs::write(&path, content).unwrap();
+            read_whole_until(&path, None, |line| {
+                if stop_at.is_some_and(|stop| line.starts_with(stop)) {
+                    ControlFlow::Break(())
+                } else {
+                    ControlFlow::Continue(())
+                }
+            })
+            .unwrap()
+            .skipped_a_line
+        };
+        assert!(!pass(b"first\nlast", None));
+        let long = "x".repeat(LINE_LIMIT);
+        assert!(pass(format!("first\n{long}\nlast\n").as_bytes(), None));
+        assert!(
+            // With no newline to count, one more byte takes it past the limit.
+            pass(format!("first\n{long}x").as_bytes(), None),
+            "unfinished"
+        );
+        assert!(pass(b"first\n\xff\xfe\nlast\n", None));
+        assert!(pass(b"first\n\xff\xfe", None), "unfinished");
+        assert!(
+            !pass(format!("first\n{long}\n").as_bytes(), Some("first")),
+            "the pass stopped before the long line"
+        );
+    }
+
     /// A reader that hands out `chunks` one per `fill_buf`, `None` standing for a read the OS
     /// interrupted.
     struct Interrupting {
@@ -366,8 +434,8 @@ mod tests {
             consumed: 0,
         };
         let mut lines = Vec::new();
-        let mut read_a_line = false;
-        let read = scan_reader(reader, 10, false, &mut read_a_line, |position, line| {
+        let mut seen = Seen::default();
+        let read = scan_reader(reader, 10, false, &mut seen, |position, line| {
             lines.push((position, line.to_string()));
             ControlFlow::Continue(())
         })
@@ -377,6 +445,6 @@ mod tests {
             [(10, "first\n".to_string()), (16, "second\n".to_string())]
         );
         assert_eq!(read, 10 + "first\nsecond\n".len() as u64);
-        assert!(read_a_line);
+        assert!(seen.read_a_line && !seen.skipped_a_line);
     }
 }

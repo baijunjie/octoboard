@@ -1,14 +1,16 @@
 ---
 title: "Windows"
-description: "Para PC con procesador Intel o AMD (casi todos los PC con Windows), con Windows 10 versión 21H2 o posterior. En Windows 11 en Arm, esta app x64 se ejecuta mediante emulación."
+description: "Para PC con procesador Intel o AMD (casi todos los PC con Windows), con Windows 10 versión 21H2 o posterior. En Windows 11 en Arm, usa el instalador arm64 nativo cuando la publicación lo ofrezca; si no, esta app x64 se ejecuta allí mediante emulación."
 ---
 
 import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
 import { downloads, productName } from "../../../../commands.ts";
+import WindowsUninstaller from "../../../../snippets/es/windows-uninstaller.mdx";
 
-Para PC con procesador Intel o AMD (x64; casi todos los PC con Windows), con Windows 10 versión 21H2 o posterior. En Windows 11 en Arm, esta app x64 se ejecuta mediante emulación.
+Para PC con procesador Intel o AMD (x64; casi todos los PC con Windows), con Windows 10 versión 21H2 o posterior. En Windows 11 en Arm, usa el instalador arm64 nativo cuando la publicación lo ofrezca; si no, esta app x64 se ejecuta allí mediante emulación.
 
 <LinkButton href={downloads.windows}>Descargar para Windows</LinkButton>
+<LinkButton href={downloads["windows-arm64"]} variant="secondary">Descargar para Windows en Arm</LinkButton>
 
 <Aside>La app para Windows está en fase beta.</Aside>
 
@@ -16,7 +18,7 @@ Para PC con procesador Intel o AMD (x64; casi todos los PC con Windows), con Win
 
 <Steps>
 
-1. Descarga el instalador con el botón de arriba. Es un archivo cuyo nombre termina en <code dir="ltr">x64-setup.exe</code>.
+1. Descarga el instalador con el botón de arriba. Es un archivo cuyo nombre termina en <code dir="ltr">x64-setup.exe</code>. En Windows en Arm, prueba el segundo botón: cuando la publicación ofrece un instalador arm64, descarga ese archivo, cuyo nombre termina en <code dir="ltr">arm64-setup.exe</code>; si no, abre la lista de publicaciones, y el instalador x64 se ejecuta mediante emulación.
 2. Abre el archivo descargado para ejecutar el instalador. Instala {productName} solo para tu cuenta de usuario, así que no pide permisos de administrador.
 
    La app todavía no tiene firma de código, por lo que Microsoft Defender SmartScreen puede mostrar «Windows protegió su PC». Selecciona «Más información» y luego «Ejecutar de todas formas».
@@ -38,6 +40,16 @@ Cuando se abra la ventana principal, habrás terminado.
 - [Grok Build](https://docs.x.ai/build/overview)
 
 Si usas Claude Code o Codex, instala primero [Git for Windows](https://git-scm.com/download/win); lo necesitan para funcionar.
+
+## Desinstalar
+
+Desinstala {productName} con su desinstalador, desde la Configuración de Windows (Aplicaciones) o el Panel de control.
+
+<WindowsUninstaller />
+
+Para ver lo que está en vigor antes de desinstalar, abre <strong>Ajustes › Limpieza › Limpiar antes de desinstalar</strong>: <strong>Quitar todo</strong> quita allí lo mismo y muestra el resultado de cada elemento.
+
+[Tu sistema queda como estaba](../../your-system/) explica qué queda después y cómo quitarlo.
 
 ## Actualizaciones
 

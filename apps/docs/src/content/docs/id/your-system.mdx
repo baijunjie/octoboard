@@ -1,0 +1,88 @@
+---
+title: "Sistem Anda tetap seperti semula"
+description: "Octoboard membiarkan sistem Anda dan file milik agen Anda seperti saat ditemukan. Apa yang ditambahkan beberapa fitur, cara membatalkannya, dan apa yang tersisa setelah pencopotan."
+---
+
+import { Aside, Code } from "@astrojs/starlight/components";
+import { commands, productName, system } from "../../../commands.ts";
+import LinuxUninstall from "../../../snippets/id/linux-uninstall.mdx";
+import WindowsUninstaller from "../../../snippets/id/windows-uninstaller.mdx";
+
+{productName} membiarkan sistem Anda seperti saat ditemukan: konfigurasi agen Anda, dan semua hal lain di luar folder milik {productName} sendiri. Hanya beberapa fitur yang menambahkan sesuatu di luar folder tersebut. Halaman ini mendaftar semuanya, dengan apa yang ditambahkan, di mana, dan cara membatalkannya, serta menjelaskan apa yang tersisa setelah Anda mencopotnya.
+
+## Aturannya
+
+- <strong>Apa yang diberikan {productName} kepada agen sampai kepadanya di setiap peluncuran, dan hanya di situ.</strong> Hook statusnya, server MCP miliknya sendiri, dan peran yang dijelaskannya kepada sesi diteruskan saat agen dimulai, atau disimpan di folder milik {productName} sendiri. Tidak ada file milik Anda atau milik agen yang diedit untuk itu, sehingga agen yang Anda jalankan sendiri dimulai tanpa semua itu.
+- <strong>{productName} tidak menambahkan hook miliknya sendiri ke pengaturan Anda, dan tidak memutuskan apa pun untuk Anda tentang folder sebuah proyek.</strong> Apakah folder sebuah proyek dipercaya, Anda yang menentukan dan agen yang mencatatnya. Satu-satunya folder yang dijawab oleh {productName} sendiri adalah folder milik konsol, yang merupakan milik {productName} (lihat di bawah).
+- <strong>Apa yang ditulis agen untuk dirinya sendiri adalah milik agen.</strong> Catatan percakapannya, cache dan log, kredensial login, dan kepercayaan yang dicatatnya ketika pertanyaannya sendiri dijawab ditulis sama seperti ketika Anda memakai agen tanpa {productName}. Begitu pula penyiapan awal yang dilakukan program milik agen saat pertama kali berjalan di sebuah folder konfigurasi; pembacaan yang dilakukan {productName} di latar belakang dapat memicunya sebelum peluncuran pertama Anda sendiri (lihat di bawah).
+- <strong>Pekerjaan di dalam proyek Anda bukan bahasan halaman ini.</strong> Mengedit file proyek, operasi Git, branch, dan worktree adalah pekerjaan pengembangan yang menjadi tujuan Anda menambahkan proyek.
+
+## Apa yang ditambahkan sebuah fitur, dan cara membatalkannya
+
+Masing-masing hanya ditambahkan oleh fitur yang Anda pakai atau aktifkan.
+
+### Dibatalkan dengan menonaktifkan fiturnya
+
+- <strong>Kunci komputer ini di server jarak jauh.</strong> Setelah Anda masuk ke daemon jarak jauh tersimpan dengan kata sandi atau file kunci, aplikasi bertanya dulu sebelum menambahkan apa pun: <strong>Tambahkan kunci komputer ini</strong> menyebutkan file dan barisnya. <strong>Tambahkan kunci</strong> menambahkan satu baris, bertanda <code dir="ltr">{system.keyMark}</code>, ke kunci SSH yang diizinkan milik pengguna Anda di server itu (<code dir="ltr">{commands.authorizedKeys}</code> di Linux dan macOS), dan menyimpan kunci privat di penyimpanan kredensial komputer ini (rantai kunci login di macOS, Credential Manager di Windows). <strong>Jangan tambahkan</strong> tidak menambahkan apa pun dan tidak ditanyakan lagi. Untuk membatalkannya, matikan <strong>Kunci komputer ini</strong> di halaman daemon itu dalam <strong>Perangkat jarak jauh</strong>, atau lepas daemon tersimpan itu: aplikasi menghapus barisnya dari file dan menghapus kunci privatnya. Aplikasi melakukan hal yang sama ketika Anda mengubah host, port, atau pengguna daemon tersimpan itu. Jika server tidak dapat dijangkau, baris itu mungkin tertinggal; aplikasi memberi tahu Anda, agar Anda menghapusnya di server.
+- <strong>Buka saat login</strong> (Windows, dan macOS 13 atau lebih baru). <strong>Pengaturan › Umum › Buka saat login</strong> memasukkan {productName} ke daftar aplikasi yang dibuka sistem Anda saat login, dan barisnya mengatakan demikian. Menonaktifkannya adalah cara mengeluarkannya dari daftar itu.
+- <strong>Alat baris perintah</strong> (macOS). <strong>Pasang</strong> di bawah <strong>Pengaturan › Umum › Alat baris perintah</strong> menambahkan tautan bernama <code dir="ltr">{system.cliName}</code> ke <code dir="ltr">{system.cliDir}</code>, atau ke <code dir="ltr">{system.cliFallbackDir}</code> jika sistem tidak mengizinkannya; barisnya mengatakan demikian sebelum Anda memasang. <strong>Hapus</strong> menghapus tautan itu.
+- <strong>Berbagi konfigurasi default.</strong> <strong>Bagikan konfigurasi default</strong>, di pengaturan sebuah akun di bawah <strong>Pengaturan › Akun agen</strong>, mengganti bagian folder akun itu yang dapat dibagikan dengan tautan ke folder akun default, menyimpan konfigurasi milik akun itu sendiri sebagai cadangan di sampingnya, dan memindahkan riwayat percakapannya ke folder akun default. Barisnya mengatakan demikian sebelum Anda mengaktifkannya. Menonaktifkannya menghapus tautan, memulihkan cadangan, dan memindahkan kembali percakapan dari sesi milik akun itu sendiri. <strong>Satu hal tetap tinggal:</strong> sisa riwayat percakapan yang dipindahkan tetap berada di folder akun default, karena menghapusnya akan membuat Anda kehilangan percakapan. Lihat [Shared configuration](../features/shared-configuration/).
+
+### Tetap sebagai milik Anda atau milik agen
+
+Hal-hal ini menulis sesuatu yang sejak saat itu menjadi milik Anda atau milik agen, jadi {productName} tidak punya apa pun miliknya sendiri yang perlu dibatalkan. Jika sebuah entri dapat dihapus secara manual, butirnya menyebutkan tempatnya.
+
+- <strong>Beralih akun sebuah sesi.</strong> <strong>Beralih akun</strong> meminta konfirmasi Anda. Peralihan yang diminta agen menunggu persetujuan Anda kecuali Anda telah mengaktifkan <strong>Setujui otomatis peralihan akun</strong>, dan peralihan pada batas penggunaan hanya terjadi selama <strong>Beralih akun otomatis saat batas penggunaan tercapai</strong> aktif. Peralihan menyalin percakapan sesi itu saja ke folder akun tujuan; untuk Codex, peralihan juga mengarahkan catatan milik akun itu tentang percakapan tersebut ke salinannya. Yang asli tetap di tempatnya, dan salinannya tetap sebagai milik akun itu. Lihat [Account continuity](../features/account-continuity/).
+- <strong>Pengaturan dan plugin yang Anda ubah di dalam sesi Grok Build.</strong> Jika <code dir="ltr">config.toml</code> Anda adalah tautan ke sebuah file, tema, sakelar plugin, atau model default yang Anda ubah di dalam sesi ditulis ke file itu saat sesi berakhir, sebagaimana Grok sendiri akan menyimpannya. Plugin yang Anda pasang di dalam sesi dicatat di registri plugin milik folder Grok Anda sendiri, jika ada.
+- <strong>Kepercayaan Grok Build pada folder sebuah proyek.</strong> Setelah Anda setuju memercayai folder sebuah proyek (<strong>Percayai dan lanjutkan</strong>, atau jawaban Anda sendiri di terminal), satu entri yang ditulis Grok dibawa, tanpa diubah, ke daftar kepercayaan di folder Grok Anda.
+- <strong>Catatan sesi yang belum pernah memiliki percakapan.</strong> Menghapus sesi yang belum pernah Anda kirimi apa pun turut memindahkan catatan milik agen tentang sesi itu ke Tong Sampah (Keranjang Sampah di Windows), tanpa bertanya: catatan itu tidak berisi percakapan Anda. Catatan sesi yang pernah Anda pakai hanya dipindahkan jika Anda mencentang opsi itu di konfirmasi. Catatan itu dapat dipulihkan dari Tong Sampah.
+- <strong>Penyiapan awal Claude Code.</strong> Di folder konfigurasi yang belum pernah dipakai Claude Code, atau setelah Claude Code diperbarui, pembacaan yang dilakukan {productName} di latar belakang (penggunaan sebuah akun, server MCP-nya, atau agennya) membuat Claude Code menjalankan penyiapan awal dan migrasi tertundanya sendiri di sana, sebagaimana peluncuran Anda berikutnya akan melakukannya. {productName} membiarkan perubahan itu apa adanya.
+- <strong>Folder kosong untuk akun Codex baru.</strong> Sebelum peluncuran atau login pertama sebuah akun Codex, {productName} membuat folder akun itu, kosong, jika belum ada: tanpa folder itu, Codex menolak untuk mulai.
+- <strong>Kepercayaan pada folder milik konsol sendiri.</strong> Sesi konsol berjalan di folder milik {productName} sendiri, sehingga {productName} menjawab pertanyaan kepercayaan agen di sana tanpa bertanya kepada Anda. Claude Code lalu menyimpan entri di daftar kepercayaannya sendiri yang hanya menyebut folder itu, dan tidak berpengaruh di tempat lain. Codex hanya bertanya jika folder itu berada di dalam repositori Git, lalu mencatat kepercayaannya untuk root repositori itu, yang mencakup seluruh repositori: jika folder home Anda disimpan di Git, itu berarti seluruh folder home Anda. Grok Build tidak mencatat apa pun di daftar kepercayaan Anda. {productName} tidak menghapus entri-entri ini, karena itu berarti satu pengeditan lagi pada file Anda. Anda dapat menghapusnya sendiri: entri Codex adalah tabel <code dir="ltr">[projects."&lt;repository root&gt;"]</code> di <code dir="ltr">config.toml</code> dalam foldernya, dan entri Claude Code adalah entri folder itu di bawah <code dir="ltr">projects</code> dalam <code dir="ltr">.claude.json</code> miliknya.
+
+### Dibatalkan dengan perintah pencopotan
+
+- <strong>Program server Linux sebagai layanan.</strong> Memasangnya sebagai layanan (lihat [Server Linux](../install/linux/)) menulis layanan pengguna systemd ke folder konfigurasi systemd Anda, dan mengaktifkan lingering untuk pengguna Anda jika sebelumnya nonaktif. Cara membatalkannya adalah perintah pencopotan di bawah.
+
+<Aside>
+Di Windows, aplikasi juga menyimpan jump list tombol bilah tugasnya, berisi daemon jarak jauh tersimpan Anda. Jump list ini tidak punya sakelar: <strong>Hapus semua</strong>, yang dijelaskan di bawah, menghapusnya, begitu pula pencopot pemasangan.
+</Aside>
+
+## Sebelum Anda mencopot
+
+Sebelum mencopot pemasangan, semua hal dari “Dibatalkan dengan menonaktifkan fiturnya” yang sedang berlaku dapat dihapus sekaligus, dengan fiturnya dinonaktifkan. Di aplikasi desktop, <strong>Pengaturan › Pembersihan</strong> memiliki satu baris untuk itu, <strong>Bersihkan sebelum mencopot</strong>: baris itu menyebutkan berapa item yang sedang berlaku dan memiliki satu tombol, <strong>Hapus semua</strong>. Di Windows, pencopot pemasangan juga melakukannya dengan sendirinya, dan perintah pencopotan program server Linux melakukannya terlebih dahulu; keduanya dijelaskan di bawah.
+
+- <strong>Ia bertanya dahulu.</strong> Konfirmasinya menyebutkan berapa item yang akan dihapus, dengan daftarnya terlipat di bawah jumlah itu, dan apa yang dipertahankan. Ia baru melanjutkan setelah Anda mengetik <strong>HAPUS</strong>.
+- <strong>Ia menampilkan hasilnya.</strong> Setelah itu, ia mendaftar apa yang dihapus dan apa yang tidak. Untuk item yang tidak dapat dihapus, misalnya kunci di server yang tidak dapat dijangkau, ia mengatakan apa yang tersisa dan di mana.
+- <strong>Ia hanya ada di jendela aplikasi itu sendiri, di komputer tersebut.</strong> Di browser pada komputer yang memiliki aplikasi desktop, dan di jendela yang menampilkan daemon jarak jauh, baris itu hanya menyebutkan di mana pembersihan dilakukan. Di browser pada server Linux, baris itu mengatakan bahwa pencopotan di server membersihkan terlebih dahulu, dan menampilkan <code dir="ltr">{system.uninstall}</code> dengan <strong>Salin perintah pencopotan</strong>, untuk Anda jalankan di server. Tidak ada yang dihapus dari sana.
+- <strong>Gunakan hanya saat Anda mencopot.</strong> Untuk membatalkan satu item saja dan tetap memakai {productName}, nonaktifkan fitur itu.
+- <strong>Ia mempertahankan data Anda.</strong> Folder milik {productName} sendiri tetap ada, begitu pula riwayat percakapan yang dipindahkan oleh fitur berbagi.
+
+## Setelah Anda mencopot
+
+Pencopotan menghapus programnya.
+
+### macOS
+
+Keluar dari {productName}, lalu hapus dari folder Aplikasi Anda. Tidak ada yang berjalan saat aplikasi dihapus, jadi pilih <strong>Hapus semua</strong> terlebih dahulu: menghapus aplikasinya tidak menghapus apa yang dihapus tindakan itu.
+
+### Windows
+
+Gunakan pencopot pemasangan aplikasi.
+
+<WindowsUninstaller />
+
+### Server Linux
+
+<LinuxUninstall />
+
+Folder tempat program dipasang tetap ada, begitu pula baris apa pun yang Anda tambahkan untuk memasukkannya ke PATH Anda.
+
+### Yang tersisa
+
+Folder milik {productName} sendiri dibiarkan, sehingga pemasangan berikutnya menemukan kembali konsol, sesi, dan pengaturan Anda. Untuk menghapusnya juga, hapus folder-folder itu: Anda kehilangan semua konsol, catatan sesi, dan pengaturan.
+
+- <strong>Folder datanya</strong>, di komputer atau server tempat sesi berjalan: <code dir="ltr">{system.dataDir}</code> (<code dir="ltr">{system.dataDirWindows}</code> di Windows). Di macOS dan Linux, <code dir="ltr">{system.removeDataDir}</code> menghapusnya.
+- <strong>Folder milik aplikasi desktop sendiri:</strong> <code dir="ltr">{system.appDataMac}</code> di macOS; <code dir="ltr">{system.appDataWindows}</code> dan <code dir="ltr">{system.appLocalDataWindows}</code> di Windows.
+
+Folder milik agen Anda sendiri, beserta login, pengaturan, dan percakapannya, adalah milik agen dan tetap seperti apa adanya.

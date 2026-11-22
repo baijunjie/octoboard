@@ -1,10 +1,14 @@
 #!/usr/bin/env node
-// Builds the distributable Windows installer, x64: `tauri build --target x86_64-pc-windows-msvc --bundles nsis`,
-// whose own `beforeBuildCommand` (see `tauri.windows.conf.json`) fetches the ConPTY files, builds the daemon sidecar
-// and the frontend first. `release.mjs` starts it on Windows, and the shared `--no-sign-update` flag does what it does
-// on macOS: the update signature is left to `sign-update.mjs`, so that the build never holds the update key and a
-// build without the flag needs it (`TAURI_SIGNING_PRIVATE_KEY`, see `.env.secret.example`). The update artifact is
-// the installer itself, signed with that key after the last step that could change its bytes.
+// Builds the distributable Windows installer of one architecture, `--arch x64|arm64` (the machine's own by default):
+// `tauri build --target <x86_64|aarch64>-pc-windows-msvc --bundles nsis`, whose own `beforeBuildCommand` (see
+// `tauri.windows.conf.json`) fetches the ConPTY files of that architecture, builds the daemon sidecar for that target
+// and the frontend first. arm64 is cross-compiled on an x64 machine as readily as built on an arm64 one (not verified:
+// no arm64 installer has yet been built on a Windows host, nor cross-built on the hosted runner); the cross-build needs
+// Visual Studio's MSVC ARM64 build tools and LLVM's `clang` on the PATH, which `ring`'s build script compiles its C for
+// arm64 with. `release.mjs` starts it on Windows, and the shared `--no-sign-update` flag does what it does on macOS:
+// the update signature is left to `sign-update.mjs`, so that the build never holds the update key and a build without
+// the flag needs it (`TAURI_SIGNING_PRIVATE_KEY`, see `.env.secret.example`). The update artifact is the installer
+// itself, signed with that key after the last step that could change its bytes.
 //
 // The code-signing mode is `WINDOWS_SIGNING` (`windows-release.mjs` describes the three). `none` and `command` are
 // one run. `signpath` is three, each a `--stage`, with a SignPath submission between them: `build` leaves our two
@@ -17,6 +21,7 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { machineArchitecture } from "../../../scripts/fetch-conpty.mjs";
 import { loadEnv } from "../../../scripts/lib/env.mjs";
 import {
   appDir,
@@ -25,9 +30,9 @@ import {
   packageVersion,
   runTauri,
   tauriBuild,
-  WINDOWS_TARGET,
   windowsBundleDir,
   windowsReleaseDir,
+  windowsTarget,
   withoutUpdateKey,
 } from "./bundle.mjs";
 import { signUpdateArchive } from "./update-archive.mjs";
@@ -49,6 +54,7 @@ const { values: options } = parseArgs({
     "no-sign-update": { type: "boolean", default: false },
     stage: { type: "string" },
     signed: { type: "string" },
+    arch: { type: "string" },
   },
 });
 const signUpdate = !options["no-sign-update"];
@@ -58,17 +64,21 @@ loadEnv(".env.secret");
 
 const mode = signingMode(process.env);
 const stage = checkStage(mode, options.stage, options.signed);
-const nsisDir = path.join(windowsBundleDir, "nsis");
+const arch = options.arch ?? machineArchitecture();
+const WINDOWS_TARGET = windowsTarget(arch);
+const releaseDir = windowsReleaseDir(arch);
+const nsisDir = path.join(windowsBundleDir(arch), "nsis");
 const binariesDir = path.join(appDir, "src-tauri", "binaries");
 // Our own executables, which `signpath` submits and takes back signed: the shell, and the sidecar as the bundler
 // finds it (`externalBin`) under its target-triple name.
 const ownFiles = [
-  { name: "Octoboard.exe", built: path.join(windowsReleaseDir, "Octoboard.exe") },
+  { name: "Octoboard.exe", built: path.join(releaseDir, "Octoboard.exe") },
   { name: "octoboardd.exe", built: path.join(binariesDir, `octoboardd-${WINDOWS_TARGET}.exe`) },
 ];
 const unsignedBinariesDir = path.join(submissionDir, "binaries");
 const unsignedInstallerDir = path.join(submissionDir, "installer");
 
+console.log(`building the ${arch} installer (${WINDOWS_TARGET}).`);
 console.log(
   mode === "none"
     ? "WINDOWS_SIGNING is not set: building unsigned. Windows SmartScreen warns on the download; see the \"Release builds\" section of apps/desktop/scripts/README.md."
@@ -113,7 +123,7 @@ if (stage === "bundle") {
   // The sidecar is bundled from `binaries/`, and `tauri-build` also left a copy beside the shell.
   copyInto(signed[0], ownFiles[0].built);
   copyInto(signed[1], ownFiles[1].built);
-  if (existsSync(path.join(windowsReleaseDir, "octoboardd.exe"))) copyInto(signed[1], path.join(windowsReleaseDir, "octoboardd.exe"));
+  if (existsSync(path.join(releaseDir, "octoboardd.exe"))) copyInto(signed[1], path.join(releaseDir, "octoboardd.exe"));
   // The patching of the shell with the bundle type would invalidate its signature.
   runTauri(["bundle", "--target", WINDOWS_TARGET, "--bundles", "nsis", "--no-binary-patching"], { env: buildEnv });
   copyInto(findBundle(nsisDir, "-setup.exe"), path.join(unsignedInstallerDir, "installer-setup.exe"));
@@ -170,6 +180,6 @@ function verify(setup) {
   const signtool = mode === "none" ? findSigntool() : requireSigntool();
   if (mode !== "none") assertSigned(signtool, [setup]);
   reportSignature(signtool, setup);
-  verifyInstaller({ setup, mode, signtool });
+  verifyInstaller({ setup, mode, signtool, arch });
   if (mode === "signpath") console.log("the uninstaller NSIS generates while it builds the installer is not signed.");
 }

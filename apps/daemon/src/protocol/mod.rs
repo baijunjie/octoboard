@@ -50,6 +50,7 @@ pub use events::*;
 pub use fields::*;
 pub use git_workflow::*;
 pub use history::*;
+pub use host::HostInfo;
 pub use interaction::*;
 pub use mcp_inventory::*;
 pub use memory::*;

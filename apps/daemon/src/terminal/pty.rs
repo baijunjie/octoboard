@@ -243,7 +243,7 @@ impl PtyCore {
             .expect("exit watch lock poisoned") = Some(task);
     }
 
-    #[cfg(all(test, unix))]
+    #[cfg(test)]
     pub(crate) async fn await_exit_watch(&self) {
         let task = self
             .exit_watch_task

@@ -5,7 +5,7 @@
 The privacy page identifies the project's shared author as the operator, using the same name as the developer's
 statement and footer copyright in every language without translating it, and gives `support@octoboard.dev` for
 privacy questions.
-Its last-updated date is the policy revision date, November 18, 2026, displayed in the page's language; it does not
+Its last-updated date is the policy revision date, November 24, 2026, displayed in the page's language; it does not
 change with the build time, visit time or visitor's time zone. Its disclosures distinguish:
 
 - application configuration and session data stored locally, with no upload of code, conversations, or usage data
@@ -70,6 +70,9 @@ A development build of the site never loads Google Analytics, whatever the answe
 
 The privacy page describes remote use of a Linux server or another computer the user manages. Sessions and their data
 stay on the host and the interface travels directly over SSH. The desktop app keeps its saved remote daemons and
-downloaded file copies locally. It saves the device's private SSH key in the macOS login keychain or Windows
-Credential Manager and adds the public key to the remote user's authorized keys on the host. It does not store the SSH
-password. See `docs/product/remote-daemons.md` and `docs/product/links-and-files-in-a-remote-window.md`.
+downloaded file copies locally. After the user signs in, it asks before adding a key of the device's own: only if the
+user agrees does it keep the device's private SSH key in the macOS login keychain or Windows Credential Manager and add
+the public key to the remote user's authorized keys on the host, and turning that key off, removing the saved remote
+daemon or changing its host, port or user removes both; if the host cannot be reached then, the page says the app tells
+the user that the public key may still be on it. It does not store the SSH password. See
+`docs/product/remote-daemons.md` and `docs/product/links-and-files-in-a-remote-window.md`.

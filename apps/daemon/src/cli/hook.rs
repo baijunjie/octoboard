@@ -18,8 +18,9 @@ use std::time::Duration;
 const TIMEOUT: Duration = Duration::from_millis(1500);
 
 /// Runs the hook and returns. Never fails: the caller exits 0 regardless. A key file that cannot
-/// be read is a daemon that refuses the post: nothing is sent.
-pub fn run(session: &str, port: u16, key_file: &Path) {
+/// be read is a daemon that refuses the post: nothing is sent. The post names the launch where
+/// the script does (`crate::holder::protocol::HookMark`).
+pub fn run(session: &str, launch: Option<&str>, port: u16, key_file: &Path) {
     // The key first: the file goes with the session's scratch directory when the agent exits, and
     // a hook the agent does not wait for can start just before that.
     let key = crate::key_file::read(key_file);
@@ -31,5 +32,9 @@ pub fn run(session: &str, port: u16, key_file: &Path) {
         return;
     };
     // The response is discarded: the daemon never steers the agent through it.
-    let _ = crate::loopback::post(port, &key, &format!("/hook/{session}"), &payload, TIMEOUT);
+    let path = match launch {
+        Some(launch) => crate::holder::protocol::hook_path(session, launch),
+        None => format!("/hook/{session}"),
+    };
+    let _ = crate::loopback::post(port, &key, &path, &payload, TIMEOUT);
 }

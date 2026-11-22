@@ -93,7 +93,8 @@ daemon to its OS-token and source rules, are in `docs/structure/daemon.md`.
   `files::is_agent_config_dir` to tell the agent's configuration directory. Which reader applies goes by who owns the
   file, not where it lies. Octoboard's own files in its private data directory, which only Octoboard's own processes
   write (the daemon, its holders, the desktop shell), are outside this rule: they are not a file an agent or another
-  program provides.
+  program provides. This rule is about reading; whether Octoboard may write a file it does not own is
+  [P9](principles.md).
 - **A worktree's git and common directories are found through `git::layout` (`git_dir`, `common_dir`), and any other
   file in a git directory is read through `hostfs::open_regular` or `hostfs::read_regular` with a bound.** The files an
   agent can plant there (`.git` pointer, `commondir`, reflogs, `packed-refs`) can block or read forever just the same.

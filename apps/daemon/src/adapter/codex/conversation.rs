@@ -42,6 +42,31 @@ pub(super) fn entries(line: &Value) -> Vec<Entry> {
     }
 }
 
+/// Whether one line of the rollout is a prompt the user sent (`RecordStore::is_user_prompt`),
+/// told from the kind of line it is: the event of a user's message (`user_message` in older Codex,
+/// an `item_completed` of a `UserMessage` item in newer), whatever it holds, an image alone
+/// included. The user-role response items beside it hold what Codex adds itself as well as what
+/// was typed, and are no prompt on their own. A line that does not parse, or an event with no
+/// payload, cannot be placed.
+pub(super) fn is_user_prompt(line: &str) -> Option<bool> {
+    let line: Value = serde_json::from_str(line).ok()?;
+    if line.get("type").and_then(Value::as_str) != Some("event_msg") {
+        return Some(false);
+    }
+    let payload = line.get("payload")?;
+    Some(match payload.get("type").and_then(Value::as_str) {
+        Some("user_message") => true,
+        Some("item_completed") => {
+            payload
+                .get("item")
+                .and_then(|item| item.get("type"))
+                .and_then(Value::as_str)
+                == Some("UserMessage")
+        }
+        _ => false,
+    })
+}
+
 fn codex_item(item: &Value) -> Vec<Entry> {
     match item.get("type").and_then(Value::as_str) {
         Some("AgentMessage") => item
@@ -145,6 +170,42 @@ pub(super) fn commentary(line: &Value) -> bool {
 
 #[cfg(test)]
 mod tests {
+    /// The event of a user's message is a prompt whatever it holds; the user-role response items
+    /// beside it, and every other line, are not. Replayed over the committed rollouts, then the
+    /// shapes they do not hold.
+    #[test]
+    fn the_event_of_a_users_message_is_a_prompt_whatever_it_holds() {
+        let prompts = |capture: &str| -> Vec<usize> {
+            capture
+                .lines()
+                .enumerate()
+                .filter(|(_, line)| super::is_user_prompt(line) == Some(true))
+                .map(|(at, _)| at)
+                .collect()
+        };
+        let titles = include_str!("../../../testdata/titles_codex_0.163.0_rollout.jsonl");
+        assert_eq!(prompts(titles), [3]);
+        let handoff = include_str!("../../../testdata/handoff_codex_0.162.1_rollout.jsonl");
+        assert_eq!(prompts(handoff), [2, 11, 14]);
+        for capture in [titles, handoff] {
+            assert!(capture
+                .lines()
+                .all(|line| super::is_user_prompt(line).is_some()));
+        }
+
+        // Images alone, in either generation's event.
+        let image_item = r#"{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"type":"image","image_url":"data:image/png;base64,AAAA"}]}}}"#;
+        assert_eq!(super::is_user_prompt(image_item), Some(true));
+        let image_message = r#"{"type":"event_msg","payload":{"type":"user_message","message":"","images":["data:image/png;base64,AAAA"],"local_images":[]}}"#;
+        assert_eq!(super::is_user_prompt(image_message), Some(true));
+        // A pasted block of markup.
+        let markup = r#"{"type":"event_msg","payload":{"type":"user_message","message":"<error>\nboom\n</error>"}}"#;
+        assert_eq!(super::is_user_prompt(markup), Some(true));
+
+        assert_eq!(super::is_user_prompt(r#"{"type":"event_msg"}"#), None);
+        assert_eq!(super::is_user_prompt(r#"{"type":"event_msg","payl"#), None);
+    }
+
     use serde_json::json;
 
     use super::*;

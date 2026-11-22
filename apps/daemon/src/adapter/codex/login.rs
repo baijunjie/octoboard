@@ -42,7 +42,7 @@ impl LoginFlow for CodexLogin {
 async fn sign_in(flow: &Flow, progress: &Progress, cancel: &Notify) -> Outcome {
     // Codex refuses a home that does not exist, the default account's included.
     if let Some(dir) = flow.config_dir.as_ref().or(flow.resolved_dir.as_ref()) {
-        if let Err(err) = std::fs::create_dir_all(dir) {
+        if let Err(err) = super::home::create_missing(dir) {
             return flow.failed(&format!("creating {} failed: {err}", dir.display()));
         }
     }

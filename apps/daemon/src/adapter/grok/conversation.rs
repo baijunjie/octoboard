@@ -75,6 +75,51 @@ pub(super) fn entries(line: &Value) -> Vec<Entry> {
     }
 }
 
+/// What Grok writes into a `user` line beside the user's own words: the environment it reports
+/// and the reminders it adds.
+const OWN_BLOCKS: [&str; 2] = ["<user_info>", "<system-reminder>"];
+
+/// Whether one line of `chat_history.jsonl` is a prompt the user sent
+/// (`RecordStore::is_user_prompt`), told from the kind of line it is: a `user` line with no
+/// `synthetic_reason` (Grok marks with one what it puts in the conversation itself) that holds a
+/// text block other than the ones Grok adds ([`OWN_BLOCKS`]). A `user` line holding only those is
+/// Grok's own. One that holds neither (only the `<image_files>` list Grok writes for attached
+/// images, a block that is not text, a `<user_query>` with nothing in it, content in another
+/// shape) cannot be placed, and neither can a line that does not parse.
+pub(super) fn is_user_prompt(line: &str) -> Option<bool> {
+    let line: Value = serde_json::from_str(line).ok()?;
+    if line.get("type").and_then(Value::as_str) != Some("user")
+        || line.get("synthetic_reason").is_some()
+    {
+        return Some(false);
+    }
+    let blocks = line.get("content")?.as_array()?;
+    let mut own_only = !blocks.is_empty();
+    for block in blocks {
+        let text = block
+            .get("text")
+            .and_then(Value::as_str)
+            .filter(|_| block.get("type").and_then(Value::as_str) == Some("text"))
+            .map(str::trim);
+        match text {
+            Some(text) if OWN_BLOCKS.iter().any(|tag| text.starts_with(tag)) => {}
+            Some(text) if text.starts_with("<image_files>") || text.is_empty() => own_only = false,
+            Some(text) => {
+                let asked = text
+                    .strip_prefix("<user_query>")
+                    .and_then(|inner| inner.strip_suffix("</user_query>"))
+                    .unwrap_or(text);
+                if !asked.trim().is_empty() {
+                    return Some(true);
+                }
+                own_only = false;
+            }
+            None => own_only = false,
+        }
+    }
+    own_only.then_some(false)
+}
+
 fn grok_call(call: &Value) -> Option<Entry> {
     let arguments: Value = serde_json::from_str(call.get("arguments")?.as_str()?).ok()?;
     call_entry(call.get("name")?.as_str()?, &arguments)
@@ -115,6 +160,92 @@ mod tests {
         let synthetic = json!({"type": "user", "synthetic_reason": "project_rules",
             "content": [{"type": "text", "text": "rules"}]});
         assert!(entries(&synthetic).is_empty());
+    }
+
+    /// Replayed over the committed chat histories: only the lines holding the user's own words are
+    /// prompts; what Grok marks as its own, and a line holding only the environment it reports or
+    /// a reminder, is not; the list of attached images on a line of its own cannot be placed.
+    #[test]
+    fn a_prompt_is_told_from_the_lines_grok_writes_itself() {
+        let placed = |capture: &str, answer: Option<bool>| -> Vec<usize> {
+            capture
+                .lines()
+                .enumerate()
+                .filter(|(_, line)| is_user_prompt(line) == answer)
+                .map(|(at, _)| at)
+                .collect()
+        };
+        let handoff = include_str!("../../../testdata/handoff_grok_1.0.62_chat_history.jsonl");
+        assert_eq!(placed(handoff, Some(true)), [4, 13]);
+        assert_eq!(placed(handoff, None), [3], "the `<image_files>` line");
+        let feed = include_str!("../../../testdata/feed_grok_1.0.89_chat_history.jsonl");
+        let prompts = placed(feed, Some(true));
+        assert_eq!(prompts.len(), 4);
+        for at in prompts {
+            let line = feed.lines().nth(at).unwrap();
+            assert!(
+                line.contains("<user_query>") && !line.contains("synthetic_reason"),
+                "{line}"
+            );
+        }
+        assert!(placed(feed, None).is_empty());
+    }
+
+    /// What Grok Build 1.0.92 wrote on launch, before any prompt: its system prompt and a reminder
+    /// it marks as its own.
+    #[test]
+    fn what_is_written_before_any_prompt_is_no_prompt() {
+        let unprompted =
+            include_str!("../../../testdata/unprompted_grok_1.0.92_chat_history.jsonl");
+        assert_eq!(unprompted.lines().count(), 2);
+        assert!(unprompted
+            .lines()
+            .all(|line| is_user_prompt(line) == Some(false)));
+    }
+
+    /// A prompt counts whatever its text, beside the image list too; a `user` line with nothing of
+    /// the user's that can be told, and a line that does not parse, cannot be placed.
+    #[test]
+    fn a_prompt_counts_whatever_it_holds() {
+        let line = |blocks: &str| format!(r#"{{"type":"user","content":[{blocks}]}}"#);
+        let text = |text: &str| format!(r#"{{"type":"text","text":"{text}"}}"#);
+        for blocks in [
+            text("fix it"),
+            text("<error>boom</error>"),
+            format!(
+                "{},{}",
+                text("<image_files>a.png</image_files>"),
+                text("look")
+            ),
+            format!(
+                "{},{}",
+                text("<user_info>os</user_info>"),
+                text("<user_query>go</user_query>")
+            ),
+        ] {
+            assert_eq!(is_user_prompt(&line(&blocks)), Some(true), "{blocks}");
+        }
+        assert_eq!(
+            is_user_prompt(&line(&text("<user_info>os</user_info>"))),
+            Some(false)
+        );
+        for blocks in [
+            text("<image_files>a.png</image_files>"),
+            text("<user_query></user_query>"),
+            r#"{"type":"image","data":"AAAA"}"#.to_owned(),
+            String::new(),
+        ] {
+            assert_eq!(is_user_prompt(&line(&blocks)), None, "{blocks}");
+        }
+        assert_eq!(
+            is_user_prompt(r#"{"type":"user","content":"fix it"}"#),
+            None
+        );
+        assert_eq!(is_user_prompt(r#"{"type":"user","content":[{"ty"#), None);
+        assert_eq!(
+            is_user_prompt(r#"{"type":"assistant","content":"The \"user\" asked."}"#),
+            Some(false)
+        );
     }
 
     /// Only the compaction line that holds the summary is one; the one beside it that restates the

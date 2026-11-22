@@ -155,7 +155,9 @@ their description for assistive technology.
 included — carries a **Delete** button while the session is unused and not still starting (see "Deleting an unused
 session" in `docs/product/deleting-sessions.md`). Agent records do not affect its availability. Being archived does not
 qualify a session for the shortcut. Pressing it takes the same deletion action as the menu, without confirmation and
-with automatic cleanup of its agent records; deletion is refused if the session is no longer unused when it takes place.
+with automatic cleanup of its agent records (as "Moving the agent's own records to the Trash" in
+`docs/product/deleting-sessions.md` sets out, which leaves records holding a prompt sent to the session); deletion is
+refused if the session is no longer unused when it takes place.
 A row whose menu offers **Archive** instead carries an Archive button while archiving would go through without a
 confirmation: the session is at its prompt or interrupted, no unarchived session is bound to it or to a session bound to
 it, and it has been used. Pressing Archive does what the menu's **Archive** does — a session still being resumed or

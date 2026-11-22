@@ -669,11 +669,11 @@ async fn a_reopen_whose_target_cannot_be_unarchived_leaves_the_owner_archived() 
     assert!(archived.exists());
 }
 
-/// The leftovers of the conversation an owner gives up go to the Trash, wherever the
-/// accounts hold a copy of it; a copy the owner's own account no longer has does not make the
-/// owner resumable.
+/// The leftovers of the conversation an owner gives up stay where they are, in whichever account
+/// holds a copy of it: the owner had a conversation, and nobody confirmed a removal. A copy the
+/// owner's own account no longer has does not make the owner resumable.
 #[tokio::test]
-async fn a_reopen_trashes_the_leftovers_of_the_conversation_an_owner_gives_up() {
+async fn a_reopen_leaves_the_leftovers_of_the_conversation_an_owner_gives_up() {
     let (state, dir) = console_with_project_and_accounts("coordinator-reopen-owner-leftover");
     let hub_account = dir.join("claude-hub");
     std::fs::create_dir_all(hub_account.join("projects")).unwrap();
@@ -692,7 +692,9 @@ async fn a_reopen_trashes_the_leftovers_of_the_conversation_an_owner_gives_up() 
         .await
         .expect_err("the owner's workdir does not exist");
     assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
-    assert!(!leftover.exists(), "the Trash stand-in removed it");
+    let hub = state.store.get_session("hub").unwrap().unwrap();
+    assert!(!hub.has_conversation, "the owner gave up its conversation");
+    assert!(leftover.exists(), "the owner's leftover is where it was");
     assert!(record.exists(), "the session's own record is untouched");
 }
 

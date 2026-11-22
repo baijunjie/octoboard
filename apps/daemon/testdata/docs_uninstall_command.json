@@ -1,0 +1,5 @@
+{
+  "cli_name": "octoboardd",
+  "uninstall_options": ["--dry-run", "--force", "--keep-changes", "--yes"],
+  "confirmation_word": "REMOVE"
+}

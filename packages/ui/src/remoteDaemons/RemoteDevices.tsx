@@ -1,11 +1,14 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 
+import { raiseError } from "../components/alerts/raiseError";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
+import { settle } from "../components/hooks/settle";
 import { useHeldGuard, useLeaveGuard } from "../components/dialog/UnsavedChanges";
 import { useStableHandler } from "../components/hooks/useLatest";
 import { InlineReference } from "../i18n/InlineReference";
 import { Message, useT } from "../i18n/react";
 import type { RemoteDaemonConnectOutcome, RemoteDaemonEntry, RemoteDaemonEntryInput, RemoteDaemonHandedOutcome, RemoteDaemonStatus, RemoteDaemonsCapability } from "../platform";
+import { reportKeyRemoval } from "./deviceKeyRemoval";
 import { useRemoteDaemonConnect } from "./useRemoteDaemonConnect";
 import type { useRemoteDaemons } from "./useRemoteDaemons";
 
@@ -14,6 +17,7 @@ const QUESTIONS: ReadonlySet<RemoteDaemonConnectOutcome["outcome"]> = new Set([
   "secret_needed",
   "host_key_unknown",
   "device_key_refused",
+  "device_key_offered",
   "octoboardd_not_found",
   "no_daemon",
   "application_not_running",
@@ -41,6 +45,9 @@ export interface RemoteDevicesState {
   /** Connects, or brings the connected one forward. */
   connect: (entry: RemoteDaemonEntry) => void;
   askRemove: (entry: RemoteDaemonEntry) => void;
+  /** Turns this computer's key on or off for `entry`; turning it off where a key is installed asks first. Resolves once
+   * the shell has answered, or at once where it asks. */
+  setDeviceKey: (entry: RemoteDaemonEntry, enabled: boolean) => Promise<void>;
 }
 
 const RemoteDevicesContext = createContext<RemoteDevicesState | undefined>(undefined);
@@ -53,7 +60,8 @@ export function useRemoteDevices(): RemoteDevicesState {
 
 /**
  * What the Remote devices page of the application's own window keeps, which has no daemon behind it: the connection
- * being made, the new device's form, the Remove confirmation and every question and failure of a connection
+ * being made, the new device's form, the Remove confirmation, the confirmation that turns an installed key of this
+ * computer's off, and every question and failure of a connection
  * (`useRemoteDaemonConnect`): the password, the host key to confirm, a changed host key, every failure, and the version
  * mismatch, whether the connection was started from the page or away from it (a menu's saved daemon), which the shell
  * hands over once it has something to show (`onHandedOver`). Its dialogs are drawn over whatever the window shows. It
@@ -68,7 +76,10 @@ export function useRemoteDevices(): RemoteDevicesState {
  * (`useLeaveGuard`); the window keeps which device is selected and whether the new device's form is open
  * (`selectedId`, `adding`), so that every way of showing a device ends the form with it. The list itself
  * is read by the window (`list`), which the page's history entries name devices by. The entries' secrets never come to
- * the page: the password typed here goes with the connect request and is dropped. The sidebar (`RemoteDevicesSidebar`)
+ * the page: the password typed here goes with the connect request and is dropped. Removing a device, saving it to
+ * another host, port or user, and turning its key off each take this computer's key back from the server first, in the
+ * shell; where the key's line could not be removed there, the owner is told which line stays (`reportKeyRemoval`),
+ * and the removal, the save or the switch has been done all the same. The sidebar (`RemoteDevicesSidebar`)
  * and the content area (`RemoteDevicePage`) read this through `useRemoteDevices`.
  */
 export function RemoteDevicesProvider({ capability, list, selectedId, adding, onShow, onAttention, onSelect, onAdd, onCancelAdd, children }: {
@@ -102,8 +113,9 @@ export function RemoteDevicesProvider({ capability, list, selectedId, adding, on
     addEpoch.current++;
   }, [adding]);
   const [removing, setRemoving] = useState<RemoteDaemonEntry>();
+  const [turningKeyOff, setTurningKeyOff] = useState<RemoteDaemonEntry>();
   const [handed, setHanded] = useState<RemoteDaemonHandedOutcome[]>([]);
-  const idle = connectIdle && removing === undefined;
+  const idle = connectIdle && removing === undefined && turningKeyOff === undefined;
 
   // Held by a window, which the shell brings forward, or for the browser, which it opens again: neither needs a
   // password.
@@ -151,16 +163,29 @@ export function RemoteDevicesProvider({ capability, list, selectedId, adding, on
     save: async (entry) => {
       const epoch = addEpoch.current;
       const saved = await capability.save(entry);
+      reportKeyRemoval(t, saved.keyRemoval);
       // The new device is selected once the list holds it, so that nothing else is shown, and recorded, in between.
       await reload();
       if (entry.id !== null || epoch !== addEpoch.current) return;
       // Not through the guard: the form that is saved is the one that goes, and it holds nothing once saved.
-      onSelect(saved.id);
+      onSelect(saved.entry.id);
     },
     connecting,
     held,
     connect: (entry) => connect(entry, held(entry)),
     askRemove: setRemoving,
+    setDeviceKey: async (entry, enabled) => {
+      // Taking an installed key back is confirmed first; nothing else the switch does changes the server.
+      if (!enabled && entry.auth === "device") {
+        setTurningKeyOff(entry);
+        return;
+      }
+      await settle(
+        async () => reportKeyRemoval(t, await capability.setDeviceKey(entry.id, enabled)),
+        (error) => raiseError(error, { title: t("remoteDaemons.deviceKey.failedTitle") }),
+        () => void reload(),
+      );
+    },
   };
 
   return (
@@ -171,16 +196,35 @@ export function RemoteDevicesProvider({ capability, list, selectedId, adding, on
           title={t("remoteDaemons.removeTitle")}
           errorTitle={t("remoteDaemons.removeFailedTitle")}
           subject={<Message id="remoteDaemons.removeSubject" params={{ name: <InlineReference dir="auto" wrap>{removing.name}</InlineReference> }} />}
-          message={t("remoteDaemons.removeMessage")}
+          message={t(removing.auth === "device" ? "remoteDaemons.removeMessage.deviceKey" : "remoteDaemons.removeMessage")}
           confirmLabel={t("common.remove")}
           destructive
           resetKey={removing.id}
           onConfirm={async () => {
-            await capability.remove(removing.id);
+            const removal = await capability.remove(removing.id);
             setRemoving(undefined);
+            reportKeyRemoval(t, removal);
             reload();
           }}
           onCancel={() => setRemoving(undefined)}
+        />
+      )}
+      {turningKeyOff && (
+        <ConfirmDialog
+          title={t("remoteDaemons.deviceKey.turnOff.title")}
+          errorTitle={t("remoteDaemons.deviceKey.failedTitle")}
+          subject={<Message id="remoteDaemons.deviceKey.turnOff.subject" params={{ name: <InlineReference dir="auto" wrap>{turningKeyOff.name}</InlineReference> }} />}
+          message={t("remoteDaemons.deviceKey.turnOff.message")}
+          confirmLabel={t("remoteDaemons.deviceKey.turnOff.confirm")}
+          destructive
+          resetKey={turningKeyOff.id}
+          onConfirm={async () => {
+            const removal = await capability.setDeviceKey(turningKeyOff.id, false);
+            setTurningKeyOff(undefined);
+            reportKeyRemoval(t, removal);
+            reload();
+          }}
+          onCancel={() => setTurningKeyOff(undefined)}
         />
       )}
       {dialogs}

@@ -28,6 +28,7 @@ use crate::accounts::quotas::reset_credit::ResetCredits;
 use crate::accounts::shared_config::SharedItem;
 use crate::accounts::thread_registry::ThreadRegistry;
 use crate::accounts::AccountOps;
+use crate::adapter::account_cli::{BackgroundRun, RunHome, RunWait};
 use crate::adapter::account_dir;
 use crate::protocol::AgentId;
 use crate::providers::codex::CODEX_SIGN_IN_FILE;
@@ -37,6 +38,20 @@ pub(crate) struct CodexAccounts;
 impl AccountOps for CodexAccounts {
     fn quota_probe(&self) -> Option<&'static dyn QuotaProbe> {
         Some(&CodexQuota)
+    }
+
+    /// Against the account's own directory: measured on 0.167.1 (`docs/agent-cli-reference.md`,
+    /// "What the background runs write into an account's configuration"), none of Codex's
+    /// background runs changes `config.toml`, in a home it has run in or in one it has not.
+    fn run_home(
+        &self,
+        _run_homes: &Path,
+        _run: BackgroundRun,
+        _account_dir: &Path,
+        _shell_env: &HashMap<String, String>,
+        _wait: &RunWait<'_>,
+    ) -> anyhow::Result<Option<RunHome>> {
+        Ok(None)
     }
 
     fn kick_command(&self) -> Option<KickCommand> {
@@ -61,6 +76,12 @@ impl AccountOps for CodexAccounts {
 
     fn shared_items(&self) -> &'static [SharedItem] {
         ITEMS
+    }
+
+    fn plugin_registries(&self) -> Option<&'static [(&'static str, &'static str)]> {
+        // Measured: a plugin installed through an account is recorded by name in `config.toml`
+        // and copied into `plugins/cache/`, and no shared entry takes the account's path.
+        Some(&[])
     }
 
     fn thread_registry(&self) -> Option<&'static dyn ThreadRegistry> {

@@ -9,6 +9,12 @@ use tauri_plugin_updater::Update;
 /// reading.
 pub const MANIFEST_SUFFIX: &str = "";
 
+/// The manifest entry to ask for in place of the build's own: none, since the universal build
+/// serves both Macs from the entry each reads.
+pub fn update_target() -> Option<&'static str> {
+    None
+}
+
 /// Downloads `update` and replaces the `.app` with it; nothing is held back for the restart.
 pub async fn install(
     update: &Update,

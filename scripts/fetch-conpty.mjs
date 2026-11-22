@@ -7,9 +7,12 @@
 // `target/debug/deps` (the test binaries) and `target/debug` (the dev daemon). The architecture is the
 // machine's own unless given.
 //
-// `--installer` lays out what the Windows installer ships instead, in `target/conpty-bundle/` (the files
-// `tauri.windows.conf.json` lists as `bundle.resources`): the x64 `conpty.dll` and an `OpenConsole.exe` for
-// each architecture in its own subdirectory, from which `conpty.dll` starts the one matching the machine.
+// `--installer [--arch x64|arm64]` lays out what the Windows installer of that architecture ships instead, in
+// `target/conpty-bundle/` (the files `tauri.windows.conf.json` lists as `bundle.resources`): the architecture's
+// `conpty.dll`, which the daemon of the same architecture loads, and an `OpenConsole.exe` for each architecture in its
+// own subdirectory, from which `conpty.dll` starts the one matching the machine. The architecture is the target
+// `tauri build` announces to its `beforeBuildCommand` (`TAURI_ENV_TARGET_TRIPLE`), else x64: never the machine's, since
+// a Mac cross-building the x64 installer must not bundle an arm64 DLL.
 //
 // The package is checked against its pinned SHA-256 before anything is extracted, and kept under `target/`
 // once verified, so a rerun needs no network. A `.nupkg` is a zip, extracted with the system `tar`, which has to
@@ -40,8 +43,15 @@ export function machineArchitecture(env = process.env, nodeArch = process.arch) 
   return nodeArch === "arm64" ? "arm64" : "x64";
 }
 
-export function parseArguments(argv, defaultArch = machineArchitecture()) {
-  const options = { arch: defaultArch, into: [], installer: false };
+// The installer architecture of a Rust target triple (`aarch64-pc-windows-msvc` is arm64), null for one that is neither.
+export function architectureOfTarget(triple) {
+  if (triple?.startsWith("aarch64-")) return "arm64";
+  if (triple?.startsWith("x86_64-")) return "x64";
+  return null;
+}
+
+export function parseArguments(argv, defaultArch = machineArchitecture(), targetTriple = process.env.TAURI_ENV_TARGET_TRIPLE) {
+  const options = { arch: undefined, into: [], installer: false };
   let placed = false;
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
@@ -49,19 +59,20 @@ export function parseArguments(argv, defaultArch = machineArchitecture()) {
       options.installer = true;
       continue;
     }
-    placed = true;
     if (flag !== "--arch" && flag !== "--into") throw new Error(`Unknown argument ${flag}. ${USAGE}`);
+    if (flag === "--into") placed = true;
     const value = argv[++i];
     if (value === undefined) throw new Error(`${flag} needs a value. ${USAGE}`);
     if (flag === "--into") options.into.push(value);
     else options.arch = value;
   }
-  if (options.installer && placed) throw new Error(`--installer takes neither --arch nor --into. ${USAGE}`);
+  if (options.installer && placed) throw new Error(`--installer takes no --into. ${USAGE}`);
+  options.arch ??= options.installer ? architectureOfTarget(targetTriple) ?? "x64" : defaultArch;
   if (!ARCHITECTURES.includes(options.arch)) throw new Error(`--arch is one of ${ARCHITECTURES.join(", ")}. ${USAGE}`);
   return options;
 }
 
-const USAGE = "Usage: node scripts/fetch-conpty.mjs [--arch x64|arm64] [--into <dir>]... | --installer";
+const USAGE = "Usage: node scripts/fetch-conpty.mjs [--arch x64|arm64] [--into <dir>]... | --installer [--arch x64|arm64]";
 
 // Where the two files are inside the package.
 export function packageFiles(arch) {
@@ -71,10 +82,11 @@ export function packageFiles(arch) {
   };
 }
 
-// The installer's files: where each is in the package and where it goes in `INSTALLER_DIR`.
-export function installerLayout() {
+// The installer's files for the architecture `arch`: where each is in the package and where it goes in `INSTALLER_DIR`.
+export function installerLayout(arch) {
+  if (!ARCHITECTURES.includes(arch)) throw new Error(`The installer architecture is one of ${ARCHITECTURES.join(", ")}, not ${arch}.`);
   return [
-    { source: packageFiles("x64").dll, target: "conpty.dll" },
+    { source: packageFiles(arch).dll, target: "conpty.dll" },
     ...ARCHITECTURES.map((arch) => ({ source: packageFiles(arch).host, target: `${arch}/OpenConsole.exe` })),
   ];
 }
@@ -120,7 +132,7 @@ export async function fetchConpty({ root = repoRoot, arch, into = [], installer 
   const bytes = await verifiedPackage({ cacheFile, download, expected });
   // Each file to take from the package and every path it is copied to, one list for both layouts.
   const copies = installer
-    ? installerLayout().map(({ source, target }) => ({ source, targets: [path.resolve(root, INSTALLER_DIR, target)] }))
+    ? installerLayout(arch).map(({ source, target }) => ({ source, targets: [path.resolve(root, INSTALLER_DIR, target)] }))
     : [["dll", "conpty.dll"], ["host", "OpenConsole.exe"]].map(([kind, name]) => ({
       source: packageFiles(arch)[kind],
       targets: (into.length ? into : DEFAULT_INTO).map((dir) => path.resolve(root, dir, name)),
@@ -147,7 +159,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
   try {
     const { arch, into, installer } = parseArguments(process.argv.slice(2));
     const { targets } = await fetchConpty({ arch, into, installer });
-    console.log(`ConPTY ${VERSION} (${installer ? "installer layout" : arch}) placed in ${targets.join(", ")}.`);
+    console.log(`ConPTY ${VERSION} (${installer ? `installer layout, ${arch}` : arch}) placed in ${targets.join(", ")}.`);
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

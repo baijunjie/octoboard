@@ -2,8 +2,13 @@
 //! open": the page reads a file from its daemon in parts (`read_file_range`) and hands each part to
 //! the commands here, which only store and open; nothing here speaks the daemon protocol.
 //!
-//! A copy lives in a folder of its own, `<temp>/<identifier>/remote-files/<random id>/<name>`, so two
-//! files of one name never meet and the file keeps the name that picks its application. The folders
+//! A copy lives in a folder of its own, `<local data directory>/remote-files/copies/<random id>/<name>`,
+//! so two files of one name never meet and the file keeps the name that picks its application. The
+//! application's local data directory is one of its own, so nothing of a copy is left anywhere else
+//! on the computer, and it is the one that stays on this computer (`config_dir::local_data_path`):
+//! a copy has no size limit and is not for a roaming profile to carry to a server. A build before
+//! this one kept the copies under the temporary directory, and what it left there is removed at
+//! the start (`clear_earlier_place`). The folders
 //! and the copy are readable by the user alone and the copy has no executable bit. A name this
 //! computer could launch rather than show (`config/launchable-extensions.json`, the one list the
 //! daemon and the UI read as well, the Windows part of it on Windows only) is refused before
@@ -40,11 +45,18 @@ use macos as platform;
 #[cfg(not(target_os = "macos"))]
 use windows as platform;
 
-use platform::{check_private, create_private_dir, mark_downloaded, private_file_options};
+use platform::{
+    check_private, create_private_dir, mark_downloaded, open_plain_file, private_file_options,
+};
 
-/// The folder of the application's own under the temporary directory the copies are kept in, below
-/// the application's identifier.
+/// The folder of the application's local data directory that holds the copies' folder and its
+/// lock, made for the user alone (the directory itself may be readable by others). A build that
+/// kept the copies under the temporary directory named their folder so, below the application's
+/// identifier.
 const FOLDER: &str = "remote-files";
+
+/// The copies' folder, inside [`FOLDER`].
+const COPIES: &str = "copies";
 
 /// The file beside the copies' folder that the running instance holds locked (`INSTANCE_LOCK`).
 const LOCK_FILE: &str = "remote-files.lock";
@@ -345,10 +357,13 @@ fn remove(folder: &Path) {
 }
 
 /// The folder the copies are kept in.
-fn root(app: &AppHandle) -> PathBuf {
-    std::env::temp_dir()
-        .join(&app.config().identifier)
-        .join(FOLDER)
+fn root(app: &AppHandle) -> tauri::Result<PathBuf> {
+    Ok(crate::config_dir::local_data_path(app, FOLDER)?.join(COPIES))
+}
+
+/// The copies' folder as a command answers it: one that is not known is a failure to store.
+fn known(root: tauri::Result<PathBuf>) -> Result<PathBuf, FileFailure> {
+    root.map_err(|err| FileFailure::new(FailureKind::Storage, err.to_string()))
 }
 
 /// The lock an instance of the application holds for as long as it runs, which tells a later one that the copies
@@ -359,9 +374,40 @@ static INSTANCE_LOCK: OnceLock<File> = OnceLock::new();
 /// application holds the copies' lock (a second start, where the system keeps no single instance), whose copies
 /// they are. A failure is logged and ignored.
 pub fn clear(app: &AppHandle) {
-    if let Some(lock) = clear_in(&root(app)) {
-        let _ = INSTANCE_LOCK.set(lock);
+    clear_earlier_place(&std::env::temp_dir().join(&app.config().identifier));
+    match root(app) {
+        Ok(root) => {
+            if let Some(lock) = clear_in(&root) {
+                let _ = INSTANCE_LOCK.set(lock);
+            }
+        }
+        Err(err) => {
+            diagnostic!("the folder of the downloaded copies is not known: {err}");
+        }
     }
+}
+
+/// Removes what a build that kept the copies under the temporary directory left in `parent`, its
+/// folder there (`<temp>/<identifier>`): the copies' folder, the lock beside it, and `parent` itself
+/// once it is empty. Nothing is removed while an instance of such a build still runs and holds the
+/// lock, or where `parent` is not a folder (a link there is not followed). The lock is opened
+/// without waiting and counts only where what was opened is a plain file (`open_plain_file`): the
+/// temporary directory may be shared, and what another user put there under that name (a pipe)
+/// would otherwise hold the start up for ever. A failure is ignored: the next start tries again.
+fn clear_earlier_place(parent: &Path) {
+    if !fs::symlink_metadata(parent).is_ok_and(|found| found.is_dir()) {
+        return;
+    }
+    let lock_file = parent.join(LOCK_FILE);
+    let held = open_plain_file(&lock_file)
+        .is_ok_and(|lock| matches!(lock.try_lock(), Err(fs::TryLockError::WouldBlock)));
+    if held {
+        return;
+    }
+    remove(&parent.join(FOLDER));
+    let _ = fs::remove_file(&lock_file);
+    // Fails where anything else is in it, which then stays.
+    let _ = fs::remove_dir(parent);
 }
 
 /// [`clear`] for the folder `root`: takes the lock beside it, which the caller keeps for as long as the copies it
@@ -481,14 +527,12 @@ pub fn remote_file_begin(
     launchable: bool,
 ) -> Result<String, FileFailure> {
     let label = webview_window.label();
-    app.state::<RemoteState>().files.begin_while(
-        &root(&app),
-        label,
-        &name,
-        size,
-        launchable,
-        || holds_connection(&app, label),
-    )
+    let root = known(root(&app))?;
+    app.state::<RemoteState>()
+        .files
+        .begin_while(&root, label, &name, size, launchable, || {
+            holds_connection(&app, label)
+        })
 }
 
 /// Appends a part to a copy. The body of the call is the copy's id, preceded by its length in one byte, then
@@ -574,7 +618,7 @@ pub fn remote_file_discard(app: AppHandle, webview_window: tauri::WebviewWindow,
 mod tests {
     use super::*;
 
-    /// The copies' folder of a scratch application folder, which holds it as `<temp>/<identifier>` does: the
+    /// The copies' folder of a scratch folder, which holds it as the local data directory's `remote-files` does: the
     /// folder above it is the one `check_private` also looks at, so it cannot be the shared temporary directory.
     fn scratch(name: &str) -> PathBuf {
         let base = std::env::temp_dir().join(format!(
@@ -912,6 +956,104 @@ mod tests {
         for bad in [&[][..], &[3, b'i', b'd'][..], &[1, 0xff, 7][..]] {
             assert_eq!(framed(bad).unwrap_err().kind, FailureKind::Storage);
         }
+    }
+
+    #[test]
+    fn a_copies_folder_that_is_not_known_is_a_failure_to_store_with_the_reason() {
+        let unknown: tauri::Result<PathBuf> =
+            Err(std::io::Error::other("no local data directory").into());
+        let failure = known(unknown).unwrap_err();
+        assert_eq!(failure.kind, FailureKind::Storage);
+        assert!(
+            failure
+                .detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains("no local data directory")),
+            "{:?}",
+            failure.detail
+        );
+        assert_eq!(
+            known(Ok(PathBuf::from("/a/copies"))).unwrap(),
+            PathBuf::from("/a/copies")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_lock_of_an_earlier_build_that_is_not_a_plain_file_is_not_opened() {
+        let _spawning = crate::spawning();
+        let parent = scratch("earlier-pipe").parent().unwrap().to_owned();
+        fs::create_dir_all(parent.join(FOLDER)).unwrap();
+        // A pipe nobody writes to: opening it for reading would wait for ever.
+        let made = std::process::Command::new("mkfifo")
+            .arg(parent.join(LOCK_FILE))
+            .status()
+            .unwrap();
+        assert!(made.success());
+        clear_earlier_place(&parent);
+        assert!(!parent.exists());
+    }
+
+    #[test]
+    fn what_an_earlier_build_left_under_the_temporary_directory_is_removed_with_its_folder() {
+        let parent = scratch("earlier").parent().unwrap().to_owned();
+        fs::create_dir_all(parent.join(FOLDER).join("id")).unwrap();
+        fs::write(parent.join(FOLDER).join("id").join("a.txt"), "x").unwrap();
+        fs::write(parent.join(LOCK_FILE), "").unwrap();
+        clear_earlier_place(&parent);
+        assert!(!parent.exists());
+        // Nothing there is no failure, and nothing is made.
+        clear_earlier_place(&parent);
+        assert!(!parent.exists());
+    }
+
+    #[test]
+    fn a_folder_of_an_earlier_build_that_holds_something_else_stays_with_it() {
+        let parent = scratch("earlier-other").parent().unwrap().to_owned();
+        fs::create_dir_all(parent.join(FOLDER)).unwrap();
+        fs::write(parent.join("other"), "kept").unwrap();
+        clear_earlier_place(&parent);
+        assert!(!parent.join(FOLDER).exists());
+        assert_eq!(fs::read_to_string(parent.join("other")).unwrap(), "kept");
+        let _ = fs::remove_dir_all(&parent);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_where_the_earlier_builds_folder_was_is_not_followed() {
+        let base = scratch("earlier-link").parent().unwrap().to_owned();
+        let target = base.join("target");
+        fs::create_dir_all(target.join(FOLDER)).unwrap();
+        let link = base.join("link");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        clear_earlier_place(&link);
+        assert!(target.join(FOLDER).exists());
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn what_an_earlier_build_left_stays_while_an_instance_of_it_holds_the_lock() {
+        // On the system's own temporary folder, as the test of the copies' lock below is.
+        let _spawning = crate::spawning();
+        let temporary = if cfg!(unix) {
+            PathBuf::from("/tmp")
+        } else {
+            std::env::temp_dir()
+        };
+        let parent = temporary.join(format!(
+            "octoboard-remote-files-earlier-lock-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&parent);
+        let root = parent.join(FOLDER);
+        fs::create_dir_all(root.join("copy")).unwrap();
+        let held = clear_in(&root).unwrap();
+        fs::create_dir_all(root.join("copy")).unwrap();
+        clear_earlier_place(&parent);
+        assert!(root.join("copy").exists());
+        drop(held);
+        clear_earlier_place(&parent);
+        assert!(!parent.exists());
     }
 
     #[test]

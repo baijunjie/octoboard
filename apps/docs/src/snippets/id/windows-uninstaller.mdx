@@ -1,0 +1,12 @@
+import { Aside } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* What the Windows uninstaller does before it removes the app, which the Windows guide and "Your system stays as it was" share. */}
+
+Sebelum menghapus apa pun, pencopot pemasangan membersihkan dengan sendirinya: ia menutup {productName} jika sedang berjalan, dengan bertanya dahulu kecuali pada pencopotan senyap, dan menghapus tanpa bertanya semua yang dihapus <strong>Hapus semua</strong>. Setelah itu ia mencopot, apa pun hasilnya. Jika ada yang tidak dapat dihapus, ia mengatakannya di akhir, beserta di mana setiap item tertinggal, dan mendaftarnya di <code dir="ltr">{system.uninstallLogWindows}</code>; pencopotan senyap hanya menulis file itu.
+
+Penginstal dan pencopot pemasangan memakai bahasa sistem Anda jika {productName} memilikinya, dan bahasa Inggris jika tidak. Pencopot pemasangan, beserta daftar apa yang ditinggalkannya, tetap memakai bahasa saat Anda memasang; alasan yang diberikan suatu fitur untuk item yang tertinggal bisa dalam bahasa Inggris.
+
+Tidak setiap pencopotan menjalankan pembersihan ini. Pembaruan dalam aplikasi dan penginstal yang dijalankan di atas aplikasi yang terpasang tidak menjalankannya, sehingga kunci Anda di server jarak jauh dan berbagi akun Anda tetap seperti semula; penginstal yang Anda jalankan sendiri di atasnya tetap menonaktifkan <strong>Buka saat login</strong>, sampai Anda mengaktifkannya lagi. Pencopot pemasangan dari versi sebelum pembersihan ini juga tidak menjalankannya: pada versi seperti itu, pilih <strong>Hapus semua</strong> terlebih dahulu.
+
+<Aside>Dengan aplikasi x64 di Windows on Arm, pencopot pemasangan tidak dapat menutup {productName} yang sedang berjalan, dan pencopotan berhenti tanpa menghapus apa pun, begitu pula penginstal yang dijalankan di atasnya: keluar dari {productName} terlebih dahulu. Aplikasi arm64 tidak memiliki batasan ini, dan pemasangan x64 di PC Arm berpindah ke sana melalui pembaruan dalam aplikasi.</Aside>

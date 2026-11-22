@@ -4,7 +4,7 @@ description: "The octoboardd commands on a Linux server, a Mac and a Windows PC:
 ---
 
 import { Code } from "@astrojs/starlight/components";
-import { commands, productName, tunnel } from "../../commands.ts";
+import { commands, productName, system, tunnel } from "../../commands.ts";
 
 octoboardd is the program that runs {productName} (the app calls it the daemon). On a Linux server you install and start it yourself. On a Mac or a Windows PC it comes inside the app, which starts it when it opens and stops it when it quits. Its commands are the same on all three, apart from the differences below.
 
@@ -35,6 +35,7 @@ Run the commands as the user who runs {productName}. They act on that user's oct
 | <code dir="ltr">{commands.update}</code> | Linux server only. Installs the newest version, as in [Upgrade](../install/linux/#upgrade). |
 | <code dir="ltr">{commands.updateCheck}</code> | Linux server only. Checks whether a newer version is out, without installing it. |
 | <code dir="ltr">{commands.updateRollback}</code> | Linux server only. Puts back the version that was installed before the last upgrade and restarts into it, as an upgrade does. |
+| <code dir="ltr">{system.uninstall}</code> | Linux server only. Removes octoboardd from the server, as in [Uninstall](../install/linux/#uninstall). |
 | <code dir="ltr">{commands.version}</code> | Prints the installed version. |
 
 For the full list of commands, run <code dir="ltr">{commands.help}</code>; for one command's options, run <code dir="ltr">{commands.commandHelp}</code>. The list also shows commands {productName} runs for itself, which you never run by hand.
@@ -45,5 +46,6 @@ The app runs octoboardd for you, so a few commands behave differently:
 
 - <strong><code dir="ltr">{commands.start}</code> and <code dir="ltr">{commands.stop}</code> on a Mac</strong> act on the app: <code dir="ltr">{commands.start}</code> opens it in the background, with no window, and <code dir="ltr">{commands.stop}</code> quits it.
 - <strong><code dir="ltr">{commands.restart}</code> and <code dir="ltr">{commands.update}</code></strong> are refused. The app restarts octoboardd and installs new versions itself.
+- <strong><code dir="ltr">{system.uninstall}</code></strong> is refused too. octoboardd is removed with the app: see how to uninstall the app on [macOS](../install/macos/#uninstall) or [Windows](../install/windows/#uninstall).
 - <strong><code dir="ltr">{commands.browserOn}</code> and <code dir="ltr">{commands.browserOff}</code></strong> change the same setting as <strong>Allow browser access</strong> in <strong>Settings › Access</strong>.
 - <strong><code dir="ltr">{commands.address}</code></strong> prints an address only while <strong>Allow browser access</strong> is on (or, on a Mac, <strong>Allow remote access</strong>). Both settings start off, so until you turn one on, the command says so and prints no address.

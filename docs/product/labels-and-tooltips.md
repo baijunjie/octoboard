@@ -276,9 +276,9 @@ Help tips are used in these places:
 - the name of an agent's **Version** row in its Agent version dialog: that updating does not stop running sessions,
   which keep their version while new sessions use the new one (see "The Version row" in
   `docs/product/agent-cli-updates.md`);
-- the **Share default configuration** row of an account's settings dialog: what is linked to the default account's
-  directory, what is never shared and what happens when sharing is turned off (see "Sharing the default configuration"
-  in `docs/product/agent-accounts.md`);
+- the **Share default configuration** row of an account's settings dialog: what is linked to or moved into the default
+  account's directory, what is never shared and what happens when sharing is turned off (see "Sharing the default
+  configuration" in `docs/product/agent-accounts.md`);
 - the **Disable** heading of Settings' accounts table (see "Turning an account off" in
   `docs/product/agent-accounts.md`).
 

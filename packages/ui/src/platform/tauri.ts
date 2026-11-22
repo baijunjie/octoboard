@@ -24,14 +24,19 @@ import type {
   PlatformAdapter,
   RemoteDaemonEntry,
   RemoteDaemonHandedOutcome,
+  RemoteDaemonSaved,
   RemoteDaemonsCapability,
   RemoteForward,
   RemoteFilesCapability,
   RemoteConnectionCapability,
   RemoteForwardsCapability,
   RemoteDaemonStatus,
+  RemoteDeviceKeyRemoval,
   RemoteLoginCapability,
+  ShellSystemChangesListed,
+  ShellSystemChangesCleared,
   StatusItemCapability,
+  SystemChangesCapability,
   TrayFlyoutCapability,
   TrayFlyoutModel,
   UpdaterCapability,
@@ -88,6 +93,8 @@ export function tauriPlatform(): PlatformAdapter {
     keepAwake: host.keepAwake ? tauriKeepAwake() : undefined,
     launchAtLogin: host.launchAtLogin ? tauriLaunchAtLogin() : undefined,
     commandLine: host.commandLine ? tauriCommandLine() : undefined,
+    // The clean-up before an uninstall is about the application on this computer, so the local window's alone.
+    systemChanges: local ? tauriSystemChanges() : undefined,
     updater: host.updater === "none" ? undefined : tauriUpdater(),
   };
 }
@@ -608,11 +615,15 @@ function tauriRemoteDaemons(): RemoteDaemonsCapability {
     onChanged: (listener) => listenTo("remote-daemons-changed", listener),
     async save(entry) {
       const { invoke } = await import("@tauri-apps/api/core");
-      return invoke<RemoteDaemonEntry>("remote_daemon_save", { entry });
+      return invoke<RemoteDaemonSaved>("remote_daemon_save", { entry });
     },
     async remove(id) {
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("remote_daemon_remove", { id });
+      return invoke<RemoteDeviceKeyRemoval>("remote_daemon_remove", { id });
+    },
+    async setDeviceKey(id, enabled) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<RemoteDeviceKeyRemoval>("remote_daemon_device_key_set", { id, enabled });
     },
     async connect(request) {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -685,6 +696,19 @@ function tauriCommandLine(): CommandLineCapability {
     async remove() {
       const { invoke } = await import("@tauri-apps/api/core");
       return invoke<CommandLineState>("command_line_remove").catch(rejectCommandLine);
+    },
+  };
+}
+
+function tauriSystemChanges(): SystemChangesCapability {
+  return {
+    async list() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<ShellSystemChangesListed>("system_changes_list");
+    },
+    async clearAll() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<ShellSystemChangesCleared>("system_changes_clear");
     },
   };
 }

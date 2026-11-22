@@ -184,6 +184,63 @@ tool_timeout_sec = 660
     assert_eq!(std::fs::read_link(&link).expect("target"), link_target);
 }
 
+/// A session whose home has a plugin directory of its own (the source home had none) loses what
+/// it installed with that home, so its plugin switches are not written back; the rest is. With
+/// the directory a link to the source home's, the switches are written back as ever.
+#[test]
+fn plugin_switches_are_not_written_back_from_a_home_with_its_own_plugin_directory() {
+    let changed = "\
+[ui]
+theme = \"tokyonight\"
+
+[plugins]
+enabled = [\"kept-plugin\", \"installed-in-the-session\"]
+disabled = [\"other\"]
+";
+    let mut fixture = spec_fixture();
+    let shared = link_config(&mut fixture, SHARED_CONFIG);
+    let plan = plan_isolated(&fixture.spec()).expect("plan");
+    let session = session_config(&plan);
+    let farm_plugins = session.parent().unwrap().join("installed-plugins");
+    std::fs::create_dir(&farm_plugins).expect("the session's own plugin directory");
+    std::fs::write(&session, changed).expect("session config");
+    plan.after_exit.as_ref().expect("writeback").run();
+
+    let parsed: toml::Table = std::fs::read_to_string(&shared)
+        .expect("shared")
+        .parse()
+        .expect("shared config");
+    assert_eq!(parsed["ui"]["theme"].as_str(), Some("tokyonight"));
+    let enabled: Vec<&str> = parsed["plugins"]["enabled"]
+        .as_array()
+        .expect("enabled")
+        .iter()
+        .filter_map(|name| name.as_str())
+        .collect();
+    assert_eq!(enabled, ["kept-plugin"]);
+    assert!(parsed["plugins"].get("disabled").is_none());
+
+    let mut linked = spec_fixture();
+    let shared = link_config(&mut linked, SHARED_CONFIG);
+    let home = PathBuf::from(linked.shell_env["GROK_HOME"].clone());
+    std::fs::create_dir(home.join("installed-plugins")).expect("the source home's plugins");
+    let plan = plan_isolated(&linked.spec()).expect("plan");
+    std::fs::write(session_config(&plan), changed).expect("session config");
+    plan.after_exit.as_ref().expect("work after the exit").run();
+    let parsed: toml::Table = std::fs::read_to_string(&shared)
+        .expect("shared")
+        .parse()
+        .expect("shared config");
+    assert_eq!(
+        parsed["plugins"]["enabled"]
+            .as_array()
+            .expect("enabled")
+            .len(),
+        2
+    );
+    assert_eq!(parsed["plugins"]["disabled"][0].as_str(), Some("other"));
+}
+
 #[test]
 fn the_launch_model_and_startup_writes_stay_in_the_session_copy() {
     let mut fixture = spec_fixture();

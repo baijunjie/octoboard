@@ -257,7 +257,7 @@ mod tests {
             agent_cli_statuses: vec![],
             daemon_update: None,
             home_dir: Some("/Users/dev".to_string()),
-            host: crate::platform::HostFacts::current().into(),
+            host: crate::protocol::HostInfo::of(crate::platform::HostFacts::current(), false),
             keep_awake_held: false,
             shell_terminals: vec![],
             remote_access: None,

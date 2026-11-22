@@ -27,7 +27,9 @@ mod windows;
 #[cfg(not(target_os = "macos"))]
 use windows as platform;
 
-pub use platform::{install, install_window, remote_daemons_changed};
+pub use platform::{
+    delete_jump_list, delete_jump_list_if_asked, install, install_window, remote_daemons_changed,
+};
 
 /// The product name, from `config/app.json` (see `build.rs`).
 pub const APP_NAME: &str = env!("OCTOBOARD_APP_NAME");

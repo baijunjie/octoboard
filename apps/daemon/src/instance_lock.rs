@@ -20,7 +20,8 @@ use crate::platform::fs::Busy;
 
 /// The status the daemon exits with when another daemon holds the lock (`EX_CANTCREAT`, 73): the
 /// desktop application tells this refusal apart from any other failed start by it, so its window
-/// can say what to do about it (see "Starting up" in `docs/product/application-lifecycle.md`).
+/// can say what to do about it (see "Starting up" in `docs/product/application-lifecycle.md`). Its
+/// copy there is pinned to this line by a test of the desktop shell's `sidecar`.
 pub const HELD_EXIT_STATUS: i32 = 73;
 
 /// The refusal to start because another daemon holds the lock, which [`HELD_EXIT_STATUS`] reports.
@@ -74,6 +75,20 @@ pub fn acquire() -> Result<InstanceLock> {
     }
 }
 
+/// Takes the lock for a command that reads the store while no daemon runs, so that none starts
+/// under the read: held until the answer is dropped, and a daemon starting meanwhile waits for it
+/// as it waits for a probe (see [`acquire`]). `None` when a daemon holds the lock. Creates nothing
+/// but the lock file, in a data directory that exists; the directory is the caller's to have seen.
+pub fn hold() -> Result<Option<InstanceLock>> {
+    let path = lock_path();
+    match lock_waiting(&path, ACQUIRE_WAIT, ACQUIRE_STEP) {
+        Ok(file) => Ok(Some(InstanceLock { _file: file })),
+        Err(Busy::Held) => Ok(None),
+        Err(Busy::Open(err)) => Err(err).with_context(|| format!("opening {}", path.display())),
+        Err(Busy::Lock(err)) => Err(err).with_context(|| format!("locking {}", path.display())),
+    }
+}
+
 /// Takes the lock at `path`, trying again every `step` for up to `wait` while it is merely held.
 fn lock_waiting(path: &Path, wait: Duration, step: Duration) -> Result<File, Busy> {
     let deadline = Instant::now() + wait;
@@ -97,8 +112,27 @@ pub fn is_running() -> Result<bool> {
     is_running_at(&lock_path())
 }
 
+/// [`is_running`] creating nothing, `daemon.lock` included where it is not there (none having
+/// run, or it was deleted, in which case no daemon holds it): for `uninstall --dry-run`, which
+/// changes nothing of the data directory.
+pub fn is_running_unchanged() -> Result<bool> {
+    is_running_unchanged_at(&lock_path())
+}
+
 fn is_running_at(path: &Path) -> Result<bool> {
-    match crate::platform::fs::try_lock_file_shared(path) {
+    probe(path, crate::platform::fs::try_lock_file_shared(path))
+}
+
+fn is_running_unchanged_at(path: &Path) -> Result<bool> {
+    probe(
+        path,
+        crate::platform::fs::try_lock_existing_file_shared(path),
+    )
+}
+
+/// What a look at the lock at `path` that came to `look` says.
+fn probe(path: &Path, look: Result<std::fs::File, Busy>) -> Result<bool> {
+    match look {
         Ok(_file) => Ok(false),
         Err(Busy::Held) => Ok(true),
         // No data directory yet: no daemon has ever run here, and a status check creates nothing.
@@ -145,6 +179,19 @@ mod tests {
         );
     }
 
+    /// A look that changes nothing tells a held lock as the other does, and creates no lock file
+    /// where none is.
+    #[test]
+    fn a_look_that_changes_nothing_creates_no_lock_file() {
+        let dir = ScratchDir::new("is-running-unchanged");
+        let path = dir.join("daemon.lock");
+        assert!(!is_running_unchanged_at(&path).unwrap());
+        assert!(!path.exists(), "the look created the lock file");
+        let held = crate::platform::fs::try_lock_file(&path).expect("the lock was taken");
+        assert!(is_running_unchanged_at(&path).unwrap());
+        drop(held);
+    }
+
     /// A probe holds the lock for a moment: a start in that moment gets it once it is released.
     #[test]
     fn a_lock_held_for_a_moment_is_taken_once_released() {
@@ -187,8 +234,15 @@ mod tests {
             err.to_string(),
             "another octoboardd is already running against /data/octoboard"
         );
-        // The desktop application reads the status as `EX_CANTCREAT`.
+        // The desktop application reads the status as `EX_CANTCREAT`, its copy held to this
+        // fixture by its own test.
         assert_eq!(HELD_EXIT_STATUS, 73);
+        let contract: serde_json::Value =
+            serde_json::from_str(include_str!("../testdata/shell_contract.json")).unwrap();
+        assert_eq!(
+            contract["instance_lock_held_exit_status"].as_i64(),
+            Some(i64::from(HELD_EXIT_STATUS))
+        );
         // Any other failure is not the refusal.
         let other =
             anyhow::anyhow!("another octoboardd is already running against /data/octoboard");

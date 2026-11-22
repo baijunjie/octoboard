@@ -51,6 +51,8 @@ Bunun sizin için doğru yol olup olmadığından emin değil misiniz? [Bağlanm
 4. <strong>Kimlik doğrulama</strong> altında, hesap parolanızla oturum açıyorsanız <strong>Parola</strong> seçeneğini seçin. Sunucu sağlayıcınız size bunun yerine bir anahtar dosyası verdiyse (çoğunlukla <code dir="ltr">id_ed25519</code> gibi adlandırılır ya da <code dir="ltr">.pem</code> ile biter) <strong>Anahtar dosyası</strong> seçeneğini seçin ve bu bilgisayarda nerede olduğunu girin.
 5. <strong>Kaydet</strong> düğmesini, ardından <strong>Bağlan</strong> düğmesini seçin. İsterse parolanızı girin.
 
+   İlk oturum açmadan sonra uygulama <strong>Bu bilgisayarın anahtarını ekle</strong> sorusunu sorar. Bundan sonra bu bilgisayardan parolasız oturum açmak için <strong>Anahtarı ekle</strong> seçeneğini, şimdiki gibi oturum açmayı sürdürmek için <strong>Anahtarı ekleme</strong> seçeneğini seçin.
+
    Bağlantı bilgilerini yapıştırdıysanız sunucunun kimliği (parmak izi) onlarla birlikte geldi ve uygulama onu sizin için denetler. Adresi elle yazdıysanız uygulama ilk seferde bir parmak izi gösterir. Doğru makineye ulaştığınızdan emin olmak için onu, bu komutun sunucuda yazdırdığı parmak iziyle karşılaştırın ve yalnızca eşleşiyorlarsa bağlanın:
 
    <Code code={commands.fingerprintCommand} lang="sh" />
@@ -107,8 +109,8 @@ Bu adresi yalnızca SSH yönlendirmesi üzerinden {productName} uygulamasına ul
 
 - <strong>Ek genel bağlantı noktası yok:</strong> {productName} yalnızca ana makinenin kendisinden gelen bağlantıları kabul eder; bu yüzden başka bir bilgisayardan bağlanmak için önce ana makinede SSH ile oturum açmanız gerekir. SSH’ye ya da [aktarıcılardan](../choose-how-to-connect/) birine bu yüzden ihtiyacınız vardır.
 - <strong>Hangi makineye ulaştığınızı denetleyin:</strong> uygulama, ilk başarılı bağlantıda ana makine anahtarını, yani makinenin SSH kimliğini hatırlar ve bu kimlik sonradan değişirse bağlantıyı bir uyarıyla engeller.
-- <strong>Parola saklanmaz:</strong> ilk kez bir parolayla veya kendi anahtar dosyanızla oturum açtıktan sonra uygulama, bu bilgisayarın sonraki oturum açmalarda kullanması için ayrı bir SSH anahtarı oluşturur.
-- <strong>Bir bilgisayarın erişimini kaldırın:</strong> o bilgisayarın girdisini ana makinenin izin verilen SSH anahtarları listesinden silin (Linux ve macOS’te <code dir="ltr">{commands.authorizedKeys}</code>). O anahtar bir daha oturum açamaz; zaten açık olan bir bağlantı sona erene kadar kalır.
+- <strong>Parola saklanmaz:</strong> uygulama parolanızı asla kaydetmez. İlk kez bir parolayla veya kendi anahtar dosyanızla oturum açtıktan sonra, sonraki oturum açmalar için bu bilgisayara ait ayrı bir SSH anahtarı eklenip eklenmeyeceğini sorar ve onu ana makineye yalnızca <strong>Anahtarı ekle</strong> seçeneğini seçerseniz ekler.
+- <strong>Bir bilgisayarın erişimini kaldırın:</strong> o bilgisayarda, <strong>Uzak cihazlar</strong> içindeki hizmetin sayfasında <strong>Bu bilgisayarın anahtarı</strong> ayarını kapatın veya kayıtlı hizmeti kaldırın; uygulama o zaman anahtarını ana makinenin izin verilen SSH anahtarları listesinden çıkarır ve ana makineye ulaşamadıysa bunu size bildirir; bu durumda girdi hâlâ orada olabilir. O bilgisayarın girdisini ana makinedeki listeden kendiniz de silebilirsiniz (Linux ve macOS’te <code dir="ltr">{commands.authorizedKeys}</code>). O anahtar bir daha oturum açamaz; zaten açık olan bir bağlantı sona erene kadar kalır.
 
 ## Uzak bir pencerede
 

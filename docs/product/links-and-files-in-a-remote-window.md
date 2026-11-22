@@ -96,9 +96,10 @@ copy with this computer's default application for it.
 - **How it travels**: through the window's own connection to its daemon, in parts of at most 1 MiB, one at a time.
   There is no limit on the file's size. A file that changes while it is copied ends the copy with an error rather than
   leaving a file put together from two versions; so does a connection lost on the way.
-- **Where the copy is kept**: in a folder of the application's own under this computer's temporary directory,
-  `dev.octoboard.desktop/remote-files/`, each copy in a new folder of its own and under the file's own name, so two
-  files of the same name, or the same file copied twice, never meet. A character this computer's file names cannot hold
+- **Where the copy is kept**: in the application's local data directory, which stays on this computer, in
+  `remote-files/copies/` (see "The desktop
+  application's own files" in `docs/product/files-octoboard-owns.md`), each copy in a new folder of its own and under
+  the file's own name, so two files of the same name, or the same file copied twice, never meet. A character this computer's file names cannot hold
   is replaced, and a name too long is cut, keeping a short extension. The folders and the copies are readable by the
   user alone.
 - **How long it is kept**: a copy stays while the application runs, so that whatever opened it can go on reading it, and

@@ -357,19 +357,23 @@ pub(crate) fn insert_new_account(
     Ok(account)
 }
 
+/// Renames or repoints an account. Returns the agent and the directory the account was pointed
+/// away from, where it was: what the provider kept for that directory is the caller's to forget
+/// ([`forget_run_homes`]), off the runtime and outside the lock taken here.
 fn update_account(
     state: &Arc<AppState>,
     id: &str,
     name: Option<String>,
     config_dir: Option<String>,
-) -> Result<()> {
+) -> Result<Option<(AgentId, String)>> {
     let repointed = {
         // Reading the account, the checks and the write are one step: another create or update
         // cannot slip between them.
         let _writes = state.lock_account_writes();
         let mut account = state.store.require_account(id)?;
         let mut changed = false;
-        let mut dir_changed = false;
+        // The directory the account is pointed away from.
+        let mut left = None;
         if let Some(name) = name {
             let name = normalize_account_name(&name)?;
             if name != account.name {
@@ -382,28 +386,27 @@ fn update_account(
             let dir = normalize_account_dir(account.agent, &dir)?;
             if dir != account.config_dir {
                 check_account_dir_unique(state, account.agent, &dir, Some(id))?;
-                account.config_dir = dir;
+                left = Some(std::mem::replace(&mut account.config_dir, dir));
                 changed = true;
-                dir_changed = true;
             }
         }
         if !changed {
-            return Ok(());
+            return Ok(None);
         }
         state.store.update_account(&account)?;
-        dir_changed.then_some(account.agent)
+        left.map(|left| (account.agent, left))
     };
     // A reading belongs to the directory it was taken under, and a login or an MCP sign-in signs in
     // to it; a rename leaves all valid.
-    if let Some(agent) = repointed {
+    if let Some((agent, _)) = &repointed {
         state.account_quotas.forget_account(state, id);
-        let _ = state.account_logins.cancel(agent, Some(id.to_string()));
-        state.mcp_server_auths.cancel_account(agent, id);
+        let _ = state.account_logins.cancel(*agent, Some(id.to_string()));
+        state.mcp_server_auths.cancel_account(*agent, id);
         // What runs under the account's directory is now what runs under the new one.
         state.publish_account_sharing();
     }
     broadcast_settings(state)?;
-    Ok(())
+    Ok(repointed)
 }
 
 /// Renames or repoints `account` as an `update_account` request asks.
@@ -419,6 +422,20 @@ pub(super) async fn update_account_requested(
     name: Option<String>,
     config_dir: Option<String>,
     base: &BTreeMap<String, u64>,
+) -> Result<()> {
+    let run_homes = crate::paths::agent_query_homes_dir();
+    update_account_requested_in(state, account, name, config_dir, base, &run_homes).await
+}
+
+/// [`update_account_requested`], with the directory the providers keep their run homes under
+/// given.
+async fn update_account_requested_in(
+    state: &Arc<AppState>,
+    account: String,
+    name: Option<String>,
+    config_dir: Option<String>,
+    base: &BTreeMap<String, u64>,
+    run_homes: &std::path::Path,
 ) -> Result<()> {
     // A sharing account's directory is brought back to its own before it is let go, once
     // the new directory is known to be acceptable.
@@ -439,8 +456,29 @@ pub(super) async fn update_account_requested(
     let _checked = state
         .checked_write(&RecordKey::Account(account.clone()), base)
         .await?;
-    update_account(state, &account, name, config_dir)?;
+    let left = update_account(state, &account, name, config_dir)?;
+    // What a provider kept for its background runs under the directory the account has left
+    // holds a copy of that directory's configuration, and nothing reads it again.
+    if let Some((agent, left)) = left {
+        forget_run_homes(agent, left, run_homes.to_path_buf()).await;
+    }
     Ok(())
+}
+
+/// Removes what `agent`'s provider kept under `run_homes` for its background runs of the account
+/// at `config_dir` (`AccountOps::forget_run_homes`): it can hold a copy of the account's
+/// configuration, so it goes when the account does, or when the account leaves the directory. It
+/// reads and removes directories, so it runs off the runtime.
+async fn forget_run_homes(agent: AgentId, config_dir: String, run_homes: std::path::PathBuf) {
+    let forgotten = tokio::task::spawn_blocking(move || {
+        if let Some(ops) = crate::adapter::provider(agent).accounts() {
+            ops.forget_run_homes(&run_homes, std::path::Path::new(&config_dir));
+        }
+    })
+    .await;
+    if let Err(err) = forgotten {
+        tracing::warn!(%err, "forgetting an account's run homes did not finish");
+    }
 }
 
 fn delete_account(state: &Arc<AppState>, id: &str) -> Result<()> {
@@ -486,6 +524,18 @@ pub(super) async fn delete_account_requested(
     account: String,
     trash_directory: bool,
 ) -> Result<()> {
+    let run_homes = crate::paths::agent_query_homes_dir();
+    delete_account_requested_in(state, account, trash_directory, &run_homes).await
+}
+
+/// [`delete_account_requested`], with the directory the providers keep their run homes under
+/// given.
+async fn delete_account_requested_in(
+    state: &Arc<AppState>,
+    account: String,
+    trash_directory: bool,
+    run_homes: &std::path::Path,
+) -> Result<()> {
     // Checked before anything is changed, sharing turned off included, so a refusal
     // leaves everything as it was.
     // Once the pre-check has passed, and until the removal ends however it does, no sign-in
@@ -502,6 +552,12 @@ pub(super) async fn delete_account_requested(
     // A sharing account's directory is brought back to its own before it is let go, so it
     // is never a directory of links into the default one that goes to the Trash.
     let _sharing = super::account_sharing::before_delete(state, &account).await?;
+    // The providers' run homes go before the directory and the account do: they are named by where
+    // the directory really is, which cannot be asked once it is in the Trash. Should the removal
+    // then fail, the account is kept and its next background run makes them again.
+    if let Some(account) = state.store.get_account(&account)? {
+        forget_run_homes(account.agent, account.config_dir, run_homes.to_path_buf()).await;
+    }
     if trash_directory {
         // The account is locked now, so it cannot be repointed and no session of it starts
         // from here on: what was judged before the lock is judged again.

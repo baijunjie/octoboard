@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // Publishes the builds `pnpm release` made, for the in-app updates, the install script and the website to find: creates
 // the versioned GitHub release `desktop-v<version>` with each platform's files (macOS: the disk image and the signed
-// update archive; Windows: the installer; Linux: the daemon's archive for each architecture with its `.sha256`), each
-// update file with its signature (each checked first against the update key's public key in `tauri.conf.json`, bound to
-// this version and naming its file, so that one no client would accept is never published), then writes the manifests
-// to the `updater` release: per platform, `beta.json` and `stable.json` for macOS, `beta-windows.json` and
-// `stable-windows.json` for Windows and `beta-linux.json` and `stable-linux.json` for Linux, the beta one always and
-// the stable one unless the version has a prerelease suffix.
+// update archive; Windows: the installer of each architecture; Linux: the daemon's archive for each architecture with
+// its `.sha256`), each update file with its signature (each checked first against the update key's public key in
+// `tauri.conf.json`, bound to this version and naming its file, so that one no client would accept is never published),
+// then writes the manifests to the `updater` release: per platform, `beta.json` and `stable.json` for macOS,
+// `beta-windows.json` and `stable-windows.json` for Windows and `beta-linux.json` and `stable-linux.json` for Linux,
+// the beta one always and the stable one unless the version has a prerelease suffix.
 // Until a platform's first stable release, a prerelease goes to its stable manifest too: the first betas follow Stable
 // by default and read only that one (`stableTakesPrereleases` in `release-manifest.mjs`). Run `pnpm release` first
 // (on Linux, once on a host of each architecture), with signed builds. Outward-facing, so it is a separate, explicit
@@ -15,15 +15,15 @@
 //   pnpm --filter @octoboard/desktop publish-release (--notes "text" | --notes-file path)
 //     [--platforms <macos,windows,linux or some of them>] [--windows-dir <dir>] [--linux-dir <dir>] [--dry-run]
 //
-// A release carries every platform unless `--platforms` selects some, and a platform not selected is neither needed
-// nor touched: its files are not looked for and its manifests are not read or written. The macOS build is
+// A release carries every platform unless `--platforms` selects some, and a platform not selected is neither needed nor
+// touched: its files are not looked for and its manifests are not read or written. The macOS build is
 // `target/universal-apple-darwin/release/bundle`, checked with macOS tools (`PlistBuddy`, `stapler`), so a macOS
 // publish runs on a Mac. The Windows build comes as `--windows-dir`, required with Windows: a directory holding the
-// installer `Octoboard_<version>_x64-setup.exe` and its `.sig`, as the Windows build made the installer and
-// `sign-update` or the release workflow's `sign` job signed it. The Linux builds come as `--linux-dir`, required with
-// Linux: a directory holding, for each architecture, the archive `octoboardd_<version>_linux_<arch>.tar.gz` with its
-// `.sha256` and `.sig`, as `release-linux.mjs` made them and `sign-update` or the release workflow's `sign` job signed
-// them.
+// installers `Octoboard_<version>_x64-setup.exe` and `Octoboard_<version>_arm64-setup.exe`, each with its `.sig`, as
+// the Windows builds made them and `sign-update` or the release workflow's `sign` job signed them. The Linux builds
+// come as `--linux-dir`, required with Linux: a directory holding, for each architecture, the archive
+// `octoboardd_<version>_linux_<arch>.tar.gz` with its `.sha256` and `.sig`, as `release-linux.mjs` made them and
+// `sign-update` or the release workflow's `sign` job signed them.
 //
 // The version is the one in `apps/desktop/package.json` (which `tauri.conf.json` reads), which must be the one of
 // the builds. The release's tag is created on the current commit, which has to be pushed. `--dry-run` prints what
@@ -159,13 +159,13 @@ if (selected("macos")) {
   );
 }
 if (selected("windows")) {
-  const windows = windowsReleaseFiles(path.resolve(options["windows-dir"]), productName, version);
-  const [update] = releaseLayout("windows", names).updates;
-  publishing.windows = describe(
-    "windows",
-    { [update.name]: windows.installer },
-    { [update.name]: readFileSync(windows.signature, "utf8") },
-  );
+  const sources = {};
+  const signatures = {};
+  for (const { installer, signature } of windowsReleaseFiles(path.resolve(options["windows-dir"]), productName, version)) {
+    sources[path.basename(installer)] = installer;
+    signatures[path.basename(installer)] = readFileSync(signature, "utf8");
+  }
+  publishing.windows = describe("windows", sources, signatures);
 }
 if (selected("linux")) {
   const linux = linuxReleaseFiles(path.resolve(options["linux-dir"]), version);

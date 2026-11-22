@@ -1,0 +1,12 @@
+import { Aside } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* What the Windows uninstaller does before it removes the app, which the Windows guide and "Your system stays as it was" share. */}
+
+在移除任何东西之前，卸载程序会自行清理：{productName} 正在运行时会先关闭它（静默卸载以外会先询问），再不经询问地移除<strong>全部移除</strong>会移除的一切。无论结果如何，它随后都会继续卸载。如果有东西没能移除，它会在最后说明，并写明每一项留在哪里，同时把清单写入 <code dir="ltr">{system.uninstallLogWindows}</code>；静默卸载只写这个文件。
+
+安装程序和卸载程序会使用系统的语言（如果 {productName} 支持），否则使用英语。卸载程序及其留下内容的清单会沿用安装时的语言；某项功能为留下的项目给出的原因可能是英语。
+
+并不是每次卸载都会做这次清理。应用内更新，以及在已安装的应用上运行的安装程序都不会做，所以你在远程服务器上的密钥和各账户的共享都保持原样；不过你自己在上面运行的安装程序仍会关闭<strong>登录时启动</strong>，直到你重新开启。这项清理出现之前的版本，其卸载程序也不做清理：在这样的版本上，请先选择<strong>全部移除</strong>。
+
+<Aside>在 Windows on Arm 上使用 x64 版应用时，卸载程序无法关闭正在运行的 {productName}，卸载会在什么都没移除的情况下停止，在它上面运行的安装程序也是如此：请先退出 {productName}。arm64 版应用没有这个限制，Arm 电脑上的 x64 版安装会通过应用内更新换成 arm64 版。</Aside>

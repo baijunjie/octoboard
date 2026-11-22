@@ -4,7 +4,8 @@ description: "Instal octoboardd, program server Octoboard, di server Linux tanpa
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../../commands.ts";
+import LinuxUninstall from "../../../../snippets/id/linux-uninstall.mdx";
 
 Instal octoboardd, program server {productName} (aplikasi menyebutnya daemon), di server Linux tanpa root. Jangkau dari aplikasi macOS atau Windows, atau dari browser, keduanya melalui SSH.
 
@@ -80,6 +81,12 @@ octoboardd memilih port sendiri yang tidak perlu Anda ketahui: alamat dan perint
   Jika ditanya apakah akan memulai ulang sekarang, jawab <code dir="ltr">y</code> untuk memulai ulang, atau tekan Enter agar versi lama tetap berjalan untuk sementara. Untuk memulai ulang nanti, jalankan <code dir="ltr">{commands.restart}</code>.
 
 Jika <code dir="ltr">{commands.update}</code> menyatakan tidak dapat mengganti program, misalnya karena program dipasang di tempat yang tidak bisa Anda tulisi, jalankan perintah instal (atau perintah layanan) sekali lagi. Perintah itu memulai ulang dengan cara yang sama jika aman, dan jika tidak, memberi tahu Anda untuk menjalankan <code dir="ltr">{commands.restart}</code>.
+
+## Mencopot
+
+<LinuxUninstall />
+
+Data Anda tetap berada di <code dir="ltr">{system.dataDir}</code>. [Sistem Anda tetap seperti semula](../../your-system/) menjelaskan apa yang tersisa sesudahnya dan cara menghapusnya.
 
 ## Perintah
 

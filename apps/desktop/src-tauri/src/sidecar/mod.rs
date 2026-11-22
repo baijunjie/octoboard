@@ -15,12 +15,16 @@ use crate::diagnostics::diagnostic;
 use crate::recovery::{self, ExitAction, RestartBudget};
 
 mod quit_note;
+pub mod request;
 mod stop;
 
 pub use quit_note::{note_quit, skip_quit_note};
 use quit_note::{QuitNote, QUIT_NOTE};
 use stop::kill_child;
-pub use stop::{stop_daemon, stop_daemon_at_session_end, StopKind};
+pub use stop::{
+    kill_daemon, stop_daemon, stop_daemon_at_session_end, stop_daemon_unasked,
+    stop_daemon_unasked_bound, StopKind,
+};
 
 /// How long to wait for `octoboardd` to print its startup line before giving up on that attempt.
 /// Generous: this is a cold process start (including, on first launch, SQLite schema setup), not a
@@ -29,6 +33,59 @@ const SIDECAR_STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// How many times the initial start tries before the window is opened with the failure.
 const STARTUP_ATTEMPTS: u32 = 3;
+
+/// The argument that starts the daemon for a clean-up run, in which it does nothing but what the
+/// clearing needs (its `cli::clean_up_run_argument`, whose test in this module holds the two to
+/// the same word).
+const CLEAN_UP_RUN_ARGUMENT: &str = "--clean-up-run";
+
+/// What a daemon is started for, and how long starting it goes on trying.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StartFor {
+    /// The application: up to `STARTUP_ATTEMPTS` attempts, each waiting longer than the last.
+    #[default]
+    Application,
+    /// The clean-up before the uninstall, for which the daemon makes a clean-up run: attempts a
+    /// second apart for as long as this, since the daemon of the application the uninstaller has
+    /// just ended may hold the data directory for a while yet.
+    CleanUp(Duration),
+}
+
+impl StartFor {
+    /// The arguments the daemon is started with besides the application's pid.
+    fn arguments(self) -> &'static [&'static str] {
+        match self {
+            Self::Application => &[],
+            Self::CleanUp(_) => &[CLEAN_UP_RUN_ARGUMENT],
+        }
+    }
+
+    /// Whether `failed` attempts, the first of them begun at `began`, are all that are made.
+    fn spent(self, failed: u32, began: Instant) -> bool {
+        match self {
+            Self::Application => failed >= STARTUP_ATTEMPTS,
+            Self::CleanUp(bound) => began.elapsed() >= bound,
+        }
+    }
+
+    /// Whether a daemon started for this is started again when it ends unexpectedly. One started
+    /// for the clean-up is not: its part of the clean-up is then not known, and no daemon that
+    /// does more than clear takes its place.
+    pub(crate) fn recovers(self) -> bool {
+        match self {
+            Self::Application => true,
+            Self::CleanUp(_) => false,
+        }
+    }
+
+    /// How long the start waits after `failed` attempts before the next.
+    fn pause(self, failed: u32) -> Duration {
+        match self {
+            Self::Application => startup_backoff(failed),
+            Self::CleanUp(_) => Duration::from_secs(1),
+        }
+    }
+}
 
 /// How long a start attempt that gave up waits for its daemon to be gone, which releases the
 /// instance lock the next attempt needs, after killing it.
@@ -49,6 +106,9 @@ pub struct DaemonState {
     /// Whether a restart or a quit is under way, in which case no daemon is started: set by
     /// `stop_daemon` and on every way out of the application.
     pub(crate) stopping: AtomicBool,
+    /// What this process's daemon is started for, set by `start_daemon` and read by every start
+    /// attempt, a recovery's included, and by what is done about a daemon that ended.
+    purpose: Mutex<StartFor>,
     /// How many recovery threads are running, which a restart waits out before it launches the next
     /// instance.
     pub(crate) recovering: AtomicUsize,
@@ -88,6 +148,31 @@ impl ChildSlot {
         if owed {
             let _ = child.write(QUIT_NOTE);
         }
+    }
+}
+
+impl DaemonState {
+    /// What this process's daemon is started for.
+    fn purpose(&self) -> StartFor {
+        *self.purpose.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Notes what the daemon is started for from now on, a recovery's attempts included.
+    fn start_for(&self, purpose: StartFor) {
+        *self.purpose.lock().unwrap_or_else(|e| e.into_inner()) = purpose;
+    }
+
+    /// What is done about the daemon numbered `generation`, which was up and ended with `code`:
+    /// nothing (`None`) for one that is no longer the latest, and otherwise what
+    /// `recovery::exit_action` says of a daemon started for this purpose.
+    fn ended_action(&self, generation: u64, code: Option<i32>) -> Option<ExitAction> {
+        (self.generation.load(Ordering::SeqCst) == generation).then(|| {
+            recovery::exit_action(
+                self.stopping.load(Ordering::SeqCst),
+                code,
+                self.purpose().recovers(),
+            )
+        })
     }
 }
 
@@ -195,7 +280,7 @@ fn error_param(detail: &str) -> String {
 }
 
 /// The status `octoboardd` exits with when another daemon already runs against its data
-/// directory (its `instance_lock::HELD_EXIT_STATUS`).
+/// directory: a copy of its `instance_lock::HELD_EXIT_STATUS`, which a test pins to it.
 const INSTANCE_LOCK_HELD_EXIT_STATUS: i32 = 73;
 
 /// A cause of a failed start the window names on its own, as `cause=` next to `error=`, to say what
@@ -255,33 +340,35 @@ impl DaemonStatus {
     }
 }
 
-/// Starts the daemon for the first time, trying up to `STARTUP_ATTEMPTS` times with a short pause
-/// between them. The error says what the last attempt did and how many were made; it is what the
-/// window shows. Blocks the calling thread for as long as that takes: call it off the main thread.
-pub fn start_daemon(app: &AppHandle) -> Result<DaemonAddress, String> {
-    let mut failure = None;
-    for attempt in 1..=STARTUP_ATTEMPTS {
-        diagnostic!("starting the daemon (attempt {attempt} of {STARTUP_ATTEMPTS})");
+/// Starts the daemon `purpose` asks for, trying again with a pause while it does not come up, for
+/// as long as `purpose` allows. No attempt is made once a restart or a quit is under way. The
+/// error says what the last attempt did and how many were made; it is what the window shows.
+/// Blocks the calling thread for as long as that takes: call it off the main thread.
+pub fn start_daemon(app: &AppHandle, purpose: StartFor) -> Result<DaemonAddress, String> {
+    app.state::<DaemonState>().start_for(purpose);
+    let began = Instant::now();
+    let mut attempts = 0;
+    let failure = loop {
+        if app.state::<DaemonState>().stopping.load(Ordering::SeqCst) {
+            break AttemptFailure::Quitting;
+        }
+        attempts += 1;
+        diagnostic!("starting the daemon (attempt {attempts})");
         match start_attempt(app) {
             Ok(address) => {
                 diagnostic!("the daemon listens on port {}", address.port);
                 return Ok(address);
             }
             Err(err) => {
-                diagnostic!("start attempt {attempt} failed: {err}");
-                let quitting = matches!(err, AttemptFailure::Quitting);
-                failure = Some(err);
-                if quitting {
-                    break;
+                diagnostic!("start attempt {attempts} failed: {err}");
+                if matches!(err, AttemptFailure::Quitting) || purpose.spent(attempts, began) {
+                    break err;
                 }
-                if attempt < STARTUP_ATTEMPTS {
-                    std::thread::sleep(startup_backoff(attempt));
-                }
+                std::thread::sleep(purpose.pause(attempts));
             }
         }
-    }
-    let failure = failure.expect("at least one attempt was made");
-    let message = startup_failure_message(STARTUP_ATTEMPTS, &failure);
+    };
+    let message = startup_failure_message(attempts, &failure);
     record_no_daemon(
         app,
         DaemonStatus::Down {
@@ -299,6 +386,9 @@ fn startup_backoff(failed_attempts: u32) -> Duration {
 
 /// What the window shows when no attempt got the daemon started.
 fn startup_failure_message(attempts: u32, last: &AttemptFailure) -> String {
+    if attempts == 0 {
+        return format!("the daemon was not started: {last}");
+    }
     format!("the daemon did not start in {attempts} attempts. The last one: {last}")
 }
 
@@ -362,9 +452,11 @@ impl fmt::Display for AttemptFailure {
 /// `watch_daemon`). A daemon that did not report its port in time, or that reports it while a
 /// restart or a quit is under way, is killed and waited for, so the next attempt does not find its
 /// instance lock held. The daemon counts as running, and is what a window opened from then on is
-/// given, only once this returns its address.
+/// given, only once this returns its address. What the process's daemon is started for
+/// (`DaemonState::purpose`) adds its arguments.
 pub(crate) fn start_attempt(app: &AppHandle) -> Result<DaemonAddress, AttemptFailure> {
     let state = app.state::<DaemonState>();
+    let purpose = state.purpose();
     let pid = std::process::id();
     let generation = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
     let (receiver, child) = app
@@ -374,6 +466,7 @@ pub(crate) fn start_attempt(app: &AppHandle) -> Result<DaemonAddress, AttemptFai
         // On Windows the plugin starts it with `CREATE_NO_WINDOW`: a console of its own, hidden,
         // which the terminal sessions' process groups share, rather than none.
         .args(["--parent-pid", &pid.to_string()])
+        .args(purpose.arguments())
         .spawn()
         .map_err(|err| AttemptFailure::Spawn(err.to_string()))?;
 
@@ -511,11 +604,11 @@ async fn watch_daemon(
 fn daemon_ended(app: &AppHandle, generation: u64, code: Option<i32>) {
     let state = app.state::<DaemonState>();
     let ended = describe_termination(code);
-    if state.generation.load(Ordering::SeqCst) != generation {
+    let Some(action) = state.ended_action(generation, code) else {
         diagnostic!("an earlier daemon ended with {ended}; ignored");
         return;
-    }
-    match recovery::exit_action(state.stopping.load(Ordering::SeqCst), code) {
+    };
+    match action {
         ExitAction::Recover => {
             diagnostic!(
                 "the daemon ended unexpectedly with {ended}; its own log, daemon.log, says why"
@@ -697,6 +790,83 @@ mod startup_tests {
     #[test]
     fn the_initial_start_waits_longer_after_each_failure() {
         assert_eq!([1, 2].map(|n| startup_backoff(n).as_secs()), [1, 2]);
+    }
+
+    #[test]
+    fn the_application_s_start_is_spent_by_its_attempts_and_the_clean_up_s_by_its_time() {
+        let now = Instant::now();
+        assert!(!StartFor::Application.spent(STARTUP_ATTEMPTS - 1, now));
+        assert!(StartFor::Application.spent(STARTUP_ATTEMPTS, now));
+        assert_eq!(
+            [1, 2].map(|n| StartFor::Application.pause(n)),
+            [1, 2].map(startup_backoff)
+        );
+        let long = StartFor::CleanUp(Duration::from_secs(3600));
+        assert!(!long.spent(1000, now));
+        assert!(StartFor::CleanUp(Duration::ZERO).spent(1, now));
+        assert_eq!([1, 9].map(|n| long.pause(n).as_secs()), [1, 1]);
+    }
+
+    /// What `start_daemon` notes of the purpose is what a daemon's end is judged by: the
+    /// application's daemon is started again, the clean-up's is left, however it ended, so that
+    /// no daemon that does more than clear takes its place.
+    #[test]
+    fn a_daemon_started_for_the_clean_up_is_not_started_again_when_it_ends_unexpectedly() {
+        let state = DaemonState::default();
+        let latest = state.generation.load(Ordering::SeqCst);
+        // A crash, a kill or a signal.
+        for code in [Some(1), Some(101), None] {
+            assert_eq!(state.ended_action(latest, code), Some(ExitAction::Recover));
+        }
+        state.start_for(StartFor::CleanUp(Duration::from_secs(45)));
+        for code in [Some(1), Some(101), None] {
+            assert_eq!(state.ended_action(latest, code), Some(ExitAction::Stopped));
+        }
+        // A daemon that is no longer the latest says nothing either way.
+        assert_eq!(state.ended_action(latest + 1, Some(1)), None);
+        state.start_for(StartFor::Application);
+        assert_eq!(
+            state.ended_action(latest, Some(1)),
+            Some(ExitAction::Recover)
+        );
+    }
+
+    #[test]
+    fn only_the_clean_up_s_daemon_is_started_for_a_clean_up_run_by_the_daemon_s_own_argument() {
+        assert!(StartFor::Application.arguments().is_empty());
+        assert_eq!(
+            StartFor::CleanUp(Duration::ZERO).arguments(),
+            [CLEAN_UP_RUN_ARGUMENT]
+        );
+        // The daemon's command line names its option without the dashes.
+        assert_eq!(
+            Some(CLEAN_UP_RUN_ARGUMENT.trim_start_matches("--")),
+            daemons_contract()["clean_up_run_option"].as_str()
+        );
+    }
+
+    /// What the daemon's tests pin its own values to, which the shell's copies are held to here.
+    fn daemons_contract() -> serde_json::Value {
+        serde_json::from_str(include_str!(
+            "../../../../daemon/testdata/shell_contract.json"
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn the_instance_lock_status_is_the_one_the_daemon_exits_with() {
+        assert_eq!(
+            daemons_contract()["instance_lock_held_exit_status"].as_i64(),
+            Some(i64::from(INSTANCE_LOCK_HELD_EXIT_STATUS))
+        );
+    }
+
+    #[test]
+    fn a_start_that_made_no_attempt_says_so() {
+        assert_eq!(
+            startup_failure_message(0, &AttemptFailure::Quitting),
+            "the daemon was not started: the application is quitting"
+        );
     }
 
     #[test]

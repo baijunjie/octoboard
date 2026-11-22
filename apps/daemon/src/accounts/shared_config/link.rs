@@ -107,6 +107,23 @@ impl Dirs {
         Ok(dirs)
     }
 
+    /// For keeping what the default directory records free of the account's spelling, between
+    /// `default`, the directory the links were made into, and an account directory that may be
+    /// gone: its recorded spelling is then all there is of it.
+    pub fn for_keeping(account: &Path, default: &Path) -> Result<Self, DirsError> {
+        let default = resolve_or_spelled(&crate::hostfs::lexically_normalise(default));
+        let account_real = resolve(account)?.unwrap_or_else(|| account.to_path_buf());
+        if account_real == default {
+            return Err(DirsError::SameAsDefault);
+        }
+        Ok(Self {
+            account: account.to_path_buf(),
+            account_real,
+            default,
+            current_default: None,
+        })
+    }
+
     fn over(account: &Path, default: PathBuf) -> Result<Option<Self>, DirsError> {
         let Some(account_real) = resolve(account)? else {
             return Ok(None);
@@ -154,7 +171,7 @@ impl SharingCause {
 }
 
 impl SharingItemFailure {
-    fn new(
+    pub(super) fn new(
         item: &SharedItem,
         left: SharingLeft,
         cause: SharingCause,
@@ -169,7 +186,7 @@ impl SharingItemFailure {
         }
     }
 
-    fn io(item: &SharedItem, left: SharingLeft, err: io::Error) -> Self {
+    pub(super) fn io(item: &SharedItem, left: SharingLeft, err: io::Error) -> Self {
         Self::new(item, left, SharingCause::of(&err), err)
     }
 
@@ -495,21 +512,11 @@ pub(super) fn turn_off(
     let items = shared_items(agent);
     let mut failures = Vec::new();
     let mut kept: Vec<&str> = Vec::new();
-    for (name, file) in registries::registries(agent) {
-        report(0, name);
-        let to = resolve_or_spelled(&dirs.default.join(name));
-        let from = [dirs.account.join(name), dirs.account_real.join(name)];
-        if let Err(err) = registries::repoint(&dirs.default.join(name).join(file), &from, &to) {
-            if let Some(item) = items.iter().find(|item| item.name == *name) {
-                failures.push(SharingItemFailure::new(
-                    item,
-                    SharingLeft::Linked,
-                    SharingCause::of(&err),
-                    format!("`{file}` not repointed: {err}"),
-                ));
-            }
-            kept.push(name);
+    for failure in registries::keep(agent, dirs, &mut |name| report(0, name)) {
+        if let Some(item) = items.iter().find(|item| item.name == failure.item) {
+            kept.push(item.name);
         }
+        failures.push(failure);
     }
     let databases = thread_registry(agent).into_iter().flat_map(|threads| {
         items

@@ -4,7 +4,8 @@ description: "Install octoboardd, the Octoboard server program, on a Linux serve
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../commands.ts";
+import LinuxUninstall from "../../../snippets/en/linux-uninstall.mdx";
 
 Install octoboardd, the {productName} server program (the app calls it the daemon), on a Linux server without root. Reach it from the macOS or Windows app, or from a browser, both through SSH.
 
@@ -80,6 +81,12 @@ octoboardd picks a port of its own, which you never need to know: the address an
   If it asks whether to restart now, answer <code dir="ltr">y</code> to restart, or press Enter to keep the old version running for now. To restart later, run <code dir="ltr">{commands.restart}</code>.
 
 If <code dir="ltr">{commands.update}</code> says it can't replace the program, for example because it was installed somewhere you can't write to, run the install command (or the service command) again instead. It restarts in the same way when that's safe, and otherwise tells you to run <code dir="ltr">{commands.restart}</code>.
+
+## Uninstall
+
+<LinuxUninstall />
+
+It leaves your data in <code dir="ltr">{system.dataDir}</code>. [Your system stays as it was](../../your-system/) says what is left afterwards and how to remove it.
 
 ## Commands
 

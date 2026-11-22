@@ -15,7 +15,7 @@ It is excluded from the production type check and from release verification, and
   `mergeHandlers` joins (a request answered by two modules throws; a `Handler` is typed to reply with the event its
   request is answered with, as `REPLY_TYPES` of `daemon-client.ts` names it, so a wrong reply fails the type check, and
   `neverReplied` is the reply of a request a scenario holds pending): `fixtureSessions.ts` (sessions),
-  `fixtureConsoles.ts`, `fixtureAccounts.ts` (accounts, and the refusals a session gets on one),
+  `fixtureConsoles.ts`, `fixtureAccounts.ts` (accounts and the refusals a session gets on one),
   `fixtureAgentClis.ts` (the agents' CLI versions: the up-to-date statuses a window starts with, and an update), `fixtureSettings.ts`,
   `fixtureMemory.ts` (the memories, a console's and a project place's: listing, reads, a user's saves and deletions with the broadcasts the daemon makes of each, the places removed projects left memory at and `delete_project`'s part in them, and `deliverMemoryChange` of the fixture daemon, which a step's `ui.daemonEvents` calls for a change a session made),
   `fixtureProjects.ts` (projects and their shell terminals), `fixtureFiles.ts` (a project's files, folder listings, path

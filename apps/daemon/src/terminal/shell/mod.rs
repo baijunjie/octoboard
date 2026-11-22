@@ -732,6 +732,37 @@ async fn end(process: Arc<ShellProcess>) {
     }
 }
 
+/// Reads whether `process` is busy now and keeps its record current with it: the one reading the
+/// watcher takes every [`POLL_INTERVAL`] and a stop check takes at the moment it is asked.
+/// **Blocking** ([`busy::is_busy`]).
+fn sample_busy(state: &AppState, process: &ShellProcess) -> bool {
+    let busy = busy::is_busy(process);
+    update(state, &process.id, |record| {
+        if record.state == ShellTerminalState::Running {
+            record.busy = busy;
+        }
+    });
+    busy
+}
+
+/// Every record, oldest first, with whether each running terminal is busy read now rather than as
+/// the watcher last saw it: a command started since its last look, up to [`POLL_INTERVAL`] ago,
+/// counts. For a check that must not miss what a shell has just started (a stop's).
+/// **Blocking** ([`busy::is_busy`], once per running terminal).
+pub fn list_busy_now(state: &AppState) -> Vec<ShellTerminal> {
+    let running: Vec<Arc<ShellProcess>> = state
+        .shell_terminals
+        .lock()
+        .values()
+        .filter(|entry| entry.record.state == ShellTerminalState::Running)
+        .map(|entry| entry.process.clone())
+        .collect();
+    for process in running {
+        sample_busy(state, &process);
+    }
+    state.shell_terminals.list()
+}
+
 /// Watches a registered shell until it exits or is closed: whether it is busy, kept current on
 /// its record, and its exit, which leaves the record exited and lets every attached client go
 /// once the shell's last output has reached them.
@@ -751,13 +782,11 @@ fn watch(state: Arc<AppState>, process: Arc<ShellProcess>) {
             }
             // Off the runtime's workers: the check reads each descendant's descriptors, and on a
             // Linux kernel that keeps no list of children, every process's record.
-            let busy = {
-                let process = process.clone();
-                tokio::task::spawn_blocking(move || busy::is_busy(&process)).await
+            let sampled = {
+                let (state, process) = (state.clone(), process.clone());
+                tokio::task::spawn_blocking(move || sample_busy(&state, &process)).await
             };
-            if let Ok(busy) = busy {
-                update(&state, &process.id, |record| record.busy = busy);
-            }
+            sampled.ok();
         }
         let drained = {
             let process = process.clone();

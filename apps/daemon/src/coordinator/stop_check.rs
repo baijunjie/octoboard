@@ -38,7 +38,7 @@ fn terminal_holds_quit(terminal: &ShellTerminal) -> bool {
 
 /// What a stop would interrupt now; an error where the sessions cannot be read, since an answer
 /// with none listed would let a stop interrupt them unasked. **Blocks** briefly on the state's
-/// locks and the store.
+/// locks, the store, and a fresh look at each running shell terminal's processes.
 pub fn stop_impact(state: &AppState) -> crate::store::Result<StopImpact> {
     let sessions = state
         .store
@@ -55,9 +55,8 @@ pub fn stop_impact(state: &AppState) -> crate::store::Result<StopImpact> {
             title: session.title,
         })
         .collect();
-    let shell_terminals = state
-        .shell_terminals
-        .list()
+    // Read now: the watcher's last look may predate a command just started.
+    let shell_terminals = crate::terminal::shell::list_busy_now(state)
         .into_iter()
         .filter(terminal_holds_quit)
         .map(|terminal| ImpactTerminal {

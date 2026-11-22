@@ -101,6 +101,13 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         // The Claude app, which registers `claude:`.
         native_app_scheme: Some("claude"),
         per_session_trust: false,
+        // Claude Code 2.1.330 documents no way to trust a folder for one interactive launch: its
+        // help names none, and `--trust-workspace` belongs to `claude ultrareview` alone. The one
+        // measured to skip the screen and record nothing, the undocumented
+        // `CLAUDE_CODE_SANDBOXED`, declares the whole process sandboxed and so trusts every folder
+        // the session reaches, not the console's alone; it is not used. Measured in
+        // `docs/agent-cli-reference.md`, "Folder-trust confirmations".
+        console_trust: super::ConsoleTrust::Answered,
         config_sharing: true,
         mcp_inventory: true,
         // Measured: on exit it kills the group of each shell it still runs, a shell that leads a

@@ -1,14 +1,16 @@
 ---
 title: "Windows"
-description: "Dành cho máy tính dùng bộ xử lý Intel hoặc AMD (hầu hết máy Windows), chạy Windows 10 phiên bản 21H2 trở lên. Trên Windows 11 chạy chip Arm, ứng dụng x64 này chạy qua giả lập."
+description: "Dành cho máy tính dùng bộ xử lý Intel hoặc AMD (hầu hết máy Windows), chạy Windows 10 phiên bản 21H2 trở lên. Trên Windows 11 dành cho Arm, hãy dùng trình cài đặt arm64 gốc khi bản phát hành có; nếu không, ứng dụng x64 này chạy ở đó qua giả lập."
 ---
 
 import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
 import { downloads, productName } from "../../../../commands.ts";
+import WindowsUninstaller from "../../../../snippets/vi/windows-uninstaller.mdx";
 
-Dành cho máy tính dùng bộ xử lý Intel hoặc AMD (x64; hầu hết máy Windows), chạy Windows 10 phiên bản 21H2 trở lên. Trên Windows 11 chạy chip Arm, ứng dụng x64 này chạy qua giả lập.
+Dành cho máy tính dùng bộ xử lý Intel hoặc AMD (x64; hầu hết máy Windows), chạy Windows 10 phiên bản 21H2 trở lên. Trên Windows 11 dành cho Arm, hãy dùng trình cài đặt arm64 gốc khi bản phát hành có; nếu không, ứng dụng x64 này chạy ở đó qua giả lập.
 
 <LinkButton href={downloads.windows}>Tải xuống cho Windows</LinkButton>
+<LinkButton href={downloads["windows-arm64"]} variant="secondary">Tải xuống bản Windows dành cho Arm</LinkButton>
 
 <Aside>Ứng dụng Windows đang ở giai đoạn beta.</Aside>
 
@@ -16,7 +18,7 @@ Dành cho máy tính dùng bộ xử lý Intel hoặc AMD (x64; hầu hết máy
 
 <Steps>
 
-1. Tải trình cài đặt bằng nút ở trên. Đó là tệp có tên kết thúc bằng <code dir="ltr">x64-setup.exe</code>.
+1. Tải trình cài đặt bằng nút ở trên. Đó là tệp có tên kết thúc bằng <code dir="ltr">x64-setup.exe</code>. Trên Windows dành cho Arm, hãy thử nút thứ hai: khi bản phát hành có trình cài đặt arm64, nút này tải tệp đó, có tên kết thúc bằng <code dir="ltr">arm64-setup.exe</code>; nếu không, nút này mở danh sách bản phát hành, và trình cài đặt x64 chạy qua giả lập.
 2. Mở tệp vừa tải để chạy trình cài đặt. Nó chỉ cài {productName} cho tài khoản người dùng của bạn, nên không yêu cầu quyền quản trị viên.
 
    Ứng dụng chưa được ký mã, nên Microsoft Defender SmartScreen có thể hiện “Windows protected your PC” (Windows đã bảo vệ PC của bạn). Chọn “More info” (Thông tin thêm), rồi “Run anyway” (Vẫn chạy).
@@ -38,6 +40,16 @@ Khi cửa sổ chính mở ra là bạn đã cài xong.
 - [Grok Build](https://docs.x.ai/build/overview)
 
 Nếu bạn dùng Claude Code hoặc Codex, hãy cài [Git for Windows](https://git-scm.com/download/win) trước; chúng cần nó để hoạt động.
+
+## Gỡ cài đặt
+
+Gỡ cài đặt {productName} bằng trình gỡ cài đặt của nó, từ Cài đặt của Windows (Ứng dụng) hoặc Control Panel.
+
+<WindowsUninstaller />
+
+Để xem những gì đang có hiệu lực trước khi gỡ cài đặt, hãy mở <strong>Cài đặt › Dọn dẹp › Dọn dẹp trước khi gỡ cài đặt</strong>: <strong>Xóa tất cả</strong> ở đó xóa những thứ tương tự và hiển thị kết quả cho từng mục.
+
+[Hệ thống của bạn vẫn như cũ](../../your-system/) cho biết sau đó còn lại gì và cách xóa.
 
 ## Cập nhật
 

@@ -18,6 +18,30 @@ use crate::window_state;
 /// from the macOS ones (`stable-windows.json`, `beta-windows.json`).
 pub const MANIFEST_SUFFIX: &str = "-windows";
 
+/// The manifest entry to ask for in place of the build's own (`super::windows_update_target`): the
+/// arm64 installer for an x64 build running emulated on an ARM64 machine. None elsewhere, Linux
+/// included, and when the machine cannot be read.
+pub fn update_target() -> Option<&'static str> {
+    #[cfg(windows)]
+    return super::windows_update_target(std::env::consts::ARCH, native_is_arm64());
+    #[cfg(not(windows))]
+    None
+}
+
+/// Whether the machine's native architecture is ARM64, whatever this process runs as: an x64
+/// process emulated there reads ARM64 as the native machine.
+#[cfg(windows)]
+fn native_is_arm64() -> bool {
+    use windows_sys::Win32::System::SystemInformation::{
+        IMAGE_FILE_MACHINE, IMAGE_FILE_MACHINE_ARM64,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, IsWow64Process2};
+    let (mut process, mut native): (IMAGE_FILE_MACHINE, IMAGE_FILE_MACHINE) = (0, 0);
+    // SAFETY: the pseudo handle of the current process is valid, and both outputs are written.
+    let read = unsafe { IsWow64Process2(GetCurrentProcess(), &mut process, &mut native) } != 0;
+    read && native == IMAGE_FILE_MACHINE_ARM64
+}
+
 /// Downloads `update` and hands the installer's bytes back for `install_for_restart` to run.
 pub async fn install(
     update: &Update,

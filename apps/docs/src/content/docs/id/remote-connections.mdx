@@ -51,6 +51,8 @@ Belum yakin ini cara yang tepat untuk Anda? [Pilih cara terhubung](../choose-how
 4. Di bawah <strong>Autentikasi</strong>, pilih <strong>Kata sandi</strong> jika Anda masuk dengan kata sandi akun Anda. Pilih <strong>File kunci</strong> jika penyedia server memberi Anda file kunci sebagai gantinya (sering bernama seperti <code dir="ltr">id_ed25519</code> atau berakhiran <code dir="ltr">.pem</code>), dan masukkan lokasinya di komputer ini.
 5. Pilih <strong>Simpan</strong>, lalu <strong>Hubungkan</strong>. Masukkan kata sandi Anda jika diminta.
 
+   Setelah login pertama, aplikasi bertanya <strong>Tambahkan kunci komputer ini</strong>. Pilih <strong>Tambahkan kunci</strong> agar sejak itu Anda masuk dari komputer ini tanpa kata sandi, atau <strong>Jangan tambahkan</strong> untuk tetap masuk seperti sekarang.
+
    Jika Anda menempelkan detail koneksi, identitas server (sidik jarinya) ikut di dalamnya, dan aplikasi memeriksanya untuk Anda. Jika Anda mengetik alamat secara manual, aplikasi menampilkan sidik jari saat pertama kali. Untuk memastikan Anda mencapai mesin yang benar, bandingkan dengan sidik jari yang dicetak perintah ini di server, dan hubungkan hanya jika keduanya cocok:
 
    <Code code={commands.fingerprintCommand} lang="sh" />
@@ -107,8 +109,8 @@ Hanya orang yang dapat menjangkau {productName} melalui penerusan SSH yang dapat
 
 - <strong>Tanpa port publik tambahan:</strong> {productName} hanya menerima koneksi dari host itu sendiri, jadi untuk terhubung dari komputer lain Anda harus masuk dulu ke host lewat SSH. Inilah sebabnya Anda memerlukan SSH, atau salah satu [relay](../choose-how-to-connect/).
 - <strong>Periksa mesin mana yang Anda jangkau:</strong> aplikasi mengingat kunci host, identitas SSH mesin itu, pada koneksi pertama yang berhasil dan memblokir koneksi dengan peringatan jika identitas itu kemudian berubah.
-- <strong>Tanpa kata sandi tersimpan:</strong> setelah Anda pertama kali masuk dengan kata sandi atau file kunci Anda sendiri, aplikasi menyiapkan kunci SSH terpisah untuk dipakai komputer ini pada login berikutnya.
-- <strong>Cabut akses sebuah komputer:</strong> hapus entri komputer itu dari daftar kunci SSH yang diizinkan di host (<code dir="ltr">{commands.authorizedKeys}</code> di Linux dan macOS). Kunci itu lalu tidak dapat masuk lagi; koneksi yang sudah terbuka tetap berjalan sampai berakhir.
+- <strong>Tanpa kata sandi tersimpan:</strong> aplikasi tidak pernah menyimpan kata sandi Anda. Setelah Anda pertama kali masuk dengan kata sandi atau file kunci Anda sendiri, aplikasi bertanya apakah akan menambahkan kunci SSH terpisah milik komputer ini untuk login berikutnya, dan hanya menambahkannya ke host jika Anda memilih <strong>Tambahkan kunci</strong>.
+- <strong>Cabut akses sebuah komputer:</strong> di komputer itu, matikan <strong>Kunci komputer ini</strong> di halaman daemon dalam <strong>Perangkat jarak jauh</strong>, atau lepas daemon tersimpan itu; aplikasi lalu menghapus kuncinya dari daftar kunci SSH yang diizinkan di host, dan memberi tahu Anda jika host tidak dapat dijangkau, yang berarti entri itu mungkin masih ada. Anda juga dapat menghapus sendiri entri komputer itu dari daftar di host (<code dir="ltr">{commands.authorizedKeys}</code> di Linux dan macOS). Kunci itu lalu tidak dapat masuk lagi; koneksi yang sudah terbuka tetap berjalan sampai berakhir.
 
 ## Di jendela jarak jauh
 

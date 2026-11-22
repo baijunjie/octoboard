@@ -32,6 +32,7 @@ impl ModelCatalogue for ClaudeCatalogue {
         &self,
         shell_env: &HashMap<String, String>,
         config_dir: Option<&Path>,
+        _run_homes: &Path,
         _timeout: Duration,
     ) -> Listing {
         listing(shell_env, config_dir)

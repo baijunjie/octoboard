@@ -45,6 +45,14 @@ pub struct ConnectRequest {
     /// opened there, whatever its protocol generation.
     #[serde(default)]
     pub browser: bool,
+    /// The owner's answer to `ConnectOutcome::DeviceKeyOffered`: install this device's key, or
+    /// do not and remember it; `None` while it was not asked.
+    #[serde(default)]
+    pub device_key: Option<bool>,
+    /// The connection goes on without this device's key where the owner would have to be asked
+    /// about it: one made at launch, which asks nothing. Never the UI's to set.
+    #[serde(skip)]
+    pub without_asking: bool,
 }
 
 /// What is run on the remote machine before the daemon is reached.
@@ -85,9 +93,16 @@ pub enum ConnectOutcome {
     AuthFailed {
         detail: String,
     },
-    /// The host no longer accepts this device's key (it was removed there): signing in with the
-    /// password installs it again.
+    /// The host no longer accepts this device's key (it was removed there): the owner signs in
+    /// with the password, and is then asked about the key as at a first connection.
     DeviceKeyRefused,
+    /// The owner signed in with a password or a key file, and is asked before this device's key
+    /// is installed: a line marked `mark` would be added to `file` for the remote user. Nothing
+    /// was written on the host, and the connection was ended; it is made again with the answer.
+    DeviceKeyOffered {
+        mark: String,
+        file: String,
+    },
     KeyUnreadable {
         detail: String,
     },
@@ -204,6 +219,17 @@ mod tests {
             json(ConnectOutcome::DeviceKeyRefused),
             serde_json::json!({"outcome": "device_key_refused"})
         );
+        assert_eq!(
+            json(ConnectOutcome::DeviceKeyOffered {
+                mark: "Octoboard on Desk".into(),
+                file: "~/.ssh/authorized_keys".into()
+            }),
+            serde_json::json!({
+                "outcome": "device_key_offered",
+                "mark": "Octoboard on Desk",
+                "file": "~/.ssh/authorized_keys"
+            })
+        );
     }
 
     #[test]
@@ -247,6 +273,23 @@ mod tests {
         .unwrap();
         assert_eq!(request.confirm_fingerprint.as_deref(), Some("SHA256:x"));
         assert_eq!(request.action, Some(Action::Start));
+        // Not asked about this device's key yet.
+        assert_eq!(request.device_key, None);
+    }
+
+    #[test]
+    fn the_answer_about_the_device_key_is_the_ui_s_and_going_on_unasked_is_not() {
+        let read = |answer: serde_json::Value| {
+            serde_json::from_value::<ConnectRequest>(serde_json::json!({
+                "id": "e", "secret": null, "confirmFingerprint": null, "action": null,
+                "deviceKey": answer, "withoutAsking": true
+            }))
+            .unwrap()
+        };
+        assert_eq!(read(serde_json::json!(true)).device_key, Some(true));
+        assert_eq!(read(serde_json::json!(false)).device_key, Some(false));
+        assert_eq!(read(serde_json::Value::Null).device_key, None);
+        assert!(!read(serde_json::Value::Null).without_asking);
     }
 
     #[test]

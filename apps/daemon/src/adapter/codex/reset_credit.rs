@@ -65,7 +65,9 @@ fn consume(
             .map_err(|refused| match refused {
                 NotRun::BinaryNotFound(binary) => Failure::BinaryNotFound(binary),
                 NotRun::BinaryRefused(err) => Failure::BinaryRefused(err),
-                NotRun::DirMissing(_) => Failure::Failed(refused.detail()),
+                NotRun::DirMissing(_) | NotRun::HomeNotPrepared(_) => {
+                    Failure::Failed(refused.detail())
+                }
             })?;
     let mut params = json!({"idempotencyKey": idempotency_key});
     if let Some(credit_id) = credit_id {

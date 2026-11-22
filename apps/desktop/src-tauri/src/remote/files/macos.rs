@@ -2,7 +2,7 @@ use std::path::Path;
 
 #[path = "unix.rs"]
 mod unix;
-pub(super) use unix::{check_private, create_private_dir, private_file_options};
+pub(super) use unix::{check_private, create_private_dir, open_plain_file, private_file_options};
 
 /// Applies the quarantine attribute so macOS checks the downloaded copy when it is opened.
 pub(super) fn mark_downloaded(path: &Path) -> std::io::Result<()> {

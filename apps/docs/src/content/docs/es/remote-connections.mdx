@@ -51,6 +51,8 @@ Usa {productName} en un servidor Linux o en otro equipo desde este, en la app de
 4. En <strong>Autenticación</strong>, elige <strong>Contraseña</strong> si inicias sesión con la contraseña de tu cuenta. Elige <strong>Archivo de clave</strong> si tu proveedor del servidor te dio un archivo de clave (a menudo con un nombre como <code dir="ltr">id_ed25519</code> o que termina en <code dir="ltr">.pem</code>), e indica dónde está en este equipo.
 5. Selecciona <strong>Guardar</strong> y luego <strong>Conectar</strong>. Introduce tu contraseña si la pide.
 
+   Tras el primer inicio de sesión, la app pregunta <strong>Añadir la clave de este equipo</strong>. Selecciona <strong>Añadir clave</strong> para iniciar sesión desde este equipo sin contraseña a partir de entonces, o <strong>No añadir</strong> para seguir iniciando sesión como hasta ahora.
+
    Si pegaste los datos de conexión, la identidad del servidor (su huella) venía incluida y la app la comprueba por ti. Si escribiste la dirección a mano, la app muestra una huella la primera vez. Para asegurarte de que has llegado a la máquina correcta, compárala con la que muestra este comando en el servidor y conéctate solo si coinciden:
 
    <Code code={commands.fingerprintCommand} lang="sh" />
@@ -107,8 +109,8 @@ Solo quien pueda acceder a {productName} a través del reenvío SSH puede usar e
 
 - <strong>Sin puertos públicos adicionales:</strong> {productName} solo acepta conexiones del propio host, así que para conectarte desde otro equipo primero debes iniciar sesión en el host por SSH. Por eso necesitas SSH o uno de los [relés](../choose-how-to-connect/).
 - <strong>Comprueba a qué máquina accedes:</strong> la app recuerda la clave de host, la identidad SSH de la máquina, en la primera conexión correcta y bloquea la conexión con una alerta si esa identidad cambia más tarde.
-- <strong>Sin contraseña guardada:</strong> después de que inicies sesión por primera vez con una contraseña o con tu propio archivo de clave, la app crea una clave SSH independiente para que este equipo la use en los inicios de sesión posteriores.
-- <strong>Quitar el acceso a un equipo:</strong> elimina la entrada de ese equipo de la lista de claves SSH permitidas del host (<code dir="ltr">{commands.authorizedKeys}</code> en Linux y macOS). Esa clave ya no podrá iniciar sesión; una conexión que ya esté abierta seguirá hasta que termine.
+- <strong>Sin contraseña guardada:</strong> la app nunca guarda tu contraseña. Después de que inicies sesión por primera vez con una contraseña o con tu propio archivo de clave, pregunta si añade una clave SSH independiente, propia de este equipo, para los inicios de sesión posteriores, y solo la añade al host si seleccionas <strong>Añadir clave</strong>.
+- <strong>Quitar el acceso a un equipo:</strong> en ese equipo, desactiva <strong>Clave de este equipo</strong> en la página del servicio en <strong>Dispositivos remotos</strong>, o quita el servicio guardado; la app elimina entonces su clave de la lista de claves SSH permitidas del host, y te avisa si no pudo llegar al host, en cuyo caso la entrada puede seguir ahí. También puedes eliminar tú la entrada de ese equipo de la lista en el host (<code dir="ltr">{commands.authorizedKeys}</code> en Linux y macOS). Esa clave ya no podrá iniciar sesión; una conexión que ya esté abierta seguirá hasta que termine.
 
 ## En una ventana remota
 

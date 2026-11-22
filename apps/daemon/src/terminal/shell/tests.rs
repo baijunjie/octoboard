@@ -359,6 +359,49 @@ async fn a_shell_is_busy_while_it_runs_something_in_the_foreground() {
     close(&state, &created.id).await.unwrap();
 }
 
+/// A stop is asked about what a shell runs as it is now, not as the watcher last saw it: a command
+/// started since that look holds the stop up, and one ended since holds it up no longer.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_stop_check_reads_whether_a_shell_is_busy_at_the_moment_it_is_asked() {
+    let (state, _dir, _project) = with_project("shell-stop-busy-now");
+    let created = create(&state, "p1".to_string(), None, String::new())
+        .await
+        .unwrap();
+    let shell = process(&state, &created);
+    let stop_holders = |state: &Arc<AppState>| {
+        let state = state.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::coordinator::stop_check::stop_impact(&state)
+                .unwrap()
+                .shell_terminals
+                .into_iter()
+                .map(|terminal| terminal.id)
+                .collect::<Vec<_>>()
+        })
+    };
+    let busy_now = |shell: &Arc<ShellProcess>, busy: bool| {
+        let shell = shell.clone();
+        within(PATIENCE, move || super::busy::is_busy(&shell) == busy)
+    };
+
+    shell.write(&typed(&sleeping(30), &sleeping(30))).unwrap();
+    assert!(busy_now(&shell, true).await, "the command never ran");
+    // The record as the watcher saw it before the command started.
+    super::update(&state, &created.id, |record| record.busy = false);
+    assert_eq!(
+        stop_holders(&state).await.unwrap(),
+        std::slice::from_ref(&created.id)
+    );
+    assert!(state.shell_terminals.list()[0].busy, "the reading is kept");
+
+    shell.write(b"\x03").unwrap();
+    assert!(busy_now(&shell, false).await, "the command never ended");
+    super::update(&state, &created.id, |record| record.busy = true);
+    assert!(stop_holders(&state).await.unwrap().is_empty());
+
+    close(&state, &created.id).await.unwrap();
+}
+
 // Unix only: where the terminal cannot name its foreground job, as on Windows, the shell is busy
 // while its job lists any process besides the shell and the console hosts, wherever that process's
 // streams go (`busy`), which `a_background_process_keeps_a_shell_busy_until_it_ends` tests.

@@ -83,7 +83,7 @@ export function FeatureView({ feature }: { feature: string }): React.ReactElemen
       break;
     case "startUsageWindows":
       content = <section className="feature-surface setting-view">
-        <SwitchSettingRow label={t("settings.startQuotaWindows.label")} description={t("settings.startQuotaWindows.description.on")} isSelected onChange={() => undefined} />
+        <SwitchSettingRow label={t("settings.startQuotaWindows.label")} description={t("settings.startQuotaWindows.requestDescription.on")} isSelected onChange={() => undefined} />
       </section>;
       break;
     case "keepAwake":

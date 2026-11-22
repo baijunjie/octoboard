@@ -12,6 +12,8 @@ import { docsPages } from "./site-seo.ts";
 export const downloadTargets = [
   { id: "macos", name: "macOS", icon: "apple-logo", kind: "app" },
   { id: "windows", name: "Windows", icon: "windows-logo", kind: "app" },
+  // The arm64 installer: offered in the Windows panel beside the x64 one, not as an app of its own.
+  { id: "windows-arm64", name: "Windows on Arm", icon: "windows-logo", kind: "app-variant", architecture: "arm64" },
   { id: "linux-x86_64", name: "Linux x86_64", icon: "linux-logo", kind: "server", architecture: "x86_64" },
   { id: "linux-aarch64", name: "Linux aarch64", icon: "linux-logo", kind: "server", architecture: "aarch64" },
 ] as const;
@@ -26,6 +28,9 @@ function targetsOfKind<Kind extends "app" | "server">(kind: Kind): DownloadTarge
 
 export const appDownloads = targetsOfKind("app");
 export const serverDownloads = targetsOfKind("server");
+export const windowsArmDownload = downloadTargets.find(
+  (target): target is DownloadTargetOf<"app-variant"> => target.id === "windows-arm64",
+)!;
 
 // The port the browser is served at until the owner sets another, and the one the forward `octoboardd address` prints
 // names; config/app.json holds it for the daemon and this site alike.
@@ -111,6 +116,22 @@ export function releasesUrl(repositoryUrl: string): string {
   return `${trimmed(repositoryUrl)}/releases`;
 }
 
+// Whether the site offers the arm64 Windows installer: only once a release carries one, so a site published before the
+// first such release, whose arm64 download is the releases page, keeps saying that the x64 app runs on Windows on Arm.
+export function offersWindowsArm(downloads: Downloads, repositoryUrl: string): boolean {
+  return downloads["windows-arm64"] !== releasesUrl(repositoryUrl);
+}
+
+// The platform line of the home page and its Markdown: Windows on arm64 too once its installer is offered.
+export function heroPlatformsKey(armOffered: boolean): string {
+  return armOffered ? "heroPlatformsWindowsArm" : "heroPlatforms";
+}
+
+// The requirements text of an app's panel: Windows points to the arm64 installer once it is offered.
+export function appRequirementsKey(id: keyof typeof appRequirementsKeys, armOffered: boolean): string {
+  return id === "windows" && armOffered ? "downloadWindowsArmRequirements" : appRequirementsKeys[id];
+}
+
 function releaseDownloadPrefix(repositoryUrl: string): string {
   return `${releasesUrl(repositoryUrl)}/download/`;
 }
@@ -125,6 +146,7 @@ export function fallbackDownloads(repositoryUrl: string): Downloads {
   return {
     macos: url,
     windows: url,
+    "windows-arm64": url,
     "linux-x86_64": url,
     "linux-aarch64": url,
   };
@@ -191,9 +213,21 @@ export function macosDownload(
   );
 }
 
-export function windowsDownload(repositoryUrl: string, manifest: unknown): string {
+// The x64 installer, and the arm64 one where the manifest names it: a manifest published before the arm64 build leaves
+// that download on the releases page rather than failing the Windows downloads as a whole.
+export function windowsDownloads(
+  repositoryUrl: string,
+  manifest: unknown,
+): Pick<Downloads, "windows" | "windows-arm64"> {
   manifestVersion(manifest, "stable-windows.json");
-  return platformUrl(repositoryUrl, manifest, "windows-x86_64", "stable-windows.json");
+  const platforms = record(record(manifest, "stable-windows.json").platforms, "stable-windows.json platforms");
+  return {
+    windows: platformUrl(repositoryUrl, manifest, "windows-x86_64", "stable-windows.json"),
+    "windows-arm64":
+      platforms["windows-aarch64"] === undefined
+        ? releasesUrl(repositoryUrl)
+        : platformUrl(repositoryUrl, manifest, "windows-aarch64", "stable-windows.json"),
+  };
 }
 
 export function linuxDownloads(
@@ -231,7 +265,7 @@ export async function resolveDownloads(options: ResolveOptions): Promise<Downloa
   const downloads = fallbackDownloads(repositoryUrl);
   const groups: Array<[string, (manifest: unknown) => Partial<Downloads>]> = [
     ["stable.json", (manifest) => ({ macos: macosDownload(repositoryUrl, productName, manifest) })],
-    ["stable-windows.json", (manifest) => ({ windows: windowsDownload(repositoryUrl, manifest) })],
+    ["stable-windows.json", (manifest) => windowsDownloads(repositoryUrl, manifest)],
     ["stable-linux.json", (manifest) => linuxDownloads(repositoryUrl, manifest)],
   ];
   await Promise.all(

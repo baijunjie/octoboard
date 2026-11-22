@@ -1,0 +1,22 @@
+import { Code } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* How the Linux server program is uninstalled, which the Linux server guide and "Your system stays as it was" share. */}
+
+インストールしたときのユーザーで、サーバー上で次のコマンドを実行します。何もダウンロードされません。
+
+<Code code={system.uninstall} lang="sh" />
+
+最初に、これから行うことをすべて一覧で示し、<code dir="ltr">{system.uninstallWord}</code> と入力するよう求めます。<code dir="ltr">{system.uninstallDryRun}</code> を付けると一覧を示すだけで終わり、尋ねるためのターミナルがない場合は <code dir="ltr">{system.uninstallYes}</code> で確認に代えます。
+
+そのあと、デフォルト構成をまだ共有しているすべてのアカウントの共有をオフにします。そのために、デーモンが動いていれば停止し（デーモンが実行しているセッションはすべて終了します）、このクリーンアップのためだけに、セッションを実行しない状態で起動します。続いてデーモンを停止し、プログラムと、あれば systemd のサービスを削除します。サービスのインストールで lingering がオンになり、ほかのサービスがそれを必要としていなければ、lingering もオフにします。
+
+- <strong>共有を停止できないアカウントがある場合</strong>（セッションのひとつが作業中である場合など）は、何も削除されず、デーモンは元どおりに起動し直されます。その作業が終わってから、もう一度コマンドを実行してください。<code dir="ltr">{system.uninstallKeepChanges}</code> を付けると、このクリーンアップを行わずにアンインストールし、そうしたアカウントのフォルダにあるリンクと、その横にあるアカウント自身の構成のバックアップを、手で削除するものとして残します。
+- <strong>デーモンを停止すると作業が中断される場合</strong>は、何も削除されません。<code dir="ltr">{system.uninstallForce}</code> を付けると、それでも停止します。
+- <strong>インストールした <code dir="ltr">{system.cliName}</code> を実行してください。</strong>リンクを通して実行した場合や、{productName} のデーモンが実行しているものとは別の <code dir="ltr">{system.cliName}</code> のコピーから実行した場合は、何も削除せず、代わりに実行すべきファイルを示します。
+
+インストールスクリプトの以前のコマンドも引き続き使え、このコマンドを実行します。<code dir="ltr">{system.binDirOption}</code> を付けてインストールした場合は、同じフォルダを指定して付けてください。
+
+<Code code={system.uninstallScript} lang="sh" />
+
+お使いの <code dir="ltr">{system.cliName}</code> がアンインストールコマンドを持たないほど古い場合は、スクリプトのコマンドがそれを自分で削除しますが、先に何もオフにしません。デフォルト構成をまだ共有しているアカウントのフォルダにはリンクが残るので、手で削除できます。

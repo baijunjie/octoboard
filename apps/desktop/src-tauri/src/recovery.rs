@@ -40,9 +40,11 @@ pub enum ExitAction {
 
 /// Exit code 0 is a requested shutdown (the UI's quit flow sends `shutdown` before it confirms the
 /// quit, and the daemon exits 0 on SIGTERM as well), and nothing is started once a restart or quit
-/// is under way. Every other end, a crash or a signal, is recoverable.
-pub fn exit_action(stopping: bool, code: Option<i32>) -> ExitAction {
-    if stopping || code == Some(0) {
+/// is under way. Every other end, a crash or a signal, is recoverable, where the daemon is one
+/// that `recovers` (`StartFor::recovers`: not the one started for the clean-up before an
+/// uninstall).
+pub fn exit_action(stopping: bool, code: Option<i32>, recovers: bool) -> ExitAction {
+    if stopping || code == Some(0) || !recovers {
         ExitAction::Stopped
     } else {
         ExitAction::Recover
@@ -223,11 +225,13 @@ mod tests {
 
     #[test]
     fn only_an_unrequested_end_is_recovered() {
-        assert_eq!(exit_action(false, Some(1)), ExitAction::Recover);
-        assert_eq!(exit_action(false, None), ExitAction::Recover);
-        assert_eq!(exit_action(false, Some(0)), ExitAction::Stopped);
-        assert_eq!(exit_action(true, Some(1)), ExitAction::Stopped);
-        assert_eq!(exit_action(true, None), ExitAction::Stopped);
+        assert_eq!(exit_action(false, Some(1), true), ExitAction::Recover);
+        assert_eq!(exit_action(false, None, true), ExitAction::Recover);
+        assert_eq!(exit_action(false, Some(0), true), ExitAction::Stopped);
+        assert_eq!(exit_action(true, Some(1), true), ExitAction::Stopped);
+        assert_eq!(exit_action(true, None, true), ExitAction::Stopped);
+        // A daemon that is not one to start again is left however it ended.
+        assert_eq!(exit_action(false, Some(1), false), ExitAction::Stopped);
     }
 
     #[test]

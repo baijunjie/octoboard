@@ -50,6 +50,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         reset_credits: false,
         native_app_scheme: None,
         per_session_trust: false,
+        console_trust: super::ConsoleTrust::Answered,
         config_sharing: false,
         mcp_inventory: false,
         ends_command_groups_on_exit: false,

@@ -2100,6 +2100,81 @@ shows another sign-in, the account has no quota; where `account/read` fails or `
 **2.1.311**, Codex **0.163.0** and Grok Build **1.0.70**, against scratch homes with fake keys, so a reply that matches
 none of them should still be shown as a plain failure.
 
+### What the background runs write into an account's configuration
+
+Measured on macOS on 2026-11-22 with Claude Code **2.1.330**, Codex **0.167.1** and Grok Build **1.0.92**: every run
+of an agent's CLI the daemon makes on its own, each against two scratch homes, one the CLI had already been run in
+interactively and one holding only a configuration file the CLI had never run against, comparing the home's
+configuration files before and after (Claude Code's `.claude.json` and `settings.json`, Codex's `config.toml`, Grok
+Build's `config.toml` and `trusted_folders.toml`). No run was signed in, and Grok Build's were given a fake
+`GROK_CODE_XAI_API_KEY` so that none could start a sign-in.
+
+| Run | A home the CLI has run in | A home it has never run in |
+|---|---|---|
+| `claude --version` | unchanged | unchanged |
+| Claude Code's quota probe (`claude -p --input-format stream-json …`, `initialize` and `get_usage`) | unchanged | `.claude.json` gains its first-run keys (`firstStartTime`, `firstStartVersion`, `machineID`, `userID`, `migrationVersion`, `seenNotifications`, `pluginUsage` and two migration flags), and a `theme` kept in `.claude.json` is moved into `settings.json` |
+| `claude mcp list`, `claude agents --json` | unchanged | the same first-run keys and the same move of `theme` |
+| `claude auth status` (measured 2026-11-24) | unchanged | `.claude.json` gains `firstStartTime`, `firstStartVersion`, `machineID`, `migrationVersion`, `seenNotifications` and two migration flags, and a backup of it is written under `backups/` |
+| Claude Code's kick (the command of "Starting a quota window", measured 2026-11-24 with one real request) | no setting changed: `.claude.json` has only its own caches refreshed (`cachedFeatureFlags`, `cachedGrowthBookFeatures`, `cachedExperimentFeatures` and their kin, `clientDataCacheSlots`), and the CLI writes a backup of `.claude.json`, its model catalog cache and its plugin sync state, all inside the config directory; no conversation record | not measured: a kick needs the account's sign-in, which a home the CLI has never run in does not hold |
+| Codex's kick (`codex exec --ephemeral --ignore-user-config …`, measured 2026-11-24 with one real request) | `config.toml` unchanged; Codex writes its model cache and its log and state databases, and no session file | not measured, for the same reason |
+| `codex --version`, `codex app-server` with the quota requests, `codex debug models`, `codex mcp list --json`, `codex app-server` for the MCP inventory | unchanged | unchanged |
+| `grok update --check --json`, `grok mcp list --json`, `grok mcp doctor --json` | unchanged | unchanged |
+| `grok --version` | not measured | unchanged: nothing in the home is written at all |
+| `grok models` | unchanged | `config.toml` gains `[marketplace] default_skills_installs_purged = true` |
+| `grok agent --no-leader stdio` with `initialize` and `_x.ai/billing` | unchanged | `config.toml` gains the same lines |
+| Grok Build's kick (`grok -p … -m … --max-turns 1 …`, the command of "Starting a quota window") | the signed-in run below left the account's configuration unchanged | `config.toml` gains the same lines, before any request is sent: the run ended at its sign-in check, with exit code 1 |
+
+The rows measured on 2026-11-24 used the same versions. `claude auth status` was run as the MCP inventory runs it, in a
+scratch `HOME` holding nothing, then a second time there (byte for byte unchanged). The two kicks were run once each,
+signed in, against the user's own default configuration directory, exactly as the daemon runs a kick for the default
+account (the login shell's environment, the home directory as working directory, the provider's arguments and
+environment); every file under the home directory, the agents' directories and `TMPDIR` written during the kick was
+compared with what was written in a window of the same length without one, so that the agent sessions running meanwhile
+could be told apart. Neither kick wrote anything outside the agent's own configuration directory.
+
+So Grok Build's quota reading, its model listing and a headless turn each initialise a home Grok has not run in, and
+append its marker to that home's `config.toml` as they do; `grok update --check --json`, `grok mcp list --json` and
+`grok mcp doctor --json` do not initialise a home and leave the file alone (measured twice). The first run of Claude
+Code in a home carries out its first-run set-up and whatever migrations are pending there. Once the CLI has run in a
+home, none of the runs measured there changes its configuration files.
+
+**Grok Build reads the same account from a home of its own.** `grok agent --no-leader stdio` run with `GROK_HOME`
+naming a new directory that held only a copy of the account's `config.toml`, and `GROK_AUTH_PATH` naming the account's
+own `auth.json`, answered `initialize` with `_meta.defaultAuthMethodId` `"cached_token"` and `_x.ai/billing` with the
+account's billing period, usage and `subscription_tier`, twice running. Nothing in the account's own directory
+changed, two levels deep, files and links compared before and after, lock files included: what Grok wrote (its
+`README.md`, `docs/`, `bundled/`, `logs/`, `sessions/session_search.sqlite`, `models_cache.json`, `agent_id` and lock
+files) landed in the new directory. A real sign-in refresh is still unobserved in this background setup. Grok Build
+1.0.77 saved a refresh to the file named by `GROK_AUTH_PATH` in a session-home measurement ("Injecting Octoboard
+into each agent" below).
+
+**A real Grok Build kick writes its conversation inside the run home.** On macOS on 2026-11-24, Grok Build
+1.0.92 completed one signed-in kick. The CLI used the daemon's login-shell environment, arguments and overrides,
+with the user's home as its working directory and `GROK_HOME` pointing to an isolated copy of the daemon's
+`agent-query-homes/grok/<account>/kick` layout. The run home held the account's copied `config.toml`. The
+account's sign-in was read in place through `GROK_AUTH_PATH`. Grok wrote its new conversation, prompt history
+and search database under `sessions/`, alongside its own guides, bundled assets, logs, caches, locks, metadata
+and worktree database in the run home. The copied and source `config.toml` both stayed byte for byte unchanged.
+Before-and-after file listings showed no changes in the source Grok home, up to three levels deep, during the kick
+or during a control window of the same duration. The login was still valid, the file named by `GROK_AUTH_PATH`
+stayed byte for byte unchanged, and the run recorded no attempt to take its refresh lock.
+
+**Grok Build's first-run step, repeated, stays inside `GROK_HOME`.** A home whose `config.toml` is put back without
+the marker before every run has the marker appended again each time, and the step that goes with it ("default skills
+installs purged") run again. Measured with `grok agent --no-leader stdio` and the two requests above, four times in a
+row, `GROK_HOME` naming a directory inside a scratch user home that also held a `~/.grok` of its own (a `config.toml`,
+a skill, an `installed-plugins/registry.json`, a `bundled/manifest.json`), `~/.agents/skills`, `~/.claude/skills` and
+`~/.claude.json`: every file of the scratch user home outside `GROK_HOME` was byte for byte as before, and nothing
+was added there or in `TMPDIR`. Inside `GROK_HOME` the file count stayed at 37 after the first run; what grew was
+`logs/unified.jsonl`, by about 10.6 KB a run, with nothing seen to cut it back.
+
+**The login store's lock is taken beside the file `GROK_AUTH_PATH` names, not in `GROK_HOME`.** With a fake, expired
+login in the shape of a real one at `<dir>/auth.json`, named by `GROK_AUTH_PATH`, and `GROK_HOME` naming another
+directory, `grok agent --no-leader stdio` tried to refresh it: its log records `auth lock: attempting acquire` and
+`auth lock: acquired` with the path `<dir>/auth.json.lock`, and `auth.json.lock` and `auth.json.commit.lock` appeared
+in `<dir>`, none in `GROK_HOME` (the refresh itself was refused, the issuer being fake). So a run against another
+home and the user's own `grok` take the same lock before they refresh the sign-in.
+
 ## Sharing a session directory between accounts
 
 Octoboard links an account's session directory into another account's only as part of an account sharing the whole of
@@ -2364,6 +2439,21 @@ target).
   those changes. External writers do not take the daemon's lock, so an edit concurrent with its read and replacement can
   race. A failed writeback is logged and does not stop removal of the session home. A `grok` run directly against the
   linked account file still updates D itself (the table's `grok mcp add -s user` row).
+- **A plugin installed under a per-session home is recorded by that home's path** (1.0.92, measured 2026-11-22, scratch
+  homes, a fake API key, no model turn). With `GROK_HOME` a directory whose `installed-plugins/` is a link to a source
+  home's, as a per-session home's is, `grok plugin install <git URL or path> --trust` put the plugin's files and
+  `registry.json` in the source home's `installed-plugins/`, through the link, and wrote the entry's `path` as
+  `<GROK_HOME>/installed-plugins/<name>-<hash>`, for a git source and for a local one alike; `[plugins] enabled` went
+  into that home's own `config.toml` copy. With that directory removed, the source home's own Grok still listed both
+  plugins, and `grok plugin update` failed for the git one with `repo directory not found: <the removed path>`. After
+  the session's process exits, Octoboard points such an entry at `<source home>/installed-plugins/<name>-<hash>`, the
+  path Grok records when run against the source home, and before each launch points what an earlier process left at the
+  resolved path of the directory the plugins are in. Not measured: whether a Grok process that stays up (the TUI) keeps
+  the registry in memory and writes it back whole at a later install, which would put a rewritten path back until the
+  next of those two moments. With a source home that has no `installed-plugins/`, the per-session home gets a directory
+  of its own: the plugin's files and the registry are that home's, nothing reaches the source home, and both are gone
+  with the session, while `[plugins] enabled` named the plugins in the copy all the same (Octoboard does not carry the
+  plugin switches out of such a home). A home Grok 1.0.62 or later has run against has the directory.
 - **Grok's `disabled-hooks` is keyed by hook source**, e.g. `global/octoboard:session_start[0].hooks[0]`. Switching
   Octoboard's hook off in one session writes the entry into the source home's file, silencing it in every later session
   from that home; with the file linked, that is every sharing account.
@@ -2400,6 +2490,34 @@ target).
   removed, the default account still loaded the plugin installed through A and `plugin list` showed it enabled, with
   no `.orphaned_at` after two starts (executable: an install into a symlinked cache folder is refused under a flagged
   storage backend, not observed).
+- **When a registry takes the installing directory's spelling** (measured 2026-11-22 on Claude Code 2.1.330, Codex
+  0.167.1 and Grok Build 1.0.92, scratch homes, an account directory A whose entries link into a default directory D, a
+  local marketplace and plugin, no login, no model turn).
+  - *Claude Code:* `claude plugin install` and `claude plugin update` run under A each write `installPath` in D's
+    `plugins/installed_plugins.json` as `<A>/plugins/cache/<marketplace>/<plugin>/<version>`; an update replaces a path
+    already spelled through D with A's spelling again. `plugin list` and `plugin marketplace update` under A leave a
+    path spelled through D as it is. A marketplace added from a local directory records that directory, not the
+    config directory, in `known_marketplaces.json` (`installLocation`) and in `settings.json`
+    (`extraKnownMarketplaces`); a marketplace cloned from a repository was not re-measured on this version (the clone
+    needs a `https://` or GitHub source). Nothing else in D named A: `settings.json` `enabledPlugins` holds names, and
+    `plugins/plugin-directory-cache-v2.json`, which `plugin marketplace update` writes, holds none. With `installPath`
+    leading nowhere, the default account still listed the plugin as enabled and read it from the local marketplace's
+    source.
+  - *Grok Build:* `grok plugin install <path or git URL> --trust` under A writes `path` in D's
+    `installed-plugins/registry.json` as `<A>/installed-plugins/<name>-<hash>`, for a local source (installed as a
+    link to the source) and for a git one. `grok plugin list` and `grok plugin update` under A keep a `path` already
+    spelled through D, an update that fetched a new commit included. The same holds for any `GROK_HOME` whose
+    `installed-plugins/` is a link, which is what a per-session home is: the registry takes that home's spelling.
+    Nothing else in D named A (`config.toml` holds `[plugins] enabled` names and a marketplace source's own path).
+    With `path` leading nowhere, the default account still listed both plugins, a plugin from a git source was no
+    longer loaded (`grok inspect`) and `grok plugin update` failed for it with `repo directory not found`; a plugin
+    installed from a local path, being a link, still loaded.
+  - *Codex:* `codex plugin marketplace add <path>` and `codex plugin add <plugin>@<marketplace>` under A write
+    `[marketplaces.<name>]` (`source_type`, `source`) and `[plugins."<plugin>@<marketplace>"] enabled` into D's
+    `config.toml` and copy the plugin into D's `plugins/cache/`; no file in D names A. A marketplace from a
+    repository keeps its snapshot under `<CODEX_HOME>/.tmp/marketplaces`, which is not shared; what `config.toml`
+    records for one was not measured (the source has to be a GitHub repository or a git URL that these builds did not
+    take from a loopback server).
 
 **Concurrent conversation-history writes from two directories.**
 
@@ -3076,6 +3194,36 @@ What Octoboard sends to answer each is under "How a confirmation is pressed" in 
   exclusive `flock` held on it elsewhere, an accepted confirmation wrote nothing until it was released). `SessionStart`
   fires right after the press. While it waits, Grok animates its logo at about 2 KB/s, so the first drawing soon leaves
   any window of recent output and the terminal is never quiet.
+
+**Trusting a console's directory for one launch** (measured on macOS on 2026-11-22, each in a scratch home with a fake
+key and no prompt sent, in a directory shaped like a console's, `<home>/.octoboard/consoles/<id>` holding an
+instruction file). A console's directory is Octoboard's own, and the user is never asked about it, so the question is
+whether one launch can be trusted there without the agent recording the directory in the user's trust list.
+
+- **Claude Code 2.1.330 has no documented way.** Its `--help` names none for an interactive launch: the trust screen
+  is skipped only without a terminal (`-p`, or output that is not a TTY), and `--trust-workspace` belongs to
+  `claude ultrareview` alone. Read out of the executable, the workspace counts as trusted for the process when the
+  environment variable `CLAUDE_CODE_SANDBOXED` is set, before any record is looked at; with `CLAUDE_CODE_SANDBOXED=1`
+  the launch drew no trust screen, came up at its prompt with the directory's `CLAUDE.md` listed under `/memory` as
+  the project's instructions, and left `projects["<dir>"].hasTrustDialogAccepted` at `false` in the global config
+  file. The variable appears in no documentation and says the whole process runs sandboxed: the same check that
+  trusts the working directory also lets the permission rules and additional directories of any project's settings
+  apply, in a session that has moved to another folder included, so it trusts more than the console's directory. A
+  directory outside a git repository is also trusted through any trusted directory above it, but that takes an entry
+  in the user's own list. Without the variable the screen comes up as for any other folder.
+- **Codex 0.167.1 does not ask outside a git repository**, as on the earlier versions above: the launch in the
+  console-shaped directory went straight to its composer and recorded nothing about trust (it added `[tui]
+  screen_reader_detection_done = true` to a `config.toml` it had not run against before, which is unrelated to trust).
+  Where a repository holds the directory (the directory made inside a fresh `git init`), it asks, in the folder-access
+  form ("Note: You're in a subdirectory of a Git project. Trusting will apply to the repository root: …", "1. Trust and
+  continue", "2. Back to Agent Command Center"), and a per-launch override does not answer it: with `-c
+  'projects."<directory>".trust_level="trusted"'` and with the same override naming the repository's root the
+  confirmation still came up, and `config.toml` was left as it was.
+- **Grok Build 1.0.92 takes an entry in the store it reads.** With `[folders."<canonical cwd>"]`, `trusted = true` and
+  `decided_at` (Unix seconds) already in `$GROK_HOME/trusted_folders.toml`, the launch drew no confirmation and left
+  the store byte for byte as it was; without the entry the confirmation came up as described above. Against a
+  session's own `GROK_HOME` that store is the session's copy, so an entry written there before the launch trusts the
+  directory for that launch and is gone with the session's home.
 
 ### Writing into a running session
 

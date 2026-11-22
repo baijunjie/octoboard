@@ -64,7 +64,7 @@ const CASES: { name: string; platform: PlatformAdapter; state: Partial<State> }[
       appMenu: { onSettingsRequested: () => () => {}, setLabels: async () => {} },
     },
     state: {
-      host: { ...HOST, keep_awake: true },
+      host: { ...HOST, keep_awake: true, application: true },
       settings: { ...DEFAULT_SETTINGS, keep_awake: true, git_workflow: { ...DEFAULT_SETTINGS.git_workflow, development: "worktree" } },
       remoteAccess: { allowed: true, state: "serving", browser_allowed: false, browser_state: "off", browser_port: null, address: "http://127.0.0.1:3369/?key=k", forward_command: "ssh -N -L 127.0.0.1:3369:/s u@<server>", server_addresses: [], connection: null, failure: null, browser_failure: null },
     },
@@ -72,7 +72,9 @@ const CASES: { name: string; platform: PlatformAdapter; state: Partial<State> }[
   {
     name: "a browser",
     platform: { kind: "browser", host: BROWSER_HOST },
-    state: { settings: { ...DEFAULT_SETTINGS, git_workflow: { ...DEFAULT_SETTINGS.git_workflow, development: "in_place" } } },
+    // The daemon has said what host it is on and that it runs on its own, which a browser waits for before it words
+    // the cleanup row.
+    state: { host: { ...HOST, keep_awake: false, application: false }, settings: { ...DEFAULT_SETTINGS, git_workflow: { ...DEFAULT_SETTINGS.git_workflow, development: "in_place" } } },
   },
 ];
 
@@ -112,7 +114,7 @@ describe.each(CASES)("in $name", ({ platform, state }) => {
 
   it.each(sections)("the %s section renders exactly the entries the search index shows for it, each in its group and worded as indexed", async (section) => {
     const { panel, reads } = await mountSection(section, platform, state);
-    const context: SettingsSearchContext = { platform, keepAwake: state.host?.keep_awake === true, settings: state.settings as Settings, remoteAccess: state.remoteAccess ?? null, reads };
+    const context: SettingsSearchContext = { platform, keepAwake: state.host?.keep_awake === true, applicationDaemon: state.host ? state.host.application === true : undefined, settings: state.settings as Settings, remoteAccess: state.remoteAccess ?? null, reads };
     const rendered = [...panel.querySelectorAll<HTMLElement>("[data-settings-search-id]")];
     const entries = SETTINGS_SEARCH_INDEX[section].filter((entry) => !entry.shown || entry.shown(context));
     expect(rendered.map((element) => element.dataset.settingsSearchId)).toEqual(entries.map((entry) => entry.id));

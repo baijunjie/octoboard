@@ -15,11 +15,13 @@ import { SettingRow } from "../settings/SettingRow";
 import { CONNECTION_STATE_WORDS, connectionState } from "./connectionState";
 import { FormCard } from "../components/card/FormCard";
 import { RemoteDaemonForm } from "./RemoteDaemonForm";
+import { RemoteDeviceKeyCard } from "./RemoteDeviceKeyCard";
 import { useRemoteDevices } from "./RemoteDevices";
 
 /**
  * The Remote devices page's content area: the selected device's settings as a form (`RemoteDaemonForm`) under a header
- * with its name, how it is connected, where it connects to and Connect (Open once it is connected), and Remove, the one
+ * with its name, how it is connected, where it connects to and Connect (Open once it is connected), then whether this
+ * computer's own key is installed on its server, with its switch (`RemoteDeviceKeyCard`), and Remove, the one
  * destructive action, in a row of its own at the bottom; or a new device's blank form, titled Add remote daemon; or,
  * with none saved, the empty state alone, centred. Nothing but the frame is drawn until the list has been read.
  * Switching to another device asks first when the form holds changes not saved (`useUnsavedChanges`), and drops them once
@@ -105,6 +107,7 @@ export function RemoteDevicePage({ drawerOpen = false }: { drawerOpen?: boolean 
             </Button>
           </header>
           <RemoteDaemonForm key={entry.id} entry={entry} onSave={save} />
+          <RemoteDeviceKeyCard entry={entry} />
           <FormCard>
             {/* The row's own padding is the card's. */}
             <div className="-my-4">

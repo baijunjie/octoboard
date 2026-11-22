@@ -1,0 +1,88 @@
+---
+title: "不更動你的系統"
+description: "Octoboard 讓你的系統和代理程式自己的檔案保持原樣。這裡列出少數功能加入的東西、各自如何還原，以及解除安裝後會留下什麼。"
+---
+
+import { Aside, Code } from "@astrojs/starlight/components";
+import { commands, productName, system } from "../../../commands.ts";
+import LinuxUninstall from "../../../snippets/zh-TW/linux-uninstall.mdx";
+import WindowsUninstaller from "../../../snippets/zh-TW/windows-uninstaller.mdx";
+
+{productName} 讓你的系統保持原樣：代理程式的組態，以及 {productName} 自身檔案夾之外的一切。只有少數功能會在這些檔案夾之外加入東西。本頁把它們逐一列出，說明各自加入了什麼、在哪裡、如何還原，也說明解除安裝之後會留下什麼。
+
+## 規則
+
+- <strong>{productName} 交給代理程式的東西只在每次啟動時傳入。</strong>它的狀態鉤子、它自己的 MCP 伺服器，以及向工作階段說明的角色，都在代理程式啟動時傳給它，或者放在 {productName} 自己的檔案夾裡。為此不會編輯你的任何檔案，也不會編輯代理程式的任何檔案，所以你單獨執行代理程式時，這些東西一概不在。
+- <strong>{productName} 不會在你的設定裡加入自己的鉤子，也不替你對專案的檔案夾做任何決定。</strong>是否信任某個專案的檔案夾，由你來決定、由代理程式來記錄。{productName} 只替一個檔案夾作答：主控台自己的檔案夾，它屬於 {productName}（見下文）。
+- <strong>代理程式為自己寫下的東西屬於代理程式。</strong>它的對話記錄、快取和記錄檔、登入憑證，以及在它自己的詢問得到回答後記下的信任，寫法都和你不透過 {productName} 使用它時一樣。代理程式自己的程式第一次在某個組態檔案夾裡執行時所做的初始設定也是如此；{productName} 在背景讀取資訊時，可能會讓這一步早於你自己的第一次啟動發生（見下文）。
+- <strong>專案內的工作不在本頁討論範圍內。</strong>編輯專案檔案、Git 操作、分支和工作樹，正是你加入專案要做的開發工作。
+
+## 功能加入了什麼，如何還原
+
+下面每一項都只在你使用或開啟對應功能時才會加入。
+
+### 關閉功能即可還原
+
+- <strong>遠端伺服器上的本機金鑰。</strong>用密碼或金鑰檔案登入某個已儲存的遠端背景服務之後，應用程式會先詢問再加入：<strong>加入本機金鑰</strong>對話框會寫明是哪個檔案、哪一行。選擇<strong>加入金鑰</strong>後，應用程式會在那台伺服器上你的使用者所允許的 SSH 金鑰中加入一行（Linux 和 macOS 上是 <code dir="ltr">{commands.authorizedKeys}</code>），標記為 <code dir="ltr">{system.keyMark}</code>，並把私密金鑰儲存在本機的憑證儲存區中（macOS 上是登入鑰匙圈，Windows 上是認證管理員）。選擇<strong>不加入</strong>則什麼都不加入，之後也不再詢問。要還原，請在<strong>遠端裝置</strong>中該背景服務的頁面關閉<strong>本機金鑰</strong>，或者移除這個已儲存的背景服務：應用程式會把那一行從檔案中刪除，並移除私密金鑰。變更已儲存背景服務的主機、連接埠或使用者時，應用程式也會這樣做。如果連不上伺服器，那一行可能會留下，應用程式會告訴你，需要你到伺服器上自行刪除。
+- <strong>登入時啟動</strong>（Windows，以及 macOS 13 或以上版本）。<strong>設定 › 一般 › 登入時啟動</strong>會把 {productName} 加入系統在登入時開啟的應用程式清單，這一列的說明裡寫明了這一點。要把它從該清單中拿掉，關閉這個開關即可。
+- <strong>命令列工具</strong>（macOS）。在<strong>設定 › 一般 › 命令列工具</strong>下選擇<strong>安裝</strong>，會在 <code dir="ltr">{system.cliDir}</code> 中加入一個名為 <code dir="ltr">{system.cliName}</code> 的連結；如果系統不允許，則加入到 <code dir="ltr">{system.cliFallbackDir}</code>。安裝之前，這一列就寫明了這一點。選擇<strong>移除</strong>會刪除該連結。
+- <strong>共用預設組態。</strong><strong>設定 › 代理程式帳號</strong>下某個帳號設定中的<strong>共用預設組態</strong>，會把該帳號檔案夾裡可共用的部分換成指向預設帳號檔案夾的連結，把帳號自己的組態當作備份留在旁邊，並把它的對話歷史移入預設帳號的檔案夾。開啟之前，這一列就寫明了這些。關閉後，連結會被移除，備份會還原，該帳號自己的工作階段的對話也會移回來。<strong>有一樣東西會留下：</strong>其餘已移走的對話歷史仍留在預設帳號的檔案夾裡，因為移除它會讓你失去對話。詳見 [Shared configuration](../features/shared-configuration/)。
+
+### 留下來，歸你或代理程式所有
+
+下面這些寫入的東西，從此就是你的或代理程式自己的，所以 {productName} 沒有什麼屬於自己、需要還原的東西。凡是可以手動移除的記錄，對應項目會寫明位置。
+
+- <strong>切換工作階段的帳號。</strong><strong>切換帳號</strong>會先請你確認。由代理程式提出的切換要等你批准，除非你開啟了<strong>自動批准帳號切換</strong>；達到使用限制時的切換，只在<strong>達到使用限制時自動切換帳號</strong>開啟期間才會發生。切換會把這一個工作階段的對話複製到目標帳號的檔案夾裡；對 Codex，還會把該帳號自己對這段對話的記錄指向這份副本。原件留在原處，副本則成為該帳號自己的內容。詳見 [Account continuity](../features/account-continuity/)。
+- <strong>在 Grok Build 工作階段裡變更的設定和外掛。</strong>如果你的 <code dir="ltr">config.toml</code> 是指向某個檔案的連結，你在工作階段中變更的主題、外掛開關或預設模型，會在工作階段結束時寫入那個檔案，和 Grok 自己儲存時一樣。你在工作階段中安裝的外掛，會記錄到你的 Grok 檔案夾自己的外掛登錄表中（如果它有的話）。
+- <strong>Grok Build 對專案檔案夾的信任。</strong>在你同意信任某個專案的檔案夾之後（選擇<strong>信任並繼續</strong>，或者你自己在終端機裡回答），Grok 寫下的那一筆記錄會原樣帶入你的 Grok 檔案夾中的信任清單。
+- <strong>從未有過對話的工作階段的記錄。</strong>刪除一個你從未向它傳送過任何內容的工作階段時，代理程式自己為它留下的記錄會一併移到垃圾桶（Windows 上是資源回收筒），不會詢問：這些記錄裡沒有你的任何對話。使用過的工作階段，只有在你勾選確認對話框中的對應選項時，它的記錄才會被移走。這些記錄都可以從垃圾桶中還原。
+- <strong>Claude Code 的首次執行設定。</strong>在 Claude Code 從未執行過的組態檔案夾裡，或者在 Claude Code 更新之後，{productName} 在背景讀取資訊（帳號的用量、它的 MCP 伺服器或它的代理程式）會讓 Claude Code 在那裡完成它自己的首次執行設定和待執行的遷移，和你下一次自己啟動它時會做的一樣。{productName} 不會更動這些變更。
+- <strong>為新的 Codex 帳號建立的空檔案夾。</strong>在某個 Codex 帳號第一次啟動或登入之前，如果它的檔案夾還不存在，{productName} 會建立一個空檔案夾：沒有它，Codex 會拒絕啟動。
+- <strong>對主控台自身檔案夾的信任。</strong>主控台工作階段在 {productName} 自己的一個檔案夾裡執行，所以代理程式在那裡詢問是否信任時，{productName} 會直接回答，不來問你。之後 Claude Code 會在它自己的信任清單裡留下一筆記錄，其中只寫了那個檔案夾，對其他任何地方都沒有影響。Codex 只在那個檔案夾位於某個 Git 儲存庫之內時才會詢問，然後把信任記在該儲存庫的根目錄上，這筆記錄涵蓋整個儲存庫：如果你的個人專屬檔案夾本身由 Git 管理，那就是整個個人專屬檔案夾。Grok Build 不會在你的信任清單裡記錄任何內容。{productName} 不會移除這些記錄，因為那樣做又是對你的檔案的一次編輯。你可以自己移除：Codex 的記錄是它檔案夾中 <code dir="ltr">config.toml</code> 裡的 <code dir="ltr">[projects."&lt;repository root&gt;"]</code> 表，Claude Code 的記錄是它的 <code dir="ltr">.claude.json</code> 中 <code dir="ltr">projects</code> 下該檔案夾對應的項目。
+
+### 用解除安裝指令還原
+
+- <strong>以服務方式執行的 Linux 伺服器程式。</strong>把它安裝為服務（見 [Linux 伺服器](../install/linux/)）時，會在你的 systemd 組態檔案夾中寫入一個 systemd 使用者服務；如果你的使用者原先沒有開啟 lingering，還會把它開啟。要還原，請用下文的解除安裝指令。
+
+<Aside>
+在 Windows 上，應用程式還會維護工作列按鈕的跳躍清單，其中列有你儲存的遠端背景服務。它沒有開關：下文所說的<strong>全部移除</strong>會移除它，解除安裝程式也會。
+</Aside>
+
+## 解除安裝之前
+
+解除安裝之前，「關閉功能即可還原」中目前生效的每一項都可以一次全部移除，對應的功能也會一併關閉。在桌面應用程式中，<strong>設定 › 清理</strong>裡有一列專門做這件事，即<strong>解除安裝前清理</strong>：它寫明目前有多少項生效，並且只有一個按鈕，<strong>全部移除</strong>。在 Windows 上，解除安裝程式也會自行做這件事，Linux 伺服器程式的解除安裝指令則會先做這件事；兩者都在下文說明。
+
+- <strong>它會先請你確認。</strong>確認對話框會寫明將移除多少項（清單收合在這個數目下面），以及會保留什麼。只有輸入<strong>移除</strong>之後才會繼續。
+- <strong>它會顯示結果。</strong>完成後會列出哪些已移除、哪些沒有。對沒能移除的項目（例如連不上的伺服器上的金鑰），會寫明留下了什麼、在哪裡。
+- <strong>它只在那台電腦上應用程式自己的視窗裡。</strong>在裝有桌面應用程式的電腦上的瀏覽器中，以及在顯示遠端背景服務的視窗中，這一列只說明清理在哪裡做。在瀏覽器中開啟 Linux 伺服器時，它會說明在伺服器上解除安裝時會先做清理，並顯示 <code dir="ltr">{system.uninstall}</code> 和<strong>複製解除安裝指令</strong>，供你在伺服器上執行。無法從那裡移除任何東西。
+- <strong>只在解除安裝時使用。</strong>如果只想還原其中一項並繼續使用 {productName}，請改為關閉對應的功能。
+- <strong>它會保留你的資料。</strong>{productName} 自己的檔案夾會留下，因共用而移走的對話歷史也會留下。
+
+## 解除安裝之後
+
+解除安裝會移除程式本身。
+
+### macOS
+
+結束 {productName}，然後把它從「應用程式」檔案夾中刪除。刪除時什麼都不會執行，所以請先選擇<strong>全部移除</strong>：它移除的那些東西，刪除應用程式不會移除。
+
+### Windows
+
+使用應用程式的解除安裝程式。
+
+<WindowsUninstaller />
+
+### Linux 伺服器
+
+<LinuxUninstall />
+
+程式安裝所在的檔案夾會留下，你為了把它加入 PATH 而加入的那一行也會留下。
+
+### 會留下什麼
+
+{productName} 自己的檔案夾會留下，所以之後重新安裝時，你的主控台、工作階段和設定都還在。如果想把它們也移除，刪除這些檔案夾即可：所有主控台、工作階段記錄和設定都會遺失。
+
+- <strong>它的資料檔案夾</strong>，位於執行工作階段的那台電腦或伺服器上：<code dir="ltr">{system.dataDir}</code>（Windows 上是 <code dir="ltr">{system.dataDirWindows}</code>）。在 macOS 和 Linux 上，可以用 <code dir="ltr">{system.removeDataDir}</code> 刪除它。
+- <strong>桌面應用程式自己的檔案夾：</strong>macOS 上是 <code dir="ltr">{system.appDataMac}</code>；Windows 上是 <code dir="ltr">{system.appDataWindows}</code> 和 <code dir="ltr">{system.appLocalDataWindows}</code>。
+
+代理程式自己的檔案夾，連同其中的登入資訊、設定和對話，都屬於代理程式，會保持原樣。

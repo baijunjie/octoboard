@@ -146,8 +146,8 @@ While Settings is open everything under it stays as it was, the terminal include
 
 A section whose rows fall into groups — General, Git, Access and Keyboard shortcuts — heads each group
 with a heading of its own, and orders its groups by how often each is used, most frequent first (the Access
-groups by where each is used instead: This computer's browser, Other computers, Key). A row of no group, General's
-Language, comes first, above the groups. Once the section is scrolled far enough for a group's heading to reach the top of the section's
+groups by where each is used instead: This computer's browser, Other computers, Key). A row of no group — General's
+Language — comes first, above the groups. Once the section is scrolled far enough for a group's heading to reach the top of the section's
 area, the heading stays pinned there, opaque, and the group's rows scroll beneath it, until the next group's heading
 arrives and pushes it out; the top fade then begins below the pinned heading (see "The edge that hides content fades" in
 `docs/product/scrolling-surfaces.md`).
@@ -316,7 +316,13 @@ lists and how a shortcut is changed are in `docs/product/keyboard-shortcuts.md`.
 
 ## Cleanup
 
-The cleanup Octoboard does on its own, one row: **Automatically delete archived sessions whose conversation is gone**.
+The cleaning up Octoboard does, two rows under no group heading: first the cleanup it does on its own, **Automatically
+delete archived sessions whose conversation is gone**; then **Clean up before uninstalling**, the clean-up before the
+application is uninstalled, which says how many of the modifications Octoboard's features have outside its own
+directories are in effect and has one action, **Remove all**, and no setting. That clean-up is done on the machine
+itself, so only the desktop application's main window has the action: in a remote window and in a browser the row only
+says where it is done, and in a browser on a daemon that runs on its own, that it is part of uninstalling on the
+server, with `octoboardd uninstall`. The row is in `docs/product/clean-up-before-uninstalling.md`.
 
 ### Automatically delete archived sessions whose conversation is gone
 

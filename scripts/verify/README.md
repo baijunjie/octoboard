@@ -42,18 +42,19 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    selects one part of the release plan; it requires `--release` and cannot be combined with `--full` or `--quick`.
    Without a group, `--release` still selects every application check.
 3. **Steps** (`steps.mjs`). Every non-`unread` plan, including release and quick plans, checks generated identity fields
-   against `config/app.json` without writing (`scripts/sync-identity.mjs --check`) and searches the production core for
-   provider knowledge (`provider-neutral.mjs`, below). A package selects its other steps (lint, type check, locales,
+   against `config/app.json` without writing (`scripts/sync-identity.mjs --check`), searches the production core for
+   provider knowledge (`provider-neutral.mjs`, below) and holds the Rust crates' writes to their registrations
+   (`registered-writes.mjs`, below). A package selects its other steps (lint, type check, locales,
    tests, build, script tests; both Rust crates always run together). The docs package's steps are lint, type check,
    build and tests, in that order. Light steps run first and heavy ones (UI tests, Rust builds and tests, the website
    and docs builds) last, and a failure stops the run. The website build runs before its SEO tests, and the docs build
    before the docs tests, which read the generated output. `--release` runs the application checks: application lint,
    production UI type check, application UI tests, desktop script tests, rustfmt, clippy, Rust tests and the Windows
    cross-check (`pnpm check:windows`: both crates, all targets, through `cargo xwin`, and a link of the daemon's
-   executable once its check passes). Local `release:version` runs the complete plan with `--fresh --head
+   executable once its check passes, for `x86_64-pc-windows-msvc` and `aarch64-pc-windows-msvc`). Local `release:version` runs the complete plan with `--fresh --head
    <release-commit>` before tagging, then scoped push verification can reuse matching passes. The release groups
-   partition those same commands; each also runs the identity and provider-neutral core checks. The optional hosted
-   workflow runs the frontend and native groups independently, with separate Linux and Windows jobs (see "Hosted
+   partition those same commands; each also runs the identity, provider-neutral core and registered writes checks. The
+   optional hosted workflow runs the frontend and native groups independently, with separate Linux and Windows jobs (see "Hosted
    application checks"); the windows group is local only, since its toolchain (cargo-xwin, the `x86_64-pc-windows-msvc`
    target, LLVM's clang, the downloaded MSVC CRT and Windows SDK) is not on the hosted macOS runner. A machine missing
    any of it fails the step before compiling, with a message naming each missing piece and how to install it; the check
@@ -122,6 +123,118 @@ precise scope. The vocabulary is a mechanical guard alongside review, not an int
 on a generic agent-id branch and checks its failing exit status. Run it with
 `node --test scripts/verify/provider-neutral.test.mjs`.
 
+## Registered writes
+
+`registered-writes.mjs` guards P9 of `docs/conventions/principles.md` (Octoboard leaves the user's own system as it
+was): in the production Rust of both crates, a call that writes is allowed only in a file the crate's registration
+names. It is a light step in every non-`unread` plan, checks all of the source rather than the changed lines, and
+reports the file, line and source of each unregistered write with exit status 1. Run it alone with
+`node scripts/verify/registered-writes.mjs`.
+
+**The vocabulary** (`VOCABULARY`) is what counts as a write: the standard library's and tokio's writing, creating,
+renaming, removing, linking, owner and permission functions, called or imported by name; those modules and types
+under another name (`use std::fs as f`, `File as F`) and the `fs_err` crate; `File::create` and `DirBuilder`; an open
+with a flag that writes set to `true` (`write`, `append`, `create`, `truncate`, `create_new`), and the flags `open`
+and `CreateFileW` write with (`O_WRONLY`, `O_RDWR`, `O_CREAT`, `O_TRUNC`, `O_APPEND`, `GENERIC_WRITE`,
+`FILE_APPEND_DATA` and their like) wherever they are named, so that an open that only reads is no hit; changes
+through a file handle; the C library's and Windows' file calls that change something; opening an SQLite database;
+unpacking an archive; the `trash` crate, the daemon's Trash tool and taking that tool from the host tools; the Windows
+registry, the credential stores, the macOS login item, the taskbar's jump list and the updater's install. Comments
+and strings are blanked first. A `git` run is not in it, whatever its `Access`: what is done in a project's repository
+is outside P9.
+
+To these the registration adds the project's own functions that write (`registered function` in a report): every
+public function of a `primitive` file, and the entry points other entries name. They count where they are called,
+not where a function of the same name is declared.
+
+**The registration** is one file per crate, beside its path helpers: `apps/daemon/src/registered_writes.json` and
+`apps/desktop/src-tauri/src/registered_writes.json`. An entry is one file, with what it writes and a kind. A
+directory is never an entry, of any kind: a new file under it would be registered unseen. The kinds (`KINDS`), each
+saying whose word the writes go by:
+
+| Kind | What it says |
+|---|---|
+| `primitive` | The helper layer: it writes at the path its caller names. Every function the file declares with any `pub` is a word of the vocabulary, so each caller is registered itself; the entry lists as `readers` the ones that write nothing, and the check fails on a reader that is not a public function of the file or whose body holds a write. A new public function is a word from the moment it is written. |
+| `own` | Only inside Octoboard's own directories (`~/.octoboard`, a session's scratch directory, the application's data directory) or its own system resources (the cgroup subtree delegated to the daemon), or a temporary file removed again. |
+| `installation` | Octoboard's own installation and presence outside its directories: the server form's executable and what an update puts beside it, the application its updater replaces, the jump list. Removed by an uninstall; not an exception. |
+| `exception` | A write into the user's own system that the user approved as an exception to P9. It names its exceptions. |
+| `user_path` | At a path the user named for that write, at the user's own action (a save dialog, a project's folder), or an account's own directory, the default account's included, created empty where the agent's client would create it anyway. |
+
+An entry that is not a `primitive` may name `entry_points`: functions of its file that write where their caller
+decides (the taking of the Trash for a session's records, the move of a project's folder, the line in a remote
+host's authorized keys), which then are words like a primitive's, so that each caller is registered too. An entry
+point is also what makes its file count as writing where the vocabulary finds nothing in it, as with a script sent
+to a remote host.
+
+An exception is defined once in its crate's registration, with what the user approved, the product doc section that
+states it, and either `cleanup`, the item the clean-up before uninstalling clears it through, or `nothing_to_undo`,
+why there is none. The check holds both ways: an exception with something to undo whose item is not in the crate's
+clean-up list (`EXCEPTIONS` in the daemon's `coordinator/system_changes.rs`, `REGISTERED` in the shell's
+`system_changes.rs`) fails, and so does an item of that list that no exception names. The document an exception
+names has to be one whose change runs this check: it is listed in `VERIFY_READS_DOCS` of `scope.mjs`, or the check
+fails, since a change under `docs/` alone otherwise runs nothing and a renamed section would pass its own push.
+
+A registration that no longer matches the code fails as well: an entry whose file is gone or holds no write any
+more, an unknown kind, an exception no entry uses, a section that does not exist, a reader or an entry point the file
+does not declare.
+
+**A line that writes no file.** The vocabulary cannot tell a pipe, a terminal or the null device from a file. Such a
+line carries `// no-file-write: <why>`, at its end or in the comment lines right above it, and is then no hit; its
+file needs no entry for it. One comment acknowledges one line. The check fails on one without a reason and on one
+with no hit to acknowledge.
+
+**Adding an entry.** A new write goes behind a file that is already registered, or its file is registered with the
+kind that is true of it. A new `exception`, and a new entry of that kind, is a new exception to P9: it needs the
+product owner's approval before it is written, and the change check reads a change to either registration that way.
+
+**Tests are outside it** only where `cfg(test)` proves it: an item or an inline module under `#[cfg(test)]` or a
+`test` conjunct, and an external module declared under one, with everything below it. No file is left out for its
+name, so a test helper compiled into production is checked like any other file, and a bare `#[test]` function outside
+a test module counts as production.
+
+**What it cannot see**, which review and the dynamic test below have to:
+
+- Any new write in a file that is registered, of whatever kind: the check holds where a write call may stand, not
+  which path it is given. A write to the user's home added to a file registered as `own` passes, and so does one
+  added to a file registered for an exception.
+- A caller of a registered file's function, unless that function is a word: the public functions of a `primitive`
+  file and the `entry_points` are, the other functions of an `own`, `exception` or `user_path` file are not. Such a
+  function that takes its target from its caller (a key file written into the directory it is handed, say) can be
+  called with any path from an unregistered file.
+- A path that is data: the records' paths computed from what an agent wrote, the worktrees `git` lists, a link in
+  Octoboard's own directory that leads into the user's.
+- What a child process writes: an agent's CLI in a session or in the background, the user's `git`, the login shell
+  whose environment is snapshotted, an updater, `systemd-run`. Starting a process is not in the vocabulary.
+- What an agent's CLI writes at Octoboard's word (`codex unarchive`, a login, an MCP sign-in): the agent's own, and
+  a process like any other to this check.
+- What a library writes by itself: the web view, the notification and updater plugins, SQLite's journals, a socket a
+  listener binds.
+- A write through a name the vocabulary does not have: a function re-exported or imported under another name
+  (`use hooks::write_hook_script as write`), an alias of a type or module other than the ones named above, a macro,
+  a function passed as a value (the Trash tool is seen where it is taken from something called `…tools` or from
+  `get()`, not where it is called, and not when the tools were first put in a variable of another name), an open
+  whose writing flag is a variable rather than `true`, a crate added later.
+- Code that is not a file of the crate's `src`: what `include!` brings in, `build.rs`, and generated code under
+  `OUT_DIR`.
+- System state that is not a file: a sleep hold, a transient systemd unit, a privacy grant the system records.
+- A write on a remote host other than through the registered entry point: the script it sends is a string.
+
+**The dynamic half** is a daemon test, `coordinator::own_directories_tests` (Unix): it starts the test binary again
+with a scratch home holding a shell profile, a git configuration, each agent's directory, a link and a project,
+launches a session of the test provider there through the launch a running daemon uses, archives it and waits for
+the end to be over, and fails when anything in that home outside `.octoboard` differs afterwards (an entry added or
+gone, a file's content, permissions or modification time, a link's target); a second test shows the comparison
+catching each of those. It covers the test provider on the host it runs on. The daemon's own start is not part of
+it (the helper builds the application state a test runs over), nor are the real providers' adapters or the shell's
+system calls.
+
+`registered-writes.test.mjs` covers every word of the vocabulary with an example of each form it takes, lines that
+only read, the blanking of comments, strings and test-only items, a planted write in a scratch source tree, a call
+of a primitive's public function and of an entry point from an unregistered file, readers that are not, the
+acknowledgements, each way a registration can stop matching the code (a directory and a missing registration among
+them), the clean-up tie in both directions, the document's consumer and the executable's exit status. Run it with
+`node --test scripts/verify/registered-writes.test.mjs`.
+
 ## Git environment boundary
 
 Run verification and tests with Git fixtures from the intended working tree with no repository-local Git location
@@ -154,8 +267,8 @@ does not call this workflow or wait for its results, except that its `linux-daem
 
 | Job | Runner | Command and scope |
 |---|---|---|
-| `frontend` | `ubuntu-latest` | `pnpm verify --release --release-group frontend --fresh`: identity, provider-neutral core search, application lint, production UI type check and application UI tests. |
-| `native` | `macos-26` | `pnpm verify --release --release-group native --fresh`: identity, provider-neutral core search, desktop script tests, rustfmt, clippy for the workspace and all targets, and both Rust crates' tests. |
+| `frontend` | `ubuntu-latest` | `pnpm verify --release --release-group frontend --fresh`: identity, provider-neutral core search, registered writes, application lint, production UI type check and application UI tests. |
+| `native` | `macos-26` | `pnpm verify --release --release-group native --fresh`: identity, provider-neutral core search, registered writes, desktop script tests, rustfmt, clippy for the workspace and all targets, and both Rust crates' tests. |
 | `linux-check` | `ubuntu-latest` | `node scripts/cargo.mjs check --locked`: compile both crates (compilation only) with the Linux prerequisites installed. |
 | `linux-daemon` | `ubuntu-24.04`, `ubuntu-24.04-arm` | `.github/workflows/linux-daemon.yml`: clippy on the daemon, its whole test suite on glibc in a privileged container with a writable cgroup v2 hierarchy, and its tests on musl for x86_64 and aarch64, the targets the Linux release links statically. It also gates Linux releases. |
 | `windows-check`, `windows-bundle` | `windows-latest` | Native Windows checks and the unsigned installer build (see the [tooling overview](../../docs/structure/tooling.md)); the local release plan's windows group also cross-checks the same crates from the Mac. |
@@ -174,6 +287,8 @@ retention and timing measurements are documented in the [Rust cache module](../.
 ## Changing it
 
 - A new package or a new input: add or extend a rule in `RULES`; a rule's `consumers` decide which steps run.
+- A product doc a registered exception names (`registered-writes.mjs`): name it in `VERIFY_READS_DOCS` of `scope.mjs`,
+  or the check fails; a change to it then selects the verify package, and with it the check.
 - A new check: a step in `steps.mjs`; keep `quick.mjs` consistent (its tests fail when a UI test reads files or a crate
   has crate-wide tests that its lists do not name). A new release check belongs in the frontend, native or windows
   group; `steps.test.mjs` checks that their combined commands equal the complete release plan.
@@ -209,4 +324,9 @@ retention and timing measurements are documented in the [Rust cache module](../.
   `tree.mjs`: `workingTree`.
 - `environment.mjs`: `withoutRepositoryEnvironment`, `assertRepositoryEnvironmentCleared`.
 - `provider-neutral.mjs`: `checkProviderNeutral` searches a repository's production core; `violations` checks one
-  source file against the vocabulary and precise exceptions.
+  source file against the vocabulary and precise exceptions; `productionSource` and `testOnly` blank what is not
+  production code, for this check and the next.
+- `registered-writes.mjs`: `checkRegisteredWrites` checks a repository's crates (`CRATES`) against their
+  registrations; `hitsIn` lists one source file's writes by the vocabulary (`VOCABULARY`) and the functions it is
+  given, with the acknowledged ones marked; `publicFunctions` and `bodiesOf` read a file's public functions and a
+  function's bodies; `productionFiles` lists a crate's production files; `KINDS` names the kinds of entry.

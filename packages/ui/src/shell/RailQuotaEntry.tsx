@@ -8,7 +8,8 @@ import { useT } from "../i18n/react";
 import type { Agent } from "../protocol";
 import type { OpenSettings } from "../settings/settingsLauncher";
 import { useDaemon, useDaemonStore, useProviders } from "../store";
-import { UseResetCreditDialog, useResetFocusReturn } from "../quota/ResetCredits";
+import { useFocusReturnAfterClose } from "../components/focus/useFocusReturnAfterClose";
+import { UseResetCreditDialog } from "../quota/ResetCredits";
 import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
 import { nestedPopovers } from "./nestedPopover";
 import { RailPanelEntry } from "./RailPanelEntry";
@@ -59,7 +60,7 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   const [resetting, setResetting] = useState<{ agent: Agent; account: string | null; name: string }>();
   // The panel closes on a press of Redeem reset, so with the confirmation gone focus has nowhere to go but this button.
   const railButton = useRef<HTMLButtonElement>(null);
-  const handBack = useResetFocusReturn(() => railButton.current?.focus());
+  const handBack = useFocusReturnAfterClose(() => railButton.current?.focus());
   return (
     <>
       <RailPanelEntry

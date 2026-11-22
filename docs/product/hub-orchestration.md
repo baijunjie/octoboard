@@ -294,7 +294,7 @@ on that agent's own trust confirmation. When the user has given that project the
 has trusted a folder its directory lies under, Octoboard presses the confirmation and the session
 carries on without them; otherwise the user is asked in a dialog — again after the application
 reconnects, if the confirmation is still waiting — and the session waits on it until it is answered,
-reading as *working* meanwhile. A trusted folder covers the projects the console session itself
+reading as *waiting for the user* meanwhile. A trusted folder covers the projects the console session itself
 associates in it, a repository it clones there included: their sessions' confirmations are pressed
 without the user being asked, whichever agent shows them, and that agent then applies the
 repository's own configuration — for Claude Code, the permission rules and hooks in its

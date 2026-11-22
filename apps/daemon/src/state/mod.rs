@@ -49,6 +49,7 @@ mod background;
 mod background_store;
 pub(crate) mod bindings;
 mod claims;
+mod clean_up_run;
 mod conversation_feeds;
 mod field_versions;
 mod forget;
@@ -58,6 +59,8 @@ mod keep_awake;
 mod late_turn_end;
 mod left_for_limit;
 mod live;
+#[cfg(test)]
+pub(crate) use live::ENDED_LAUNCHES_KEPT;
 mod mcp_tokens;
 mod process_exit;
 mod record_watch;
@@ -84,6 +87,7 @@ pub(crate) use auto_switch::AutoSwitchHooks;
 pub(crate) use background::EMPTY_TASKS_DELAY;
 pub(crate) use claims::session_archived;
 pub use claims::{ClaimKind, LaunchClaim};
+pub use clean_up_run::StartWork;
 pub use conversation_feeds::{ConversationFeeds, FeedChannel};
 pub(crate) use field_versions::SETTINGS_FIELDS;
 pub use field_versions::{FieldVersions, RecordKey, Stamp};
@@ -374,6 +378,8 @@ pub struct AppState {
     /// Whether a service manager restarts the daemon after a planned restart; see
     /// [`Self::set_service_managed`].
     service_managed: AtomicBool,
+    /// Whether the daemon was started for a clean-up run; see [`clean_up_run`].
+    clean_up_run: AtomicBool,
     /// What a planned stop refuses and waits for before it hands the terminals over; see
     /// [`handover_barrier`].
     handover_barrier: handover_barrier::HandoverBarrier,
@@ -532,6 +538,7 @@ impl AppState {
             stop: tokio::sync::watch::channel(None).0,
             follows_application: AtomicBool::new(false),
             service_managed: AtomicBool::new(false),
+            clean_up_run: AtomicBool::new(false),
             handover_barrier: handover_barrier::new_barrier(),
             application_note: Default::default(),
             adoption_done: tokio::sync::watch::channel(true).0,

@@ -10,19 +10,24 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::accounts::shared_config::{
-    account_in_use, carry_out, default_dir, entries, in_use, lock_account, lock_agent,
-    not_shareable, own_conversations, require_file_links, sharing_failed, sharing_in_progress,
-    still_sharing, try_lock_agent, Changing, Locked, Refused,
+    account_in_use, carry_out, default_dir, entries, history_present, in_use, lock_account,
+    lock_agent, not_shareable, own_conversations, require_file_links, sharing_failed,
+    sharing_in_progress, still_sharing, try_lock_agent, Changing, Locked, Refused,
 };
 use crate::hostfs::dir_key;
 use crate::hostfs::is_same_path;
 use crate::messaging::texts;
 use crate::processes::ledger::HeldForLaunch;
 use crate::protocol::{
-    error_code, notice_code, Account, CodedError, Notice, ProcessTree, ProviderOperation,
-    SessionStatus, SharingCause, SharingFailure, SharingPhase, SharingProgress,
+    error_code, error_parts, notice_code, Account, CodedError, Notice, ProcessTree,
+    ProviderOperation, SessionStatus, SharingCause, SharingFailure, SharingPhase, SharingProgress,
 };
-use crate::state::{broadcast_settings, AccountSharingLock, AppState};
+use crate::state::{broadcast_settings, AccountSharingLock, AppState, StartWork};
+use crate::store::Store;
+
+use super::system_changes::{
+    ClearAll, Exception, SystemChange, SystemChangeFailure, SystemChangeKept, SystemChangeResult,
+};
 
 /// Records `share` as the account's choice and carries it out at once, answering once it has
 /// ended; `account` is the account's id, and `None` names the default account, which has no
@@ -81,6 +86,152 @@ pub async fn set(state: &Arc<AppState>, account: Option<String>, share: bool) ->
             return Ok(());
         }
         return change(state, &mut locked, &current, share, &account_in_use).await;
+    }
+}
+
+/// What [`turn_off_all`] did.
+#[derive(Debug, Default)]
+pub struct AllTurnedOff {
+    /// The accounts whose sharing was turned off, with what of theirs stays in the default
+    /// account's directory.
+    pub turned_off: Vec<TurnedOff>,
+    /// The accounts whose sharing could not be turned off, each with why, as `set_account_sharing`
+    /// answers it. Such an account still shares, or its change is incomplete.
+    pub failed: Vec<(Account, anyhow::Error)>,
+}
+
+/// An account [`turn_off_all`] stopped sharing.
+#[derive(Debug)]
+pub struct TurnedOff {
+    pub account: Account,
+    /// Where the account's conversation history went and stays; `None` when the account's sharing
+    /// was never carried out, so nothing of it was moved, and when it could not be read.
+    pub history: Option<SharedHistory>,
+}
+
+/// The conversation history of a default account's directory that an account shared: the entries
+/// the account's own history was moved into when sharing was turned on, and its sessions wrote
+/// to while it was on. They also hold the default account's own history and that of every other
+/// account that shares, which cannot be told apart from the account's once merged; none of it is
+/// taken back when sharing is turned off, but the conversations of the account's own Octoboard
+/// sessions.
+#[derive(Debug, PartialEq, Eq)]
+pub struct SharedHistory {
+    /// The default account's directory.
+    pub default_dir: PathBuf,
+    /// The conversation-history entries of the agent's shared list that the directory holds.
+    pub entries: Vec<&'static str>,
+}
+
+/// Turns sharing off for every account that shares or whose last change of sharing is incomplete,
+/// one after another, each as `set_account_sharing` turns it off: refused while the account is in
+/// use, its idle sessions ended and resumed around it. One account's refusal or failure does not
+/// stop the others, and neither does an account whose record could not be read: each is answered
+/// in `failed`. The answer names, per account turned off, the history that stays in the default
+/// account's directory. What the clean-up before an uninstall runs ([`EXCEPTION`]).
+pub async fn turn_off_all(state: &Arc<AppState>) -> Result<AllTurnedOff> {
+    let mut done = AllTurnedOff::default();
+    for account in state.store.list_accounts()? {
+        if is_done(&account, false) {
+            continue;
+        }
+        // Read before the change, which may leave nothing recorded to read it from.
+        let start = match state.store.account_sharing_start(&account.id) {
+            Ok(start) => start,
+            Err(err) => {
+                done.failed.push((account, err.into()));
+                continue;
+            }
+        };
+        if let Err(err) = set(state, Some(account.id.clone()), false).await {
+            done.failed.push((account, err));
+            continue;
+        }
+        let history = match start {
+            Some(start) => {
+                let agent = account.agent;
+                let default_dir = PathBuf::from(start.default_dir);
+                let read = tokio::task::spawn_blocking(move || SharedHistory {
+                    entries: history_present(agent, &default_dir),
+                    default_dir,
+                })
+                .await;
+                // Sharing is off all the same; only what stays could not be named.
+                read.inspect_err(|err| {
+                    tracing::warn!(account = %account.id, %err, "reading what history a sharing account leaves failed")
+                })
+                .ok()
+            }
+            None => None,
+        };
+        done.turned_off.push(TurnedOff { account, history });
+    }
+    Ok(done)
+}
+
+/// Sharing the default configuration as the daemon registers it for the clean-up before an
+/// uninstall (`super::system_changes`): the accounts that share, and turning all of them off.
+pub const EXCEPTION: Exception = Exception {
+    kind: "account_sharing",
+    in_effect,
+    clear_all: clear_all_boxed,
+};
+
+/// The accounts that share their agent's default configuration, or whose last change of sharing
+/// is incomplete: what [`turn_off_all`] would turn off.
+fn in_effect(store: &Store) -> Result<Vec<SystemChange>> {
+    Ok(store
+        .list_accounts()?
+        .into_iter()
+        .filter(|account| !is_done(account, false))
+        .map(sharing_change)
+        .collect())
+}
+
+fn clear_all_boxed(state: &Arc<AppState>) -> ClearAll<'_> {
+    Box::pin(clear_all(state))
+}
+
+/// [`turn_off_all`], answered per account as the clean-up tells it: the history that stays in the
+/// default account's directory for an account turned off, the refusal for one that was not.
+async fn clear_all(state: &Arc<AppState>) -> Result<Vec<SystemChangeResult>> {
+    let done = turn_off_all(state).await?;
+    let turned_off = done.turned_off.into_iter().map(|off| SystemChangeResult {
+        change: sharing_change(off.account),
+        failure: None,
+        kept: off
+            .history
+            .filter(|history| !history.entries.is_empty())
+            .map(|history| SystemChangeKept {
+                dir: history.default_dir.to_string_lossy().into_owned(),
+                entries: history
+                    .entries
+                    .iter()
+                    .map(|entry| (*entry).to_owned())
+                    .collect(),
+            }),
+    });
+    let failed = done.failed.into_iter().map(|(account, err)| {
+        let (code, params, message) = error_parts(&err);
+        SystemChangeResult {
+            change: sharing_change(account),
+            failure: Some(SystemChangeFailure {
+                code,
+                params,
+                message,
+            }),
+            kept: None,
+        }
+    });
+    Ok(turned_off.chain(failed).collect())
+}
+
+fn sharing_change(account: Account) -> SystemChange {
+    SystemChange::AccountSharing {
+        account: account.id,
+        name: account.name,
+        agent: account.agent,
+        config_dir: account.config_dir,
     }
 }
 
@@ -320,7 +471,8 @@ fn session_did_not_stop(account: &Account, session: &str) -> anyhow::Error {
 }
 
 /// Resumes `id`, one of the sessions the change ended and waited for, on its conversation, and
-/// lets it go. A session archived or deleted meanwhile is let go as it is. One whose relaunch
+/// lets it go. A session archived or deleted meanwhile is let go as it is, and so is every one in
+/// a clean-up run, which resumes none (`StartWork::ResumingSessions`). One whose relaunch
 /// fails is left interrupted, and one never seen down (its process may still be running) is not
 /// relaunched; either is told as a `sharing_resume_failed` notice, without failing the change.
 /// What the session's process started, held for the relaunch, is given up once that is over: kept
@@ -347,7 +499,11 @@ async fn resume(
     });
     let resumed = match (record, lock.claim(id)) {
         _ if still_running => Err(anyhow::anyhow!("its process was not seen to end")),
-        (Some(session), Some(_)) if session.status == SessionStatus::Interrupted => {
+        // A clean-up run leaves it interrupted, as the stop that follows would.
+        (Some(session), Some(_))
+            if session.status == SessionStatus::Interrupted
+                && state.does(StartWork::ResumingSessions) =>
+        {
             lock.release_queue_for_relaunch(id);
             match lock.claim(id) {
                 Some(claim) => relaunch(state, claim, id)

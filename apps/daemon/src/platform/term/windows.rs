@@ -369,6 +369,7 @@ fn pipe(inbound: bool) -> io::Result<(OwnedHandle, OwnedHandle)> {
     // SAFETY: a valid handle the call above returned, owned from here.
     let ours = unsafe { OwnedHandle::from_raw_handle(ours) };
     let theirs_access = if inbound {
+        // no-file-write: the access to the client end of a named pipe just created.
         windows_sys::Win32::Foundation::GENERIC_WRITE | FILE_READ_ATTRIBUTES
     } else {
         windows_sys::Win32::Foundation::GENERIC_READ | FILE_WRITE_ATTRIBUTES

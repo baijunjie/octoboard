@@ -1,5 +1,6 @@
-//! Where Octoboard keeps its own files. Everything lives under `~/.octoboard`; nothing is ever
-//! written inside a project or into the user's agent configuration.
+//! Where Octoboard keeps its own files: everything of its own lives under `~/.octoboard`. What
+//! it writes into the user's agent configuration is one of the operations listed in
+//! docs/product/launching-agents.md's "What Octoboard never modifies" section.
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -132,6 +133,13 @@ pub fn application_quit_record() -> PathBuf {
 /// may still be running when the daemon is replaced, and its log is where to look afterwards.
 pub fn agent_cli_updates_dir() -> PathBuf {
     data_dir().join("agent-cli-updates")
+}
+
+/// The directories short queries of an agent's CLI run against in place of an account's own, for
+/// a CLI that would otherwise change the account's configuration: one per provider that needs
+/// them, each holding what that provider builds there (`crate::adapter::account_cli::RunHome`).
+pub fn agent_query_homes_dir() -> PathBuf {
+    data_dir().join("agent-query-homes")
 }
 
 #[cfg(test)]

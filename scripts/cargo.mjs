@@ -16,19 +16,32 @@
 // need no daemon build and no fetched files. Only this script sets the override: a plain `cargo build` or
 // `pnpm tauri build` still fails without them.
 //
-// `check-windows` cross-checks for `x86_64-pc-windows-msvc` through `cargo xwin`. It first checks the toolchain
-// that needs (`scripts/lib/windows-toolchain.mjs`) and fails naming how to install each missing piece. Both crates
-// gate: the desktop crate is checked first and then the daemon, and the exit code is non-zero when either fails.
+// `check-windows` cross-checks for both Windows targets the release builds, `x86_64-pc-windows-msvc` and then
+// `aarch64-pc-windows-msvc`, through `cargo xwin`. It first checks the toolchain that needs
+// (`scripts/lib/windows-toolchain.mjs`) and fails naming how to install each missing piece. Both crates gate, for each
+// target: the desktop crate is checked first and then the daemon, and the exit code is non-zero when any fails.
 // Once the daemon checks clean, its executable is also linked (`cargo xwin build --bin octoboardd`), since a
 // compile check never runs the linker and a link failure (a linker argument, an embedded resource, a native
 // library) would otherwise surface only on a Windows machine; the link needs nothing the check does not. The
 // desktop crate is compile-checked only.
 // `pnpm check:windows desktop` or `pnpm check:windows daemon` narrows the run to one crate (the daemon's still
-// linked).
+// linked), and `x64` or `arm64` after it, or alone, to one target: `pnpm check:windows daemon arm64`.
+//
+// For `aarch64-pc-windows-msvc` a shim `clang` goes first on the PATH (`writeArm64ClangShim`, in `arm64-clang-shim/`
+// of cargo-xwin's cache), which `ring`'s build script needs on this target; see there why. It lives beside the cache
+// because cargo-xwin links its machine-wide `clang-cl` to it: a shim inside a worktree would leave that link dangling
+// once the worktree is removed.
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { WINDOWS_TARGET, windowsCheckEnv, windowsToolchainProblems } from "./lib/windows-toolchain.mjs";
+import {
+  clangOnPath,
+  WINDOWS_TARGETS,
+  xwinCacheDir,
+  windowsCheckEnv,
+  windowsToolchainProblems,
+  writeArm64ClangShim,
+} from "./lib/windows-toolchain.mjs";
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -49,40 +62,47 @@ const run = (args, env = { ...process.env, ...tauriConfig }) => {
 
 const [name, ...extra] = process.argv.slice(2);
 if (name === "check-windows") {
-  const [which, ...rest] = extra;
-  const only = WINDOWS_CRATES[which] ? which : undefined;
-  if (which && !only) {
-    console.error("Usage: node scripts/cargo.mjs check-windows [desktop|daemon] [cargo arguments]");
+  const crateArg = WINDOWS_CRATES[extra[0]] ? extra[0] : undefined;
+  const afterCrate = crateArg ? extra.slice(1) : extra;
+  const archArg = WINDOWS_TARGETS[afterCrate[0]] ? afterCrate[0] : undefined;
+  const args = archArg ? afterCrate.slice(1) : afterCrate;
+  const misplaced = args.some((arg) => WINDOWS_CRATES[arg] || WINDOWS_TARGETS[arg]);
+  if (misplaced || (!crateArg && !archArg && extra[0] !== undefined && !extra[0].startsWith("-"))) {
+    console.error("Usage: node scripts/cargo.mjs check-windows [desktop|daemon] [x64|arm64] [cargo arguments]");
     process.exit(2);
   }
+  const targets = archArg ? [WINDOWS_TARGETS[archArg]] : Object.values(WINDOWS_TARGETS);
   const windowsEnv = { ...windowsCheckEnv(), ...tauriConfig };
-  const problems = windowsToolchainProblems({ env: windowsEnv });
+  const problems = windowsToolchainProblems({ env: windowsEnv, targets });
   if (problems.length > 0) {
     console.error(`check-windows: the Windows cross-check cannot run on this machine:\n${problems.map((problem) => `- ${problem}`).join("\n")}`);
     process.exit(1);
   }
-  const args = only ? rest : extra;
-  const checkCrate = (crate) =>
-    run([
-      "xwin",
-      "check",
-      "--target",
-      WINDOWS_TARGET,
-      "--all-targets",
-      "-p",
-      WINDOWS_CRATES[crate],
-      ...args,
-    ], windowsEnv);
-  const checkDaemon = () => {
-    const checked = checkCrate("daemon");
-    if (checked !== 0) return checked;
-    return run(["xwin", "build", "--target", WINDOWS_TARGET, "-p", WINDOWS_CRATES.daemon, "--bin", WINDOWS_CRATES.daemon, ...args], windowsEnv);
+  const targetEnv = (target) => {
+    const clang = clangOnPath(windowsEnv);
+    if (target !== WINDOWS_TARGETS.arm64 || process.platform === "win32" || !clang) return windowsEnv;
+    const shim = writeArm64ClangShim(path.join(xwinCacheDir(windowsEnv), "arm64-clang-shim"), clang);
+    return { ...windowsEnv, PATH: [shim, windowsEnv.PATH].join(path.delimiter) };
   };
-  if (only === "daemon") process.exit(checkDaemon());
-  if (only) process.exit(checkCrate(only));
-  const desktop = checkCrate("desktop");
-  const daemon = checkDaemon();
-  process.exit(desktop !== 0 ? desktop : daemon);
+  const checkCrate = (crate, target) =>
+    run(["xwin", "check", "--target", target, "--all-targets", "-p", WINDOWS_CRATES[crate], ...args], targetEnv(target));
+  const checkDaemon = (target) => {
+    const checked = checkCrate("daemon", target);
+    if (checked !== 0) return checked;
+    return run(["xwin", "build", "--target", target, "-p", WINDOWS_CRATES.daemon, "--bin", WINDOWS_CRATES.daemon, ...args], targetEnv(target));
+  };
+  const checkTarget = (target) => {
+    if (crateArg === "daemon") return checkDaemon(target);
+    if (crateArg) return checkCrate(crateArg, target);
+    const desktop = checkCrate("desktop", target);
+    const daemon = checkDaemon(target);
+    return desktop !== 0 ? desktop : daemon;
+  };
+  const statuses = targets.map((target) => {
+    console.error(`check-windows: ${target}`);
+    return checkTarget(target);
+  });
+  process.exit(statuses.find((status) => status !== 0) ?? 0);
 }
 const command = COMMANDS[name];
 if (!command) {

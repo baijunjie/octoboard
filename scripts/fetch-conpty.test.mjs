@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { TAR, fetchConpty, installerLayout, machineArchitecture, packageFiles, parseArguments, verifiedPackage } from "./fetch-conpty.mjs";
+import { TAR, architectureOfTarget, fetchConpty, installerLayout, machineArchitecture, packageFiles, parseArguments, verifiedPackage } from "./fetch-conpty.mjs";
 
 function scratch(t) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "conpty-"));
@@ -63,15 +63,32 @@ test("the files are taken from the architecture's own folders of the package", (
   });
 });
 
-test("the installer layout is one conpty.dll and an OpenConsole.exe per architecture", () => {
-  assert.deepEqual(parseArguments(["--installer"], "arm64"), { arch: "arm64", into: [], installer: true });
-  assert.throws(() => parseArguments(["--installer", "--arch", "x64"]), /takes neither/);
-  assert.throws(() => parseArguments(["--into", "a", "--installer"]), /takes neither/);
-  assert.deepEqual(installerLayout(), [
+test("the installer's architecture is the one given, else the announced target's, else x64, never the machine's", () => {
+  assert.deepEqual(parseArguments(["--installer"], "arm64", undefined), { arch: "x64", into: [], installer: true });
+  assert.deepEqual(parseArguments(["--installer"], "x64", "aarch64-pc-windows-msvc"), { arch: "arm64", into: [], installer: true });
+  assert.deepEqual(parseArguments(["--installer"], "arm64", "x86_64-pc-windows-msvc"), { arch: "x64", into: [], installer: true });
+  assert.deepEqual(parseArguments(["--installer", "--arch", "arm64"], "x64", "x86_64-pc-windows-msvc"), { arch: "arm64", into: [], installer: true });
+  assert.deepEqual(parseArguments([], "arm64", "x86_64-pc-windows-msvc"), { arch: "arm64", into: [], installer: false });
+  assert.throws(() => parseArguments(["--into", "a", "--installer"]), /takes no --into/);
+  assert.throws(() => parseArguments(["--installer", "--arch", "x86"]), /--arch is one of/);
+  assert.equal(architectureOfTarget("aarch64-pc-windows-msvc"), "arm64");
+  assert.equal(architectureOfTarget("x86_64-pc-windows-msvc"), "x64");
+  assert.equal(architectureOfTarget("universal-apple-darwin"), null);
+  assert.equal(architectureOfTarget(undefined), null);
+});
+
+test("the installer layout is the architecture's conpty.dll and an OpenConsole.exe per architecture", () => {
+  assert.deepEqual(installerLayout("x64"), [
     { source: "runtimes/win-x64/native/conpty.dll", target: "conpty.dll" },
     { source: "build/native/runtimes/x64/OpenConsole.exe", target: "x64/OpenConsole.exe" },
     { source: "build/native/runtimes/arm64/OpenConsole.exe", target: "arm64/OpenConsole.exe" },
   ]);
+  assert.deepEqual(installerLayout("arm64"), [
+    { source: "runtimes/win-arm64/native/conpty.dll", target: "conpty.dll" },
+    { source: "build/native/runtimes/x64/OpenConsole.exe", target: "x64/OpenConsole.exe" },
+    { source: "build/native/runtimes/arm64/OpenConsole.exe", target: "arm64/OpenConsole.exe" },
+  ]);
+  assert.throws(() => installerLayout(undefined), /architecture is one of/);
 });
 
 // A stand-in package with the real one's paths, zipped (a `.nupkg` is a zip) by the system `tar` that `fetchConpty`
@@ -84,12 +101,10 @@ const needsZipTar = zipTar ? {} : { skip: "the system tar is not bsdtar, which f
 function standInPackage(t) {
   const dir = scratch(t);
   const content = path.join(dir, "content");
-  for (const { source } of installerLayout()) {
+  for (const source of new Set([...installerLayout("x64"), ...installerLayout("arm64")].map((file) => file.source))) {
     mkdirSync(path.dirname(path.join(content, source)), { recursive: true });
     writeFileSync(path.join(content, source), source);
   }
-  mkdirSync(path.join(content, "runtimes/win-arm64/native"), { recursive: true });
-  writeFileSync(path.join(content, "runtimes/win-arm64/native/conpty.dll"), "runtimes/win-arm64/native/conpty.dll");
   const archive = path.join(dir, "package.zip");
   const packed = spawnSync(TAR, ["--format", "zip", "-cf", archive, "-C", content, "."], { encoding: "utf8" });
   assert.equal(packed.status, 0, packed.stderr);
@@ -99,13 +114,15 @@ function standInPackage(t) {
   return { root: path.join(dir, "root"), download: async () => bytes, expected: digest(bytes) };
 }
 
-test("the installer layout is written under target/conpty-bundle, each file from its architecture", needsZipTar, async (t) => {
-  const { root, ...package_ } = standInPackage(t);
-  const { targets } = await fetchConpty({ root, installer: true, ...package_ });
-  const bundle = path.join(root, "target", "conpty-bundle");
-  assert.deepEqual(targets, [bundle]);
-  for (const { source, target } of installerLayout()) assert.equal(readFileSync(path.join(bundle, target), "utf8"), source);
-});
+for (const arch of ["x64", "arm64"]) {
+  test(`the ${arch} installer layout is written under target/conpty-bundle, each file from its architecture`, needsZipTar, async (t) => {
+    const { root, ...package_ } = standInPackage(t);
+    const { targets } = await fetchConpty({ root, arch, installer: true, ...package_ });
+    const bundle = path.join(root, "target", "conpty-bundle");
+    assert.deepEqual(targets, [bundle]);
+    for (const { source, target } of installerLayout(arch)) assert.equal(readFileSync(path.join(bundle, target), "utf8"), source);
+  });
+}
 
 test("a directory layout puts the machine's files in every directory it is given", needsZipTar, async (t) => {
   const { root, ...package_ } = standInPackage(t);

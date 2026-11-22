@@ -1,0 +1,22 @@
+import { Code } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* How the Linux server program is uninstalled, which the Linux server guide and "Your system stays as it was" share. */}
+
+Jalankan perintah ini di server, sebagai pengguna yang dipakai saat memasangnya. Tidak ada yang diunduh.
+
+<Code code={system.uninstall} lang="sh" />
+
+Pertama-tama ia mendaftar semua yang akan dilakukannya dan meminta Anda mengetik <code dir="ltr">{system.uninstallWord}</code>. <code dir="ltr">{system.uninstallDryRun}</code> hanya menampilkan daftar itu, dan <code dir="ltr">{system.uninstallYes}</code> mengonfirmasi bila tidak ada terminal untuk bertanya.
+
+Kemudian ia menonaktifkan berbagi untuk setiap akun yang masih membagikan konfigurasi default. Untuk itu, ia menghentikan daemon jika sedang berjalan, yang mengakhiri setiap sesi yang dijalankan daemon itu, lalu memulainya hanya untuk pembersihan ini, tanpa menjalankan sesi. Setelah itu ia menghentikan daemon dan menghapus programnya, beserta layanan systemd-nya jika ada, dan menonaktifkan lingering jika pemasangan layanan yang mengaktifkannya dan tidak ada layanan Anda yang lain yang membutuhkannya.
+
+- <strong>Jika sebuah akun tidak dapat berhenti berbagi</strong>, misalnya karena salah satu sesinya sedang bekerja, tidak ada yang dihapus dan daemon dimulai lagi seperti semula: jalankan lagi perintah itu setelah pekerjaan tersebut selesai. Dengan <code dir="ltr">{system.uninstallKeepChanges}</code>, ia mencopot tanpa pembersihan itu dan meninggalkan tautan di folder setiap akun tersebut, beserta cadangan konfigurasi milik akun itu di sebelahnya, untuk Anda hapus sendiri.
+- <strong>Jika menghentikan daemon akan menyela pekerjaan</strong>, tidak ada yang dihapus. <code dir="ltr">{system.uninstallForce}</code> tetap menghentikannya.
+- <strong>Jalankan <code dir="ltr">{system.cliName}</code> yang Anda pasang.</strong> Bila dijalankan melalui tautan, atau sebagai salinan <code dir="ltr">{system.cliName}</code> lain dari yang dijalankan daemon {productName}, ia tidak menghapus apa pun dan menyebutkan file yang harus dijalankan sebagai gantinya.
+
+Perintah lama dari skrip pemasangan masih berfungsi dan menjalankan perintah ini. Jika Anda memasang dengan <code dir="ltr">{system.binDirOption}</code>, tambahkan opsi itu dengan folder yang sama.
+
+<Code code={system.uninstallScript} lang="sh" />
+
+Jika <code dir="ltr">{system.cliName}</code> Anda terlalu lama untuk memiliki perintah pencopotan, perintah skrip itu menghapusnya sendiri, tetapi tanpa menonaktifkan apa pun terlebih dahulu: akun yang masih membagikan konfigurasi default tetap menyimpan tautan di foldernya, yang dapat Anda hapus sendiri.

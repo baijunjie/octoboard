@@ -4,7 +4,8 @@ description: "ثبّت octoboardd، برنامج خادم Octoboard، على خ�
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../../commands.ts";
+import LinuxUninstall from "../../../../snippets/ar/linux-uninstall.mdx";
 
 ثبّت octoboardd، برنامج خادم {productName} (يسمّيه التطبيق «الخدمة»)، على خادم Linux دون صلاحيات root. يمكنك الوصول إليه من تطبيق macOS أو Windows، أو من متصفح، وكلاهما عبر SSH.
 
@@ -80,6 +81,12 @@ import { commands, downloads, productName } from "../../../../commands.ts";
   إذا سأل هل تريد إعادة التشغيل الآن، فأجب بـ <code dir="ltr">y</code> لإعادة التشغيل، أو اضغط Enter لإبقاء النسخة القديمة قيد التشغيل في الوقت الحالي. لإعادة التشغيل لاحقًا، شغّل <code dir="ltr">{commands.restart}</code>.
 
 إذا قال <code dir="ltr">{commands.update}</code> إنه لا يستطيع استبدال البرنامج، مثلًا لأنه مثبّت في مكان لا يمكنك الكتابة فيه، فشغّل أمر التثبيت (أو أمر الخدمة) من جديد بدلًا من ذلك. فهو يعيد التشغيل بالطريقة نفسها عندما يكون ذلك آمنًا، وإلا طلب منك تشغيل <code dir="ltr">{commands.restart}</code>.
+
+## إلغاء التثبيت
+
+<LinuxUninstall />
+
+تبقى بياناتك في <code dir="ltr">{system.dataDir}</code>. تبيّن صفحة [نظامك يبقى كما كان](../../your-system/) ما الذي يبقى بعد ذلك وكيف تزيله.
 
 ## الأوامر
 

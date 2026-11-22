@@ -502,7 +502,9 @@ async fn read_account(
     let key = claim.key.clone();
     let shell = shell.clone();
     let stopping = state.account_quotas.stopping.clone();
-    let outcome = tokio::task::spawn_blocking(move || read(&key, &*shell, &stopping)).await;
+    let run_homes = crate::paths::agent_query_homes_dir();
+    let outcome =
+        tokio::task::spawn_blocking(move || read(&key, &*shell, &run_homes, &stopping)).await;
     let (quota, trace) = outcome.unwrap_or_else(|err| {
         (
             unavailable_quota(
@@ -592,8 +594,11 @@ async fn kick_and_read(state: &Arc<AppState>, shell: &ShellSource, claim: Claim)
             let key = claim.key.clone();
             let shell = shell.clone();
             let stopping = state.account_quotas.stopping.clone();
-            let outcome =
-                tokio::task::spawn_blocking(move || start_windows(&key, &*shell, &stopping)).await;
+            let run_homes = crate::paths::agent_query_homes_dir();
+            let outcome = tokio::task::spawn_blocking(move || {
+                start_windows(&key, &*shell, &run_homes, &stopping)
+            })
+            .await;
             if let Err(err) = outcome
                 .map_err(anyhow::Error::from)
                 .and_then(|result| result)
@@ -621,6 +626,7 @@ async fn kick_and_read(state: &Arc<AppState>, shell: &ShellSource, claim: Claim)
 fn read(
     key: &Key,
     shell: &(dyn Fn() -> anyhow::Result<HashMap<String, String>> + Send + Sync),
+    run_homes: &Path,
     cancel: &AtomicBool,
 ) -> (AccountQuota, ProbeTrace) {
     let mut trace = ProbeTrace::default();
@@ -641,6 +647,7 @@ fn read(
             key.agent,
             shell_env,
             key.config_dir.as_deref().map(Path::new),
+            run_homes,
             PROBE_TIMEOUT,
             cancel,
             &mut trace,
@@ -706,6 +713,7 @@ fn missing_config_dir(key: &Key) -> Option<&str> {
 fn start_windows(
     key: &Key,
     shell: &(dyn Fn() -> anyhow::Result<HashMap<String, String>> + Send + Sync),
+    run_homes: &Path,
     cancel: &AtomicBool,
 ) -> anyhow::Result<()> {
     if cancel.load(Ordering::Relaxed) {
@@ -719,6 +727,7 @@ fn start_windows(
         key.agent,
         &shell_env,
         key.config_dir.as_deref().map(Path::new),
+        run_homes,
         KICK_TIMEOUT,
         cancel,
     )

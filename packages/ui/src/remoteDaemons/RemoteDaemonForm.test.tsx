@@ -23,6 +23,7 @@ const SAVED: RemoteDaemonEntry = {
   keyPath: null,
   fingerprint: "SHA256:pinned",
   octoboarddPath: "/opt/octoboardd",
+  deviceKey: { declined: false, file: null, mark: null },
 };
 
 const onSave = vi.fn(async (_entry: RemoteDaemonEntryInput) => {});
@@ -175,12 +176,53 @@ it("offers no use of this computer's own key to an entry the shell has not switc
   expect(radio("This computer")).toBeUndefined();
 });
 
-it("keeps this computer's own key on an entry the shell has switched to it, which it offers to be saved with", async () => {
+it("says an entry the shell has switched to this computer's own key signs in with it, in place of the choice, and saves it so", async () => {
   mount({ ...SAVED, auth: "device" });
-  expect(radio("This computer")!.checked).toBe(true);
+  // The key is turned off at its own switch, not by choosing another way here.
+  expect(radio("This computer")).toBeUndefined();
+  expect(radio("Password")).toBeUndefined();
+  expect(radio("Key file")).toBeUndefined();
+  expect(text()).toContain("Connections sign in with this computer’s key. To use a password or a key file instead, turn the key off.");
   type(field("User"), "ops");
   await press("Save");
   expect(saved()).toMatchObject({ id: "staging", auth: "device", keyPath: null, user: "ops" });
+});
+
+/** What describes `input`, by the ids its `aria-describedby` names, without the isolates around what is substituted. */
+const describedBy = (input: HTMLInputElement) =>
+  (input.getAttribute("aria-describedby") ?? "")
+    .split(" ")
+    .map((id) => document.getElementById(id)?.textContent ?? "")
+    .join(" ")
+    .replace(/[\u2068\u2069]/g, "");
+const REPOINT_WARNING = "Saving removes this computer’s key from deploy@staging.example.com.";
+
+it("warns that saving another host, port or user removes this computer's key from where it was added, before the save", () => {
+  mount({ ...SAVED, auth: "device" });
+  const shown = () => text().replace(/[\u2068\u2069]/g, "");
+  // Nothing warns while the destination is the saved one, whatever else is edited.
+  expect(shown()).not.toContain(REPOINT_WARNING);
+  type(field("Name"), "Renamed");
+  expect(shown()).not.toContain(REPOINT_WARNING);
+  for (const [label, changed, back] of [["User", "ops", "deploy"], ["Host", "other.example.com", "staging.example.com"], ["SSH port", "22", "2222"]] as const) {
+    type(field(label), changed);
+    // The warning names where the key is now, says what the next connection does, and describes the three fields.
+    expect(shown()).toContain("The key does not move to the new address");
+    expect(shown()).toContain(REPOINT_WARNING);
+    expect(shown()).toContain("The next connection asks before adding it at the new address.");
+    for (const described of ["User", "Host", "SSH port"]) expect(describedBy(field(described))).toContain(REPOINT_WARNING);
+    // Back at the saved destination, the save removes nothing and nothing warns.
+    type(field(label), back);
+    expect(shown()).not.toContain(REPOINT_WARNING);
+    expect(describedBy(field(label))).not.toContain(REPOINT_WARNING);
+  }
+});
+
+it("warns of nothing when a daemon without this computer's key is pointed elsewhere", () => {
+  mount(SAVED);
+  type(field("Host"), "other.example.com");
+  expect(text()).not.toContain("removes this computer’s key");
+  expect(describedBy(field("Host"))).not.toContain("removes this computer’s key");
 });
 
 it("shows an entry as it is saved, with Save and Revert unavailable until something is changed", () => {
@@ -200,7 +242,9 @@ it("edits an entry as it is saved, keeping its id and sending every field back",
   expect(isDisabled("Save")).toBe(false);
   expect(isDisabled("Revert")).toBe(false);
   await press("Save");
-  expect(saved()).toEqual({ ...SAVED, user: "ops" });
+  // What the entry keeps about this computer's key is not the form's to send.
+  const { deviceKey: _deviceKey, ...sent } = SAVED;
+  expect(saved()).toEqual({ ...sent, user: "ops" });
 });
 
 it("takes the fields back to what is saved on Revert, and Save with them", async () => {

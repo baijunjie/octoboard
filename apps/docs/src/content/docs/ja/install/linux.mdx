@@ -4,7 +4,8 @@ description: "Octoboard のサーバー用プログラム octoboardd を、root 
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../../commands.ts";
+import LinuxUninstall from "../../../../snippets/ja/linux-uninstall.mdx";
 
 {productName} のサーバー用プログラム octoboardd（アプリでは「デーモン」と呼びます）を、root 権限なしで Linux サーバーにインストールします。macOS または Windows のアプリからも、ブラウザからも、SSH 経由で使えます。
 
@@ -80,6 +81,12 @@ octoboardd は自分用のポートを自分で選びます。そのポートを
   今すぐ再起動するか尋ねられたら、再起動するなら <code dir="ltr">y</code> と答えます。Enter キーを押すと、当面は古いバージョンのまま動かし続けます。あとで再起動するには、<code dir="ltr">{commands.restart}</code> を実行します。
 
 <code dir="ltr">{commands.update}</code> が「プログラムを置き換えられない」と表示した場合（たとえば、書き込めない場所にインストールされているときなど）は、代わりにインストールのコマンド（またはサービスのコマンド）をもう一度実行してください。安全なときは同じように再起動し、そうでなければ <code dir="ltr">{commands.restart}</code> を実行するよう案内されます。
+
+## アンインストール
+
+<LinuxUninstall />
+
+あなたのデータは <code dir="ltr">{system.dataDir}</code> に残ります。あとに何が残るか、それをどう削除するかは、[システムは元のまま](../../your-system/)で説明しています。
 
 ## コマンド
 

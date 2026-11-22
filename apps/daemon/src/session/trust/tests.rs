@@ -754,6 +754,10 @@ async fn a_console_session_is_always_answered_and_a_project_only_with_the_users_
     elsewhere.path = text(&dir.join("elsewhere/project"));
     let asks = |session, project| consented(&state, session, project);
     assert!(asks(&console_session, None).await.unwrap());
+    // A console's screen is Octoboard's to answer whichever way the provider has its directory
+    // trusted, one that comes up although the launch was to trust the directory itself included.
+    let per_launch = session("s", AgentId::GROK, SessionKind::Console, None);
+    assert!(asks(&per_launch, None).await.unwrap());
     assert!(asks(&project_session, Some(&consenting)).await.unwrap());
     assert!(!asks(&project_session, Some(&inside)).await.unwrap());
     assert!(!asks(&project_session, None).await.unwrap());
@@ -1399,6 +1403,15 @@ async fn a_console_sessions_screen_is_answered_without_asking() {
     }
 }
 
+/// Every provider answers how a console's directory comes to be trusted, and only a provider with
+/// a way of the launch's own says the launch does it.
+#[test]
+fn each_released_provider_says_how_a_consoles_directory_is_trusted() {
+    assert_eq!(console_trust_of(AgentId::CLAUDE), ConsoleTrust::Answered);
+    assert_eq!(console_trust_of(AgentId::CODEX), ConsoleTrust::Answered);
+    assert_eq!(console_trust_of(AgentId::GROK), ConsoleTrust::PerLaunch);
+}
+
 #[tokio::test]
 async fn a_project_without_consent_is_asked_about_and_nothing_is_sent_until_confirmed() {
     let (state, dir) = state_with_project("ask");
@@ -1654,6 +1667,11 @@ async fn a_confirmation_for_a_stale_or_foreign_session_changes_nothing() {
         .await
         .expect_err("refused");
     assert!(err.to_string().contains("console session"), "{err}");
+    assert_eq!(
+        err.downcast_ref::<CodedError>().map(|coded| coded.code),
+        Some(error_code::CONSOLE_SESSION_TRUST_NOT_ASKED),
+        "a console's confirmation is pressed without asking, so there is no go-ahead to give"
+    );
 
     assert!(
         !state
@@ -2941,6 +2959,142 @@ async fn a_grok_entry_that_never_appears_is_reported_and_records_nothing() {
             if session == "grok-1" && code == notice_code::TRUST_NOT_CARRIED_OVER);
     }
     assert!(told, "the user is told");
+}
+
+/// A Grok console session whose launch could not trust the console's directory itself shows
+/// Grok's confirmation after all. It is pressed without asking, as any console's is, with nothing
+/// carried anywhere: the press counts once Grok's hook has come.
+#[tokio::test]
+async fn a_grok_console_sessions_screen_is_pressed_and_nothing_is_carried() {
+    let (state, dir) = state_with_project("grok-console");
+    let mut events = state.subscribe();
+    let received = dir.join("received");
+    let script = [
+        load(&[("SCREEN", "grok_trust_screen.bin")]),
+        show("SCREEN"),
+        take(1, &quoted(&received)),
+        "sleep 30".to_string(),
+    ]
+    .join("; ");
+    let record = session("grok-console-1", AgentId::GROK, SessionKind::Console, None);
+    state.store.insert_session(&record).expect("session");
+    let live = watched_live_session(
+        "grok-console-1",
+        AgentId::GROK,
+        120,
+        32,
+        &format!("stty raw -echo; {script}"),
+        None,
+    );
+    spawn_reader_thread(live.clone(), 8 * 1024);
+    state.register_live(live.clone());
+    supervise(&state, &live);
+    // Grok's `SessionStart`, right after the press.
+    let hook = {
+        let (state, live, received) = (state.clone(), live.clone(), received.clone());
+        tokio::task::spawn_blocking(move || {
+            assert!(wait_for(PATIENCE, || sent(&received) == YES));
+            on_hook(&state, &live);
+        })
+    };
+    hook.await.unwrap();
+    let pressed = live.clone();
+    assert!(
+        tokio::task::spawn_blocking(move || {
+            wait_for(PATIENCE, || pressed.trust.pressed.load(Ordering::Acquire))
+        })
+        .await
+        .unwrap(),
+        "the press counts once the hook has come"
+    );
+    assert_eq!(sent(&received), YES);
+    while let Ok(event) = events.try_recv() {
+        assert!(
+            !matches!(
+                event,
+                Event::TrustPrompt { .. } | Event::SessionNotice { .. }
+            ),
+            "nobody is asked and nothing failed: {event:?}"
+        );
+    }
+}
+
+/// A Grok stand-in at its confirmation that takes one key and then does nothing: no hook, and the
+/// screen stays up.
+fn grok_that_never_answers(
+    state: &Arc<AppState>,
+    dir: &Path,
+    id: &str,
+    kind: SessionKind,
+) -> (StandIn, PathBuf) {
+    let received = dir.join(format!("{id}-received"));
+    let script = [
+        load(&[("SCREEN", "grok_trust_screen.bin")]),
+        show("SCREEN"),
+        take(1, &quoted(&received)),
+        "sleep 30".to_string(),
+    ]
+    .join("; ");
+    let project = (kind == SessionKind::Project).then_some("project-1");
+    let record = session(id, AgentId::GROK, kind, project);
+    state.store.insert_session(&record).expect("session");
+    let live = watched_live_session(
+        id,
+        AgentId::GROK,
+        120,
+        32,
+        &format!("stty raw -echo; {script}"),
+        None,
+    );
+    spawn_reader_thread(live.clone(), 8 * 1024);
+    state.register_live(live.clone());
+    assert!(wait_for(PATIENCE, || live.trust.waiting()));
+    (live, received)
+}
+
+/// A press that carries nothing waits for the agent to get past its screen, and fails when
+/// neither a hook comes nor the screen goes: the key was sent, and the confirmation is left for
+/// the person.
+#[tokio::test]
+async fn a_press_that_carries_nothing_fails_when_the_screen_does_not_go() {
+    let (state, dir) = state_with_project("grok-console-stuck");
+    let (live, received) =
+        grok_that_never_answers(&state, &dir, "grok-console-1", SessionKind::Console);
+    // What the sighting says of a console session whose launch was to trust its directory.
+    live.trust.carries_nothing.store(true, Ordering::Release);
+
+    let pressing = live.clone();
+    let err = tokio::task::spawn_blocking(move || answer_within(&pressing, SHORT_PATIENCE))
+        .await
+        .unwrap()
+        .expect_err("the screen never went");
+    let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+    assert_eq!(coded.code, error_code::TRUST_ANSWER_FAILED);
+    assert_eq!(
+        coded.params["reason_code"],
+        trust_reason::SCREEN_NOT_DISMISSED
+    );
+    assert_eq!(sent(&received), YES);
+    assert!(!live.trust.pressed.load(Ordering::Acquire));
+}
+
+/// A session that has lost its carrier is not pressed as if it carried nothing: a Grok project
+/// session whose trust record has nowhere to go fails before any key is sent, since a press would
+/// leave the record in the session's own home and Grok would ask again at the next launch.
+#[tokio::test]
+async fn a_project_session_that_lost_its_carrier_is_not_pressed() {
+    let (state, dir) = state_with_project("grok-project-no-carrier");
+    let (live, received) =
+        grok_that_never_answers(&state, &dir, "grok-project-1", SessionKind::Project);
+
+    let pressing = live.clone();
+    let err = tokio::task::spawn_blocking(move || answer_within(&pressing, SHORT_PATIENCE))
+        .await
+        .unwrap()
+        .expect_err("nowhere to carry");
+    assert!(err.to_string().contains("nowhere to carry"), "{err}");
+    assert!(sent(&received).is_empty(), "no key was sent");
+    assert!(!live.trust.pressed.load(Ordering::Acquire));
 }
 
 /// Grok answered by the person in the terminal: the entry Grok wrote reaches the user's own

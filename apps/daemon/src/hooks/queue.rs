@@ -46,9 +46,24 @@ thread_local! {
     static SETTLE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
 }
 
+/// One hook event as it arrived: the launch its hook named (`crate::holder::protocol::HookMark`),
+/// if it named one, and the agent's payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueuedHook {
+    pub launch: Option<String>,
+    pub body: Bytes,
+}
+
+impl From<Bytes> for QueuedHook {
+    /// An event whose hook named no launch.
+    fn from(body: Bytes) -> Self {
+        Self { launch: None, body }
+    }
+}
+
 #[derive(Default)]
 pub struct HookQueues {
-    sessions: Mutex<HashMap<String, VecDeque<Bytes>>>,
+    sessions: Mutex<HashMap<String, VecDeque<QueuedHook>>>,
     /// Woken whenever a session's queue goes away.
     drained: Notify,
 }
@@ -65,7 +80,8 @@ pub enum Push {
 }
 
 impl HookQueues {
-    pub fn push(&self, session: &str, event: Bytes) -> Push {
+    pub fn push(&self, session: &str, event: impl Into<QueuedHook>) -> Push {
+        let event = event.into();
         let mut sessions = self.sessions.lock().expect("hook queue lock poisoned");
         match sessions.get_mut(session) {
             Some(queue) if queue.len() >= MAX_QUEUED => {
@@ -86,7 +102,7 @@ impl HookQueues {
 
     /// The event to apply next, which stays queued until [`Self::complete`], so the session reads
     /// as busy for as long as it is being applied.
-    pub fn next(&self, session: &str) -> Option<Bytes> {
+    pub fn next(&self, session: &str) -> Option<QueuedHook> {
         let sessions = self.sessions.lock().expect("hook queue lock poisoned");
         sessions.get(session)?.front().cloned()
     }
@@ -163,10 +179,10 @@ mod tests {
         assert_eq!(queues.push("s", Bytes::from("b")), Push::Queued);
         assert_eq!(queues.push("t", Bytes::from("x")), Push::StartWorker);
 
-        assert_eq!(queues.next("s").unwrap(), "a");
+        assert_eq!(queues.next("s").unwrap().body, "a");
         assert!(queues.is_busy());
         assert!(queues.complete("s"));
-        assert_eq!(queues.next("s").unwrap(), "b");
+        assert_eq!(queues.next("s").unwrap().body, "b");
         assert!(!queues.complete("s"));
         assert!(queues.next("s").is_none());
         assert_eq!(queues.push("s", Bytes::from("c")), Push::StartWorker);
@@ -180,13 +196,13 @@ mod tests {
             assert_eq!(queues.push("s", Bytes::from("e")), Push::Queued);
         }
         assert_eq!(queues.push("s", Bytes::from("late")), Push::Coalesced);
-        assert_eq!(queues.next("s").unwrap(), "0");
+        assert_eq!(queues.next("s").unwrap().body, "0");
         for _ in 1..MAX_QUEUED - 1 {
             assert!(queues.complete("s"));
         }
-        assert_eq!(queues.next("s").unwrap(), "e");
+        assert_eq!(queues.next("s").unwrap().body, "e");
         assert!(queues.complete("s"));
-        assert_eq!(queues.next("s").unwrap(), "late");
+        assert_eq!(queues.next("s").unwrap().body, "late");
         assert!(!queues.complete("s"));
     }
 

@@ -82,6 +82,12 @@ pub(super) fn not_running() -> String {
 /// listens, when its record says.
 fn running_state(owner: Option<&Owner>) -> String {
     match owner {
+        Some(owner) if owner.clean_up_run => format!(
+            "running only for the clean-up of an uninstall (`octoboardd uninstall`), which stops \
+             it when it is done: pid {}, {}",
+            owner.identity.pid.0,
+            address(owner.port)
+        ),
         Some(owner) => format!(
             "running: pid {}, {}",
             owner.identity.pid.0,
@@ -123,7 +129,40 @@ pub(super) fn status() -> Result<i32> {
     Ok(0)
 }
 
+/// The daemon that runs, for a command that must know which one it is before it asks anything of
+/// it: `None` when none runs, and an error where one holds the lock that no record names.
+pub(super) fn recorded_daemon() -> Result<Option<Owner>> {
+    match find_daemon(RESTART_WAIT, true)? {
+        Found::Running { owner, .. } => Ok(Some(owner)),
+        Found::NotRunning { .. } => Ok(None),
+        Found::Unrecorded => {
+            anyhow::bail!("{}", no_record("asking", RESTART_WAIT, lock_holder()))
+        }
+    }
+}
+
 pub(super) fn stop(force: bool) -> Result<i32> {
+    stop_telling(force).map(|(status, _)| status)
+}
+
+/// [`stop`], with which refusal of `stop_guard` the status is, if it is one: a refusal stopped
+/// nothing and asked the daemon to stop nothing, as against a stop that was asked and did not
+/// come to its end.
+pub(super) fn stop_telling(force: bool) -> Result<(i32, Option<stop_guard::Refusal>)> {
+    Ok(match stop_guarded(force)? {
+        Guarded::Refused(refusal) => (stop_guard::REFUSED, Some(refusal)),
+        Guarded::Went(status) => (status, None),
+    })
+}
+
+/// What [`stop`] came to: turned away by the guard, or gone through with, to this status.
+enum Guarded {
+    Refused(stop_guard::Refusal),
+    Went(i32),
+}
+
+fn stop_guarded(force: bool) -> Result<Guarded> {
+    let went = |status: Result<i32>| status.map(Guarded::Went);
     let began = Instant::now();
     let outcome = match find_daemon(RESTART_WAIT, true)? {
         // The daemon found once the handover the stop waited through was over is stopped only if
@@ -136,8 +175,8 @@ pub(super) fn stop(force: bool) -> Result<i32> {
             let key = owner.recorded_key();
             match succession(&from, None, &owner, key.as_deref()) {
                 Succession::Successor => {
-                    if let Some(status) = stop_guard::refusal_status(&owner, force) {
-                        return Ok(status);
+                    if let Some(refusal) = stop_guard::refused(&owner, force) {
+                        return Ok(Guarded::Refused(refusal));
                     }
                     stop_following(&owner, key, began, None)?
                 }
@@ -158,26 +197,26 @@ pub(super) fn stop(force: bool) -> Result<i32> {
             }
         }
         Found::Running { owner, .. } => {
-            if let Some(status) = stop_guard::refusal_status(&owner, force) {
-                return Ok(status);
+            if let Some(refusal) = stop_guard::refused(&owner, force) {
+                return Ok(Guarded::Refused(refusal));
             }
             if owner.follows_application == Some(true) && application::is_application_copy() {
-                return application::stop(&owner);
+                return went(application::stop(&owner));
             }
             stop_and_wait(&owner, began)?
         }
         Found::NotRunning { waited: false } => {
             println!("{}", not_running());
-            return Ok(0);
+            return went(Ok(0));
         }
         // What held the lock, or was handing over, has gone with no daemon after it.
         Found::NotRunning { waited: true } => StopOutcome::EndedUnfollowed,
         Found::Unrecorded => {
             eprintln!("{}", no_record("stopping", RESTART_WAIT, lock_holder()));
-            return Ok(1);
+            return went(Ok(1));
         }
     };
-    match outcome {
+    went(match outcome {
         StopOutcome::Stopped => {
             println!("{} stopped", crate::APP_NAME);
             Ok(0)
@@ -219,7 +258,7 @@ pub(super) fn stop(force: bool) -> Result<i32> {
             );
             Ok(1)
         }
-    }
+    })
 }
 
 /// Waits until `deadline` for the daemon `from`, whose handover `stop` waited through, to have
@@ -264,6 +303,15 @@ pub(super) fn restart(before: &mut BeforeRestart<'_>) -> Result<i32> {
             return Ok(1);
         }
     };
+    if owner.clean_up_run {
+        eprintln!(
+            "{} (pid {}) runs only for the clean-up of an uninstall, which stops it when it is \
+             done; not restarting it. Once it has stopped, start it with `octoboardd start`",
+            crate::APP_NAME,
+            owner.identity.pid.0
+        );
+        return Ok(1);
+    }
     match owner.follows_application {
         Some(false) => {}
         Some(true) => {
@@ -545,7 +593,7 @@ pub(super) fn start(port: Option<u16>) -> Result<i32> {
         return application::start(port);
     }
     let exe = super::launch_path()?;
-    match spawn_and_await_handshake(&exe, port, None, None) {
+    match spawn_and_await_handshake(&exe, port, None, None, None) {
         Ok(started) => {
             println!("{}", started.line);
             // The port the system assigned, when none was asked for, is in the line.
@@ -583,10 +631,124 @@ pub(super) fn start(port: Option<u16>) -> Result<i32> {
     }
 }
 
+/// Starts the daemon in the background for a clean-up run (`crate::state::StartWork` lists what
+/// such a daemon leaves out), with none running, and says nothing of it on standard output: the
+/// startup line, which holds the key, is not shown. For `uninstall`'s clean-up, which stops it
+/// again. Whether it started; why it did not is said on stderr.
+pub(super) fn start_for_clean_up() -> Result<bool> {
+    if application::is_application_copy() {
+        return Ok(false);
+    }
+    // A clean-up run is ended by the command or, the command gone, by itself, for which it
+    // follows the command's process. Where this process cannot be named for that, none is
+    // started: nothing would end it.
+    let Some(command) = crate::owner_record::own_identity() else {
+        eprintln!(
+            "this command could not read when its own process started, so a daemon started for \
+             the clean-up could not be made to end with it; none was started"
+        );
+        return Ok(false);
+    };
+    let exe = super::launch_path()?;
+    let run = CleanUpRun { followed: command };
+    Ok(told(spawn_and_await_handshake(&exe, None, None, None, Some(run)))?.is_some())
+}
+
+/// Starts the ordinary daemon in the background again, as `start` does, at `port` where one is
+/// given, and says nothing of it on standard output: the startup line, which holds the key, is not
+/// shown. For `uninstall`, to start again the daemon it stopped for a clean-up that left
+/// something. Its pid where it started; why it did not is said on stderr.
+pub(super) fn start_again(port: Option<u16>) -> Result<Option<u32>> {
+    let exe = super::launch_path()?;
+    Ok(told(spawn_and_await_handshake(&exe, port, None, None, None))?.map(|started| started.pid))
+}
+
+/// The daemon a start brought up, with why none was said on stderr; an error where preparing or
+/// spawning it failed.
+fn told(start: Result<Started, StartFailure>) -> Result<Option<Started>> {
+    match start {
+        Ok(started) => Ok(Some(started)),
+        Err(StartFailure::Error(err)) => Err(err),
+        Err(StartFailure::TimedOut { said }) => {
+            eprintln!(
+                "{} did not report listening within {} seconds; it was killed",
+                crate::APP_NAME,
+                START_WAIT.as_secs()
+            );
+            print_said(&said);
+            Ok(None)
+        }
+        Err(StartFailure::Ended { status, said }) => {
+            eprintln!("{} ended while starting ({status})", crate::APP_NAME);
+            print_said(&said);
+            Ok(None)
+        }
+    }
+}
+
+/// What having the clean-up run hand back came to ([`hand_back`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum HandBack {
+    /// It made its planned stop and is gone, or none ran any more.
+    Ended,
+    /// It took the request and has not ended yet.
+    Ending,
+    /// It was not asked, or did not take the request: what runs is as it was, and why was said.
+    NotAsked,
+}
+
+/// Has the clean-up run that runs make a planned stop that starts no successor, which leaves the
+/// sessions it took over and did not end running in their holders, and waits for it to be gone.
+/// For `uninstall`, to end the clean-up run it started where that daemon's ordinary stop is
+/// refused. A daemon whose record does not say it is a clean-up run is left alone: it is not this
+/// command's to end that way. Why one was not asked is said on stderr.
+pub(super) fn hand_back() -> Result<HandBack> {
+    let owner = match find_daemon(RESTART_WAIT, false)? {
+        Found::Running { owner, .. } if !owner.clean_up_run => {
+            eprintln!(
+                "{} (pid {}) is not the daemon started for the clean-up; it is left running",
+                crate::APP_NAME,
+                owner.identity.pid.0
+            );
+            return Ok(HandBack::NotAsked);
+        }
+        Found::Running { owner, .. } => owner,
+        Found::NotRunning { .. } => return Ok(HandBack::Ended),
+        Found::Unrecorded => {
+            eprintln!("{}", no_record("ending", RESTART_WAIT, lock_holder()));
+            return Ok(HandBack::NotAsked);
+        }
+    };
+    let Some(key) = owner.recorded_key() else {
+        eprintln!("{}", key_not_recorded(&owner, "end"));
+        return Ok(HandBack::NotAsked);
+    };
+    if let Asked::Refused(why) = request_over_loopback(&owner, &key, "/planned-stop")? {
+        eprintln!(
+            "{} (pid {}) did not take the request to end: {why}",
+            crate::APP_NAME,
+            owner.identity.pid.0
+        );
+        return Ok(HandBack::NotAsked);
+    }
+    Ok(if ended_by(&owner, Instant::now() + STOP_WAIT) {
+        HandBack::Ended
+    } else {
+        HandBack::Ending
+    })
+}
+
 fn print_said(said: &str) {
     if !said.trim().is_empty() {
         eprintln!("{}", said.trim_end());
     }
+}
+
+/// A daemon to start for a clean-up run, which it ends once the process `followed` is gone: the
+/// command that starts it. There is none that follows nothing.
+#[derive(Clone, Copy)]
+struct CleanUpRun {
+    followed: proc::ProcessIdentity,
 }
 
 /// A daemon that reported listening.
@@ -630,7 +792,7 @@ pub(crate) fn start_successor(
     listener: Option<&crate::platform::listener_handover::Kept>,
 ) -> SuccessorStart {
     let handover = handover_input(key, crate::owner_record::own_identity());
-    match spawn_and_await_handshake(exe, Some(port), Some(&handover), listener) {
+    match spawn_and_await_handshake(exe, Some(port), Some(&handover), listener, None) {
         Ok(started) => {
             tracing::info!(pid = started.pid, port, "the next daemon is listening");
             if started.in_starter_job {
@@ -674,11 +836,13 @@ fn refused_listener(status: Option<i32>, said: &str) -> bool {
 /// when none comes in time. With `handover` (the key and the identity of the daemon handing over,
 /// [`handover_input`]), the daemon is told to read its key from its stdin, where that is written;
 /// otherwise it makes one. With `listener`, it is handed that socket and told to take it over.
+/// With `clean_up_run`, it is started for a clean-up run.
 fn spawn_and_await_handshake(
     exe: &Path,
     port: Option<u16>,
     handover: Option<&str>,
     listener: Option<&crate::platform::listener_handover::Kept>,
+    clean_up_run: Option<CleanUpRun>,
 ) -> Result<Started, StartFailure> {
     // Its working directory is the data directory, not wherever the starter was, so that it pins
     // no mount that is then busy at unmount.
@@ -692,6 +856,10 @@ fn spawn_and_await_handshake(
     }
     if handover.is_some() {
         command.arg("--key-stdin");
+    }
+    if let Some(run) = clean_up_run {
+        command.arg(super::clean_up_run_argument());
+        command.args([super::FOLLOW_PROCESS_ARGUMENT, &run.followed.key()]);
     }
     if listener.is_some() {
         command.args([
@@ -1078,6 +1246,7 @@ pub(super) mod tests {
             browser_port: None,
             unit: None,
             predecessor: Predecessor::None,
+            clean_up_run: false,
         }
     }
 

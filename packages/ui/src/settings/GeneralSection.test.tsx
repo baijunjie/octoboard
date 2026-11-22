@@ -18,7 +18,7 @@ import { SettingsReadsProvider } from "./SettingsReadsProvider";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const t = translatorFor("en");
-const HOST = { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "settings" } as const;
+const HOST = { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "settings", application: true } as const;
 
 const launchAtLogin = { status: async () => "disabled" as const, set: async () => "disabled" as const, openSystemSettings: async () => {} };
 const backgroundRun = { set: async () => {} };

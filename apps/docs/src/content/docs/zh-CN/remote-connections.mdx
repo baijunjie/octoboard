@@ -51,6 +51,8 @@ import { commands, productName } from "../../../commands.ts";
 4. 在<strong>认证方式</strong>中，如果你用账号密码登录，选<strong>密码</strong>；如果服务器提供商给的是密钥文件（文件名常像 <code dir="ltr">id_ed25519</code>，或以 <code dir="ltr">.pem</code> 结尾），选<strong>密钥文件</strong>，并填写它在这台电脑上的位置。
 5. 点击<strong>保存</strong>，再点击<strong>连接</strong>。如果要求输入密码，请输入。
 
+   首次登录后，应用会询问<strong>添加本机密钥</strong>。选择<strong>添加密钥</strong>，以后从这台电脑登录就不用再输入密码；选择<strong>不添加</strong>，则继续按现在的方式登录。
+
    如果你粘贴了连接信息，其中已经带有服务器的身份（指纹），应用会替你核对。如果你是手动填写的地址，第一次连接时应用会显示一个指纹。为了确认连上的是正确的机器，请把它和在服务器上运行下面这条命令得到的指纹比对，一致时再连接：
 
    <Code code={commands.fingerprintCommand} lang="sh" />
@@ -107,8 +109,8 @@ import { commands, productName } from "../../../commands.ts";
 
 - <strong>不额外开放端口：</strong>{productName} 只接受来自主机本机的连接，所以要从另一台电脑连接，需要先通过 SSH 登录主机。这就是为什么需要 SSH，或者某种[第三方中转](../choose-how-to-connect/)。
 - <strong>核对主机身份：</strong>首次成功连接后，应用会记住主机的身份标识（主机密钥），以后标识变了就拒绝连接并提醒你。
-- <strong>不保存密码：</strong>首次用密码或自己的密钥文件登录后，应用会为这台电脑设置一把专用 SSH 密钥，供以后登录使用。
-- <strong>随时收回权限：</strong>在主机允许登录的 SSH 密钥列表中（Linux 和 macOS 上是 <code dir="ltr">{commands.authorizedKeys}</code> 文件）删掉这台电脑对应的一行，这把密钥就不能再登录了；已经建立的连接不受影响，直到它自行断开。
+- <strong>不保存密码：</strong>应用从不保存你的密码。首次用密码或自己的密钥文件登录后，它会询问是否为这台电脑添加一把专用的 SSH 密钥，供以后登录使用；只有你选择<strong>添加密钥</strong>，它才会把密钥添加到主机上。
+- <strong>随时收回权限：</strong>在那台电脑上，到<strong>远程设备</strong>中该守护进程的页面关闭<strong>本机密钥</strong>，或者移除这个已保存的守护进程，应用就会把它的密钥从主机允许登录的 SSH 密钥列表中删除；如果连不上主机，应用会告诉你，这时那一行可能还在。你也可以自己在主机上的这个列表里（Linux 和 macOS 上是 <code dir="ltr">{commands.authorizedKeys}</code> 文件）删掉这台电脑对应的一行。这把密钥就不能再登录了；已经建立的连接不受影响，直到它自行断开。
 
 ## 在远程窗口中工作
 

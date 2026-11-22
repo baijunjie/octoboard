@@ -4,7 +4,7 @@ description: "Bir Linux sunucusunda, Mac’te ve Windows bilgisayarda octoboardd
 ---
 
 import { Code } from "@astrojs/starlight/components";
-import { commands, productName, tunnel } from "../../../commands.ts";
+import { commands, productName, system, tunnel } from "../../../commands.ts";
 
 octoboardd, {productName}’u çalıştıran programdır (uygulama ona “hizmet” der). Linux sunucusunda onu kendiniz kurar ve başlatırsınız. Mac’te veya Windows bilgisayarda uygulamanın içinde gelir; uygulama açılırken onu başlatır, kapanırken durdurur. Komutlar üçünde de aynıdır, aşağıdaki farklar dışında.
 
@@ -35,6 +35,7 @@ Komutları {productName} uygulamasını çalıştıran kullanıcı olarak çalı
 | <code dir="ltr">{commands.update}</code> | Yalnızca Linux sunucusunda. [Yükseltme](../install/linux/#yükseltme) bölümündeki gibi en yeni sürümü kurar. |
 | <code dir="ltr">{commands.updateCheck}</code> | Yalnızca Linux sunucusunda. Daha yeni bir sürüm çıkıp çıkmadığını, kurmadan denetler. |
 | <code dir="ltr">{commands.updateRollback}</code> | Yalnızca Linux sunucusunda. Son yükseltmeden önce kurulu olan sürümü geri getirir ve yükseltmedeki gibi o sürümle yeniden başlar. |
+| <code dir="ltr">{system.uninstall}</code> | Yalnızca Linux sunucusunda. [Kaldırma](../install/linux/#kaldırma) bölümündeki gibi octoboardd’yi sunucudan kaldırır. |
 | <code dir="ltr">{commands.version}</code> | Kurulu sürümü yazdırır. |
 
 Komutların tam listesi için <code dir="ltr">{commands.help}</code> komutunu; tek bir komutun seçenekleri için <code dir="ltr">{commands.commandHelp}</code> komutunu çalıştırın. Listede, {productName} tarafından otomatik olarak çalıştırılan ve sizin elle çalıştırmanız gerekmeyen komutlar da yer alır.
@@ -45,5 +46,6 @@ Uygulama octoboardd’yi sizin için çalıştırır, bu yüzden birkaç komut f
 
 - <strong>Mac’te <code dir="ltr">{commands.start}</code> ve <code dir="ltr">{commands.stop}</code></strong> uygulama üzerinde işlem yapar: <code dir="ltr">{commands.start}</code> uygulamayı arka planda, pencere açmadan açar; <code dir="ltr">{commands.stop}</code> uygulamadan çıkar.
 - <strong><code dir="ltr">{commands.restart}</code> ve <code dir="ltr">{commands.update}</code></strong> reddedilir. octoboardd’yi yeniden başlatmayı ve yeni sürümleri kurmayı uygulama kendisi yapar.
+- <strong><code dir="ltr">{system.uninstall}</code></strong> da reddedilir. octoboardd uygulamayla birlikte kaldırılır: uygulamanın nasıl kaldırılacağı [macOS](../install/macos/#kaldırma) ve [Windows](../install/windows/#kaldırma) sayfalarında anlatılır.
 - <strong><code dir="ltr">{commands.browserOn}</code> ve <code dir="ltr">{commands.browserOff}</code></strong>, <strong>Ayarlar › Erişim</strong> bölümündeki <strong>Tarayıcı erişimine izin ver</strong> ile aynı ayarı değiştirir.
 - <strong><code dir="ltr">{commands.address}</code></strong>, yalnızca <strong>Tarayıcı erişimine izin ver</strong> (veya Mac’te <strong>Uzaktan erişime izin ver</strong>) açıkken adres yazdırır. İki ayar da varsayılan olarak kapalıdır; bu yüzden birini açana kadar komut bunu söyler ve adres yazdırmaz.

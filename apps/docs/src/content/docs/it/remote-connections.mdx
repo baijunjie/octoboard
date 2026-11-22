@@ -51,6 +51,8 @@ Non sai se è la strada giusta per te? [Scegli come connetterti](../choose-how-t
 4. Sotto <strong>Autenticazione</strong>, scegli <strong>Password</strong> se accedi con la password del tuo account. Scegli <strong>File della chiave</strong> se il provider del server ti ha dato invece un file della chiave (spesso con un nome come <code dir="ltr">id_ed25519</code> o che termina con <code dir="ltr">.pem</code>), e indica dove si trova su questo computer.
 5. Seleziona <strong>Salva</strong>, poi <strong>Connetti</strong>. Se te la chiede, inserisci la password.
 
+   Dopo il primo accesso, l’app chiede <strong>Aggiungi la chiave di questo computer</strong>. Seleziona <strong>Aggiungi chiave</strong> per accedere da questo computer senza password da quel momento in poi, oppure <strong>Non aggiungere</strong> per continuare ad accedere come ora.
+
    Se hai incollato i dati di connessione, l’identità del server (la sua impronta) è arrivata insieme e l’app la controlla per te. Se hai digitato l’indirizzo a mano, l’app mostra un’impronta la prima volta. Per assicurarti di aver raggiunto la macchina giusta, confrontala con quella che questo comando stampa sul server e collegati solo se coincidono:
 
    <Code code={commands.fingerprintCommand} lang="sh" />
@@ -107,8 +109,8 @@ Solo chi può raggiungere {productName} tramite l’inoltro SSH può usare quest
 
 - <strong>Nessuna porta pubblica in più:</strong> {productName} accetta solo connessioni dall’host stesso, quindi per collegarti da un altro computer devi prima accedere all’host via SSH. Per questo serve SSH, oppure uno dei [relay](../choose-how-to-connect/).
 - <strong>Controlla quale macchina raggiungi:</strong> l’app ricorda la chiave host, l’identità SSH della macchina, alla prima connessione riuscita e blocca la connessione con un avviso se quell’identità cambia in seguito.
-- <strong>Nessuna password salvata:</strong> dopo il tuo primo accesso con una password o con il tuo file della chiave, l’app configura una chiave SSH separata che questo computer userà per gli accessi futuri.
-- <strong>Revocare l’accesso a un computer:</strong> rimuovi la voce di quel computer dall’elenco delle chiavi SSH autorizzate dell’host (<code dir="ltr">{commands.authorizedKeys}</code> su Linux e macOS). Quella chiave non potrà più accedere; una connessione già aperta resta fino alla sua fine.
+- <strong>Nessuna password salvata:</strong> l’app non salva mai la tua password. Dopo il tuo primo accesso con una password o con il tuo file della chiave, chiede se aggiungere una chiave SSH separata, propria di questo computer, per gli accessi futuri, e la aggiunge all’host solo se selezioni <strong>Aggiungi chiave</strong>.
+- <strong>Revocare l’accesso a un computer:</strong> su quel computer, disattiva <strong>Chiave di questo computer</strong> nella pagina del servizio in <strong>Dispositivi remoti</strong>, oppure rimuovi il servizio salvato; l’app toglie allora la sua chiave dall’elenco delle chiavi SSH autorizzate dell’host, e ti avvisa se non è riuscita a raggiungere l’host, nel qual caso la voce potrebbe essere ancora lì. Puoi anche rimuovere tu la voce di quel computer dall’elenco sull’host (<code dir="ltr">{commands.authorizedKeys}</code> su Linux e macOS). Quella chiave non potrà più accedere; una connessione già aperta resta fino alla sua fine.
 
 ## In una finestra remota
 

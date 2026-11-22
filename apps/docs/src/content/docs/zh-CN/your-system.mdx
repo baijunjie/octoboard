@@ -1,0 +1,88 @@
+---
+title: "不改动你的系统"
+description: "Octoboard 让你的系统和智能体自己的文件保持原样。这里列出少数功能添加的东西、各自如何撤销，以及卸载后会留下什么。"
+---
+
+import { Aside, Code } from "@astrojs/starlight/components";
+import { commands, productName, system } from "../../../commands.ts";
+import LinuxUninstall from "../../../snippets/zh-CN/linux-uninstall.mdx";
+import WindowsUninstaller from "../../../snippets/zh-CN/windows-uninstaller.mdx";
+
+{productName} 让你的系统保持原样：智能体的配置，以及 {productName} 自身文件夹之外的一切。只有少数功能会在这些文件夹之外添加东西。本页把它们逐一列出，说明各自添加了什么、在哪里、如何撤销，也说明卸载之后会留下什么。
+
+## 规则
+
+- <strong>{productName} 交给智能体的东西只在每次启动时传入。</strong>它的状态钩子、它自己的 MCP 服务器，以及向会话说明的角色，都在智能体启动时传给它，或者放在 {productName} 自己的文件夹里。为此不会编辑你的任何文件，也不会编辑智能体的任何文件，所以你单独运行智能体时，这些东西一概不在。
+- <strong>{productName} 不往你的设置里添加自己的钩子，也不替你对项目的文件夹做任何决定。</strong>是否信任某个项目的文件夹，由你来决定、由智能体来记录。{productName} 只替一个文件夹作答：控制台自己的文件夹，它属于 {productName}（见下文）。
+- <strong>智能体为自己写下的东西属于智能体。</strong>它的对话记录、缓存和日志、登录凭据，以及在它自己的询问得到回答后记下的信任，写法都和你不通过 {productName} 使用它时一样。智能体自己的程序第一次在某个配置文件夹里运行时所做的初始化也是如此；{productName} 在后台读取信息时，可能会让这一步早于你自己的第一次启动发生（见下文）。
+- <strong>项目内的工作不在本页讨论范围内。</strong>编辑项目文件、Git 操作、分支和工作树，正是你添加项目要做的开发工作。
+
+## 功能添加了什么，如何撤销
+
+下面每一项都只在你使用或开启对应功能时才会添加。
+
+### 关闭功能即可撤销
+
+- <strong>远程服务器上的本机密钥。</strong>用密码或密钥文件登录某个已保存的远程守护进程之后，应用会先询问再添加：<strong>添加本机密钥</strong>对话框会写明是哪个文件、哪一行。选择<strong>添加密钥</strong>后，应用在那台服务器上你的用户所允许的 SSH 密钥中添加一行（Linux 和 macOS 上是 <code dir="ltr">{commands.authorizedKeys}</code>），标记为 <code dir="ltr">{system.keyMark}</code>，并把私钥保存在本机的凭据存储中（macOS 上是登录钥匙串，Windows 上是凭据管理器）。选择<strong>不添加</strong>则什么都不添加，以后也不再询问。要撤销，请在<strong>远程设备</strong>中该守护进程的页面关闭<strong>本机密钥</strong>，或者移除这个已保存的守护进程：应用会把那一行从文件中删除，并移除私钥。更改已保存守护进程的主机、端口或用户时，应用也会这样做。如果连不上服务器，那一行可能会留下，应用会告诉你，需要你到服务器上自行删除。
+- <strong>登录时启动</strong>（Windows，以及 macOS 13 或更高版本）。<strong>设置 › 通用 › 登录时启动</strong>会把 {productName} 加入系统在登录时打开的应用列表，这一行的说明里写明了这一点。要把它从该列表中去掉，关闭这个开关即可。
+- <strong>命令行工具</strong>（macOS）。在<strong>设置 › 通用 › 命令行工具</strong>下选择<strong>安装</strong>，会在 <code dir="ltr">{system.cliDir}</code> 中添加一个名为 <code dir="ltr">{system.cliName}</code> 的链接；如果系统不允许，则添加到 <code dir="ltr">{system.cliFallbackDir}</code>。安装之前，这一行就写明了这一点。选择<strong>移除</strong>会删除该链接。
+- <strong>共享默认配置。</strong><strong>设置 › 智能体账户</strong>下某个账户设置中的<strong>共享默认配置</strong>，会把该账户文件夹里可共享的部分替换成指向默认账户文件夹的链接，把账户自己的配置作为备份留在旁边，并把它的对话历史移入默认账户的文件夹。开启之前，这一行就写明了这些。关闭后，链接会被移除，备份会恢复，该账户自己的会话的对话也会移回来。<strong>有一样东西会留下：</strong>其余已移走的对话历史仍留在默认账户的文件夹里，因为移除它会让你丢失对话。详见[共享配置](../features/shared-configuration/)。
+
+### 留下来，归你或智能体所有
+
+下面这些写入的东西，从此就是你的或智能体自己的，所以 {productName} 没有什么属于自己、需要撤销的东西。凡是可以手动移除的记录，对应条目会写明位置。
+
+- <strong>切换会话的账户。</strong><strong>切换账户</strong>会先请你确认。由智能体提出的切换要等你批准，除非你开启了<strong>自动批准账户切换</strong>；达到使用限制时的切换，只在<strong>达到使用限制时自动切换账户</strong>开启期间才会发生。切换会把这一个会话的对话复制到目标账户的文件夹里；对 Codex，还会把该账户自己对这段对话的记录指向这份副本。原件留在原处，副本则成为该账户自己的内容。详见[账户连续性](../features/account-continuity/)。
+- <strong>在 Grok Build 会话里更改的设置和插件。</strong>如果你的 <code dir="ltr">config.toml</code> 是指向某个文件的链接，你在会话中更改的主题、插件开关或默认模型，会在会话结束时写入那个文件，和 Grok 自己保存时一样。你在会话中安装的插件，会记录到你的 Grok 文件夹自己的插件注册表中（如果它有的话）。
+- <strong>Grok Build 对项目文件夹的信任。</strong>在你同意信任某个项目的文件夹之后（选择<strong>信任并继续</strong>，或者你自己在终端里回答），Grok 写下的那一条记录会原样带入你的 Grok 文件夹中的信任列表。
+- <strong>从未有过对话的会话的记录。</strong>删除一个你从未向它发送过任何内容的会话时，智能体自己为它留下的记录会一并移到废纸篓（Windows 上是回收站），不会询问：这些记录里没有你的任何对话。使用过的会话，只有在你勾选确认对话框中的对应选项时，它的记录才会被移走。这些记录都可以从废纸篓中恢复。
+- <strong>Claude Code 的首次运行初始化。</strong>在 Claude Code 从未运行过的配置文件夹里，或者在 Claude Code 更新之后，{productName} 在后台读取信息（账户的用量、它的 MCP 服务器或它的智能体）会让 Claude Code 在那里完成它自己的首次运行初始化和待执行的迁移，和你下一次自己启动它时会做的一样。{productName} 不会改动这些更改。
+- <strong>为新的 Codex 账户创建的空文件夹。</strong>在某个 Codex 账户第一次启动或登录之前，如果它的文件夹还不存在，{productName} 会创建一个空文件夹：没有它，Codex 拒绝启动。
+- <strong>对控制台自身文件夹的信任。</strong>控制台会话在 {productName} 自己的一个文件夹里运行，所以智能体在那里询问是否信任时，{productName} 会直接回答，不来问你。之后 Claude Code 会在它自己的信任列表里留下一条记录，其中只写了那个文件夹，对其他任何地方都没有影响。Codex 只在那个文件夹位于某个 Git 仓库之内时才会询问，然后把信任记在该仓库的根目录上，这条记录覆盖整个仓库：如果你的主文件夹本身由 Git 管理，那就是整个主文件夹。Grok Build 不会在你的信任列表里记录任何内容。{productName} 不会移除这些记录，因为那样做又是对你的文件的一次编辑。你可以自己移除：Codex 的记录是它文件夹中 <code dir="ltr">config.toml</code> 里的 <code dir="ltr">[projects."&lt;repository root&gt;"]</code> 表，Claude Code 的记录是它的 <code dir="ltr">.claude.json</code> 中 <code dir="ltr">projects</code> 下该文件夹对应的条目。
+
+### 用卸载命令撤销
+
+- <strong>作为服务运行的 Linux 服务器程序。</strong>把它安装为服务（见 [Linux 服务器](../install/linux/)）时，会在你的 systemd 配置文件夹中写入一个 systemd 用户服务；如果你的用户原先没有开启 lingering，还会把它开启。要撤销，用下文的卸载命令。
+
+<Aside>
+在 Windows 上，应用还会维护任务栏按钮的跳转列表，其中列有你保存的远程守护进程。它没有开关：下文所说的<strong>全部移除</strong>会移除它，卸载程序也会。
+</Aside>
+
+## 卸载之前
+
+卸载之前，“关闭功能即可撤销”中当前生效的每一项都可以一次全部移除，对应的功能也会一并关闭。在桌面应用中，<strong>设置 › 清理</strong>里有一行专门做这件事，即<strong>卸载前清理</strong>：它写明当前有多少项生效，并且只有一个按钮，<strong>全部移除</strong>。在 Windows 上，卸载程序也会自行做这件事，Linux 服务器程序的卸载命令则会先做这件事；两者都在下文说明。
+
+- <strong>它会先请你确认。</strong>确认对话框会写明将移除多少项（清单折叠在这个数目下面），以及会保留什么。只有输入<strong>移除</strong>之后才会继续。
+- <strong>它会显示结果。</strong>完成后会列出哪些已移除、哪些没有。对没能移除的项目（例如连不上的服务器上的密钥），会写明留下了什么、在哪里。
+- <strong>它只在那台电脑上应用自己的窗口里。</strong>在装有桌面应用的电脑上的浏览器中，以及在显示远程守护进程的窗口中，这一行只说明清理在哪里做。在浏览器中打开 Linux 服务器时，它会说明在服务器上卸载时会先做清理，并显示 <code dir="ltr">{system.uninstall}</code> 和<strong>复制卸载命令</strong>，供你在服务器上运行。无法从那里移除任何东西。
+- <strong>只在卸载时使用。</strong>如果只想撤销其中一项并继续使用 {productName}，请改为关闭对应的功能。
+- <strong>它会保留你的数据。</strong>{productName} 自己的文件夹会留下，因共享而移走的对话历史也会留下。
+
+## 卸载之后
+
+卸载会移除程序本身。
+
+### macOS
+
+退出 {productName}，然后把它从“应用程序”文件夹中删除。删除时什么都不会运行，所以请先选择<strong>全部移除</strong>：它移除的那些东西，删除应用不会移除。
+
+### Windows
+
+使用应用的卸载程序。
+
+<WindowsUninstaller />
+
+### Linux 服务器
+
+<LinuxUninstall />
+
+程序安装所在的文件夹会留下，你为了把它加入 PATH 而添加的那一行也会留下。
+
+### 会留下什么
+
+{productName} 自己的文件夹会留下，所以以后重新安装时，你的控制台、会话和设置都还在。如果想把它们也移除，删除这些文件夹即可：所有控制台、会话记录和设置都会丢失。
+
+- <strong>它的数据文件夹</strong>，位于运行会话的那台电脑或服务器上：<code dir="ltr">{system.dataDir}</code>（Windows 上是 <code dir="ltr">{system.dataDirWindows}</code>）。在 macOS 和 Linux 上，可以用 <code dir="ltr">{system.removeDataDir}</code> 删除它。
+- <strong>桌面应用自己的文件夹：</strong>macOS 上是 <code dir="ltr">{system.appDataMac}</code>；Windows 上是 <code dir="ltr">{system.appDataWindows}</code> 和 <code dir="ltr">{system.appLocalDataWindows}</code>。
+
+智能体自己的文件夹，连同其中的登录信息、设置和对话，都属于智能体，会保持原样。

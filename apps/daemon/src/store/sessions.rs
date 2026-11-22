@@ -261,6 +261,23 @@ impl Store {
         )
     }
 
+    /// Records that the session has had a turn, as its agent's own record of the conversation
+    /// `agent_session_id` shows: only while the session still names that conversation, so one it
+    /// has given up since the record was read stays without. Returns the record as it now stands,
+    /// or `None` when nothing was written.
+    pub fn mark_conversation_recorded(
+        &self,
+        id: &str,
+        agent_session_id: &str,
+    ) -> Result<Option<Session>> {
+        self.update_session_row(
+            id,
+            "UPDATE sessions SET has_conversation = 1
+             WHERE id = ?1 AND has_conversation = 0 AND agent_session_id = ?2",
+            params![id, agent_session_id],
+        )
+    }
+
     /// Forgets the session's conversation, its id and what the agent's records gave it, how its
     /// last turn ended included, as for a session that has had no turn. Returns the record as it
     /// now stands, or `None` when the session is gone.

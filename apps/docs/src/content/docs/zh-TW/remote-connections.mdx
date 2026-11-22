@@ -51,6 +51,8 @@ import { commands, productName } from "../../../commands.ts";
 4. 在<strong>驗證方式</strong>中，如果你用帳號密碼登入，請選<strong>密碼</strong>；如果伺服器供應商給的是金鑰檔案（檔名常像 <code dir="ltr">id_ed25519</code>，或以 <code dir="ltr">.pem</code> 結尾），請選<strong>金鑰檔案</strong>，並填入它在這台電腦上的位置。
 5. 點選<strong>儲存</strong>，再點選<strong>連線</strong>。如果要求輸入密碼，請輸入。
 
+   第一次登入後，應用程式會詢問<strong>加入本機金鑰</strong>。選擇<strong>加入金鑰</strong>，之後從這台電腦登入就不必再輸入密碼；選擇<strong>不加入</strong>，則繼續照現在的方式登入。
+
    如果你貼上了連線資訊，其中已經帶有伺服器的身分（指紋），應用程式會替你核對。如果你是手動填入位址，第一次連線時應用程式會顯示一個指紋。為了確認連上的是正確的機器，請把它和在伺服器上執行下面這個指令得到的指紋比對，一致時再連線：
 
    <Code code={commands.fingerprintCommand} lang="sh" />
@@ -107,8 +109,8 @@ import { commands, productName } from "../../../commands.ts";
 
 - <strong>不額外開放連接埠：</strong>{productName} 只接受來自主機本機的連線，所以要從另一台電腦連線，需要先透過 SSH 登入主機。這就是為什麼需要 SSH，或某種[第三方中繼](../choose-how-to-connect/)。
 - <strong>核對主機身分：</strong>第一次成功連線後，應用程式會記住主機的身分標識（主機金鑰），之後標識改變時就拒絕連線並提醒你。
-- <strong>不儲存密碼：</strong>第一次用密碼或自己的金鑰檔案登入後，應用程式會為這台電腦設定一把專用的 SSH 金鑰，供之後登入使用。
-- <strong>隨時收回權限：</strong>在主機允許登入的 SSH 金鑰清單中（Linux 和 macOS 上是 <code dir="ltr">{commands.authorizedKeys}</code> 檔案）刪除這台電腦對應的那一行，這把金鑰就不能再登入了；已經建立的連線不受影響，直到它自行中斷。
+- <strong>不儲存密碼：</strong>應用程式從不儲存你的密碼。第一次用密碼或自己的金鑰檔案登入後，它會詢問是否為這台電腦加入一把專用的 SSH 金鑰，供之後登入使用；只有你選擇<strong>加入金鑰</strong>，它才會把金鑰加入主機。
+- <strong>隨時收回權限：</strong>在那台電腦上，到<strong>遠端裝置</strong>中該背景服務的頁面關閉<strong>本機金鑰</strong>，或者移除這個已儲存的背景服務，應用程式就會把它的金鑰從主機允許登入的 SSH 金鑰清單中刪除；如果連不上主機，應用程式會告訴你，這時那一行可能還在。你也可以自己在主機上的這份清單裡（Linux 和 macOS 上是 <code dir="ltr">{commands.authorizedKeys}</code> 檔案）刪除這台電腦對應的那一行。這把金鑰就不能再登入了；已經建立的連線不受影響，直到它自行中斷。
 
 ## 在遠端視窗中工作
 

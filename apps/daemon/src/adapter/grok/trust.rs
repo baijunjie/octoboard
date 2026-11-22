@@ -1,6 +1,8 @@
-//! Grok Build's trust store, which is carried from the session's own home to the user's: the entry
-//! Grok writes when its confirmation is accepted is put into the user's `trusted_folders.toml`
-//! unchanged, under the store's lock file and by replacing the file, as Grok itself writes it.
+//! Grok Build's trust store. For a project session it is carried from the session's own home to
+//! the user's: the entry Grok writes when its confirmation is accepted is put into the user's
+//! `trusted_folders.toml` unchanged, under the store's lock file and by replacing the file, as Grok
+//! itself writes it. For a console session nothing is carried: the console's directory is trusted
+//! in the session's own copy of the store, for that launch alone ([`trust_for_this_launch`]).
 
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -72,6 +74,56 @@ impl TrustCarrier for CarriedTrust {
     fn user_store(&self) -> &Path {
         &self.user_store
     }
+}
+
+/// Trusts `folder` for one launch, by an entry in `session_store`, the session's own copy of the
+/// trust store, which Grok reads as it starts and which goes with the session's home. Grok Build
+/// 1.0.92 then shows no confirmation for the folder and leaves the copy as it is, and the user's
+/// own store never holds the entry. A folder the copy already trusts is left alone. Every other
+/// entry of the copy stays as it was ([`merge_entry`]); a copy that does not read as a store is
+/// refused, and Grok then asks.
+pub(super) fn trust_for_this_launch(session_store: &Path, folder: &str) -> Result<()> {
+    let current = match read_regular_text(session_store, LARGE_FILE_LIMIT) {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(err) => {
+            return Err(err).with_context(|| format!("reading {}", session_store.display()))
+        }
+    };
+    let trusts = |store: &toml::Table| {
+        folder_entry(store, folder)
+            .and_then(|entry| entry.get("trusted"))
+            .and_then(toml::Value::as_bool)
+            == Some(true)
+    };
+    if current
+        .parse::<toml::Table>()
+        .is_ok_and(|store| trusts(&store))
+    {
+        return Ok(());
+    }
+    let merged = merge_entry(&current, folder, &launch_entry(folder)?)?;
+    write_replacing(session_store, &merged)
+}
+
+/// The entry that trusts `folder`, in the form Grok writes one: `trusted` and the time of the
+/// decision in Unix seconds, under the folder's own table.
+fn launch_entry(folder: &str) -> Result<String> {
+    let decided_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_secs())
+        .unwrap_or_default();
+    let mut entry = toml::Table::new();
+    entry.insert("trusted".to_string(), toml::Value::Boolean(true));
+    entry.insert(
+        "decided_at".to_string(),
+        toml::Value::Integer(i64::try_from(decided_at).unwrap_or(i64::MAX)),
+    );
+    let mut folders = toml::Table::new();
+    folders.insert(folder.to_string(), toml::Value::Table(entry));
+    let mut store = toml::Table::new();
+    store.insert("folders".to_string(), toml::Value::Table(folders));
+    toml::to_string(&store).context("writing the trust entry")
 }
 
 /// Waits for the entry Grok writes for the folder, then carries it into the user's store.
@@ -284,6 +336,44 @@ fn write_replacing(target: &Path, text: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A console's directory is trusted in the session's copy of the store alone: the entry reads
+    /// as Grok's own, the entries the copy carried stay byte for byte, a folder already trusted
+    /// there is not written again, and a copy that does not read is left as it is.
+    #[test]
+    fn a_launch_trusts_its_folder_in_the_sessions_copy_only() {
+        let dir = crate::test_support::ScratchDir::new("grok-launch-trust");
+        let store = dir.join("trusted_folders.toml");
+        let folder = "/home/me/.octoboard/consoles/c \"1\"";
+
+        trust_for_this_launch(&store, folder).expect("a store is made");
+        let made = std::fs::read_to_string(&store).expect("the store");
+        let parsed: toml::Table = made.parse().expect("a store Grok reads");
+        let entry = folder_entry(&parsed, folder).expect("the folder's entry");
+        assert_eq!(
+            entry.get("trusted").and_then(toml::Value::as_bool),
+            Some(true)
+        );
+        assert!(entry.get("decided_at").is_some_and(toml::Value::is_integer));
+
+        trust_for_this_launch(&store, folder).expect("already trusted");
+        assert_eq!(std::fs::read_to_string(&store).expect("the store"), made);
+
+        let others = "# mine\n[folders.\"/a\"]\ntrusted = true\ndecided_at = 5\n";
+        std::fs::write(&store, others).expect("the user's entries");
+        trust_for_this_launch(&store, folder).expect("added");
+        let added = std::fs::read_to_string(&store).expect("the store");
+        assert!(added.starts_with(others), "{added}");
+        let parsed: toml::Table = added.parse().expect("a store Grok reads");
+        assert!(folder_entry(&parsed, folder).is_some() && folder_entry(&parsed, "/a").is_some());
+
+        std::fs::write(&store, "[folders\n").expect("a broken store");
+        assert!(trust_for_this_launch(&store, folder).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&store).expect("the store"),
+            "[folders\n"
+        );
+    }
 
     /// Only Grok's entry changes in the user's store, exactly as Grok wrote it — added, or put in
     /// place of a stale one — and every other byte stays; a store that cannot be read is left

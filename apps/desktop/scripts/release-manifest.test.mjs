@@ -30,6 +30,8 @@ import {
   repositorySlug,
   stableTakesPrereleases,
   windowsInstallerName,
+  WINDOWS_ARCHES,
+  WINDOWS_PLATFORMS,
 } from "./release-manifest.mjs";
 
 test("a version with a prerelease suffix is a prerelease, one without is not", () => {
@@ -110,8 +112,13 @@ test("a repository address gives its owner and name", () => {
   assert.throws(() => repositorySlug("https://example.test/a/b"), /not a GitHub repository/);
 });
 
-test("the Windows installer is published under the name the bundler gives it", () => {
-  assert.equal(windowsInstallerName("Octoboard", "0.2.0-beta.1"), "Octoboard_0.2.0-beta.1_x64-setup.exe");
+test("each Windows installer is published under the name the bundler gives it, which carries its architecture", () => {
+  assert.deepEqual(WINDOWS_ARCHES, ["x64", "arm64"]);
+  assert.deepEqual(WINDOWS_PLATFORMS, ["windows-x86_64", "windows-aarch64"]);
+  assert.equal(windowsInstallerName("Octoboard", "0.2.0-beta.1", "x64"), "Octoboard_0.2.0-beta.1_x64-setup.exe");
+  assert.equal(windowsInstallerName("Octoboard", "0.2.0-beta.1", "arm64"), "Octoboard_0.2.0-beta.1_arm64-setup.exe");
+  assert.throws(() => windowsInstallerName("Octoboard", "0.2.0", undefined), /not a Windows release architecture/);
+  assert.throws(() => windowsInstallerName("Octoboard", "0.2.0", "aarch64"), /not a Windows release architecture/);
 });
 
 test("the disk image and the Linux archives are published under names carrying the version", () => {
@@ -137,16 +144,22 @@ test("a Mac manifest names the archive for both Macs and nothing else", () => {
   });
 });
 
-test("a Windows manifest names the installer for windows-x86_64 and nothing else", () => {
-  const update = { url: "https://github.com/baijunjie/octoboard/releases/download/desktop-v0.2.0/a-setup.exe", signature: "d2luZG93cw==\n" };
-  const entries = { "windows-x86_64": update };
+test("a Windows manifest names each architecture's installer, for windows-x86_64 and windows-aarch64, and nothing else", () => {
+  const base = "https://github.com/baijunjie/octoboard/releases/download/desktop-v0.2.0";
+  const entries = {
+    "windows-x86_64": { url: `${base}/Octoboard_0.2.0_x64-setup.exe`, signature: "d2luZG93cw==\n" },
+    "windows-aarch64": { url: `${base}/Octoboard_0.2.0_arm64-setup.exe`, signature: "YXJtNjQ=\n" },
+  };
   const manifest = buildManifest({ version: "0.2.0", notes: "Fixes.", pubDate: "2026-11-01T00:00:00.000Z", platform: "windows", entries, holderFloor: "0.0.0" });
   assert.deepEqual(manifest, {
     version: "0.2.0",
     notes: "Fixes.",
     pub_date: "2026-11-01T00:00:00.000Z",
     holder_floor: "0.0.0",
-    platforms: { "windows-x86_64": { signature: "d2luZG93cw==", url: update.url } },
+    platforms: {
+      "windows-x86_64": { signature: "d2luZG93cw==", url: entries["windows-x86_64"].url },
+      "windows-aarch64": { signature: "YXJtNjQ=", url: entries["windows-aarch64"].url },
+    },
   });
 });
 
@@ -181,8 +194,8 @@ test("only the Linux manifest carries a SHA-256, which must be 64 lowercase hex 
   const macEntry = { url: "https://example.test/m", signature: "c2ln", sha256: "c".repeat(64) };
   const mac = buildManifest({ ...base, platform: "macos", entries: { "darwin-aarch64": macEntry, "darwin-x86_64": macEntry } });
   for (const entry of Object.values(mac.platforms)) assert.deepEqual(entry, { signature: "c2ln", url: "https://example.test/m" });
-  const windows = buildManifest({ ...base, platform: "windows", entries: { "windows-x86_64": macEntry } });
-  assert.deepEqual(windows.platforms["windows-x86_64"], { signature: "c2ln", url: "https://example.test/m" });
+  const windows = buildManifest({ ...base, platform: "windows", entries: { "windows-x86_64": macEntry, "windows-aarch64": macEntry } });
+  for (const entry of Object.values(windows.platforms)) assert.deepEqual(entry, { signature: "c2ln", url: "https://example.test/m" });
 });
 
 test("a manifest without an update's address or signature, with keys of another platform, or for an unknown platform, is refused", () => {
@@ -195,13 +208,14 @@ test("a manifest without an update's address or signature, with keys of another 
   assert.throws(() => buildManifest({ ...base, platform: "macos", entries: { "darwin-aarch64": update, "darwin-x86_64": { signature: "c2ln" } } }), /darwin-x86_64 update/);
   assert.throws(() => buildManifest({ ...base, platform: "macos", entries: { "darwin-aarch64": update } }), /darwin-x86_64 update/);
   assert.throws(() => buildManifest({ ...base, platform: "linux", entries: { "linux-x86_64": linuxUpdate } }), /linux-aarch64 update/);
-  assert.throws(() => buildManifest({ ...base, platform: "windows", entries: { "windows-x86_64": update, "linux-x86_64": linuxUpdate } }), /linux-x86_64/);
+  assert.throws(() => buildManifest({ ...base, platform: "windows", entries: { "windows-x86_64": update } }), /windows-aarch64 update/);
+  assert.throws(() => buildManifest({ ...base, platform: "windows", entries: { "windows-x86_64": update, "windows-aarch64": update, "linux-x86_64": linuxUpdate } }), /linux-x86_64/);
   assert.throws(() => buildManifest({ ...base, platform: "freebsd", entries: { "windows-x86_64": update } }), /not a release platform/);
 });
 
 test("a manifest carries the build's holder floor, which must be a version", () => {
   const update = { url: "https://example.test/a", signature: "c2ln" };
-  const base = { version: "0.2.0", notes: "", pubDate: "2026-11-01T00:00:00.000Z", platform: "windows", entries: { "windows-x86_64": update } };
+  const base = { version: "0.2.0", notes: "", pubDate: "2026-11-01T00:00:00.000Z", platform: "windows", entries: { "windows-x86_64": update, "windows-aarch64": update } };
   assert.equal(buildManifest({ ...base, holderFloor: "0.1.0" }).holder_floor, "0.1.0");
   assert.throws(() => buildManifest(base), /not a semantic version/);
   assert.throws(() => buildManifest({ ...base, holderFloor: "latest" }), /not a semantic version/);
@@ -230,7 +244,12 @@ test("each platform's release assets are its files and the update files' signatu
     "Octoboard_0.2.0_universal.app.tar.gz",
     "Octoboard_0.2.0_universal.app.tar.gz.sig",
   ]);
-  assert.deepEqual(releaseAssets("windows", layoutInput), ["Octoboard_0.2.0_x64-setup.exe", "Octoboard_0.2.0_x64-setup.exe.sig"]);
+  assert.deepEqual(releaseAssets("windows", layoutInput), [
+    "Octoboard_0.2.0_x64-setup.exe",
+    "Octoboard_0.2.0_arm64-setup.exe",
+    "Octoboard_0.2.0_x64-setup.exe.sig",
+    "Octoboard_0.2.0_arm64-setup.exe.sig",
+  ]);
   assert.deepEqual(releaseAssets("linux", layoutInput), [
     ...linuxArchives.flatMap((archive) => [archive, `${archive}.sha256`]),
     ...linuxArchives.map((archive) => `${archive}.sig`),
@@ -249,8 +268,11 @@ test("what is published is named by the release layout: the files, and the updat
     ],
   });
   assert.deepEqual(releaseLayout("windows", layoutInput), {
-    files: ["Octoboard_0.2.0_x64-setup.exe"],
-    updates: [{ name: "Octoboard_0.2.0_x64-setup.exe", keys: ["windows-x86_64"], signature: "Octoboard_0.2.0_x64-setup.exe.sig" }],
+    files: ["Octoboard_0.2.0_x64-setup.exe", "Octoboard_0.2.0_arm64-setup.exe"],
+    updates: [
+      { name: "Octoboard_0.2.0_x64-setup.exe", keys: ["windows-x86_64"], signature: "Octoboard_0.2.0_x64-setup.exe.sig" },
+      { name: "Octoboard_0.2.0_arm64-setup.exe", keys: ["windows-aarch64"], signature: "Octoboard_0.2.0_arm64-setup.exe.sig" },
+    ],
   });
   assert.deepEqual(releaseLayout("linux", layoutInput), {
     files: [

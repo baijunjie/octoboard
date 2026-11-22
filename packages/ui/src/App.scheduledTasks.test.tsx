@@ -70,7 +70,7 @@ function taskOf(id: string, title: string): ScheduledTask {
 const REPORT = taskOf("t-report", "Morning report");
 const CLEANUP = taskOf("t-cleanup", "Weekly cleanup");
 
-const KEYED: RemoteDaemonEntry = { id: "keyed", name: "Keyed", host: "keyed.example.com", port: 22, user: "deploy", auth: "password", keyPath: null, fingerprint: null, octoboarddPath: null };
+const KEYED: RemoteDaemonEntry = { id: "keyed", name: "Keyed", host: "keyed.example.com", port: 22, user: "deploy", auth: "password", keyPath: null, fingerprint: null, octoboarddPath: null, deviceKey: { declined: false, file: null, mark: null } };
 
 /** The desktop application's own window, which has the Remote devices page too. */
 const DESKTOP: PlatformAdapter = {
@@ -80,8 +80,9 @@ const DESKTOP: PlatformAdapter = {
     list: async () => [KEYED],
     status: async () => [],
     onChanged: () => () => {},
-    save: async (entry) => ({ ...entry, id: entry.id ?? "new" }),
-    remove: async () => {},
+    save: async (entry) => ({ entry: { ...entry, id: entry.id ?? "new", deviceKey: { declined: false, file: null, mark: null } }, keyRemoval: { line: { result: "not_installed" as const }, privateKeyLeft: null } }),
+    remove: async () => ({ line: { result: "not_installed" as const }, privateKeyLeft: null }),
+    setDeviceKey: async () => ({ line: { result: "not_installed" as const }, privateKeyLeft: null }),
     connect: async () => ({ outcome: "opened" }),
     disconnect: async () => {},
     onPageRequested: () => () => {},

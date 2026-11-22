@@ -20,7 +20,7 @@ use crate::processes::ledger::HeldForLaunch;
 use crate::protocol::{AgentId, ProcessTree, Session, SessionStatus};
 pub(crate) use crate::records::resumability::record_needs_shell_env;
 use crate::records::switch_continue;
-use crate::state::{AppState, ChangeAdmission, OutboxHold};
+use crate::state::{AppState, ChangeAdmission, OutboxHold, StartWork};
 
 use super::launch::{came_up, stop_process_listing_trees, wait_until_stopped};
 use super::resume::resumable_agent_session_id;
@@ -104,7 +104,9 @@ pub(crate) async fn run<T, Fut>(
 where
     Fut: Future<Output = Result<T>>,
 {
-    // Refused before the process is ended once a planned stop has raised its handover barrier.
+    // Refused before the process is ended: in a clean-up run, which would not relaunch it, and
+    // once a planned stop has raised its handover barrier.
+    state.admit_launch()?;
     let admission = state.admit_change()?;
     run_admitted(state, admission, id, did_not_stop, after_stop).await
 }
@@ -326,13 +328,17 @@ pub(crate) async fn give_up_what_a_restart_held(
 /// user, among the processes of the session's project, as a tree the user keeps is, when the
 /// session is left interrupted in a project; stopped, when it is a console session, which keeps
 /// nothing, or was archived meanwhile, which stops what it started, or when the daemon is shutting
-/// down. A process that had exited by itself is not the restart's doing, so what it left is
+/// down, or makes a clean-up run, after which nothing of Octoboard's is to run on
+/// (`StartWork::KeepingProcesses`). A process that had exited by itself is not the restart's doing, so what it left is
 /// stopped as for any agent that exits on its own: the caller does not come here. **Blocks.**
 pub(super) fn keep_what_a_failed_restart_carried(
     state: &Arc<AppState>,
     id: &str,
     held: HeldForLaunch,
 ) {
+    if !state.does(StartWork::KeepingProcesses) {
+        return;
+    }
     match state.session_record(id) {
         Ok(session) if session.status != SessionStatus::Archived => {
             if let Some(project) = session.project_id {

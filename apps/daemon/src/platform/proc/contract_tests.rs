@@ -1008,7 +1008,7 @@ async fn the_parent_watch_calls_back_once_the_process_is_gone() {
     wait_for_pid(&pid_file);
 
     let (gone, mut gone_rx) = tokio::sync::oneshot::channel();
-    watch_parent(parent.id(), move || {
+    watch_parent(super::Parent::read(parent.id()), move || {
         gone.send(()).ok();
     });
     // Several of the polls a watch on Unix makes, each run to its end on the paused clock before
@@ -1180,6 +1180,34 @@ fn only_the_file_this_process_runs_names_the_running_image() {
             assert!(names_running_image(&other_name));
         }
     }
+}
+
+/// The executable another process runs is told by the file, as this process's own is, where the
+/// host says: only Linux does, and elsewhere it is an error, never a guess. A file that is gone
+/// is read as where it was.
+#[test]
+fn the_image_of_a_process_is_its_file_where_the_host_says() {
+    let own = image_of(ProcessId(std::process::id()));
+    if cfg!(target_os = "linux") {
+        let own = own.expect("this process's image");
+        let image = running_image().expect("the running executable");
+        assert_eq!(
+            crate::platform::fs::identity(&image, crate::platform::fs::Links::Follow).ok(),
+            Some(own.identity)
+        );
+        assert_eq!(own.removed_from(), None);
+    } else {
+        assert_eq!(own.unwrap_err().kind(), std::io::ErrorKind::Unsupported);
+    }
+    let gone = Image {
+        identity: crate::platform::fs::identity(
+            &std::env::current_exe().unwrap(),
+            crate::platform::fs::Links::Follow,
+        )
+        .unwrap(),
+        path: "/opt/bin/octoboardd (deleted)".into(),
+    };
+    assert_eq!(gone.removed_from(), Some("/opt/bin/octoboardd".into()));
 }
 
 /// The open image reads as the file at the running executable's path, so reading it for a copy gives

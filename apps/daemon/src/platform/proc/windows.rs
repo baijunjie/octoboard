@@ -958,10 +958,12 @@ fn runs_console_host(process: HANDLE) -> bool {
     name.eq_ignore_ascii_case("conhost.exe") || name.eq_ignore_ascii_case("OpenConsole.exe")
 }
 
-/// Calls `on_gone` once the process `pid` has exited, waiting on a handle opened now, which keeps
-/// the pid from passing to another process meanwhile. A process that cannot be opened because it
-/// is already gone calls it at once; one that cannot be opened otherwise is never watched.
-pub(crate) fn watch_parent(pid: u32, on_gone: impl FnOnce() + Send + 'static) {
+/// Calls `on_gone` once the process `parent` has exited, waiting on a handle opened now, which
+/// keeps the pid from passing to another process meanwhile. A process that cannot be opened
+/// because it is already gone calls it at once; one that cannot be opened otherwise is never
+/// watched.
+pub(crate) fn watch_parent(parent: super::Parent, on_gone: impl FnOnce() + Send + 'static) {
+    let pid = parent.pid;
     let Some(process) = Process::open(pid, PROCESS_SYNCHRONIZE) else {
         let err = last_error();
         if err.raw_os_error() == Some(ERROR_INVALID_PARAMETER as i32) {

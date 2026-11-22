@@ -1219,3 +1219,96 @@ async fn removing_an_account_publishes_only_the_projects_it_cleared() {
         "the cleared project is published, and only it"
     );
 }
+
+/// The run homes a provider keeps for `account`'s background runs under `run_homes`, made as a
+/// reading makes them; the directory of the one made is returned.
+fn run_home_of(account: &Account, run_homes: &std::path::Path) -> std::path::PathBuf {
+    use crate::adapter::account_cli::{BackgroundRun, RunWait};
+
+    let wait = RunWait {
+        until: std::time::Instant::now() + crate::test_support::PATIENCE,
+        cancel: None,
+    };
+    let home = crate::adapter::provider(account.agent)
+        .accounts()
+        .expect("a provider with accounts")
+        .run_home(
+            run_homes,
+            BackgroundRun::QuotaReading,
+            std::path::Path::new(&account.config_dir),
+            &HashMap::new(),
+            &wait,
+        )
+        .expect("the provider's answer")
+        .expect("a provider that keeps run homes");
+    home.dir.clone()
+}
+
+/// A Grok Build account in a directory of its own under `dir`, with a configuration to copy.
+async fn grok_account(state: &Arc<AppState>, dir: &std::path::Path, name: &str) -> Account {
+    let config_dir = dir.join(name);
+    // A home Grok Build has run in, which is what an account may be pointed at.
+    std::fs::create_dir_all(config_dir.join("sessions")).unwrap();
+    std::fs::write(config_dir.join("config.toml"), "api_key = \"k\"\n").unwrap();
+    handle(
+        state,
+        None,
+        create_account_request(AgentId::GROK, name, &config_dir.to_string_lossy()),
+    )
+    .await
+    .expect("created");
+    only_account(state)
+}
+
+/// Removing an account removes what its provider kept for its background runs, which holds a copy
+/// of the account's configuration.
+#[tokio::test]
+async fn removing_an_account_removes_its_providers_run_homes() {
+    let (state, dir) = crate::test_support::app_state("coordinator-account-run-homes-removed");
+    let account = grok_account(&state, &dir, "work").await;
+    let run_homes = dir.join("run-homes");
+    let home = run_home_of(&account, &run_homes);
+    assert!(home.join("config.toml").exists());
+
+    delete_account_requested_in(&state, account.id.clone(), false, &run_homes)
+        .await
+        .expect("deleted");
+    assert!(!home.exists());
+    assert!(state.store.list_accounts().unwrap().is_empty());
+}
+
+/// Pointing an account at another directory removes the run homes kept for the directory it
+/// leaves; a rename leaves them.
+#[tokio::test]
+async fn repointing_an_account_removes_the_run_homes_of_the_directory_it_leaves() {
+    let (state, dir) = crate::test_support::app_state("coordinator-account-run-homes-repointed");
+    let account = grok_account(&state, &dir, "work").await;
+    let run_homes = dir.join("run-homes");
+    let home = run_home_of(&account, &run_homes);
+
+    update_account_requested_in(
+        &state,
+        account.id.clone(),
+        Some("Renamed".to_string()),
+        None,
+        &BTreeMap::new(),
+        &run_homes,
+    )
+    .await
+    .expect("renamed");
+    assert!(home.exists(), "a rename leaves the directory's run homes");
+
+    let other = dir.join("other");
+    std::fs::create_dir_all(other.join("sessions")).unwrap();
+    update_account_requested_in(
+        &state,
+        account.id.clone(),
+        None,
+        Some(other.to_string_lossy().into_owned()),
+        &BTreeMap::new(),
+        &run_homes,
+    )
+    .await
+    .expect("repointed");
+    assert!(!home.exists());
+}

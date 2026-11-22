@@ -12,8 +12,8 @@ fn the_hook_script_is_executable_by_its_owner_only() {
     let scratch = fixture.scratch.join("hook-script");
     std::fs::create_dir_all(&scratch).expect("scratch directory");
     let key_file = scratch.join("key");
-    let path =
-        write_hook_script(&scratch, "/bin/octoboardd", "s", 1, &key_file).expect("hook script");
+    let path = write_hook_script(&scratch, "/bin/octoboardd", "s", "l", 1, &key_file)
+        .expect("hook script");
     let mode = std::fs::metadata(&path)
         .expect("metadata")
         .permissions()
@@ -26,6 +26,8 @@ fn the_hook_script_is_executable_by_its_owner_only() {
         "{script}"
     );
     assert!(!script.contains("--key '"), "{script}");
+    // And the launch it reports for.
+    assert!(script.contains("--launch 'l'"), "{script}");
 }
 
 /// The guard's inline command line and its script both run the daemon's `guard-hook` mode over the

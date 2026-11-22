@@ -219,6 +219,16 @@ async fn the_setting_off_resumes_nothing() {
     assert_eq!(called.load(Ordering::SeqCst), 0);
 }
 
+/// A clean-up run resumes none at start, whatever the setting says.
+#[tokio::test]
+async fn a_clean_up_run_wants_no_resume_at_start_with_the_setting_on() {
+    let (state, _dir) = console_with_project_and_accounts("resume-on-start-clean-up");
+    state.store.set_resume_sessions_on_start(true).unwrap();
+    assert!(wanted(&state));
+    state.set_clean_up_run();
+    assert!(!wanted(&state));
+}
+
 /// With the setting on, the interrupted sessions are resumed and the others are not.
 #[tokio::test(start_paused = true)]
 async fn the_setting_on_resumes_the_interrupted_sessions() {

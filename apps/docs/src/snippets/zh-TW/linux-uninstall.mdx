@@ -1,0 +1,22 @@
+import { Code } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* How the Linux server program is uninstalled, which the Linux server guide and "Your system stays as it was" share. */}
+
+以當初安裝它的使用者身分，在伺服器上執行下面的指令。它不會下載任何東西。
+
+<Code code={system.uninstall} lang="sh" />
+
+它會先列出將要做的每一件事，並請你輸入 <code dir="ltr">{system.uninstallWord}</code>。<code dir="ltr">{system.uninstallDryRun}</code> 只顯示這份清單；在沒有終端機可供詢問的地方，用 <code dir="ltr">{system.uninstallYes}</code> 來確認。
+
+隨後，它會為每個仍在共用預設組態的帳號關閉共用。為此，背景服務在執行時它會先停止背景服務，這會結束背景服務執行的每個工作階段；再只為這次清理啟動背景服務，不執行任何工作階段。之後它停止背景服務，移除程式以及它的 systemd 服務（如果有）；如果是安裝服務時開啟了 lingering，且你的其他服務都不需要它，還會關閉 lingering。
+
+- <strong>如果某個帳號無法停止共用</strong>，例如它有工作階段正在工作，就什麼都不會移除，背景服務也會按原來的方式重新啟動：等那項工作結束後再執行一次這道指令。加上 <code dir="ltr">{system.uninstallKeepChanges}</code> 則不做這次清理就解除安裝，並把每個這類帳號檔案夾裡的連結，以及旁邊該帳號自身組態的備份，留給你手動刪除。
+- <strong>如果停止背景服務會打斷工作</strong>，就什麼都不會移除。加上 <code dir="ltr">{system.uninstallForce}</code> 則照樣停止它。
+- <strong>請執行你安裝的那個 <code dir="ltr">{system.cliName}</code>。</strong>透過連結執行，或者用 {productName} 背景服務所執行的那份以外的 <code dir="ltr">{system.cliName}</code> 副本執行時，它不會移除任何東西，並寫明應改為執行哪個檔案。
+
+安裝指令碼原先的指令仍然可用，它執行的就是上面這道指令。如果安裝時用了 <code dir="ltr">{system.binDirOption}</code>，請加上它並指定同一個檔案夾。
+
+<Code code={system.uninstallScript} lang="sh" />
+
+如果你的 <code dir="ltr">{system.cliName}</code> 舊到還沒有解除安裝指令，指令碼的指令會自己移除它，但事先不會關閉任何東西：仍在共用預設組態的帳號，其檔案夾裡的連結會留下，你可以手動刪除。

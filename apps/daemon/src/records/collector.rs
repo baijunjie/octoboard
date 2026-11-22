@@ -2,10 +2,12 @@
 //! context size (`context.rs`), the titles (`titles.rs`) and the model and effort
 //! (`observed.rs`). One collector reads append-only records incrementally; archived
 //! sources are read once, and get a final pass after their process exits. No conversation content
-//! is retained or published here. Missing data stays unknown. Where the records live is
-//! `records/mod.rs`'s business; this module reads them and hands each line to the three
-//! modules above, and asks `default_effort.rs` for the effort a session's agent runs it at where
-//! the records give the model alone.
+//! is retained or published here. Missing data stays unknown. A session that counts as having no
+//! conversation is marked as having one once its own record shows a prompt the user sent
+//! (`user_prompt.rs`): the agent's hook reports that prompt, and the report does not always
+//! arrive. Where the records live is `records/mod.rs`'s business; this module reads them and hands
+//! each line to the three modules above, and asks `default_effort.rs` for the effort a session's
+//! agent runs it at where the records give the model alone.
 //!
 //! A change of a session's model restarts it on the same conversation, so its records go on
 //! naming the old model up to where the old process stopped. The change stores an observation
@@ -30,6 +32,7 @@ use crate::records::default_effort::DefaultEfforts;
 use crate::records::line_file::{Change, LineFile, Signature, JSON_FILE_LIMIT};
 use crate::records::observed::Observed;
 use crate::records::titles::{SharedTitles, Titles};
+use crate::records::user_prompt;
 use crate::records::Locator;
 use crate::state::AppState;
 use crate::store::RecordUpdate;
@@ -63,6 +66,9 @@ struct Cursor {
     summary: JsonFile,
     /// The file beside the record that gives the context window (`RecordStore::window_file`).
     window: JsonFile,
+    /// The conversation file, followed for a prompt the user sent while the session counts as
+    /// having no conversation.
+    user_prompt: user_prompt::Search,
 }
 
 /// What a session's records held when a change of its model ended its process (see the module
@@ -447,6 +453,11 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 .and_then(|id| locator.current_record(session.agent, &root, id));
         }
         let store = provider(session.agent).records();
+        let recorded = recorded_conversation(state, cursor, &locator, &session);
+        if recorded == Recorded::Marked {
+            // Kept in the copy this pass goes on to publish, which would otherwise take it back.
+            session.has_conversation = true;
+        }
         refresh_first_prompt(cursor, &mut locator, &session);
         if let Some(path) = cursor.path.clone() {
             if scan(session.agent, &path, cursor).is_ok() {
@@ -527,7 +538,8 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
             titles.prompt = Some(prompt.clone());
         }
         let titles = (titles != session.record_titles).then_some(titles);
-        cursor.without_process = !live;
+        // A session whose mark was not written is read again, process or not, until it is.
+        cursor.without_process = !live && recorded != Recorded::Pending;
         if context.is_some()
             || titles.is_some()
             || observed_model.is_some()
@@ -581,6 +593,62 @@ fn settle_default_effort(
     };
     if state.set_default_effort(&session.id, default) {
         republish.push(session.clone());
+    }
+}
+
+/// What a pass found of a conversation no hook reported ([`recorded_conversation`]).
+#[derive(PartialEq, Eq)]
+enum Recorded {
+    /// The session was marked as having a conversation by this pass.
+    Marked,
+    /// Its record shows a prompt the user sent, and the mark was not written: a launch holds the
+    /// session, or the write failed. The next pass asks again.
+    Pending,
+    /// The session has a conversation already, or its record shows no prompt.
+    No,
+}
+
+/// Marks `session` as having a conversation when it does not count as having one and its own
+/// record shows a prompt the user sent: the mark otherwise comes from the agent's hook alone, whose
+/// report of the prompt may never arrive. The conversation file is followed only while the session
+/// is unmarked, and the write holds only while the session still names the conversation read and
+/// no launch holds it (`AppState::mark_conversation_recorded`).
+fn recorded_conversation(
+    state: &AppState,
+    cursor: &mut Cursor,
+    locator: &Locator,
+    session: &Session,
+) -> Recorded {
+    if session.has_conversation {
+        return Recorded::No;
+    }
+    let (Some(record), Some(agent_id)) =
+        (cursor.path.as_deref(), session.agent_session_id.as_deref())
+    else {
+        return Recorded::No;
+    };
+    let Some(file) = locator
+        .root(session.agent, session.config_dir.as_deref())
+        .and_then(|root| user_prompt::conversation_file_of(session.agent, &root, agent_id, record))
+    else {
+        return Recorded::No;
+    };
+    if !cursor
+        .user_prompt
+        .read(provider(session.agent).records(), &file)
+    {
+        return Recorded::No;
+    }
+    match state.mark_conversation_recorded(&session.id, agent_id) {
+        Ok(true) => Recorded::Marked,
+        Ok(false) => Recorded::Pending,
+        Err(err) => {
+            tracing::debug!(
+                session = %session.id, %err,
+                "recording the conversation the session's record shows failed"
+            );
+            Recorded::Pending
+        }
     }
 }
 
@@ -1888,5 +1956,156 @@ mod tests {
         )
         .unwrap();
         assert_eq!(boundary.start(&compressed), Some(0));
+    }
+
+    /// Stores a session of `each`'s agent that counts as having no conversation, named for the
+    /// agent, on `each`'s account and conversation.
+    fn insert_unreported(
+        state: &AppState,
+        each: &crate::records::fixtures::Unreported,
+        status: &str,
+    ) {
+        let console_id = state.store.list_consoles().unwrap()[0].id.clone();
+        let id = each.agent.descriptor().id;
+        let session: Session = serde_json::from_value(json!({
+            "id":id,"agent":id,"agent_session_id":each.agent_id,"console_id":console_id,
+            "host_id":"local","kind":"console","origin":"user","title":"Session",
+            "status":status,"role":"coordinator","has_conversation":false,"pinned":false,
+            "started_at":0,"config_dir":each.account.to_string_lossy()}))
+        .unwrap();
+        state.store.insert_session(&session).unwrap();
+    }
+
+    fn unreported_state(label: &str) -> (Arc<AppState>, crate::test_support::ScratchDir) {
+        let (state, directory) = crate::test_support::app_state(label);
+        state
+            .store
+            .insert_console(&crate::test_support::console(&directory))
+            .unwrap();
+        (state, directory)
+    }
+
+    fn used(state: &AppState, each: &crate::records::fixtures::Unreported) -> bool {
+        state
+            .session_record(each.agent.descriptor().id)
+            .unwrap()
+            .has_conversation
+    }
+
+    /// For each agent, a running session whose hook never reported a prompt counts as having a
+    /// conversation one pass after its own record holds a prompt the user sent, and not while the
+    /// record holds only what the agent writes with none sent; clients are told.
+    #[test]
+    fn a_prompt_in_the_record_marks_a_session_no_hook_reported_as_having_a_conversation() {
+        let (state, directory) = unreported_state("record-collector-unreported");
+        let cases = crate::records::fixtures::unreported(&directory);
+        let mut live = Vec::new();
+        for each in &cases {
+            insert_unreported(&state, each, "idle");
+            each.write(false);
+            let stand_in =
+                crate::test_support::idle_stand_in_of(each.agent.descriptor().id, each.agent);
+            state.register_live(stand_in.clone());
+            live.push(stand_in);
+        }
+        let mut cursors = Cursors::default();
+        collect(&state, &mut cursors);
+        for each in &cases {
+            assert!(!used(&state, each), "{:?}: no prompt sent", each.agent);
+        }
+        let mut events = state.subscribe();
+        for each in &cases {
+            each.write(true);
+        }
+        collect(&state, &mut cursors);
+        for each in &cases {
+            assert!(used(&state, each), "{:?}: the record holds it", each.agent);
+        }
+        let mut told = Vec::new();
+        while let Ok(event) = events.try_recv() {
+            if let crate::protocol::Event::SessionUpserted { session } = event {
+                if session.has_conversation {
+                    told.push(session.id.clone());
+                }
+            }
+        }
+        for each in &cases {
+            assert!(
+                told.iter().any(|id| id == each.agent.descriptor().id),
+                "{:?}: clients are told",
+                each.agent
+            );
+        }
+    }
+
+    /// A session with no process is read once, and that one pass marks it too.
+    #[test]
+    fn a_stopped_sessions_one_pass_marks_the_conversation_its_record_holds() {
+        let (state, directory) = unreported_state("record-collector-unreported-once");
+        let cases = crate::records::fixtures::unreported(&directory);
+        for each in &cases {
+            insert_unreported(&state, each, "archived");
+            each.write(true);
+        }
+        collect(&state, &mut Cursors::default());
+        for each in &cases {
+            assert!(used(&state, each), "{:?}", each.agent);
+        }
+    }
+
+    /// The mark holds only for the conversation that was read: a session that names another one by
+    /// now, or none, is left as it is.
+    #[test]
+    fn a_recorded_conversation_is_not_marked_on_a_session_that_names_another() {
+        let (state, directory) = unreported_state("record-collector-unreported-stale");
+        let each = crate::records::fixtures::unreported(&directory).remove(0);
+        insert_unreported(&state, &each, "idle");
+        let id = each.agent.descriptor().id;
+        assert!(!state.mark_conversation_recorded(id, "earlier").unwrap());
+        assert!(!used(&state, &each));
+        assert!(state.mark_conversation_recorded(id, each.agent_id).unwrap());
+        assert!(used(&state, &each));
+        assert!(
+            !state.mark_conversation_recorded(id, each.agent_id).unwrap(),
+            "already marked"
+        );
+    }
+
+    /// While a launch holds a session, the conversation its record shows is not marked: the launch
+    /// has read that there is none to resume, and the id it will store is the fresh conversation's.
+    /// The session, though it has no process, is read again once the claim is released, and is
+    /// marked then if it still names that conversation.
+    #[test]
+    fn a_recorded_conversation_is_not_marked_while_a_launch_holds_the_session() {
+        let (state, directory) = unreported_state("record-collector-unreported-launching");
+        let each = crate::records::fixtures::unreported(&directory).remove(0);
+        insert_unreported(&state, &each, "interrupted");
+        each.write(true);
+        let id = each.agent.descriptor().id;
+        let mut cursors = Cursors::default();
+
+        let claim = state.begin_launch(id).unwrap();
+        collect(&state, &mut cursors);
+        assert!(!used(&state, &each), "the launch holds the session");
+        assert!(!state.mark_conversation_recorded(id, each.agent_id).unwrap());
+        drop(claim);
+        collect(&state, &mut cursors);
+        assert!(
+            used(&state, &each),
+            "asked again once the claim is released"
+        );
+
+        // A launch that opened a fresh conversation: the mark against the old id never lands.
+        state.store.forget_conversation(id).unwrap();
+        state.set_agent_session_id(id, each.agent_id).unwrap();
+        let mut cursors = Cursors::default();
+        let claim = state.begin_launch(id).unwrap();
+        collect(&state, &mut cursors);
+        state
+            .set_agent_session_id(id, "22222222-3333-4444-8555-666666666666")
+            .unwrap();
+        drop(claim);
+        collect(&state, &mut cursors);
+        assert!(!used(&state, &each), "the new conversation has no prompt");
     }
 }

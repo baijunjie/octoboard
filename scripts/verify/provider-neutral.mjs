@@ -15,7 +15,7 @@ export const EXCEPTIONS = [
 // their contents are exactly the agent facts this check must inspect.
 const TEST_CFG = /#\[cfg\((test|all\([^\]]*\))\)\]/g;
 // Only a direct `test` conjunct proves an item absent from production. `any(test, unix)` does not.
-const testOnly = (condition) => {
+export const testOnly = (condition) => {
   if (condition === "test") return true;
   if (!condition.startsWith("all(")) return false;
   let depth = 0;

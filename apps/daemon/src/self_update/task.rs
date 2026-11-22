@@ -211,7 +211,8 @@ pub(crate) fn restart_requested(state: &Arc<AppState>) -> Result<()> {
 /// that one added later has to be given its own answer here.
 pub(super) fn restart_refused(refusal: RestartRefusal) -> anyhow::Error {
     match refusal {
-        RestartRefusal::StopInProgress => shutting_down_refusal(),
+        // A clean-up run is about to stop, and is refused as a stopping daemon is.
+        RestartRefusal::StopInProgress | RestartRefusal::CleanUpRun => shutting_down_refusal(),
         RestartRefusal::HoldersInService => holders_in_service_refusal(),
         RestartRefusal::AgentUpdateRunning => {
             CodedError::raised(error_code::AGENT_UPDATE_RUNNING, refusal.message(), &[])

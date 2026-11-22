@@ -4,7 +4,7 @@ description: "Các lệnh của octoboardd trên máy chủ Linux, máy Mac và 
 ---
 
 import { Code } from "@astrojs/starlight/components";
-import { commands, productName, tunnel } from "../../../commands.ts";
+import { commands, productName, system, tunnel } from "../../../commands.ts";
 
 octoboardd là chương trình chạy {productName} (ứng dụng gọi nó là daemon). Trên máy chủ Linux, bạn tự cài và khởi động nó. Trên máy Mac hoặc máy tính Windows, nó nằm sẵn trong ứng dụng, ứng dụng khởi động nó khi mở và dừng nó khi thoát. Các lệnh giống nhau trên cả ba, trừ những điểm khác dưới đây.
 
@@ -35,6 +35,7 @@ Chạy các lệnh với tư cách người dùng đang chạy {productName}. C�
 | <code dir="ltr">{commands.update}</code> | Chỉ dành cho máy chủ Linux. Cài phiên bản mới nhất, như trong [Nâng cấp](../install/linux/#nâng-cấp). |
 | <code dir="ltr">{commands.updateCheck}</code> | Chỉ dành cho máy chủ Linux. Kiểm tra xem đã có phiên bản mới hơn chưa, mà không cài đặt. |
 | <code dir="ltr">{commands.updateRollback}</code> | Chỉ dành cho máy chủ Linux. Khôi phục phiên bản đã cài trước lần nâng cấp gần nhất và khởi động lại vào phiên bản đó, như khi nâng cấp. |
+| <code dir="ltr">{system.uninstall}</code> | Chỉ dành cho máy chủ Linux. Gỡ octoboardd khỏi máy chủ, như trong [Gỡ cài đặt](../install/linux/#gỡ-cài-đặt). |
 | <code dir="ltr">{commands.version}</code> | In phiên bản đã cài. |
 
 Để xem danh sách đầy đủ các lệnh, chạy <code dir="ltr">{commands.help}</code>; để xem tùy chọn của một lệnh, chạy <code dir="ltr">{commands.commandHelp}</code>. Danh sách còn có các lệnh do {productName} tự chạy, mà bạn không bao giờ cần chạy thủ công.
@@ -45,5 +46,6 @@ Chạy các lệnh với tư cách người dùng đang chạy {productName}. C�
 
 - <strong><code dir="ltr">{commands.start}</code> và <code dir="ltr">{commands.stop}</code> trên máy Mac</strong> tác động lên ứng dụng: <code dir="ltr">{commands.start}</code> mở ứng dụng ở chế độ nền, không có cửa sổ, còn <code dir="ltr">{commands.stop}</code> thoát ứng dụng.
 - <strong><code dir="ltr">{commands.restart}</code> và <code dir="ltr">{commands.update}</code></strong> bị từ chối. Ứng dụng tự khởi động lại octoboardd và tự cài phiên bản mới.
+- <strong><code dir="ltr">{system.uninstall}</code></strong> cũng bị từ chối. octoboardd được gỡ cùng với ứng dụng: xem cách gỡ ứng dụng trên [macOS](../install/macos/#gỡ-cài-đặt) hoặc [Windows](../install/windows/#gỡ-cài-đặt).
 - <strong><code dir="ltr">{commands.browserOn}</code> và <code dir="ltr">{commands.browserOff}</code></strong> đổi cùng một thiết lập với <strong>Cho phép truy cập từ trình duyệt</strong> trong <strong>Cài đặt › Truy cập</strong>.
 - <strong><code dir="ltr">{commands.address}</code></strong> chỉ in địa chỉ khi <strong>Cho phép truy cập từ trình duyệt</strong> (hoặc, trên máy Mac, <strong>Cho phép truy cập từ xa</strong>) đang bật. Cả hai thiết lập đều tắt theo mặc định, nên cho đến khi bạn bật một trong hai, lệnh cho biết điều đó và không in địa chỉ.

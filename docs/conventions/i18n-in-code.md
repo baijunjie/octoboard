@@ -17,6 +17,12 @@ How code produces text the user reads, in the UI and on the website. How copy is
   `CATALOGS`**: labels, tooltips, accessible names, toasts, notifications and the native menu's labels. A translated
   catalog is typed `Translation<...>`, so a missing message or plural category fails the package's typecheck, and
   `catalog.test.ts` checks placeholders and plural categories.
+- **Text the desktop shell writes with no UI to word it is in the shell's native catalogs**,
+  `apps/desktop/src-tauri/localizations/<tag>.json` (the macOS permission prompts, and what Rust reads through
+  `src/localizations.rs`, such as the uninstaller's clean-up report), with the same terms as the UI's catalogs; the
+  Windows installer's own text is an NSIS `LangString` per language in `windows/installer-hooks.nsh`, or Tauri's.
+  These catalogs have no plural selection, so a count there is worded as a label form (`More: {count}`) in every
+  language, never with a noun that agrees with it.
 - **A language is identified everywhere by its tag in `languages.ts`** (Chinese is `zh-CN` and `zh-TW`); only the macOS
   bundle maps them to Apple's identifiers, in `apps/desktop/scripts/native-localizations.mjs`.
 - **Only what the user reads in Octoboard's own UI is translated.** Text aimed at an agent (a console session's
@@ -72,6 +78,8 @@ How code produces text the user reads, in the UI and on the website. How copy is
   for the language by `format`.
 - **A plural message carries every CLDR category its language needs** (ar zero/one/two/few/many/other, ru
   one/few/many/other), never only one/other and never an English plural `s` appended after a placeholder.
+- **A message with two numbers selects its plural form by `count` alone and words the other number without agreement**
+  (a label form, such as `Removed: {removed}`); nothing selects a form by the second number.
 - **Case-insensitive comparison of text the daemon also folds uses `toLowerCase()`**, never `toLocaleLowerCase()`
   (project and agent tags, account names, anything the daemon deduplicates with Rust's `to_lowercase()`). Under a
   Turkish locale `I` folds to `ı`, and the UI and daemon then disagree on duplicates. Locale-aware forms are for

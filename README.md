@@ -96,11 +96,12 @@ an SSH forward. Projects and agents run on the machine hosting their daemon. Eac
 
 ### Installing on Windows
 
-- **Download**: `Octoboard_<version>_x64-setup.exe` from a [release](https://github.com/baijunjie/octoboard/releases).
-  It installs Octoboard for your user account only; later versions arrive through the app's own updates.
-- **Requirements**: Windows 10 version 21H2 or later on x64; Windows 11 is the version it has been tested on. There is no
-  native ARM64 build yet: on Windows 11 on Arm the x64 app runs under emulation. The installer downloads and installs
-  Microsoft Edge WebView2 if it is missing, which needs an internet connection.
+- **Download**: `Octoboard_<version>_x64-setup.exe`, or `Octoboard_<version>_arm64-setup.exe` for Windows 11 on Arm,
+  from a [release](https://github.com/baijunjie/octoboard/releases). It installs Octoboard for your user account only;
+  later versions arrive through the app's own updates.
+- **Requirements**: Windows 10 version 21H2 or later on x64, or Windows 11 on Arm with the native arm64 build; Windows
+  11 is the version it has been tested on. The installer downloads and installs Microsoft Edge WebView2 if it is
+  missing, which needs an internet connection.
 - **Agents**: install the agent CLIs you want to use yourself, as on macOS; Claude Code and Codex also need
   [Git for Windows](https://gitforwindows.org/). Sharing the default account's configuration with additional accounts
   needs Windows' Developer Mode turned on (then quit Octoboard and open it again); without it, sharing is unavailable
@@ -178,12 +179,15 @@ beyond the server's SSH: whoever can log in over SSH as the daemon's user can us
    SSH key files, save, and connect; that daemon then opens in a window of its own. Without the
    details, type the host, port and user in; the app then shows the server's host key at the first connection and pins
    it once you confirm it, which you can check against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the
-   server. After the first sign-in the app installs an SSH key of its own for this device and uses it from then on; no
-   password is stored.
-3. **Removing a device**: a device is let in by the SSH key it signs in with. To shut one out, delete its line from
-   `~/.ssh/authorized_keys` of the daemon's user on the server; a key the app installed ends with
-   `Octoboard on <device name>`. A connection already open lasts until it drops. A browser address you gave out is
-   shut out separately, with `octoboardd address --rotate`.
+   server. After the first sign-in the app asks whether to add an SSH key of its own for this device, naming the line
+   and the file it would add it to; if you agree it signs in with that key from then on, and if you do not it keeps
+   signing in as you chose and does not ask again. No password is stored.
+3. **Removing a device**: a device is let in by the SSH key it signs in with. Removing the remote daemon in the app,
+   or turning **This computer's key** off on its page, takes the app's key out of the server's file and off the
+   device; where the server cannot be reached, the app names the line for you to delete. To shut a device out from the
+   server itself, delete its line from `~/.ssh/authorized_keys` of the daemon's user; a key the app installed ends
+   with `Octoboard on <device name>`. A connection already open lasts until it drops. A browser address you gave out
+   is shut out separately, with `octoboardd address --rotate`.
 
 The daemon keeps running when the app quits or the window closes: a remote window only disconnects.
 

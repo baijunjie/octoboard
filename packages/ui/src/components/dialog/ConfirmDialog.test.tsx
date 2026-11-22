@@ -165,6 +165,28 @@ it("shows the localized confirmation example and keeps the literal and editable 
   expect(document.body.querySelector<HTMLButtonElement>("button[type=submit]")!.disabled).toBe(false);
 });
 
+it.each([
+  { language: "tr", typed: "kaldir", accepted: true },
+  { language: "tr", typed: "kaldır", accepted: true },
+  { language: "tr", typed: "KaLdIr", accepted: true },
+  { language: "tr", typed: "KALDİR", accepted: true },
+  { language: "en", typed: "kaldir", accepted: true },
+  { language: "en", typed: "kaldır", accepted: true },
+  { language: "tr", typed: "kaldirma", accepted: false },
+  { language: "tr", typed: "sil", accepted: false },
+] as const)("takes $typed under $language as KALDIR: $accepted, the dotted and dotless i being one letter", ({ language, typed, accepted }) => {
+  const before = currentLanguage();
+  act(() => setLanguage(language));
+  onTestFinished(() => { act(() => setLanguage(before)); });
+  mount({ typeToConfirm: "KALDIR" });
+  const input = document.body.querySelector("input")!;
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, typed);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(document.body.querySelector<HTMLButtonElement>("button[type=submit]")!.disabled).toBe(!accepted);
+});
+
 const labels = () => Array.from(document.body.querySelectorAll("[role=alertdialog] button")).map((button) => button.textContent).filter(Boolean);
 const closeButton = () => document.body.querySelector("[role=alertdialog] button[aria-label=Close]");
 

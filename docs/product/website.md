@@ -232,7 +232,7 @@ receive a hover background; an expanded question and its answer share a uniform 
 
 The primary action in the header, hero, and closing section is the same localized Download label and opens the
 localized download page (see `docs/product/website-download-page.md`). The hero identifies macOS on Apple silicon and
-Intel, Windows on x64 and the Linux server on x86_64 and aarch64, all as beta. The closing section, under the slogan's
+Intel, Windows on x64 and arm64 and the Linux server on x86_64 and aarch64, all as beta. The closing section, under the slogan's
 meaning, says that the macOS or Windows app can be downloaded or the Linux server installed with one command, shows
 three platform links — macOS, Windows and Linux server, each with its icon — that open the download page at that
 platform's tab, then the Download button, and a closing note that repeats the beta status beside the MIT License. Other

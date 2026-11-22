@@ -1,0 +1,22 @@
+import { Code } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* How the Linux server program is uninstalled, which the Linux server guide and "Your system stays as it was" share. */}
+
+Ejecuta este comando en el servidor, como el usuario para el que se instaló. No se descarga nada.
+
+<Code code={system.uninstall} lang="sh" />
+
+Primero enumera todo lo que va a hacer y te pide que escribas <code dir="ltr">{system.uninstallWord}</code>. <code dir="ltr">{system.uninstallDryRun}</code> solo muestra la lista, y <code dir="ltr">{system.uninstallYes}</code> confirma donde no hay un terminal en el que preguntar.
+
+Después desactiva el uso compartido en cada cuenta que todavía comparte la configuración predeterminada. Para ello detiene el servicio si está en ejecución, lo que termina todas las sesiones que ejecuta, y lo inicia solo para esta limpieza, sin ejecutar sesiones. Luego detiene el servicio y quita el programa, junto con su servicio de systemd si lo tiene, y desactiva el lingering si la instalación del servicio lo activó y ningún otro servicio tuyo lo necesita.
+
+- <strong>Si una cuenta no puede dejar de compartir</strong>, por ejemplo porque una de sus sesiones está trabajando, no se quita nada y el servicio se vuelve a iniciar tal como estaba: vuelve a ejecutar el comando cuando ese trabajo haya terminado. Con <code dir="ltr">{system.uninstallKeepChanges}</code> desinstala sin esa limpieza y deja los enlaces en la carpeta de cada una de esas cuentas, y las copias de seguridad de la configuración propia de la cuenta junto a ellos, para que los borres a mano.
+- <strong>Si detener el servicio interrumpiría trabajo</strong>, no se quita nada. <code dir="ltr">{system.uninstallForce}</code> lo detiene de todos modos.
+- <strong>Ejecuta el <code dir="ltr">{system.cliName}</code> que instalaste.</strong> Ejecutado a través de un enlace, o como otra copia de <code dir="ltr">{system.cliName}</code> distinta de la que ejecuta el servicio de {productName}, no quita nada e indica el archivo que hay que ejecutar en su lugar.
+
+El comando anterior del script de instalación sigue funcionando y ejecuta este. Si instalaste con <code dir="ltr">{system.binDirOption}</code>, añádelo con la misma carpeta.
+
+<Code code={system.uninstallScript} lang="sh" />
+
+Si tu <code dir="ltr">{system.cliName}</code> es demasiado antiguo para tener el comando de desinstalación, el comando del script lo quita por sí mismo, pero sin desactivar nada antes: una cuenta que todavía comparte la configuración predeterminada conserva los enlaces de su carpeta, que puedes borrar a mano.

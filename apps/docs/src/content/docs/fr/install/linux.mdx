@@ -4,7 +4,8 @@ description: "Installez octoboardd, le programme serveur d’Octoboard, sur un s
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../../commands.ts";
+import LinuxUninstall from "../../../../snippets/fr/linux-uninstall.mdx";
 
 Installez octoboardd, le programme serveur de {productName} (l’app l’appelle le service), sur un serveur Linux sans droits root. Accédez-y depuis l’app macOS ou Windows, ou depuis un navigateur, dans les deux cas par SSH.
 
@@ -80,6 +81,12 @@ octoboardd choisit lui-même son propre port, que vous n’avez jamais besoin de
   S’il demande s’il faut redémarrer maintenant, répondez <code dir="ltr">y</code> pour redémarrer, ou appuyez sur Entrée pour garder l’ancienne version en marche pour le moment. Pour redémarrer plus tard, exécutez <code dir="ltr">{commands.restart}</code>.
 
 Si <code dir="ltr">{commands.update}</code> indique qu’il ne peut pas remplacer le programme, par exemple parce qu’il a été installé à un endroit où vous ne pouvez pas écrire, exécutez plutôt de nouveau la commande d’installation (ou celle du service). Il redémarre de la même façon quand c’est sûr, et sinon vous dit d’exécuter <code dir="ltr">{commands.restart}</code>.
+
+## Désinstaller
+
+<LinuxUninstall />
+
+Vos données restent dans <code dir="ltr">{system.dataDir}</code>. [Votre système reste tel qu’il était](../../your-system/) indique ce qui reste ensuite et comment le retirer.
 
 ## Commandes
 

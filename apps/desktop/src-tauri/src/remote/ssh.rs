@@ -230,6 +230,9 @@ pub struct Session {
     pub fingerprint: String,
     /// Set once the connection has ended (`Ended`).
     ended: tokio::sync::watch::Receiver<bool>,
+    /// How long [`Session::run`] gives a command: `COMMAND_TIMEOUT`, unless a test against a real
+    /// host has made the session patient ([`Session::patient`]).
+    command_limit: Duration,
 }
 
 /// Connects to `target` and authenticates.
@@ -314,6 +317,7 @@ pub async fn connect(target: &Target) -> Result<Session, ConnectError> {
         handle,
         fingerprint,
         ended,
+        command_limit: COMMAND_TIMEOUT,
     })
 }
 
@@ -414,10 +418,20 @@ impl Session {
         let _ = ended.wait_for(|ended| *ended).await;
     }
 
-    /// Runs `command` on the host and collects what it printed and its exit status, within
-    /// `COMMAND_TIMEOUT`.
+    /// Runs `command` on the host and collects what it printed and its exit status, within the
+    /// session's command limit: `COMMAND_TIMEOUT`, or `PATIENCE` for a session a test made
+    /// patient ([`Session::patient`]).
     pub async fn run(&self, command: &str) -> Result<Output, RunError> {
-        self.run_within(command, COMMAND_TIMEOUT).await
+        self.run_within(command, self.command_limit).await
+    }
+
+    /// This session with every [`Session::run`] bounded by `PATIENCE` instead of the tests' short
+    /// `COMMAND_TIMEOUT`: for a test against a real host, which answers when it answers, the
+    /// machine running the test perhaps loaded, and which proves no limit running out.
+    #[cfg(test)]
+    pub fn patient(mut self) -> Self {
+        self.command_limit = crate::test_support::PATIENCE;
+        self
     }
 
     /// `run` within `limit`, for a command that may take longer than reading something does.

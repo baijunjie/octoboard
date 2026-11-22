@@ -130,7 +130,10 @@ by its conversation's session ID, with `request_resume_session` (see
   stops the background session holding that conversation, under the account it launches on, then resumes as usual.
   Stopping keeps the conversation but ends whatever that background session was running, without asking and with no
   notice in the app; the daemon's log records it. It is best effort: if the background sessions cannot be listed or
-  stopped, the launch goes on and meets Claude Code's refusal, and the session does not come back. It runs only with
+  stopped, the launch goes on and meets Claude Code's refusal, and the session does not come back. The listing,
+  `claude agents --json`, changes no configuration file except in a config directory where Claude Code's first-run
+  set-up or migrations are still to be done (see "Claude Code's first-run set-up" in
+  `docs/product/account-quota-readings.md`). It runs only with
   Claude Code 2.1.329 or later; with an older version, or one whose version is unknown, it is skipped. Continuing a
   conversation from Claude Code's agents view forks it under a new id, which never holds the original, so it is not
   involved. A launch that resumes no conversation runs none of this.
@@ -145,10 +148,10 @@ by its conversation's session ID, with `request_resume_session` (see
     relaunched, so a session refused with `conversation_unresumable` leaves its owners archived too. The session's own
     `codex unarchive` also runs before any owner is relaunched, so its failure leaves the whole group as it was; an
     archived Codex owner's runs just before that owner's own relaunch, and its failure is that owner's refusal.
-  - **An archived owner whose conversation is proven gone does not stop the reopen**: what is left of its old
-    conversation's records is moved to the Trash, under the rules in "Moving the agent's own records to the Trash" in
-    `docs/product/deleting-sessions.md`, and the owner is relaunched into a fresh conversation, without the context of
-    its earlier one, as a session nobody typed into would be. The session is then resumed as usual.
+  - **An archived owner whose conversation is proven gone does not stop the reopen**: the owner is relaunched into a
+    fresh conversation, without the context of its earlier one, as a session nobody typed into would be, and the
+    session is then resumed as usual. What is left of the owner's old conversation's records stays in the agent's
+    directory (see "Moving the agent's own records to the Trash" in `docs/product/deleting-sessions.md`).
 - **Reopening an owner on its own reopens nothing bound to it**, and reopening a session reopens none of the other
   sessions bound to the same owners. The group comes back one session at a time, from the session the user asked for.
 - Resuming a session whose process is already running is refused. The refusal a double-click produces is not surfaced

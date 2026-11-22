@@ -51,6 +51,8 @@ Du bist nicht sicher, ob das der richtige Weg für dich ist? [Verbindungsart wä
 4. Wähle unter <strong>Anmeldung</strong> die Option <strong>Passwort</strong>, wenn du dich mit deinem Kontopasswort anmeldest. Wähle <strong>Schlüsseldatei</strong>, wenn dir dein Serveranbieter stattdessen eine Schlüsseldatei gegeben hat (oft mit einem Namen wie <code dir="ltr">id_ed25519</code> oder mit der Endung <code dir="ltr">.pem</code>), und gib an, wo sie sich auf diesem Computer befindet.
 5. Wähle <strong>Sichern</strong> und dann <strong>Verbinden</strong>. Gib dein Passwort ein, falls danach gefragt wird.
 
+   Nach der ersten Anmeldung fragt die App <strong>Schlüssel dieses Computers hinzufügen</strong>. Wähle <strong>Schlüssel hinzufügen</strong>, um dich von diesem Computer aus künftig ohne Passwort anzumelden, oder <strong>Nicht hinzufügen</strong>, um dich weiter so anzumelden wie bisher.
+
    Wenn du die Verbindungsdaten eingefügt hast, kam die Identität des Servers (sein Fingerabdruck) mit, und die App prüft sie für dich. Wenn du die Adresse von Hand eingegeben hast, zeigt die App beim ersten Mal einen Fingerabdruck an. Um sicherzugehen, dass du den richtigen Rechner erreicht hast, vergleiche ihn mit dem, den dieser Befehl auf dem Server ausgibt, und verbinde dich nur, wenn beide übereinstimmen:
 
    <Code code={commands.fingerprintCommand} lang="sh" />
@@ -107,8 +109,8 @@ Nur wer {productName} über die SSH-Weiterleitung erreicht, kann diese Adresse v
 
 - <strong>Keine zusätzlichen öffentlichen Ports:</strong> {productName} nimmt nur Verbindungen vom Host selbst an, daher musst du dich für eine Verbindung von einem anderen Computer zuerst per SSH am Host anmelden. Deshalb brauchst du SSH oder eines der [Relays](../choose-how-to-connect/).
 - <strong>Prüfe, welchen Rechner du erreichst:</strong> Die App merkt sich beim ersten erfolgreichen Verbinden den Host-Schlüssel, die SSH-Identität des Rechners, und blockiert die Verbindung mit einer Meldung, wenn sich diese Identität später ändert.
-- <strong>Kein Passwort gespeichert:</strong> Nachdem du dich zum ersten Mal mit einem Passwort oder deiner eigenen Schlüsseldatei angemeldet hast, richtet die App einen eigenen SSH-Schlüssel ein, den dieser Computer für künftige Anmeldungen verwendet.
-- <strong>Einem Computer den Zugriff entziehen:</strong> Entferne den Eintrag dieses Computers aus der Liste der erlaubten SSH-Schlüssel des Hosts (<code dir="ltr">{commands.authorizedKeys}</code> unter Linux und macOS). Dieser Schlüssel kann sich dann nicht mehr anmelden; eine bereits geöffnete Verbindung bleibt bestehen, bis sie endet.
+- <strong>Kein Passwort gespeichert:</strong> Die App speichert dein Passwort nie. Nachdem du dich zum ersten Mal mit einem Passwort oder deiner eigenen Schlüsseldatei angemeldet hast, fragt sie, ob sie einen eigenen SSH-Schlüssel dieses Computers für künftige Anmeldungen hinzufügen soll, und fügt ihn dem Host nur hinzu, wenn du <strong>Schlüssel hinzufügen</strong> wählst.
+- <strong>Einem Computer den Zugriff entziehen:</strong> Schalte auf diesem Computer <strong>Schlüssel dieses Computers</strong> auf der Seite des Hintergrunddienstes unter <strong>Remote-Geräte</strong> aus oder entferne den gesicherten Hintergrunddienst; die App nimmt seinen Schlüssel dann aus der Liste der erlaubten SSH-Schlüssel des Hosts und sagt dir, wenn sie den Host nicht erreichen konnte; der Eintrag kann dann noch dort sein. Du kannst den Eintrag dieses Computers auch selbst auf dem Host aus der Liste entfernen (<code dir="ltr">{commands.authorizedKeys}</code> unter Linux und macOS). Dieser Schlüssel kann sich dann nicht mehr anmelden; eine bereits geöffnete Verbindung bleibt bestehen, bis sie endet.
 
 ## In einem Remote-Fenster
 

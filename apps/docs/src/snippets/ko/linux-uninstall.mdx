@@ -1,0 +1,22 @@
+import { Code } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* How the Linux server program is uninstalled, which the Linux server guide and "Your system stays as it was" share. */}
+
+설치할 때 쓴 사용자로 서버에서 아래 명령을 실행하세요. 아무것도 다운로드하지 않습니다.
+
+<Code code={system.uninstall} lang="sh" />
+
+먼저 수행할 작업을 모두 나열한 다음 <code dir="ltr">{system.uninstallWord}</code> 입력을 요청합니다. <code dir="ltr">{system.uninstallDryRun}</code> 옵션은 목록만 보여 주고, 물어볼 터미널이 없는 곳에서는 <code dir="ltr">{system.uninstallYes}</code> 옵션으로 확인을 대신합니다.
+
+그런 다음 아직 기본 구성을 공유하는 모든 계정의 공유를 끕니다. 이를 위해 데몬이 실행 중이면 중지하고(데몬이 실행하는 모든 세션이 끝납니다), 이 정리만을 위해 세션을 실행하지 않는 상태로 데몬을 시작합니다. 그 뒤 데몬을 중지하고 프로그램과 systemd 서비스(있는 경우)를 제거하며, 서비스를 설치할 때 lingering을 켰고 다른 서비스가 그것을 필요로 하지 않으면 lingering도 끕니다.
+
+- <strong>공유를 중지할 수 없는 계정이 있으면</strong>(예를 들어 세션 중 하나가 작업 중이면) 아무것도 제거되지 않고 데몬은 원래대로 다시 시작됩니다. 그 작업이 끝난 뒤 명령을 다시 실행하세요. <code dir="ltr">{system.uninstallKeepChanges}</code> 옵션을 주면 이 정리 없이 제거하며, 그런 계정 폴더의 링크와 그 옆에 있는 계정 자체 구성의 백업은 직접 삭제하도록 남겨 둡니다.
+- <strong>데몬을 중지하면 작업이 중단되는 경우</strong> 아무것도 제거되지 않습니다. <code dir="ltr">{system.uninstallForce}</code> 옵션을 주면 그래도 중지합니다.
+- <strong>설치한 <code dir="ltr">{system.cliName}</code>을(를) 실행하세요.</strong> 링크를 통해 실행하거나, {productName} 데몬이 실행 중인 것과 다른 <code dir="ltr">{system.cliName}</code> 사본으로 실행하면 아무것도 제거하지 않고 대신 실행할 파일을 알려 줍니다.
+
+설치 스크립트의 예전 명령도 여전히 동작하며, 이 명령을 실행합니다. <code dir="ltr">{system.binDirOption}</code> 옵션으로 설치했다면 같은 폴더로 이 옵션을 추가하세요.
+
+<Code code={system.uninstallScript} lang="sh" />
+
+사용 중인 <code dir="ltr">{system.cliName}</code>이(가) 제거 명령이 없을 만큼 오래된 버전이면 스크립트 명령이 직접 제거하지만, 그 전에 아무것도 끄지 않습니다. 아직 기본 구성을 공유하는 계정은 폴더의 링크를 그대로 유지하며, 이 링크는 직접 삭제할 수 있습니다.

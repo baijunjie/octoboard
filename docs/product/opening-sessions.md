@@ -139,9 +139,10 @@ approval" in `docs/product/session-requests.md`); once up, it is in *working*.
 
 A session in a folder its agent has not been told to trust can first stop on that agent's own trust confirmation, before
 it takes up its task or reaches its prompt. A resumed session can stop on it as well; since a session left interrupted
-is relaunched only when it is selected or resumed, that is when its confirmation appears. Octoboard presses that
-confirmation for the user once they have given permission — for that project, or for a folder its directory lies under,
-whichever agent asked — or asks them first; see `docs/product/folder-trust.md`.
+is relaunched only when it is selected or resumed, that is when its confirmation appears. In a project session
+Octoboard presses that confirmation for the user once they have given permission — for that project, or for a folder
+its directory lies under, whichever agent asked — or asks them first; a console session's is pressed without asking.
+See `docs/product/folder-trust.md`.
 
 If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the user's
 shell environment could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), or, for

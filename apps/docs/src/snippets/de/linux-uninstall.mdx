@@ -1,0 +1,22 @@
+import { Code } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* How the Linux server program is uninstalled, which the Linux server guide and "Your system stays as it was" share. */}
+
+Führe diesen Befehl auf dem Server aus, als der Benutzer, für den es installiert wurde. Es wird nichts heruntergeladen.
+
+<Code code={system.uninstall} lang="sh" />
+
+Er führt zuerst alles auf, was er tun wird, und bittet dich, <code dir="ltr">{system.uninstallWord}</code> einzutippen. <code dir="ltr">{system.uninstallDryRun}</code> zeigt nur die Liste, und <code dir="ltr">{system.uninstallYes}</code> bestätigt dort, wo kein Terminal zum Nachfragen da ist.
+
+Dann schaltet er das Teilen für jedes Konto aus, das die Standardkonfiguration noch teilt. Dafür beendet er den Hintergrunddienst, falls er läuft, was jede Sitzung beendet, die der Hintergrunddienst ausführt, und startet ihn nur für diese Bereinigung, ohne Sitzungen. Danach beendet er den Hintergrunddienst und entfernt das Programm, samt seinem systemd-Dienst, falls es einen hat. Lingering schaltet er aus, wenn die Installation des Dienstes es eingeschaltet hat und kein anderer Dienst von dir es braucht.
+
+- <strong>Kann ein Konto das Teilen nicht beenden</strong>, etwa weil eine seiner Sitzungen arbeitet, wird nichts entfernt, und der Hintergrunddienst wird wieder gestartet, wie er lief: Führe den Befehl erneut aus, sobald diese Arbeit beendet ist. Mit <code dir="ltr">{system.uninstallKeepChanges}</code> deinstalliert er ohne diese Bereinigung und lässt die Links im Ordner jedes solchen Kontos zurück, samt den Sicherungen der eigenen Konfiguration des Kontos daneben, damit du sie von Hand löschst.
+- <strong>Würde das Beenden des Hintergrunddienstes Arbeit unterbrechen</strong>, wird nichts entfernt. <code dir="ltr">{system.uninstallForce}</code> beendet ihn trotzdem.
+- <strong>Führe das <code dir="ltr">{system.cliName}</code> aus, das du installiert hast.</strong> Über einen Link aufgerufen, oder als eine andere Kopie von <code dir="ltr">{system.cliName}</code> als die, die der Hintergrunddienst von {productName} ausführt, entfernt er nichts und nennt die Datei, die stattdessen auszuführen ist.
+
+Der frühere Befehl des Installationsskripts funktioniert weiterhin und führt diesen aus. Hast du mit <code dir="ltr">{system.binDirOption}</code> installiert, gib es mit demselben Ordner an.
+
+<Code code={system.uninstallScript} lang="sh" />
+
+Ist dein <code dir="ltr">{system.cliName}</code> zu alt für den Deinstallationsbefehl, entfernt der Befehl des Skripts es selbst, schaltet aber vorher nichts aus: Ein Konto, das die Standardkonfiguration noch teilt, behält die Links in seinem Ordner, die du von Hand löschen kannst.

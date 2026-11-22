@@ -187,8 +187,11 @@ pub(crate) async fn set_session_model_with(
     }
     refuse_if_owner_must_wait(state, asker, &before)?;
     // Shown restarting at once, as an account switch is shown switching once it has its claim, so
-    // that no window shows the old status or offers another change while the checks run.
+    // that no window shows the old status or offers another change while the checks run. A clean-up
+    // run, which would not relaunch it, refuses first, so that it is never shown starting; the
+    // admission below is asked again, and a change that only records the model passes this one.
     if !before.status.has_no_process() {
+        state.admit_launch()?;
         state.mark_model_change(id);
     }
     crate::accounts::shared_config::refuse_if_changing(state, before.account_id.as_deref())?;
@@ -253,7 +256,10 @@ pub(crate) async fn set_session_model_with(
     refuse_if_owner_must_wait(state, asker, &current)?;
     // Admitted past the handover barrier before anything commits the session to the restart, and
     // held through it: a planned stop raised first refuses the change, leaving a waiting quota
-    // recovery and the shown status alone, and one raised later waits for it.
+    // recovery and the shown status alone, and one raised later waits for it. A clean-up run, which
+    // would not relaunch the session, refuses here too, before its process is ended; a change
+    // that only records the model, above, it takes.
+    state.admit_launch()?;
     let admission = state.admit_change()?;
     // Committed to the restart from here: a quota recovery waiting to resume the session would
     // only be cut off by it.

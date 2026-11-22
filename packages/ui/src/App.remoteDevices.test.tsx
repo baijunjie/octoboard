@@ -45,6 +45,7 @@ const KEYED: RemoteDaemonEntry = {
   keyPath: "~/.ssh/id_ed25519",
   fingerprint: null,
   octoboarddPath: null,
+  deviceKey: { declined: false, file: null, mark: null },
 };
 
 const SECOND: RemoteDaemonEntry = { ...KEYED, id: "second", name: "Second box", host: "second.example.com" };
@@ -75,8 +76,9 @@ const DESKTOP: PlatformAdapter = {
       changeListeners.add(listener);
       return () => void changeListeners.delete(listener);
     },
-    save: async (entry) => ({ ...entry, id: entry.id ?? "new" }),
-    remove: async () => {},
+    save: async (entry) => ({ entry: { ...entry, id: entry.id ?? "new", deviceKey: { declined: false, file: null, mark: null } }, keyRemoval: { line: { result: "not_installed" as const }, privateKeyLeft: null } }),
+    remove: async () => ({ line: { result: "not_installed" as const }, privateKeyLeft: null }),
+    setDeviceKey: async () => ({ line: { result: "not_installed" as const }, privateKeyLeft: null }),
     connect: (request) => connect(request),
     disconnect: async () => {},
     onPageRequested: (listener) => {

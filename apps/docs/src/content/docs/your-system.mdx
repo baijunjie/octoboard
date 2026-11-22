@@ -1,0 +1,88 @@
+---
+title: "Your system stays as it was"
+description: "Octoboard leaves your system and your agents' files as it found them. The few things a feature adds, how each is undone, and what is left after uninstalling."
+---
+
+import { Aside, Code } from "@astrojs/starlight/components";
+import { commands, productName, system } from "../../commands.ts";
+import LinuxUninstall from "../../snippets/en/linux-uninstall.mdx";
+import WindowsUninstaller from "../../snippets/en/windows-uninstaller.mdx";
+
+{productName} leaves your system as it found it: your agents' configuration, and everything else outside {productName}'s own folders. A few features do add something outside those folders. This page lists every one of them, with what it adds, where, and how it is undone, and says what is left after you uninstall.
+
+## The rule
+
+- <strong>What {productName} gives an agent reaches it at each launch, and only there.</strong> Its status hooks, its own MCP server and the role it describes to a session are passed when the agent starts, or kept in {productName}'s own folder. No file of yours or of an agent's is edited for them, so an agent you run on its own starts without any of it.
+- <strong>{productName} adds no hook of its own to your settings, and decides nothing about a project's folder for you.</strong> Whether a project's folder is trusted is for you to say and for the agent to record. The one folder {productName} answers for is a console's own, which is {productName}'s (see below).
+- <strong>What an agent writes for itself is the agent's.</strong> Its conversation records, caches and logs, a login's credentials and the trust it records when its own question is answered are written as they are when you use the agent without {productName}. So is the set-up an agent's own program does the first time it runs in a configuration folder, which a background reading by {productName} can set off before your own first launch (see below).
+- <strong>Work inside your projects is not what this page is about.</strong> Editing a project's files, Git operations, branches and worktrees are the development work you add a project for.
+
+## What a feature adds, and how to undo it
+
+Each of these is added only by a feature you use or turn on.
+
+### Undone by turning the feature off
+
+- <strong>This computer's key on a remote server.</strong> After you sign in to a saved remote daemon with a password or a key file, the app asks before it adds anything: <strong>Add this computer's key</strong> names the file and the line. <strong>Add key</strong> adds one line, marked <code dir="ltr">{system.keyMark}</code>, to your user's allowed SSH keys on that server (<code dir="ltr">{commands.authorizedKeys}</code> on Linux and macOS), and keeps the private key in this computer's credential store (the login keychain on macOS, Credential Manager on Windows). <strong>Do not add</strong> adds nothing and is not asked again. To undo it, turn off <strong>This computer's key</strong> on that daemon's page in <strong>Remote devices</strong>, or remove the saved daemon: the app takes the line out of the file and removes the private key. It does the same when you change the saved daemon's host, port or user. If the server cannot be reached, the line may stay, and the app tells you so, for you to delete it on the server.
+- <strong>Launch at login</strong> (Windows, and macOS 13 or later). <strong>Settings › General › Launch at login</strong> puts {productName} in the list of apps your system opens at login, and its row says so. Turning it off is how it is taken out of that list.
+- <strong>The command-line tool</strong> (macOS). <strong>Install</strong> under <strong>Settings › General › Command-line tool</strong> adds a link named <code dir="ltr">{system.cliName}</code> to <code dir="ltr">{system.cliDir}</code>, or to <code dir="ltr">{system.cliFallbackDir}</code> if the system does not allow that; the row says so before you install. <strong>Remove</strong> deletes the link.
+- <strong>Sharing the default configuration.</strong> <strong>Share default configuration</strong>, in an account's settings under <strong>Settings › Agent accounts</strong>, replaces the shareable parts of that account's folder with links into the default account's folder, keeps the account's own configuration as backups beside them, and moves its conversation history into the default account's folder. The row says this before you turn it on. Turning it off removes the links, restores the backups and moves the conversations of the account's own sessions back. <strong>One thing stays:</strong> the rest of the conversation history that was moved stays in the default account's folder, because removing it would lose your conversations. See [Shared configuration](../features/shared-configuration/).
+
+### Kept as yours or the agent's
+
+These write something that is yours or the agent's from then on, so {productName} has nothing of its own to undo. Where an entry can be removed by hand, the item says where.
+
+- <strong>Switching a session's account.</strong> <strong>Switch account</strong> asks you to confirm. A switch an agent asks for waits for your approval unless you have turned on <strong>Automatically approve account switches</strong>, and the switch at the usage limit happens only while <strong>Automatically switch accounts at the usage limit</strong> is on. A switch copies that one session's conversation into the target account's folder; for Codex, it also points that account's own record of the conversation at the copy. The original stays where it was, and the copy stays as that account's own. See [Account continuity](../features/account-continuity/).
+- <strong>Settings and plugins you change inside a Grok Build session.</strong> Where your <code dir="ltr">config.toml</code> is a link to a file, a theme, plugin switch or default model you change in a session is written to that file when the session ends, as Grok would have saved it. A plugin you install in a session is recorded in your Grok folder's own plugin registry, where it has one.
+- <strong>Grok Build's trust in a project's folder.</strong> Once you have agreed to trust a project's folder (<strong>Trust and continue</strong>, or your own answer in the terminal), the one entry Grok wrote is carried, unchanged, into the trust list in your Grok folder.
+- <strong>Records of a session that never had a conversation.</strong> Deleting a session you never sent anything to moves the agent's own records of it to the Trash (the Recycle Bin on Windows) with it, without asking: they hold no conversation of yours. The records of a session you used are moved only if you tick that option in the confirmation. They can be recovered from the Trash.
+- <strong>Claude Code's first-run set-up.</strong> In a configuration folder Claude Code has not run in before, or after an update of Claude Code, a background reading by {productName} (an account's usage, its MCP servers or its agents) makes Claude Code carry out its own first-run set-up and pending migrations there, as its next launch by you would have. {productName} leaves those changes as they are.
+- <strong>An empty folder for a new Codex account.</strong> Before a Codex account's first launch or sign-in, {productName} creates the account's folder, empty, if it does not exist yet: Codex refuses to start without it.
+- <strong>Trust in a console's own folder.</strong> A console session runs in a folder of {productName}'s own, so {productName} answers the agent's trust question there without asking you. Claude Code then keeps an entry in its own trust list that names only that folder, and has no effect anywhere else. Codex asks only where that folder lies inside a Git repository, and then records its trust for that repository's root, which covers the whole repository: if your home folder is kept in Git, that is your whole home folder. Grok Build records nothing in your trust list. {productName} does not remove these entries, since that would be another edit of your file. You can remove them yourself: Codex's is the <code dir="ltr">[projects."&lt;repository root&gt;"]</code> table in the <code dir="ltr">config.toml</code> of its folder, and Claude Code's is the folder's entry under <code dir="ltr">projects</code> in its <code dir="ltr">.claude.json</code>.
+
+### Undone by the uninstall command
+
+- <strong>The Linux server program as a service.</strong> Installing it as a service (see [Linux server](../install/linux/)) writes a systemd user service into your systemd configuration folder, and turns on lingering for your user if it was off. The uninstall command, below, is how this is undone.
+
+<Aside>
+On Windows, the app also keeps the jump list of its taskbar button, with your saved remote daemons. It has no switch: <strong>Remove all</strong>, described below, removes it, and so does the uninstaller.
+</Aside>
+
+## Before you uninstall
+
+Before you uninstall, everything from “Undone by turning the feature off” that is in effect can be removed in one go, with its feature turned off. In the desktop app, <strong>Settings › Cleanup</strong> has one row for it, <strong>Clean up before uninstalling</strong>: it says how many items are in effect and has one button, <strong>Remove all</strong>. On Windows the uninstaller also does it by itself, and the Linux server program's uninstall command does it first; both are described below.
+
+- <strong>It asks first.</strong> The confirmation says how many items will be removed, with the list folded away under that count, and what is kept. It goes ahead only once you have typed <strong>REMOVE</strong>.
+- <strong>It shows the result.</strong> Afterwards it lists what was removed and what was not. For an item that could not be removed, for example a key on a server that cannot be reached, it says what is left and where.
+- <strong>It is only in the app's own window on that computer.</strong> In a browser on a computer with the desktop app, and in a window that shows a remote daemon, the row only says where the clean-up is done. In a browser on a Linux server, it says that uninstalling on the server cleans up first, and shows <code dir="ltr">{system.uninstall}</code> with <strong>Copy uninstall command</strong>, for you to run on the server. Nothing is removed from there.
+- <strong>Use it only when you are uninstalling.</strong> To undo one item and keep using {productName}, turn that feature off instead.
+- <strong>It keeps your data.</strong> {productName}'s own folders stay, and so does the conversation history that sharing moved.
+
+## After you uninstall
+
+Uninstalling removes the program.
+
+### macOS
+
+Quit {productName}, then delete it from your Applications folder. Nothing runs when it is deleted, so select <strong>Remove all</strong> first: deleting the app does not remove what it removes.
+
+### Windows
+
+Use the app's uninstaller.
+
+<WindowsUninstaller />
+
+### Linux server
+
+<LinuxUninstall />
+
+The folder the program was installed in stays, and so does any line you added to put it on your PATH.
+
+### What stays
+
+{productName}'s own folders are left, so a later installation finds your consoles, sessions and settings again. To remove them as well, delete them: you lose every console, session record and setting.
+
+- <strong>Its data folder</strong>, on the computer or server where sessions ran: <code dir="ltr">{system.dataDir}</code> (<code dir="ltr">{system.dataDirWindows}</code> on Windows). On macOS and Linux, <code dir="ltr">{system.removeDataDir}</code> removes it.
+- <strong>The desktop app's own folder:</strong> <code dir="ltr">{system.appDataMac}</code> on macOS; <code dir="ltr">{system.appDataWindows}</code> and <code dir="ltr">{system.appLocalDataWindows}</code> on Windows.
+
+Your agents' own folders, with their logins, settings and conversations, are the agents' and stay as they are.

@@ -4,7 +4,7 @@ description: "Os comandos do octoboardd em um servidor Linux, em um Mac e em um 
 ---
 
 import { Code } from "@astrojs/starlight/components";
-import { commands, productName, tunnel } from "../../../commands.ts";
+import { commands, productName, system, tunnel } from "../../../commands.ts";
 
 O octoboardd é o programa que executa o {productName} (o app o chama de daemon). Em um servidor Linux, você mesmo o instala e o inicia. Em um Mac ou em um PC com Windows, ele vem dentro do app, que o inicia ao abrir e o para ao fechar. Os comandos são os mesmos nos três, exceto pelas diferenças abaixo.
 
@@ -35,6 +35,7 @@ Execute os comandos como o usuário que executa o {productName}. Eles atuam sobr
 | <code dir="ltr">{commands.update}</code> | Apenas em servidores Linux. Instala a versão mais recente, como em [Atualizar](../install/linux/#atualizar). |
 | <code dir="ltr">{commands.updateCheck}</code> | Apenas em servidores Linux. Verifica se há uma versão mais nova, sem instalá-la. |
 | <code dir="ltr">{commands.updateRollback}</code> | Apenas em servidores Linux. Restaura a versão que estava instalada antes da última atualização e reinicia nela, como faz uma atualização. |
+| <code dir="ltr">{system.uninstall}</code> | Apenas em servidores Linux. Remove o octoboardd do servidor, como em [Desinstalar](../install/linux/#desinstalar). |
 | <code dir="ltr">{commands.version}</code> | Imprime a versão instalada. |
 
 Para ver a lista completa de comandos, execute <code dir="ltr">{commands.help}</code>; para as opções de um comando, execute <code dir="ltr">{commands.commandHelp}</code>. A lista também mostra comandos que o {productName} executa por conta própria e que você nunca executa manualmente.
@@ -45,5 +46,6 @@ O app executa o octoboardd por você, então alguns comandos se comportam de out
 
 - <strong><code dir="ltr">{commands.start}</code> e <code dir="ltr">{commands.stop}</code> em um Mac</strong> atuam sobre o app: <code dir="ltr">{commands.start}</code> o abre em segundo plano, sem janela, e <code dir="ltr">{commands.stop}</code> o encerra.
 - <strong><code dir="ltr">{commands.restart}</code> e <code dir="ltr">{commands.update}</code></strong> são recusados. O app reinicia o octoboardd e instala as versões novas por conta própria.
+- <strong><code dir="ltr">{system.uninstall}</code></strong> também é recusado. O octoboardd é removido junto com o app: veja como desinstalá-lo no [macOS](../install/macos/#desinstalar) ou no [Windows](../install/windows/#desinstalar).
 - <strong><code dir="ltr">{commands.browserOn}</code> e <code dir="ltr">{commands.browserOff}</code></strong> mudam a mesma configuração que <strong>Permitir acesso pelo navegador</strong> em <strong>Ajustes › Acesso</strong>.
 - <strong><code dir="ltr">{commands.address}</code></strong> imprime um endereço apenas enquanto <strong>Permitir acesso pelo navegador</strong> (ou, em um Mac, <strong>Permitir acesso remoto</strong>) está ativado. As duas configurações vêm desativadas por padrão, então, até você ativar uma, o comando informa isso e não imprime endereço nenhum.

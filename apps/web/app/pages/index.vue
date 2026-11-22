@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { downloadTabs } from "../../seo/downloads";
+import { downloadTabs, heroPlatformsKey, offersWindowsArm, type Downloads } from "../../seo/downloads";
 import {
   availablePlatforms,
   developerSections,
@@ -11,6 +11,7 @@ import {
 } from "../../seo/page-outline";
 const { t } = useSiteCopy();
 const config = useRuntimeConfig();
+const platformsKey = heroPlatformsKey(offersWindowsArm(config.public.downloads as Downloads, config.public.repositoryUrl));
 const localePath = useLocalePath();
 const page = ref<HTMLElement | null>(null);
 const paused = ref(false);
@@ -60,7 +61,7 @@ useSeoMeta({
             }}<span class="link-arrow" aria-hidden="true"
             /></a>
           </div>
-          <p class="hero-note">{{ t("heroAvailability") }}</p>
+          <p class="hero-note">{{ t(platformsKey) }}</p>
         </div>
         <div class="hero-art">
           <HeroMascot :paused="paused" />

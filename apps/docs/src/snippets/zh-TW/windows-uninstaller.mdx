@@ -1,0 +1,12 @@
+import { Aside } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* What the Windows uninstaller does before it removes the app, which the Windows guide and "Your system stays as it was" share. */}
+
+在移除任何東西之前，解除安裝程式會自行清理：{productName} 正在執行時會先關閉它（靜默解除安裝以外會先詢問），再不經詢問地移除<strong>全部移除</strong>會移除的一切。無論結果如何，它隨後都會繼續解除安裝。如果有東西沒能移除，它會在最後說明，並寫明每一項留在哪裡，同時把清單寫入 <code dir="ltr">{system.uninstallLogWindows}</code>；靜默解除安裝只寫這個檔案。
+
+安裝程式和解除安裝程式會使用系統的語言（如果 {productName} 支援），否則使用英文。解除安裝程式及其留下內容的清單會沿用安裝時的語言；某項功能為留下的項目給出的原因可能是英文。
+
+並不是每次解除安裝都會做這次清理。應用程式內更新，以及在已安裝的應用程式上執行的安裝程式都不會做，所以你在遠端伺服器上的金鑰和各帳號的共用都保持原樣；不過你自己在上面執行的安裝程式仍會關閉<strong>登入時啟動</strong>，直到你重新開啟。這項清理出現之前的版本，其解除安裝程式也不做清理：在這樣的版本上，請先選擇<strong>全部移除</strong>。
+
+<Aside>在 Windows on Arm 上使用 x64 版應用程式時，解除安裝程式無法關閉正在執行的 {productName}，解除安裝會在什麼都沒移除的情況下停止，在它上面執行的安裝程式也是如此：請先結束 {productName}。arm64 版應用程式沒有這個限制，Arm 電腦上的 x64 版安裝會透過應用程式內更新換成 arm64 版。</Aside>

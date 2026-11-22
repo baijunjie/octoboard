@@ -34,7 +34,32 @@
       },
       "nsis": {
         "installMode": "currentUser",
-        "installerHooks": "windows/installer-hooks.nsh"
+        "installerHooks": "windows/installer-hooks.nsh",
+        "languages": [
+          "Arabic",
+          "German",
+          "English",
+          "Spanish",
+          "French",
+          "Hindi",
+          "Indonesian",
+          "Italian",
+          "Japanese",
+          "Korean",
+          "PortugueseBR",
+          "Russian",
+          "Thai",
+          "Turkish",
+          "Vietnamese",
+          "SimpChinese",
+          "TradChinese"
+        ],
+        "customLanguageFiles": {
+          "Hindi": "windows/languages/Hindi.nsh",
+          "Indonesian": "windows/languages/Indonesian.nsh",
+          "Thai": "windows/languages/Thai.nsh"
+        },
+        "displayLanguageSelector": false
       }
     }
   }

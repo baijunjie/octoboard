@@ -37,7 +37,10 @@ this row**, on Windows and on macOS 13 and later; on macOS 11 and 12 and in a br
 state rather than a choice Octoboard keeps — off until the system has an entry for Octoboard — and the row appears once
 that state has been read. While it is off the row's description says that, once it is
 on, Octoboard opens when the user logs in; while it is on, that it does; either way it adds that, while Octoboard keeps
-running in the background, it then starts without showing its window. While the system holds the entry for the user's
+running in the background, it then starts without showing its window. A second sentence names the list of apps the
+system, named as it names itself, opens at login: while the switch is off, that turning it on adds Octoboard to that
+list and turning it off removes it; while it is on, that Octoboard is in that list until the switch is turned off.
+While the system holds the entry for the user's
 approval (macOS), the switch is on, the description says that Octoboard is waiting for the user's approval and to allow
 it in System Settings, and an **Open System Settings** button stands beside the switch; at 768 px and below the two go
 under the text (see "In a narrow window" in `docs/product/settings.md`). What the system's entry is, how the state is
@@ -61,11 +64,18 @@ copy, so it runs the build an update puts there. **Nothing makes it at launch**:
   application is replaced. A link left in `~/.local/bin` by an earlier install is removed once the one in
   `/usr/local/bin` is made.
 - **The row shows its state each time Settings opens**, and again when the window gets focus back, saying so in the row
-  and never in a dialog: **Not installed**; **Installed at** the link's path; installed but running **another copy** of
+  and never in a dialog: **Not installed**, followed by a line saying that installing adds a link named `octoboardd` to
+  `/usr/local/bin`, or to `~/.local/bin` if the system does not allow that; **Installed at** the link's path; installed but running **another copy** of
   the application; or installed but the copy it points to **is no longer there**. A refusal or failure of an action is
   said in the row too.
 - **The actions follow the state**: Install where there is no link; Reinstall (which points the link at this
   application) and Remove where there is one, whichever of the three states.
+- **Remove deletes every link of the application's** in both `/usr/local/bin` and `~/.local/bin`, through the
+  administrator prompt where the directory is not the user's to write; a file that is not a link, or a link to anything
+  but an application's `octoboardd`, is left. A directory installing created stays, empty. The clean-up before
+  uninstalling lists the link wherever there is one and its **Remove all** removes it as Remove does (see
+  `docs/product/clean-up-before-uninstalling.md`). Deleting the application without either leaves the link, leading
+  nowhere (see `docs/product/what-remains-after-uninstalling.md`).
 
 Run from the link, `octoboardd` is the application's own copy, whose `start` and `stop` start and quit the application
 (see "The application's copy of `octoboardd`" in `docs/product/daemon-command-line.md`).

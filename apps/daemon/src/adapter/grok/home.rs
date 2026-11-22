@@ -27,9 +27,12 @@ const SANDBOX_CHECKED_ENTRIES: &[&str] = &["bundled", "bundles", "hooks-paths", 
 /// an organisation-distributed config is not Octoboard's to reproduce.
 const EXCLUDED_ENTRIES: &[&str] = &["managed_config.toml", "requirements.toml", "hooks"];
 
+/// The per-session home's name inside the session's scratch directory.
+pub(super) const FARM_DIR: &str = "grok-home";
+
 /// The variable that names Grok's login store to it in place of `$GROK_HOME/auth.json` (Grok Build
 /// reads the login from the file it names: measured on 1.0.77).
-const LOGIN_STORE_VAR: &str = "GROK_AUTH_PATH";
+pub(super) const LOGIN_STORE_VAR: &str = "GROK_AUTH_PATH";
 
 /// The session's `GROK_HOME`, and what the launch sets for Grok to use it.
 pub(super) struct GrokHome {
@@ -136,7 +139,7 @@ fn is_sqlite_file(name: &str) -> bool {
 
 /// Builds the session's `GROK_HOME`.
 pub(super) fn build_grok_home(spec: &LaunchSpec<'_>, source_home: &Path) -> Result<GrokHome> {
-    let farm = spec.scratch.join("grok-home");
+    let farm = spec.scratch.join(FARM_DIR);
     if farm.exists() {
         std::fs::remove_dir_all(&farm).ok();
     }
@@ -185,21 +188,33 @@ pub(super) fn build_grok_home(spec: &LaunchSpec<'_>, source_home: &Path) -> Resu
     }
     write_hooks(&farm, spec.hook_script, spec.guard.as_ref())?;
 
-    // A login store the user's shell names already reaches Grok through the launch environment.
-    if !file_links && !spec.shell_env.contains_key(LOGIN_STORE_VAR) {
-        let login = source_home.join(GROK_SIGN_IN_FILE);
-        // Resolved, so that Grok's save replaces the file rather than a link to it.
-        let login = crate::hostfs::canonical(&login).unwrap_or(login);
-        env.push((
-            LOGIN_STORE_VAR.to_string(),
-            login.to_string_lossy().into_owned(),
-        ));
+    if !file_links {
+        env.extend(login_store_env(source_home, spec.shell_env));
     }
     Ok(GrokHome {
         dir: farm,
         env,
         claude_mcps_supplied: added.claude_mcps_supplied,
     })
+}
+
+/// What names the login store of the Grok home `source_home` to a Grok run against another home
+/// ([`LOGIN_STORE_VAR`]); `None` where the user's shell names a login store already, which reaches
+/// Grok through the shell snapshot. The path is resolved, so that Grok's save replaces the file
+/// rather than a link to it.
+pub(super) fn login_store_env(
+    source_home: &Path,
+    shell_env: &std::collections::HashMap<String, String>,
+) -> Option<(String, String)> {
+    if shell_env.contains_key(LOGIN_STORE_VAR) {
+        return None;
+    }
+    let login = source_home.join(GROK_SIGN_IN_FILE);
+    let login = crate::hostfs::canonical(&login).unwrap_or(login);
+    Some((
+        LOGIN_STORE_VAR.to_string(),
+        login.to_string_lossy().into_owned(),
+    ))
 }
 
 /// Copies a source file the farm carries as a copy. A file that cannot be copied (gone meanwhile,
@@ -274,7 +289,7 @@ fn append_mcp_server(config: &Path, spec: &LaunchSpec<'_>) -> Result<()> {
 /// source is read whole within [`LARGE_FILE_LIMIT`] before `to` is created, so a source that is too
 /// large, or stops being a regular file before it is read, fails the copy rather than leaving a
 /// truncated one.
-fn copy_private_file(from: &Path, to: &Path) -> Result<()> {
+pub(super) fn copy_private_file(from: &Path, to: &Path) -> Result<()> {
     use std::io::Write;
 
     if !from.is_file() {

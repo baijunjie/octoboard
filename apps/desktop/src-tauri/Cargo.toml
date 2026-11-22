@@ -79,11 +79,12 @@ tauri-plugin-single-instance = "2.5"
 # the window's system menu (`GetSystemMenu`, `AppendMenuW`) and hears its items through a window subclass,
 # `launch_at_login/windows.rs`, which reads and writes the `Run` key's login entry, `lifecycle/windows.rs`,
 # which puts the shell before its daemon in the system's shutdown order, `remote_login.rs`, which asks the
-# Service Control Manager whether OpenSSH Server runs, and `remote/credentials.rs`, which keeps each remote
-# daemon's device key in the Credential Manager. The version the lockfile already resolves for other
+# Service Control Manager whether OpenSSH Server runs, `remote/credentials.rs`, which keeps each remote
+# daemon's device key in the Credential Manager, and `updater/windows.rs`, which reads the machine's native
+# architecture (`IsWow64Process2`). The version the lockfile already resolves for other
 # dependencies.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_System_Registry", "Win32_System_Services", "Win32_System_Threading", "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_System_Registry", "Win32_System_Services", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 # For the request filter `page_isolation/windows.rs` puts on the window's WebView2 and the browser accelerator
 # keys `chrome/windows.rs` turns off on it, and `windows` for the string and interface types their calls take.
 # Pinned to the exact versions `tauri` and `wry` already resolve, so promoting them to direct dependencies does
@@ -91,6 +92,13 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 webview2-com = "=0.39.1"
 # The jump list (`menu/jump_list.rs`) uses its shell, COM and property types.
 windows = { version = "=0.62.2", default-features = false, features = ["Win32_Foundation", "Win32_Storage_EnhancedStorage", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_Shell_PropertiesSystem"] }
+
+# For the macOS half of `sidecar::terminate`, which sends the daemon SIGTERM so it stops its sessions' processes
+# before a restart kills it, and, on every Unix target the shell compiles on, for the flags `remote/files/unix.rs`
+# opens an earlier build's lock with (without waiting, without following a link). The release line `octoboardd` and
+# `tauri` already resolve.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 # The macOS-only bindings; the other platforms build without them.
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -122,9 +130,6 @@ objc2-foundation = { version = "=0.3.2", default-features = false, features = ["
 # through `objc2-web-kit`.
 objc2-web-kit = { version = "=0.3.2", default-features = false, features = ["std", "block2", "WKContentRuleList", "WKContentRuleListStore", "WKUserContentController", "WKWebViewConfiguration"] }
 block2 = "=0.6.2"
-# For the macOS half of `sidecar::terminate`, which sends the daemon SIGTERM so it stops its sessions' processes
-# before a restart kills it. The release line `octoboardd` and `tauri` already resolve.
-libc = "0.2"
 # For `remote/credentials.rs`, which keeps each remote daemon's device key in the login keychain as a
 # generic password. The release line the TLS stack's platform verifier already resolves.
 security-framework = "3.7"

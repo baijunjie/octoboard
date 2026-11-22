@@ -6,6 +6,7 @@ use crate::adapter::provider;
 use crate::protocol::{QuotaWindow, QuotaWindowKind, ResetCredit};
 use crate::test_support::{fake_agent, until_the_shell_ran, ScratchDir};
 use serde_json::json;
+use std::path::PathBuf;
 
 const CLAUDE_REPLY: &str = include_str!("../../../../testdata/claude_get_usage_reply.json");
 const CODEX_REPLY: &str = include_str!("../../../../testdata/codex_rate_limits_reply.json");
@@ -15,6 +16,22 @@ const GROK_REPLY_PERIOD_UNUSED: &str =
 
 /// Long enough for a fake agent to start on a loaded machine, short enough to wait out.
 const SHORT: Duration = Duration::from_millis(700);
+
+/// [`super::probe`] with the directories a provider runs a probe against kept in a scratch
+/// directory of the call's own.
+fn probe(
+    agent: AgentId,
+    shell_env: &HashMap<String, String>,
+    config_dir: Option<&Path>,
+    timeout: Duration,
+    cancel: &AtomicBool,
+    trace: &mut ProbeTrace,
+) -> Result<Reading, QuotaUnavailable> {
+    let run_homes = ScratchDir::new("probe-run-homes");
+    super::probe(
+        agent, shell_env, config_dir, &run_homes, timeout, cancel, trace,
+    )
+}
 
 fn reply_of(agent: AgentId) -> &'static str {
     match agent {
@@ -729,6 +746,35 @@ fn a_grok_percent_that_is_not_a_number_is_unreadable_even_with_a_period() {
     }
 }
 
+/// Whether `agent`'s provider makes its reading against a directory of Octoboard's own rather than
+/// the account's (`AccountOps::run_home`), asked under a root of the question's own.
+fn reads_in_a_home_of_its_own(
+    agent: AgentId,
+    account: &Path,
+    shell_env: &HashMap<String, String>,
+) -> bool {
+    let asked = ScratchDir::new("quota-run-home-asked");
+    provider(agent)
+        .accounts()
+        .and_then(|ops| {
+            let wait = RunWait {
+                until: Instant::now() + crate::test_support::PATIENCE,
+                cancel: None,
+            };
+            ops.run_home(
+                &asked,
+                BackgroundRun::QuotaReading,
+                account,
+                shell_env,
+                &wait,
+            )
+            .expect("the provider's answer")
+        })
+        .is_some()
+}
+
+/// The agent's own variable names the account's directory to the CLI, or, for a provider that
+/// reads against a directory of Octoboard's own, one under the run homes and never the account's.
 #[test]
 fn an_account_directory_is_exported_under_the_agents_own_variable() {
     for agent in probing_providers() {
@@ -736,35 +782,52 @@ fn an_account_directory_is_exported_under_the_agents_own_variable() {
         let env = answering_agent(&dir, agent, reply_of(agent));
         let account_dir = dir.join("account");
         std::fs::create_dir(&account_dir).unwrap();
-        probe(
+        let run_homes = dir.join("run-homes");
+        let own_home = reads_in_a_home_of_its_own(agent, &account_dir, &env);
+        let given = || {
+            let given = std::fs::read_to_string(dir.join("dir")).unwrap();
+            PathBuf::from(given.trim())
+        };
+        super::probe(
             agent,
             &env,
             Some(&account_dir),
+            &run_homes,
             crate::test_support::PATIENCE,
             &AtomicBool::new(false),
             &mut ProbeTrace::default(),
         )
         .expect("a readable reply");
-        assert_eq!(
-            std::fs::read_to_string(dir.join("dir")).unwrap().trim(),
-            account_dir.to_string_lossy(),
-            "{agent:?}"
-        );
-        // The default account is left to the shell, which here exports nothing.
-        probe(
+        if own_home {
+            assert!(given().starts_with(&run_homes), "{agent:?}: {:?}", given());
+            assert!(
+                !given().starts_with(&account_dir),
+                "{agent:?}: {:?}",
+                given()
+            );
+        } else {
+            assert_eq!(given(), account_dir, "{agent:?}");
+        }
+        let of_the_account = given();
+        // The default account is left to the shell, which here exports nothing; a provider with a
+        // directory of its own names one for the default account as well, another than the
+        // pinned account's.
+        super::probe(
             agent,
             &env,
             None,
+            &run_homes,
             crate::test_support::PATIENCE,
             &AtomicBool::new(false),
             &mut ProbeTrace::default(),
         )
         .expect("a readable reply");
-        assert_eq!(
-            std::fs::read_to_string(dir.join("dir")).unwrap().trim(),
-            "",
-            "{agent:?}"
-        );
+        if own_home {
+            assert!(given().starts_with(&run_homes), "{agent:?}: {:?}", given());
+            assert_ne!(given(), of_the_account, "{agent:?}");
+        } else {
+            assert_eq!(given(), PathBuf::new(), "{agent:?}");
+        }
     }
 }
 
@@ -1027,4 +1090,99 @@ fn the_signed_out_reason_of_claude_names_the_fields_that_decided_it() {
     );
     assert!(reason.contains("the usage request was refused"), "{reason}");
     assert!(!reason.contains("me@example.com"), "{reason}");
+}
+
+/// A Grok account with a configuration and a login, and a stand-in that initialises its home as
+/// Grok Build does: it appends to the home's `config.toml`, records the home and the login it was
+/// given, and answers the billing request.
+fn grok_account_and_stand_in(dir: &ScratchDir, users: &str) -> (PathBuf, HashMap<String, String>) {
+    use crate::providers::grok::{GROK_CONFIG_FILE, GROK_SIGN_IN_FILE};
+
+    let account = dir.join("account");
+    std::fs::create_dir_all(&account).unwrap();
+    std::fs::write(account.join(GROK_CONFIG_FILE), users).unwrap();
+    std::fs::write(account.join(GROK_SIGN_IN_FILE), "{}").unwrap();
+    std::fs::write(dir.join("reply"), GROK_REPLY).unwrap();
+    let env = fake(
+        dir,
+        AgentId::GROK,
+        &format!(
+            "echo \"$GROK_HOME\" > '{d}/dir'; echo \"$GROK_AUTH_PATH\" > '{d}/login'\n\
+             printf '\\n[marketplace]\\ndefault_skills_installs_purged = true\\n' \
+             >> \"$GROK_HOME/config.toml\"\n\
+             while read line; do case \"$line\" in *'_x.ai/billing'*) cat '{d}/reply';; esac\n\
+             done",
+            d = dir.display(),
+        ),
+    );
+    (account, env)
+}
+
+/// Grok Build's reading is run against a directory of Octoboard's own, never the account's: the
+/// CLI is given that directory, with a copy of the account's configuration in it, and the
+/// account's own login by its path; whatever the CLI writes there leaves the account's
+/// `config.toml` as it was.
+#[test]
+fn groks_reading_runs_against_a_home_of_its_own_and_leaves_the_accounts_configuration() {
+    use crate::providers::grok::{GROK_CONFIG_FILE, GROK_SIGN_IN_FILE};
+
+    let dir = ScratchDir::new("quota-grok-own-home");
+    let users = "# mine\n[ui]\nfoo = \"bar\"\n";
+    let (account, env) = grok_account_and_stand_in(&dir, users);
+    let run_homes = dir.join("homes");
+
+    super::probe(
+        AgentId::GROK,
+        &env,
+        Some(&account),
+        &run_homes,
+        crate::test_support::PATIENCE,
+        &AtomicBool::new(false),
+        &mut ProbeTrace::default(),
+    )
+    .expect("a readable reply");
+
+    let home = PathBuf::from(std::fs::read_to_string(dir.join("dir")).unwrap().trim());
+    assert!(home.starts_with(&run_homes), "{}", home.display());
+    let login = crate::hostfs::canonical(account.join(GROK_SIGN_IN_FILE)).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(dir.join("login")).unwrap().trim(),
+        login.to_string_lossy()
+    );
+    assert_eq!(
+        std::fs::read_to_string(account.join(GROK_CONFIG_FILE)).unwrap(),
+        users,
+        "the account's configuration is as it was"
+    );
+    assert!(std::fs::read_to_string(home.join(GROK_CONFIG_FILE))
+        .unwrap()
+        .starts_with(users));
+}
+
+/// Where the directory of Octoboard's own cannot be made ready, the reading fails and the CLI is
+/// not run at all: the account's own directory is never fallen back to.
+#[test]
+fn a_grok_reading_whose_home_cannot_be_prepared_fails_and_runs_nothing() {
+    let dir = ScratchDir::new("quota-grok-no-home");
+    let users = "# mine\n";
+    let (account, env) = grok_account_and_stand_in(&dir, users);
+    let run_homes = dir.join("homes");
+    std::fs::write(&run_homes, "a file where the directories go").unwrap();
+
+    let unavailable = super::probe(
+        AgentId::GROK,
+        &env,
+        Some(&account),
+        &run_homes,
+        crate::test_support::PATIENCE,
+        &AtomicBool::new(false),
+        &mut ProbeTrace::default(),
+    )
+    .expect_err("a failed reading");
+    assert_eq!(unavailable.code, code::COMMAND_FAILED);
+    assert!(!dir.join("dir").exists(), "the CLI was not run");
+    assert_eq!(
+        std::fs::read_to_string(account.join(crate::providers::grok::GROK_CONFIG_FILE)).unwrap(),
+        users
+    );
 }

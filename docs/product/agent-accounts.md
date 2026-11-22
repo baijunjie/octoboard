@@ -414,21 +414,24 @@ settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-
 Every account the user owns has a **Share default configuration** row in its account settings dialog, above **Disable
 account** (see "The account settings dialog" above): the name with a "?" help tip, a line under it, and the switch at
 the row's end. The line follows the switch: while it is off, it explains that turning sharing on links the account's
-configuration and conversation history to its agent's default account's directory; while it is on, it confirms that
-these are linked. Both name that default account by its current name, using the current language's standard name when
-it has no custom name, and show the name in the inline reference style. Renaming the default account updates the line
-while the dialog is open. The line is left out while a change runs and while the last change is incomplete. The default
-account has none. The switch's accessible name
+configuration to its agent's default account's directory and moves its conversation history there, where the history
+stays after sharing is turned off; while it is on, it confirms that the configuration is linked to that directory and
+the conversation history has been moved there, where it stays after sharing is turned off. Both name that default
+account by its current name, using the current language's standard name when it has no custom name, and show the name in
+the inline reference style. Renaming the default account updates the line while the dialog is open. The line is left out
+while a change runs and while the last change is incomplete. The default account has none. The switch's accessible name
 identifies the account. A change is carried out at once or not at all (see "When a change is carried out" in
 `docs/product/sharing-the-default-configuration.md`), so the switch is either free to use or unavailable, and says
 which. Unavailable, it follows "How such a control behaves" in `docs/product/controls-unavailable-for-a-reason.md`: a
 press on it is ignored, and where there is a reason, its tooltip and its description for assistive technology say why,
 with nothing under the row's line repeating it.
 
-A help tip beside the row's name says, one line each, that configuration (skills, plugins, settings and more) and
-conversation history are linked to the default account's directory, what is never shared for the selected agent, and
-what happens to conversations when sharing is turned off; and, while the account has idle sessions, that changing it
-first ends that many idle sessions of the account and resumes them afterwards. The rules are in "What is shared" and
+A help tip beside the row's name says, one line each, that configuration (skills, plugins, settings and more) is linked
+to the default account's directory and conversation history is moved into it, what is never shared for the selected
+agent, and that after sharing is turned off the account's conversation history stays in the default account's
+directory, except the conversations of its own sessions, which are moved back into its directory; and, while the
+account has idle sessions, that changing it first ends that many idle sessions of the account and resumes them
+afterwards. The rules are in "What is shared" and
 "Turning sharing off" in `docs/product/sharing-the-default-configuration.md`.
 
 The switch saves independently of the account's name or directory. It shows the daemon's recorded choice, which changes
@@ -554,7 +557,9 @@ Pointing an account at another directory ends a login running for it and any sig
 servers (see "Signing an account in to and out of an MCP server" in
 `docs/product/account-mcp-servers-and-connectors.md`), and an account that shares the default
 configuration, or whose last change of it is incomplete, has its sharing undone first (see "Removing or repointing a
-sharing account" in `docs/product/sharing-the-default-configuration.md`).
+sharing account" in `docs/product/sharing-the-default-configuration.md`). For a Grok Build account, the directories of
+Octoboard's own that its background runs were made against for the directory it leaves are removed (see "Where Grok
+Build's readings run" in `docs/product/account-quota-readings.md`).
 
 Removing an account — what it clears, its confirmation, and its option to move the account's directory to the Trash —
 is in `docs/product/removing-accounts.md`.

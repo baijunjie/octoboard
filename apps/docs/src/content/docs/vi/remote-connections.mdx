@@ -51,6 +51,8 @@ Chưa chắc đây là cách phù hợp với bạn? [Chọn cách kết nối](
 4. Trong mục <strong>Xác thực</strong>, chọn <strong>Mật khẩu</strong> nếu bạn đăng nhập bằng mật khẩu tài khoản. Chọn <strong>Tệp khóa</strong> nếu nhà cung cấp máy chủ đã đưa cho bạn một tệp khóa (thường có tên như <code dir="ltr">id_ed25519</code> hoặc kết thúc bằng <code dir="ltr">.pem</code>), rồi nhập vị trí của nó trên máy tính này.
 5. Chọn <strong>Lưu</strong>, rồi chọn <strong>Kết nối</strong>. Nhập mật khẩu nếu được hỏi.
 
+   Sau lần đăng nhập đầu tiên, ứng dụng hỏi <strong>Thêm khóa của máy tính này</strong>. Chọn <strong>Thêm khóa</strong> để từ đó đăng nhập từ máy tính này mà không cần mật khẩu, hoặc <strong>Không thêm</strong> để tiếp tục đăng nhập như hiện nay.
+
    Nếu bạn đã dán thông tin kết nối, danh tính của máy chủ (dấu vân tay) đã đi kèm trong đó, và ứng dụng kiểm tra giúp bạn. Nếu bạn tự gõ địa chỉ, ứng dụng sẽ hiện dấu vân tay ở lần đầu. Để chắc chắn đã tới đúng máy, hãy so với dấu vân tay mà lệnh này in ra trên máy chủ, và chỉ kết nối nếu chúng khớp nhau:
 
    <Code code={commands.fingerprintCommand} lang="sh" />
@@ -107,8 +109,8 @@ Chỉ ai truy cập được {productName} qua chuyển tiếp SSH mới dùng �
 
 - <strong>Không mở thêm cổng công khai:</strong> {productName} chỉ nhận kết nối từ chính máy đích, nên để kết nối từ máy tính khác, trước hết bạn phải đăng nhập vào máy đích qua SSH. Đó là lý do bạn cần SSH, hoặc một trong các [dịch vụ chuyển tiếp](../choose-how-to-connect/).
 - <strong>Kiểm tra bạn đang tới máy nào:</strong> ứng dụng ghi nhớ khóa máy chủ, tức danh tính SSH của máy, ở lần kết nối thành công đầu tiên, và chặn kết nối kèm cảnh báo nếu danh tính đó sau này thay đổi.
-- <strong>Không lưu mật khẩu:</strong> sau khi bạn đăng nhập lần đầu bằng mật khẩu hoặc tệp khóa của riêng mình, ứng dụng tạo một khóa SSH riêng cho máy tính này dùng cho các lần đăng nhập sau.
-- <strong>Thu hồi quyền truy cập của một máy tính:</strong> xóa mục của máy tính đó khỏi danh sách khóa SSH được phép trên máy đích (<code dir="ltr">{commands.authorizedKeys}</code> trên Linux và macOS). Khóa đó sẽ không đăng nhập lại được; kết nối đang mở vẫn còn cho đến khi kết thúc.
+- <strong>Không lưu mật khẩu:</strong> ứng dụng không bao giờ lưu mật khẩu của bạn. Sau khi bạn đăng nhập lần đầu bằng mật khẩu hoặc tệp khóa của riêng mình, ứng dụng hỏi có thêm một khóa SSH riêng của máy tính này cho các lần đăng nhập sau hay không, và chỉ thêm khóa vào máy đích nếu bạn chọn <strong>Thêm khóa</strong>.
+- <strong>Thu hồi quyền truy cập của một máy tính:</strong> trên máy tính đó, hãy tắt <strong>Khóa của máy tính này</strong> trên trang của daemon trong <strong>Thiết bị từ xa</strong>, hoặc gỡ bỏ daemon đã lưu; khi đó ứng dụng sẽ xóa khóa của nó khỏi danh sách khóa SSH được phép trên máy đích, và báo cho bạn nếu không kết nối được với máy đích, khi ấy mục đó có thể vẫn còn. Bạn cũng có thể tự xóa mục của máy tính đó khỏi danh sách trên máy đích (<code dir="ltr">{commands.authorizedKeys}</code> trên Linux và macOS). Khóa đó sẽ không đăng nhập lại được; kết nối đang mở vẫn còn cho đến khi kết thúc.
 
 ## Trong cửa sổ từ xa
 

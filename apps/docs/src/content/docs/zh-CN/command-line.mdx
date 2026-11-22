@@ -4,7 +4,7 @@ description: "Linux 服务器、Mac 和 Windows 电脑上的 octoboardd 命令�
 ---
 
 import { Code } from "@astrojs/starlight/components";
-import { commands, productName, tunnel } from "../../../commands.ts";
+import { commands, productName, system, tunnel } from "../../../commands.ts";
 
 octoboardd 是运行 {productName} 的程序（应用里称它为“守护进程”）。在 Linux 服务器上，需要你自己安装并启动它；在 Mac 或 Windows 电脑上，它包含在应用里，应用打开时启动它，退出时停止它。三种系统上的命令相同，只有下面几处不同。
 
@@ -35,6 +35,7 @@ octoboardd 是运行 {productName} 的程序（应用里称它为“守护进程
 | <code dir="ltr">{commands.update}</code> | 仅限 Linux 服务器。安装最新版本，如[升级](../install/linux/#升级)所述。 |
 | <code dir="ltr">{commands.updateCheck}</code> | 仅限 Linux 服务器。检查是否有更新的版本，但不安装。 |
 | <code dir="ltr">{commands.updateRollback}</code> | 仅限 Linux 服务器。恢复到上一次升级之前安装的版本，并像升级一样重新启动，换上该版本。 |
+| <code dir="ltr">{system.uninstall}</code> | 仅限 Linux 服务器。从服务器上移除 octoboardd，如[卸载](../install/linux/#卸载)所述。 |
 | <code dir="ltr">{commands.version}</code> | 输出已安装的版本。 |
 
 想查看完整的命令列表，请运行 <code dir="ltr">{commands.help}</code>；想查看某条命令的选项，请运行 <code dir="ltr">{commands.commandHelp}</code>。列表中也包含 {productName} 自己运行的命令，你无需手动运行。
@@ -45,5 +46,6 @@ octoboardd 是运行 {productName} 的程序（应用里称它为“守护进程
 
 - <strong>Mac 上的 <code dir="ltr">{commands.start}</code> 和 <code dir="ltr">{commands.stop}</code></strong> 作用于应用：<code dir="ltr">{commands.start}</code> 在后台打开应用，不显示窗口；<code dir="ltr">{commands.stop}</code> 退出应用。
 - <strong><code dir="ltr">{commands.restart}</code> 和 <code dir="ltr">{commands.update}</code></strong> 会被拒绝。应用自己重新启动 octoboardd，也自己安装新版本。
+- <strong><code dir="ltr">{system.uninstall}</code></strong> 也会被拒绝。octoboardd 随应用一起移除：卸载应用的方法见 [macOS](../install/macos/#卸载) 和 [Windows](../install/windows/#卸载)。
 - <strong><code dir="ltr">{commands.browserOn}</code> 和 <code dir="ltr">{commands.browserOff}</code></strong> 修改的设置与<strong>设置 › 访问</strong>中的<strong>允许浏览器访问</strong>相同。
 - <strong><code dir="ltr">{commands.address}</code></strong> 只有在<strong>允许浏览器访问</strong>开启（在 Mac 上也可以是<strong>允许远程访问</strong>）时才会输出地址。这两项设置默认都是关闭的，所以在你打开其中一项之前，该命令只会说明这一点，不输出地址。

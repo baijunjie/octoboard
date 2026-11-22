@@ -208,21 +208,27 @@ pub enum Busy {
 /// closed or the process exits, so a crashed holder leaves no stale lock behind. The file is not
 /// truncated, since another program may keep the lock file for its own use too.
 pub fn try_lock_file(path: &Path) -> Result<File, Busy> {
-    lock_file(path, true)
+    lock_file(path, true, true)
 }
 
 /// [`try_lock_file`] with a shared lock: refused while an exclusive lock is held, and taken
 /// alongside other shared ones. What looks whether a lock is held takes this, so that two who look
 /// at once do not each find the other holding it.
 pub fn try_lock_file_shared(path: &Path) -> Result<File, Busy> {
-    lock_file(path, false)
+    lock_file(path, false, true)
 }
 
-fn lock_file(path: &Path, exclusive: bool) -> Result<File, Busy> {
+/// [`try_lock_file_shared`] of a lock file that is there, creating none: one that is not is
+/// [`Busy::Open`] with `NotFound`. For a look that must leave the directory as it is.
+pub fn try_lock_existing_file_shared(path: &Path) -> Result<File, Busy> {
+    lock_file(path, false, false)
+}
+
+fn lock_file(path: &Path, exclusive: bool, create: bool) -> Result<File, Busy> {
     // Read access too: Windows locks only through a handle that may read or write the file's
     // data, and appending alone is neither.
     let file = OpenOptions::new()
-        .create(true)
+        .create(create)
         .read(true)
         .append(true)
         .open(path)

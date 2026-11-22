@@ -4,7 +4,7 @@ description: "คำสั่งของ octoboardd บนเซิร์ฟเ
 ---
 
 import { Code } from "@astrojs/starlight/components";
-import { commands, productName, tunnel } from "../../../commands.ts";
+import { commands, productName, system, tunnel } from "../../../commands.ts";
 
 octoboardd คือโปรแกรมที่รัน {productName} (แอปเรียกว่า “ดีมอน”) บนเซิร์ฟเวอร์ Linux ต้องติดตั้งและเริ่มเอง ส่วนบน Mac หรือพีซี Windows โปรแกรมนี้มาอยู่ในแอป ซึ่งจะเริ่มให้เมื่อเปิดแอปและหยุดให้เมื่อปิดแอป คำสั่งของทั้งสามแบบเหมือนกัน ยกเว้นความต่างด้านล่าง
 
@@ -35,6 +35,7 @@ octoboardd คือโปรแกรมที่รัน {productName} (แ�
 | <code dir="ltr">{commands.update}</code> | ใช้ได้เฉพาะบนเซิร์ฟเวอร์ Linux ติดตั้งเวอร์ชันล่าสุด ตามที่อธิบายใน [อัปเกรด](../install/linux/#อัปเกรด) |
 | <code dir="ltr">{commands.updateCheck}</code> | ใช้ได้เฉพาะบนเซิร์ฟเวอร์ Linux ตรวจสอบว่ามีเวอร์ชันใหม่กว่าออกแล้วหรือไม่ โดยไม่ติดตั้ง |
 | <code dir="ltr">{commands.updateRollback}</code> | ใช้ได้เฉพาะบนเซิร์ฟเวอร์ Linux คืนเวอร์ชันที่ติดตั้งไว้ก่อนการอัปเกรดครั้งล่าสุด และรีสตาร์ทเข้าสู่เวอร์ชันนั้น เหมือนการอัปเกรด |
+| <code dir="ltr">{system.uninstall}</code> | ใช้ได้เฉพาะบนเซิร์ฟเวอร์ Linux ลบ octoboardd ออกจากเซิร์ฟเวอร์ ตามที่อธิบายใน [ถอนการติดตั้ง](../install/linux/#ถอนการติดตั้ง) |
 | <code dir="ltr">{commands.version}</code> | แสดงเวอร์ชันที่ติดตั้งอยู่ |
 
 หากต้องการดูรายการคำสั่งทั้งหมด ให้รัน <code dir="ltr">{commands.help}</code> หากต้องการดูตัวเลือกของคำสั่งเดียว ให้รัน <code dir="ltr">{commands.commandHelp}</code> รายการนี้ยังแสดงคำสั่งที่ {productName} รันเอง ซึ่งคุณไม่จำเป็นต้องรันด้วยตนเอง
@@ -45,5 +46,6 @@ octoboardd คือโปรแกรมที่รัน {productName} (แ�
 
 - <strong><code dir="ltr">{commands.start}</code> และ <code dir="ltr">{commands.stop}</code> บน Mac</strong> ทำงานกับแอป <code dir="ltr">{commands.start}</code> เปิดแอปในเบื้องหลังโดยไม่มีหน้าต่าง ส่วน <code dir="ltr">{commands.stop}</code> ปิดแอป
 - <strong><code dir="ltr">{commands.restart}</code> และ <code dir="ltr">{commands.update}</code></strong> จะถูกปฏิเสธ แอปรีสตาร์ท octoboardd และติดตั้งเวอร์ชันใหม่เอง
+- <strong><code dir="ltr">{system.uninstall}</code></strong> ก็จะถูกปฏิเสธเช่นกัน octoboardd จะถูกลบไปพร้อมกับแอป ดูวิธีถอนการติดตั้งแอปบน [macOS](../install/macos/#ถอนการติดตั้ง) หรือ [Windows](../install/windows/#ถอนการติดตั้ง)
 - <strong><code dir="ltr">{commands.browserOn}</code> และ <code dir="ltr">{commands.browserOff}</code></strong> เปลี่ยนค่าเดียวกับ <strong>อนุญาตการเข้าถึงจากเบราว์เซอร์</strong> ใน <strong>การตั้งค่า › การเข้าถึง</strong>
 - <strong><code dir="ltr">{commands.address}</code></strong> แสดงที่อยู่เฉพาะเมื่อ <strong>อนุญาตการเข้าถึงจากเบราว์เซอร์</strong> (หรือบน Mac คือ <strong>อนุญาตการเข้าถึงระยะไกล</strong>) เปิดอยู่ ทั้งสองการตั้งค่าปิดอยู่ตามค่าเริ่มต้น ดังนั้นจนกว่าจะเปิดอย่างใดอย่างหนึ่ง คำสั่งนี้จะแจ้งเรื่องนี้และไม่แสดงที่อยู่

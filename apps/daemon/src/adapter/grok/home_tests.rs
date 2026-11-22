@@ -64,6 +64,97 @@ fn the_farms_trust_store_is_the_users_copied_without_the_project_added() {
     );
 }
 
+/// A console session's directory is trusted in the farm's copy of the store alone: the copy gains
+/// the entry beside the user's own, the user's store stays byte for byte, and the plan carries
+/// nothing, so no entry for a console can reach the user's store later either.
+#[test]
+fn a_console_sessions_directory_is_trusted_in_the_farm_and_nothing_is_carried() {
+    let mut fixture = spec_fixture();
+    fixture.kind = crate::protocol::SessionKind::Console;
+    let home = with_default_home(&mut fixture);
+    let users = "[folders.\"/somewhere/else\"]\ntrusted = true\n";
+    std::fs::write(home.join(GROK_TRUST_STORE), users).expect("trust store");
+
+    let plan = plan_isolated(&fixture.spec()).expect("plan");
+    let farm = PathBuf::from(&plan.env[0].1);
+    assert!(
+        plan.carried_trust.is_none(),
+        "a console's trust is not carried"
+    );
+    let copy = std::fs::read_to_string(farm.join(GROK_TRUST_STORE)).expect("the copy");
+    assert!(copy.starts_with(users), "{copy}");
+    let store: toml::Table = copy.parse().expect("a store Grok reads");
+    let canonical = crate::hostfs::canonical(&fixture.cwd).expect("canonical path");
+    let entry = store["folders"][canonical.to_string_lossy().as_ref()]
+        .as_table()
+        .expect("the console's directory");
+    assert_eq!(entry["trusted"].as_bool(), Some(true));
+    assert_eq!(
+        std::fs::read_to_string(home.join(GROK_TRUST_STORE)).expect("the user's store"),
+        users
+    );
+    // The plan does what the provider declares for a console's directory.
+    assert_eq!(
+        AgentId::GROK.descriptor().capabilities.console_trust,
+        crate::providers::ConsoleTrust::PerLaunch
+    );
+    // A plain configuration file leaves nothing for after the exit, so nothing is recorded for an
+    // adopting daemon either.
+    assert!(plan.adoption.is_none());
+}
+
+/// Where the session's copy of the trust store does not read as one, the console's directory
+/// cannot be trusted for the launch, and the launch goes on all the same: the copy is left as it
+/// was, nothing is carried, and Grok asks.
+#[test]
+fn a_console_launch_goes_on_when_its_directory_cannot_be_trusted_for_it() {
+    let mut fixture = spec_fixture();
+    fixture.kind = crate::protocol::SessionKind::Console;
+    let home = with_default_home(&mut fixture);
+    let broken = "[folders\n";
+    std::fs::write(home.join(GROK_TRUST_STORE), broken).expect("trust store");
+
+    let plan = plan_isolated(&fixture.spec()).expect("the launch goes on");
+    let farm = PathBuf::from(&plan.env[0].1);
+    assert!(plan.carried_trust.is_none());
+    assert_eq!(
+        std::fs::read_to_string(farm.join(GROK_TRUST_STORE)).expect("the copy"),
+        broken
+    );
+    assert_eq!(
+        std::fs::read_to_string(home.join(GROK_TRUST_STORE)).expect("the user's store"),
+        broken
+    );
+}
+
+/// A console session whose account's `config.toml` is a link leaves a write-back for after its
+/// exit, which is what its adoption record is for. The record reads in an earlier build, which
+/// needs a carrier in it, and rebuilds the write-back and no carrier, wherever the consoles'
+/// directories are kept.
+#[test]
+fn an_adopted_console_launch_keeps_its_writeback_and_carries_nothing() {
+    let mut fixture = spec_fixture();
+    fixture.kind = crate::protocol::SessionKind::Console;
+    let home = with_default_home(&mut fixture);
+    let shared = fixture.scratch.join("shared-config.toml");
+    std::fs::rename(home.join("config.toml"), &shared).expect("the shared file");
+    crate::test_support::symlink(&shared, home.join("config.toml")).expect("the link");
+
+    let plan = plan_isolated(&fixture.spec()).expect("plan");
+    assert!(plan.carried_trust.is_none());
+    assert!(plan.after_exit.is_some(), "the write-back");
+    let record = plan.adoption.expect("a record for the write-back");
+    assert!(
+        record["carried_trust"].is_object(),
+        "an earlier build reads the record only with a carrier in it"
+    );
+    for consoles in [fixture.scratch.join("consoles"), fixture.cwd.clone()] {
+        let rebuilt = adoption::rebuild(&record, &consoles);
+        assert!(rebuilt.carried_trust.is_none());
+        assert!(rebuilt.after_exit.is_some());
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn the_farms_config_is_readable_by_its_owner_only_even_when_the_users_is_not() {

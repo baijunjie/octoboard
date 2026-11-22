@@ -4,7 +4,8 @@ description: "不需要 root 權限，就能在 Linux 伺服器上安裝 octoboa
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../../commands.ts";
+import LinuxUninstall from "../../../../snippets/zh-TW/linux-uninstall.mdx";
 
 不需要 root 權限，就能在 Linux 伺服器上安裝 octoboardd（{productName} 的伺服器程式，應用程式裡稱它為「背景服務」）。可從 macOS 或 Windows 應用程式連線，也可在瀏覽器中開啟，兩種方式都經由 SSH。
 
@@ -80,6 +81,12 @@ octoboardd 會自行選用自己的連接埠，你不需要知道它：<code dir
   如果它詢問是否立即重新啟動，輸入 <code dir="ltr">y</code> 重新啟動；直接按 Enter 則暫時繼續執行舊版本，之後想重新啟動時再執行 <code dir="ltr">{commands.restart}</code>。
 
 如果 <code dir="ltr">{commands.update}</code> 提示無法取代程式（例如程式裝在你沒有寫入權限的位置），請改為再次執行安裝指令（或服務指令）。它同樣會在安全時自動重新啟動，否則會提示你執行 <code dir="ltr">{commands.restart}</code>。
+
+## 解除安裝
+
+<LinuxUninstall />
+
+你的資料會留在 <code dir="ltr">{system.dataDir}</code> 中。[不更動你的系統](../../your-system/)說明了解除安裝後會留下什麼，以及如何移除。
 
 ## 指令
 

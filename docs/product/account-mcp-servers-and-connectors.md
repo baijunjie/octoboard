@@ -122,7 +122,8 @@ for the default account):
 The two commands share the read budget. For the listing, Octoboard sets Claude Code's per-server connection timeout,
 `MCP_TIMEOUT`, to 10,000 milliseconds, keeping a positive value of 10,000 or less already set in the login shell.
 A server that takes longer to connect is listed as failed by Claude Code. This setting applies to the inventory
-listing's process.
+listing's process. In a config directory Claude Code has not run in before, the listing carries out Claude Code's own
+first-run set-up there (see "Claude Code's first-run set-up" in `docs/product/account-quota-readings.md`).
 
 The statuses `claude mcp list` prints map onto the states:
 

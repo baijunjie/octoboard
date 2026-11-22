@@ -1,0 +1,88 @@
+---
+title: "Sisteminiz olduğu gibi kalır"
+description: "Octoboard, sisteminizi ve ajanlarınızın kendi dosyalarını bulduğu gibi bırakır. Birkaç özelliğin eklediği şeyler, her birinin nasıl geri alındığı ve kaldırdıktan sonra geriye ne kaldığı."
+---
+
+import { Aside, Code } from "@astrojs/starlight/components";
+import { commands, productName, system } from "../../../commands.ts";
+import LinuxUninstall from "../../../snippets/tr/linux-uninstall.mdx";
+import WindowsUninstaller from "../../../snippets/tr/windows-uninstaller.mdx";
+
+{productName}, sisteminizi bulduğu gibi bırakır: ajanlarınızın yapılandırmasını ve {productName} uygulamasının kendi klasörleri dışındaki her şeyi. Yalnızca birkaç özellik bu klasörlerin dışına bir şey ekler. Bu sayfa bunların her birini, ne eklediğini, nereye eklediğini ve nasıl geri alındığını listeler; kaldırdıktan sonra geriye ne kaldığını da söyler.
+
+## Kural
+
+- <strong>{productName} uygulamasının bir ajana verdiği şey ona her başlatmada ulaşır, yalnızca orada.</strong> Durum kancaları, kendi MCP sunucusu ve bir oturuma tarif ettiği rol, ajan başlarken aktarılır veya {productName} uygulamasının kendi klasöründe tutulur. Bunlar için ne sizin ne de bir ajanın herhangi bir dosyası düzenlenir; bu yüzden kendi başınıza çalıştırdığınız bir ajan bunların hiçbiri olmadan başlar.
+- <strong>{productName}, ayarlarınıza kendi kancasını eklemez ve bir projenin klasörü hakkında sizin yerinize hiçbir şeye karar vermez.</strong> Bir projenin klasörüne güvenilip güvenilmeyeceğini siz söylersiniz, ajan da bunu kaydeder. {productName} uygulamasının kendisinin yanıt verdiği tek klasör, bir konsolun kendi klasörüdür; bu klasör {productName} uygulamasınındır (aşağıya bakın).
+- <strong>Bir ajanın kendisi için yazdığı şey ajanındır.</strong> Konuşma kayıtları, önbellekleri ve günlükleri, bir oturum açmanın kimlik bilgileri ve kendi sorusu yanıtlandığında kaydettiği güven, ajanı {productName} olmadan kullandığınızda olduğu gibi yazılır. Ajanın kendi programının bir yapılandırma klasöründe ilk kez çalıştığında yaptığı ilk kurulum da böyledir; {productName} uygulamasının arka planda yaptığı bir okuma, bunu sizin ilk başlatmanızdan önce tetikleyebilir (aşağıya bakın).
+- <strong>Projelerinizin içindeki işler bu sayfanın konusu değildir.</strong> Bir projenin dosyalarını düzenlemek, Git işlemleri, dallar ve çalışma ağaçları, bir projeyi eklemenizin amacı olan geliştirme işidir.
+
+## Bir özellik ne ekler ve nasıl geri alınır
+
+Bunların her biri yalnızca kullandığınız veya açtığınız bir özellik tarafından eklenir.
+
+### Özellik kapatılınca geri alınanlar
+
+- <strong>Uzak bir sunucudaki bu bilgisayarın anahtarı.</strong> Kayıtlı bir uzak hizmette parolayla veya anahtar dosyasıyla oturum açtıktan sonra uygulama, herhangi bir şey eklemeden önce sorar: <strong>Bu bilgisayarın anahtarını ekle</strong> penceresi dosyayı ve satırı belirtir. <strong>Anahtarı ekle</strong>, o sunucudaki kullanıcınızın izin verilen SSH anahtarlarına (Linux ve macOS’te <code dir="ltr">{commands.authorizedKeys}</code>) <code dir="ltr">{system.keyMark}</code> olarak işaretlenmiş tek bir satır ekler ve özel anahtarı bu bilgisayarın kimlik bilgisi deposunda (macOS’te oturum anahtar zinciri, Windows’ta Kimlik Bilgisi Yöneticisi) tutar. <strong>Anahtarı ekleme</strong> hiçbir şey eklemez ve bir daha sorulmaz. Geri almak için <strong>Uzak cihazlar</strong> içinde o hizmetin sayfasında <strong>Bu bilgisayarın anahtarı</strong> ayarını kapatın veya kayıtlı hizmeti kaldırın: uygulama satırı dosyadan çıkarır ve özel anahtarı siler. Kayıtlı hizmetin ana makinesini, bağlantı noktasını veya kullanıcısını değiştirdiğinizde de aynısını yapar. Sunucuya ulaşılamazsa satır kalabilir; uygulama bunu size bildirir, siz de satırı sunucuda kendiniz silersiniz.
+- <strong>Oturum açıldığında aç</strong> (Windows ve macOS 13 veya sonrası). <strong>Ayarlar › Genel › Oturum açıldığında aç</strong>, {productName} uygulamasını sisteminizin oturum açılışında açtığı uygulamalar listesine koyar; satırı da bunu söyler. Onu o listeden çıkarmanın yolu bu ayarı kapatmaktır.
+- <strong>Komut satırı aracı</strong> (macOS). <strong>Ayarlar › Genel › Komut satırı aracı</strong> altındaki <strong>Yükle</strong>, <code dir="ltr">{system.cliDir}</code> konumuna, sistem buna izin vermezse <code dir="ltr">{system.cliFallbackDir}</code> konumuna <code dir="ltr">{system.cliName}</code> adlı bir bağlantı ekler; satır bunu siz yüklemeden önce söyler. <strong>Kaldır</strong> bağlantıyı siler.
+- <strong>Saptanmış yapılandırmayı paylaşma.</strong> <strong>Ayarlar › Ajan hesapları</strong> altında bir hesabın ayarlarındaki <strong>Saptanmış yapılandırmayı paylaş</strong>, o hesabın klasörünün paylaşılabilen bölümlerini saptanmış hesabın klasörüne giden bağlantılarla değiştirir, hesabın kendi yapılandırmasını bunların yanında yedek olarak tutar ve konuşma geçmişini saptanmış hesabın klasörüne taşır. Satır bunu siz açmadan önce söyler. Kapatıldığında bağlantılar kaldırılır, yedekler geri yüklenir ve hesabın kendi oturumlarının konuşmaları geri taşınır. <strong>Bir şey kalır:</strong> taşınan konuşma geçmişinin geri kalanı saptanmış hesabın klasöründe kalır, çünkü onu kaldırmak konuşmalarınızı kaybettirirdi. Bkz. [Shared configuration](../features/shared-configuration/).
+
+### Sizin veya ajanın olarak kalanlar
+
+Bunlar, o andan itibaren sizin veya ajanın olan bir şey yazar; dolayısıyla {productName} uygulamasının kendisine ait geri alacağı bir şey yoktur. Bir girdi elle kaldırılabiliyorsa, ilgili madde nerede olduğunu söyler.
+
+- <strong>Bir oturumun hesabını değiştirme.</strong> <strong>Hesap değiştir</strong> sizden onay ister. Bir ajanın istediği değişiklik, <strong>Hesap değiştirmeyi otomatik onayla</strong> ayarını açmadıysanız onayınızı bekler; kullanım sınırındaki değişiklik ise yalnızca <strong>Kullanım sınırında hesabı otomatik değiştir</strong> açıkken gerçekleşir. Değişiklik, o tek oturumun konuşmasını hedef hesabın klasörüne kopyalar; Codex için ayrıca o hesabın konuşmaya ilişkin kendi kaydını kopyaya yönlendirir. Özgün konuşma olduğu yerde kalır, kopya da o hesabın kendisine ait olarak kalır. Bkz. [Account continuity](../features/account-continuity/).
+- <strong>Bir Grok Build oturumunun içinde değiştirdiğiniz ayarlar ve eklentiler.</strong> <code dir="ltr">config.toml</code> dosyanız bir dosyaya giden bir bağlantıysa, bir oturumda değiştirdiğiniz tema, eklenti anahtarı veya saptanmış model, oturum bittiğinde Grok’un kaydedeceği biçimde o dosyaya yazılır. Bir oturumda yüklediğiniz eklenti, Grok klasörünüzün kendi eklenti kayıt defterine (varsa) kaydedilir.
+- <strong>Grok Build’in bir projenin klasörüne güveni.</strong> Bir projenin klasörüne güvenmeyi kabul ettikten sonra (<strong>Güven ve devam et</strong> ile veya terminalde kendi yanıtınızla), Grok’un yazdığı tek girdi, değiştirilmeden Grok klasörünüzdeki güven listesine taşınır.
+- <strong>Hiç konuşması olmamış bir oturumun kayıtları.</strong> Hiçbir şey göndermediğiniz bir oturumu silmek, ajanın o oturuma ait kendi kayıtlarını da sormadan onunla birlikte Çöp Sepeti’ne (Windows’ta Geri Dönüşüm Kutusu’na) taşır: bunlarda size ait hiçbir konuşma yoktur. Kullandığınız bir oturumun kayıtları yalnızca onay penceresinde o seçeneği işaretlerseniz taşınır. Kayıtlar Çöp Sepeti’nden geri alınabilir.
+- <strong>Claude Code’un ilk çalıştırma kurulumu.</strong> Claude Code’un daha önce hiç çalışmadığı bir yapılandırma klasöründe veya Claude Code güncellendikten sonra, {productName} uygulamasının arka planda yaptığı bir okuma (bir hesabın kullanımı, MCP sunucuları veya ajanları), Claude Code’un kendi ilk çalıştırma kurulumunu ve bekleyen geçişlerini orada yapmasına yol açar; bir sonraki başlatmanızda da aynısı olurdu. {productName} bu değişiklikleri olduğu gibi bırakır.
+- <strong>Yeni bir Codex hesabı için boş bir klasör.</strong> Bir Codex hesabının ilk başlatılmasından veya ilk oturum açmasından önce, hesabın klasörü henüz yoksa {productName} onu boş olarak oluşturur: o olmadan Codex başlamayı reddeder.
+- <strong>Bir konsolun kendi klasörüne güven.</strong> Konsol oturumu {productName} uygulamasının kendi klasöründe çalışır; bu yüzden {productName}, ajanın oradaki güven sorusunu size sormadan yanıtlar. Ardından Claude Code, kendi güven listesinde yalnızca o klasörü adlandıran ve başka hiçbir yerde etkisi olmayan bir girdi tutar. Codex yalnızca o klasör bir Git deposunun içindeyse sorar ve o zaman güvenini o deponun kökü için kaydeder; bu kayıt deponun tamamını kapsar: ana klasörünüz Git’te tutuluyorsa, ana klasörünüzün tamamıdır. Grok Build güven listenize hiçbir şey kaydetmez. {productName} bu girdileri kaldırmaz, çünkü bu, dosyanızda bir düzenleme daha olurdu. Bunları kendiniz kaldırabilirsiniz: Codex’inki, klasöründeki <code dir="ltr">config.toml</code> dosyasında yer alan <code dir="ltr">[projects."&lt;repository root&gt;"]</code> tablosudur; Claude Code’unki ise <code dir="ltr">.claude.json</code> dosyasında <code dir="ltr">projects</code> altındaki o klasöre ait girdidir.
+
+### Kaldırma komutuyla geri alınanlar
+
+- <strong>Hizmet olarak çalışan Linux sunucu programı.</strong> Programı hizmet olarak kurmak ([Linux sunucusu](../install/linux/) sayfasına bakın), systemd yapılandırma klasörünüze bir systemd kullanıcı hizmeti yazar ve kapalıysa kullanıcınız için lingering özelliğini açar. Bunu geri almanın yolu, aşağıdaki kaldırma komutudur.
+
+<Aside>
+Windows’ta uygulama ayrıca görev çubuğu düğmesinin atlama listesini, kayıtlı uzak hizmetlerinizle birlikte tutar. Bunun bir anahtarı yoktur: onu aşağıda anlatılan <strong>Tümünü kaldır</strong> işlemi kaldırır, kaldırıcı da kaldırır.
+</Aside>
+
+## Kaldırmadan önce
+
+Kaldırmadan önce, “Özellik kapatılınca geri alınanlar” başlığındakilerden yürürlükte olan her şey, özelliği kapatılarak tek seferde kaldırılabilir. Masaüstü uygulamasında <strong>Ayarlar › Temizlik</strong> altında bunun için tek bir satır vardır: <strong>Uygulamayı kaldırmadan önce temizle</strong>. Kaç öğenin yürürlükte olduğunu söyler ve tek bir düğmesi vardır: <strong>Tümünü kaldır</strong>. Windows’ta kaldırıcı da bunu kendiliğinden yapar, Linux sunucu programının kaldırma komutu ise bunu ilk iş olarak yapar; ikisi de aşağıda anlatılıyor.
+
+- <strong>Önce sorar.</strong> Onay penceresi, kaç öğenin kaldırılacağını (liste bu sayının altında katlanmış durur) ve nelerin korunacağını söyler. Yalnızca siz <strong>KALDIR</strong> yazdıktan sonra devam eder.
+- <strong>Sonucu gösterir.</strong> Ardından nelerin kaldırıldığını ve nelerin kaldırılmadığını listeler. Kaldırılamayan bir öğe için, örneğin ulaşılamayan bir sunucudaki anahtar için, geriye neyin, nerede kaldığını söyler.
+- <strong>Yalnızca o bilgisayarda, uygulamanın kendi penceresinde bulunur.</strong> Masaüstü uygulamasının olduğu bir bilgisayardaki tarayıcıda ve uzak bir hizmeti gösteren pencerede satır yalnızca temizliğin nerede yapıldığını söyler. Bir Linux sunucusundaki tarayıcıda, sunucuda kaldırmanın önce temizlik yaptığını söyler ve sunucuda çalıştırmanız için <code dir="ltr">{system.uninstall}</code> komutunu <strong>Uygulamayı kaldırma komutunu kopyala</strong> düğmesiyle gösterir. Oradan hiçbir şey kaldırılmaz.
+- <strong>Yalnızca uygulamayı kaldırırken kullanın.</strong> Tek bir öğeyi geri alıp {productName} uygulamasını kullanmaya devam etmek için bunun yerine o özelliği kapatın.
+- <strong>Verilerinizi korur.</strong> {productName} uygulamasının kendi klasörleri kalır; paylaşımın taşıdığı konuşma geçmişi de kalır.
+
+## Kaldırdıktan sonra
+
+Kaldırma işlemi programı siler.
+
+### macOS
+
+{productName} uygulamasından çıkın, ardından onu Uygulamalar klasörünüzden silin. Silinirken hiçbir şey çalışmaz, bu yüzden önce <strong>Tümünü kaldır</strong> düğmesini seçin: uygulamayı silmek, bu işlemin kaldırdıklarını kaldırmaz.
+
+### Windows
+
+Uygulamanın kaldırıcısını kullanın.
+
+<WindowsUninstaller />
+
+### Linux sunucusu
+
+<LinuxUninstall />
+
+Programın kurulduğu klasör kalır; onu PATH’inize eklemek için eklediğiniz satırlar da kalır.
+
+### Geriye kalanlar
+
+{productName} uygulamasının kendi klasörleri bırakılır; böylece sonraki bir kurulum konsollarınızı, oturumlarınızı ve ayarlarınızı yeniden bulur. Bunları da kaldırmak için klasörleri silin: tüm konsolları, oturum kayıtlarını ve ayarları kaybedersiniz.
+
+- <strong>Veri klasörü</strong>, oturumların çalıştığı bilgisayarda veya sunucuda: <code dir="ltr">{system.dataDir}</code> (Windows’ta <code dir="ltr">{system.dataDirWindows}</code>). macOS ve Linux’ta <code dir="ltr">{system.removeDataDir}</code> komutu onu kaldırır.
+- <strong>Masaüstü uygulamasının kendi klasörü:</strong> macOS’te <code dir="ltr">{system.appDataMac}</code>; Windows’ta <code dir="ltr">{system.appDataWindows}</code> ve <code dir="ltr">{system.appLocalDataWindows}</code>.
+
+Ajanlarınızın kendi klasörleri, oturum açma bilgileri, ayarları ve konuşmalarıyla birlikte ajanlarındır ve olduğu gibi kalır.

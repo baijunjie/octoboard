@@ -4,11 +4,10 @@
 //! is the list and the file only decorates it, so a missing or unreadable file still leaves a
 //! list, of bare ids. The measurements are in `docs/agent-cli-reference.md`, section "Grok Build".
 //!
-//! The command runs with `GROK_HOME` pointed at the account directory itself, unlike a session,
-//! which runs against a per-session private home precisely so that its settings cannot leak into
-//! the user's `config.toml`: that is necessarily so, since it is what refreshes the
-//! `models_cache.json` read afterwards. The side effect is that opening the Advanced section of a
-//! dialog writes into the user's Grok account directory.
+//! The command runs with `GROK_HOME` pointed at a directory of Octoboard's own for the account
+//! (`super::query_home`), never at the account's directory: run there, `grok models` can add a
+//! setting to the account's `config.toml`. The `models_cache.json` it refreshes is therefore the
+//! one in that directory, which is where it is read afterwards.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -17,7 +16,8 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::agents::models::{
-    entry_efforts, levels, run_catalogue_command, unreadable, Listing, ModelCatalogue, OUTPUT_LIMIT,
+    entry_efforts, levels, run_catalogue_command_in, unreadable, Listing, ModelCatalogue,
+    OUTPUT_LIMIT,
 };
 use crate::protocol::{AgentId, AgentModel};
 use crate::providers::grok::GROK_MODELS_CACHE;
@@ -30,27 +30,36 @@ impl ModelCatalogue for GrokCatalogue {
         &self,
         shell_env: &HashMap<String, String>,
         config_dir: Option<&Path>,
+        run_homes: &Path,
         timeout: Duration,
     ) -> Listing {
-        run_catalogue_command(AgentId::GROK, shell_env, config_dir, &["models"], timeout)
-            .and_then(|stdout| {
-                let ids = parse_list(&stdout);
-                if ids.is_empty() {
-                    return Err(unreadable(AgentId::GROK));
-                }
-                let home = crate::adapter::account_dir(AgentId::GROK, config_dir, shell_env);
-                // Read after the command, which is what refreshes it.
-                let cache =
-                    crate::hostfs::read_regular_text(&home.join(GROK_MODELS_CACHE), OUTPUT_LIMIT)
-                        .ok();
-                // The cache can drop every printed id as hidden; an empty list needs its reason.
-                let models = decorate(&ids, cache.as_deref());
-                if models.is_empty() {
-                    return Err(unreadable(AgentId::GROK));
-                }
-                Ok(models)
-            })
-            .map_or_else(Listing::unavailable, Listing::found)
+        let args = ["models"];
+        run_catalogue_command_in(
+            AgentId::GROK,
+            shell_env,
+            config_dir,
+            run_homes,
+            &args,
+            timeout,
+        )
+        .and_then(|(stdout, home)| {
+            let ids = parse_list(&stdout);
+            if ids.is_empty() {
+                return Err(unreadable(AgentId::GROK));
+            }
+            // Read after the command, which is what refreshes it, and from the directory the
+            // command ran against, which is where it did.
+            let cache = home.and_then(|home| {
+                crate::hostfs::read_regular_text(&home.join(GROK_MODELS_CACHE), OUTPUT_LIMIT).ok()
+            });
+            // The cache can drop every printed id as hidden; an empty list needs its reason.
+            let models = decorate(&ids, cache.as_deref());
+            if models.is_empty() {
+                return Err(unreadable(AgentId::GROK));
+            }
+            Ok(models)
+        })
+        .map_or_else(Listing::unavailable, Listing::found)
     }
 }
 
@@ -137,7 +146,8 @@ fn decorate(ids: &[String], cache: Option<&str>) -> Vec<AgentModel> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::models::{list, COMMAND_TIMEOUT};
+    use crate::adapter::account_cli::BackgroundRun;
+    use crate::agents::models::{list_in, COMMAND_TIMEOUT};
     use crate::protocol::models_unavailable_code as code;
     use crate::test_support::{fake_agent, ScratchDir};
 
@@ -219,49 +229,106 @@ mod tests {
         assert_eq!(models[3].efforts, levels(&GROK_EFFORTS));
     }
 
+    /// A stand-in for `grok models` that refreshes its home's models cache from `cache`, as Grok
+    /// Build does, and prints the list.
+    fn listing_agent(dir: &ScratchDir, cache: &str) -> HashMap<String, String> {
+        let fixture = dir.join("models.txt");
+        std::fs::write(&fixture, GROK_LIST).unwrap();
+        let fresh = dir.join("fresh-cache.json");
+        std::fs::write(&fresh, cache).unwrap();
+        fake_agent(
+            dir,
+            "grok",
+            &format!(
+                "[ \"$1\" = models ] || exit 3\n\
+                 echo \"$GROK_HOME\" > '{d}/dir'\n\
+                 cp '{fresh}' \"$GROK_HOME/{GROK_MODELS_CACHE}\"\n\
+                 cat '{list}'",
+                d = dir.display(),
+                fresh = fresh.display(),
+                list = fixture.display(),
+            ),
+        )
+    }
+
+    fn account(dir: &ScratchDir) -> std::path::PathBuf {
+        let account = dir.join("grok-account");
+        std::fs::create_dir_all(&account).unwrap();
+        std::fs::write(account.join("config.toml"), "# mine\n").unwrap();
+        account
+    }
+
     #[test]
     fn a_grok_cache_that_hides_every_printed_model_is_unreadable_not_empty() {
         let dir = ScratchDir::new("agent-models-grok-hidden");
-        let home = dir.join("grok-home");
-        std::fs::create_dir_all(&home).unwrap();
+        let account = account(&dir);
         let cache = ["grok-4.7", "grok-4.7-build-fast", "grok-4.6", "grok-4.5"]
             .map(|id| format!(r#""{id}":{{"info":{{"hidden":true}}}}"#))
             .join(",");
-        std::fs::write(
-            home.join(GROK_MODELS_CACHE),
-            format!(r#"{{"models":{{{cache}}}}}"#),
-        )
-        .unwrap();
-        let fixture = dir.join("models.txt");
-        std::fs::write(&fixture, GROK_LIST).unwrap();
-        let env = fake_agent(&dir, "grok", &format!("cat '{}'", fixture.display()));
+        let env = listing_agent(&dir, &format!(r#"{{"models":{{{cache}}}}}"#));
 
-        let listing = list(AgentId::GROK, &env, Some(&home), COMMAND_TIMEOUT);
+        let listing = list_in(
+            AgentId::GROK,
+            &env,
+            Some(&account),
+            &dir.join("homes"),
+            COMMAND_TIMEOUT,
+        );
         assert!(listing.models.is_empty());
         assert_eq!(reason(&listing), code::UNREADABLE_OUTPUT);
     }
 
+    /// The listing runs against a directory of Octoboard's own, never the account's, and the
+    /// cache it reads afterwards is the one the command refreshed there; the account's directory
+    /// gains nothing and its configuration stays as it was.
     #[test]
-    fn grok_is_run_in_the_accounts_home_and_its_cache_read_from_there() {
+    fn grok_is_run_in_a_home_of_its_own_and_its_cache_read_from_there() {
         let dir = ScratchDir::new("agent-models-grok");
-        let home = dir.join("grok-home");
-        std::fs::create_dir_all(&home).unwrap();
-        std::fs::write(home.join(GROK_MODELS_CACHE), GROK_CACHE).unwrap();
-        let fixture = dir.join("models.txt");
-        std::fs::write(&fixture, GROK_LIST).unwrap();
-        let env = fake_agent(
-            &dir,
-            "grok",
-            &format!(
-                "[ \"$1\" = models ] && [ \"$GROK_HOME\" = '{}' ] && cat '{}'",
-                home.display(),
-                fixture.display()
-            ),
-        );
+        let account = account(&dir);
+        let env = listing_agent(&dir, GROK_CACHE);
+        let run_homes = dir.join("homes");
 
-        let listing = list(AgentId::GROK, &env, Some(&home), COMMAND_TIMEOUT);
+        let listing = list_in(
+            AgentId::GROK,
+            &env,
+            Some(&account),
+            &run_homes,
+            COMMAND_TIMEOUT,
+        );
         assert_eq!(listing.unavailable, None);
         assert_eq!(listing.models[1].name, "Grok 4.7 Fast");
+        let home = std::fs::read_to_string(dir.join("dir")).unwrap();
+        assert_eq!(
+            Path::new(home.trim()),
+            super::super::query_home::dir_for(&run_homes, BackgroundRun::ModelListing, &account)
+        );
+        assert!(!account.join(GROK_MODELS_CACHE).exists());
+        assert_eq!(
+            std::fs::read_to_string(account.join("config.toml")).unwrap(),
+            "# mine\n"
+        );
+    }
+
+    /// Where the directory of Octoboard's own cannot be made ready there is no list, with the
+    /// reason, and the command is not run against the account's directory instead.
+    #[test]
+    fn a_listing_whose_home_cannot_be_prepared_fails_and_runs_nothing() {
+        let dir = ScratchDir::new("agent-models-grok-no-home");
+        let account = account(&dir);
+        let env = listing_agent(&dir, GROK_CACHE);
+        let run_homes = dir.join("homes");
+        std::fs::write(&run_homes, "a file where the directories go").unwrap();
+
+        let listing = list_in(
+            AgentId::GROK,
+            &env,
+            Some(&account),
+            &run_homes,
+            COMMAND_TIMEOUT,
+        );
+        assert!(listing.models.is_empty());
+        assert_eq!(reason(&listing), code::COMMAND_FAILED);
+        assert!(!dir.join("dir").exists(), "the CLI was not run");
     }
 
     #[test]
@@ -271,15 +338,30 @@ mod tests {
             "adapter::grok::models::tests::bounded_agent_files_leave_grok_models_available",
             crate::adapter::tests::FILE_CASES,
             |case| {
-                let home = ScratchDir::new("bounded-model-cache");
+                let dir = ScratchDir::new("bounded-model-cache");
+                let account = account(&dir);
+                let run_homes = dir.join("homes");
+                // The cache as the directory the listing runs against holds it.
+                let home = super::super::query_home::dir_for(
+                    &run_homes,
+                    BackgroundRun::ModelListing,
+                    &account,
+                );
+                std::fs::create_dir_all(&home).unwrap();
                 agent_file(
                     &home.join(GROK_MODELS_CACHE),
                     case,
                     GROK_CACHE,
                     OUTPUT_LIMIT,
                 );
-                let env = fake_agent(&home, "grok", &format!("printf '%s' '{}'", GROK_LIST));
-                let listing = list(AgentId::GROK, &env, Some(&home), COMMAND_TIMEOUT);
+                let env = fake_agent(&dir, "grok", &format!("printf '%s' '{}'", GROK_LIST));
+                let listing = list_in(
+                    AgentId::GROK,
+                    &env,
+                    Some(&account),
+                    &run_homes,
+                    COMMAND_TIMEOUT,
+                );
                 let readable = matches!(case, "regular" | "linked");
                 assert_eq!(listing.unavailable, None);
                 assert_eq!(

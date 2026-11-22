@@ -15,6 +15,7 @@ use super::quotas::probe::QuotaProbe;
 use super::quotas::reset_credit::ResetCredits;
 use super::shared_config::SharedItem;
 use super::thread_registry::ThreadRegistry;
+use crate::adapter::account_cli::{BackgroundRun, RunHome, RunWait};
 
 /// A provider's accounts, beyond launching a session against one.
 pub(crate) trait AccountOps: Send + Sync {
@@ -29,6 +30,28 @@ pub(crate) trait AccountOps: Send + Sync {
     fn kick_command(&self) -> Option<KickCommand> {
         None
     }
+
+    /// A directory of Octoboard's own, under `run_homes`, to make `run` against in place of the
+    /// account's directory `account_dir`, for a CLI measured to change the account's configuration
+    /// when that run is made against the account's own directory; `None` makes it against the
+    /// account's. Every provider answers, from what was measured of its CLI: running against the
+    /// account's directory is what lets a CLI write the user's files, so it is never assumed.
+    /// Asked once the account's directory is admitted for the run. A directory another run holds
+    /// is waited for as `wait` says. `Err` is why the directory could not be made ready, and the
+    /// run is then not made at all: the account's own directory is not fallen back to.
+    fn run_home(
+        &self,
+        run_homes: &Path,
+        run: BackgroundRun,
+        account_dir: &Path,
+        shell_env: &HashMap<String, String>,
+        wait: &RunWait<'_>,
+    ) -> anyhow::Result<Option<RunHome>>;
+
+    /// Removes what [`Self::run_home`] keeps under `run_homes` for the account at `account_dir`,
+    /// when the account is removed: such a directory can hold a copy of the account's
+    /// configuration. The default keeps nothing, so removes nothing.
+    fn forget_run_homes(&self, _run_homes: &Path, _account_dir: &Path) {}
 
     /// The email the account under `config_dir` (`None` for the default account, whose directory
     /// follows `shell_env` as the CLI's would) signs in with, read from the provider's own sign-in
@@ -69,10 +92,13 @@ pub(crate) trait AccountOps: Send + Sync {
         &[]
     }
 
-    /// The plugin registries that record the path a plugin was installed under, by the shared
-    /// item they sit in and their path inside it.
-    fn plugin_registries(&self) -> &'static [(&'static str, &'static str)] {
-        &[]
+    /// The plugin registries in the shared entries that record the path a plugin was installed
+    /// under, by the shared item they sit in and their path inside it: the files sharing keeps
+    /// naming the default account's directory. A provider that shares entries states them,
+    /// `Some(&[])` when it was measured to record no such path; `None` is for a provider that
+    /// shares nothing.
+    fn plugin_registries(&self) -> Option<&'static [(&'static str, &'static str)]> {
+        None
     }
 
     /// The shared directory item in which the provider keeps per-project memory, which a launch

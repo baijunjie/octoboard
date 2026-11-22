@@ -8,7 +8,10 @@
 //! (`cli_reads.rs`). While it runs the account is locked: none of its sessions is created,
 //! launched, resumed or switched to. Nothing carries a change out later; one that fails is left
 //! as it is, marked incomplete, for the user to ask again. Before every launch of a session of a
-//! sharing account, the links an agent replaced are repaired. What the directory operations do is
+//! sharing account, the links an agent replaced are repaired, and then, after each of its sessions
+//! ends, as the daemon stops and at daemon start, what its sessions left in the default
+//! directory's plugin registries by the account's spelling is pointed at the default directory's
+//! own (`keep.rs`), so nothing in the default directory depends on the account's. What the directory operations do is
 //! `link.rs`'s; running a change as an operation, which ends the account's idle sessions and
 //! resumes them around it, is `crate::coordinator::account_sharing`'s; the whole contract is the
 //! "Sharing the default configuration" list under "Records" in `apps/daemon/PROTOCOL.md`.
@@ -16,6 +19,7 @@
 mod change;
 mod cli_reads;
 mod items;
+mod keep;
 mod launch;
 mod link;
 mod locks;
@@ -44,6 +48,10 @@ pub(crate) use cli_reads::{admitted_reading, hold, is_missing, running_long, Run
 pub(crate) use cli_reads::{is_held, reading_account, waiting};
 pub(crate) use items::{
     config_dir, config_file, history_dir, history_lines, thread_database, SharedItem,
+};
+pub(crate) use keep::{
+    after_exit as keep_registries_after_exit, at_start as keep_registries_at_start,
+    at_stop as keep_registries_at_stop,
 };
 pub use launch::before_launch;
 pub(crate) use link::entries;
@@ -102,6 +110,19 @@ pub(crate) async fn lock_agent(state: &AppState, agent: AgentId) -> MutexGuard<'
 /// [`lock_agent`] if no operation holds the agent's lock now.
 pub(crate) fn try_lock_agent(state: &AppState, agent: AgentId) -> Option<MutexGuard<'_, ()>> {
     state.account_sharing.locks.try_lock(agent)
+}
+
+/// The conversation-history entries of `agent`'s shared list that `default`, a default account's
+/// directory, holds: what turning an account's sharing off leaves there. Blocking.
+pub(crate) fn history_present(agent: AgentId, default: &Path) -> Vec<&'static str> {
+    items::shared_items(agent)
+        .iter()
+        .filter(|item| {
+            item.class.is_history()
+                && moves::lstat(&default.join(item.name)).is_ok_and(|found| found.is_some())
+        })
+        .map(|item| item.name)
+        .collect()
 }
 
 /// Whether `session` runs under `account`'s directory: one of the account's sessions, or one

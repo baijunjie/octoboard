@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { afterQueuedWork } from "../test/clock";
+import { LAZY_IMPORT_TIMEOUT_MS } from "../test/lazyImport";
 import { MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { CommandLineError } from "./commandLineError";
 import { ConfigurationFileError } from "./configurationFileError";
@@ -480,6 +481,21 @@ describe("what each kind of window of the application has", () => {
     expect(tauriPlatform().remoteLogin).toBeUndefined();
   });
 
+  it("gives only the local daemon's window the clean-up before an uninstall, which asks the shell for the list and the clearing", async () => {
+    openAs("&daemon=me%40host&remote=host");
+    expect(tauriPlatform().systemChanges).toBeUndefined();
+    openAs("&flyout=1");
+    expect(tauriPlatform().systemChanges).toBeUndefined();
+    openAs("");
+    const { systemChanges } = tauriPlatform();
+    const listed = { changes: [{ kind: "launch_at_login", turnedOff: false }], failed: [] };
+    const cleared = { results: [{ change: { kind: "launch_at_login", turnedOff: false }, outcome: { result: "cleared" } }], failed: [] };
+    invoke.mockResolvedValueOnce(listed).mockResolvedValueOnce(cleared);
+    await expect(systemChanges!.list()).resolves.toEqual(listed);
+    await expect(systemChanges!.clearAll()).resolves.toEqual(cleared);
+    expect(invoke.mock.calls.slice(-2)).toEqual([["system_changes_list"], ["system_changes_clear"]]);
+  });
+
   it("gives the notification-area flyout's page its own capability, and no other window has it", () => {
     openAs("&flyout=1");
     const flyout = tauriPlatform();
@@ -734,7 +750,7 @@ describe("the files copied from a remote daemon", () => {
 });
 
 describe("the remote daemons", () => {
-  const ENTRY = { id: "a", name: "Staging", host: "h", port: 22, user: "u", auth: "password", keyPath: null, fingerprint: null, octoboarddPath: null } as const;
+  const ENTRY = { id: "a", name: "Staging", host: "h", port: 22, user: "u", auth: "password", keyPath: null, fingerprint: null, octoboarddPath: null, deviceKey: { declined: false, file: null, mark: null } } as const;
 
   it("lists the entries and the connections through the shell and returns what it answers", async () => {
     const { remoteDaemons } = tauriPlatform();
@@ -746,15 +762,43 @@ describe("the remote daemons", () => {
     expect(invoke).toHaveBeenLastCalledWith("remote_daemons_status");
   });
 
-  it("saves and removes an entry by the shell's commands, and gives back what the shell saved", async () => {
+  it("saves and removes an entry by the shell's commands, and gives back what the shell saved and what became of its key", async () => {
     const { remoteDaemons } = tauriPlatform();
-    const input = { ...ENTRY, id: null };
-    invoke.mockResolvedValueOnce(ENTRY);
-    expect(await remoteDaemons!.save(input)).toEqual(ENTRY);
+    const { id: _id, deviceKey: _deviceKey, ...fields } = ENTRY;
+    const input = { ...fields, id: null };
+    const saved = { entry: ENTRY, keyRemoval: { line: { result: "not_installed" }, privateKeyLeft: null } };
+    invoke.mockResolvedValueOnce(saved);
+    expect(await remoteDaemons!.save(input)).toEqual(saved);
     expect(invoke).toHaveBeenLastCalledWith("remote_daemon_save", { entry: input });
-    invoke.mockResolvedValueOnce(undefined);
-    await remoteDaemons!.remove("a");
+    const left = {
+      line: { result: "left_on_host", mark: "Octoboard on Desk", file: null, host: "h", user: "u", detail: "unreachable" },
+      privateKeyLeft: { service: "app.remote-daemon-key", account: "a", host: "h", user: "u", detail: "locked" },
+    };
+    invoke.mockResolvedValueOnce(left);
+    expect(await remoteDaemons!.remove("a")).toEqual(left);
     expect(invoke).toHaveBeenLastCalledWith("remote_daemon_remove", { id: "a" });
+  });
+
+  it("turns this computer's key on or off for an entry by the shell's command, and says what became of the key", async () => {
+    const { remoteDaemons } = tauriPlatform();
+    const removed = { line: { result: "removed" }, privateKeyLeft: null };
+    invoke.mockResolvedValueOnce(removed);
+    expect(await remoteDaemons!.setDeviceKey("a", false)).toEqual(removed);
+    expect(invoke).toHaveBeenLastCalledWith("remote_daemon_device_key_set", { id: "a", enabled: false });
+    const nothing = { line: { result: "not_installed" }, privateKeyLeft: null };
+    invoke.mockResolvedValueOnce(nothing);
+    expect(await remoteDaemons!.setDeviceKey("a", true)).toEqual(nothing);
+    expect(invoke).toHaveBeenLastCalledWith("remote_daemon_device_key_set", { id: "a", enabled: true });
+  });
+
+  it("sends the owner's answer about this computer's key with the request only once it is given", async () => {
+    const { remoteDaemons } = tauriPlatform();
+    const request = { id: "a", secret: "pw", confirmFingerprint: null, action: null, browser: false, deviceKey: false };
+    invoke.mockResolvedValueOnce({ outcome: "device_key_offered", mark: "Octoboard on Desk", file: "~/.ssh/authorized_keys" });
+    expect(await remoteDaemons!.connect({ ...request, deviceKey: undefined })).toEqual({ outcome: "device_key_offered", mark: "Octoboard on Desk", file: "~/.ssh/authorized_keys" });
+    invoke.mockResolvedValueOnce({ outcome: "opened" });
+    await remoteDaemons!.connect(request);
+    expect(invoke).toHaveBeenLastCalledWith("remote_daemon_connect", { request });
   });
 
   it("sends a connection's request whole, the password with it, and resolves with how it ended", async () => {
@@ -859,10 +903,16 @@ describe("the remote daemons", () => {
     invoke.mockImplementation(async (command: string) => (command === "remote_page_requested_take" ? true : undefined));
     const listener = vi.fn();
     const undo = tauriPlatform().remoteDaemons!.onPageRequested(listener);
-    await vi.waitFor(() => {
-      expect(listeners.has("remote-page-requested")).toBe(true);
-      expect(listener).toHaveBeenCalledTimes(1);
-    });
+    // The listener registers after two dynamic imports of the shell's modules, cold when this is the file's first
+    // test to reach them: the wait ends as soon as it has registered and taken, and its bound is only how long a hang
+    // is tolerated, not a window the imports have to beat.
+    await vi.waitFor(
+      () => {
+        expect(listeners.has("remote-page-requested")).toBe(true);
+        expect(listener).toHaveBeenCalledTimes(1);
+      },
+      { timeout: LAZY_IMPORT_TIMEOUT_MS },
+    );
     // Nothing asked for is not passed on.
     invoke.mockImplementation(async () => false);
     listeners.get("remote-page-requested")!({ payload: undefined });

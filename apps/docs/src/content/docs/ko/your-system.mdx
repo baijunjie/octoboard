@@ -1,0 +1,88 @@
+---
+title: "시스템은 그대로 둡니다"
+description: "Octoboard는 사용자의 시스템과 에이전트 자체 파일을 원래대로 둡니다. 일부 기능이 추가하는 것, 각각을 되돌리는 방법, 제거한 뒤에 남는 것을 정리했습니다."
+---
+
+import { Aside, Code } from "@astrojs/starlight/components";
+import { commands, productName, system } from "../../../commands.ts";
+import LinuxUninstall from "../../../snippets/ko/linux-uninstall.mdx";
+import WindowsUninstaller from "../../../snippets/ko/windows-uninstaller.mdx";
+
+{productName}은(는) 사용자의 시스템을 원래대로 둡니다. 에이전트의 구성도, {productName} 자체 폴더 밖의 다른 모든 것도 마찬가지입니다. 다만 몇몇 기능은 그 폴더 밖에 무언가를 추가합니다. 이 페이지는 그런 기능을 빠짐없이 나열하고, 각각 무엇을 어디에 추가하는지, 어떻게 되돌리는지, 그리고 제거한 뒤에 무엇이 남는지 설명합니다.
+
+## 원칙
+
+- <strong>{productName}이(가) 에이전트에 주는 것은 실행할 때마다, 그 실행에만 전달됩니다.</strong> 상태 훅, {productName} 자체 MCP 서버, 세션에 알려 주는 역할은 에이전트가 시작될 때 전달되거나 {productName} 자체 폴더에 보관됩니다. 이를 위해 사용자의 파일이나 에이전트의 파일을 편집하지 않으므로, 에이전트를 따로 실행하면 이 가운데 아무것도 없이 시작됩니다.
+- <strong>{productName}은(는) 사용자의 설정에 자체 훅을 추가하지 않으며, 프로젝트 폴더에 관해 사용자 대신 아무것도 결정하지 않습니다.</strong> 프로젝트 폴더를 신뢰할지는 사용자가 정하고 에이전트가 기록합니다. {productName}이(가) 답하는 폴더는 콘솔 자체 폴더 하나뿐이며, 이 폴더는 {productName}의 것입니다(아래 참고).
+- <strong>에이전트가 스스로 기록하는 것은 에이전트의 것입니다.</strong> 대화 기록, 캐시와 로그, 로그인 자격 증명, 에이전트 자신의 질문에 답했을 때 기록되는 신뢰는 {productName} 없이 에이전트를 쓸 때와 똑같이 기록됩니다. 에이전트 자체 프로그램이 어떤 구성 폴더에서 처음 실행될 때 하는 초기 설정도 마찬가지이며, {productName}이(가) 백그라운드에서 정보를 읽을 때 사용자의 첫 실행보다 먼저 이루어질 수 있습니다(아래 참고).
+- <strong>프로젝트 안에서 하는 작업은 이 페이지에서 다루지 않습니다.</strong> 프로젝트 파일 편집, Git 작업, 브랜치와 작업 트리는 프로젝트를 추가해서 하려는 개발 작업 그 자체입니다.
+
+## 기능이 추가하는 것과 되돌리는 방법
+
+아래 항목은 모두 사용자가 쓰거나 켠 기능이 있을 때에만 추가됩니다.
+
+### 기능을 끄면 되돌려지는 것
+
+- <strong>원격 서버에 있는 이 컴퓨터의 키.</strong> 저장된 원격 데몬에 비밀번호나 키 파일로 로그인하고 나면, 앱은 무엇이든 추가하기 전에 먼저 묻습니다. <strong>이 컴퓨터의 키 추가</strong> 대화상자에 어느 파일의 어느 줄인지가 표시됩니다. <strong>키 추가</strong>를 선택하면 그 서버에 있는 사용자의 허용된 SSH 키 목록(Linux와 macOS에서는 <code dir="ltr">{commands.authorizedKeys}</code>)에 <code dir="ltr">{system.keyMark}</code> 표시가 붙은 한 줄이 추가되고, 개인 키는 이 컴퓨터의 자격 증명 저장소(macOS에서는 로그인 키체인, Windows에서는 자격 증명 관리자)에 보관됩니다. <strong>추가 안 함</strong>을 선택하면 아무것도 추가되지 않으며 다시 묻지 않습니다. 되돌리려면 <strong>원격 기기</strong>에 있는 해당 데몬의 페이지에서 <strong>이 컴퓨터의 키</strong>를 끄거나 저장된 데몬을 제거하세요. 앱이 그 줄을 파일에서 삭제하고 개인 키를 제거합니다. 저장된 데몬의 호스트, 포트 또는 사용자를 바꿀 때에도 똑같이 합니다. 서버에 연결할 수 없으면 그 줄이 남을 수 있으며, 앱이 이를 알려 주므로 서버에서 직접 지우세요.
+- <strong>로그인 시 열기</strong>(Windows, 그리고 macOS 13 이상). <strong>설정 › 일반 › 로그인 시 열기</strong>를 켜면 시스템이 로그인할 때 여는 앱 목록에 {productName}이(가) 들어가며, 이 행의 설명에도 그렇게 적혀 있습니다. 그 목록에서 빼려면 이 스위치를 끄세요.
+- <strong>명령줄 도구</strong>(macOS). <strong>설정 › 일반 › 명령줄 도구</strong>에서 <strong>설치</strong>를 선택하면 <code dir="ltr">{system.cliDir}</code>에 <code dir="ltr">{system.cliName}</code>(이)라는 이름의 링크가 추가되고, 시스템이 허용하지 않으면 <code dir="ltr">{system.cliFallbackDir}</code>에 추가됩니다. 설치하기 전부터 이 행에 그렇게 적혀 있습니다. <strong>제거</strong>를 선택하면 그 링크가 삭제됩니다.
+- <strong>기본 구성 공유.</strong> <strong>설정 › 에이전트 계정</strong>에 있는 계정 설정의 <strong>기본 구성 공유</strong>를 켜면, 그 계정 폴더에서 공유할 수 있는 부분이 기본 계정 폴더로 가는 링크로 바뀌고, 계정 자체의 구성은 그 옆에 백업으로 남으며, 대화 이력은 기본 계정의 폴더로 옮겨집니다. 켜기 전부터 이 행에 그렇게 적혀 있습니다. 끄면 링크가 제거되고 백업이 복원되며, 그 계정 자체 세션의 대화가 다시 옮겨집니다. <strong>한 가지는 남습니다.</strong> 옮겨진 대화 이력의 나머지는 기본 계정의 폴더에 남습니다. 지우면 사용자의 대화가 사라지기 때문입니다. [Shared configuration](../features/shared-configuration/)을(를) 참고하세요.
+
+### 사용자나 에이전트의 것으로 남는 것
+
+아래에서 기록되는 것은 그때부터 사용자의 것 또는 에이전트 자신의 것이 되므로, {productName}이(가) 자기 것으로서 되돌릴 것은 없습니다. 직접 지울 수 있는 항목은 해당 항목에서 위치를 알려 드립니다.
+
+- <strong>세션의 계정 전환.</strong> <strong>계정 전환</strong>은 먼저 확인을 요청합니다. 에이전트가 요청한 전환은 <strong>계정 전환 자동 승인</strong>을 켜 두지 않은 한 사용자의 승인을 기다리며, 사용 한도에서의 전환은 <strong>사용 한도 도달 시 계정 자동 전환</strong>이 켜져 있는 동안에만 일어납니다. 전환하면 그 세션 하나의 대화가 대상 계정의 폴더로 복사됩니다. Codex의 경우에는 그 계정이 이 대화에 대해 가지고 있는 자체 기록도 복사본을 가리키도록 바뀝니다. 원본은 있던 자리에 남고, 복사본은 그 계정 자신의 것으로 남습니다. [Account continuity](../features/account-continuity/)을(를) 참고하세요.
+- <strong>Grok Build 세션 안에서 바꾼 설정과 플러그인.</strong> 사용자의 <code dir="ltr">config.toml</code>이(가) 어떤 파일로 가는 링크인 경우, 세션에서 바꾼 테마, 플러그인 켜기/끄기, 기본 모델은 세션이 끝날 때 Grok이 직접 저장했을 때와 똑같이 그 파일에 기록됩니다. 세션에서 설치한 플러그인은 사용자의 Grok 폴더에 자체 플러그인 레지스트리가 있으면 거기에 기록됩니다.
+- <strong>프로젝트 폴더에 대한 Grok Build의 신뢰.</strong> 사용자가 프로젝트 폴더를 신뢰하기로 동의하면(<strong>신뢰 및 계속</strong>을 선택하거나 터미널에서 직접 답하면), Grok이 기록한 항목 하나가 그대로 사용자의 Grok 폴더에 있는 신뢰 목록으로 옮겨집니다.
+- <strong>대화가 한 번도 없었던 세션의 기록.</strong> 아무것도 보낸 적이 없는 세션을 삭제하면, 에이전트가 그 세션에 대해 가지고 있는 자체 기록도 묻지 않고 함께 휴지통으로 이동합니다. 거기에는 사용자의 대화가 없기 때문입니다. 사용한 적이 있는 세션의 기록은 확인 대화상자에서 해당 옵션을 선택한 경우에만 이동합니다. 이 기록은 휴지통에서 복구할 수 있습니다.
+- <strong>Claude Code의 첫 실행 설정.</strong> Claude Code가 한 번도 실행된 적 없는 구성 폴더에서, 또는 Claude Code가 업데이트된 뒤에는, {productName}의 백그라운드 읽기(계정의 사용량, MCP 서버, 에이전트)로 인해 Claude Code가 그곳에서 자체 첫 실행 설정과 대기 중인 마이그레이션을 수행합니다. 사용자가 다음에 직접 실행했다면 했을 일과 같습니다. {productName}은(는) 그 변경을 그대로 둡니다.
+- <strong>새 Codex 계정을 위한 빈 폴더.</strong> Codex 계정을 처음 실행하거나 처음 로그인하기 전에 그 계정의 폴더가 아직 없으면 {productName}이(가) 빈 폴더를 만듭니다. 이 폴더가 없으면 Codex가 시작을 거부하기 때문입니다.
+- <strong>콘솔 자체 폴더에 대한 신뢰.</strong> 콘솔 세션은 {productName} 자체 폴더에서 실행되므로, 에이전트가 그곳에서 신뢰 여부를 물으면 {productName}이(가) 사용자에게 묻지 않고 답합니다. 그러면 Claude Code는 자신의 신뢰 목록에 그 폴더만을 가리키는 항목을 남기며, 이 항목은 다른 곳에는 아무 영향도 주지 않습니다. Codex는 그 폴더가 Git 저장소 안에 있을 때에만 묻고, 그 저장소의 루트에 대해 신뢰를 기록합니다. 이 기록은 저장소 전체에 적용되므로, 홈 폴더를 Git으로 관리한다면 홈 폴더 전체가 해당됩니다. Grok Build는 사용자의 신뢰 목록에 아무것도 기록하지 않습니다. {productName}은(는) 이 항목들을 지우지 않습니다. 지우면 사용자의 파일을 한 번 더 편집하게 되기 때문입니다. 직접 지울 수는 있습니다. Codex의 항목은 Codex 폴더의 <code dir="ltr">config.toml</code>에 있는 <code dir="ltr">[projects."&lt;repository root&gt;"]</code> 테이블이고, Claude Code의 항목은 <code dir="ltr">.claude.json</code>의 <code dir="ltr">projects</code> 아래에 있는 해당 폴더 항목입니다.
+
+### 제거 명령으로 되돌리는 것
+
+- <strong>서비스로 실행하는 Linux 서버 프로그램.</strong> 서비스로 설치하면([Linux 서버](../install/linux/) 참고) 사용자의 systemd 구성 폴더에 systemd 사용자 서비스가 기록되고, 사용자의 lingering이 꺼져 있었다면 켜집니다. 이것은 아래의 제거 명령으로 되돌립니다.
+
+<Aside>
+Windows에서는 앱이 작업 표시줄 버튼의 점프 목록도 유지하며, 여기에는 저장된 원격 데몬이 들어 있습니다. 이 목록에는 스위치가 없습니다. 아래에서 설명하는 <strong>모두 제거</strong>가 이 목록을 제거하며, 제거 프로그램도 제거합니다.
+</Aside>
+
+## 제거하기 전에
+
+제거하기 전에, ‘기능을 끄면 되돌려지는 것’ 가운데 지금 적용 중인 항목을 한 번에 모두 제거하고 해당 기능을 끌 수 있습니다. 데스크톱 앱에서는 <strong>설정 › 정리</strong>에 이를 위한 행 <strong>앱 제거 전 정리</strong>가 하나 있습니다. 적용 중인 항목이 몇 개인지 알려 주며, 버튼은 <strong>모두 제거</strong> Windows에서는 제거 프로그램도 스스로 이 정리를 하고, Linux 서버 프로그램의 제거 명령은 가장 먼저 이 정리를 합니다. 둘 다 아래에서 설명합니다.
+
+- <strong>먼저 확인을 요청합니다.</strong> 확인 대화상자에는 제거될 항목의 수(목록은 그 수 아래에 접혀 있습니다)와 무엇이 유지되는지가 표시됩니다. <strong>제거</strong>를 입력해야만 진행됩니다.
+- <strong>결과를 보여 줍니다.</strong> 끝나면 제거된 것과 제거되지 않은 것이 나열됩니다. 연결할 수 없는 서버에 있는 키처럼 제거하지 못한 항목에는 무엇이 어디에 남았는지 표시됩니다.
+- <strong>그 컴퓨터에 있는 앱 자체의 창에만 있습니다.</strong> 데스크톱 앱이 있는 컴퓨터의 브라우저와 원격 데몬을 표시하는 창에서는 이 행이 정리를 어디에서 하는지만 알려 줍니다. 브라우저로 Linux 서버를 열었을 때에는 서버에서 제거할 때 정리가 먼저 이루어진다고 알려 주며, 서버에서 실행할 수 있도록 <code dir="ltr">{system.uninstall}</code> 명령과 <strong>앱 삭제 명령 복사</strong>를 보여 줍니다. 거기에서는 아무것도 제거되지 않습니다.
+- <strong>앱을 제거할 때에만 사용하세요.</strong> 하나만 되돌리고 {productName}을(를) 계속 사용하려면 대신 해당 기능을 끄세요.
+- <strong>사용자의 데이터는 그대로 둡니다.</strong> {productName} 자체 폴더는 남으며, 공유로 옮겨진 대화 이력도 남습니다.
+
+## 제거한 뒤에
+
+제거하면 프로그램이 지워집니다.
+
+### macOS
+
+{productName}을(를) 종료한 다음 응용 프로그램 폴더에서 삭제하세요. 삭제할 때에는 아무것도 실행되지 않으므로 먼저 <strong>모두 제거</strong>를 선택하세요. 이 동작이 제거하는 것은 앱을 삭제해도 지워지지 않습니다.
+
+### Windows
+
+앱의 제거 프로그램을 사용하세요.
+
+<WindowsUninstaller />
+
+### Linux 서버
+
+<LinuxUninstall />
+
+프로그램을 설치한 폴더는 남으며, 그 폴더를 PATH에 넣으려고 추가한 줄도 남습니다.
+
+### 남는 것
+
+{productName} 자체 폴더는 남으므로, 나중에 다시 설치하면 콘솔, 세션, 설정을 그대로 다시 쓸 수 있습니다. 이것까지 지우려면 폴더를 삭제하세요. 모든 콘솔, 세션 기록, 설정이 사라집니다.
+
+- <strong>데이터 폴더</strong>(세션이 실행되던 컴퓨터나 서버에 있습니다): <code dir="ltr">{system.dataDir}</code>(Windows에서는 <code dir="ltr">{system.dataDirWindows}</code>). macOS와 Linux에서는 <code dir="ltr">{system.removeDataDir}</code> 명령으로 지울 수 있습니다.
+- <strong>데스크톱 앱 자체 폴더:</strong> macOS에서는 <code dir="ltr">{system.appDataMac}</code>, Windows에서는 <code dir="ltr">{system.appDataWindows}</code>와(과) <code dir="ltr">{system.appLocalDataWindows}</code>.
+
+에이전트 자체 폴더는 그 안의 로그인, 설정, 대화와 함께 에이전트의 것이며, 그대로 남습니다.

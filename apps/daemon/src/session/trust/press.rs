@@ -170,7 +170,7 @@ fn answer_with(live: &LiveSession, patience: Duration, dismissal: Duration) -> R
     let pressed = match screen.press {
         Press::DownThenEnter => press_down_then_enter(live, screen, patience, dismissal),
         Press::Enter => press_enter(live, screen, patience, dismissal),
-        Press::Yes => press_yes(live),
+        Press::Yes => press_yes(live, patience),
     };
     match pressed {
         Ok(()) => {
@@ -320,12 +320,18 @@ pub(super) fn still_waiting_after_claim(live: &LiveSession) -> bool {
 /// run its hook and the entry it recorded has reached the user's own store, or, with no hook to
 /// carry it (a policy that runs none), once the rendered screen is seen to have gone; a hook that
 /// comes after that still carries the entry.
-pub(super) fn press_yes(live: &LiveSession) -> Result<()> {
+pub(super) fn press_yes(live: &LiveSession, patience: Duration) -> Result<()> {
     let agent = live.agent;
     let trust = &live.trust;
-    // Every launch of a provider whose trust is per session says where its trust record is
-    // carried (`crate::adapter::LaunchPlan::carried_trust`).
+    // A launch whose trust record is the user's to keep says where it is carried
+    // (`crate::adapter::LaunchPlan::carried_trust`). With no carrier, only a session whose record
+    // is nobody's to keep is pressed (`TrustState::carries_nothing`); any other has lost its
+    // carrier, an adopted launch whose record did not read, say, and a press would leave the
+    // record in the session's home with the user none the wiser when the agent asks again.
     let Some(carried) = trust.carried.as_deref() else {
+        if trust.carries_nothing.load(Ordering::Acquire) {
+            return press_yes_carrying_nothing(live, patience);
+        }
         return Err(anyhow!(
             "this {} session has nowhere to carry its trust record to",
             agent.label()
@@ -367,6 +373,28 @@ pub(super) fn press_yes(live: &LiveSession) -> Result<()> {
         None if trust.dismissed.load(Ordering::Acquire) => Ok(()),
         // No hook: the confirmation did not go. A hook that comes later reports its own outcome.
         None => Err(not_dismissed(agent)),
+    }
+}
+
+/// [`press_yes`] for a session that carries no trust record: the same `y` under the same checks,
+/// counting once the agent's hook has come or the rendered screen is seen to have gone
+/// ([`super::release_when_the_sighted_screen_goes`]), whichever is first, within [`CARRY_WAIT`],
+/// or `patience` where that is shorter.
+fn press_yes_carrying_nothing(live: &LiveSession, patience: Duration) -> Result<()> {
+    let agent = live.agent;
+    let trust = &live.trust;
+    let writes = trust.writes_at_sighting.load(Ordering::Acquire);
+    std::thread::sleep(SETTLE);
+    if live.poll_exit() {
+        return Err(screen_gone(agent));
+    }
+    write(live, writes, &yes())?;
+    let past =
+        || trust.hook_seen.load(Ordering::Acquire) || trust.dismissed.load(Ordering::Acquire);
+    if wait_for(CARRY_WAIT.min(patience), past) {
+        Ok(())
+    } else {
+        Err(not_dismissed(agent))
     }
 }
 

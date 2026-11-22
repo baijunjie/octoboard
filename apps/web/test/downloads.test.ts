@@ -3,9 +3,12 @@ import test from "node:test";
 import { existsSync, readFileSync } from "node:fs";
 import { locales } from "../seo/site-seo.ts";
 import {
+  appRequirementsKey,
   appRequirementsKeys,
   detectDownloadTab,
+  heroPlatformsKey,
   linuxCommands,
+  offersWindowsArm,
   downloadPagePath,
   downloadTargets,
   fallbackDownloads,
@@ -23,7 +26,10 @@ const releases = `${repositoryUrl}/releases`;
 const macos = { version: "0.1.0-beta.5", platforms: { "darwin-aarch64": { url: `${base}/desktop-v0.1.0-beta.5/Octoboard_0.1.0-beta.5_universal.app.tar.gz` } } };
 const windows = {
   version: "0.1.0-beta.5",
-  platforms: { "windows-x86_64": { url: `${base}/desktop-v0.1.0-beta.5/Octoboard_0.1.0-beta.5_x64-setup.exe` } },
+  platforms: {
+    "windows-x86_64": { url: `${base}/desktop-v0.1.0-beta.5/Octoboard_0.1.0-beta.5_x64-setup.exe` },
+    "windows-aarch64": { url: `${base}/desktop-v0.1.0-beta.5/Octoboard_0.1.0-beta.5_arm64-setup.exe` },
+  },
 };
 const linux = {
   version: "0.1.0",
@@ -74,6 +80,7 @@ test("each platform takes its link from its manifest", async () => {
   assert.deepEqual(await resolveDownloads(run), {
     macos: `${base}/desktop-v0.1.0-beta.5/Octoboard_0.1.0-beta.5_universal.dmg`,
     windows: `${base}/desktop-v0.1.0-beta.5/Octoboard_0.1.0-beta.5_x64-setup.exe`,
+    "windows-arm64": `${base}/desktop-v0.1.0-beta.5/Octoboard_0.1.0-beta.5_arm64-setup.exe`,
     "linux-x86_64": `${base}/desktop-v0.1.0/octoboardd_0.1.0_linux_x86_64.tar.gz`,
     "linux-aarch64": `${base}/desktop-v0.1.0/octoboardd_0.1.0_linux_aarch64.tar.gz`,
   });
@@ -124,6 +131,31 @@ test("a manifest with a bad version or a url outside the repository's releases i
     }, true);
     await assert.rejects(resolveDownloads(bad.options), /stable-windows\.json/, url);
   }
+});
+
+test("a Windows manifest from before the arm64 build keeps its x64 link and leaves arm64 on the releases page", async () => {
+  const x64Only = { version: "0.1.0", platforms: { "windows-x86_64": windows.platforms["windows-x86_64"] } };
+  const { options: run, warnings } = options(
+    {
+      "stable.json": { status: 404 },
+      "stable-windows.json": { status: 200, body: x64Only },
+      "stable-linux.json": { status: 404 },
+    },
+    true,
+  );
+  const downloads = await resolveDownloads(run);
+  assert.match(downloads.windows, /x64-setup\.exe$/);
+  assert.equal(downloads["windows-arm64"], releases);
+  assert.equal(warnings.length, 2);
+});
+
+test("an arm64 Windows link outside the repository's releases is rejected", async () => {
+  const bad = { ...windows, platforms: { ...windows.platforms, "windows-aarch64": { url: "https://example.com/setup.exe" } } };
+  const { options: run } = options(
+    { "stable.json": { status: 404 }, "stable-windows.json": { status: 200, body: bad }, "stable-linux.json": { status: 404 } },
+    true,
+  );
+  await assert.rejects(resolveDownloads(run), /windows-aarch64/);
 });
 
 test("a manifest lacking a Linux architecture is rejected as a whole", async () => {
@@ -236,10 +268,31 @@ test("each desktop app's download button has a requirements line in every langua
   assert.deepEqual({ ...appRequirementsKeys }, { macos: "downloadMacosRequirements", windows: "downloadWindowsRequirements" });
   for (const locale of locales) {
     const catalog = JSON.parse(readFileSync(new URL(`../i18n/locales/${locale.file}`, import.meta.url), "utf8")) as Record<string, string>;
-    for (const key of Object.values(appRequirementsKeys)) {
+    for (const key of [...Object.values(appRequirementsKeys), "downloadWindowsArmRequirements", "downloadWindowsArm"]) {
       assert.equal(typeof catalog[key], "string", `${locale.code}: ${key}`);
       assert.notEqual(catalog[key].trim(), "", `${locale.code}: ${key}`);
     }
   }
   assert.deepEqual({ ...linuxCommands }, { start: "octoboardd start", address: "octoboardd address" });
+});
+
+test("the arm64 Windows installer is offered only once a release carries one, with its own requirements line", () => {
+  const before = fallbackDownloads(repositoryUrl);
+  before.windows = `${base}/desktop-v1.0.0/Octoboard_1.0.0_x64-setup.exe`;
+  assert.equal(offersWindowsArm(before, repositoryUrl), false);
+  assert.equal(appRequirementsKey("windows", false), "downloadWindowsRequirements");
+  const after = { ...before, "windows-arm64": `${base}/desktop-v1.0.0/Octoboard_1.0.0_arm64-setup.exe` };
+  assert.equal(offersWindowsArm(after, `${repositoryUrl}/`), true);
+  assert.equal(appRequirementsKey("windows", true), "downloadWindowsArmRequirements");
+  assert.equal(appRequirementsKey("macos", true), "downloadMacosRequirements");
+});
+
+test("the home page's platform line names Windows on arm64 only once its installer is offered", () => {
+  assert.equal(heroPlatformsKey(false), "heroPlatforms");
+  assert.equal(heroPlatformsKey(true), "heroPlatformsWindowsArm");
+  for (const locale of locales) {
+    const messages = JSON.parse(readFileSync(new URL(`../i18n/locales/${locale.file}`, import.meta.url), "utf8"));
+    assert.equal(messages.heroPlatforms.includes("arm64"), false, `${locale.code} heroPlatforms`);
+    assert.ok(messages.heroPlatformsWindowsArm.includes("arm64"), `${locale.code} heroPlatformsWindowsArm`);
+  }
 });

@@ -147,6 +147,54 @@ pub enum QueryKind {
     Unknown,
 }
 
+/// Which launch of which session a hook reports for: the session's id, and the launch's own id
+/// (`crate::adapter::LaunchSpec::launch_id`), which every hook of the launch carries back so that a
+/// report from a launch that has ended is told from the running one's at any time
+/// (`crate::state::AppState::launch_ended`). A hook configured by a build from before launches
+/// were named carries no launch. Here beside [`RelayRoute`] since a holder relays it as the hook
+/// route's parameter, and every hook a launch configures posts with it (`crate::adapter::hook_url`,
+/// `crate::adapter::hook_command`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HookMark {
+    pub session: String,
+    pub launch: Option<String>,
+}
+
+impl HookMark {
+    /// The mark the hook route's path names after `/hook/`, which is also the parameter a holder
+    /// relays ([`FromHolder::Relay`]): `<session>/<launch>`, or `<session>` alone.
+    /// Neither id holds a `/`.
+    pub fn parse(param: &str) -> Self {
+        match param.split_once('/') {
+            Some((session, launch)) => Self {
+                session: session.to_string(),
+                launch: Some(launch.to_string()),
+            },
+            None => Self {
+                session: param.to_string(),
+                launch: None,
+            },
+        }
+    }
+
+    /// What [`Self::parse`] reads back.
+    pub fn param(&self) -> String {
+        match &self.launch {
+            Some(launch) => format!("{}/{launch}", self.session),
+            None => self.session.clone(),
+        }
+    }
+}
+
+/// The hook route's path for the launch `launch_id` of the session `session_id`.
+pub fn hook_path(session_id: &str, launch_id: &str) -> String {
+    let mark = HookMark {
+        session: session_id.to_string(),
+        launch: Some(launch_id.to_string()),
+    };
+    format!("/hook/{}", mark.param())
+}
+
 /// The helper routes a holder relays to the daemon, as the daemon's own HTTP routes of the same
 /// names (`crate::server`) take them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -568,7 +616,9 @@ pub enum FromHolder {
     Relay {
         req: u64,
         route: RelayRoute,
-        /// The path's parameter: the session id, or for [`RelayRoute::Mcp`] the token.
+        /// The path's parameter: the session id, for [`RelayRoute::Hook`] followed by the launch
+        /// where the hook names one ([`HookMark`]), or for [`RelayRoute::Mcp`] the
+        /// token.
         param: String,
         #[serde(with = "base64_bytes")]
         body: Vec<u8>,
@@ -1248,5 +1298,24 @@ mod tests {
             decode_bulk(&[1, 0, 1, 0xff]).is_none(),
             "an id that is not text"
         );
+    }
+
+    /// A hook names its launch after the session in the route's path, and the mark reads back as it
+    /// was written; a hook of an earlier build names the session alone.
+    #[test]
+    fn a_hook_mark_names_the_launch_after_the_session_and_reads_back() {
+        assert_eq!(hook_path("s", "l"), "/hook/s/l");
+        let launched = HookMark::parse("s/l");
+        assert_eq!(
+            launched,
+            HookMark {
+                session: "s".into(),
+                launch: Some("l".into()),
+            }
+        );
+        assert_eq!(launched.param(), "s/l");
+        let earlier = HookMark::parse("s");
+        assert_eq!(earlier.launch, None);
+        assert_eq!(earlier.param(), "s");
     }
 }

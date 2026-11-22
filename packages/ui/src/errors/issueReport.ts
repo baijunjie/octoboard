@@ -1,3 +1,4 @@
+import { logsDirectory } from "../format/dataDirectory";
 import { appConfig } from "../appConfig";
 import { CodedError } from "./codedError";
 import type { RecordNames } from "./daemonMessage";
@@ -302,7 +303,7 @@ function titleOf({ failures, context, known }: IssueFacts): string {
  * writes a path. Only where they are: a report attaches nothing on its own and never asks for raw diagnostics, which
  * can hold what the user would not share. */
 function logsHint(daemonHost: IssueEnvironment["daemonHost"]): string {
-  const logs = daemonHost?.path_style === "windows" ? "%USERPROFILE%\\.octoboard\\logs\\" : "~/.octoboard/logs/";
+  const logs = logsDirectory(daemonHost?.path_style);
   return `<!-- ${appConfig.name} keeps its logs in ${logs} (daemon.log, desktop.log); a maintainer may ask about them if more detail is needed. -->`;
 }
 

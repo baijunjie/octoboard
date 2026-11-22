@@ -406,8 +406,8 @@ no upstream it records one. It does not edit the project's files (see "Pushing t
 `docs/product/project-git-actions.md`). Switching to a local branch moves the project's own working tree (see "Switching
 the local branch" in `docs/product/project-git-actions.md`). Restoring file changes discards tracked changes without
 moving the branch (see "Restoring file changes" in `docs/product/project-git-actions.md`). A check's fetch still updates
-remote refs only and still does not move the working tree or push (see "What one check does" above). The guarantee these
-qualify is in "What Octoboard never modifies" in `docs/product/launching-agents.md`.
+remote refs only and still does not move the working tree or push (see "What one check does" above). What
+Octoboard itself does in a project is summed up in "What Octoboard never modifies" in `docs/product/launching-agents.md`.
 
 ### Turning the switch on
 

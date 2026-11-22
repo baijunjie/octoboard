@@ -1,7 +1,8 @@
 //! The exit watcher: what follows when a session's process ends — the output it left saved, what
-//! it started outside its terminal session stopped, its exit recorded, and its owner told of an
-//! end nobody asked for. Also the sequence that drops a live session from the daemon
-//! ([`unregister_live`]), which the watcher ends with.
+//! it started outside its terminal session stopped, its exit recorded, its owner told of an
+//! end nobody asked for, and what it left in the default directory's plugin registries by a
+//! sharing account's spelling pointed back at the default directory. Also the sequence that drops
+//! a live session from the daemon ([`unregister_live`]), which the watcher ends with.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -54,6 +55,9 @@ pub(crate) fn end_process_for_test(state: &Arc<AppState>, id: &str) {
 /// watching and records nothing: the process is the next daemon's.
 pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
     let state = state.clone();
+    // The record as this process runs under it: an account switch records the session on its
+    // target once the process is down, and what the process left belongs to the account it ran as.
+    let ran_as = state.store.get_session(&live.id).ok().flatten();
     #[cfg(test)]
     let watched = live.clone();
     let task = tokio::spawn(async move {
@@ -144,6 +148,11 @@ pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
             None => {}
         }
         live.settle_exit();
+        // Last, once the exit is recorded and told: nothing waits for it, and it reads and may
+        // rewrite files of the agent's.
+        if let Some(session) = ran_as {
+            crate::accounts::shared_config::keep_registries_after_exit(&state, &session).await;
+        }
     });
     #[cfg(test)]
     watched.keep_exit_watch_task(task);

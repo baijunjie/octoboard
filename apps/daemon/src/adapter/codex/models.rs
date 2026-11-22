@@ -21,6 +21,7 @@ impl ModelCatalogue for CodexCatalogue {
         &self,
         shell_env: &HashMap<String, String>,
         config_dir: Option<&Path>,
+        _run_homes: &Path,
         timeout: Duration,
     ) -> Listing {
         run_catalogue_command(

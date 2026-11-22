@@ -24,6 +24,11 @@
 //! "Where updates come from" in `docs/product/in-app-updates.md`); the platform half names its
 //! manifests (`MANIFEST_SUFFIX`). The endpoint is set per check from the chosen channel rather than
 //! from `tauri.conf.json`, which carries only the signing key's public half.
+//!
+//! The updater reads the manifest's entry for the build's own platform and architecture, except
+//! where the platform half names another (`update_target`): an x64 Windows build on an ARM64 machine
+//! asks for the arm64 installer, so an emulated installation moves to the native build at its next
+//! update, and reads its own entry when the manifest has none for arm64.
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -164,6 +169,22 @@ fn begin(phase: Phase, operation: Operation) -> Result<Phase, UpdateError> {
 fn means_no_update(err: &tauri_plugin_updater::Error) -> bool {
     use tauri_plugin_updater::Error;
     matches!(err, Error::TargetNotFound(_) | Error::TargetsNotFound(_))
+}
+
+/// Whether a check that asked for the manifest entry `asked` in place of the build's own, and got
+/// `err`, is made again for the build's own: the manifest has no such entry (one written before that
+/// build existed), which is no reason to stop updating.
+fn falls_back_to_own_entry(asked: Option<&str>, err: &tauri_plugin_updater::Error) -> bool {
+    asked.is_some() && matches!(err, tauri_plugin_updater::Error::TargetNotFound(_))
+}
+
+/// The manifest entry a Windows build of the architecture `build_arch` (as `std::env::consts::ARCH`
+/// names it) asks for in place of its own, on a machine whose native architecture is ARM64 or not:
+/// an x64 build there runs emulated and asks for the arm64 installer, which installs over it. None
+/// asks for the build's own.
+#[cfg(any(windows, test))]
+fn windows_update_target(build_arch: &str, native_is_arm64: bool) -> Option<&'static str> {
+    (build_arch == "x86_64" && native_is_arm64).then_some("windows-aarch64")
 }
 
 /// What a check answers when the manifest's address answered `status` and the updater found no
@@ -335,14 +356,12 @@ async fn look_for_update(
     let url: tauri::Url = manifest_url(REPOSITORY_URL, channel, platform::MANIFEST_SUFFIX)
         .parse()
         .map_err(UpdateError::failed)?;
-    let updater = app
-        .updater_builder()
-        .endpoints(vec![url.clone()])
-        .map_err(UpdateError::failed)?
-        .timeout(CHECK_TIMEOUT)
-        .build()
-        .map_err(UpdateError::failed)?;
-    match updater.check().await {
+    let asked = platform::update_target();
+    let mut checked = check_manifest(app, &url, asked).await;
+    if matches!(&checked, Err(err) if falls_back_to_own_entry(asked, err)) {
+        checked = check_manifest(app, &url, None).await;
+    }
+    match checked {
         Ok(update) => Ok(update.map(|mut update| {
             update.timeout = Some(DOWNLOAD_TIMEOUT);
             update
@@ -354,6 +373,24 @@ async fn look_for_update(
         Err(err) if means_no_update(&err) => Ok(None),
         Err(err) => Err(UpdateError::failed(err)),
     }
+}
+
+/// Checks the manifest at `url` for the entry `target`, or for the build's own when none is given.
+async fn check_manifest(
+    app: &AppHandle,
+    url: &tauri::Url,
+    target: Option<&str>,
+) -> tauri_plugin_updater::Result<Option<Update>> {
+    let mut builder = app.updater_builder();
+    if let Some(target) = target {
+        builder = builder.target(target);
+    }
+    builder
+        .endpoints(vec![url.clone()])?
+        .timeout(CHECK_TIMEOUT)
+        .build()?
+        .check()
+        .await
 }
 
 /// Downloads and installs what the last check found, reporting progress through `on_progress`.
@@ -569,6 +606,33 @@ mod tests {
         assert!(!means_no_update(&Error::ReleaseNotFound));
         assert!(!means_no_update(&Error::EmptyEndpoints));
         assert!(!means_no_update(&Error::Network("503".into())));
+    }
+
+    #[test]
+    fn only_a_check_for_another_entry_that_the_manifest_lacks_is_made_again_for_the_own_entry() {
+        use tauri_plugin_updater::Error;
+        let missing = Error::TargetNotFound("windows-aarch64".into());
+        assert!(falls_back_to_own_entry(Some("windows-aarch64"), &missing));
+        assert!(!falls_back_to_own_entry(None, &missing));
+        assert!(!falls_back_to_own_entry(
+            Some("windows-aarch64"),
+            &Error::ReleaseNotFound
+        ));
+        assert!(!falls_back_to_own_entry(
+            Some("windows-aarch64"),
+            &Error::Network("503".into())
+        ));
+    }
+
+    #[test]
+    fn only_an_x64_windows_build_on_an_arm64_machine_asks_for_the_arm64_installer() {
+        assert_eq!(
+            windows_update_target("x86_64", true),
+            Some("windows-aarch64")
+        );
+        assert_eq!(windows_update_target("x86_64", false), None);
+        assert_eq!(windows_update_target("aarch64", true), None);
+        assert_eq!(windows_update_target("aarch64", false), None);
     }
 
     #[test]

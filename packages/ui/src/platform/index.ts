@@ -107,6 +107,10 @@ export interface PlatformAdapter {
   readonly launchAtLogin?: LaunchAtLoginCapability;
   /** Linking the application's `octoboardd` into the PATH, present only where the shell offers it (the macOS application). */
   readonly commandLine?: CommandLineCapability;
+  /** What the application's features have in effect outside its own directories, and clearing all of it before the
+   * application is uninstalled: present only in the local daemon's window of the desktop application, whose
+   * installation it is about. A remote daemon's window and a browser have none. */
+  readonly systemChanges?: SystemChangesCapability;
   /** Looking for, downloading and installing a new version of the application: present only where a shell
    * can replace itself, so the update notices and Settings rows exist only there. */
   readonly updater?: UpdaterCapability;
@@ -531,6 +535,75 @@ export interface CommandLineCapability {
   remove(): Promise<CommandLineState>;
 }
 
+/** One modification in effect outside the application's own directories on this computer, which turning its feature
+ * off undoes. The desktop application's own: this computer's key for the saved remote daemon `id` (with `onServer`,
+ * installed: a line in the authorized keys of `user` on `host`, with its private half in this computer's credential
+ * store; without, only a private half left in the credential store by a key turned off earlier), the entry that opens
+ * the application at login (with `turnedOff`, one the user turned off in the system's own list, where it stays), or the
+ * command-line tool's link at `path`. This computer's daemon's, which the shell asks itself: the account `account`,
+ * called `name`, of the agent `agent`, which shares its agent's default configuration. */
+export type ShellSystemChange =
+  | { kind: "device_key"; id: string; name: string; host: string; user: string; onServer: boolean }
+  | { kind: "launch_at_login"; turnedOff: boolean }
+  | { kind: "command_line"; path: string }
+  | { kind: "account_sharing"; account: string; name: string; agent: string };
+
+/** A part that could not tell what it has in effect: nothing of it is listed, and after a clearing some of it may have
+ * been cleared. `kind` is that of a feature's items, or `daemon` for this computer's daemon not answering, which
+ * leaves out the accounts that share; `detail` is the shell's own text, or the daemon's. */
+export interface ShellSystemChangesFailure {
+  kind: string;
+  detail: string;
+}
+
+/** What is in effect: the items of every part that could tell, and the parts that could not. */
+export interface ShellSystemChangesListed {
+  changes: ShellSystemChange[];
+  failed: ShellSystemChangesFailure[];
+}
+
+/** Why the daemon did not turn an account's sharing off, as the daemon words a failure: its code, the code's
+ * parameters, and its own English text. */
+export interface ShellSystemChangeRefusal {
+  code: string;
+  params: Record<string, string>;
+  message: string;
+}
+
+/** What clearing one of them came to: nothing of it is left; a device key of which a part stays (`removal` names its
+ * line on the server and its private key); the login entry still there (`detail` is the system's own text); the
+ * command-line link still there, by the shell's code as `CommandLineError` carries it; or an account that still
+ * shares, with the daemon's refusal. */
+export type ShellSystemChangeOutcome =
+  | { result: "cleared" }
+  | { result: "device_key_left"; removal: RemoteDeviceKeyRemoval }
+  | { result: "launch_at_login_left"; detail: string }
+  | { result: "command_line_left"; error: { code: string; path: string | null; detail: string } }
+  | { result: "account_sharing_left"; failure: ShellSystemChangeRefusal };
+
+export interface ShellSystemChangeResult {
+  change: ShellSystemChange;
+  outcome: ShellSystemChangeOutcome;
+}
+
+/** What clearing everything came to: what became of each item, and the parts that could not tell what they have in
+ * effect, whose items `results` leaves out and some of which may have been cleared. */
+export interface ShellSystemChangesCleared {
+  results: ShellSystemChangeResult[];
+  failed: ShellSystemChangesFailure[];
+}
+
+export interface SystemChangesCapability {
+  /** What is in effect now, the application's own items and this computer's daemon's in one list, read each time; a
+   * part that cannot tell is answered beside the items of the others. */
+  list(): Promise<ShellSystemChangesListed>;
+  /** Clears all of it and turns the features behind it off, which may raise the system's administrator prompt and wait
+   * for remote servers, and resolves with what became of each item: one that could not be cleared does not stop the
+   * others, and neither does a part that fails as a whole. For the moment before the application is uninstalled, and
+   * only after the user confirmed it. There is no way to clear one item: that is its own feature's switch. */
+  clearAll(): Promise<ShellSystemChangesCleared>;
+}
+
 export interface KeepAwakeCapability {
   /** Tells the shell whether the daemon is keeping the computer awake, for its menu bar icon to show. The shell holds
    * nothing itself: the daemon does (`Settings.keep_awake`), and the UI forwards the `keep_awake_held` it reports. */
@@ -651,9 +724,22 @@ export interface RemoteLoginCapability {
 }
 
 /** How the shell signs in to the server: the user's password, a key file on this computer, or this device's own key,
- * which the shell installs on the server after the first sign-in with one of the others and keeps in the system's
- * credential store. An entry is switched to "device" by the shell alone. */
+ * which the shell installs on the server after a sign-in with one of the others, once the owner has agreed to it
+ * (`device_key_offered`), and keeps in the system's credential store. An entry is switched to "device" by the shell
+ * alone, and one that is has its key installed. */
 export type RemoteDaemonAuth = "password" | "key" | "device";
+
+/** What an entry keeps about this device's own key. */
+export interface RemoteDaemonDeviceKey {
+  /** The owner said no to installing the key, or turned it off: nothing is installed and nothing asked until it is
+   * turned on again (`setDeviceKey`). */
+  declined: boolean;
+  /** The file on the server the key's line was added to; null with no key installed, and for a key an earlier version
+   * installed. */
+  file: string | null;
+  /** What that line is marked with; null as `file` is. */
+  mark: string | null;
+}
 
 /** One remote daemon the shell can connect to, as the shell keeps it. The password or passphrase is never part of it.
  */
@@ -673,10 +759,48 @@ export interface RemoteDaemonEntry {
   fingerprint: string | null;
   /** Where `octoboardd` is on the remote computer, when it is not found by itself. */
   octoboarddPath: string | null;
+  deviceKey: RemoteDaemonDeviceKey;
 }
 
-/** An entry to save: `id` is null for a new one. */
-export type RemoteDaemonEntryInput = Omit<RemoteDaemonEntry, "id"> & { id: string | null };
+/** An entry to save: `id` is null for a new one. What it keeps about this device's key is not the form's to send. */
+export type RemoteDaemonEntryInput = Omit<RemoteDaemonEntry, "id" | "deviceKey"> & { id: string | null };
+
+/** What became of the line a device key was installed as on its server: none was installed; the line was taken out
+ * of the server's file; or it stays on a server that could not be reached, refused the key, or does not hold the line
+ * where the shell looks for it, for the owner to remove there (`file` is null where the shell does not know it: a key
+ * an earlier version installed; `detail` is why the file was not changed). */
+export type RemoteDeviceKeyLine =
+  | { result: "not_installed" }
+  | { result: "removed" }
+  | { result: "left_on_host"; mark: string; file: string | null; host: string; user: string; detail: string }
+  /** The server's file may be incomplete: it was being rewritten when the write failed, and its content could not be
+   * put back, so other keys may be missing from it. `copy` is where the server keeps the content the file had before,
+   * for the owner to restore it from. */
+  | { result: "file_incomplete"; host: string; user: string; copy: string; detail: string };
+
+/** A private key the system's credential store did not remove, named so that the owner can remove the item there:
+ * the service it is kept under and its account, the user and host it was kept for, and what the store said. */
+export interface RemoteDevicePrivateKeyLeft {
+  service: string;
+  account: string;
+  host: string;
+  user: string;
+  detail: string;
+}
+
+/** What taking this device's key back from an entry's server came to: its line on the server, and its private half
+ * on this computer, which is removed whatever the server answered; `privateKeyLeft` is null where it is gone, or none
+ * was kept. */
+export interface RemoteDeviceKeyRemoval {
+  line: RemoteDeviceKeyLine;
+  privateKeyLeft: RemoteDevicePrivateKeyLeft | null;
+}
+
+/** An entry as it was saved, and what became of the device key the save gave up (another host, port or user). */
+export interface RemoteDaemonSaved {
+  entry: RemoteDaemonEntry;
+  keyRemoval: RemoteDeviceKeyRemoval;
+}
 
 export interface RemoteDaemonConnectRequest {
   id: string;
@@ -691,6 +815,9 @@ export interface RemoteDaemonConnectRequest {
   /** Hold the connection without opening a window, and have the shell open the daemon's own web interface in the system
    * browser (`opened_in_browser`), which skips the check that its version matches this application's. */
   browser: boolean;
+  /** The owner's answer to `device_key_offered`: install this device's key, or do not and remember it. Absent while
+   * the owner was not asked. */
+  deviceKey?: boolean;
 }
 
 /** How a connection attempt ended. */
@@ -706,8 +833,13 @@ export type RemoteDaemonConnectOutcome =
   | { outcome: "host_key_mismatch"; expected: string; actual: string }
   | { outcome: "unreachable"; detail: string }
   | { outcome: "auth_failed"; detail: string }
-  /** The server no longer accepts this device's key; signing in with the password installs it again. */
+  /** The server no longer accepts this device's key; the owner signs in with the password, and is then asked about the
+   * key as at a first connection. */
   | { outcome: "device_key_refused" }
+  /** The owner signed in with a password or a key file, and is asked before this device's key is installed: a line
+   * marked `mark` would be added to `file` for the user on the server. Nothing was written there and the connection was
+   * ended; it is made again with the answer (`deviceKey`). */
+  | { outcome: "device_key_offered"; mark: string; file: string }
   | { outcome: "key_unreadable"; detail: string }
   | { outcome: "octoboardd_not_found"; tried: string[] }
   | { outcome: "no_daemon" }
@@ -744,9 +876,16 @@ export interface RemoteDaemonsCapability {
   /** Calls `listener` when the list or a connection changed (an entry saved or removed, a remote window opened or
    * closed, a connection dropped or back), for the caller to read both again. Returns the unsubscribe. */
   onChanged(listener: () => void): () => void;
-  /** Saves a new entry or changes one; rejects with the shell's reason when the entry is not valid. */
-  save(entry: RemoteDaemonEntryInput): Promise<RemoteDaemonEntry>;
-  remove(id: string): Promise<void>;
+  /** Saves a new entry or changes one; rejects with the shell's reason when the entry is not valid. A save that points
+   * an entry with this device's key installed at another host, port or user takes the key back from the server it was
+   * installed on first, which may take seconds. */
+  save(entry: RemoteDaemonEntryInput): Promise<RemoteDaemonSaved>;
+  /** Removes an entry, its device key taken back from the server first, which may take seconds. */
+  remove(id: string): Promise<RemoteDeviceKeyRemoval>;
+  /** Turns this device's key on or off for an entry. Off takes an installed key back and keeps the entry, which then
+   * signs in with a password until the owner chooses otherwise; on has the entry's next connection ask before
+   * installing one. */
+  setDeviceKey(id: string, enabled: boolean): Promise<RemoteDeviceKeyRemoval>;
   /** Connects and opens the window; resolves with how it ended, and may take seconds. Rejects only for a failure of the
    * command itself. The shell saves the pinned fingerprint itself once a confirmed first connection has authenticated.
    */

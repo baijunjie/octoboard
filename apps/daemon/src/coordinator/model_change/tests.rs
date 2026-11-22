@@ -917,7 +917,9 @@ async fn compatibility_only_change_relaunches_running_session_and_failure_restor
 /// One hook event of session `s`, applied the way the hook route applies it: queued, then
 /// drained.
 fn hook(state: &Arc<AppState>, payload: serde_json::Value) {
-    state.hook_queues.push("s", payload.to_string().into());
+    state
+        .hook_queues
+        .push("s", bytes::Bytes::from(payload.to_string()));
     crate::hooks::apply::drain_hook_queue(state, "s");
 }
 
@@ -1311,4 +1313,75 @@ async fn a_reapply_is_what_makes_held_values_a_change() {
     );
     let after = state.session_record("starting").unwrap();
     assert_eq!(after.observed_model.as_deref(), Some("opus"));
+}
+
+/// A clean-up run starts no agent, so a change of the model that would relaunch a running session
+/// is refused with the reason before that session's process is ended, and nothing is written nor
+/// shown (it is never shown starting); a change of a session with no process only records the
+/// values, and goes through.
+#[tokio::test]
+async fn a_clean_up_run_refuses_a_model_change_that_would_relaunch_and_takes_one_that_only_records()
+{
+    let (state, dir) = console_with_project_and_accounts("coordinator-model-change-clean-up-run");
+    let mut project = state.store.get_project("project-1").unwrap().unwrap();
+    project.path = dir.to_string_lossy().into_owned();
+    state.store.update_project(&project).unwrap();
+    state
+        .store
+        .insert_session(&project_session("up", AgentId::CLAUDE, SessionStatus::Idle))
+        .unwrap();
+    state
+        .store
+        .insert_session(&project_session(
+            "down",
+            AgentId::CLAUDE,
+            SessionStatus::Interrupted,
+        ))
+        .unwrap();
+    let live = idle_stand_in("up");
+    state.register_live(live.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, live.clone());
+    state.set_clean_up_run();
+    let mut events = state.subscribe();
+    let change = |id: &'static str| {
+        set_session_model_with(
+            &state,
+            id,
+            LaunchEdit {
+                compatibility: Default::default(),
+                model: Some(Some("opus".to_string())),
+                effort: None,
+            },
+            ModelAsker::User { reapply: false },
+            None,
+            shell_env(&dir),
+            |_| panic!("a clean-up run launches nothing"),
+        )
+    };
+
+    let err = change("up").await.expect_err("a clean-up run");
+
+    assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN);
+    assert!(
+        format!("{err:#}").contains("so it starts no agent"),
+        "{err:#}"
+    );
+    assert!(!live.poll_exit(), "the process was left running");
+    let after = state.store.get_session("up").unwrap().unwrap();
+    assert_eq!((after.status, after.model), (SessionStatus::Idle, None));
+    assert!(!state.is_changing_model("up"));
+    while let Ok(event) = events.try_recv() {
+        if let Event::SessionUpserted { session } = event {
+            assert_ne!(
+                (session.id.as_str(), session.status),
+                ("up", SessionStatus::Starting),
+                "the refused session was shown starting"
+            );
+        }
+    }
+
+    assert_eq!(change("down").await.unwrap(), ModelChange::Recorded);
+    let recorded = state.store.get_session("down").unwrap().unwrap();
+    assert_eq!(recorded.model, Some(Some("opus".to_string())));
+    assert_eq!(recorded.status, SessionStatus::Interrupted);
 }

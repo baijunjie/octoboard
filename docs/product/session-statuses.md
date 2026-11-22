@@ -308,7 +308,49 @@ Every session record the session tools give carries the list (see "Session recor
 session has one from the moment its agent reports the first prompt submitted, or from the moment it is opened or
 resumed on an existing conversation (see "Opening a new session on a found conversation" in
 `docs/product/resuming-a-conversation-by-its-session-id.md`), and keeps it: clearing the conversation with `/clear`
-does not take it away. A session with a conversation that is at its prompt, with nothing left running in the background
+does not take it away.
+
+The agent's report of the first prompt does not always arrive — Octoboard's hook turned off in the agent, a policy that
+runs none of Octoboard's hooks, or a Codex whose hook reports the session but not the prompt. So for Claude Code, Codex
+and Grok Build a session also gets a conversation once the agent's own record of the session's current conversation,
+in the account the session is on, holds a prompt sent to it. Octoboard reads every session's record about once a
+second, and a session with no process once, so such a session counts as having a conversation within about a second of
+the agent writing the prompt to its record, with no report.
+
+A sent prompt is told from the kind of line the agent writes for it, never from what it holds, so a prompt that is only
+a pasted block of markup (one beginning with `<`, such as XML, HTML or a log) counts, and for Claude Code and Codex so
+does one that is only an image. What the agent writes into the record itself is none: for Claude Code its own meta
+lines, a compaction summary, a line from a background task or from another session, a tool result, a local command
+such as `/clear` with its output, and the note an interrupted turn leaves; for Codex every line but the event of a
+user's message; for Grok Build the lines it marks as its own and a line holding only the environment it reports or a
+reminder. A line Octoboard cannot place gives no conversation either: one longer than 8 MiB (a prompt with a large image
+pasted into it is written as one line) or not UTF-8, one that does not parse, Claude Code's shell input (`!command`)
+when it is recorded as a prompt (Claude Code 2.1.330 goes on to ask the model about it), and Grok Build's list of
+attached images on a line of its own. A session whose first prompt is such a line stays without a conversation until a
+later prompt Octoboard can read.
+
+The record gives no conversation while the session is being launched or switched to another account: a relaunch that
+finds no conversation to resume opens a fresh one, so a prompt read from the old record meanwhile does not count, and
+the next read, about a second later, asks again of the conversation the session is then on. An agent's report comes
+with the launch that sent it, so a report from a process that has ended is ignored whenever it arrives, the session
+launched again or not, and one from the launch under way (the process running, or the launch the daemon is starting)
+counts even before its process is running. Some reports are told by the conversation they name instead: one from a
+launch an earlier version of Octoboard started, which names no launch, and one naming a launch the daemon did not start
+in this run (one from before a restart, delivered once the daemon took the session back). While a launch holds the
+session and none of its processes is running, such a report counts only when it names a conversation other than the one
+the session named until then, which is the launched process reporting early, and otherwise came from the process that
+ended and is ignored.
+
+Reading the record needs the agent's id of the conversation: a Codex session whose id Octoboard never learned — Codex
+is given none in advance (see "Codex" in `docs/product/per-agent-launch-specifics.md`), and with no hook report at all
+none arrives — stays without a conversation however much it was used. Claude Code and Grok Build sessions are launched
+with an id Octoboard chose, so they always have one. Two cases give a session a conversation nobody prompted, and are
+not set right: a Codex session relaunched on a fresh conversation goes on naming the old one until the new process first
+reports, so an unreported prompt the old record holds, read in that window (a relaunch within about a second of the
+prompt), counts; and a late report from a process an earlier version started (which names no launch) counts when it
+arrives after the relaunch has finished, as does one from a process that ended before the daemon last restarted.
+
+A session with a conversation that is at its prompt, with nothing left running in the background
 and no delegated work in progress, is *done*; one that has never had a conversation is *awaiting instructions*. So:
 
 - a session opened by hand with no brief is *awaiting instructions* until its first turn, then *done* after it;
@@ -570,8 +612,9 @@ next prompt. A prompt whose call Octoboard did not see start comes down with the
 permission prompt comes down with the next call to start or end, since it holds back the other calls of its response
 until it is answered.
 
-A hand raised for a folder-trust confirmation can be answered in its trust dialog or the terminal; see "What happens
-when a confirmation comes up" in `docs/product/folder-trust.md`.
+A hand raised for a project session's folder-trust confirmation can be answered in its trust dialog or the terminal, and
+one raised for a console session's, which Octoboard could not press, in the terminal alone; see "What happens when a
+confirmation comes up" in `docs/product/folder-trust.md`.
 
 A hand Octoboard raised for a waiting session request is answered in that request's dialog instead, so a message
 addressed to such a session is not held (see "Waiting for the answer" in `docs/product/session-requests.md`).

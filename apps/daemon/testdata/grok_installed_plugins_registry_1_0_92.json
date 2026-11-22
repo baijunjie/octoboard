@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "repos": {
+    "plugin-local-a41a3242": {
+      "kind": {
+        "type": "Local",
+        "source_path": "{SOURCES}/plugin-local"
+      },
+      "installed_at": "2026-11-22T11:23:40.288996+00:00",
+      "updated_at": "2026-11-22T11:23:40.288996+00:00",
+      "path": "{SESSION_HOME}/installed-plugins/plugin-local-a41a3242",
+      "plugins": {
+        "hello-local": {
+          "version": "1.0.0"
+        }
+      }
+    },
+    "plugin-git-b5401dd4": {
+      "kind": {
+        "type": "Git",
+        "url": "file://{SOURCES}/plugin-git",
+        "commit": "733799233285a559978621fe2717d3bff24f84ad"
+      },
+      "installed_at": "2026-11-22T11:23:40.061981+00:00",
+      "updated_at": "2026-11-22T11:23:40.061981+00:00",
+      "path": "{SESSION_HOME}/installed-plugins/plugin-git-b5401dd4",
+      "plugins": {
+        "hello-git": {
+          "version": "1.0.0"
+        }
+      }
+    }
+  }
+}

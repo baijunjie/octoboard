@@ -35,15 +35,20 @@ pub fn install_command() -> String {
 /// executable's directory (`--bin-dir`, which it would otherwise not install into) and, for the
 /// beta channel, `--beta`. The directory is quoted for a POSIX shell.
 pub fn install_command_for(exe: &std::path::Path, channel: DaemonUpdateChannel) -> String {
-    let mut command = format!("{INSTALL_PIPE} | sh -s --");
-    if let Some(dir) = exe.parent().filter(|dir| !dir.as_os_str().is_empty()) {
-        command.push_str(" --bin-dir ");
-        command.push_str(&shell_quote(&dir.to_string_lossy()));
-    }
+    let mut command = format!("{INSTALL_PIPE} | sh -s --{}", bin_dir_option(exe));
     if channel == DaemonUpdateChannel::Beta {
         command.push_str(" --beta");
     }
     command
+}
+
+/// The install script's ` --bin-dir <dir>` for the directory of `exe`, quoted for a POSIX shell;
+/// nothing for a path without a directory.
+fn bin_dir_option(exe: &std::path::Path) -> String {
+    match exe.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        Some(dir) => format!(" --bin-dir {}", shell_quote(&dir.to_string_lossy())),
+        None => String::new(),
+    }
 }
 
 /// `text` as one word of a POSIX shell: as it is when it holds nothing the shell treats

@@ -84,6 +84,7 @@ pub(super) fn spawn_on_slave(
 /// controlling terminal. On Linux it is asked of the master, which names no path and so holds
 /// across devpts instances; a kernel that cannot (before 4.13) has it opened by its path.
 fn open_slave(master: RawFd) -> io::Result<OwnedFd> {
+    // no-file-write: the flags a pseudoterminal's slave end is opened with.
     let flags = libc::O_RDWR | libc::O_NOCTTY | libc::O_CLOEXEC;
     #[cfg(target_os = "linux")]
     {

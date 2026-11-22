@@ -1,9 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { InlineReference } from "../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
-import { afterFrames } from "../components/focus/afterFrames";
-import { focusFellToPage } from "../components/focus/regionFocus";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { ConfirmConsequences } from "../components/dialog/ConfirmConsequences";
 import { isolate } from "../i18n/isolate";
@@ -11,7 +9,6 @@ import { Message, useT } from "../i18n/react";
 import type { AccountQuota, Agent, ResetCreditOutcome } from "../protocol";
 import { useDaemon, useProviders } from "../store";
 import { servedProvider } from "../agents/providers";
-import { ringForAutomaticFocus } from "../input/lastInput";
 import { useNow } from "../format/useNow";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { AccountQuotaSummary, QuotaStaleMark } from "./AccountQuotaSummary";
@@ -46,23 +43,6 @@ export function ResetCreditsLine({ quota, accountName, onUse, focusOnPress }: {
       </Button>
     </div>
   );
-}
-
-/** Hands focus on once `UseResetCreditDialog` has closed, for the surface that opened it: returns the function to call
- * when it closes, which two frames later (React Aria restores focus in the frame after the dialog unmounts) runs
- * `restore` if focus fell to the page, the way `useLoginFocusReturn` does for the login dialog. The user did not ask for
- * the move, so the ring follows the last input. Nothing runs once the surface is gone. */
-export function useResetFocusReturn(restore: () => void): () => void {
-  const cancel = useRef<() => void>(undefined);
-  useEffect(() => () => cancel.current?.(), []);
-  return () => {
-    cancel.current?.();
-    cancel.current = afterFrames(2, () => {
-      if (!focusFellToPage()) return;
-      ringForAutomaticFocus();
-      restore();
-    });
-  };
 }
 
 /** The notice of an outcome that ends the question at once; a use that worked is told in the dialog itself. */

@@ -1,19 +1,20 @@
 //! Starting a usage window that has reset but not begun counting: a kick, one one-word request to
 //! the agent's cheapest model, measured in `docs/agent-cli-reference.md` ("Starting a quota
 //! window"). It is run the way a probe is (login-shell snapshot, the agent's configuration
-//! directory variable pointed at the account's directory) and costs as little as the CLI lets it:
+//! directory variable pointed at the account's directory, or at the directory of Octoboard's own
+//! the provider gives for it, `AccountOps::run_home`) and costs as little as the CLI lets it:
 //! a one-line system prompt in place of its own, no tools, one turn, a capped reply, and as little
 //! of the user's setup loaded as the CLI can leave out without losing its sign-in.
 
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::bail;
 
 use super::diagnostics::{redact, truncate, LINE_LIMIT};
-use crate::adapter::account_cli::{self, NotRun};
+use crate::adapter::account_cli::{self, BackgroundRun, NotRun, RunWait};
 use crate::adapter::provider;
 use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{AgentId, CodedError, ProviderOperation};
@@ -54,6 +55,7 @@ pub(super) fn kick(
     agent: AgentId,
     shell_env: &HashMap<String, String>,
     config_dir: Option<&Path>,
+    run_homes: &Path,
     timeout: Duration,
     cancel: &AtomicBool,
 ) -> anyhow::Result<()> {
@@ -65,14 +67,26 @@ pub(super) fn kick(
             .and_then(|ops| ops.kick_command()),
     )?;
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
-    let mut run =
-        account_cli::admitted_command(agent, shell_env, config_dir, &args).map_err(|refused| {
-            match refused {
-                NotRun::BinaryRefused(refusal) => anyhow::Error::new(refusal),
-                other => anyhow::anyhow!(other.detail()),
-            }
-        })?;
+    // What the kick waits for its directory comes out of the time it is given.
+    let deadline = Instant::now() + timeout;
+    let mut run = account_cli::admitted_command_in(
+        agent,
+        shell_env,
+        config_dir,
+        BackgroundRun::Kick,
+        run_homes,
+        &RunWait {
+            until: deadline,
+            cancel: Some(cancel),
+        },
+        &args,
+    )
+    .map_err(|refused| match refused {
+        NotRun::BinaryRefused(refusal) => anyhow::Error::new(refusal),
+        other => anyhow::anyhow!(other.detail()),
+    })?;
     run.command.envs(env);
+    let timeout = deadline.saturating_duration_since(Instant::now());
     let output = run
         .run(timeout, OUTPUT_LIMIT, Some(cancel))
         .map_err(|failure| match failure {
@@ -102,8 +116,42 @@ mod tests {
     use super::*;
     use crate::test_support::{fake_agent, ScratchDir};
 
+    /// [`super::kick`] with the directories a provider runs a kick against kept in a scratch
+    /// directory of the call's own.
+    fn kick(
+        agent: AgentId,
+        shell_env: &HashMap<String, String>,
+        config_dir: Option<&Path>,
+        timeout: Duration,
+        cancel: &AtomicBool,
+    ) -> anyhow::Result<()> {
+        let run_homes = ScratchDir::new("kick-run-homes");
+        super::kick(agent, shell_env, config_dir, &run_homes, timeout, cancel)
+    }
+
     /// Long enough for a fake agent to start on a loaded machine, short enough to wait out.
     const SHORT: Duration = Duration::from_millis(700);
+
+    /// Whether `agent`'s provider makes its kick against a directory of Octoboard's own rather
+    /// than the account's (`AccountOps::run_home`), asked under a root of the question's own.
+    fn kicks_in_a_home_of_its_own(
+        agent: AgentId,
+        account: &Path,
+        shell_env: &HashMap<String, String>,
+    ) -> bool {
+        let asked = ScratchDir::new("kick-run-home-asked");
+        provider(agent)
+            .accounts()
+            .and_then(|ops| {
+                let wait = RunWait {
+                    until: Instant::now() + crate::test_support::PATIENCE,
+                    cancel: None,
+                };
+                ops.run_home(&asked, BackgroundRun::Kick, account, shell_env, &wait)
+                    .expect("the provider's answer")
+            })
+            .is_some()
+    }
 
     fn fake(dir: &Path, agent: AgentId, body: &str) -> HashMap<String, String> {
         fake_agent(dir, agent.descriptor().binary, body)
@@ -148,7 +196,7 @@ mod tests {
     }
 
     /// Each agent's own choice of model and effort, and what it leaves out, in the order the
-    /// arguments are given, run in the account's directory like a probe.
+    /// arguments are given, run where the provider says a kick runs, like a probe.
     #[test]
     fn each_agent_is_kicked_with_its_cheapest_model_and_lowest_effort() {
         let expected = [
@@ -199,10 +247,12 @@ mod tests {
             );
             let account = dir.join("account");
             std::fs::create_dir(&account).unwrap();
-            kick(
+            let run_homes = dir.join("run-homes");
+            super::kick(
                 agent,
                 &env,
                 Some(&account),
+                &run_homes,
                 crate::test_support::PATIENCE,
                 &AtomicBool::new(false),
             )
@@ -212,11 +262,16 @@ mod tests {
                 args,
                 "{agent:?}"
             );
-            assert_eq!(
-                std::fs::read_to_string(dir.join("dir")).unwrap().trim(),
-                account.to_str().unwrap(),
-                "{agent:?}"
-            );
+            // The CLI is given the account's directory, or, where the provider kicks against a
+            // directory of Octoboard's own, one under the run homes and never the account's.
+            let given = std::fs::read_to_string(dir.join("dir")).unwrap();
+            let given = Path::new(given.trim());
+            if kicks_in_a_home_of_its_own(agent, &account, &env) {
+                assert!(given.starts_with(&run_homes), "{agent:?}: {given:?}");
+                assert!(!given.starts_with(&account), "{agent:?}: {given:?}");
+            } else {
+                assert_eq!(given, account, "{agent:?}");
+            }
         }
     }
 
@@ -358,5 +413,54 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.to_string().contains("more than"), "{err}");
+    }
+
+    /// Grok Build's kick runs against a directory of Octoboard's own, with the account's login
+    /// named by its path, so what a headless turn writes as it starts leaves the account's
+    /// `config.toml` as it was.
+    #[test]
+    fn groks_kick_runs_against_a_home_of_its_own() {
+        use crate::providers::grok::{GROK_CONFIG_FILE, GROK_SIGN_IN_FILE};
+
+        let dir = ScratchDir::new("kick-grok-own-home");
+        let account = dir.join("account");
+        std::fs::create_dir_all(&account).unwrap();
+        let users = "# mine\n";
+        std::fs::write(account.join(GROK_CONFIG_FILE), users).unwrap();
+        std::fs::write(account.join(GROK_SIGN_IN_FILE), "{}").unwrap();
+        let env = fake(
+            &dir,
+            AgentId::GROK,
+            &format!(
+                "echo \"$GROK_HOME\" > '{d}/dir'; echo \"$GROK_AUTH_PATH\" > '{d}/login'\n\
+                 echo 'purged = true' >> \"$GROK_HOME/config.toml\"",
+                d = dir.display(),
+            ),
+        );
+        let run_homes = dir.join("homes");
+
+        super::kick(
+            AgentId::GROK,
+            &env,
+            Some(&account),
+            &run_homes,
+            crate::test_support::PATIENCE,
+            &AtomicBool::new(false),
+        )
+        .expect("kicked");
+
+        let home = std::fs::read_to_string(dir.join("dir")).unwrap();
+        assert!(Path::new(home.trim()).starts_with(&run_homes), "{home}");
+        let login = crate::hostfs::canonical(account.join(GROK_SIGN_IN_FILE)).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.join("login")).unwrap().trim(),
+            login.to_string_lossy()
+        );
+        assert_eq!(
+            std::fs::read_to_string(account.join(GROK_CONFIG_FILE)).unwrap(),
+            users
+        );
+        // What the kick wrote in its directory, the copy it appended to included, is gone again.
+        assert!(!Path::new(home.trim()).join(GROK_CONFIG_FILE).exists());
     }
 }

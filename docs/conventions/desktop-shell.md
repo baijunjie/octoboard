@@ -48,7 +48,10 @@ The list of helpers is in `docs/structure/desktop.md`, "Shared entry points"; th
 - **Write a diagnostic with `diagnostic!`**, so it reaches `desktop.log` as well as stderr. Write JSON under the app config directory with
   `config_dir::write_json`, which writes atomically.
 - **Stop the daemon before a restart or quit only through `sidecar::stop_daemon` with a `StopKind`** (the update restart
-  is the planned stop, which hands the sessions over instead of interrupting them), and once the exit flow exists leave
+  is the planned stop, which hands the sessions over instead of interrupting them); a process with no window, whose
+  daemon nothing has asked to stop yet (the uninstaller's clean-up), stops it through `sidecar::stop_daemon_unasked`,
+  with the time the daemon's whole stop may take, since `stop_daemon` allows only for the end of a stop the UI asked
+  for already. Once the exit flow exists leave
   or end the application only through `exit::confirm_quit`, `exit::on_exit_requested` and `exit::on_exit`. macOS Quit
   does not raise Tauri's `ExitRequested`, so a path that bypasses these skips the confirmation, the quit note and the
   update install. A startup failure before it exists may end the shell directly.

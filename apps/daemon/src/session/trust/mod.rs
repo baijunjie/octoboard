@@ -5,13 +5,13 @@
 //! Codex's "Trust this folder?" (only inside a git repository) and Grok Build's "Do you trust the
 //! contents of this directory?" (only where the folder holds content its trust gates, such as an
 //! `AGENTS.md`). A session the console session starts in a fresh project would sit there
-//! unattended. Octoboard presses the confirmation by typing at the terminal, and so the agent
-//! records the trust in its own configuration, which is what makes a later launch of that agent
-//! trusted. Octoboard never makes that trust decision itself and never writes it into a
-//! per-session copy ahead of the press; the one write it makes is carrying the entry Grok wrote
-//! over to the user's own store, unchanged ([`TrustCarrier`]), after Octoboard's press and after
-//! the person's own answer in the terminal alike ([`on_hook`]), so that Grok, like the other two,
-//! does not ask again. Only Octoboard's own successful press records a permission of Octoboard's.
+//! unattended. Octoboard presses a project session's confirmation by typing at the terminal, and
+//! so the agent records the trust in its own configuration, which is what makes a later launch of
+//! that agent trusted. Octoboard never makes a project's trust decision itself; the one write it
+//! makes is carrying the entry Grok wrote for a project over to the user's own store, unchanged
+//! ([`TrustCarrier`]), after Octoboard's press and after the person's own answer in the terminal
+//! alike ([`on_hook`]), so that Grok, like the other two, does not ask again. Only Octoboard's own
+//! successful press records a permission of Octoboard's.
 //!
 //! The user's agreement comes first, in a dialog of Octoboard's own, and is one permission shared
 //! by every agent, in two forms: per project (`Project::trust_consent`), or for a whole directory
@@ -90,12 +90,18 @@
 //! So none of Octoboard's own writes can be what ends a wait, and the input counted since a
 //! sighting is the person's alone.
 //!
-//! **What happens next** is decided by [`supervise`]: a console session's working directory is
-//! Octoboard's own console directory, so it is pressed at once and nothing is recorded; a project
-//! session is pressed at once when the project has the user's permission, and otherwise a
-//! `trust_prompt` is broadcast and the screen is left alone until `confirm_trust` comes back. With
-//! no client connected, or after "Not now", nothing is sent and the screen waits for the person to
-//! answer it in the terminal.
+//! **What happens next** is decided by [`supervise`]: a project session is pressed at once when
+//! the project has the user's permission, and otherwise a `trust_prompt` is broadcast and the
+//! screen is left alone until `confirm_trust` comes back. With no client connected, or after "Not
+//! now", nothing is sent and the screen waits for the person to answer it in the terminal.
+//!
+//! A console session's working directory is Octoboard's own console directory, which holds
+//! nothing but the instruction file Octoboard wrote there, so trusting it is Octoboard's to do:
+//! its screen is pressed at once, nobody is asked and nothing of Octoboard's is recorded. Whether
+//! the screen comes up at all is the provider's (`Capabilities::console_trust`): its launch may
+//! trust the directory itself, for that launch alone, so that the agent records nothing in the
+//! user's trust list; otherwise the agent records the console's directory when its screen is
+//! pressed, as it does for any answer.
 //!
 //! **Sending keys is the dangerous part**, so [`answer_within`] is the only place that does it,
 //! takes no text, and checks before each key that the screen was sighted and has not been
@@ -142,6 +148,7 @@ use crate::protocol::{
     error_code, notice_code, trust_reason, AgentId, CodedError, Event, Notice, Project, Session,
     SessionKind,
 };
+use crate::providers::ConsoleTrust;
 use crate::session::wait::quiet;
 use crate::session::LiveSession;
 use crate::state::AppState;
@@ -678,6 +685,20 @@ async fn on_sighting(state: &Arc<AppState>, live: &Arc<LiveSession>) -> Result<(
         None => None,
     };
     if consented(state, &session, project.as_ref()).await? {
+        if session.kind == SessionKind::Console
+            && console_trust_of(session.agent) == ConsoleTrust::PerLaunch
+        {
+            // The launch was to trust the console's directory itself; the screen is answered as
+            // any console's is, and what the agent records for the answer stays in the session's
+            // own home, so the press has nothing to carry.
+            live.trust.carries_nothing.store(true, Ordering::Release);
+            tracing::warn!(
+                session = %live.id,
+                agent = session.agent.label(),
+                "the trust confirmation came up although the launch was to trust the console's \
+                 directory itself"
+            );
+        }
         answer_and_report(state, live).await;
         return Ok(());
     }

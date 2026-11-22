@@ -1,0 +1,22 @@
+import { Code } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* How the Linux server program is uninstalled, which the Linux server guide and "Your system stays as it was" share. */}
+
+Exécutez cette commande sur le serveur, sous l’utilisateur pour lequel il a été installé. Rien n’est téléchargé.
+
+<Code code={system.uninstall} lang="sh" />
+
+Elle énumère d’abord tout ce qu’elle va faire et vous demande de saisir <code dir="ltr">{system.uninstallWord}</code>. <code dir="ltr">{system.uninstallDryRun}</code> affiche seulement la liste, et <code dir="ltr">{system.uninstallYes}</code> confirme là où il n’y a pas de terminal pour poser la question.
+
+Elle désactive ensuite le partage pour chaque compte qui partage encore la configuration par défaut. Pour cela, elle arrête le service s’il tourne, ce qui met fin à chaque session qu’il exécute, et ne le démarre que pour ce nettoyage, sans exécuter de session. Elle arrête ensuite le service et supprime le programme, avec son service systemd s’il en a un, et désactive le lingering si l’installation du service l’a activé et qu’aucun autre de vos services n’en a besoin.
+
+- <strong>Si un compte ne peut pas cesser de partager</strong>, par exemple parce qu’une de ses sessions travaille, rien n’est supprimé et le service est redémarré tel qu’il tournait : relancez la commande une fois ce travail terminé. Avec <code dir="ltr">{system.uninstallKeepChanges}</code>, elle désinstalle sans ce nettoyage et laisse les liens dans le dossier de chacun de ces comptes, ainsi que les sauvegardes de la configuration propre au compte à côté d’eux, à supprimer à la main.
+- <strong>Si arrêter le service interromprait du travail</strong>, rien n’est supprimé. <code dir="ltr">{system.uninstallForce}</code> l’arrête quand même.
+- <strong>Exécutez le <code dir="ltr">{system.cliName}</code> que vous avez installé.</strong> Lancée par un lien, ou depuis une autre copie de <code dir="ltr">{system.cliName}</code> que celle qu’exécute le service de {productName}, elle ne supprime rien et indique le fichier à exécuter à la place.
+
+L’ancienne commande du script d’installation fonctionne toujours et exécute celle-ci. Si vous avez installé avec <code dir="ltr">{system.binDirOption}</code>, ajoutez-le avec le même dossier.
+
+<Code code={system.uninstallScript} lang="sh" />
+
+Si votre <code dir="ltr">{system.cliName}</code> est trop ancien pour avoir la commande de désinstallation, la commande du script le supprime elle-même, mais sans rien désactiver d’abord : un compte qui partage encore la configuration par défaut garde les liens de son dossier, que vous pouvez supprimer à la main.

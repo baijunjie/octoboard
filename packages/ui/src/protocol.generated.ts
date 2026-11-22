@@ -3044,6 +3044,13 @@ export type HostInfo = {
    * setting changes nothing there and a client does not offer it.
    */
   keep_awake: boolean,
+  /**
+   * Whether the daemon is a desktop application's own: one started it and it follows that
+   * application, so that what is done to the installation on this host (uninstalling it, the
+   * clean-up before that) is done in that application. False for a daemon that runs on its own
+   * (the server form). A fact of the daemon on its host, which the snapshot fills in.
+   */
+  application: boolean,
 };
 
 export type HostKind = "local" | "ssh";

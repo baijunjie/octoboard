@@ -74,6 +74,10 @@ pub struct Owner {
     pub unit: Option<String>,
     /// The daemon this one took over from.
     pub predecessor: Predecessor,
+    /// Whether the daemon was started for a clean-up run (`crate::state::StartWork`): there for an
+    /// uninstall's clean-up and gone with it, not a daemon to use, restart or take for the
+    /// ordinary one.
+    pub clean_up_run: bool,
 }
 
 /// Which daemon a daemon took over from, as its record says.
@@ -101,6 +105,10 @@ pub struct HandoverNote {
     /// teardown.
     pub noted: SystemTime,
 }
+
+/// The token of a record of a daemon started for a clean-up run, read wherever it stands after the
+/// port, as the tokens above are; an earlier build takes no notice of it.
+const CLEAN_UP_RUN: &str = "clean-up-run";
 
 /// The third token of a record of a daemon that follows an application.
 const FOLLOWS_APPLICATION: &str = "application";
@@ -163,6 +171,7 @@ impl Owner {
             browser_port: None,
             unit: None,
             predecessor: Predecessor::Unsaid,
+            clean_up_run: false,
         })
     }
 
@@ -170,6 +179,14 @@ impl Owner {
     pub fn with_unit(self, unit: Option<String>) -> Self {
         Self {
             unit: unit.filter(|unit| is_unit_name(unit)),
+            ..self
+        }
+    }
+
+    /// This owner, saying whether it was started for a clean-up run.
+    pub fn with_clean_up_run(self, clean_up_run: bool) -> Self {
+        Self {
+            clean_up_run,
             ..self
         }
     }
@@ -396,6 +413,9 @@ impl Owner {
             Predecessor::None => content.push_str(&format!(" {AFTER}{AFTER_NONE}")),
             Predecessor::Daemon(from) => content.push_str(&format!(" {AFTER}{}", from.key())),
         }
+        if self.clean_up_run {
+            content.push_str(&format!(" {CLEAN_UP_RUN}"));
+        }
         content.push('\n');
         replace_beside(path, content.as_bytes(), Permissions::Private)
     }
@@ -445,6 +465,7 @@ impl Owner {
             browser_port,
             unit,
             predecessor,
+            clean_up_run: rest.contains(&CLEAN_UP_RUN),
         })
     }
 
@@ -527,6 +548,7 @@ mod tests {
             browser_port: None,
             unit: None,
             predecessor: Predecessor::Unsaid,
+            clean_up_run: false,
         }
     }
 
@@ -547,6 +569,24 @@ mod tests {
         assert!(!path.exists());
         // Already gone: nothing to do.
         ours.remove_from(&path).unwrap();
+    }
+
+    #[test]
+    fn whether_the_daemon_was_started_for_a_clean_up_run_reads_back() {
+        let dir = ScratchDir::new("owner-record-clean-up-run");
+        let path = dir.join("daemon.owner");
+        let run = owner(10, 7531).with_clean_up_run(true);
+        run.write_to(&path).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "10:123456 7531 alone clean-up-run\n"
+        );
+        assert_eq!(Owner::read_from(&path), Some(run));
+        // Wherever it stands after the port, and not said by a record without it.
+        std::fs::write(&path, "10:123456 7531 clean-up-run\n").unwrap();
+        assert!(Owner::read_from(&path).unwrap().clean_up_run);
+        owner(10, 7531).write_to(&path).unwrap();
+        assert!(!Owner::read_from(&path).unwrap().clean_up_run);
     }
 
     #[test]
@@ -1301,6 +1341,7 @@ mod tests {
         assert_eq!(
             Owner {
                 predecessor: Predecessor::Unsaid,
+                clean_up_run: false,
                 ..followed
             },
             ours

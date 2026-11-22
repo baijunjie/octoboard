@@ -4,7 +4,8 @@ description: "Installiere octoboardd, das Octoboard-Serverprogramm, ohne Root au
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../../commands.ts";
+import LinuxUninstall from "../../../../snippets/de/linux-uninstall.mdx";
 
 Installiere octoboardd, das {productName}-Serverprogramm (die App nennt es den Hintergrunddienst), ohne Root auf einem Linux-Server. Du erreichst es über die macOS- oder Windows-App oder über einen Browser, beides per SSH.
 
@@ -80,6 +81,12 @@ octoboardd wählt selbst einen eigenen Port, den du nie kennen musst: Die Adress
   Wenn gefragt wird, ob jetzt neu gestartet werden soll, antworte mit <code dir="ltr">y</code>, um neu zu starten, oder drücke die Eingabetaste, um die alte Version vorerst weiterlaufen zu lassen. Um später neu zu starten, führe <code dir="ltr">{commands.restart}</code> aus.
 
 Wenn <code dir="ltr">{commands.update}</code> meldet, dass es das Programm nicht ersetzen kann, zum Beispiel weil es an einem Ort installiert wurde, an dem du nicht schreiben darfst, führe stattdessen den Installationsbefehl (oder den Dienstbefehl) erneut aus. Er startet auf die gleiche Weise neu, wenn das sicher ist, und sagt dir sonst, dass du <code dir="ltr">{commands.restart}</code> ausführen sollst.
+
+## Deinstallieren
+
+<LinuxUninstall />
+
+Deine Daten bleiben in <code dir="ltr">{system.dataDir}</code>. [Dein System bleibt, wie es war](../../your-system/) sagt, was danach bleibt und wie du es entfernst.
 
 ## Befehle
 

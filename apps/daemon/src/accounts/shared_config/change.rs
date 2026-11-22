@@ -10,10 +10,11 @@ use anyhow::Result;
 
 use super::link::{self, DirsError};
 use super::{
-    cli_reads, default_dir, describe, in_use, moves, not_shareable, sharing_in_progress, take_back,
+    cli_reads, default_dir, describe, in_use, keep, moves, not_shareable, sharing_in_progress,
+    take_back,
 };
 use crate::accounts::thread_registry::thread_registry;
-use crate::protocol::{Account, SharingCause, SharingFailure, SharingItemFailure};
+use crate::protocol::{Account, SharingCause, SharingFailure, SharingItemFailure, SharingLeft};
 use crate::state::{broadcast_settings, AccountSharingLock, AppState};
 use crate::store::SharingStart;
 
@@ -172,7 +173,22 @@ pub(crate) async fn carry_out(
                 tokio::task::spawn_blocking(move || {
                     match link::Dirs::for_undoing(&dir, Path::new(&start.default_dir), &current) {
                         // The directory never linked anything to itself: nothing to undo.
-                        Err(DirsError::SameAsDefault) | Ok(None) => Ok(Vec::new()),
+                        Err(DirsError::SameAsDefault) => Ok(Vec::new()),
+                        // The directory is gone, and its links with it; what the default
+                        // directory still records by its spelling is all that is left to undo.
+                        // An item that could not be brought in line is told as absent: its link
+                        // went with the directory.
+                        Ok(None) => Ok(keep::registries_in_default(
+                            agent,
+                            &dir,
+                            Path::new(&start.default_dir),
+                        )
+                        .into_iter()
+                        .map(|failure| SharingItemFailure {
+                            left: SharingLeft::Absent,
+                            ..failure
+                        })
+                        .collect()),
                         Err(err) => Err(err),
                         Ok(Some(dirs)) => Ok(link::turn_off(
                             agent,

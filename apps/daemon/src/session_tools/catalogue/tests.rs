@@ -749,3 +749,40 @@ fn the_scheduled_task_tools_are_for_console_sessions_and_coordinators() {
         );
     }
 }
+
+/// The clean-up before Octoboard is uninstalled is done on the machine itself, in the
+/// application's own window or by `octoboardd uninstall`: no session is offered a tool that lists
+/// or clears what the features have in effect outside Octoboard's own directories, by its name,
+/// its description or a property of its schema.
+#[test]
+fn no_session_is_offered_a_tool_for_the_clean_up_before_uninstalling() {
+    const WORDS: [&str; 6] = [
+        "system_change",
+        "system change",
+        "uninstall",
+        "clean-up before",
+        "cleanup before",
+        "octoboardd uninstall",
+    ];
+    for (kind, worker) in [
+        (SessionKind::Console, false),
+        (SessionKind::Project, false),
+        (SessionKind::Project, true),
+    ] {
+        for tool in tools_for(kind, worker) {
+            let text =
+                format!("{}\n{}\n{}", tool.name, tool.description, (tool.schema)()).to_lowercase();
+            for word in WORDS {
+                assert!(!text.contains(word), "{}: {word}", tool.name);
+            }
+        }
+        for name in [
+            "cleanup",
+            "list_system_changes",
+            "clear_system_changes",
+            "system_changes",
+        ] {
+            assert!(tool_by_name(kind, worker, name).is_none(), "{name}");
+        }
+    }
+}

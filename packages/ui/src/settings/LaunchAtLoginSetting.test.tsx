@@ -60,6 +60,20 @@ it.each<{ status: LaunchAtLoginStatus; checked: boolean; text: string }>([
   expect(container.textContent).toContain(text);
 });
 
+it("says what turning the switch on adds to the system, and that turning it off removes it, while it is off", async () => {
+  const container = mount(login({ status: () => Promise.resolve("disabled"), set: vi.fn() }));
+  await act(async () => {});
+  expect(container.textContent).toContain("Turning this on adds");
+  expect(container.textContent).toContain("to the list of apps macOS opens at login, and turning it off removes it.");
+});
+
+it("says the app is in the system's list until the switch is turned off, while it is on", async () => {
+  const container = mount(login({ status: () => Promise.resolve("enabled"), set: vi.fn() }));
+  await act(async () => {});
+  expect(container.textContent).toContain("is in the list of apps macOS opens at login until this is turned off.");
+  expect(container.textContent).not.toContain("Turning this on adds");
+});
+
 it("shows the switch off when the system cannot say, which a press then tries to change", async () => {
   const set = vi.fn<(enabled: boolean) => Promise<LaunchAtLoginStatus>>(() => Promise.resolve("enabled"));
   const container = mount(login({ status: () => Promise.reject(new Error("no such command")), set }));

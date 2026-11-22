@@ -1,5 +1,6 @@
 //! The command line: the daemon itself when no mode is named; `start`, `stop`, `restart`, `status`
-//! and `address`, which a user runs to keep the daemon in the background; the modes other processes
+//! and `address`, which a user runs to keep the daemon in the background; `uninstall`, which
+//! removes the server form's installation; the modes other processes
 //! start it in — an agent's hook, a session's git hooks, a provider's status line and the MCP
 //! server — each of which runs in a process of its own and calls the running daemon, and an
 //! agent's cross-project guard, which decides from a file alone; and the holder, which the running
@@ -11,6 +12,7 @@ mod background;
 #[cfg(all(test, unix))]
 mod background_tests;
 mod browser;
+mod cleanup;
 mod connection;
 mod holder;
 pub(crate) mod hook;
@@ -25,6 +27,7 @@ mod restart_tests;
 mod stop_and_browser_tests;
 mod stop_guard;
 mod succession;
+mod uninstall;
 pub(crate) mod update;
 mod verify_archive;
 
@@ -76,6 +79,43 @@ pub(crate) struct Cli {
     /// on status 75 (the maintained systemd unit does). Ignored on Windows.
     #[arg(long)]
     pub(crate) service_managed: bool,
+
+    /// Run only to clear what the daemon's features have in effect outside Octoboard's own
+    /// directories, for whoever is uninstalling Octoboard and stops the daemon again afterwards
+    /// (`crate::state::StartWork` lists what such a daemon leaves out). What the desktop
+    /// application's Windows uninstaller and `octoboardd uninstall` start it with.
+    #[arg(long = CLEAN_UP_RUN_OPTION, hide = true)]
+    pub(crate) clean_up_run: bool,
+
+    /// Stop, handing the sessions back to their holders, once this process is gone: the command
+    /// that started the daemon for a clean-up run (`octoboardd uninstall`), which the daemon
+    /// never outlives, named by its pid and its start time (`<pid>:<start>`) so that a process
+    /// given the pid later is not taken for it. Unlike `--parent-pid` it does not make the daemon
+    /// an application's.
+    #[arg(
+        long,
+        hide = true,
+        requires = "clean_up_run",
+        conflicts_with = "parent_pid",
+        value_parser = parse_followed
+    )]
+    pub(crate) follow_process: Option<crate::platform::proc::ProcessIdentity>,
+}
+
+/// The option that names the process a clean-up run follows.
+pub(crate) const FOLLOW_PROCESS_ARGUMENT: &str = "--follow-process";
+
+fn parse_followed(text: &str) -> Result<crate::platform::proc::ProcessIdentity, String> {
+    crate::platform::proc::ProcessIdentity::parse(text)
+        .ok_or_else(|| "expected `<pid>:<start>`".to_owned())
+}
+
+/// The name of the option that starts the daemon for a clean-up run, without its dashes.
+const CLEAN_UP_RUN_OPTION: &str = "clean-up-run";
+
+/// The argument that starts the daemon for a clean-up run.
+pub(crate) fn clean_up_run_argument() -> String {
+    format!("--{CLEAN_UP_RUN_OPTION}")
 }
 
 /// The line the daemon prints once it listens, which the desktop application reads for the port and
@@ -196,6 +236,34 @@ pub(crate) enum Command {
         #[command(subcommand)]
         action: browser::Action,
     },
+    /// Uninstall this octoboardd: first clear what Octoboard's features have in effect on this
+    /// machine outside its own directories (each account that shares its agent's default
+    /// configuration stops sharing; the running daemon does it, and is started for it where none
+    /// runs), then stop the daemon, then remove what the install set up: the systemd user unit,
+    /// lingering where the install turned it on and no other service of yours needs it, this
+    /// executable, `octoboardd.previous` and what an update left beside them. Where something
+    /// stays in effect, or the stop would interrupt work, nothing is removed. ~/.octoboard, the
+    /// daemon's data, is left, with the command that removes it. In a terminal it says what it
+    /// will do and asks for a word to be typed first. Refused for the desktop application's own
+    /// daemon, which is uninstalled with the application. Exits 0 once uninstalled, or with
+    /// `--dry-run`, and 1 when nothing or not everything was removed.
+    Uninstall {
+        /// Uninstall without asking: needed where there is no terminal to ask in.
+        #[arg(long)]
+        yes: bool,
+        /// Stop the daemon whatever work that interrupts, as `stop --force` does.
+        #[arg(long)]
+        force: bool,
+        /// Do not clear first what Octoboard's features have in effect outside its own
+        /// directories: it stays in place (the links in a sharing account's directory that lead
+        /// into its agent's default account's directory, and the backups of its own configuration
+        /// that sharing set aside).
+        #[arg(long)]
+        keep_changes: bool,
+        /// Only say what would be cleared, stopped and removed, and change nothing.
+        #[arg(long, conflicts_with = "yes")]
+        dry_run: bool,
+    },
     /// Print the connection details another device sets itself up from: the SSH host, port and
     /// user, the SSH server's host key fingerprint and this octoboardd's path, with no secret, as
     /// a QR code and as one line of text the application takes pasted. The host is the address
@@ -225,6 +293,9 @@ pub(crate) enum Command {
     Hook {
         #[arg(long)]
         session: String,
+        /// The launch the hook reports for, which a hook script of an earlier build does not name.
+        #[arg(long)]
+        launch: Option<String>,
         #[arg(long)]
         port: u16,
         /// The owner-only file holding the key the daemon requires of every connection.
@@ -388,6 +459,17 @@ pub(crate) fn run(command: Command) -> Result<()> {
             address::print_address(rotate)?
         }),
         Command::Browser { action } => std::process::exit(browser::run(&action)?),
+        Command::Uninstall {
+            yes,
+            force,
+            keep_changes,
+            dry_run,
+        } => std::process::exit(uninstall::run(uninstall::Options {
+            yes,
+            force,
+            keep_changes,
+            dry_run,
+        })?),
         Command::Connection {
             host,
             ssh_port,
@@ -399,10 +481,11 @@ pub(crate) fn run(command: Command) -> Result<()> {
         // turn critical path, several times per turn.
         Command::Hook {
             session,
+            launch,
             port,
             key_file,
         } => {
-            hook::run(&session, port, &key_file);
+            hook::run(&session, launch.as_deref(), port, &key_file);
             Ok(())
         }
         // Synchronous, and silent unless it denies: the agent reads its stdout as the decision.
@@ -502,6 +585,47 @@ mod tests {
 
     use super::*;
 
+    /// The documentation site quotes the command's name and its uninstall options as this fixture
+    /// holds them, which its own test reads too.
+    #[test]
+    fn the_uninstall_options_are_the_ones_the_docs_quote() {
+        let quoted: serde_json::Value =
+            serde_json::from_str(include_str!("../../testdata/docs_uninstall_command.json"))
+                .unwrap();
+        assert_eq!(quoted["cli_name"].as_str(), Some(env!("CARGO_BIN_NAME")));
+        let command = <Cli as clap::CommandFactory>::command();
+        let uninstall = command
+            .find_subcommand("uninstall")
+            .expect("the uninstall command");
+        let mut options: Vec<String> = uninstall
+            .get_arguments()
+            .filter_map(|arg| arg.get_long())
+            .filter(|long| *long != "help")
+            .map(|long| format!("--{long}"))
+            .collect();
+        options.sort();
+        let mut quoted_options: Vec<&str> = quoted["uninstall_options"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|option| option.as_str())
+            .collect();
+        quoted_options.sort_unstable();
+        assert_eq!(options, quoted_options);
+    }
+
+    /// The desktop application starts a clean-up run with the option this fixture names, which
+    /// its own test holds its copy to.
+    #[test]
+    fn the_clean_up_run_option_is_the_one_the_shell_names() {
+        let contract: serde_json::Value =
+            serde_json::from_str(include_str!("../../testdata/shell_contract.json")).unwrap();
+        assert_eq!(
+            contract["clean_up_run_option"].as_str(),
+            Some(CLEAN_UP_RUN_OPTION)
+        );
+    }
+
     #[test]
     fn the_listening_line_names_its_port() {
         let line = listening_line(40123, &"a".repeat(64));
@@ -570,6 +694,39 @@ mod tests {
             .render_help()
             .to_string()
             .contains("--listen-fd"));
+    }
+
+    #[test]
+    fn the_clean_up_run_is_asked_for_by_its_argument_and_hidden_from_the_help() {
+        use clap::CommandFactory;
+
+        assert!(!parse(&[]).unwrap().clean_up_run);
+        let argument = clean_up_run_argument();
+        assert_eq!(argument, "--clean-up-run");
+        assert!(parse(&[&argument]).unwrap().clean_up_run);
+        let cli = parse(&["--parent-pid", "1", &argument]).unwrap();
+        assert!(cli.clean_up_run && cli.parent_pid == Some(1));
+        assert!(parse(&[&argument, "status"]).is_err());
+        assert!(!Cli::command().render_help().to_string().contains(&argument));
+    }
+
+    #[test]
+    fn a_followed_process_is_named_only_for_a_clean_up_run_and_not_beside_an_application() {
+        let argument = clean_up_run_argument();
+        let followed = crate::platform::proc::ProcessIdentity::parse("7:123456").unwrap();
+        let cli = parse(&[&argument, FOLLOW_PROCESS_ARGUMENT, &followed.key()]).unwrap();
+        assert_eq!((cli.follow_process, cli.parent_pid), (Some(followed), None));
+        // A bare pid is not a process: it may be another's by the time it is looked for.
+        assert!(parse(&[&argument, FOLLOW_PROCESS_ARGUMENT, "7"]).is_err());
+        assert!(parse(&[FOLLOW_PROCESS_ARGUMENT, "7:123456"]).is_err());
+        let both = [
+            &argument,
+            FOLLOW_PROCESS_ARGUMENT,
+            "7:123456",
+            "--parent-pid",
+            "1",
+        ];
+        assert!(parse(&both).is_err());
     }
 
     #[test]
@@ -658,6 +815,74 @@ mod tests {
             &["browser"],
         ] {
             assert!(parse(args).is_err(), "{args:?}");
+        }
+    }
+
+    #[test]
+    fn uninstall_takes_yes_force_keep_changes_and_dry_run_and_no_daemon_option() {
+        let uninstall = |args: &[&str]| -> Result<(bool, bool, bool, bool), clap::Error> {
+            match parse(&[&["uninstall"], args].concat())?.command {
+                Some(Command::Uninstall {
+                    yes,
+                    force,
+                    keep_changes,
+                    dry_run,
+                }) => Ok((yes, force, keep_changes, dry_run)),
+                _ => panic!("not the uninstall command: {args:?}"),
+            }
+        };
+        assert_eq!(uninstall(&[]).unwrap(), (false, false, false, false));
+        assert_eq!(
+            uninstall(&["--yes", "--force", "--keep-changes"]).unwrap(),
+            (true, true, true, false)
+        );
+        assert_eq!(
+            uninstall(&["--dry-run", "--keep-changes"]).unwrap(),
+            (false, false, true, true)
+        );
+        assert!(uninstall(&["--dry-run", "--yes"]).is_err());
+        assert!(uninstall(&["--bin-dir", "/x"]).is_err());
+        assert!(uninstall(&["--port", "7531"]).is_err());
+        assert!(parse(&["--port", "7531", "uninstall"]).is_err());
+    }
+
+    /// The clean-up is no command of its own: it is the first step of `uninstall`.
+    #[test]
+    fn there_is_no_cleanup_command_and_the_help_names_none() {
+        use clap::CommandFactory;
+
+        assert!(parse(&["cleanup"]).is_err());
+        assert!(parse(&["cleanup", "--list"]).is_err());
+        let mut command = Cli::command();
+        assert!(command.find_subcommand("cleanup").is_none());
+        let help = command.render_long_help().to_string();
+        assert!(!help.contains("cleanup"), "{help}");
+        assert!(help.contains("uninstall"), "{help}");
+    }
+
+    /// The help says what the command does first, what it leaves and whose daemon it refuses.
+    #[test]
+    fn the_help_of_uninstall_says_what_it_clears_removes_and_leaves() {
+        use clap::CommandFactory;
+
+        let mut command = Cli::command();
+        let help = command
+            .find_subcommand_mut("uninstall")
+            .expect("the command exists")
+            .render_long_help()
+            .to_string();
+        // The help is wrapped to the width of a terminal: read it as one line.
+        let help = help.split_whitespace().collect::<Vec<_>>().join(" ");
+        for said in [
+            "first clear",
+            "~/.octoboard",
+            "desktop application",
+            "--yes",
+            "--force",
+            "--keep-changes",
+            "--dry-run",
+        ] {
+            assert!(help.contains(said), "{said}: {help}");
         }
     }
 
@@ -816,7 +1041,24 @@ mod tests {
         let hook = parse(&["hook", "--session", "s", "--port", "1", "--key-file", "/k"]).unwrap();
         assert!(matches!(
             hook.command,
-            Some(Command::Hook { key_file, .. }) if key_file == Path::new("/k")
+            Some(Command::Hook { key_file, launch: None, .. }) if key_file == Path::new("/k")
+        ));
+        // The launch, which a hook script of an earlier build leaves out.
+        let launched = parse(&[
+            "hook",
+            "--session",
+            "s",
+            "--launch",
+            "l",
+            "--port",
+            "1",
+            "--key-file",
+            "/k",
+        ])
+        .unwrap();
+        assert!(matches!(
+            launched.command,
+            Some(Command::Hook { launch: Some(launch), .. }) if launch == "l"
         ));
         let mcp = parse(&[
             "mcp",

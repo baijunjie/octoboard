@@ -134,11 +134,11 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
       help={
         <HelpTip label={t("settings.accounts.sharing.helpLabel")}>
           <div className="flex flex-col gap-2">
-            <p>{t("settings.accounts.sharing.helpShared")}</p>
+            <p>{t("settings.accounts.sharing.helpLinked")}</p>
             <p>
               <ProviderMessage providers={providers} id={account.agent} name="sharingNeverShared" fallback="settings.accounts.sharing.helpNever" unbroken />
             </p>
-            <p><Message id="settings.accounts.sharing.helpOff" /></p>
+            <p><Message id="settings.accounts.sharing.helpHistoryStays" /></p>
             {idle > 0 && <p>{t("settings.accounts.sharing.idleSessions", { count: idle })}</p>}
           </div>
         </HelpTip>
@@ -146,7 +146,7 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
       description={
         <>
           {!progress && !unfinished && <Message
-            id={shared ? "settings.accounts.sharing.describeOnAccount" : "settings.accounts.sharing.describeOffAccount"}
+            id={shared ? "settings.accounts.sharing.describeOnMoved" : "settings.accounts.sharing.describeOffMoves"}
             params={{ name: <InlineReference dir="auto" wrap>{defaultName}</InlineReference> }}
           />}
         </>

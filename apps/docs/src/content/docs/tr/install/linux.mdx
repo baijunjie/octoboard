@@ -4,7 +4,8 @@ description: "Octoboard’un sunucu programı octoboardd’yi bir Linux sunucusu
 ---
 
 import { Aside, Code, LinkButton, Steps } from "@astrojs/starlight/components";
-import { commands, downloads, productName } from "../../../../commands.ts";
+import { commands, downloads, productName, system } from "../../../../commands.ts";
+import LinuxUninstall from "../../../../snippets/tr/linux-uninstall.mdx";
 
 {productName} sunucu programı octoboardd’yi (uygulama ona “hizmet” der) bir Linux sunucusuna root yetkisi olmadan kurun. macOS veya Windows uygulamasından ya da bir tarayıcıdan, ikisinde de SSH üzerinden ulaşın.
 
@@ -80,6 +81,12 @@ octoboardd kendi bağlantı noktasını kendisi seçer ve bunu bilmeniz gerekmez
   Şimdi yeniden başlatılıp başlatılmayacağını sorarsa, yeniden başlatmak için <code dir="ltr">y</code> yanıtını verin ya da eski sürümü şimdilik çalışır tutmak için Enter’a basın. Daha sonra yeniden başlatmak için <code dir="ltr">{commands.restart}</code> komutunu çalıştırın.
 
 <code dir="ltr">{commands.update}</code> programı değiştiremediğini söylüyorsa, örneğin yazamayacağınız bir yere kurulduğu için, bunun yerine kurulum komutunu (ya da hizmet komutunu) yeniden çalıştırın. Güvenliyse aynı şekilde yeniden başlar, değilse <code dir="ltr">{commands.restart}</code> komutunu çalıştırmanızı söyler.
+
+## Kaldırma
+
+<LinuxUninstall />
+
+Verileriniz <code dir="ltr">{system.dataDir}</code> içinde kalır. [Sisteminiz olduğu gibi kalır](../../your-system/) sayfası, sonrasında geriye ne kaldığını ve bunun nasıl kaldırılacağını anlatır.
 
 ## Komutlar
 

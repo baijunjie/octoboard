@@ -6,6 +6,12 @@ use crate::protocol::{Event, Role};
 use crate::state::WriteHold;
 use crate::test_support::{app_state, PATIENCE};
 
+/// Applies `body` as a hook that names no launch would post it, as one configured by an earlier
+/// build does.
+fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
+    super::apply_hook(state, session_id, None, body);
+}
+
 /// A completion notification trims the list once the session is working: trimmed while it is
 /// still idle, the record it publishes would show a plain idle between the finished work and
 /// the turn it started.
@@ -2180,4 +2186,236 @@ async fn a_hook_that_raises_the_hand_starts_the_watch_of_the_screen() {
         .interaction
         .watching
         .load(std::sync::atomic::Ordering::Acquire));
+}
+
+/// While a launch holds a session and none of its processes is registered, a report of a prompt
+/// marks the session only when it comes from the launched process, which is told by the
+/// conversation it names: the ended process's late report names the conversation the session
+/// still names (or none) and marks nothing, and the launched process's early report, which names
+/// the conversation the launch opened, marks the session before its process is registered.
+#[tokio::test]
+async fn a_report_under_a_launch_marks_only_when_it_names_the_launched_conversation() {
+    const OLD: &str = "11111111-2222-4333-8444-555555555555";
+    const NEW: &str = "66666666-7777-4888-8999-000000000000";
+    let prompt = |conversation: Option<&str>| {
+        let mut payload = serde_json::json!({"hook_event_name": "UserPromptSubmit"});
+        if let Some(conversation) = conversation {
+            payload["session_id"] = conversation.into();
+        }
+        serde_json::to_vec(&payload).unwrap()
+    };
+    let (state, dir) = app_state("server-report-under-launch");
+    state
+        .store
+        .insert_console(&crate::test_support::console(&dir))
+        .unwrap();
+    let used = |id: &str| state.session_record(id).unwrap().has_conversation;
+    let mut agents = 0;
+    for agent in AgentId::ALL {
+        // Every provider whose hook reports a submitted prompt under this event's name.
+        if !crate::adapter::provider(agent)
+            .hooks()
+            .starts_conversation("UserPromptSubmit")
+        {
+            continue;
+        }
+        agents += 1;
+        let id = agent.descriptor().id;
+        let mut session = crate::test_support::console_session(id, SessionStatus::Interrupted);
+        session.agent = agent;
+        session.agent_session_id = Some(OLD.to_owned());
+        session.has_conversation = false;
+        state.store.insert_session(&session).unwrap();
+
+        let claim = state.begin_launch(id).unwrap();
+        apply_hook(&state, id, &prompt(Some(OLD)));
+        assert!(!used(id), "{agent:?}: the ended process's late report");
+        apply_hook(&state, id, &prompt(None));
+        assert!(!used(id), "{agent:?}: a report that names no conversation");
+        apply_hook(&state, id, &prompt(Some(NEW)));
+        assert!(used(id), "{agent:?}: the launched process's early report");
+        assert_eq!(
+            state
+                .session_record(id)
+                .unwrap()
+                .agent_session_id
+                .as_deref(),
+            Some(NEW)
+        );
+        drop(claim);
+    }
+    assert!(agents > 0);
+
+    // With no launch under way, a report marks the session whatever it names.
+    let mut session = crate::test_support::console_session("idle", SessionStatus::Idle);
+    session.agent_session_id = Some(OLD.to_owned());
+    session.has_conversation = false;
+    state.store.insert_session(&session).unwrap();
+    apply_hook(&state, "idle", &prompt(Some(OLD)));
+    assert!(used("idle"));
+}
+
+/// A hook that names its launch is told by it alone: a report from a launch that has ended is
+/// ignored whenever it arrives, the session launched again or not, and whatever conversation it
+/// names; one from a launch that has not ended is the running or starting process's, and marks
+/// the session even while a launch holds it.
+#[tokio::test]
+async fn a_report_from_an_ended_launch_is_ignored_once_the_relaunch_is_over() {
+    const OLD: &str = "11111111-2222-4333-8444-555555555555";
+    const NEW: &str = "66666666-7777-4888-8999-000000000000";
+    let prompt = |conversation: Option<&str>| {
+        let mut payload = serde_json::json!({"hook_event_name": "UserPromptSubmit"});
+        if let Some(conversation) = conversation {
+            payload["session_id"] = conversation.into();
+        }
+        serde_json::to_vec(&payload).unwrap()
+    };
+    let (state, dir) = app_state("server-report-from-an-ended-launch");
+    state
+        .store
+        .insert_console(&crate::test_support::console(&dir))
+        .unwrap();
+    let mut session = crate::test_support::console_session("s", SessionStatus::Idle);
+    session.agent = AgentId::CLAUDE;
+    session.agent_session_id = Some(OLD.to_owned());
+    session.has_conversation = false;
+    state.store.insert_session(&session).unwrap();
+    let record = || state.session_record("s").unwrap();
+
+    let first = crate::test_support::fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
+    state.register_live(first.clone());
+    let ended = first.launch_id.clone();
+    assert!(state.remove_live(&first));
+    // Its end seen and nothing running: its late report is ignored.
+    super::apply_hook(&state, "s", Some(&ended), &prompt(Some(OLD)));
+    assert!(!record().has_conversation, "with nothing running");
+
+    // Launched again, on a fresh conversation, and running.
+    let second = crate::test_support::fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
+    state.register_live(second.clone());
+    assert_ne!(second.launch_id, ended);
+    for conversation in [Some(OLD), Some(NEW), None] {
+        super::apply_hook(&state, "s", Some(&ended), &prompt(conversation));
+        let now = record();
+        assert!(!now.has_conversation, "{conversation:?}");
+        assert_eq!(
+            now.agent_session_id.as_deref(),
+            Some(OLD),
+            "{conversation:?}"
+        );
+        assert_eq!(now.status, SessionStatus::Idle, "{conversation:?}");
+    }
+    // The running launch's own report is applied.
+    super::apply_hook(&state, "s", Some(&second.launch_id), &prompt(Some(NEW)));
+    let now = record();
+    assert!(now.has_conversation);
+    assert_eq!(now.agent_session_id.as_deref(), Some(NEW));
+
+    // Under a launch with no process registered yet, a report naming the launch this run reserved
+    // comes from the launched process, whatever conversation it names; one naming a launch this
+    // run does not know (an earlier run's, its last reports relayed once the session was adopted
+    // and launched again) is told by its conversation, as one that names no launch.
+    assert!(state.remove_live(&second));
+    let mut fresh = crate::test_support::console_session("t", SessionStatus::Interrupted);
+    fresh.agent = AgentId::CLAUDE;
+    fresh.agent_session_id = Some(OLD.to_owned());
+    fresh.has_conversation = false;
+    state.store.insert_session(&fresh).unwrap();
+    let claim = state.begin_launch("t").unwrap();
+    let earlier_run = "launch-of-an-earlier-run";
+    for conversation in [Some(OLD), None] {
+        super::apply_hook(&state, "t", Some(earlier_run), &prompt(conversation));
+        assert!(
+            !state.session_record("t").unwrap().has_conversation,
+            "{conversation:?}"
+        );
+    }
+    let reserved = state.process_ledger.begin_launch("t").unwrap();
+    super::apply_hook(
+        &state,
+        "t",
+        Some(reserved.tag().launch_id()),
+        &prompt(Some(OLD)),
+    );
+    assert!(state.session_record("t").unwrap().has_conversation);
+    drop(claim);
+}
+
+/// The ended launches of a session are forgotten with its record, whether its process had ended
+/// before the deletion or ends after it.
+#[tokio::test]
+async fn the_ended_launches_of_a_deleted_session_are_forgotten() {
+    let (state, dir) = app_state("server-ended-launches-forgotten");
+    state
+        .store
+        .insert_console(&crate::test_support::console(&dir))
+        .unwrap();
+    let live = |id: &str| {
+        let live = crate::test_support::fake_live_session(id, AgentId::CLAUDE, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        live
+    };
+    for id in ["before", "after"] {
+        state
+            .store
+            .insert_session(&crate::test_support::console_session(
+                id,
+                SessionStatus::Idle,
+            ))
+            .unwrap();
+    }
+
+    let ended = live("before");
+    assert!(state.remove_live(&ended));
+    state.after_live_removed("before", true);
+    assert!(state.launch_ended("before", &ended.launch_id));
+    state.discard_session("before").unwrap();
+    assert!(!state.launch_ended("before", &ended.launch_id));
+
+    // Deleted while its process runs: the end that follows leaves nothing behind either.
+    let running = live("after");
+    state.discard_session("after").unwrap();
+    assert!(state.remove_live(&running));
+    state.after_live_removed("after", true);
+    assert!(!state.launch_ended("after", &running.launch_id));
+}
+
+/// A session launched again and again, each launch ended, keeps the launches that ended last as
+/// ended, however many went before: the report a late hook posts is of the latest launches, and the
+/// memory of them is bounded rather than the latest forgotten for the first.
+#[tokio::test]
+async fn the_latest_ended_launches_of_a_session_stay_known_through_many_relaunches() {
+    let (state, dir) = app_state("server-ended-launches-latest");
+    state
+        .store
+        .insert_console(&crate::test_support::console(&dir))
+        .unwrap();
+    state
+        .store
+        .insert_session(&crate::test_support::console_session(
+            "s",
+            SessionStatus::Idle,
+        ))
+        .unwrap();
+    let mut ended = Vec::new();
+    for _ in 0..40 {
+        let live = crate::test_support::fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        assert!(state.remove_live(&live));
+        state.after_live_removed("s", true);
+        ended.push(live.launch_id.clone());
+    }
+
+    // The latest are all known, and only as many as are kept: the earliest are forgotten.
+    let kept = crate::state::ENDED_LAUNCHES_KEPT;
+    assert!(kept < ended.len());
+    let (forgotten, known) = ended.split_at(ended.len() - kept);
+    for launch in known {
+        assert!(state.launch_ended("s", launch), "{launch}");
+    }
+    for launch in forgotten {
+        assert!(!state.launch_ended("s", launch), "{launch} is still kept");
+    }
+    assert!(!state.launch_ended("s", "never-launched"));
+    assert!(!state.launch_ended("another", ended.last().unwrap()));
 }

@@ -28,8 +28,9 @@ const DESKTOP: PlatformAdapter = {
       changed = listener;
       return () => {};
     },
-    save: async (entry) => ({ ...entry, id: entry.id ?? "new" }),
-    remove: async () => {},
+    save: async (entry) => ({ entry: { ...entry, id: entry.id ?? "new", deviceKey: { declined: false, file: null, mark: null } }, keyRemoval: { line: { result: "not_installed" as const }, privateKeyLeft: null } }),
+    remove: async () => ({ line: { result: "not_installed" as const }, privateKeyLeft: null }),
+    setDeviceKey: async () => ({ line: { result: "not_installed" as const }, privateKeyLeft: null }),
     connect: async () => ({ outcome: "opened" }),
     disconnect: async () => {},
     onHandedOver: () => () => {},

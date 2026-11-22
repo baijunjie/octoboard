@@ -294,6 +294,7 @@ pub(super) fn connect(name: &str, timeout: Duration) -> io::Result<BlockingStrea
     loop {
         match OpenOptions::new()
             .read(true)
+            // no-file-write: the name is a named pipe's, which this only connects to.
             .write(true)
             .security_qos_flags(SECURITY_IDENTIFICATION)
             .open(name)

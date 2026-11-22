@@ -62,6 +62,12 @@ pub fn status() -> Result<Status, String> {
     Ok(status_of(status))
 }
 
+/// Whether the system holds the login item: registered, enabled or waiting for approval. One the
+/// user turned off in System Settings is unregistered, so nothing of it stays.
+pub fn present() -> Result<bool, String> {
+    Ok(status()? != Status::Disabled)
+}
+
 pub fn set(enabled: bool) -> Result<Status, String> {
     let service = main_app_service()?;
     // SAFETY: both methods take only the error out-parameter, which `objc2` turns into a `Result`.

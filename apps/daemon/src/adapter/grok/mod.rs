@@ -38,13 +38,16 @@
 //!   document).
 //! - `trusted_folders.toml`: Grok saves it by replacing the file, so against a symlink its write
 //!   would replace the link rather than reach the user's store, and no setting moves the store out
-//!   of `GROK_HOME`. The copy carries every folder the user already trusts, and Octoboard adds
-//!   nothing to it: a folder Grok has not been told to trust shows Grok's own confirmation, which
-//!   Octoboard presses under the user's permission (`crate::session::trust`), or the person answers
-//!   in the terminal. The entry Grok then writes lands only in this copy, so once the confirmation
-//!   is accepted, by Octoboard's press or in the terminal, it is carried over, unchanged, to the
-//!   user's own store (`LaunchPlan::carried_trust`, `trust`), and a later launch is trusted from
-//!   the start. Until a folder is trusted Grok silently loads none of the project's own
+//!   of `GROK_HOME`. The copy carries every folder the user already trusts. For a project session
+//!   Octoboard adds nothing to it: a folder Grok has not been told to trust shows Grok's own
+//!   confirmation, which Octoboard presses under the user's permission (`crate::session::trust`),
+//!   or the person answers in the terminal. The entry Grok then writes lands only in this copy, so
+//!   once the confirmation is accepted, by Octoboard's press or in the terminal, it is carried
+//!   over, unchanged, to the user's own store (`LaunchPlan::carried_trust`, `trust`), and a later
+//!   launch is trusted from the start. For a console session the copy is given an entry for the
+//!   console's directory (`trust::trust_for_this_launch`), so Grok does not ask, and nothing is
+//!   carried: the entry goes with the session's home and the user's store never names a console.
+//!   Until a folder is trusted Grok silently loads none of the project's own
 //!   `AGENTS.md`, hooks or MCP servers. Folder trust, not a git repository, is what gates the
 //!   instruction files: outside one Grok reads only the working directory's own.
 //!
@@ -74,9 +77,10 @@
 //! and `auth.json` inside the throw-away farm and lose them.
 //!
 //! The copies are a snapshot: an edit the user makes while a session runs is not seen, and anything
-//! the session persists lands in Octoboard's copy. Two things are kept: the trust entry above, once
-//! the confirmation is accepted, and, when the source `config.toml` is a symlink, the settings
-//! [`writeback::SharedConfigWriteback`] copies to its target. The rest is lost with the process.
+//! the session persists lands in Octoboard's copy. Two things are kept: a project's trust entry
+//! above, once the confirmation is accepted, and, when the source `config.toml` is a symlink, the
+//! settings [`writeback::SharedConfigWriteback`] copies to its target. The rest is lost with the
+//! process.
 //! Rebuilding the farm on every launch is what picks up an edit made in between.
 //!
 //! Two conditions come from Grok itself rather than from the mechanism: it locates a project by
@@ -86,11 +90,11 @@
 //! MCP server is a child process here too.
 //!
 //! A console's working directory is not a repository, but Grok still reads the instruction file
-//! written there once the folder is trusted, which Octoboard's confirmation presses for a console
-//! session. So a Grok console session gets the same short pointer in `--rules` as the other
-//! agents, and the role itself from that file. Grok freezes both `--rules` and the instruction
-//! files for a session, replaying them on a resume or a fork, so a change never reaches a session
-//! already begun.
+//! written there once the folder is trusted, which a console session's launch does in the
+//! session's own copy of the trust store. So a Grok console session gets the same short pointer
+//! in `--rules` as the other agents, and the role itself from that file. Grok freezes both
+//! `--rules` and the instruction files for a session, replaying them on a resume or a fork, so a
+//! change never reaches a session already begun.
 
 pub(crate) mod accounts;
 mod adoption;
@@ -103,6 +107,10 @@ mod interaction;
 mod login;
 mod mcp_inventory;
 pub(crate) mod models;
+mod plugin_paths;
+#[cfg(test)]
+pub(crate) use plugin_paths::after_exit_for_test as plugin_paths_after_exit_for_test;
+mod query_home;
 pub(crate) mod quota;
 pub(crate) mod records;
 mod sandbox;
@@ -130,7 +138,7 @@ use std::path::Path;
 use anyhow::Result;
 
 use super::{AgentProvider, LaunchPlan, LaunchSpec};
-use crate::protocol::{AgentId, Code, CodedError, TerminalAppearance};
+use crate::protocol::{AgentId, Code, CodedError, SessionKind, TerminalAppearance};
 use crate::providers::{grok, ProviderDescriptor};
 use crate::session::screen::ScreenReader;
 use crate::session_tools;
@@ -195,7 +203,10 @@ impl AgentProvider for GrokProvider {
     }
 
     fn rebuild_launch(&self, launch: super::AdoptedLaunch<'_>) -> super::RebuiltLaunch {
-        launch.adoption.map(adoption::rebuild).unwrap_or_default()
+        launch
+            .adoption
+            .map(|record| adoption::rebuild(record, &crate::paths::consoles_dir()))
+            .unwrap_or_default()
     }
 
     fn refuse_unlaunchable_account(&self, pinned: Option<&Path>) -> Result<()> {
@@ -368,11 +379,33 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: Option<&Path>) -> Result<Launch
         }
     }
 
-    let carried_trust = trust::CarriedTrust {
-        session_store: grok_home.join(grok::GROK_TRUST_STORE),
-        user_store: source_home.join(grok::GROK_TRUST_STORE),
-        folder: canonical_cwd(spec.cwd),
-        record_wait: trust::RECORD_TIMEOUT,
+    let session_store = grok_home.join(grok::GROK_TRUST_STORE);
+    let folder = canonical_cwd(spec.cwd);
+    // A console's directory is Octoboard's own, so it is trusted without asking, and nothing
+    // about it may reach the user's trust store: no entry is carried for a console session. What
+    // the provider declares (`Capabilities::console_trust`) is done here: the directory is trusted
+    // in the session's copy of the store, for this launch alone. Where that fails Grok asks, and
+    // the confirmation is answered as any console's is (`crate::session::trust`). A project's
+    // trust is the user's decision, so the entry Grok writes for it is carried to their store.
+    let carried_trust = if spec.kind == SessionKind::Console {
+        let declared = AgentId::GROK.descriptor().capabilities.console_trust;
+        if declared == crate::providers::ConsoleTrust::PerLaunch {
+            if let Err(err) = trust::trust_for_this_launch(&session_store, &folder) {
+                tracing::warn!(
+                    session = %spec.session_id,
+                    %err,
+                    "the console's directory could not be trusted for this launch"
+                );
+            }
+        }
+        None
+    } else {
+        Some(trust::CarriedTrust {
+            session_store: session_store.clone(),
+            user_store: source_home.join(grok::GROK_TRUST_STORE),
+            folder: folder.clone(),
+            record_wait: trust::RECORD_TIMEOUT,
+        })
     };
     // Grok has no `--theme` flag. `GROK_THEME` outranks `config.toml`, so the copy of the user's
     // configuration cannot paint a dark theme onto the light terminal (or the reverse). A launch
@@ -411,13 +444,30 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: Option<&Path>) -> Result<Launch
         env.push((MEMORY_OFF.0.to_string(), MEMORY_OFF.1.to_string()));
     }
     let writeback = shared_config_writeback(&source_home, &grok_home, spec.model);
-    let adoption = adoption::record(&carried_trust, writeback.as_ref());
+    // What an earlier process recorded in the user's plugin registry under a per-session home is
+    // put right before this one starts, and this one's own is left for after its exit.
+    let plugin_paths = plugin_paths::plugin_paths(&source_home, &grok_home);
+    if let Some(plugin_paths) = &plugin_paths {
+        plugin_paths.settle_earlier();
+    }
+    let adoption = match &carried_trust {
+        Some(carried_trust) => {
+            adoption::record(carried_trust, writeback.as_ref(), plugin_paths.as_ref())
+        }
+        None => adoption::record_without_carrier(
+            &session_store,
+            &folder,
+            writeback.as_ref(),
+            plugin_paths.as_ref(),
+        ),
+    };
     Ok(LaunchPlan {
         args,
         env,
-        carried_trust: Some(std::sync::Arc::new(carried_trust)),
-        after_exit: writeback
-            .map(|writeback| Box::new(writeback) as Box<dyn crate::session::term::AfterExit>),
+        carried_trust: carried_trust.map(|carried| {
+            std::sync::Arc::new(carried) as std::sync::Arc<dyn crate::session::trust::TrustCarrier>
+        }),
+        after_exit: adoption::after_exit(writeback, plugin_paths),
         adoption,
         ..LaunchPlan::default()
     })

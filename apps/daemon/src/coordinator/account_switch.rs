@@ -272,6 +272,9 @@ pub(crate) async fn switch_session_account_if(
     // can launch, resume, switch or delete the session while its process is down, while the
     // relaunched one is being watched, or while the account is put back; refused here when one
     // of those is under way.
+    // Refused before a waiting recovery is cancelled and the claim shows the session as switching
+    // to every client: a clean-up run would not relaunch it.
+    state.admit_launch()?;
     if only_if.recovery.is_none() {
         state.cancel_recoveries(id);
     }

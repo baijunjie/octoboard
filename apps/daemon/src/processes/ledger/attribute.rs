@@ -67,6 +67,10 @@ pub(crate) const ENDED: &str = "ended";
 pub(crate) struct Launch {
     /// The session the launch runs, or `None` for [`ENDED`].
     pub session_id: Option<String>,
+    /// The launch id was reserved by this run of the daemon, for [`Self::session_id`]
+    /// ([`super::ProcessLedger::begin_launch`]), rather than taken in from a launch an earlier run
+    /// started.
+    pub reserved_here: bool,
     /// The agent's process has been started: until then the launch id is only reserved, so a
     /// process carrying it is not taken for an ended launch's.
     pub started: bool,

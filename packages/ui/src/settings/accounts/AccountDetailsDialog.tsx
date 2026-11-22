@@ -10,7 +10,8 @@ import { Message, useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
 import { AccountQuotaSummary, LoginStateBadge, NoUsageReading, QuotaFailureMark, QuotaPlan, QuotaUpdated } from "../../quota/AccountQuotaSummary";
 import { knownQuotaWindows, loginStateOf } from "../../accounts/quotaFormat";
-import { ResetCreditsLine, UseResetCreditDialog, useResetFocusReturn } from "../../quota/ResetCredits";
+import { useFocusReturnAfterClose } from "../../components/focus/useFocusReturnAfterClose";
+import { ResetCreditsLine, UseResetCreditDialog } from "../../quota/ResetCredits";
 import { useAccountQuota } from "../../quota/useAccountQuota";
 import { useDaemonStore } from "../../store";
 import { ProviderName } from "../../components/text/ProviderName";
@@ -61,7 +62,7 @@ export function AccountDetailsDialog({ agent, account, onClose }: {
   const quota = useAccountQuota(agent, account);
   const [resetting, setResetting] = useState(false);
   const redeem = useRef<HTMLDivElement>(null);
-  const handBack = useResetFocusReturn(() => void focusOpenDialog(redeem.current?.querySelector("button"), { opening: true }));
+  const handBack = useFocusReturnAfterClose(() => void focusOpenDialog(redeem.current?.querySelector("button"), { opening: true }));
   const closeReset = () => {
     setResetting(false);
     handBack();

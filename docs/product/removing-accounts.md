@@ -9,8 +9,10 @@ account, model and reasoning effort" in `docs/product/projects.md`); a project o
 as it is. A scheduled task that names the account is put back to inheriting its target's account (see "When what a
 task names goes away" in `docs/product/scheduled-tasks.md`). Removing an account ends a login running for it, and any sign-in to or sign-out of one of its MCP servers
 (see "Signing an account in to and out of an MCP server" in `docs/product/account-mcp-servers-and-connectors.md`).
-**The account's config directory and everything in it are
-left as they are**, unless the user chooses to move the directory to the Trash as well (see "Moving the account
+For a Grok Build account, the directories of Octoboard's own its background runs are made against, with the copies of
+its configuration they hold, are removed, before the account's directory is moved where it is moved to the Trash (see
+"Where Grok Build's readings run" in `docs/product/account-quota-readings.md`). **The account's config directory
+and everything in it are left as they are**, unless the user chooses to move the directory to the Trash as well (see "Moving the account
 directory to the Trash" below).
 
 An account that shares the default configuration, or whose last change of it is incomplete, has its sharing turned off
@@ -80,7 +82,8 @@ Unticking the option drops the check and anything it showed; an answer that arri
 
 - The directory is **moved to the system Trash, never deleted outright**, so it can be recovered from there.
 - The move comes before the account's record is removed. **If the move fails, the removal fails** with the reason, and
-  the account is kept, so the removal can be retried; sharing turned off for the removal stays off.
+  the account is kept, so the removal can be retried; sharing turned off for the removal stays off. A Grok Build
+  account's directories of Octoboard's own, removed just before the move, are made again by its next background run.
 - **The directory is judged before anything is changed**, so a refusal at that point leaves everything as it was. It is
   judged again once the account is locked (after its sharing is turned off), since the account may have been repointed
   or the file system changed meanwhile; a refusal then leaves sharing turned off. It is judged a last time immediately

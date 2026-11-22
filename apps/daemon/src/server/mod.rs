@@ -17,6 +17,9 @@
 //!   the requests to stop: to shut down, to make a planned restart, and to make a planned stop.
 //! - [`keys`]: the routes about the keys a request carries: the key check and the owner-key
 //!   rotation.
+//! - [`system_changes`]: the routes the clean-up before uninstalling asks, which list and clear what the
+//!   daemon's features have in effect outside Octoboard's own directories, for the launch key
+//!   alone.
 //! - [`relay`]: the same helper routes, for the requests a holder relays from its helpers.
 //! - [`ui`]: the browser UI embedded in the build, the fallback for every other path.
 
@@ -25,6 +28,7 @@ mod callbacks;
 mod control;
 mod keys;
 pub(crate) mod relay;
+mod system_changes;
 mod terminal;
 #[cfg(test)]
 mod test_support;
@@ -90,6 +94,10 @@ fn routes(state: Arc<AppState>) -> Router {
         .route("/ws/control", get(control::control_ws))
         .route("/ws/term/:session", get(terminal::term_ws))
         .route("/hook/:session", post(callbacks::hook_callback))
+        .route(
+            "/hook/:session/:launch",
+            post(callbacks::launch_hook_callback),
+        )
         .route("/git-ref/:session", post(callbacks::git_ref_callback))
         .route(
             "/revert-gate/:session",
@@ -107,6 +115,8 @@ fn routes(state: Arc<AppState>) -> Router {
         .route("/planned-stop", post(callbacks::planned_stop))
         .route("/key-check", get(keys::key_check))
         .route("/owner-key/rotate", post(keys::rotate_owner_key))
+        .route("/system-changes", post(system_changes::list))
+        .route("/system-changes/clear", post(system_changes::clear))
         .with_state(state)
 }
 
@@ -139,6 +149,8 @@ mod tests {
                 "POST /planned-stop",
                 "GET /key-check",
                 "POST /owner-key/rotate",
+                "POST /system-changes",
+                "POST /system-changes/clear",
             ];
             for route in routes {
                 let keyed = keyed(route);

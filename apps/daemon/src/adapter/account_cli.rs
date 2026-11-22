@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Output};
 use std::sync::atomic::AtomicBool;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::accounts::shared_config;
 use crate::platform::proc::Reach;
@@ -140,15 +140,70 @@ pub fn account_command_of(
     command
 }
 
+/// The runs of an agent's CLI that Octoboard makes on its own, outside a session, for which a
+/// provider may give a directory of Octoboard's own ([`RunHome`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BackgroundRun {
+    QuotaReading,
+    ModelListing,
+    Kick,
+}
+
+/// How long a run may wait for the directory it is made against, where another run holds it: until
+/// the run's own deadline, so that the wait comes out of the time the run is given rather than on
+/// top of it, and no longer than the caller goes on wanting the run.
+pub(crate) struct RunWait<'a> {
+    pub(crate) until: Instant,
+    /// Set to give the wait up at once, as it stops the run itself.
+    pub(crate) cancel: Option<&'a AtomicBool>,
+}
+
+/// A directory of Octoboard's own that a run of an agent's CLI is made against in place of the
+/// account's, for a CLI measured to change the account's configuration when it is run against the
+/// account's own directory: the provider builds it from the account's
+/// (`AccountOps::run_home`) and says which variables reach the account's sign-in from it. The
+/// account's directory is still what the run is admitted under, and the home is built inside that
+/// admission, so no change of the account's sharing moves what it is built from meanwhile.
+pub(crate) struct RunHome {
+    pub(crate) dir: PathBuf,
+    /// Set on top of the shell snapshot, after the agent's own directory variable.
+    pub(crate) env: Vec<(String, String)>,
+    /// What the provider does to the directory once the run has ended, while it is still this
+    /// run's alone: removing what a run leaves there that nothing reads again.
+    pub(crate) after_run: Option<Box<dyn FnOnce() + Send>>,
+    /// What keeps the directory this run's alone, held until the run has ended: two runs of one
+    /// kind for one account would otherwise rewrite the same files under each other.
+    pub(crate) _lock: Option<std::fs::File>,
+}
+
+impl Drop for RunHome {
+    /// The run has ended, or was never made: the provider's work for after it is done before the
+    /// lock is let go, which the fields' own drop does next.
+    fn drop(&mut self) {
+        if let Some(after_run) = self.after_run.take() {
+            after_run();
+        }
+    }
+}
+
 /// A command running an agent's CLI as an account, and the account's directory admitted for it:
 /// no change of the account's sharing moves what the CLI opens, such as Codex's state database
 /// and history, from under it until this is dropped.
 pub(crate) struct AdmittedCommand {
     pub(crate) command: Command,
     _reading: Option<shared_config::Run>,
+    /// The directory of Octoboard's own the command runs against, where the provider gave one,
+    /// kept with its lock for as long as the command is.
+    home: Option<RunHome>,
 }
 
 impl AdmittedCommand {
+    /// The directory of Octoboard's own the command runs against in place of the account's, where
+    /// the provider gave one ([`RunHome`]).
+    pub(crate) fn home_dir(&self) -> Option<&Path> {
+        self.home.as_ref().map(|home| home.dir.as_path())
+    }
+
     /// Runs the command as a short query ([`run_query`]), the account's directory held until this
     /// returns.
     pub(crate) fn run(
@@ -191,6 +246,9 @@ pub(crate) enum NotRun {
     /// The agent's binary is a launcher the provider refuses to start the CLI through; carries the
     /// provider's coded error ([`Unstartable::Refused`]).
     BinaryRefused(CodedError),
+    /// The directory of Octoboard's own the run was to be made against could not be made ready
+    /// ([`RunHome`]); carries why. The account's own directory is never fallen back to.
+    HomeNotPrepared(String),
 }
 
 impl From<Unstartable> for NotRun {
@@ -214,6 +272,9 @@ impl NotRun {
                 format!("`{binary}` was not found on PATH in the shell environment")
             }
             Self::BinaryRefused(refusal) => refusal.message.clone(),
+            Self::HomeNotPrepared(why) => {
+                format!("the directory the command runs in could not be prepared: {why}")
+            }
         }
     }
 }
@@ -233,6 +294,54 @@ pub(crate) fn admitted_command(
     Ok(AdmittedCommand {
         command,
         _reading: reading,
+        home: None,
+    })
+}
+
+/// [`admitted_command`] for one of the runs Octoboard makes on its own ([`BackgroundRun`]): where
+/// the provider gives a directory of Octoboard's own for it under `run_homes`
+/// (`AccountOps::run_home`), the command runs against that directory, built once the account's
+/// directory is admitted; elsewhere against the account's. A directory that cannot be made ready,
+/// or that another run still holds when `wait` runs out, refuses the run
+/// ([`NotRun::HomeNotPrepared`]). The account stays admitted while the directory is waited for,
+/// which `wait` bounds by the run's own deadline.
+pub(crate) fn admitted_command_in(
+    agent: AgentId,
+    shell_env: &HashMap<String, String>,
+    config_dir: Option<&Path>,
+    run: BackgroundRun,
+    run_homes: &Path,
+    wait: &RunWait<'_>,
+    args: &[&str],
+) -> Result<AdmittedCommand, NotRun> {
+    let reading = shared_config::admitted_reading(config_dir)
+        .map_err(|missing| NotRun::DirMissing(missing.0))?;
+    // Before the directory is made: a CLI that is not there leaves none behind.
+    let binary = resolve_account_binary(agent, shell_env)?;
+    let home = match super::provider(agent).accounts() {
+        Some(ops) => ops
+            .run_home(
+                run_homes,
+                run,
+                &account_dir(agent, config_dir, shell_env),
+                shell_env,
+                wait,
+            )
+            .map_err(|err| NotRun::HomeNotPrepared(format!("{err:#}")))?,
+        None => None,
+    };
+    let command = match &home {
+        Some(home) => {
+            let mut command = account_command_of(&binary, agent, shell_env, Some(&home.dir), args);
+            command.envs(home.env.iter().map(|(name, value)| (name, value)));
+            command
+        }
+        None => account_command_of(&binary, agent, shell_env, config_dir, args),
+    };
+    Ok(AdmittedCommand {
+        command,
+        _reading: reading,
+        home,
     })
 }
 

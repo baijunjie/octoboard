@@ -13,6 +13,27 @@ use crate::protocol::{
     QuotaWindow, QuotaWindowKind,
 };
 use crate::state::AppState;
+
+/// [`super::read`] with the directories a provider runs a reading against kept in a scratch
+/// directory of the call's own.
+fn read(
+    key: &Key,
+    shell: &(dyn Fn() -> anyhow::Result<HashMap<String, String>> + Send + Sync),
+    cancel: &AtomicBool,
+) -> (AccountQuota, ProbeTrace) {
+    let run_homes = crate::test_support::ScratchDir::new("poll-run-homes");
+    super::read(key, shell, &run_homes, cancel)
+}
+
+/// [`super::start_windows`], likewise.
+fn start_windows(
+    key: &Key,
+    shell: &(dyn Fn() -> anyhow::Result<HashMap<String, String>> + Send + Sync),
+    cancel: &AtomicBool,
+) -> anyhow::Result<()> {
+    let run_homes = crate::test_support::ScratchDir::new("poll-run-homes");
+    super::start_windows(key, shell, &run_homes, cancel)
+}
 use crate::time::now_millis;
 
 #[test]

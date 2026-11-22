@@ -1,5 +1,6 @@
 // What the fixture daemon answers for the agent accounts: their creation and removal, sharing, sign-in, the default
-// account's name and the use of a Codex reset credit, and the refusals a session gets on an account.
+// account's name and the use of a Codex reset credit, the refusals a session gets on an account, and the list of what
+// the daemon has in effect outside Octoboard's directories (the accounts that share) with its clearing.
 import { consoleAccount, inheritedAccount } from "../accounts/accountInheritance";
 import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, servedLabel } from "./fixtureProviders";
 import { type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Project, type QuotaWindow, type ClientRequestBody, type McpSignInState, type SharingCause, type Session } from "../protocol";

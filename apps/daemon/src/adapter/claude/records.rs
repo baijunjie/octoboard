@@ -147,6 +147,10 @@ impl RecordStore for ClaudeRecords {
         super::conversation::entries(line)
     }
 
+    fn is_user_prompt(&self, line: &str) -> Option<bool> {
+        super::conversation::is_user_prompt(line)
+    }
+
     /// What the user typed: a paste without its wrapper, a slash command as typed, nothing for the
     /// note an interrupted turn leaves (`super::conversation::user_text`).
     fn user_text<'a>(&self, text: &'a str) -> Option<std::borrow::Cow<'a, str>> {

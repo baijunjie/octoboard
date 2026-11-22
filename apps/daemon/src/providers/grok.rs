@@ -92,6 +92,11 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         reset_credits: false,
         native_app_scheme: None,
         per_session_trust: true,
+        // A console session's launch writes the console's directory into the session's own copy
+        // of the trust store (`crate::adapter::grok`), which Grok Build 1.0.92 takes without
+        // asking and which goes with the session's home. Measured in
+        // `docs/agent-cli-reference.md`, "Folder-trust confirmations".
+        console_trust: super::ConsoleTrust::PerLaunch,
         config_sharing: true,
         mcp_inventory: true,
         // Read from the 1.0.89 binary, not measured: it runs each command in its own process group

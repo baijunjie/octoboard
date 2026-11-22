@@ -1,0 +1,12 @@
+import { Aside } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* What the Windows uninstaller does before it removes the app, which the Windows guide and "Your system stays as it was" share. */}
+
+Kaldırıcı, herhangi bir şeyi silmeden önce kendiliğinden temizlik yapar: {productName} çalışıyorsa onu kapatır (sessiz kaldırma dışında önce sorar) ve <strong>Tümünü kaldır</strong> işleminin kaldırdığı her şeyi sormadan kaldırır. Ardından, sonuç ne olursa olsun, uygulamayı kaldırır. Kaldırılamayan bir şey varsa bunu sonunda, her öğenin nerede kaldığıyla birlikte söyler ve <code dir="ltr">{system.uninstallLogWindows}</code> dosyasında listeler; sessiz kaldırma yalnızca bu dosyayı yazar.
+
+Kurulum programı ve kaldırıcı, {productName} sisteminizin dilini içeriyorsa o dili, içermiyorsa İngilizceyi kullanır. Kaldırıcı ve bıraktıklarının listesi, kurulumu yaptığınız dilde kalır; bir özelliğin kalan bir öğe için verdiği neden İngilizce olabilir.
+
+Her kaldırma işlemi bu temizliği yapmaz. Uygulama içi güncelleme ve kurulu uygulamanın üzerine çalıştırılan bir kurulum programı bunu yapmaz; uzak sunuculardaki anahtarlarınız ve hesaplarınızın paylaşımı olduğu gibi kalır. Üzerine kendiniz çalıştırdığınız bir kurulum programı yine de <strong>Oturum açıldığında aç</strong> ayarını, siz yeniden açana kadar kapatır. Bu temizlikten önceki bir sürümün kaldırıcısı da hiçbir temizlik yapmaz: böyle bir sürümde önce <strong>Tümünü kaldır</strong> öğesini seçin.
+
+<Aside>Windows on Arm üzerindeki x64 uygulamasında kaldırıcı, çalışan {productName} uygulamasını kapatamaz ve kaldırma işlemi hiçbir şeyi silmeden durur; üzerine çalıştırılan bir kurulum programı da öyle: önce {productName} uygulamasından çıkın. arm64 uygulamasında bu sınır yoktur ve Arm bir bilgisayardaki x64 kurulumu, uygulama içi güncellemeyle ona geçer.</Aside>

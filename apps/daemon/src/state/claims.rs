@@ -168,6 +168,8 @@ impl AppState {
 
     fn claim_to_launch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
         self.refuse_while_shutting_down()?;
+        // Before anything is recorded or published for a launch a clean-up run will not make.
+        self.admit_launch()?;
         let mut live = self.live.write().expect("live sessions lock poisoned");
         if live.sessions.contains_key(id) {
             return Err(CodedError::raised(

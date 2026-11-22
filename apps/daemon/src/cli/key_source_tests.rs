@@ -627,6 +627,35 @@ fn the_hook_posts_the_payload_under_the_key_in_its_file() {
     assert_eq!(requests[0].body, r#"{"hook_event_name":"Stop"}"#);
 }
 
+/// A hook that names its launch posts to the route of that launch, which is how the daemon tells a
+/// report from a launch that has ended from the running one's; one that names none (a script of an
+/// earlier build) posts to the session's route alone.
+#[test]
+fn the_hook_names_its_launch_in_the_route_it_posts_to_where_it_has_one() {
+    let dir = ScratchDir::new("key-source-hook-launch");
+    let file = key_file(&dir, "key", Some(TEST_KEY));
+    for (launch, expected) in [(Some("l-1"), "/hook/a/l-1"), (None, "/hook/a")] {
+        let daemon = StandInDaemon::start("{}");
+        let port = daemon.port.to_string();
+        let mut arguments = vec!["hook", "--session", "a"];
+        if let Some(launch) = launch {
+            arguments.extend(["--launch", launch]);
+        }
+        arguments.extend(["--port", &port, "--key-file", &file]);
+        let (output, written) = run(helper(&arguments, None), br#"{"hook_event_name":"Stop"}"#);
+        assert!(written);
+        assert_eq!(output.status.code(), Some(0));
+        let requests = daemon.finish();
+        assert_eq!(requests.len(), 1, "{launch:?}");
+        assert_eq!(
+            requests[0].line,
+            format!("POST {expected}?key={TEST_KEY} HTTP/1.1"),
+            "{launch:?}"
+        );
+        assert_eq!(requests[0].body, r#"{"hook_event_name":"Stop"}"#);
+    }
+}
+
 #[test]
 fn the_hook_without_a_usable_key_file_reads_its_input_and_posts_nothing() {
     let dir = ScratchDir::new("key-source-hook-without");

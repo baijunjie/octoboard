@@ -6,9 +6,10 @@ notification area on Windows) when you choose that, and installs its own updates
 build time; it talks to the daemon ([`apps/daemon/`](../daemon/README.md)) only over the daemon's own protocol.
 
 Both are in beta. On macOS it runs on macOS 11 or later, and the release build is one universal bundle for Apple
-silicon and Intel. On Windows it runs on Windows 10 version 21H2 or later, and the release build is an x64 NSIS installer,
-`Octoboard_<version>_x64-setup.exe`, which installs per user and downloads Microsoft Edge WebView2 if it is missing; on
-Windows 11 on Arm the x64 app runs under emulation, and there is no native ARM64 build yet. The Windows installer is not
+silicon and Intel. On Windows it runs on Windows 10 version 21H2 or later, and the release build is an NSIS installer per
+architecture, `Octoboard_<version>_x64-setup.exe` and `Octoboard_<version>_arm64-setup.exe` (for Windows 11 on Arm, built
+natively), each of which installs per user and downloads
+Microsoft Edge WebView2 if it is missing. The Windows installer is not
 code-signed yet, so Microsoft Defender SmartScreen may show "Windows protected your PC" on a downloaded copy; "More
 info", then "Run anyway" installs it. Installing it as a user is described in the
 [root README](../../README.md#installing-on-windows).

@@ -162,6 +162,18 @@ impl Store {
         Ok(changed > 0)
     }
 
+    /// Makes what account `id` records of its sharing unreadable, as a damaged database would:
+    /// [`Self::account_sharing_start`] then fails for it.
+    #[cfg(test)]
+    pub(crate) fn damage_account_sharing_start(&self, id: &str) {
+        self.lock()
+            .execute(
+                "UPDATE accounts SET share_default_config_backup = X'ff' WHERE id = ?1",
+                params![id],
+            )
+            .unwrap();
+    }
+
     pub fn get_account(&self, id: &str) -> Result<Option<Account>> {
         let account = self
             .lock()

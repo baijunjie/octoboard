@@ -491,6 +491,7 @@ pub(in crate::platform::proc) fn output(
         let (reader, writer) = io::pipe()?;
         Ok((Some(reader), inherited(&writer)?))
     } else {
+        // no-file-write: the null device, for output nobody reads.
         let null = File::options().write(true).open("NUL")?;
         Ok((None, inherited(&null)?))
     }

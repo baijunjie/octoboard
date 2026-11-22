@@ -4,7 +4,8 @@
 //! not found by itself. No password or passphrase is ever written here: one is asked for at a
 //! connection and kept in memory for that connection's reconnections alone. Once this device's own
 //! key is installed on the remote host (`device_key`), the entry authenticates with it, and its
-//! private key is kept in the system's credential store, not here.
+//! private key is kept in the system's credential store, not here. What the owner answered when
+//! asked about that key, and where its line was added, is kept with the entry (`DeviceKey`).
 
 use std::path::Path;
 
@@ -25,8 +26,23 @@ pub enum Auth {
     /// A private key file on this computer, its passphrase asked for when it has one.
     Key,
     /// This device's own key, installed on the host after a login with one of the others and kept
-    /// in the system's credential store.
+    /// in the system's credential store. An entry that authenticates so has its key installed,
+    /// whichever build installed it.
     Device,
+}
+
+/// What an entry keeps about this device's key.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DeviceKey {
+    /// The owner said no to installing the key, or turned it off: nothing is installed and
+    /// nothing asked until it is turned on again.
+    pub declined: bool,
+    /// The file on the host the key's line was added to, as the owner was told of it; `None` with
+    /// no key installed, and for a key an earlier build installed.
+    pub file: Option<String>,
+    /// What the line is marked with there (`device_key::comment`); `None` as `file` is.
+    pub mark: Option<String>,
 }
 
 /// One remote daemon, as the UI sees and edits it.
@@ -44,9 +60,14 @@ pub struct Entry {
     /// owner confirms the one shown at a first connection.
     pub fingerprint: Option<String>,
     pub octoboardd_path: Option<String>,
+    /// Absent from a file an earlier build wrote.
+    #[serde(default)]
+    pub device_key: DeviceKey,
 }
 
-/// An entry as the UI sends it to be saved: `id` is `None` for a new one.
+/// An entry as the UI sends it to be saved: `id` is `None` for a new one. What the entry keeps
+/// about this device's key is not the form's to send; it is changed by a connection's answer and
+/// by the entry's switch.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EntryInput {
@@ -79,20 +100,39 @@ impl Entry {
     pub fn outlives_device_key_of(&self, previous: &Entry) -> bool {
         self.identity() != previous.identity()
     }
+
+    /// Whether this device's key is installed for the entry.
+    pub fn has_device_key(&self) -> bool {
+        self.auth == Auth::Device
+    }
+
+    /// Whether saving this entry in place of `previous` gives up the device key installed for
+    /// `previous`, which is then taken back from its host first.
+    pub fn gives_up_device_key_of(&self, previous: &Entry) -> bool {
+        previous.has_device_key() && !self.has_device_key()
+    }
+}
+
+/// The entries kept at `path`: none when there is no such file, and an error, with the system's
+/// or the decoder's own words, when the file is there and cannot be read or is not what `save`
+/// writes. For whoever must not take a file it cannot read for "nothing saved".
+pub fn read(path: &Path) -> Result<Vec<Entry>, String> {
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) => return Err(format!("{} could not be read: {err}", path.display())),
+    };
+    serde_json::from_slice::<Stored>(&bytes)
+        .map(|stored| stored.entries)
+        .map_err(|err| format!("{} could not be read: {err}", path.display()))
 }
 
 /// The entries kept at `path`; none when the file is missing or unreadable.
 pub fn load(path: &Path) -> Vec<Entry> {
-    let Ok(bytes) = std::fs::read(path) else {
-        return Vec::new();
-    };
-    match serde_json::from_slice::<Stored>(&bytes) {
-        Ok(stored) => stored.entries,
-        Err(err) => {
-            diagnostic!("ignoring {}: {err}", path.display());
-            Vec::new()
-        }
-    }
+    read(path).unwrap_or_else(|err| {
+        diagnostic!("ignoring the saved remote daemons: {err}");
+        Vec::new()
+    })
 }
 
 /// Writes `entries` to `path`.
@@ -173,6 +213,11 @@ pub fn upsert(
         key_path: input.key_path,
         fingerprint: input.fingerprint,
         octoboardd_path: input.octoboardd_path,
+        device_key: entries
+            .iter()
+            .find(|existing| existing.id == id)
+            .map(|existing| existing.device_key.clone())
+            .unwrap_or_default(),
     };
     if entry.auth == Auth::Device {
         let installed = entries.iter().any(|existing| {
@@ -183,6 +228,11 @@ pub fn upsert(
         if !installed {
             entry.auth = Auth::Password;
         }
+    }
+    // Where the line is belongs to an installed key alone; the owner's no stays with the entry.
+    if entry.auth != Auth::Device {
+        entry.device_key.file = None;
+        entry.device_key.mark = None;
     }
     match entries.iter_mut().find(|existing| existing.id == id) {
         Some(existing) => *existing = entry.clone(),
@@ -206,9 +256,16 @@ pub fn pin(entries: &mut [Entry], id: &str, fingerprint: &str) -> bool {
     }
 }
 
-/// Switches the entry `id` to this device's key, installed for `identity`, unless the owner has
-/// pointed it at another destination since; whether it is switched now.
-pub fn use_device_key(entries: &mut [Entry], id: &str, identity: &str) -> bool {
+/// Switches the entry `id` to this device's key, installed for `identity` as a line marked `mark`
+/// in the host's `file`, unless the owner has pointed it at another destination since; whether it
+/// is switched now.
+pub fn use_device_key(
+    entries: &mut [Entry],
+    id: &str,
+    identity: &str,
+    file: &str,
+    mark: &str,
+) -> bool {
     let Some(entry) = entries
         .iter_mut()
         .find(|entry| entry.id == id && entry.identity() == identity)
@@ -217,6 +274,50 @@ pub fn use_device_key(entries: &mut [Entry], id: &str, identity: &str) -> bool {
     };
     entry.auth = Auth::Device;
     entry.key_path = None;
+    entry.device_key = DeviceKey {
+        declined: false,
+        file: Some(file.to_owned()),
+        mark: Some(mark.to_owned()),
+    };
+    true
+}
+
+/// Turns this device's key off for the entry `id`, which signs in with a password from now on
+/// where it signed in with the key, and is not asked about the key again; whether there is such
+/// an entry.
+pub fn decline_device_key(entries: &mut [Entry], id: &str) -> bool {
+    let Some(entry) = entries.iter_mut().find(|entry| entry.id == id) else {
+        return false;
+    };
+    if entry.auth == Auth::Device {
+        entry.auth = Auth::Password;
+    }
+    entry.device_key = DeviceKey {
+        declined: true,
+        file: None,
+        mark: None,
+    };
+    true
+}
+
+/// Notes the owner's no to this device's key for the entry `id` and changes nothing else: an
+/// entry whose key is installed goes on saying so until the key has been taken out of its host
+/// (`decline_device_key`). Whether there is such an entry.
+pub fn note_declined_device_key(entries: &mut [Entry], id: &str) -> bool {
+    let Some(entry) = entries.iter_mut().find(|entry| entry.id == id) else {
+        return false;
+    };
+    entry.device_key.declined = true;
+    true
+}
+
+/// Turns this device's key on again for the entry `id`: its next connection asks before
+/// installing it. Whether there is such an entry.
+pub fn allow_device_key(entries: &mut [Entry], id: &str) -> bool {
+    let Some(entry) = entries.iter_mut().find(|entry| entry.id == id) else {
+        return false;
+    };
+    entry.device_key.declined = false;
     true
 }
 
@@ -249,6 +350,17 @@ pub fn new_id() -> String {
 mod tests {
     use super::*;
     use crate::config_dir::test_support::Scratch;
+
+    /// Switches the entry to a key installed in the usual file under the usual mark.
+    fn install(entries: &mut [Entry], id: &str, identity: &str) -> bool {
+        use_device_key(
+            entries,
+            id,
+            identity,
+            "~/.ssh/authorized_keys",
+            "Octoboard on Desk",
+        )
+    }
 
     fn input(id: Option<&str>) -> EntryInput {
         EntryInput {
@@ -327,12 +439,21 @@ mod tests {
         keyed.auth = Auth::Key;
         let saved = upsert(&mut entries, keyed, || "a".into()).unwrap();
         assert_eq!(saved.key_path.as_deref(), Some("~/.ssh/id_ed25519"));
-        assert!(!use_device_key(&mut entries, "a", "ssh:me@elsewhere:22"));
-        assert!(!use_device_key(&mut entries, "missing", &saved.identity()));
+        assert!(!install(&mut entries, "a", "ssh:me@elsewhere:22"));
+        assert!(!install(&mut entries, "missing", &saved.identity()));
         assert_eq!(entries[0].auth, Auth::Key);
-        assert!(use_device_key(&mut entries, "a", &saved.identity()));
+        assert!(install(&mut entries, "a", &saved.identity()));
         assert_eq!(entries[0].auth, Auth::Device);
         assert_eq!(entries[0].key_path, None);
+        // Where the line is, and what it is marked with, is kept for the owner to be told.
+        assert_eq!(
+            entries[0].device_key,
+            DeviceKey {
+                declined: false,
+                file: Some("~/.ssh/authorized_keys".into()),
+                mark: Some("Octoboard on Desk".into()),
+            }
+        );
     }
 
     #[test]
@@ -343,7 +464,7 @@ mod tests {
         // A new entry has no key installed yet.
         let saved = upsert(&mut entries, asked, || "a".into()).unwrap();
         assert_eq!(saved.auth, Auth::Password);
-        assert!(use_device_key(&mut entries, "a", &saved.identity()));
+        assert!(install(&mut entries, "a", &saved.identity()));
         // Renamed, it keeps the key.
         let mut renamed = input(Some("a"));
         renamed.name = "Renamed".into();
@@ -351,6 +472,8 @@ mod tests {
         let kept = upsert(&mut entries, renamed, || unreachable!()).unwrap();
         assert_eq!(kept.auth, Auth::Device);
         assert!(!kept.outlives_device_key_of(&saved));
+        assert!(!kept.gives_up_device_key_of(&entries[0].clone()));
+        assert_eq!(kept.device_key.mark.as_deref(), Some("Octoboard on Desk"));
         // Pointed at another destination, it signs in with a password again.
         let mut moved = input(Some("a"));
         moved.user = "other".into();
@@ -358,6 +481,86 @@ mod tests {
         let moved = upsert(&mut entries, moved, || unreachable!()).unwrap();
         assert_eq!(moved.auth, Auth::Password);
         assert!(moved.outlives_device_key_of(&kept));
+        // The key installed at the destination it left is given up, and nothing says where a line
+        // is any more; it was never declined, so the new destination is asked about.
+        assert!(moved.gives_up_device_key_of(&kept));
+        assert_eq!(moved.device_key, DeviceKey::default());
+    }
+
+    #[test]
+    fn an_entry_saved_to_sign_in_another_way_gives_up_its_device_key() {
+        let mut entries = Vec::new();
+        let saved = upsert(&mut entries, input(None), || "a".into()).unwrap();
+        assert!(install(&mut entries, "a", &saved.identity()));
+        let installed = entries[0].clone();
+        let changed = upsert(&mut entries, input(Some("a")), || unreachable!()).unwrap();
+        assert_eq!(changed.auth, Auth::Password);
+        assert!(changed.gives_up_device_key_of(&installed));
+        assert_eq!(changed.device_key, DeviceKey::default());
+        // An entry without a key gives none up.
+        assert!(!changed.gives_up_device_key_of(&changed));
+    }
+
+    #[test]
+    fn a_declined_key_is_remembered_until_it_is_turned_on_again() {
+        let mut entries = Vec::new();
+        let saved = upsert(&mut entries, input(None), || "a".into()).unwrap();
+        assert!(!decline_device_key(&mut entries, "missing"));
+        assert!(decline_device_key(&mut entries, "a"));
+        assert!(entries[0].device_key.declined);
+        assert_eq!(entries[0].auth, Auth::Password);
+        // Saving the form keeps the answer, whatever the form sent.
+        let mut renamed = input(Some("a"));
+        renamed.name = "Renamed".into();
+        assert!(
+            upsert(&mut entries, renamed, || unreachable!())
+                .unwrap()
+                .device_key
+                .declined
+        );
+        assert!(!allow_device_key(&mut entries, "missing"));
+        assert!(allow_device_key(&mut entries, "a"));
+        assert!(!entries[0].device_key.declined);
+        // A no that is only noted leaves an installed key shown as installed, where its line is
+        // included, until the key has been taken out of its host.
+        assert!(install(&mut entries, "a", &saved.identity()));
+        assert!(!note_declined_device_key(&mut entries, "missing"));
+        assert!(note_declined_device_key(&mut entries, "a"));
+        assert_eq!(entries[0].auth, Auth::Device);
+        assert_eq!(
+            entries[0].device_key,
+            DeviceKey {
+                declined: true,
+                file: Some("~/.ssh/authorized_keys".into()),
+                mark: Some("Octoboard on Desk".into()),
+            }
+        );
+        assert!(allow_device_key(&mut entries, "a"));
+        // Turned off where it is installed, the entry signs in with a password and no longer says
+        // where a line is.
+        assert!(install(&mut entries, "a", &saved.identity()));
+        assert!(decline_device_key(&mut entries, "a"));
+        assert_eq!(entries[0].auth, Auth::Password);
+        assert_eq!(
+            entries[0].device_key,
+            DeviceKey {
+                declined: true,
+                file: None,
+                mark: None
+            }
+        );
+    }
+
+    #[test]
+    fn a_file_an_earlier_build_wrote_reads_with_no_answer_about_the_key() {
+        let stored: Stored = serde_json::from_value(serde_json::json!({"entries": [{
+            "id": "a", "name": "n", "host": "h", "port": 22, "user": "u", "auth": "device",
+            "keyPath": null, "fingerprint": null, "octoboarddPath": null
+        }]}))
+        .unwrap();
+        assert_eq!(stored.entries[0].device_key, DeviceKey::default());
+        // Its key counts as installed all the same.
+        assert!(stored.entries[0].has_device_key());
     }
 
     #[test]
@@ -501,7 +704,7 @@ mod tests {
             typed.host = format!("host{index}");
             let saved = upsert(&mut entries, typed, || format!("e{index}")).unwrap();
             if auth == Auth::Device {
-                assert!(use_device_key(&mut entries, &saved.id, &saved.identity()));
+                assert!(install(&mut entries, &saved.id, &saved.identity()));
             }
         }
         save(&path, &entries).unwrap();

@@ -3,7 +3,10 @@
 Everything Octoboard writes for itself lives under `~/.octoboard` — on the machine the daemon runs on, which in the
 server form (the daemon alone on a Linux server; see `docs/product/server-form.md`, and
 `docs/product/application-lifecycle.md` for the desktop form) is the server — with the exceptions of the desktop
-application's own files and what it keeps in the system's credential store, described after the table. On Windows the directory is
+application's own files and what it keeps in the system's credential store (see "The desktop application's own files"
+below), and of the server form's files beside its executable (see "Beside the server form's executable" below). What
+of all this stays once Octoboard is uninstalled, and how to remove it, is in
+`docs/product/what-remains-after-uninstalling.md`. On Windows the directory is
 `%USERPROFILE%\.octoboard`, and the paths below are the same under it, with Windows' separator
 (`%USERPROFILE%\.octoboard\logs\daemon.log`, say). A user name and home path outside ASCII (`C:\Users\测试用户`, say) take
 nothing away: the data directory, its logs, agent launches and the hooks Octoboard gives the agents work under it as
@@ -18,7 +21,7 @@ and every file below it inherits it.
 | Path | Contents |
 |---|---|
 | `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages every session pushed, Octoboard's memory — every console's and every project place's entries (see `docs/product/memory.md`) — each project's trust permission and the trusted folders (see "The trust permission" in `docs/product/folder-trust.md`), the scheduled tasks and the records of their recent runs (see `docs/product/scheduled-tasks.md`), and the settings the daemon keeps for every client (see "How switches save" in `docs/product/settings.md` and `docs/product/git-settings.md`). What the daemon does with an existing file when it starts is under "The database's schema version" below. |
-| `~/.octoboard/consoles/<console id>/` | A console's working directory, where its console sessions run, including the shared console session instruction text in `octoboard-instructions.md` and the agents' instruction files, exposed through links, imports or copies (see "The console session's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
+| `~/.octoboard/consoles/<console id>/` | A console's working directory, where its console sessions run, including the shared console session instruction text in `octoboard-instructions.md` and the agents' instruction files, exposed through links, imports or copies (see "The console session's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted; the trust entry Claude Code, or Codex inside a git repository, recorded for it in the agent's own trust list stays (see "Console sessions' trust confirmations" in `docs/product/folder-trust.md`). |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects, among it `key`, the key the session's helpers carry (see `docs/product/who-can-reach-the-daemon.md`), and, for Claude Code, `claude-settings.json`, the settings passed with `--settings`, which hold that key too; both are owner-only, and so is the hook script a launch writes there for an agent whose hooks run one. Where a launch injects the cross-project guard, it also writes there the guard's list, `cross-project-guard.json`, and its script, `guard-hook` (`guard-hook.cmd` on Windows), both owner-only (see "The edit check" in `docs/product/keeping-sessions-to-their-own-project.md`). Images pasted into the session's terminal are kept in `pasted/` there, owner-only (see "Where the image is kept" in `docs/product/pasting-images.md`). Files a client attaches to the session are kept in `attachments/` there, owner-only, with a hidden file for each upload still under way (see "Where the file is kept" in `docs/product/attaching-files.md`). Removed when the session's process is gone, and cleared on daemon start, except for the sessions the start adopts from process holders. |
 | `~/.octoboard/output/<session id>` | The saved terminal preview shown for an interrupted session (see "The saved terminal preview" in `docs/product/session-terminal-interrupted-and-archived-sessions.md` for its capture rules and limits). Written when the process ends while a daemon runs it, including when the daemon stops it on its way out. A daemon that goes down without stopping, or makes a planned stop, writes none, its sessions' processes running on in their process holders; a later daemon start writes it from the screen a planned stop saved, for a session whose holder turns out to be gone (see "The screen of a terminal handed over" in `docs/product/process-holders.md`). Starting a new process discards it, and so does a daemon start adopting the session's running process. Removed with the session's record; on daemon start, any left for a session that no longer exists is removed. |
 | `~/.octoboard/handoff/<session id>.md` | The handoff package a session read when it took over another session's place (see "The handoff package" in `docs/product/handing-off-sessions.md`), named for the receiving session. Removed with that session's record; on daemon start, any left for a session that no longer exists, and any half-written one, is removed. |
@@ -35,46 +38,66 @@ and every file below it inherits it.
 | `~/.octoboard/octoboardd.port` | The port the daemon listens on, alone, never the daemon's key, for a developer attaching to a daemon started by hand (see "Starting up" in `docs/product/application-lifecycle.md`). It is in the data directory rather than the system's temporary directory, which on Linux is one `/tmp` for every user, so the daemons of two users of one machine never write the same file. Only the daemon that holds `daemon.lock` writes it; one that cannot write it logs a warning and starts all the same. Removed when the daemon stops, unless the file names another port by then, but not when the daemon goes down on an internal failure. |
 | `~/.octoboard/logs/daemon.log` | The daemon's log, at the level of information and above, the panics of any of its threads included. Only the daemon that holds `daemon.lock` writes it, so a second daemon refused at start leaves it alone. An entry that would take the file past **5 MiB** first rotates it: `daemon.log` becomes `daemon.log.1`, the one before that `daemon.log.2`, then `daemon.log.3`, and the oldest beyond that is dropped. |
 | `~/.octoboard/logs/desktop.log` | The desktop application's own log: each attempt to start the daemon or start it again and how it went, and the failures the application meets itself, each line with a UTC timestamp. A file larger than **1 MiB** when the application first writes to it in a launch is moved to `desktop.log.1`, replacing the one there. |
+| `~/.octoboard/logs/uninstall-clean-up.log` | Windows only: what the uninstaller's clean-up could not undo, one line per item with where it is, written by the application when the uninstaller runs it and replaced at each such run. A clean-up that leaves nothing writes none and removes an earlier one (`docs/product/clean-up-before-uninstalling.md`, "The Windows uninstaller's clean-up"). |
 | `~/.octoboard/holders/` | One file per running process holder, by which a daemon finds and connects to it, holding the secret that connection is opened with (see `docs/product/process-holders.md`). The directory and its files are the user's alone. A holder removes its file when it exits; a daemon start removes the file of a holder that is gone. |
 | `~/.octoboard/builds/<build>/` | A copy of a build's daemon executable, which process holders and the helpers of their launches run from (a project session's git hooks excepted, which run the installation's own executable), so that an update can replace the installed application while they run; on Windows with `conpty.dll` and `OpenConsole.exe` beside it. `<build>` is the version and a short hash of the executable. The running daemon's own build's copy is kept while no holder runs from it; any other build's is removed once none does, and a copy that fails to start a holder is made afresh (see "The copy of the build holders run from" in `docs/product/process-holders.md`). The helpers of a launch whose terminal runs in the daemon itself run from such a copy too where the daemon updates itself, or where its path no longer leads to the build it runs (see "When holders cannot be set up" in `docs/product/process-holders.md`); only the holders' clean-up removes copies, so on a host where holders cannot be set up one copy per daemon build that ran there can stay. |
 | `~/.octoboard/logs/holder-<holder id>.log` | A process holder's log, at the level of information and above, rotated as `daemon.log` is. A holder starting removes the logs of holders no longer running that have not been written for **7 days**. |
 | `~/.octoboard/agent-cli-updates/<agent>.log` | The output of the last update of that agent's CLI, one file per agent named by its id (see "Updating" in `docs/product/agent-cli-updates.md`). Overwritten by each update of the agent, kept across restarts. |
+| `~/.octoboard/agent-query-homes/grok/<digest>/` | The directories Grok Build's quota reading (`quota/`), model listing (`models/`) and kick (`kick/`) run against in place of the account's own directory, one set per account, named by a digest of the account's directory (see "Where Grok Build's readings run" in `docs/product/account-quota-readings.md`). Each holds a copy of the account's `config.toml`, made afresh before every run, which can hold an API key: on macOS and Linux the directory and the copy are readable by their owner only, and on Windows they have the privacy of the data directory above them. The sign-in is not copied. Each also holds whatever Grok writes as it runs — its documentation, logs, caches, its model cache and a kick's session record — and `.octoboard-run.lock`, the lock file a run holds until it ends; a run of the same kind for the same account that finds it held waits within its own time limit. Grok's `logs/` is removed before every run; `quota/` and `models/` keep everything else Grok wrote between runs; `kick/` is emptied once each kick has ended, all but its lock file, so the copy of `config.toml` and whatever Grok wrote are there only while a kick runs. Beside the three, `.octoboard-account` names the account's directory as it is written, so that the set is found again once that directory is gone. The directories are kept between runs and across restarts, and removed when the account is removed (before its directory is moved to the Trash, where that option is ticked) or pointed at another directory, which removes those of the directory it leaves; the default account cannot be removed, so its directories stay until the user deletes them. |
+| `~/.octoboard/install.lingering` | Written by the server form's install script with `--service` when it turned lingering on for the user, holding the user's name, so that `octoboardd uninstall` turns lingering off again, and only then (see "Installing it as a service" and "Uninstalling" in `docs/product/installing-the-server-form.md`). The script creates `~/.octoboard` for it, for the user alone, where no daemon has yet. Removed by `octoboardd uninstall` once lingering is off; it stays where turning lingering off was refused. Lingering that was on before the install gets no file, and neither does an install by a script that predates the file. |
 | `~/.octoboard/update.lock` | Held while the server form's update downloads and replaces the daemon's executable, by the daemon or by `octoboardd update`, so that the two never do it together; the install script takes it too while it replaces the executable, where `flock` is installed (see "The install script" in `docs/product/installing-the-server-form.md`); and it is taken for an instant by a daemon that updates itself as it starts, to clear `updates/` (see "Downloading and replacing the executable" in `docs/product/server-form-updates.md`). Only the lock on it counts; the file stays. |
 | `~/.octoboard/updates/` | Where the server form's update downloads the release archive. The archive is removed once it is installed or the download fails; every download clears the directory first, and a daemon that updates itself clears what a stop left there as it starts, unless another process holds `update.lock`. |
 | `~/.octoboard/update-installed.json` | The last replacement of the daemon's executable by the server form's update: the version installed, its holder floor, the version it replaced, the database schema version and the holder floor of the replaced build (each absent in a record an earlier build wrote) and the executable's path. Written after every replacement, by the daemon or by `octoboardd update`, so that a running daemon learns of an update `octoboardd update` made under it (see "Downloading and replacing the executable" in `docs/product/server-form-updates.md`), and so that `octoboardd update --rollback` can name the version it goes back to, tell whether that build reads the database and judge the restart into it by its holder floor (see "The `octoboardd update` command" in `docs/product/server-form-updates.md`); a record that names another file, or a version not newer than the running daemon's, is ignored. Removed by `octoboardd update --rollback`, and by a planned restart that falls back to the build that ran (see "When the update does not start" in `docs/product/server-form-updates.md`). |
 | `~/.octoboard/daemon.version` | The version of the last daemon that updates itself to start, one line. Each such daemon reads it as it starts, then writes its own; one that finds an older version there started in place of that version, which the browser says once (see "What the browser shows" in `docs/product/server-form-updates.md`). Any other daemon neither reads nor writes it. |
 | `~/.octoboard/process-ledger.json` | The launch identities, attributed processes and user keeps used for background-process cleanup across daemon restarts (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`). It records the boot ID of the system it was written in (on Linux), and records from before the system last started are ignored. An unreadable file is moved aside as `process-ledger.json.unreadable`; processes identified only by their launch tag are kept rather than stopped without knowing the user's choices. A file whose boot ID cannot be compared with the running system's (it records none, written before boot IDs were recorded, on a system that has one, or the daemon cannot read the system's) is treated as unreadable but not moved aside. |
 
+## The desktop application's own files
+
 The desktop application keeps the main window's size, position and maximized state in
 `~/Library/Application Support/dev.octoboard.desktop/window-state.json` on macOS and in
 `%APPDATA%\dev.octoboard.desktop\window-state.json` on Windows (see "The window's size and position across
 launches" in `docs/product/window-size-and-position.md`). It belongs to the application's window rather than to the
 daemon, so it is not under `~/.octoboard`. Deleting it makes the next launch open the window as a first launch does.
-Beside it, the application keeps three more files of its own, each written whole:
+That folder is the application's config directory. Beside the file, the application keeps three more files of its
+own, each written whole:
 
 - `daemon-window-state.json`: the same for each remote daemon's window, one state per daemon, under its SSH
   destination (see `docs/product/remote-daemons.md`).
 - `remote-daemons.json`: the saved remote daemons — for each its name, SSH host, port and user, how it authenticates
-  (and a key file's path), its pinned host key fingerprint and the path of `octoboardd` where one was given — and never
-  a password, a passphrase or a key (see "Saved remote daemons" in `docs/product/remote-daemons.md`). A file that cannot
+  (and a key file's path), its pinned host key fingerprint, the path of `octoboardd` where one was given, and what it
+  knows of this computer's key there (whether the owner said no to it or turned it off, and the file and mark of the
+  line it installed) — and never a password, a passphrase or a key (see "Saved remote daemons" in `docs/product/remote-daemons.md`). A file that cannot
   be read counts as none saved.
 - `remote-windows.json`: which remote windows were open at the last quit, and whether the main window was hidden then,
   for the next launch to bring them back (see "Bringing remote windows back at launch" in
   `docs/product/remote-daemons.md`). A file that cannot be read brings none back.
 
-**In this computer's temporary directory**, under `dev.octoboard.desktop/`, the application keeps in `remote-files/` the
-copies of remote files it opened here, each in a folder of its own, and beside it `remote-files.lock`, which the
-running application holds so that a second one started meanwhile does not remove them (see "Files opened on this
-computer" in `docs/product/links-and-files-in-a-remote-window.md`). The copies are removed when the application next
-starts; deleting them at any time loses nothing but the copies.
+Files that must stay on this computer are in the application's local data directory instead: on macOS the same
+folder as the config directory, and on Windows `%LOCALAPPDATA%\dev.octoboard.desktop`, apart from the config directory
+in `%APPDATA%`, which a roaming profile or a redirected folder carries to a server. It holds one folder of Octoboard's:
+
+- `remote-files/`, readable by the user alone: in `copies/`, the copies of remote files the application opened here,
+  each in a folder of its own (`copies/<random id>/<name>`), and beside it `remote-files.lock`, which the running
+  application holds so that a second one started meanwhile does not remove them (see "Files opened on this computer"
+  in `docs/product/links-and-files-in-a-remote-window.md`). The copies have no size limit. They are removed when the
+  application next starts; deleting them at any time loses nothing but the copies. Earlier builds kept the same folder
+  and lock under this computer's temporary directory, in `dev.octoboard.desktop/`; each start removes what they left
+  there, and that folder once it is empty, except while an instance of such a build still runs and holds the lock
+  there.
 
 **In the system's credential store** — the login keychain on macOS, as a generic password, and the Credential Manager on
 Windows, as a generic credential — the application keeps the private half of each device key it installed on a remote
-machine, one item per saved remote daemon, named by the application's identifier and the saved daemon's id, and
-nothing else (see "Device keys" in `docs/product/remote-daemons.md`). An item is removed with its saved daemon, or when
-the daemon's host, port or user changes.
+machine, one item per saved remote daemon, named by the application's identifier and the saved daemon's id (service
+`dev.octoboard.desktop.remote-daemon-key` and the saved daemon's id as the account on macOS; the credential
+`dev.octoboard.desktop.remote-daemon-key:<saved daemon id>` on Windows), and nothing else (see "Device keys" in `docs/product/remote-daemons.md`). An item is removed whenever its key is taken
+back — with its saved daemon, when the key is turned off, or when the daemon's host, port or user changes — even where
+the key's line could not be removed from the remote host (see "Taking the key back" in
+`docs/product/remote-daemons.md`), when the owner says no to a key it still holds, when an install that made the key
+fails, and when an installed key cannot be recorded for its saved daemon. Where the credential store does not remove
+the item of a key being taken back (a locked keychain, say), the owner is told its service and account, to remove it
+there.
 
-Beside it, in the same directory, `settings.json` holds the two choices the desktop application must know before the
+In the same config directory, `settings.json` holds the two choices the desktop application must know before the
 window's UI has loaded: keeping it running in the background when the window is closed, under `run_in_background`,
 `false` to begin with (see "Closing the window" in `docs/product/application-lifecycle.md`), and showing the menu bar
 icon, the notification-area icon on Windows, under `show_menu_bar_icon`, `true` to begin with (see "Hiding the icon" in
@@ -95,13 +118,17 @@ switch for either changes, including when an import applies them.
   defaults, so the icon shows even if the user had hidden it. Should the file not be written, the choices stay in
   browser storage and the next launch takes them over again.
 
+## Beside the server form's executable
+
 The server form's update also writes beside the daemon's executable, not under `~/.octoboard` (see
 `docs/product/server-form-updates.md`): `octoboardd.previous`, the executable an update, `octoboardd update --rollback`,
 the install script (see "The install script" in `docs/product/installing-the-server-form.md`) or a planned restart
 that falls back to the build that ran replaced, kept for a rollback and replaced by the next one of any of them; and,
 while it replaces the file, hidden files named
 `.octoboardd.update-<n>`, `.octoboardd.prev-<n>` or `.octoboardd.rollback-<n>`, which a replacement cut short can leave
-behind and the next update or rollback removes.
+behind and the next update or rollback removes. `octoboardd uninstall`, which the install script's `--uninstall` hands
+over to, removes the executable, `octoboardd.previous` and every `.octoboardd.*` file there (see "Uninstalling the
+server form" in `docs/product/daemon-command-line.md`).
 
 What Octoboard writes inside a project's repository, and what it writes into the user's own agent configuration, is
 in "What Octoboard never modifies" in `docs/product/launching-agents.md`.

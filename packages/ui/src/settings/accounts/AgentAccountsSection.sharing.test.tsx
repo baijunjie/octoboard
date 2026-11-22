@@ -44,7 +44,9 @@ it("offers the sharing switch on each owned account and none on the default acco
   expect(switches[0]!.hasAttribute("aria-disabled")).toBe(false);
   // Free, nothing stands under the switch; what turning it on does is its description, and the rest is in the help tip.
   expect(captionOf(container, switches[0]!)).toBe("");
-  expect(container.textContent).toContain("Turning this on links the account’s configuration and conversation history to Default’s directory.");
+  // The line says what turning it on changes and where: links for the configuration, the history moved, and that
+  // the moved history stays once sharing is off.
+  expect(container.textContent).toContain("Turning this on links the account’s configuration to Default’s directory and moves its conversation history there, where it stays after sharing is turned off.");
   expect(container.textContent).not.toContain("Applies at once");
   expect(container.textContent).not.toContain("has not been applied to the account’s directory yet");
   expect(container.querySelector('[role="progressbar"]')).toBeNull();
@@ -52,7 +54,7 @@ it("offers the sharing switch on each owned account and none on the default acco
 
 it("locks the sharing switch where the daemon's host cannot make file links, saying how to turn them on there", async () => {
   const { container: section, set } = mount("Codex");
-  await set({ host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings", keep_awake: false } });
+  await set({ host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings", keep_awake: false, application: true } });
   const dialog = await openSettingsOf(section, "codex-work");
   const [sharing] = sharingSwitches(dialog);
   expect(sharing!.getAttribute("aria-disabled")).toBe("true");
@@ -67,7 +69,7 @@ it("locks the sharing switch where the daemon's host cannot make file links, say
 it("leaves an account that already shares free to be turned off where the host cannot make file links, with nothing under the switch", async () => {
   settings.accounts[1]!.share_default_config = true;
   const { container: section, set } = mount("Codex");
-  await set({ host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings", keep_awake: false } });
+  await set({ host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings", keep_awake: false, application: true } });
   const dialog = await openSettingsOf(section, "codex-work");
   const [sharing] = sharingSwitches(dialog);
   expect(sharing!.checked).toBe(true);
@@ -81,7 +83,7 @@ it("leaves an account that already shares free to be turned off where the host c
 });
 
 describe("an account that shares, on a host that cannot make file links", () => {
-  const windows = { host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings", keep_awake: false } } as const;
+  const windows = { host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings", keep_awake: false, application: true } } as const;
 
   it("says the sessions that run, not Developer Mode, while sessions of the account run", async () => {
     settings.accounts[1]!.share_default_config = true;
@@ -110,7 +112,7 @@ it("keeps saying why sharing is locked, with the file links available, while ses
   settings.accounts[1]!.share_default_config = true;
   accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 1, signing_in: false } });
   const { container: section, set } = mount("Codex");
-  await set({ host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "settings", keep_awake: false } });
+  await set({ host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "settings", keep_awake: false, application: true } });
   const dialog = await openSettingsOf(section, "codex-work");
   const [sharing] = sharingSwitches(dialog);
   expect(sharing!.getAttribute("aria-disabled")).toBe("true");
@@ -147,20 +149,28 @@ it("says what is the case now when the account shares", async () => {
   const [sharing] = sharingSwitches(container);
   expect(sharing!.checked).toBe(true);
   expect(captionOf(container, sharing!)).toBe("");
-  expect(container.textContent).toContain("The account’s configuration and conversation history are linked to Default’s directory.");
+  expect(container.textContent).toContain("The account’s configuration is linked to Default’s directory, and its conversation history has been moved there, where it stays after sharing is turned off.");
 });
 
 it.each([
-  [false, "Turning this on links the account’s configuration and conversation history to"],
-  [true, "The account’s configuration and conversation history are linked to"],
+  [false, "Turning this on links the account’s configuration to"],
+  [true, "The account’s configuration is linked to"],
 ] as const)("follows the current agent’s default account name in the description when sharing is %s", async (shared, description) => {
   settings.accounts[1]!.share_default_config = shared;
   settings.default_account_names = { claude: "Personal", codex: "Team" };
   const { container, setSettings } = await mountSettings("Codex");
-  expect(container.textContent).toContain(`${description} Team’s directory.`);
+  expect(container.textContent).toContain(`${description} Team’s directory`);
   setSettings({ default_account_names: { ...settings.default_account_names, codex: "Office" } });
-  expect(container.textContent).toContain(`${description} Office’s directory.`);
-  expect(container.textContent).not.toContain("Team’s directory.");
+  expect(container.textContent).toContain(`${description} Office’s directory`);
+  expect(container.textContent).not.toContain("Team’s directory");
+});
+
+it.each([false, true])("says in the help tip that the history is moved and stays when sharing is turned off (sharing %s)", async (shared) => {
+  settings.accounts[1]!.share_default_config = shared;
+  const { container } = await mountSettings("Codex");
+  const tip = helpTipText(container)!;
+  expect(tip).toContain("Configuration (skills, plugins, settings and more) is linked to the default account’s directory, and conversation history is moved into it.");
+  expect(tip).toContain("After sharing is turned off, this account’s conversation history stays in the default account’s directory, except the conversations of its own sessions, which are moved back into its directory.");
 });
 
 it.each([["Claude Code", [".claude.json", "plans/"]], ["Grok Build", ["trusted_folders.toml", "hooks-paths"]]])(

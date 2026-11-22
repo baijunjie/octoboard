@@ -8,17 +8,20 @@ import { AlertContent, AlertDescription, AlertIndicator, AlertTitle } from "../.
 
 export type { AlertStatus };
 
-function AlertMessage({ textId, title, announce, announceKey, announceDelayMs, children }: {
+function AlertMessage({ textId, title, announce, announceKey, announceDelayMs, insideAlertDialog, children }: {
   textId?: string;
   title: React.ReactNode;
   announce: boolean;
   announceKey?: number;
   announceDelayMs?: number;
+  insideAlertDialog: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const announcement = useAlertAnnouncement(announce, announceKey, announceDelayMs);
+  // Still waiting for its announcement: inside an alert dialog the text is kept out of the accessibility tree meanwhile.
+  const waiting = insideAlertDialog && announcement.waiting;
   return (
-    <div id={textId} key={announcement.key} role={announcement.role} className="flex min-w-0 max-w-full flex-col items-start">
+    <div id={textId} key={announcement.key} role={announcement.role} aria-hidden={waiting || undefined} className="flex min-w-0 max-w-full flex-col items-start">
       <AlertTitle>{title}</AlertTitle>
       {children && <AlertDescription>{children}</AlertDescription>}
     </div>
@@ -54,6 +57,9 @@ function AlertMessage({ textId, title, announce, announceKey, announceDelayMs, c
  * an alert after the delay (`AFTER_FOCUS_MOVE_DELAY_MS`), and until then the text is only shown. Like `announce`, it is
  * read as the Alert mounts. `delayEachAttempt` also restarts that delay for each new `announceKey`, for a retry whose
  * own state feedback or focus handover would otherwise mask the next failure; recovery controls stay mounted.
+ * `insideAlertDialog` is for an Alert in an alert dialog (a warning modal), which WebKit exposes as an assertive live
+ * region that speaks what is inserted into it: while the delay runs, the announcing part is hidden from assistive
+ * technology, so the one insertion the dialog sees is the alert after the delay, and the failure is spoken once.
  */
 export function ErrorAlert({
   id,
@@ -63,6 +69,7 @@ export function ErrorAlert({
   announceKey,
   announceDelayMs,
   delayEachAttempt = false,
+  insideAlertDialog = false,
   status = "danger",
   remedy,
   details,
@@ -78,6 +85,7 @@ export function ErrorAlert({
   announceKey?: number;
   announceDelayMs?: number;
   delayEachAttempt?: boolean;
+  insideAlertDialog?: boolean;
   status?: AlertStatus;
   /** The one main thing to do, shown under the description and not announced. */
   remedy?: React.ReactNode;
@@ -91,7 +99,7 @@ export function ErrorAlert({
       <AlertFrame status={status} className="flex-wrap">
         <AlertIndicator />
         <AlertContent className="min-w-40 basis-0">
-          <AlertMessage key={delayEachAttempt ? announceKey : undefined} textId={textId} title={title} announce={announce} announceKey={announceKey} announceDelayMs={announceDelayMs}>
+          <AlertMessage key={delayEachAttempt ? announceKey : undefined} textId={textId} title={title} announce={announce} announceKey={announceKey} announceDelayMs={announceDelayMs} insideAlertDialog={insideAlertDialog}>
             {children}
           </AlertMessage>
           {remedy && <AlertDescription>{remedy}</AlertDescription>}

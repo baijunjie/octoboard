@@ -120,7 +120,7 @@ const COPY: { [F in BooleanField]: Copy<F> } = {
     section: "agentAccounts",
     order: 3,
     label: "settings.startQuotaWindows.label",
-    description: { on: "settings.startQuotaWindows.description.on", off: "settings.startQuotaWindows.description.off" },
+    description: { on: "settings.startQuotaWindows.requestDescription.on", off: "settings.startQuotaWindows.requestDescription.off" },
     help: { label: "settings.startQuotaWindows.help", text: "settings.startQuotaWindows.helpText" },
     consequence: "configuration.import.settings.consequence.autoStartQuotaWindows",
   },

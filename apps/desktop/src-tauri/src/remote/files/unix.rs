@@ -1,10 +1,10 @@
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
 /// Refuses `root` and its parent unless they are private directories owned by the user who
-/// created `ours`. The temporary directory can be shared, so another user could have made
-/// either directory first.
+/// created `ours`. The directory above them (the application's local data directory) may be open
+/// to others, so another user could have made either directory first.
 pub(in super::super) fn check_private(root: &Path, ours: &Path) -> std::io::Result<()> {
     let me = fs::symlink_metadata(ours)?.uid();
     for folder in [root.parent(), Some(root)].into_iter().flatten() {
@@ -32,4 +32,23 @@ pub(in super::super) fn private_file_options() -> OpenOptions {
     let mut options = OpenOptions::new();
     options.write(true).mode(0o600);
     options
+}
+
+/// Opens `path` for reading without waiting for anything and without following a link there, and
+/// answers the file only where what was opened is a plain file. A pipe opened the usual way waits
+/// for a writer; looking at the path first and opening it after would leave a moment for it to be
+/// replaced, so it is the opened file that is looked at.
+pub(in super::super) fn open_plain_file(path: &Path) -> std::io::Result<File> {
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW)
+        .open(path)?;
+    if file.metadata()?.is_file() {
+        Ok(file)
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{} is not a plain file", path.display()),
+        ))
+    }
 }

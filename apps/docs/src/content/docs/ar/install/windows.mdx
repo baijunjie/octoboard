@@ -1,14 +1,16 @@
 ---
 title: "Windows"
-description: "لأجهزة الكمبيوتر بمعالج Intel أو AMD (معظم أجهزة Windows)، على Windows 10 الإصدار 21H2 أو أحدث. على Windows 11 لمعالجات Arm يعمل هذا التطبيق x64 بالمحاكاة."
+description: "لأجهزة الكمبيوتر بمعالج Intel أو AMD (معظم أجهزة Windows)، على Windows 10 الإصدار 21H2 أو أحدث. وعلى Windows 11 لأجهزة Arm استخدم مثبّت arm64 الأصلي حين يوفّره الإصدار، وإلا فإن تطبيق x64 هذا يعمل عليه بالمحاكاة."
 ---
 
 import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
 import { downloads, productName } from "../../../../commands.ts";
+import WindowsUninstaller from "../../../../snippets/ar/windows-uninstaller.mdx";
 
-لأجهزة الكمبيوتر بمعالج Intel أو AMD (x64؛ معظم أجهزة Windows)، على Windows 10 الإصدار 21H2 أو أحدث. على Windows 11 لمعالجات Arm يعمل هذا التطبيق x64 بالمحاكاة.
+لأجهزة الكمبيوتر بمعالج Intel أو AMD (x64؛ معظم أجهزة Windows)، على Windows 10 الإصدار 21H2 أو أحدث. وعلى Windows 11 لأجهزة Arm استخدم مثبّت arm64 الأصلي حين يوفّره الإصدار، وإلا فإن تطبيق x64 هذا يعمل عليه بالمحاكاة.
 
 <LinkButton href={downloads.windows}>تنزيل لنظام Windows</LinkButton>
+<LinkButton href={downloads["windows-arm64"]} variant="secondary">تنزيل لنظام Windows لأجهزة Arm</LinkButton>
 
 <Aside>تطبيق Windows في مرحلة النسخة التجريبية.</Aside>
 
@@ -16,7 +18,7 @@ import { downloads, productName } from "../../../../commands.ts";
 
 <Steps>
 
-1. نزّل المثبّت بالزر أعلاه. وهو ملف ينتهي اسمه بـ <code dir="ltr">x64-setup.exe</code>.
+1. نزّل المثبّت بالزر أعلاه. وهو ملف ينتهي اسمه بـ <code dir="ltr">x64-setup.exe</code>. على Windows لأجهزة Arm جرّب الزر الثاني: حين يوفّر الإصدار مثبّت arm64 ينزّل ذلك الملف، وينتهي اسمه بـ <code dir="ltr">arm64-setup.exe</code>؛ وإلا فإنه يفتح قائمة الإصدارات، ويعمل مثبّت x64 بالمحاكاة.
 2. افتح الملف الذي نزّلته لتشغيل المثبّت. يثبّت {productName} لحساب المستخدم الخاص بك فقط، لذلك لا يطلب صلاحيات المسؤول.
 
    التطبيق غير موقَّع رقميًا بعد، لذا قد يعرض Microsoft Defender SmartScreen رسالة “Windows protected your PC”. اختر “More info” ثم “Run anyway”.
@@ -38,6 +40,16 @@ import { downloads, productName } from "../../../../commands.ts";
 - [Grok Build](https://docs.x.ai/build/overview)
 
 إذا كنت تستخدم Claude Code أو Codex، فثبّت [Git for Windows](https://git-scm.com/download/win) أولًا؛ فهما يحتاجان إليه ليعملا.
+
+## إلغاء التثبيت
+
+ألغِ تثبيت {productName} ببرنامج إلغاء التثبيت الخاص به، من إعدادات Windows (التطبيقات) أو من لوحة التحكم.
+
+<WindowsUninstaller />
+
+لترى ما هو سارٍ قبل إلغاء التثبيت، افتح <strong>الإعدادات › التنظيف › التنظيف قبل إلغاء التثبيت</strong>: يزيل <strong>إزالة الكل</strong> هناك الأشياء نفسها، ويعرض النتيجة لكل عنصر.
+
+تبيّن صفحة [نظامك يبقى كما كان](../../your-system/) ما الذي يبقى بعد ذلك وكيف تزيله.
 
 ## التحديثات
 

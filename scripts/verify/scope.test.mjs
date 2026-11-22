@@ -5,8 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
-  ALL_PACKAGES, DAEMON_READS_MARKDOWN, DAEMON_READS_NATIVE, DAEMON_READS_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, MENU_KEYS_FILE, matchingRules, planScope, PROTOCOL_SCHEMA, RULES, SWEEP_SHARED, DOCS_IMPORTS_FROM_UI, DOCS_RUNS_UI_GALLERY, DOCS_READS_WEB, UI_READS_DAEMON, UI_READS_ELSEWHERE,
-  UI_IMPORTS_NATIVE, UI_READS_NATIVE, VERIFY_READS_UI, WEB_IMPORTS_FROM_UI, WEB_READS_DOCS, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, WIRE_PROTOCOL,
+  ALL_PACKAGES, DAEMON_READS_MARKDOWN, DAEMON_READS_NATIVE, NATIVE_READS_DAEMON, DAEMON_READS_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, MENU_KEYS_FILE, matchingRules, planScope, PROTOCOL_SCHEMA, RULES, SWEEP_SHARED, DOCS_IMPORTS_FROM_UI, DOCS_RUNS_UI_GALLERY, DOCS_READS_WEB, DOCS_READS_DAEMON, DOCS_READS_NATIVE, DESKTOP_READS_UI, UI_READS_DAEMON, UI_READS_ELSEWHERE,
+  UI_IMPORTS_NATIVE, UI_READS_NATIVE, VERIFY_READS_DOCS, VERIFY_READS_UI, WEB_IMPORTS_FROM_UI, WEB_READS_DOCS, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, WIRE_PROTOCOL,
 } from "./scope.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -62,6 +62,7 @@ const CASES = [
   [".gitignore", ["verify"]],
   ["config/app.json", ALL_PACKAGES, ["ui"]],
   ["docs/plans/x/README.md", []],
+  ["docs/product/launching-agents.md", ["verify"]],
   ["docs/images/a.png", []],
   [".claude/skills/a/SKILL.md", []],
   [".agents/a", []],
@@ -71,6 +72,7 @@ const CASES = [
   ["CLAUDE.md", []],
   ["AGENTS.md", []],
   ["packages/ui/src/i18n/matchLanguage.ts", ["verify", "ui", "web"]],
+  ["packages/ui/src/i18n/messages/fr.ts", ["verify", "ui", "desktop"]],
   ["packages/ui/src/website-preview/main.tsx", ["verify", "ui", "web"]],
   ["packages/ui/src/fixtures/fixtureDaemon.ts", ["verify", "ui", "web"]],
   ["packages/ui/src/gallery/scenario.ts", ["ui"]],
@@ -81,17 +83,21 @@ const CASES = [
   ["contracts/protocol/released/control-output.schema.json", ["verify", "daemon"]],
   ["packages/ui/src/platform/tauri.ts", ["verify", "ui", "native"]],
   ["scripts/verify/lock.mjs", ["verify", "ui", "docs"]],
-  ["packages/ui/src/i18n/languages.ts", ["verify", "ui", "web", "docs", "daemon"]],
+  ["packages/ui/src/i18n/languages.ts", ["verify", "ui", "web", "docs", "desktop", "daemon"]],
   ["apps/daemon/src/providers/claude.rs", ["verify", "ui", "daemon"]],
   ["apps/desktop/src-tauri/Info.template.plist", ["verify", "ui", "desktop", "native"]],
   ["apps/desktop/src-tauri/localizations/", ["verify", "desktop", "native"]],
   ["apps/desktop/src-tauri/localizations/ja.json", ["verify", "desktop", "native"]],
-  ["apps/desktop/src-tauri/tauri.conf.json", ["verify", "web", "desktop", "daemon", "native"]],
+  ["apps/desktop/src-tauri/tauri.conf.json", ["verify", "web", "docs", "desktop", "daemon", "native"]],
   ["apps/daemon/dist/systemd/octoboardd.service", ["verify", "web", "daemon"]],
   ["apps/daemon/testdata/self_update/test-release-key.txt", ["verify", "web", "daemon"]],
   ["apps/desktop/scripts/release-manifest.mjs", ["verify", "web", "desktop"]],
   ["apps/desktop/src-tauri/tauri.windows.conf.json", ["verify", "desktop", "native"]],
-  ["apps/desktop/src-tauri/windows/installer-hooks.nsh", ["verify", "desktop", "daemon", "native"]],
+  ["apps/desktop/src-tauri/windows/installer-hooks.nsh", ["verify", "docs", "desktop", "daemon", "native"]],
+  ["apps/daemon/testdata/docs_uninstall_command.json", ["verify", "docs", "daemon"]],
+  ["apps/desktop/src-tauri/testdata/docs_system_paths.json", ["verify", "docs", "native"]],
+  ["apps/daemon/testdata/system_changes_wire.json", ["verify", "daemon", "native"]],
+  ["apps/daemon/testdata/shell_contract.json", ["verify", "daemon", "native"]],
   ["apps/desktop/src-tauri/tauri.macos.conf.json", ["verify", "desktop", "native"]],
   ["LICENSE", ["verify", "ui"]],
   ["apps/web/site.config.ts", ["verify", "web", "docs"]],
@@ -153,12 +159,13 @@ test("several changed packages select a union, in package order, without unrelat
 });
 
 test("the menu keys select the shell only when the caller reports a change to them", () => {
-  assert.deepEqual(planScope([MENU_KEYS_FILE]).packages, ["ui"]);
-  assert.deepEqual(planScope([MENU_KEYS_FILE], { fullFiles: [MENU_KEYS_FILE] }).packages, ["verify", "ui", "native"]);
+  // The desktop's script test lists the catalogs' names (`DESKTOP_READS_UI`), so every catalog selects it.
+  assert.deepEqual(planScope([MENU_KEYS_FILE]).packages, ["verify", "ui", "desktop"]);
+  assert.deepEqual(planScope([MENU_KEYS_FILE], { fullFiles: [MENU_KEYS_FILE] }).packages, ["verify", "ui", "desktop", "native"]);
 });
 
 // Every relation list, so a new one is added in one place.
-const RELATION_LISTS = [WEB_IMPORTS_FROM_UI, DOCS_IMPORTS_FROM_UI, DOCS_RUNS_UI_GALLERY, DOCS_READS_WEB, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, SWEEP_SHARED, WIRE_PROTOCOL, PROTOCOL_SCHEMA, DAEMON_READS_MARKDOWN, DAEMON_READS_NATIVE, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI, UI_IMPORTS_NATIVE, WEB_READS_DOCS];
+const RELATION_LISTS = [WEB_IMPORTS_FROM_UI, DOCS_IMPORTS_FROM_UI, DOCS_RUNS_UI_GALLERY, DOCS_READS_WEB, DOCS_READS_DAEMON, DOCS_READS_NATIVE, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, DESKTOP_READS_UI, SWEEP_SHARED, WIRE_PROTOCOL, PROTOCOL_SCHEMA, DAEMON_READS_MARKDOWN, DAEMON_READS_NATIVE, NATIVE_READS_DAEMON, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI, VERIFY_READS_DOCS, UI_IMPORTS_NATIVE, WEB_READS_DOCS];
 
 test("every file named in a relation list selects verify, so these tests run when it changes", () => {
   for (const file of RELATION_LISTS.flat()) assert.ok(planScope([file]).packages.includes("verify"), file);

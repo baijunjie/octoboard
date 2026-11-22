@@ -42,13 +42,15 @@ pub(crate) fn run_scheduled_task(state: &Arc<AppState>, task_id: &str) -> Result
 }
 
 /// What `run_scheduled_task` refuses before it runs the task: an unknown task, and a run while the
-/// daemon is stopping. Runs nothing, and gives the task.
+/// daemon is stopping or makes a clean-up run, which launches no agent: refused here, the run is
+/// not recorded as one that failed. Runs nothing, and gives the task.
 pub(crate) fn check_run_scheduled_task(
     state: &Arc<AppState>,
     task_id: &str,
 ) -> Result<ScheduledTask> {
     let task = state.store.require_scheduled_task(task_id)?;
     state.refuse_while_shutting_down()?;
+    state.admit_launch()?;
     Ok(task)
 }
 

@@ -10,8 +10,8 @@ pub(crate) use super::systemd::{
 };
 
 use super::{
-    tag_value, PendingSweep, Polite, ProcessId, ProcessIdentity, Sent, SetEnv, Signal, Swept,
-    Unreaped, TAG_VARIABLE,
+    tag_value, Parent, PendingSweep, Polite, ProcessId, ProcessIdentity, Sent, SetEnv, Signal,
+    Swept, Unreaped, TAG_VARIABLE,
 };
 use crate::platform::descriptors;
 use crate::platform::proc_table::{self, pids};
@@ -658,16 +658,21 @@ pub(crate) fn shares_console(_leader: &ProcessIdentity, _id: &ProcessIdentity) -
 /// How often [`watch_parent`] looks for its process.
 pub(crate) const PARENT_POLL: std::time::Duration = std::time::Duration::from_secs(1);
 
-/// Calls `on_gone` once the process `pid` no longer exists, polling for it. The caller is in the
-/// runtime: the watch is a task of it.
-pub(crate) fn watch_parent(pid: u32, on_gone: impl FnOnce() + Send + 'static) {
+/// Calls `on_gone` once the process `parent` is gone, polling for it. The process is followed by
+/// its identity as the daemon started ([`Parent::read`], [`ProcessIdentity::is_running`], as a
+/// clean-up run follows the command that started it), so a process given the pid once it has
+/// ended is not taken for it; one that was gone, or could not be told, by then is gone at the first
+/// poll. The caller is in the runtime: the watch is a task of it.
+pub(crate) fn watch_parent(parent: Parent, on_gone: impl FnOnce() + Send + 'static) {
+    watch_identity(parent.identity, on_gone);
+}
+
+/// [`watch_parent`] of the process `parent`, `None` being one already gone.
+fn watch_identity(parent: Option<ProcessIdentity>, on_gone: impl FnOnce() + Send + 'static) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(PARENT_POLL).await;
-            // SAFETY: signal 0 only probes whether the pid exists.
-            if unsafe { libc::kill(pid as libc::pid_t, 0) } != 0
-                && io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH)
-            {
+            if !parent.is_some_and(|parent| parent.is_running()) {
                 on_gone();
                 break;
             }
@@ -795,6 +800,52 @@ mod tests {
 
     fn by_environment(invocation: Option<&str>, exec_pid: Option<&str>, own_pid: u32) -> bool {
         restart_is_managed(false, invocation, exec_pid, own_pid)
+    }
+
+    /// The parent watch follows the process it read as it began, not its pid: a process that has
+    /// the pid with another start time (one given the pid once the parent ended) is no parent, and
+    /// neither is a pid that had no process when the watch began. The process that does run under
+    /// the identity keeps the watch quiet.
+    #[tokio::test]
+    async fn the_parent_watch_follows_the_parent_s_identity_not_its_pid() {
+        use super::super::{ProcessId, ProcessIdentity};
+
+        let own = ProcessIdentity {
+            pid: ProcessId(std::process::id()),
+            start_micros: super::proc_table::start_of(std::process::id() as i32)
+                .expect("this process's start"),
+        };
+        let reused = ProcessIdentity {
+            start_micros: own.start_micros + 1,
+            ..own
+        };
+        let watched = |parent: Option<ProcessIdentity>| {
+            let (gone, gone_rx) = tokio::sync::oneshot::channel();
+            super::watch_identity(parent, move || {
+                gone.send(()).ok();
+            });
+            gone_rx
+        };
+        let (mut running, reused, never) =
+            (watched(Some(own)), watched(Some(reused)), watched(None));
+        // As `main` reads it: the process the pid names as the daemon starts.
+        let (gone, mut read) = tokio::sync::oneshot::channel();
+        super::watch_parent(super::super::Parent::read(own.pid.0), move || {
+            gone.send(()).ok();
+        });
+        // Several polls, each run to its end on the paused clock before the next.
+        crate::test_support::runtime_advanced(super::PARENT_POLL.saturating_mul(3)).await;
+        assert!(running.try_recv().is_err(), "the parent still runs");
+        assert!(
+            read.try_recv().is_err(),
+            "the parent read at the start still runs"
+        );
+        for (gone, what) in [(reused, "another start time"), (never, "no process at all")] {
+            tokio::time::timeout(PATIENCE, gone)
+                .await
+                .unwrap_or_else(|_| panic!("{what}: not taken for gone"))
+                .expect("the callback ran");
+        }
     }
 
     #[test]

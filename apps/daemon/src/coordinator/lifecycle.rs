@@ -1,7 +1,7 @@
 //! Archiving and deleting sessions together with what is bound to them, the inspections a client
 //! makes before either, and a session's title, pin, lock and colour.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -21,9 +21,12 @@ use super::launch::stop_process;
 use super::validate::required_text;
 
 mod finished;
+mod record_trash;
 pub(crate) use finished::{
     archivable_self, archive_finished, unfinished, Finish, Finished, Unfinished,
 };
+pub(super) use record_trash::host_trash;
+use record_trash::trash_agent_records_of;
 
 /// Ends the session's process and archives it. What archiving means beyond ending the process
 /// belongs here and not in [`stop_process`], which a switch of the session's account shares.
@@ -317,9 +320,9 @@ pub(super) fn session_ids_where(
 /// The record takes its saved terminal output with it. Nothing else of Octoboard's hangs off a
 /// session: its queue, MCP token and turn bookkeeping go when its process does, and so does its
 /// scratch directory (clearing the run directory at startup is only the fallback). The project is
-/// never touched. The caller moves unused sessions' native records to the Trash automatically,
-/// and used sessions' records when asked, through `trash_agent_records_of` (every one
-/// deleted, the archived sessions bound to it included).
+/// never touched. The caller hands every session deleted, the archived sessions bound to it
+/// included, to [`trash_agent_records_with`], which decides whose native records move to the
+/// Trash ([`may_move_agent_records`]).
 pub(super) fn delete_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>> {
     let _removal = state.claim_session_removal();
     let session = state.session_record(id)?;
@@ -388,92 +391,138 @@ fn delete_unused_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>
     ))
 }
 
-/// Moves the agent's own records of the sessions just deleted to the Trash
-/// ([`trash_agent_records_with`], through the Trash proper and the default accounts).
-async fn trash_agent_records_after_delete(state: &Arc<AppState>, deleted: Vec<Session>) {
-    trash_agent_records_with(
-        state,
-        deleted,
-        records::Locator::default(),
-        state.host_tools.get().trash,
-    )
-    .await;
+/// What the user said, in the deletion they confirmed, about the agent's own records of the
+/// sessions it removes. Only a request of the user's can carry [`RecordsConsent::Ticked`]: a
+/// deletion nobody confirmed has no tick to pass. Private to this module, with
+/// [`trash_agent_records_with`], so no other path can pass a tick of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RecordsConsent {
+    /// Nobody ticked the cleanup option of a deletion of one session and what goes with it: left
+    /// unticked, or a deletion that asks nothing.
+    Unticked,
+    /// Nobody ticked the cleanup option of a deletion of every archived session in a scope.
+    UntickedBulk,
+    /// The user ticked the confirmation's option to move the agent's own records too.
+    Ticked,
 }
 
-/// [`trash_agent_records_of`] on a blocking task: a move across volumes copies, and the accounts'
-/// records are listed. The delete has happened already, so nothing here fails the request: a
-/// failure is logged.
-pub(crate) async fn trash_agent_records_with(
+impl RecordsConsent {
+    /// From a `delete_session` request's `trash_agent_records`.
+    fn of_request(trash_agent_records: bool) -> Self {
+        if trash_agent_records {
+            Self::Ticked
+        } else {
+            Self::Unticked
+        }
+    }
+
+    /// From a `delete_archived_sessions` request's `trash_agent_records`.
+    fn of_bulk_request(trash_agent_records: bool) -> Self {
+        if trash_agent_records {
+            Self::Ticked
+        } else {
+            Self::UntickedBulk
+        }
+    }
+}
+
+/// Whether deleting `session` may move its agent's own records to the Trash: the one place that
+/// decides it, for every path that deletes a session. The records of a session that never had a
+/// conversation are what Octoboard's own launch made the agent write, so they go with it; those of
+/// a session that had one hold the user's conversation, and move only on the user's tick. The
+/// deletion of every archived session in a scope is stricter: left unticked it moves nothing, a
+/// never-used session's records included, since it removes many sessions on one confirmation. A
+/// session let through without the tick counts as never used only by Octoboard's own record of it,
+/// which rests on the agent's report of the first prompt, so [`trash_agent_records_with`] goes on
+/// to ask the agent's records themselves ([`borne_out_as_unused`]).
+fn may_move_agent_records(session: &Session, consent: RecordsConsent) -> bool {
+    match consent {
+        RecordsConsent::Ticked => true,
+        RecordsConsent::Unticked => !session.has_conversation,
+        RecordsConsent::UntickedBulk => false,
+    }
+}
+
+/// Of `unused`, sessions whose records may move only because they count as never having had a
+/// conversation, those whose records bear that out: none of them holds a prompt the user sent
+/// (`records::user_prompt`). One whose record holds such a prompt had a conversation the agent
+/// never reported, and one whose records cannot be read through, hold a line that was skipped or
+/// cannot be placed, or cannot be told a prompt from, may have: the records of both stay where
+/// they are. Reads the records, so the caller is on a
+/// blocking task and holds no lock.
+fn borne_out_as_unused(
+    state: &AppState,
+    unused: Vec<Session>,
+    locator: &mut records::Locator,
+) -> Vec<Session> {
+    let accounts = match state.store.list_accounts() {
+        Ok(accounts) => accounts,
+        Err(err) => {
+            tracing::warn!(%err, "reading the accounts before trashing the agent's records failed");
+            return Vec::new();
+        }
+    };
+    unused
+        .into_iter()
+        .filter(|session| {
+            let found =
+                records::user_prompt::of_session(&state.record_hints, locator, &accounts, session);
+            let unused = found == records::user_prompt::UserPrompt::NotHeld;
+            if !unused {
+                tracing::info!(
+                    session = %session.id, ?found,
+                    "leaving the agent's records of a session that counted as unused"
+                );
+            }
+            unused
+        })
+        .collect()
+}
+
+/// [`trash_agent_records_with`] for a deletion nobody confirmed, such as the automatic deletion of
+/// archived sessions whose conversation is gone: with no tick, it moves only the records of the
+/// sessions that never had a conversation, once their records bear that out
+/// ([`borne_out_as_unused`]), and leaves a used session's where they are.
+pub(super) async fn trash_unconfirmed_agent_records_with(
     state: &Arc<AppState>,
     deleted: Vec<Session>,
     locator: records::Locator,
     trash: impl Fn(&Path) -> Result<(), TrashFailure> + Send + 'static,
 ) {
+    trash_agent_records_with(state, deleted, RecordsConsent::Unticked, locator, trash).await;
+}
+
+/// [`trash_agent_records_of`], for those of `deleted` whose records may move under `consent`
+/// ([`may_move_agent_records`]) and, without the user's tick, whose records bear out that they
+/// were never used ([`borne_out_as_unused`]), on a blocking task: a move across volumes copies,
+/// and the accounts' records are listed and read. The delete has happened already, so nothing here
+/// fails the request: a failure is logged.
+async fn trash_agent_records_with(
+    state: &Arc<AppState>,
+    deleted: Vec<Session>,
+    consent: RecordsConsent,
+    locator: records::Locator,
+    trash: impl Fn(&Path) -> Result<(), TrashFailure> + Send + 'static,
+) {
+    let deleted: Vec<Session> = deleted
+        .into_iter()
+        .filter(|session| may_move_agent_records(session, consent))
+        .collect();
     if deleted.is_empty() {
         return;
     }
     let state = Arc::clone(state);
     let moved = tokio::task::spawn_blocking(move || {
+        let mut locator = locator;
+        let deleted = match consent {
+            RecordsConsent::Ticked | RecordsConsent::UntickedBulk => deleted,
+            RecordsConsent::Unticked => borne_out_as_unused(&state, deleted, &mut locator),
+        };
         trash_agent_records_of(&state, &deleted, locator, trash)
     })
     .await;
     if let Err(err) = moved {
         tracing::warn!(%err, "moving the agent's session records to the Trash did not finish");
-    }
-}
-
-/// Moves the agent's own records of each of `deleted` that deleting it may remove (see
-/// `records::removable_record_paths`) through `trash`. The sessions are gone from the store,
-/// or are about to give up their conversation and still on record: either way they no longer count
-/// as holding the conversation with another session. A session is left alone when another
-/// remaining session refers to the same agent session id (a resumed copy, say), and a path that is
-/// missing is skipped. The records' loss costs the session its resumption in the agent only, so a
-/// failure to find or move one is logged, never raised. The accounts' records are listed once for
-/// the whole call, through `locator`.
-///
-/// A process that was stopped by the deletion may still rewrite its transcript after the move,
-/// leaving a small file behind in the agent's directory; that is accepted.
-fn trash_agent_records_of(
-    state: &AppState,
-    deleted: &[Session],
-    mut locator: records::Locator,
-    trash: impl Fn(&Path) -> Result<(), TrashFailure>,
-) {
-    let (remaining, accounts) = match (state.store.list_sessions(), state.store.list_accounts()) {
-        (Ok(sessions), Ok(accounts)) => (sessions, accounts),
-        (Err(err), _) | (_, Err(err)) => {
-            tracing::warn!(%err, "reading the sessions before trashing the agent's records failed");
-            return;
-        }
-    };
-    let mut paths: Vec<PathBuf> = Vec::new();
-    for session in deleted {
-        let Some(agent_id) = &session.agent_session_id else {
-            continue;
-        };
-        let shared = remaining.iter().any(|other| {
-            other.agent == session.agent
-                && other.agent_session_id.as_ref() == Some(agent_id)
-                && !deleted.iter().any(|gone| gone.id == other.id)
-        });
-        if shared {
-            continue;
-        }
-        for path in
-            records::removable_record_paths(&state.record_hints, &mut locator, &accounts, session)
-        {
-            if !paths.contains(&path) {
-                paths.push(path);
-            }
-        }
-    }
-    for path in paths {
-        if path.symlink_metadata().is_err() {
-            continue;
-        }
-        if let Err(err) = trash(&path) {
-            tracing::warn!(path = %path.display(), %err, "moving the agent's session record to the Trash failed");
-        }
     }
 }
 
@@ -557,7 +606,10 @@ fn delete_archived_sessions(
 
 /// Deletes `session` and what goes with it as a `delete_session` request asks, only if it is unused
 /// with `only_if_unused`. Its branches are removed once it is down, and its agent records go to
-/// the Trash with `trash_agent_records`, or when it has no conversation to keep.
+/// the Trash with `trash_agent_records`, or when it has no conversation to keep and its records
+/// bear that out: without the tick, the records of a session that counts as unused stay where
+/// they are when one of them holds a prompt the user sent or cannot be read through
+/// ([`borne_out_as_unused`]).
 pub(super) async fn delete_requested(
     state: &Arc<AppState>,
     session: String,
@@ -566,6 +618,29 @@ pub(super) async fn delete_requested(
     force_remove: Vec<SessionBranchTarget>,
     keep: Vec<SessionBranchTarget>,
 ) -> Result<()> {
+    delete_requested_with(
+        state,
+        session,
+        RecordsConsent::of_request(trash_agent_records),
+        only_if_unused,
+        (force_remove, keep),
+        records::Locator::default(),
+        host_trash(state),
+    )
+    .await
+}
+
+/// [`delete_requested`], finding the agent's records through `locator` and moving them through
+/// `trash`: the Trash proper and the default accounts for a request, a test's own otherwise.
+async fn delete_requested_with(
+    state: &Arc<AppState>,
+    session: String,
+    consent: RecordsConsent,
+    only_if_unused: bool,
+    (force_remove, keep): (Vec<SessionBranchTarget>, Vec<SessionBranchTarget>),
+    locator: records::Locator,
+    trash: impl Fn(&Path) -> Result<(), TrashFailure> + Send + 'static,
+) -> Result<()> {
     let _admission = state.admit_change()?;
     let deleted = if only_if_unused {
         delete_unused_session(state, &session)?
@@ -573,17 +648,14 @@ pub(super) async fn delete_requested(
         delete_session(state, &session)?
     };
     remove_branches_once_stopped(state, deleted.clone(), force_remove, keep);
-    let records_to_trash = deleted
-        .into_iter()
-        .filter(|session| trash_agent_records || !session.has_conversation)
-        .collect();
-    trash_agent_records_after_delete(state, records_to_trash).await;
+    trash_agent_records_with(state, deleted, consent, locator, trash).await;
     Ok(())
 }
 
 /// Deletes the archived sessions a `delete_archived_sessions` request selects, removing their
 /// branches once they are down and, with `trash_agent_records`, moving their agent records to the
-/// Trash.
+/// Trash. Without it nothing moves, a never-used session's records included: the bulk deletion
+/// moves records only on the user's tick ([`RecordsConsent::UntickedBulk`]).
 pub(super) async fn delete_archived_requested(
     state: &Arc<AppState>,
     console: String,
@@ -601,9 +673,14 @@ pub(super) async fn delete_archived_requested(
         console_session.as_deref(),
     )?;
     remove_branches_once_stopped(state, deleted.clone(), force_remove, keep);
-    if trash_agent_records {
-        trash_agent_records_after_delete(state, deleted).await;
-    }
+    trash_agent_records_with(
+        state,
+        deleted,
+        RecordsConsent::of_bulk_request(trash_agent_records),
+        records::Locator::default(),
+        host_trash(state),
+    )
+    .await;
     Ok(())
 }
 

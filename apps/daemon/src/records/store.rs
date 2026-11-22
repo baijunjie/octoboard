@@ -279,6 +279,17 @@ pub trait RecordStore: Send + Sync {
         Some(Cow::Borrowed(text))
     }
 
+    /// Whether `line`, one line of a conversation file ([`Self::conversation_file`]), is a prompt
+    /// the user sent, which makes the conversation one the user took part in
+    /// (`crate::records::user_prompt`). Answered from what kind of line it is, never from whether
+    /// it holds text to show: a prompt that is only an image, or only a pasted block of markup, is
+    /// a prompt. `None` for a line the provider cannot place (one that does not parse, a shape it
+    /// does not know), and by default, for a provider that cannot tell a prompt of the user's
+    /// from its other lines: nothing then says a record holds none.
+    fn is_user_prompt(&self, _line: &str) -> Option<bool> {
+        None
+    }
+
     // -- Live conversation feed -------------------------------------------------------------------
 
     /// The reader the live conversation feed reads this provider's record with

@@ -1,0 +1,4 @@
+{
+  "command_line_dirs": { "system": "/usr/local/bin", "user": "~/.local/bin" },
+  "clean_up_log_name": "uninstall-clean-up.log"
+}

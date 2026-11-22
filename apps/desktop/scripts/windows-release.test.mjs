@@ -3,11 +3,15 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync 
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { WINDOWS_TARGETS } from "./bundle.mjs";
+import { WINDOWS_ARCHES } from "./release-manifest.mjs";
 import {
+  architectureMismatches,
   checkStage,
   conptyMismatches,
   filesEndingWith,
   isMicrosoftFile,
+  peArchitecture,
   removeInstallers,
   signConfigArgs,
   signerOf,
@@ -109,10 +113,10 @@ test("ConPTY files that differ from the package's, or are missing, are reported"
       }
     }
     const listing = () => Object.keys(files).map((name) => path.join(dir, "extracted", name));
-    assert.deepEqual(conptyMismatches(listing(), path.join(dir, "fetched")), []);
+    for (const arch of ["x64", "arm64"]) assert.deepEqual(conptyMismatches(listing(), path.join(dir, "fetched"), arch), []);
     writeFileSync(path.join(dir, "extracted", "x64", "OpenConsole.exe"), "signed by us");
-    assert.deepEqual(conptyMismatches(listing(), path.join(dir, "fetched")), ["x64/OpenConsole.exe"]);
-    assert.deepEqual(conptyMismatches(listing().slice(0, 2), path.join(dir, "fetched")), ["x64/OpenConsole.exe", "arm64/OpenConsole.exe"]);
+    assert.deepEqual(conptyMismatches(listing(), path.join(dir, "fetched"), "arm64"), ["x64/OpenConsole.exe"]);
+    assert.deepEqual(conptyMismatches(listing().slice(0, 2), path.join(dir, "fetched"), "x64"), ["x64/OpenConsole.exe", "arm64/OpenConsole.exe"]);
   }));
 
 test("earlier installers and their signatures are removed, other files are not", () =>
@@ -123,14 +127,21 @@ test("earlier installers and their signatures are removed, other files are not",
     removeInstallers(path.join(dir, "missing"));
   }));
 
-test("the Windows build's files are the installer named for the version and a signature not older than it", () =>
+test("the Windows builds' files are each architecture's installer named for the version and a signature not older than it", () =>
   temporaryDirectory((dir) => {
     const installer = path.join(dir, "Octoboard_0.2.0_x64-setup.exe");
+    const arm = path.join(dir, "Octoboard_0.2.0_arm64-setup.exe");
     assert.throws(() => windowsReleaseFiles(dir, "Octoboard", "0.2.0"), /does not exist/);
     writeFileSync(installer, "setup");
     assert.throws(() => windowsReleaseFiles(dir, "Octoboard", "0.2.0"), /\.sig does not exist/);
     writeFileSync(`${installer}.sig`, "sig");
-    assert.deepEqual(windowsReleaseFiles(dir, "Octoboard", "0.2.0"), { installer, signature: `${installer}.sig` });
+    assert.throws(() => windowsReleaseFiles(dir, "Octoboard", "0.2.0"), /arm64-setup\.exe does not exist/);
+    writeFileSync(arm, "setup");
+    writeFileSync(`${arm}.sig`, "sig");
+    assert.deepEqual(windowsReleaseFiles(dir, "Octoboard", "0.2.0"), [
+      { arch: "x64", installer, signature: `${installer}.sig` },
+      { arch: "arm64", installer: arm, signature: `${arm}.sig` },
+    ]);
     assert.throws(() => windowsReleaseFiles(dir, "Octoboard", "0.3.0"), /does not exist/);
     const now = Date.now() / 1000;
     utimesSync(installer, now, now);
@@ -139,3 +150,45 @@ test("the Windows build's files are the installer named for the version and a si
     utimesSync(`${installer}.sig`, now - 60, now - 60);
     assert.throws(() => windowsReleaseFiles(dir, "Octoboard", "0.2.0"), /older than/);
   }));
+
+test("the Windows target table names exactly the release's architectures", () => {
+  assert.deepEqual(Object.keys(WINDOWS_TARGETS), WINDOWS_ARCHES);
+});
+
+// The smallest bytes `peArchitecture` reads: the MZ signature, the header offset at 0x3c, the PE signature and machine.
+function pe(machine) {
+  const bytes = Buffer.alloc(0x50);
+  bytes.writeUInt16LE(0x5a4d, 0);
+  bytes.writeUInt32LE(0x40, 0x3c);
+  bytes.writeUInt32LE(0x00004550, 0x40);
+  bytes.writeUInt16LE(machine, 0x44);
+  return bytes;
+}
+
+test("a PE file's architecture is read from its machine field", () => {
+  assert.equal(peArchitecture(pe(0x8664)), "x64");
+  assert.equal(peArchitecture(pe(0xaa64)), "arm64");
+  assert.equal(peArchitecture(pe(0x014c)), null);
+  assert.equal(peArchitecture(Buffer.from("not a PE file at all, just some text that is long enough to read")), null);
+  const truncated = pe(0x8664);
+  truncated.writeUInt32LE(0x1000, 0x3c);
+  assert.equal(peArchitecture(truncated), null);
+});
+
+test("an installer's executables built for the wrong architecture are reported, the hosts by their subdirectory", () => {
+  const listing = ["$INSTDIR/Octoboard.exe", "$INSTDIR/octoboardd.exe", "$INSTDIR/conpty.dll", "$INSTDIR/x64/OpenConsole.exe", "$INSTDIR/arm64/OpenConsole.exe"];
+  const files = (dll) => ({
+    "$INSTDIR/Octoboard.exe": pe(0xaa64),
+    "$INSTDIR/octoboardd.exe": pe(0xaa64),
+    "$INSTDIR/conpty.dll": pe(dll),
+    "$INSTDIR/x64/OpenConsole.exe": pe(0x8664),
+    "$INSTDIR/arm64/OpenConsole.exe": pe(0xaa64),
+  });
+  assert.deepEqual(architectureMismatches(listing, "arm64", (file) => files(0xaa64)[file]), []);
+  assert.deepEqual(architectureMismatches(listing, "arm64", (file) => files(0x8664)[file]), ["conpty.dll: x64"]);
+  assert.deepEqual(architectureMismatches(listing, "x64", (file) => files(0x8664)[file]), [
+    "Octoboard.exe: arm64",
+    "octoboardd.exe: arm64",
+  ]);
+  assert.deepEqual(architectureMismatches(listing.slice(0, 2), "arm64", (file) => files(0xaa64)[file]), []);
+});

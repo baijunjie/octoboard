@@ -106,9 +106,13 @@ jobs:
       - run: node scripts/cargo.mjs test --locked -p octoboardd
 
   windows-bundle:
-    # The unsigned installer, built as the release builds it (`WINDOWS_SIGNING=none`, no update key), so that the
-    # `tauri build` of the Windows release can be checked without making a release. It shares the release builds'
-    # dependency cache.
+    # The unsigned installer of each architecture, built as the release builds it (`WINDOWS_SIGNING=none`, no update
+    # key; arm64 cross-compiled on the x64 runner), so that the `tauri build` of the Windows release can be checked
+    # without making a release. It shares the release builds' dependency cache.
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
     runs-on: windows-latest
     defaults:
       run:
@@ -125,9 +129,9 @@ jobs:
       - run: rustup toolchain install
       - uses: ./.github/actions/rust-cache
         with:
-          profile: windows-release
+          profile: windows-release-${{ matrix.arch }}
       - run: pnpm install --frozen-lockfile
       - name: Build the unsigned installer
         env:
           WINDOWS_SIGNING: none
-        run: pnpm --filter @octoboard/desktop release --no-sign-update
+        run: pnpm --filter @octoboard/desktop release --arch ${{ matrix.arch }} --no-sign-update

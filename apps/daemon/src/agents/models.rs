@@ -7,7 +7,9 @@
 //!
 //! A catalogue belongs to an account, so a command that lists models runs in the login-shell
 //! snapshot with the provider's configuration-directory variable pointed at the account's
-//! directory, which is what a session of the account gets ([`run_catalogue_command`]).
+//! directory, which is what a session of the account gets ([`run_catalogue_command`]), or, for a
+//! provider whose CLI would change the account's configuration there, at a directory of
+//! Octoboard's own the provider builds from it ([`run_catalogue_command_in`]).
 //!
 //! Every model carries effort levels, never "unknown": the model's own where its catalogue entry
 //! gives them (an empty list meaning it takes none), else the provider's measured set. Levels are
@@ -25,7 +27,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use crate::adapter::account_cli::{self, NotRun, QueryFailure};
+use crate::adapter::account_cli::{self, BackgroundRun, NotRun, QueryFailure, RunWait};
 use crate::adapter::provider;
 use crate::env_shell;
 use crate::processes::subprocess::BoundedFailure;
@@ -61,11 +63,13 @@ pub trait ModelCatalogue: Send + Sync {
     /// The models an account of the provider offers, read in `shell_env` under `config_dir` (the
     /// pinned account's directory, `None` for the default account). Blocking: it may run the
     /// provider's CLI, held to `timeout`. Never an error: an empty list with a reason
-    /// ([`Listing::unavailable`]).
+    /// ([`Listing::unavailable`]). `run_homes` is where a provider keeps the directories of
+    /// Octoboard's own it lists against (`AccountOps::run_home`).
     fn list(
         &self,
         shell_env: &HashMap<String, String>,
         config_dir: Option<&Path>,
+        run_homes: &Path,
         timeout: Duration,
     ) -> Listing;
 
@@ -103,7 +107,13 @@ pub trait ModelCatalogue: Send + Sync {
 pub struct NoCatalogue;
 
 impl ModelCatalogue for NoCatalogue {
-    fn list(&self, _: &HashMap<String, String>, _: Option<&Path>, _: Duration) -> Listing {
+    fn list(
+        &self,
+        _: &HashMap<String, String>,
+        _: Option<&Path>,
+        _: &Path,
+        _: Duration,
+    ) -> Listing {
         Listing {
             models: Vec::new(),
             unavailable: None,
@@ -179,7 +189,13 @@ pub fn load(agent: AgentId, config_dir: Option<&Path>) -> Listing {
     // Human-paced, but the result is cached anyway, so the cached snapshot keeps a dialog from
     // forking a login shell on top of the command.
     match env_shell::cached_snapshot() {
-        Ok(shell_env) => list(agent, &shell_env, config_dir, COMMAND_TIMEOUT),
+        Ok(shell_env) => list_in(
+            agent,
+            &shell_env,
+            config_dir,
+            &crate::paths::agent_query_homes_dir(),
+            COMMAND_TIMEOUT,
+        ),
         Err(err) => {
             let detail = format!("{err:#}");
             Listing::unavailable(ModelsUnavailable::new(
@@ -191,17 +207,31 @@ pub fn load(agent: AgentId, config_dir: Option<&Path>) -> Listing {
     }
 }
 
-/// [`load`] over an already-captured environment and with its deadline given, which is what makes
-/// the failure paths testable without waiting out [`COMMAND_TIMEOUT`].
+/// [`load`] over an already-captured environment, with its deadline given and the providers' run
+/// homes under `run_homes`, which is what makes the failure paths testable without waiting out
+/// [`COMMAND_TIMEOUT`] or touching the data directory.
+pub(crate) fn list_in(
+    agent: AgentId,
+    shell_env: &HashMap<String, String>,
+    config_dir: Option<&Path>,
+    run_homes: &Path,
+    timeout: Duration,
+) -> Listing {
+    provider(agent)
+        .catalogue()
+        .list(shell_env, config_dir, run_homes, timeout)
+}
+
+/// [`list_in`] with the run homes in a scratch directory of the call's own.
+#[cfg(test)]
 pub(crate) fn list(
     agent: AgentId,
     shell_env: &HashMap<String, String>,
     config_dir: Option<&Path>,
     timeout: Duration,
 ) -> Listing {
-    provider(agent)
-        .catalogue()
-        .list(shell_env, config_dir, timeout)
+    let run_homes = crate::test_support::ScratchDir::new("model-run-homes");
+    list_in(agent, shell_env, config_dir, &run_homes, timeout)
 }
 
 pub(crate) fn unreadable(agent: AgentId) -> ModelsUnavailable {
@@ -230,10 +260,58 @@ pub(crate) fn run_catalogue_command(
         timeout,
         OUTPUT_LIMIT,
         None,
-    )
-    .map_err(|failure| match failure {
+    );
+    catalogue_stdout(agent, output)
+}
+
+/// [`run_catalogue_command`] for a provider that lists against a directory of Octoboard's own
+/// (`AccountOps::run_home`, kept under `run_homes`): its stdout, and the directory it ran against
+/// where the provider gave one, for what the command left there.
+pub(crate) fn run_catalogue_command_in(
+    agent: AgentId,
+    shell_env: &HashMap<String, String>,
+    config_dir: Option<&Path>,
+    run_homes: &Path,
+    args: &[&str],
+    timeout: Duration,
+) -> Result<(String, Option<PathBuf>), ModelsUnavailable> {
+    // What the listing waits for its directory comes out of the time it is given.
+    let deadline = Instant::now() + timeout;
+    let admitted = account_cli::admitted_command_in(
+        agent,
+        shell_env,
+        config_dir,
+        BackgroundRun::ModelListing,
+        run_homes,
+        &RunWait {
+            until: deadline,
+            cancel: None,
+        },
+        args,
+    );
+    let mut run = match admitted {
+        Ok(run) => run,
+        Err(refused) => {
+            return catalogue_stdout(agent, Err(QueryFailure::NotRun(refused)))
+                .map(|stdout| (stdout, None));
+        }
+    };
+    let home = run.home_dir().map(Path::to_path_buf);
+    let timeout = deadline.saturating_duration_since(Instant::now());
+    let output = run
+        .run(timeout, OUTPUT_LIMIT, None)
+        .map_err(QueryFailure::Bounded);
+    catalogue_stdout(agent, output).map(|stdout| (stdout, home))
+}
+
+/// The stdout of a catalogue command that ran and succeeded, or why there is no list.
+fn catalogue_stdout(
+    agent: AgentId,
+    output: Result<std::process::Output, QueryFailure>,
+) -> Result<String, ModelsUnavailable> {
+    let output = output.map_err(|failure| match failure {
         QueryFailure::NotRun(refused) => match refused {
-            NotRun::DirMissing(_) => failed(agent, &refused.detail()),
+            NotRun::DirMissing(_) | NotRun::HomeNotPrepared(_) => failed(agent, &refused.detail()),
             NotRun::BinaryNotFound(binary) => ModelsUnavailable::new(
                 code::BINARY_NOT_FOUND,
                 refused.detail(),
@@ -264,7 +342,7 @@ pub(crate) fn run_catalogue_command(
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-fn failed(agent: AgentId, detail: &str) -> ModelsUnavailable {
+pub(crate) fn failed(agent: AgentId, detail: &str) -> ModelsUnavailable {
     ModelsUnavailable::new(
         code::COMMAND_FAILED,
         format!("listing {}'s models failed: {detail}", agent.label()),
@@ -368,7 +446,7 @@ mod tests {
 
     #[test]
     fn a_provider_without_a_catalogue_lists_nothing_and_says_nothing_of_why() {
-        let listing = NoCatalogue.list(&HashMap::new(), None, COMMAND_TIMEOUT);
+        let listing = NoCatalogue.list(&HashMap::new(), None, Path::new(""), COMMAND_TIMEOUT);
         assert!(listing.models.is_empty());
         assert_eq!(listing.unavailable, None);
         assert!(!NoCatalogue.names_default_model());

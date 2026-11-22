@@ -262,8 +262,10 @@ interaction conventions are `docs/conventions/ui-standard.md`; what each view do
   of a kind passes through (`daemonMessage`). A number, date or time an `Intl` formatter wrote in the interface's
   language needs none, since the formatter already orders it for that language; a string that is matched, sorted,
   keyed or a collection's `textValue` is never isolated, and a value in an element that carries a `dir` needs none.
-  Why: in a right-to-left line the bidi algorithm alone misplaces the spaces, parentheses and digits beside such a
-  value.
+  Native text the desktop shell or the Windows installer shows outside the interface (a Win32 message box, the
+  installer's details) marks such a value with a left-to-right mark (U+200E) on each side instead, since a Win32 message
+  box is not relied on to honour isolates; a bare ASCII number there needs none. Why: in a right-to-left line the bidi algorithm
+  alone misplaces the spaces, parentheses and digits beside such a value.
 - **An LTR value field whose placeholder is prose lays the placeholder out in the interface's direction**, `dir="ltr"`
   only once it holds a value.
 - **An icon mirrors only when its meaning is a direction** (`rtl:-scale-x-100`; Back and Forward, a disclosure or

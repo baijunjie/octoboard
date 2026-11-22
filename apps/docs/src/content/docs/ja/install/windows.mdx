@@ -1,14 +1,16 @@
 ---
 title: "Windows"
-description: "Intel または AMD プロセッサ搭載の PC（ほとんどの Windows PC）に対応。Windows 10 バージョン 21H2 以降で使えます。Arm 版 Windows 11 では、この x64 版アプリがエミュレーションで動きます。"
+description: "Intel または AMD プロセッサ搭載の PC（ほとんどの Windows PC）に対応。Windows 10 バージョン 21H2 以降で使えます。Arm 版 Windows 11 では、リリースにネイティブの arm64 版インストーラーがあればそれを使います。ない場合は、この x64 版アプリがエミュレーションで動きます。"
 ---
 
 import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
 import { downloads, productName } from "../../../../commands.ts";
+import WindowsUninstaller from "../../../../snippets/ja/windows-uninstaller.mdx";
 
-Intel または AMD プロセッサ搭載の PC（x64。ほとんどの Windows PC）に対応。Windows 10 バージョン 21H2 以降で使えます。Arm 版 Windows 11 では、この x64 版アプリがエミュレーションで動きます。
+Intel または AMD プロセッサ搭載の PC（x64。ほとんどの Windows PC）に対応。Windows 10 バージョン 21H2 以降で使えます。Arm 版 Windows 11 では、リリースにネイティブの arm64 版インストーラーがあればそれを使います。ない場合は、この x64 版アプリがエミュレーションで動きます。
 
 <LinkButton href={downloads.windows}>Windows 版をダウンロード</LinkButton>
+<LinkButton href={downloads["windows-arm64"]} variant="secondary">Windows Arm64 版をダウンロード</LinkButton>
 
 <Aside>Windows 版アプリはベータ版です。</Aside>
 
@@ -16,7 +18,7 @@ Intel または AMD プロセッサ搭載の PC（x64。ほとんどの Windows 
 
 <Steps>
 
-1. 上のボタンからインストーラーをダウンロードします。名前が <code dir="ltr">x64-setup.exe</code> で終わるファイルです。
+1. 上のボタンからインストーラーをダウンロードします。名前が <code dir="ltr">x64-setup.exe</code> で終わるファイルです。Arm 版 Windows では 2 つ目のボタンを試します。リリースに arm64 版インストーラーがあれば、名前が <code dir="ltr">arm64-setup.exe</code> で終わるそのファイルをダウンロードします。ない場合はリリース一覧が開くので、エミュレーションで動く x64 版インストーラーを使います。
 2. ダウンロードしたファイルを開いて、インストーラーを実行します。{productName} は自分のユーザーアカウントだけにインストールされるので、管理者の許可は求められません。
 
    アプリにはまだコード署名がないため、Microsoft Defender SmartScreen が「Windows によって PC が保護されました」と表示することがあります。その場合は「詳細情報」を選び、続けて「実行」を選びます。
@@ -38,6 +40,16 @@ Intel または AMD プロセッサ搭載の PC（x64。ほとんどの Windows 
 - [Grok Build](https://docs.x.ai/build/overview)
 
 Claude Code または Codex を使う場合は、先に [Git for Windows](https://git-scm.com/download/win) をインストールしてください。動作に必要です。
+
+## アンインストール
+
+Windows の設定（アプリ）またはコントロールパネルから、{productName} のアンインストーラーでアンインストールします。
+
+<WindowsUninstaller />
+
+アンインストールの前に何が有効になっているかを確かめるには、<strong>設定 › クリーンアップ › アンインストール前のクリーンアップ</strong>を開きます。そこにある<strong>すべて削除</strong>も同じものを削除し、項目ごとの結果を表示します。
+
+あとに何が残るか、それをどう削除するかは、[システムは元のまま](../../your-system/)で説明しています。
 
 ## アップデート
 

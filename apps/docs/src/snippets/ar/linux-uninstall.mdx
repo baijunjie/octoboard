@@ -1,0 +1,22 @@
+import { Code } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* How the Linux server program is uninstalled, which the Linux server guide and "Your system stays as it was" share. */}
+
+شغّل هذا الأمر على الخادم، بالمستخدم الذي ثُبّت له. لا يُنزَّل أي شيء.
+
+<Code code={system.uninstall} lang="sh" />
+
+يسرد أولًا كل ما سيفعله، ويطلب منك كتابة <code dir="ltr">{system.uninstallWord}</code>. الخيار <code dir="ltr">{system.uninstallDryRun}</code> يعرض القائمة فقط، والخيار <code dir="ltr">{system.uninstallYes}</code> يؤكّد حيث لا توجد طرفية يُسأل فيها.
+
+ثم يوقف المشاركة لكل حساب ما زال يشارك التكوين الافتراضي. ولذلك يوقف الخدمة إن كانت تعمل، فتنتهي كل جلسة تشغّلها، ثم يشغّلها لهذا التنظيف وحده دون أن تشغّل أي جلسة. بعد ذلك يوقف الخدمة ويزيل البرنامج، مع خدمة systemd التابعة له إن وُجدت، ويوقف الـ lingering إن كان تثبيت الخدمة قد شغّله ولم تكن أي خدمة أخرى لك تحتاج إليه.
+
+- <strong>إذا تعذّر على حساب إيقاف المشاركة</strong>، كأن تكون إحدى جلساته تعمل، فلا يُزال شيء وتُشغَّل الخدمة من جديد كما كانت: شغّل الأمر مرة أخرى بعد انتهاء ذلك العمل. ومع <code dir="ltr">{system.uninstallKeepChanges}</code> يلغي التثبيت دون هذا التنظيف، ويترك الروابط في مجلد كل حساب من هذه الحسابات، ومعها النسخ الاحتياطية لتكوين الحساب الخاص بجانبها، لتحذفها يدويًا.
+- <strong>إذا كان إيقاف الخدمة سيقطع عملًا</strong>، فلا يُزال شيء. والخيار <code dir="ltr">{system.uninstallForce}</code> يوقفها على أي حال.
+- <strong>شغّل <code dir="ltr">{system.cliName}</code> الذي ثبّتّه.</strong> إذا شُغّل عبر رابط، أو من نسخة من <code dir="ltr">{system.cliName}</code> غير التي تشغّلها خدمة {productName}، فلا يزيل شيئًا ويذكر الملف الذي ينبغي تشغيله بدلًا منه.
+
+ما زال أمر سكربت التثبيت السابق يعمل، ويشغّل هذا الأمر. إن ثبّتّ باستخدام <code dir="ltr">{system.binDirOption}</code>، فأضِفه مع المجلد نفسه.
+
+<Code code={system.uninstallScript} lang="sh" />
+
+إذا كان <code dir="ltr">{system.cliName}</code> لديك قديمًا إلى حدّ أنه لا يملك أمر إلغاء التثبيت، فإن أمر السكربت يزيله بنفسه، لكن دون أن يوقف أي شيء أولًا: الحساب الذي ما زال يشارك التكوين الافتراضي يحتفظ بالروابط في مجلده، ويمكنك حذفها يدويًا.

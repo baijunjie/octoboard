@@ -76,13 +76,39 @@ dimmed area behind the drawer is named Close remote devices.
 The content area shows the selected device under a header holding its name, as the page's heading, the badge of its
 connection where it is connected, its SSH destination as `user@host:port`, read left to right in every language, and
 **Connect** (**Open** for one that is connected; see "Connecting from the page" below). The **Reconnecting** badge, a
-warning badge, pairs a spinner in the badge's text colour with its status text. Under the header is the device's form (see "The form" below), and under
-the form, in a card of its own, the **Remove remote daemon** row with **Remove**.
+warning badge, pairs a spinner in the badge's text colour with its status text. Under the header is the device's form (see "The form" below), then
+the **This computer's key** card (see "This computer's key" below), and last, in a card of its own, the **Remove remote
+daemon** row with **Remove**.
 
 **Remove**, from this row or from the row's menu in the sidebar, asks first, in a confirmation saying the daemon is
-removed from the remote daemons and the server and its daemon stay the same; confirmed, it removes the saved daemon and
-the device key kept for it (see "Device keys" in `docs/product/remote-daemons.md`). A window open on it stays until it
-is closed. The page then shows the first saved device, or, with none left, the empty state.
+removed from the remote daemons and the server and its daemon stay the same; where this computer's key is added for
+it, the confirmation says instead that the key is removed from the server and its private key from this computer, the
+server and its daemon otherwise staying the same. Confirmed, it takes the key back where one is added, which may
+take seconds, and removes the saved daemon (see "Taking the key back" in `docs/product/remote-daemons.md`). A window
+open on it stays until it is closed; where its key was taken back, it cannot reconnect once its connection drops (see
+"Turning the key off and on" in `docs/product/remote-daemons.md`). The page then shows the first saved device, or, with none left, the empty state.
+
+### This computer's key
+
+The card holds one switch row, **This computer's key**, which shows and changes the state of this computer's key for
+the device (see "Device keys" in `docs/product/remote-daemons.md`). The switch is on in two of the three states, so
+its line, which says which state it is, is also the switch's description to assistive technology:
+
+- **Added**: the switch is on, and its line says the key is added for the device's `user@host`, and that connections
+  from this computer sign in with it without asking for a password or passphrase.
+- **Not added, asked for at the next connection**: the switch is on, and its line says the key is not added yet and
+  that the next connection asks before adding it to the server.
+- **Off**: the switch is off, and its line says that once it is on, the next connection asks before adding this
+  computer's key to the server, and that once it is added, later connections sign in with it.
+
+**Turning it off where the key is added asks first**, in a destructive confirmation titled **Turn off this
+computer's key**, saying the key will be removed from the daemon, that its line is taken out of the server's authorized
+keys and the private key removed from this computer, and that later connections ask for the password or key file. Its
+confirm button is **Turn off and remove**. Confirmed, the key is taken back and the switch turns off; cancelled, nothing
+changes. Turning it off where nothing is added, and turning it on, ask nothing. A change that fails is an error
+alert titled that this computer's key could not be changed. One that left the key's line on the server, or its private
+key in the credential store, is done all the same and raises the alerts "Taking the key back" in
+`docs/product/remote-daemons.md` describes; so do a Remove and a save that take the key back.
 
 ### Adding a device
 
@@ -106,7 +132,13 @@ The form holds the fields of a saved remote daemon, whose meaning and rules are 
 - **Connection**: Connection details, with its Paste button (see "Pasting connection details" below), then Name, then
   User, Host and SSH port in one row, which stacks where the content area is too narrow for it. The row mirrors under a
   right-to-left language, as any row of controls does; the fields' text stays left to right.
-- **Sign-in**: Authentication, and the key file's path where Key file is chosen.
+- **Sign-in**: Authentication, a choice of Password or Key file, and the key file's path where Key file is chosen. For
+  a device whose host has this computer's key added, a line in place of the choice says connections sign in with this
+  computer's key, and that to use a password or a key file instead the key is turned off (see "This computer's key"
+  above). While the host, port or user of such a device differ from what is saved, a warning stands under that line,
+  titled **The key does not move to the new address**, saying that saving removes this computer's key from the saved
+  `user@host`, and that the next connection asks before adding it at the new address. It goes once the three fields are
+  back at the saved destination, and while it stands the three fields are described by it.
 - **Advanced**: Path of octoboardd, then the pinned host key.
 
 Under the cards are **Save** and **Revert** for a saved device, and **Save** and **Cancel** for a new one.
@@ -115,7 +147,8 @@ Under the cards are **Save** and **Revert** for a saved device, and **Save** and
   nothing is changed or while a save is under way. Two inputs that save the same count as no change: text is saved
   without the spaces around it, a blank name as the host, the port as a number, and a key file's path only where Key
   file is the way to sign in. A save that fails is an error alert titled that the remote daemon could not be saved, and
-  leaves the form as it was.
+  leaves the form as it was. A save that changes the host, port or user of a device whose key is added takes the
+  key back first, which may take seconds (see "Taking the key back" in `docs/product/remote-daemons.md`).
 - **Revert** drops what was changed, and is disabled while nothing is or while a save is under way.
 - **A field that was not changed follows the saved device** when that changes elsewhere — the host key pinned at a
   connection, the path of `octoboardd` saved from a question — and a changed field the saved device comes to match

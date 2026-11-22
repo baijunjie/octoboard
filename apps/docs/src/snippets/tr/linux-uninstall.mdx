@@ -1,0 +1,22 @@
+import { Code } from "@astrojs/starlight/components";
+import { productName, system } from "../../commands.ts";
+
+{/* How the Linux server program is uninstalled, which the Linux server guide and "Your system stays as it was" share. */}
+
+Bu komutu sunucuda, kurulduğu kullanıcı olarak çalıştırın. Hiçbir şey indirilmez.
+
+<Code code={system.uninstall} lang="sh" />
+
+Önce yapacağı her şeyi listeler ve sizden <code dir="ltr">{system.uninstallWord}</code> yazmanızı ister. <code dir="ltr">{system.uninstallDryRun}</code> yalnızca listeyi gösterir; sorulacak bir terminal olmadığında ise <code dir="ltr">{system.uninstallYes}</code> onay yerine geçer.
+
+Ardından saptanmış yapılandırmayı hâlâ paylaşan her hesap için paylaşımı kapatır. Bunun için hizmet çalışıyorsa onu durdurur; bu, hizmetin çalıştırdığı her oturumu sonlandırır. Sonra hizmeti yalnızca bu temizlik için, hiçbir oturum çalıştırmadan başlatır. Ardından hizmeti durdurur ve programı, varsa systemd hizmetiyle birlikte kaldırır; hizmetin kurulumu lingering’i açtıysa ve başka hiçbir hizmetinizin ona ihtiyacı yoksa lingering’i de kapatır.
+
+- <strong>Bir hesap paylaşmayı bırakamıyorsa</strong>, örneğin oturumlarından biri çalıştığı için, hiçbir şey kaldırılmaz ve hizmet önceki gibi yeniden başlatılır: o iş bittiğinde komutu yeniden çalıştırın. <code dir="ltr">{system.uninstallKeepChanges}</code> ile bu temizlik yapılmadan kaldırır; böyle her hesabın klasöründeki bağlantıları ve yanlarındaki, hesabın kendi yapılandırmasının yedeklerini sizin elle silmeniz için bırakır.
+- <strong>Hizmeti durdurmak bir işi yarıda keserse</strong> hiçbir şey kaldırılmaz. <code dir="ltr">{system.uninstallForce}</code> onu yine de durdurur.
+- <strong>Kurduğunuz <code dir="ltr">{system.cliName}</code> dosyasını çalıştırın.</strong> Bir bağlantı üzerinden ya da {productName} hizmetinin çalıştırdığından başka bir <code dir="ltr">{system.cliName}</code> kopyası olarak çalıştırılırsa hiçbir şey kaldırmaz ve bunun yerine çalıştırılacak dosyayı söyler.
+
+Kurulum betiğinin önceki komutu hâlâ çalışır ve bu komutu çalıştırır. <code dir="ltr">{system.binDirOption}</code> ile kurduysanız onu aynı klasörle ekleyin.
+
+<Code code={system.uninstallScript} lang="sh" />
+
+<code dir="ltr">{system.cliName}</code> sürümünüz kaldırma komutunu içermeyecek kadar eskiyse, betiğin komutu onu kendisi kaldırır ama önce hiçbir şeyi kapatmaz: saptanmış yapılandırmayı hâlâ paylaşan bir hesap, klasöründeki bağlantıları korur; bunları elle silebilirsiniz.

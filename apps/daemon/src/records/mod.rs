@@ -26,8 +26,9 @@
 //! Where a record is found is [`locate`] (the hook's hint, the account directories walked), the
 //! record a switch of accounts carries and what travels with it is [`carried`], which paths a
 //! deletion removes are [`removal`], whether a conversation can be resumed is
-//! [`mod@resumability`], and whether a relaunched session is sent a prompt to carry on is
-//! [`switch_continue`]. [`store`] is the interface each provider answers them through.
+//! [`mod@resumability`], whether a record holds a prompt the user sent is [`user_prompt`], and
+//! whether a relaunched session is sent a prompt to carry on is [`switch_continue`]. [`store`] is
+//! the interface each provider answers them through.
 
 pub(crate) mod carried;
 pub(crate) mod collector;
@@ -46,6 +47,7 @@ pub(crate) mod resumability;
 pub(crate) mod store;
 pub(crate) mod switch_continue;
 pub(crate) mod titles;
+pub(crate) mod user_prompt;
 pub(crate) mod watch;
 
 pub(crate) use locate::{

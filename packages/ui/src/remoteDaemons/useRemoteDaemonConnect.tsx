@@ -21,6 +21,7 @@ type Step =
   | { kind: "no_daemon" }
   | { kind: "application_not_running"; detail: string }
   | { kind: "path"; tried: string[] }
+  | { kind: "device_key"; mark: string; file: string; browser: boolean }
   | { kind: "mismatch"; mismatch: GenerationMismatch };
 
 /** One connection in progress: what the owner has given so far, which the retries of this one connection reuse and
@@ -29,6 +30,8 @@ interface Flow {
   entry: RemoteDaemonEntry;
   secret: string | null;
   confirmFingerprint: string | null;
+  /** The owner's answer about this computer's key, once given. */
+  deviceKey?: boolean;
   step: Step;
 }
 
@@ -38,9 +41,13 @@ const FINGERPRINT_COMMAND = "ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub";
 /**
  * Connecting to a remote daemon, from the press on Connect to the daemon's window opening: asks for the password first
  * (a key's passphrase only when the shell asks, and nothing for this device's own key unless the server refuses it, when the
- * password signs in again and the shell reinstalls the key), and each outcome that is not the window opening is an
- * alert or a question to answer before a retry (see `RemoteDaemonConnectOutcome`). The password, the passphrase and the
- * fingerprint just confirmed live in the flow's state alone, for the retries of this one connection. A version mismatch
+ * password signs in again), and each outcome that is not the window opening is an
+ * alert or a question to answer before a retry (see `RemoteDaemonConnectOutcome`). After a sign-in with the password or
+ * a key file the shell asks before it installs this computer's own key on the server (`device_key_offered`): the
+ * question says what is added and where, Add key and Do not add both connect again with the answer, which the shell
+ * remembers, and closing it ends the connection with nothing installed. It comes after the seconds a connection
+ * takes, so it does not start with focus on its confirm button. The password, the passphrase, the
+ * fingerprint just confirmed and that answer live in the flow's state alone, for the retries of this one connection. A version mismatch
  * offers to open the daemon's own web interface in the system browser (the shell holds the connection for it and opens
  * the browser itself, `opened_in_browser`); it never updates either side, which is done on each machine itself. One
  * entry is connected at a time. `connecting` is the id of the entry being connected, to show its row pending and the
@@ -74,10 +81,10 @@ export function useRemoteDaemonConnect(capability: RemoteDaemonsCapability, onCh
   };
 
   /** What the owner is told or asked once a connection has ended with `outcome`, whoever asked for it. */
-  const settle = (entry: RemoteDaemonEntry, secret: string | null, confirmFingerprint: string | null, outcome: RemoteDaemonConnectOutcome) => {
+  const settle = (entry: RemoteDaemonEntry, secret: string | null, confirmFingerprint: string | null, outcome: RemoteDaemonConnectOutcome, browser = false, deviceKey?: boolean) => {
     const address = `${entry.host}:${entry.port}`;
     if (outcome.outcome !== "opened" && outcome.outcome !== "opened_in_browser") onAttention?.();
-    const ask = (step: Step) => setFlow({ entry, secret, confirmFingerprint, step });
+    const ask = (step: Step) => setFlow({ entry, secret, confirmFingerprint, deviceKey, step });
     switch (outcome.outcome) {
       // The daemon's window is open or focused, or the shell has opened the browser: nothing more to do.
       case "opened":
@@ -107,6 +114,9 @@ export function useRemoteDaemonConnect(capability: RemoteDaemonsCapability, onCh
         break;
       case "device_key_refused":
         ask({ kind: "secret", secretKind: "password", deviceKeyRefused: true });
+        break;
+      case "device_key_offered":
+        ask({ kind: "device_key", mark: outcome.mark, file: outcome.file, browser });
         break;
       case "auth_failed":
         fail(t("remoteDaemons.error.authFailed.title"), t("remoteDaemons.error.authFailed.body"), outcome.detail);
@@ -143,13 +153,15 @@ export function useRemoteDaemonConnect(capability: RemoteDaemonsCapability, onCh
     }
   };
 
-  const attempt = async (entry: RemoteDaemonEntry, secret: string | null, confirmFingerprint: string | null, action: "start" | null, browser = false) => {
+  const attempt = async (entry: RemoteDaemonEntry, secret: string | null, confirmFingerprint: string | null, action: "start" | null, browser = false, deviceKey?: boolean) => {
     if (running.current) return;
     running.current = true;
     setFlow(undefined);
     setConnecting(entry.id);
+    // The answer about this computer's key goes with the request only once the owner has given one.
+    const answered = deviceKey === undefined ? {} : { deviceKey };
     await settleAction(
-      async () => settle(entry, secret, confirmFingerprint, await capability.connect({ id: entry.id, secret, confirmFingerprint, action, browser })),
+      async () => settle(entry, secret, confirmFingerprint, await capability.connect({ id: entry.id, secret, confirmFingerprint, action, browser, ...answered }), browser, deviceKey),
       (error) => raiseError(error, { title: t("remoteDaemons.error.failed.title") }),
       () => {
         running.current = false;
@@ -174,11 +186,44 @@ export function useRemoteDaemonConnect(capability: RemoteDaemonsCapability, onCh
   const name = flow ? <InlineReference dir="auto" wrap>{flow.entry.name}</InlineReference> : null;
   let dialogs: React.ReactElement | null = null;
   if (flow) {
-    const { entry, secret, confirmFingerprint, step } = flow;
+    const { entry, secret, confirmFingerprint, deviceKey, step } = flow;
     const errorTitle = t("remoteDaemons.error.failed.title");
     switch (step.kind) {
       case "secret":
-        dialogs = <RemoteDaemonSecretDialog kind={step.secretKind} name={entry.name} user={entry.user} message={step.deviceKeyRefused ? t("remoteDaemons.secret.deviceKeyRefused") : undefined} onSubmit={(value) => void attempt(entry, value, confirmFingerprint, null)} onClose={end} />;
+        dialogs = <RemoteDaemonSecretDialog kind={step.secretKind} name={entry.name} user={entry.user} message={step.deviceKeyRefused ? t("remoteDaemons.secret.deviceKeyRefused.signIn") : undefined} onSubmit={(value) => void attempt(entry, value, confirmFingerprint, null, false, deviceKey)} onClose={end} />;
+        break;
+      case "device_key":
+        // Both buttons answer the question and connect again; the close button ends the connection, nothing installed.
+        dialogs = (
+          <ConfirmDialog
+            title={t("remoteDaemons.deviceKey.offer.title")}
+            errorTitle={errorTitle}
+            unprompted
+            hideCancel
+            otherAction={{ label: t("remoteDaemons.deviceKey.offer.decline"), onPress: () => void attempt(entry, secret, confirmFingerprint, null, step.browser, false) }}
+            subject={<Message id="remoteDaemons.deviceKey.offer.subject" params={{ name }} />}
+            message={
+              <>
+                <p>
+                  <Message
+                    id="remoteDaemons.deviceKey.offer.what"
+                    params={{
+                      file: <InlineReference monospace dir="ltr" wrap>{step.file}</InlineReference>,
+                      destination: <InlineReference monospace dir="ltr" wrap>{`${entry.user}@${entry.host}`}</InlineReference>,
+                      // Literal text the owner looks for in the file, in whatever script the computer's name is written.
+                      mark: <InlineReference monospace dir="auto" wrap>{step.mark}</InlineReference>,
+                    }}
+                  />
+                </p>
+                <p>{t("remoteDaemons.deviceKey.offer.keep")}</p>
+                <p>{t("remoteDaemons.deviceKey.offer.later")}</p>
+              </>
+            }
+            confirmLabel={t("remoteDaemons.deviceKey.offer.confirm")}
+            onConfirm={async () => void attempt(entry, secret, confirmFingerprint, null, step.browser, true)}
+            onCancel={end}
+          />
+        );
         break;
       case "host_key":
         dialogs = (
@@ -188,7 +233,7 @@ export function useRemoteDaemonConnect(capability: RemoteDaemonsCapability, onCh
             subject={<Message id="remoteDaemons.hostKey.subject" params={{ name, fingerprint: <InlineReference monospace dir="ltr" wrap>{step.fingerprint}</InlineReference> }} />}
             message={<p><Message id="remoteDaemons.hostKey.compare" params={{ command: <InlineReference monospace dir="ltr" wrap>{FINGERPRINT_COMMAND}</InlineReference> }} /></p>}
             confirmLabel={t("remoteDaemons.connect")}
-            onConfirm={async () => void attempt(entry, secret, step.fingerprint, null)}
+            onConfirm={async () => void attempt(entry, secret, step.fingerprint, null, false, deviceKey)}
             onCancel={end}
           />
         );
@@ -201,7 +246,7 @@ export function useRemoteDaemonConnect(capability: RemoteDaemonsCapability, onCh
             subject={<Message id="remoteDaemons.noDaemon.subject" params={{ name }} />}
             message={t("remoteDaemons.noDaemon.message")}
             confirmLabel={t("remoteDaemons.noDaemon.confirm")}
-            onConfirm={async () => void attempt(entry, secret, confirmFingerprint, "start")}
+            onConfirm={async () => void attempt(entry, secret, confirmFingerprint, "start", false, deviceKey)}
             onCancel={end}
           />
         );
@@ -223,7 +268,7 @@ export function useRemoteDaemonConnect(capability: RemoteDaemonsCapability, onCh
               </>
             }
             confirmLabel={t("error.tryAgain")}
-            onConfirm={async () => void attempt(entry, secret, confirmFingerprint, null)}
+            onConfirm={async () => void attempt(entry, secret, confirmFingerprint, null, false, deviceKey)}
             onCancel={end}
           />
         );
@@ -234,7 +279,7 @@ export function useRemoteDaemonConnect(capability: RemoteDaemonsCapability, onCh
             tried={step.tried}
             onSave={async (path) => {
               const saved = await capability.save({ ...entry, octoboarddPath: path });
-              void attempt(saved, secret, confirmFingerprint, null);
+              void attempt(saved.entry, secret, confirmFingerprint, null, false, deviceKey);
             }}
             onClose={end}
           />
@@ -260,7 +305,7 @@ export function useRemoteDaemonConnect(capability: RemoteDaemonsCapability, onCh
             subject={<Message id="remoteDaemons.mismatch.subject" params={{ name, remoteVersion: <InlineReference monospace>{step.mismatch.remoteVersion}</InlineReference>, localVersion: <InlineReference monospace>{step.mismatch.localVersion}</InlineReference> }} />}
             message={`${t(older ? "remoteDaemons.mismatch.older" : "remoteDaemons.mismatch.newer")}${t("common.sentenceSeparator")}${t("remoteDaemons.mismatch.browser")}`}
             confirmLabel={t("remoteDaemons.browser.open")}
-            onConfirm={async () => void attempt(entry, secret, confirmFingerprint, null, true)}
+            onConfirm={async () => void attempt(entry, secret, confirmFingerprint, null, true, deviceKey)}
             onCancel={end}
           />
         );

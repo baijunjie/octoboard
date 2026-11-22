@@ -1,14 +1,16 @@
 ---
 title: "Windows"
-description: "適用於 Intel 或 AMD 處理器的電腦（絕大多數 Windows 電腦），需要 Windows 10 版本 21H2 或更新版本。在 Arm 版 Windows 11 上，這個 x64 應用程式會以模擬方式執行。"
+description: "適用於 Intel 或 AMD 處理器的電腦（絕大多數 Windows 電腦），需要 Windows 10 版本 21H2 或更新版本。在 Arm 版 Windows 11 上，發行版本提供原生 arm64 安裝程式時請使用它；否則這個 x64 應用程式會以模擬方式執行。"
 ---
 
 import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
 import { downloads, productName } from "../../../../commands.ts";
+import WindowsUninstaller from "../../../../snippets/zh-TW/windows-uninstaller.mdx";
 
-適用於 Intel 或 AMD 處理器的電腦（x64，絕大多數 Windows 電腦），需要 Windows 10 版本 21H2 或更新版本。在 Arm 版 Windows 11 上，這個 x64 應用程式會以模擬方式執行。
+適用於 Intel 或 AMD 處理器的電腦（x64，絕大多數 Windows 電腦），需要 Windows 10 版本 21H2 或更新版本。在 Arm 版 Windows 11 上，發行版本提供原生 arm64 安裝程式時請使用它；否則這個 x64 應用程式會以模擬方式執行。
 
 <LinkButton href={downloads.windows}>下載 Windows 版</LinkButton>
+<LinkButton href={downloads["windows-arm64"]} variant="secondary">下載 Arm 版 Windows 安裝程式</LinkButton>
 
 <Aside>Windows 應用程式仍處於 Beta 階段。</Aside>
 
@@ -16,7 +18,7 @@ import { downloads, productName } from "../../../../commands.ts";
 
 <Steps>
 
-1. 點選上面的按鈕下載安裝程式，檔名以 <code dir="ltr">x64-setup.exe</code> 結尾。
+1. 點選上面的按鈕下載安裝程式，檔名以 <code dir="ltr">x64-setup.exe</code> 結尾。Arm 版 Windows 請試試第二個按鈕：發行版本提供 arm64 安裝程式時，它會下載檔名以 <code dir="ltr">arm64-setup.exe</code> 結尾的那個檔案；否則會開啟發行版本清單，x64 安裝程式以模擬方式執行。
 2. 開啟下載的檔案，執行安裝程式。它只會為你目前的使用者帳戶安裝 {productName}，不需要系統管理員權限。
 
    應用程式尚未進行程式碼簽署，因此 Microsoft Defender SmartScreen 可能會顯示「Windows 已保護您的電腦」。請點選「其他資訊」，再點選「仍要執行」。
@@ -38,6 +40,16 @@ import { downloads, productName } from "../../../../commands.ts";
 - [Grok Build](https://docs.x.ai/build/overview)
 
 如果你使用 Claude Code 或 Codex，請先安裝 [Git for Windows](https://git-scm.com/download/win)，它們需要它才能運作。
+
+## 解除安裝
+
+從 Windows 設定（應用程式）或控制台中，用 {productName} 的解除安裝程式解除安裝它。
+
+<WindowsUninstaller />
+
+想在解除安裝前看看哪些東西正在生效，請開啟<strong>設定 › 清理 › 解除安裝前清理</strong>：那裡的<strong>全部移除</strong>會移除同樣的東西，並顯示每一項的結果。
+
+[不更動你的系統](../../your-system/)說明了解除安裝後會留下什麼，以及如何移除。
 
 ## 更新
 

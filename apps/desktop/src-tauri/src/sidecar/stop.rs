@@ -111,13 +111,7 @@ pub fn stop_daemon(app: &AppHandle, kind: StopKind) {
     // stopped until it has.
     wait_for_recoveries(app, RECOVERY_END_WAIT);
     match kind {
-        StopKind::Ordinary => escalate_stop(
-            || daemon_stopped(app),
-            || request_stop_of(app, kind, STOP_REQUEST_TIMEOUT),
-            || terminate_child(app),
-            || kill_child(app),
-            [DAEMON_EXIT_GRACE, DAEMON_TERM_GRACE, DAEMON_KILL_WAIT],
-        ),
+        StopKind::Ordinary => ordinary_stop(app, DAEMON_EXIT_GRACE, DAEMON_TERM_GRACE),
         StopKind::Planned => escalate_planned_stop(
             || daemon_stopped(app),
             // A session end that began meanwhile has the daemon's planned stop made ordinary, or
@@ -134,6 +128,41 @@ pub fn stop_daemon(app: &AppHandle, kind: StopKind) {
             ],
         ),
     }
+}
+
+/// The ordinary stop's escalation for the daemon of `app`: `exit_grace` for a stop asked for
+/// already to end it, then the request (or the signal), `term_grace` for it to end, then the kill.
+fn ordinary_stop(app: &AppHandle, exit_grace: Duration, term_grace: Duration) {
+    escalate_stop(
+        || daemon_stopped(app),
+        || request_stop_of(app, StopKind::Ordinary, STOP_REQUEST_TIMEOUT),
+        || terminate_child(app),
+        || kill_child(app),
+        [exit_grace, term_grace, DAEMON_KILL_WAIT],
+    );
+}
+
+/// [`stop_daemon`]'s ordinary stop for a daemon nothing has asked to stop yet (no window made the
+/// UI's request): it is asked at once and given `grace` to end before it is killed, the whole of
+/// its stop falling in that wait, where `stop_daemon` allows only for the end of one already
+/// under way. Blocks the calling thread: call it off the main thread.
+///
+/// It returns within [`stop_daemon_unasked_bound`] of `grace`.
+pub fn stop_daemon_unasked(app: &AppHandle, grace: Duration) {
+    mark_daemon_stopping(app);
+    wait_for_recoveries(app, RECOVERY_END_WAIT);
+    ordinary_stop(app, Duration::ZERO, grace);
+}
+
+/// The longest [`stop_daemon_unasked`] takes for `grace`: the wait for a recovery under way to
+/// end, the request, the grace, and the wait for a killed daemon to be gone.
+pub const fn stop_daemon_unasked_bound(grace: Duration) -> Duration {
+    Duration::from_secs(
+        RECOVERY_END_WAIT.as_secs()
+            + STOP_REQUEST_TIMEOUT.as_secs()
+            + grace.as_secs()
+            + DAEMON_KILL_WAIT.as_secs(),
+    )
 }
 
 /// What the stop at the end of the user's session does about the daemon.
@@ -216,6 +245,14 @@ fn terminate_child(app: &AppHandle) {
     {
         terminate(child.pid());
     }
+}
+
+/// Kills the daemon at once, asking it nothing, and has none started from now on: for a process
+/// that has run out of time to stop it as `stop_daemon` does (the clean-up before the uninstall at
+/// its last bound). What the daemon's sessions ran is left to the holders, as when it is killed.
+pub fn kill_daemon(app: &AppHandle) {
+    mark_daemon_stopping(app);
+    kill_child(app);
 }
 
 /// Kills the running sidecar and lets go of it.
@@ -308,39 +345,21 @@ fn escalate_planned_stop(
 }
 
 /// Asks the daemon at `address` to stop with `POST /shutdown` or `POST /planned-stop`
-/// (`StopKind::endpoint`), and says whether it answered that it will. The one HTTP request the
-/// shell makes to the daemon, so it is written out over a socket rather than through a client the
-/// rest of the shell has no use for. Each of its steps, connecting, sending and reading the answer,
-/// gets what is left of `timeout`, so it cannot hold a restart up for longer than that.
+/// (`StopKind::endpoint`), and says whether it answered that it will. Each of its steps,
+/// connecting, sending and reading the status line, gets what is left of `timeout`, so it cannot
+/// hold a restart up for longer than that.
 fn request_stop(address: &DaemonAddress, kind: StopKind, timeout: Duration) -> bool {
-    use std::io::{BufRead, BufReader, Write};
-    use std::net::{Ipv4Addr, SocketAddr, TcpStream};
-
     let deadline = Instant::now() + timeout;
-    // A socket timeout of zero is an error, so the last step still gets a moment.
-    let left = || {
-        deadline
-            .saturating_duration_since(Instant::now())
-            .max(Duration::from_millis(1))
-    };
-    let attempt = || -> std::io::Result<bool> {
-        let target = SocketAddr::from((Ipv4Addr::LOCALHOST, address.port));
-        let mut stream = TcpStream::connect_timeout(&target, left())?;
-        stream.set_read_timeout(Some(left()))?;
-        stream.set_write_timeout(Some(left()))?;
-        write!(
-            stream,
-            "POST /{}?key={} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-            kind.endpoint(),
-            address.key,
-            address.port
-        )?;
-        let mut status_line = String::new();
-        BufReader::new(stream).read_line(&mut status_line)?;
-        Ok(accepted(&status_line))
-    };
-    match attempt() {
-        Ok(accepted) => accepted,
+    let path = format!("/{}", kind.endpoint());
+    let left = |_| deadline.saturating_duration_since(Instant::now());
+    match super::request::post(
+        address,
+        &path,
+        None,
+        super::request::Reply::StatusLine,
+        left,
+    ) {
+        Ok(answer) => answer.succeeded(),
         Err(err) => {
             diagnostic!(
                 "the {} request to the daemon failed: {err}",
@@ -349,14 +368,6 @@ fn request_stop(address: &DaemonAddress, kind: StopKind, timeout: Duration) -> b
             false
         }
     }
-}
-
-/// Whether an HTTP status line is a success.
-fn accepted(status_line: &str) -> bool {
-    status_line
-        .split_whitespace()
-        .nth(1)
-        .is_some_and(|status| status.starts_with('2'))
 }
 
 #[cfg(target_os = "macos")]
@@ -541,15 +552,6 @@ mod tests {
         };
         assert_eq!(run(None), ["terminate", "request", "kill"]);
         assert_eq!(run(Some("request")), ["terminate", "request"]);
-    }
-
-    #[test]
-    fn only_a_success_status_accepts_the_shutdown_request() {
-        assert!(accepted("HTTP/1.1 202 Accepted\r\n"));
-        assert!(accepted("HTTP/1.1 200 OK\r\n"));
-        assert!(!accepted("HTTP/1.1 401 Unauthorized\r\n"));
-        assert!(!accepted("HTTP/1.1 404 Not Found\r\n"));
-        assert!(!accepted(""));
     }
 
     #[test]

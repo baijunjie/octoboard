@@ -41,6 +41,22 @@ it("offers Install alone when the tool is not installed", async () => {
   expect(buttons(container)).toEqual(["Install"]);
 });
 
+it("says what installing adds and where before the tool is installed", async () => {
+  const container = mount(capability({ state: "notInstalled" }));
+  await act(async () => {});
+  const said = container.textContent ?? "";
+  expect(said).toContain("Installing adds a link named");
+  // Both places the shell may put the link, the system's first.
+  expect(said.indexOf("/usr/local/bin")).toBeGreaterThan(said.indexOf("Installing adds a link named"));
+  expect(said.indexOf("~/.local/bin")).toBeGreaterThan(said.indexOf("/usr/local/bin"));
+});
+
+it("does not say what installing adds once the tool is installed", async () => {
+  const container = mount(capability({ state: "installed", path: "/usr/local/bin/octoboardd", pathNote: false }));
+  await act(async () => {});
+  expect(container.textContent).not.toContain("Installing adds a link named");
+});
+
 it.each<{ state: CommandLineState; text: string }>([
   { state: { state: "installed", path: "/usr/local/bin/octoboardd", pathNote: false }, text: "Installed at /usr/local/bin/octoboardd." },
   { state: { state: "otherCopy", path: "/usr/local/bin/octoboardd" }, text: "runs another copy" },

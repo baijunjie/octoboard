@@ -48,7 +48,10 @@ const switches: { key: string; label: string; help?: string; onText: string; off
   { key: "auto_select_account", label: "Automatically select an account", onText: "whose weekly limit resets soonest" },
   { key: "auto_switch_on_usage_limit", label: "Automatically switch accounts at the usage limit", onText: "switched to another account with usage left" },
   { key: "auto_pull_repositories", label: "Automatically pull repositories", help: "About automatic pulling", onText: "A project's branch is pulled" },
-  { key: "auto_start_quota_windows", label: "Start usage windows automatically", help: "About starting usage windows automatically", onText: "starts counting once it resets" },
+  { key: "auto_start_quota_windows", label: "Start usage windows automatically", help: "About starting usage windows automatically",
+    // What a kick sends is said in the description, where the user turns it on.
+    onText: "one small request is sent on each account, which counts a little toward the account's usage limits.",
+  },
 ];
 
 function mount(field: string, on = false) {

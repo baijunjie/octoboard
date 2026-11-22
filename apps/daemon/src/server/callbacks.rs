@@ -14,9 +14,10 @@ use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 
+use crate::holder::protocol::HookMark;
 use crate::holder::protocol::RelayRoute;
 use crate::hooks;
-use crate::hooks::queue::Push;
+use crate::hooks::queue::{Push, QueuedHook};
 use crate::state::{AppState, RestartRefusal};
 
 /// What a helper route answers: a status, and a body that is JSON or empty.
@@ -55,7 +56,8 @@ impl IntoResponse for Reply {
     }
 }
 
-/// Runs the helper route `route`, whose path parameter is `param` (the session id, or for
+/// Runs the helper route `route`, whose path parameter is `param` (the session id, for
+/// [`RelayRoute::Hook`] followed by the launch where the hook names one ([`HookMark`]), or for
 /// [`RelayRoute::Mcp`] the session's token) and whose body is `body`.
 pub(super) async fn handle(
     state: Arc<AppState>,
@@ -91,6 +93,20 @@ pub(super) async fn hook_callback(
     body: Bytes,
 ) -> Reply {
     handle(state, RelayRoute::Hook, session_id, body).await
+}
+
+/// The hook callback of a launch whose hooks name it ([`HookMark`]): the session
+/// and the launch go on as one parameter, as a holder relays them.
+pub(super) async fn launch_hook_callback(
+    Path((session, launch)): Path<(String, String)>,
+    State(state): State<Arc<AppState>>,
+    body: Bytes,
+) -> Reply {
+    let mark = HookMark {
+        session,
+        launch: Some(launch),
+    };
+    handle(state, RelayRoute::Hook, mark.param(), body).await
 }
 
 pub(super) async fn git_ref_callback(
@@ -132,8 +148,15 @@ pub(super) async fn mcp_call(
 /// waited would also hold the turn, and one that never came (an unreachable daemon, the hook's
 /// timeout) shows a non-blocking error notice in the transcript. An empty `200` is read there as
 /// "no decision", so the event cannot steer the turn either.
-fn hook(state: Arc<AppState>, session_id: String, body: Bytes) -> Reply {
-    match state.hook_queues.push(&session_id, body) {
+fn hook(state: Arc<AppState>, param: String, body: Bytes) -> Reply {
+    let HookMark {
+        session: session_id,
+        launch,
+    } = HookMark::parse(&param);
+    match state
+        .hook_queues
+        .push(&session_id, QueuedHook { launch, body })
+    {
         Push::StartWorker => {
             // Applying an event is blocking work on the store, so the drain runs on the blocking
             // pool; the tasks `apply_hook` starts find the runtime from there.

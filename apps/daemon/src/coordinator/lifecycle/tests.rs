@@ -623,6 +623,381 @@ fn the_agent_records_of_deleted_sessions_are_trashed_unless_shared() {
     );
 }
 
+/// Which records a deletion moves is decided by whether each removed session had a conversation:
+/// without the user's tick only a never-used session's records go, a used session's stay in every
+/// account that holds them, and the tick moves both. A deletion nobody confirmed has no tick.
+#[tokio::test]
+async fn only_the_users_tick_moves_the_records_of_a_session_that_had_a_conversation() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-delete-records-consent");
+    let project_dir = dir.join("claude-account/projects/-work");
+    std::fs::create_dir_all(&project_dir).unwrap();
+    // The used session's conversation also has a copy in another of the accounts.
+    let other_copy = dir.join("claude-a/projects/-work");
+    std::fs::create_dir_all(&other_copy).unwrap();
+    let transcript =
+        |n: usize| project_dir.join(format!("00000000-0000-0000-0000-00000000000{n}.jsonl"));
+    let subagents = |n: usize| project_dir.join(format!("00000000-0000-0000-0000-00000000000{n}"));
+    let copy = |n: usize| other_copy.join(format!("00000000-0000-0000-0000-00000000000{n}.jsonl"));
+    let seed = |n: usize, used: bool| {
+        std::fs::write(transcript(n), "{}\n").unwrap();
+        if used {
+            std::fs::create_dir_all(subagents(n).join("subagents")).unwrap();
+            std::fs::write(copy(n), "{}\n").unwrap();
+        }
+        let session = Session {
+            agent_session_id: Some(format!("00000000-0000-0000-0000-00000000000{n}")),
+            config_dir: Some(dir.join("claude-account").to_string_lossy().into_owned()),
+            has_conversation: used,
+            ..project_session(&format!("s{n}"), AgentId::CLAUDE, SessionStatus::Archived)
+        };
+        state.store.insert_session(&session).unwrap();
+        delete_session(&state, &session.id).unwrap()
+    };
+    let locator = || {
+        records::Locator::with_shell(HashMap::from([(
+            "HOME".to_string(),
+            dir.join("home").to_string_lossy().into_owned(),
+        )]))
+    };
+    let remove = |path: &Path| {
+        let removed = if path.is_dir() {
+            std::fs::remove_dir_all(path)
+        } else {
+            std::fs::remove_file(path)
+        };
+        removed.map_err(|err| TrashFailure::new(path, err))
+    };
+
+    // A deletion nobody confirmed: the automatic one.
+    let deleted = [seed(1, true), seed(2, false)].concat();
+    trash_unconfirmed_agent_records_with(&state, deleted, locator(), remove).await;
+    assert!(transcript(1).exists() && subagents(1).is_dir() && copy(1).exists());
+    assert!(
+        !transcript(2).exists(),
+        "the never-used session's record moved"
+    );
+
+    // A deletion the user confirmed with the option left unticked.
+    let deleted = [seed(3, true), seed(4, false)].concat();
+    trash_agent_records_with(
+        &state,
+        deleted,
+        RecordsConsent::of_request(false),
+        locator(),
+        remove,
+    )
+    .await;
+    assert!(transcript(3).exists() && subagents(3).is_dir() && copy(3).exists());
+    assert!(
+        !transcript(4).exists(),
+        "the never-used session's record moved"
+    );
+
+    // And with it ticked.
+    let deleted = [seed(5, true), seed(6, false)].concat();
+    trash_agent_records_with(
+        &state,
+        deleted,
+        RecordsConsent::of_request(true),
+        locator(),
+        remove,
+    )
+    .await;
+    assert!(!transcript(5).exists() && !subagents(5).exists() && !copy(5).exists());
+    assert!(!transcript(6).exists());
+}
+
+/// A session that counts as never used is not taken at its word: without the user's tick its
+/// records move only when none of them holds a prompt the user sent. One whose record holds such a
+/// prompt (the agent's report of it never arrived) keeps its records, and so does one whose record
+/// cannot be read; the user's tick still moves them.
+#[tokio::test]
+async fn an_unused_sessions_records_stay_when_they_hold_a_prompt_or_cannot_be_read() {
+    // What Claude Code wrote for a `/clear` with no prompt sent, and a typed prompt.
+    let unprompted = include_str!("../../../testdata/unprompted_claude_2.1.330_clear.jsonl");
+    let handoff = include_str!("../../../testdata/handoff_claude_2.1.302.jsonl");
+    let (injected, prompt) = (unprompted.trim_end(), handoff.lines().nth(1).unwrap());
+    #[allow(non_snake_case)]
+    let (INJECTED, PROMPT) = (injected, prompt);
+    let (state, dir) = console_with_project_and_accounts("coordinator-delete-records-unreported");
+    let project_dir = dir.join("claude-account/projects/-work");
+    std::fs::create_dir_all(&project_dir).unwrap();
+    let rollouts = dir.join("codex-account/sessions/2026/10/17");
+    std::fs::create_dir_all(&rollouts).unwrap();
+    let native = |n: usize| format!("00000000-0000-0000-0000-00000000000{n}");
+    let transcript = |n: usize| project_dir.join(format!("{}.jsonl", native(n)));
+    let rollout = |n: usize| {
+        rollouts.join(format!(
+            "rollout-2026-10-17T01-02-03-{}.jsonl.zst",
+            native(n)
+        ))
+    };
+    let delete = |n: usize, agent: AgentId, account: &str| {
+        let session = Session {
+            agent_session_id: Some(native(n)),
+            config_dir: Some(dir.join(account).to_string_lossy().into_owned()),
+            has_conversation: false,
+            ..project_session(&format!("s{n}"), agent, SessionStatus::Archived)
+        };
+        state.store.insert_session(&session).unwrap();
+        delete_session(&state, &session.id).unwrap()
+    };
+    let claude = |n: usize, lines: &[&str]| {
+        std::fs::write(transcript(n), lines.join("\n") + "\n").unwrap();
+        delete(n, AgentId::CLAUDE, "claude-account")
+    };
+    // A compressed rollout whose content is no zstd stream cannot be read.
+    let unreadable = |n: usize| {
+        std::fs::write(rollout(n), b"not a zstd stream").unwrap();
+        delete(n, AgentId::CODEX, "codex-account")
+    };
+    let locator = || {
+        records::Locator::with_shell(HashMap::from([(
+            "HOME".to_string(),
+            dir.join("home").to_string_lossy().into_owned(),
+        )]))
+    };
+    let remove =
+        |path: &Path| std::fs::remove_file(path).map_err(|err| TrashFailure::new(path, err));
+
+    // A deletion nobody confirmed.
+    let deleted = [
+        claude(1, &[INJECTED, PROMPT]),
+        claude(2, &[INJECTED]),
+        unreadable(3),
+    ]
+    .concat();
+    trash_unconfirmed_agent_records_with(&state, deleted, locator(), remove).await;
+    assert!(transcript(1).exists(), "the record holds the user's prompt");
+    assert!(!transcript(2).exists(), "the record holds no prompt");
+    assert!(rollout(3).exists(), "the record cannot be read");
+
+    // A deletion the user confirmed with the option left unticked.
+    let deleted = [
+        claude(4, &[INJECTED, PROMPT]),
+        claude(5, &[INJECTED]),
+        unreadable(6),
+    ]
+    .concat();
+    trash_agent_records_with(
+        &state,
+        deleted,
+        RecordsConsent::of_request(false),
+        locator(),
+        remove,
+    )
+    .await;
+    assert!(transcript(4).exists(), "the record holds the user's prompt");
+    assert!(!transcript(5).exists(), "the record holds no prompt");
+    assert!(rollout(6).exists(), "the record cannot be read");
+
+    // And with it ticked.
+    let deleted = [claude(7, &[INJECTED, PROMPT]), unreadable(8)].concat();
+    trash_agent_records_with(
+        &state,
+        deleted,
+        RecordsConsent::of_request(true),
+        locator(),
+        remove,
+    )
+    .await;
+    assert!(!transcript(7).exists() && !rollout(8).exists());
+}
+
+/// The first prompt of a session whose agent never reported it reads as a prompt whatever it
+/// holds: a pasted block of markup, or an image alone, keeps the transcript where it is, and so
+/// does a line too long to be read, which may have been the prompt.
+#[tokio::test]
+async fn a_first_prompt_of_markup_or_an_image_keeps_an_unused_sessions_records() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-delete-records-shapes");
+    let project_dir = dir.join("claude-account/projects/-work");
+    std::fs::create_dir_all(&project_dir).unwrap();
+    let unprompted = include_str!("../../../testdata/unprompted_claude_2.1.330_clear.jsonl");
+    let user = |content: &str| {
+        format!(r#"{{"type":"user","message":{{"role":"user","content":{content}}}}}"#)
+    };
+    let long = "x".repeat(records::line_file::LINE_LIMIT);
+    let firsts = [
+        user(r#""<error>\nconnection refused\n</error>""#),
+        user(
+            r#"[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AAAA"}}]"#,
+        ),
+        user(&format!(
+            r#"[{{"type":"image","source":{{"data":"{long}"}}}}]"#
+        )),
+    ];
+    let mut deleted = Vec::new();
+    let mut transcripts = Vec::new();
+    for (n, first) in firsts.iter().enumerate() {
+        let native = format!("00000000-0000-0000-0000-00000000000{n}");
+        let transcript = project_dir.join(format!("{native}.jsonl"));
+        std::fs::write(&transcript, format!("{unprompted}{first}\n")).unwrap();
+        let session = Session {
+            agent_session_id: Some(native),
+            config_dir: Some(dir.join("claude-account").to_string_lossy().into_owned()),
+            has_conversation: false,
+            ..project_session(&format!("s{n}"), AgentId::CLAUDE, SessionStatus::Archived)
+        };
+        state.store.insert_session(&session).unwrap();
+        deleted.extend(delete_session(&state, &session.id).unwrap());
+        transcripts.push(transcript);
+    }
+    let locator = records::Locator::with_shell(HashMap::from([(
+        "HOME".to_string(),
+        dir.join("home").to_string_lossy().into_owned(),
+    )]));
+    let remove =
+        |path: &Path| std::fs::remove_file(path).map_err(|err| TrashFailure::new(path, err));
+    trash_unconfirmed_agent_records_with(&state, deleted, locator, remove).await;
+    for transcript in transcripts {
+        assert!(transcript.exists(), "{}", transcript.display());
+    }
+}
+
+/// Deleting every archived session in a scope moves records only on the user's tick: left
+/// unticked, nothing moves, a never-used session's records included; ticked, a used session's and
+/// a never-used one's both go, with no check of the records.
+#[tokio::test]
+async fn the_bulk_deletion_moves_records_only_on_the_users_tick() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-delete-records-bulk");
+    let project_dir = dir.join("claude-account/projects/-work");
+    std::fs::create_dir_all(&project_dir).unwrap();
+    let unprompted = include_str!("../../../testdata/unprompted_claude_2.1.330_clear.jsonl");
+    let transcript =
+        |n: usize| project_dir.join(format!("00000000-0000-0000-0000-00000000000{n}.jsonl"));
+    let seed = |n: usize, used: bool| {
+        std::fs::write(transcript(n), unprompted).unwrap();
+        state
+            .store
+            .insert_session(&Session {
+                agent_session_id: Some(format!("00000000-0000-0000-0000-00000000000{n}")),
+                config_dir: Some(dir.join("claude-account").to_string_lossy().into_owned()),
+                has_conversation: used,
+                ..project_session(&format!("s{n}"), AgentId::CLAUDE, SessionStatus::Archived)
+            })
+            .unwrap();
+    };
+    let locator = || {
+        records::Locator::with_shell(HashMap::from([(
+            "HOME".to_string(),
+            dir.join("home").to_string_lossy().into_owned(),
+        )]))
+    };
+    let remove =
+        |path: &Path| std::fs::remove_file(path).map_err(|err| TrashFailure::new(path, err));
+    let delete_all = || delete_archived_sessions(&state, "console-1", Some("project-1"), None);
+
+    // Through the request: left unticked, it reaches no record.
+    seed(1, true);
+    seed(2, false);
+    delete_archived_requested(
+        &state,
+        "console-1".to_string(),
+        Some("project-1".to_string()),
+        None,
+        false,
+        Vec::new(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
+    assert!(session_ids(&state).is_empty());
+    assert!(transcript(1).exists() && transcript(2).exists());
+    for consent in [false, true] {
+        let consent = RecordsConsent::of_bulk_request(consent);
+        let moves = |used: bool| {
+            let session = Session {
+                has_conversation: used,
+                ..project_session("s", AgentId::CLAUDE, SessionStatus::Archived)
+            };
+            may_move_agent_records(&session, consent)
+        };
+        assert_eq!(
+            (moves(true), moves(false)),
+            (
+                consent == RecordsConsent::Ticked,
+                consent == RecordsConsent::Ticked
+            )
+        );
+    }
+
+    seed(3, true);
+    seed(4, false);
+    let deleted = delete_all().unwrap();
+    trash_agent_records_with(
+        &state,
+        deleted,
+        RecordsConsent::of_bulk_request(false),
+        locator(),
+        remove,
+    )
+    .await;
+    assert!(transcript(3).exists() && transcript(4).exists());
+
+    seed(5, true);
+    seed(6, false);
+    let deleted = delete_all().unwrap();
+    trash_agent_records_with(
+        &state,
+        deleted,
+        RecordsConsent::of_bulk_request(true),
+        locator(),
+        remove,
+    )
+    .await;
+    assert!(!transcript(5).exists() && !transcript(6).exists());
+}
+
+/// Through the request's own path (the delete, the consent the request carries and the move, with
+/// only the Trash and the default account stood in for): an unused session deleted with no
+/// confirmation loses its records when they hold no prompt, and keeps them when the user's prompt
+/// is in them, whatever the session's own record says.
+#[tokio::test]
+async fn a_delete_request_leaves_the_records_of_an_unused_session_that_was_prompted() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-delete-request-unreported");
+    let project_dir = dir.join("claude-account/projects/-work");
+    std::fs::create_dir_all(&project_dir).unwrap();
+    let unprompted = include_str!("../../../testdata/unprompted_claude_2.1.330_clear.jsonl");
+    let prompt = include_str!("../../../testdata/handoff_claude_2.1.302.jsonl")
+        .lines()
+        .nth(1)
+        .unwrap();
+    let transcript =
+        |n: usize| project_dir.join(format!("00000000-0000-0000-0000-00000000000{n}.jsonl"));
+    for (n, content) in [
+        (1, unprompted.to_owned()),
+        (2, format!("{unprompted}{prompt}\n")),
+    ] {
+        std::fs::write(transcript(n), content).unwrap();
+        state
+            .store
+            .insert_session(&Session {
+                agent_session_id: Some(format!("00000000-0000-0000-0000-00000000000{n}")),
+                config_dir: Some(dir.join("claude-account").to_string_lossy().into_owned()),
+                has_conversation: false,
+                ..project_session(&format!("s{n}"), AgentId::CLAUDE, SessionStatus::Idle)
+            })
+            .unwrap();
+        delete_requested_with(
+            &state,
+            format!("s{n}"),
+            RecordsConsent::of_request(false),
+            true,
+            (Vec::new(), Vec::new()),
+            records::Locator::with_shell(HashMap::from([(
+                "HOME".to_string(),
+                dir.join("home").to_string_lossy().into_owned(),
+            )])),
+            |path: &Path| std::fs::remove_file(path).map_err(|err| TrashFailure::new(path, err)),
+        )
+        .await
+        .unwrap();
+    }
+    assert!(session_ids(&state).is_empty());
+    assert!(!transcript(1).exists(), "never prompted");
+    assert!(transcript(2).exists(), "the record holds the user's prompt");
+}
+
 /// A Codex thread that had a turn reverted goes to the Trash whole: its first rollout and every
 /// later segment, plain or compressed.
 #[test]

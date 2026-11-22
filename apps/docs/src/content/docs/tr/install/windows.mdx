@@ -1,14 +1,16 @@
 ---
 title: "Windows"
-description: "Intel veya AMD işlemcili bilgisayarlar için (neredeyse tüm Windows bilgisayarları), Windows 10 sürüm 21H2 veya sonrasında. Arm tabanlı Windows 11’de bu x64 uygulaması öykünme altında çalışır."
+description: "Intel veya AMD işlemcili bilgisayarlar için (neredeyse tüm Windows bilgisayarları), Windows 10 sürüm 21H2 veya sonrasında. Arm tabanlı Windows 11’de, sürüm sunuyorsa yerel arm64 yükleyicisini kullanın; sunmuyorsa bu x64 uygulaması orada öykünme altında çalışır."
 ---
 
 import { Aside, LinkButton, Steps } from "@astrojs/starlight/components";
 import { downloads, productName } from "../../../../commands.ts";
+import WindowsUninstaller from "../../../../snippets/tr/windows-uninstaller.mdx";
 
-Intel veya AMD işlemcili bilgisayarlar için (x64; neredeyse tüm Windows bilgisayarları), Windows 10 sürüm 21H2 veya sonrasında. Arm tabanlı Windows 11’de bu x64 uygulaması öykünme altında çalışır.
+Intel veya AMD işlemcili bilgisayarlar için (x64; neredeyse tüm Windows bilgisayarları), Windows 10 sürüm 21H2 veya sonrasında. Arm tabanlı Windows 11’de, sürüm sunuyorsa yerel arm64 yükleyicisini kullanın; sunmuyorsa bu x64 uygulaması orada öykünme altında çalışır.
 
 <LinkButton href={downloads.windows}>Windows için indir</LinkButton>
+<LinkButton href={downloads["windows-arm64"]} variant="secondary">Arm tabanlı Windows için indir</LinkButton>
 
 <Aside>Windows uygulaması beta aşamasındadır.</Aside>
 
@@ -16,7 +18,7 @@ Intel veya AMD işlemcili bilgisayarlar için (x64; neredeyse tüm Windows bilgi
 
 <Steps>
 
-1. Yükleyiciyi yukarıdaki düğmeyle indirin. Adı <code dir="ltr">x64-setup.exe</code> ile biten bir dosyadır.
+1. Yükleyiciyi yukarıdaki düğmeyle indirin. Adı <code dir="ltr">x64-setup.exe</code> ile biten bir dosyadır. Arm tabanlı Windows’ta ikinci düğmeyi deneyin: sürüm bir arm64 yükleyicisi sunuyorsa adı <code dir="ltr">arm64-setup.exe</code> ile biten o dosyayı indirir; sunmuyorsa sürümlerin listesini açar ve x64 yükleyicisi öykünme altında çalışır.
 2. Yükleyiciyi çalıştırmak için indirilen dosyayı açın. {productName} yalnızca kullanıcı hesabınız için kurulur, bu yüzden yönetici yetkisi istemez.
 
    Uygulama henüz kod imzalı olmadığından Microsoft Defender SmartScreen “Windows bilgisayarınızı korudu” iletisini gösterebilir. “Daha fazla bilgi”yi, ardından “Yine de çalıştır”ı seçin.
@@ -38,6 +40,16 @@ Ana pencere açıldığında işiniz tamamdır.
 - [Grok Build](https://docs.x.ai/build/overview)
 
 Claude Code veya Codex kullanıyorsanız önce [Git for Windows](https://git-scm.com/download/win) kurun; çalışmak için ona ihtiyaç duyarlar.
+
+## Kaldırma
+
+{productName} uygulamasını, Windows Ayarları’ndan (Uygulamalar) veya Denetim Masası’ndan, kendi kaldırıcısıyla kaldırın.
+
+<WindowsUninstaller />
+
+Kaldırmadan önce nelerin yürürlükte olduğunu görmek için <strong>Ayarlar › Temizlik › Uygulamayı kaldırmadan önce temizle</strong> bölümünü açın: oradaki <strong>Tümünü kaldır</strong> aynı şeyleri kaldırır ve her öğenin sonucunu gösterir.
+
+[Sisteminiz olduğu gibi kalır](../../your-system/) sayfası, sonrasında geriye ne kaldığını ve bunun nasıl kaldırılacağını anlatır.
 
 ## Güncellemeler
 
