@@ -3,8 +3,9 @@
 //! within a bound, reading a regular file without blocking (as bytes or as text), appending to one,
 //! comparing and removing entries, and refusing a path that is not a directory. The rest lives
 //! beside it: `identity` and `place` tell directories apart whatever their paths look like,
-//! `listing` browses directories and finds the git repositories under a parent, `replace` replaces
-//! a file whole, and `trash` moves a file or directory to the Trash.
+//! `links` walks the links on the way to a path without resolving them all at once, `listing`
+//! browses directories and finds the git repositories under a parent, `replace` replaces a file
+//! whole, and `trash` moves a file or directory to the Trash.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -15,6 +16,7 @@ use crate::platform::fs;
 use crate::protocol::{error_code, CodedError};
 
 pub mod identity;
+pub mod links;
 pub mod listing;
 pub mod place;
 pub mod replace;

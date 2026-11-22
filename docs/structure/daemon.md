@@ -457,11 +457,18 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 - `src/hostfs/` — host filesystem work: bounded reads, regular-file reads and appends, device/inode identity, listing,
   whole-file replacement, Trash, small entry steps (`modified`, `remove_any`, `is_same_path`), `dir_key`, and the one
   place a path is resolved against the disk (`canonical`, over `platform::names::canonical`) and compared as written
-  (`lexical_key`, `lexically_within`, over `platform::names::lexical_key`).
+  (`lexical_key`, `lexically_within`, over `platform::names::lexical_key`); `links.rs` (`leads_into`) walks a path's
+  spelling component by component, following each symbolic link by reading its target and never looking at a prefix
+  the caller's judgement refuses, so a path whose links lead into a network or device place is found before that place
+  is touched (`path_links/resolve.rs` is its caller).
 - `src/host_open/`, `src/path_links/` — opening the file manager, default application or terminal (every launcher runs
   through one bounded runner, and what each host's launcher is comes from `platform::open`; `host_open/native_app.rs`
-  opens an agent's desktop application at a URL its scheme names); probing, reading (`read`, the one way a click on a file shows it) and opening the paths a terminal shows, where `path_links/resolve.rs` is the one
-  place that decides what a link may reach and what is only shown rather than launched.
+  opens an agent's desktop application at a URL its scheme names); probing, reading (`read`, the one way a click on a file shows it) and opening the paths a terminal shows, where
+  `path_links/mod.rs` holds the routes (`probe`, `read`, `locate`, `open`, `reveal`), `path_links/resolve.rs` is the one place that decides what a path names, what a link may reach
+  and what is only shown rather than launched (it refuses a network or device place as written, and a link into one
+  through `hostfs::links::leads_into`), and `path_links/looks.rs` holds the deadlines under which the disk is looked at
+  (`PROBE_DEADLINE`, `ROOTS_DEADLINE`), the passes that run a project's roots lookup and the resolving of paths under
+  them within them (`roots_within_deadline`, `reach_within_deadline`), and the test seam that stalls a look.
 - `src/env_shell/` — the user's real shell environment agents are launched with (the host's login-shell snapshot from
   `platform::shell`, filtered by `snapshot.rs` using Octoboard's own markers and every descriptor's
   `inherited_session_vars`, kept under the freshness rules of `cache.rs`), and resolving a binary on it into what starts
@@ -656,8 +663,10 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   never through a link) (contract tests in `fs/contract_tests.rs` hold every host to the same behaviour), and which
   process holds a lock on a file where the host lists them (`lock_holder`, Linux's `/proc/locks`, read by
   `fs/lock_table.rs`); `names/` how the host spells names (a name as bytes and back, the components a client may send,
-  git bytes as a path, the lexical comparison key of a path, the path style, the canonical path, which on Windows is the
-  long, plain form (`std::fs::canonicalize`), so a `%TEMP%` written as an 8.3 short path, as on the CI runner, compares
+  git bytes as a path, the lexical comparison key of a path, the path style, whether a spelling reaches a network or
+  device place (`reaches_network_or_device`: the Windows UNC and device namespaces, the Unix automount trees) and
+  whether a link target in the device namespace is a local volume after all (`names_local_volume`, Windows only), the
+  canonical path, which on Windows is the long, plain form (`std::fs::canonicalize`), so a `%TEMP%` written as an 8.3 short path, as on the CI runner, compares
   equal to its long form; the Windows rules that need no OS call are plain functions tested on every host, the rest a
   skeleton); `shell/` what the host asks of the user's shell (the login shell and the environment snapshot it gives,
   finding a binary on a `PATH` as what starts it, the command line a hook runs (and the variant that always exits 0,

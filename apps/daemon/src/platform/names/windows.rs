@@ -69,3 +69,7 @@ pub fn plain_form(path: PathBuf) -> PathBuf {
 pub fn reaches_network_or_device(path: &Path) -> bool {
     windows_rules::reaches_network_or_device(&path.to_string_lossy())
 }
+
+pub fn names_local_volume(path: &Path) -> bool {
+    windows_rules::names_local_volume(&path.to_string_lossy())
+}

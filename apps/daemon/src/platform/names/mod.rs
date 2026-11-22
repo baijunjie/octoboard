@@ -74,12 +74,21 @@ fn is_foreign_absolute_to(host: PathStyle, recorded: &str) -> bool {
 /// another machine or a device rather than read its own disk: on Windows a UNC path
 /// (`\\server\share`, also written with slashes) and the device namespaces (`\\.\`, `\\?\`
 /// but for a plain drive such as `\\?\C:\`), where the host connects out with the user's
-/// credentials; on Unix the automount tree `/net`, and on macOS `/home` too (the `auto_home`
-/// mount; an ordinary folder on Linux), where touching a name mounts a remote host. A judgement of
-/// the spelling alone: where a link leads is not known until the disk is looked at. Text only:
-/// nothing is read from disk, so it can be asked before the path is touched.
+/// credentials; on Unix the automount tree `/net`, and on macOS also `/home`,
+/// `/System/Volumes/Data/home` and `/Network/Servers` (any case, as the file system reads them;
+/// `/home` is an ordinary folder on Linux), where touching a name mounts a remote host. A
+/// judgement of the spelling alone: where a link leads is not known until the disk is looked at,
+/// so a caller that follows links asks this of each prefix as it goes, never looking at one it
+/// refuses. Text only: nothing is read from disk, so it can be asked before the path is touched.
 pub fn reaches_network_or_device(path: &Path) -> bool {
     host::reaches_network_or_device(path)
+}
+
+/// Whether `target`, what a symbolic link leads to, names a local volume rather than a network or
+/// device place, though its spelling is in the device namespace: on Windows `\\?\Volume{GUID}\…`,
+/// what a folder a volume is mounted in leads to. Always false on Unix. Text only.
+pub fn names_local_volume(target: &Path) -> bool {
+    host::names_local_volume(target)
 }
 
 /// The bytes of a file name, one name to one byte string: on Unix the name's own bytes, on

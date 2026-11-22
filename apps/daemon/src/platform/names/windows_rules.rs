@@ -143,6 +143,35 @@ pub(super) fn reaches_network_or_device(text: &str) -> bool {
     !verbatim_drive
 }
 
+/// Whether `text`, the target of a link, names a local volume by its GUID (`\\?\Volume{GUID}\…`,
+/// also with the `\??\` of the NT namespace): what a folder a volume is mounted in leads to, a
+/// device-namespace form that is still the local disk. Case does not matter; the name must be a
+/// GUID in braces, ending the text or followed by a backslash.
+pub(super) fn names_local_volume(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let Some(rest) = [r"\\?\", r"\??\"]
+        .iter()
+        .find_map(|prefix| bytes.strip_prefix(prefix.as_bytes()))
+    else {
+        return false;
+    };
+    let Some(rest) = rest
+        .get(.."Volume{".len())
+        .filter(|head| head.eq_ignore_ascii_case(b"Volume{"))
+        .map(|head| &rest[head.len()..])
+    else {
+        return false;
+    };
+    // `8-4-4-4-12` hexadecimal digits, then the closing brace.
+    let guid = rest.get(..36).filter(|guid| {
+        guid.iter().enumerate().all(|(at, byte)| match at {
+            8 | 13 | 18 | 23 => *byte == b'-',
+            _ => byte.is_ascii_hexdigit(),
+        })
+    });
+    guid.is_some() && rest.get(36) == Some(&b'}') && matches!(rest.get(37), None | Some(b'\\'))
+}
+
 /// `path` without its verbatim prefix, or `None` where it has none or dropping it would change what
 /// it names: `\\?\C:\a` is `C:\a` and `\\?\UNC\server\share\a` is `\\server\share\a`. A verbatim path
 /// is taken as written, so one with a component the plain form would normalise away (a trailing
@@ -398,6 +427,34 @@ mod tests {
             "C://server/share",
         ] {
             assert!(!reaches_network_or_device(local), "{local}");
+        }
+    }
+
+    /// A link whose target is a volume by GUID, which is what a folder a volume is mounted in
+    /// leads to, names a local volume; nothing else does.
+    #[test]
+    fn a_volume_by_guid_is_a_local_volume_and_no_other_name_is() {
+        for local in [
+            r"\\?\Volume{0b1c2d3e-0000-4000-8000-0123456789ab}\",
+            r"\\?\Volume{0b1c2d3e-0000-4000-8000-0123456789ab}",
+            r"\\?\volume{0B1C2D3E-0000-4000-8000-0123456789AB}\dir\a",
+            r"\??\Volume{0b1c2d3e-0000-4000-8000-0123456789ab}\",
+        ] {
+            assert!(names_local_volume(local), "{local}");
+        }
+        for other in [
+            r"\\?\Volume{0b1c}\dir",
+            r"\\?\Volume{0b1c2d3e-0000-4000-8000-0123456789ab}x\",
+            r"\\?\Volume{0b1c2d3e-0000-4000-8000-0123456789ag}\",
+            r"\\?\Volume{0b1c2d3e-0000-4000-8000-0123456789ab",
+            r"\\?\UNC\server\share",
+            r"\\?\GLOBALROOT\Device\x",
+            r"\\.\Volume{0b1c2d3e-0000-4000-8000-0123456789ab}\",
+            r"\\server\share",
+            r"C:\a",
+            "",
+        ] {
+            assert!(!names_local_volume(other), "{other}");
         }
     }
 

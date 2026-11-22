@@ -1,13 +1,15 @@
 //! File paths a session's terminal shows, checked and opened on the daemon's host. A path is
-//! reachable when it names an existing file or directory anywhere on the host: an absolute or
-//! `~/` path as written, a relative one from each root of the session's project (its own directory
-//! and its place in a worktree of the same repository), wherever it leads from there. Symbolic
-//! links are resolved first, and a path is judged by where it resolves to: in the project, in a
-//! system temp root, or elsewhere on the host. A network or device path as written (a UNC path, a
-//! device namespace, the `/net` automount tree, and `/home` on macOS) is refused before the disk is
+//! reachable when it names an existing file or directory anywhere on the host: an absolute path
+//! or one from `~` and a separator as written, a relative one from each root of the session's
+//! project (its own directory and its place in a worktree of the same repository), wherever it
+//! leads from there. Symbolic links are resolved first, and a path is judged by where it resolves
+//! to: in the project, in a system temp root, or elsewhere on the host. A network or device path
+//! as written (a UNC path, a device namespace, the `/net` automount tree, and on macOS `/home`,
+//! `/System/Volumes/Data/home` and `/Network/Servers`, in any case) is refused before the disk is
 //! touched, since looking at it makes the host connect out, unless it lies inside one of the
-//! project's own roots. Only the spelling is judged: a link that leads into such a place is not
-//! refused.
+//! project's own roots. A symbolic link that leads into such a place is refused the same way: the
+//! links on the way are followed one by one without looking at the place
+//! ([`crate::hostfs::links::leads_into`]), before the path is resolved.
 //!
 //! A click on a file never hands it to the host's opener: the system's default application for a
 //! file may run it, so the client reads the file ([`read`]) and shows it in the file viewer,
@@ -32,6 +34,13 @@
 //! host. A relative path is reachable only when exactly one of the project's roots has it, and not
 //! at all with no root to look from (a console session, a project whose directory is not found).
 //!
+//! The look that finds what a path names has a deadline: in a probe, and in the resolving step of
+//! a click (`open`, `read`, `locate`, `reveal`), on a thread of its own per place ([`place_of`]),
+//! so that a mount that hangs holds one thread and is refused at once while it stays stuck (see
+//! [`probe`], [`reached`] and [`looks`]). What comes after it has none: reading the file, which is
+//! bounded in bytes only, asking whether a folder is a package, checking who owns a temp root's
+//! entries, selecting a link in `reveal`.
+//!
 //! A path found in a project root also says where the file viewer reads it from (`view`); a file
 //! elsewhere (in a temp root or anywhere else on the host) is read by [`read`]. Whether the viewer
 //! can show it is for the client to find out by reading it. For a directory the view is its entry
@@ -40,7 +49,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -48,8 +57,10 @@ use tokio::sync::Semaphore;
 
 use crate::protocol::{error_code, CodedError, PathLink, PathLinkKind, PathLinkView};
 
+mod looks;
+use looks::{reach_within_deadline, roots_within_deadline, Looks};
 mod resolve;
-use resolve::{own_entry, place_of, private_in_temp, reach, resolve, Refusal, Resolved, Unreached};
+use resolve::{own_entry, place_of, private_in_temp, resolve, Refusal, Resolved, Unreached};
 
 /// The most paths one `probe_path_links` request may ask about.
 pub const MAX_PROBED_PATHS: usize = 64;
@@ -57,22 +68,13 @@ pub const MAX_PROBED_PATHS: usize = 64;
 /// How many probes run at once; each can touch the file system for up to `MAX_PROBED_PATHS` paths.
 pub static PROBE_PERMITS: Semaphore = Semaphore::const_new(crate::blocking_pass::BLOCKING_WIDTH);
 
-/// How long the paths of one `probe_path_links` request are waited for, all together. A path on a
-/// healthy disk answers in well under a millisecond; one on a disk still waking from sleep can take
-/// a few seconds. The places that have not answered by then are left out, and their paths are
-/// answered `none`, rather than holding one of [`PROBE_PERMITS`] on a stalled mount.
-const PROBE_DEADLINE: Duration = Duration::from_secs(2);
-
-/// How long the roots of a project are waited for when a probe asks for them: finding them runs
-/// `git` (a cold lookup is the slow case), and reads the project's directory.
-const ROOTS_DEADLINE: Duration = Duration::from_secs(5);
-
 /// How long the roots of a project are reused: finding its worktrees runs `git`.
 const ROOTS_TTL: Duration = Duration::from_secs(5);
 
 /// The temp roots. `canonical` are the roots as they resolve now; `lexical` are the spellings a
 /// path inside one may be written with (each root as the host names it, and as resolved), read to
 /// say where a path that is gone was spelled.
+#[derive(Clone)]
 pub struct TempRoots {
     pub canonical: Vec<PathBuf>,
     pub lexical: Vec<PathBuf>,
@@ -229,42 +231,17 @@ fn known(state: &crate::state::AppState, project: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-/// The roots of `project` as `RootsCache` holds them if they are fresh, else found within
-/// [`ROOTS_DEADLINE`] (a pass of its own, so a stalled project directory holds one thread, and a
-/// lookup still stuck is not started again); none when they were not found in time.
-fn roots_within_deadline(
-    state: &std::sync::Arc<crate::state::AppState>,
-    project: &str,
-) -> Option<ProjectRoots> {
-    let path = roots_key_path(state.store.get_project(project).ok().flatten().as_ref());
-    if let Some(roots) = state.path_link_roots.get(project, &path) {
-        return Some(roots);
-    }
-    let groups = HashMap::from([(project.to_owned(), vec![()])]);
-    let (owned, id) = (std::sync::Arc::clone(state), project.to_owned());
-    let pass = crate::blocking_pass::within_deadline(
-        &state.path_root_lookups,
-        groups,
-        ROOTS_DEADLINE,
-        move |()| Some(project_roots(&owned, &id, false)),
-    );
-    for project in &pass.timed_out {
-        tracing::warn!(%project, "finding a project's roots for path links timed out");
-    }
-    pass.found.into_iter().next().map(|(_, roots)| roots)
-}
-
 /// Answers each of `paths`, in order, with what it names. The roots of the project are found
-/// within [`ROOTS_DEADLINE`], and the paths within [`PROBE_DEADLINE`], grouped by the place they
-/// lie on ([`place_of`]) so that one stalled mount holds one thread, not one per path
-/// ([`crate::blocking_pass::within_deadline`], a few places at a time, as the caller is on the
-/// blocking pool): the paths of a place not answered by then, or whose earlier look is still stuck,
-/// are answered `none`, and every other place is answered. A probe blocks for at most the two
-/// deadlines together, plus finding the temp roots and the home directory, which the daemon
+/// within [`looks::ROOTS_DEADLINE`], and the paths within [`looks::PROBE_DEADLINE`], grouped by
+/// the place they lie on ([`place_of`]) so that one stalled mount holds one thread, not one per
+/// path ([`crate::blocking_pass::within_deadline`], a few places at a time, as the caller is on
+/// the blocking pool): the paths of a place not answered by then, or whose earlier look is still
+/// stuck, are answered `none`, and every other place is answered. A probe blocks for at most the
+/// two deadlines together, plus finding the temp roots and the home directory, which the daemon
 /// resolves itself. When the roots are not found in time every path is `none`; a request with no
 /// path asks for nothing and is answered at once.
 pub fn probe(
-    state: &std::sync::Arc<crate::state::AppState>,
+    state: &Arc<crate::state::AppState>,
     project: Option<&str>,
     paths: Vec<String>,
 ) -> Result<Vec<PathLink>> {
@@ -286,9 +263,10 @@ pub fn probe(
     if paths.is_empty() {
         return Ok(Vec::new());
     }
+    let looks = Looks::current();
     let roots = match project {
         None => Some(ProjectRoots::default()),
-        Some(project) => roots_within_deadline(state, project),
+        Some(project) => roots_within_deadline(state, project, false, &looks),
     };
     let Some(roots) = roots else {
         return Ok(paths.into_iter().map(none).collect());
@@ -309,8 +287,9 @@ pub fn probe(
     let pass = crate::blocking_pass::within_deadline(
         &state.path_probes,
         groups,
-        PROBE_DEADLINE,
+        looks.probe_deadline,
         move |path: &String| {
+            looks.before_look(path);
             let resolved = resolve(path, home.as_deref(), &temp, &|| roots.clone());
             let kind = resolved.as_ref().map_or(PathLinkKind::None, |r| r.kind);
             let viewer_only = resolved.as_ref().is_some_and(Resolved::viewer_only);
@@ -395,23 +374,6 @@ fn entry_file(directory: &Path) -> Option<PathBuf> {
     best.map(|(_, _, name)| directory.join(name))
 }
 
-/// The roots of `project`, looked up once into `cache` however often they are asked for: afresh when
-/// `fresh`, else as found within the last few seconds.
-fn cached_roots(
-    state: &crate::state::AppState,
-    project: Option<&str>,
-    cache: &OnceLock<ProjectRoots>,
-    fresh: bool,
-) -> ProjectRoots {
-    cache
-        .get_or_init(|| {
-            project.map_or_else(ProjectRoots::default, |project| {
-                project_roots(state, project, fresh)
-            })
-        })
-        .clone()
-}
-
 /// The directory a project's place in `worktree` is, from the roots as found within the last few
 /// seconds, for a read that runs again for every part of a file and must not run `git` for each;
 /// none for a worktree not among them.
@@ -428,26 +390,37 @@ pub fn worktree_scope(
     roots.canonical.into_iter().nth(index)
 }
 
-/// What `path` names now, resolved as `probe` does but with the project's roots as `lookup` finds
-/// them, or why it is not reachable. A launchable file is reachable here; it is for the caller to
-/// refuse.
+/// What `path` names now, resolved as `probe` does, with the project's roots, or why it is not
+/// reachable: the roots are found and the path looked at under deadlines, on a thread of the
+/// place's own, and a place whose earlier look is still stuck is refused at once (see
+/// [`looks::roots_within_deadline`] and [`looks::reach_within_deadline`]). The roots are looked up
+/// afresh when `fresh`, else taken as found within the last few seconds. A launchable file is
+/// reachable here; it is for the caller to refuse.
 fn reached(
-    state: &crate::state::AppState,
+    state: &Arc<crate::state::AppState>,
     project: Option<&str>,
     path: &str,
     temp: &TempRoots,
-    lookup: &dyn Fn() -> ProjectRoots,
-) -> Result<Resolved> {
+    fresh: bool,
+) -> Result<(Resolved, ProjectRoots)> {
     known(state, project)?;
-    let home = crate::paths::known_home_dir();
-    match reach(path, home.as_deref(), temp, lookup) {
-        Ok(resolved) => Ok(resolved),
-        Err(Unreached::Refused(refusal)) => Err(refusal.into_error(path)),
-        Err(Unreached::Gone { was }) => Err(CodedError::raised(
+    let looks = Looks::current();
+    let unanswered = || Refusal::Unanswered.into_error(path);
+    let roots = match project {
+        None => ProjectRoots::default(),
+        Some(project) => {
+            roots_within_deadline(state, project, fresh, &looks).ok_or_else(unanswered)?
+        }
+    };
+    match reach_within_deadline(state, &looks, path, temp, &roots) {
+        Some(Ok(resolved)) => Ok((resolved, roots)),
+        Some(Err(Unreached::Refused(refusal))) => Err(refusal.into_error(path)),
+        Some(Err(Unreached::Gone { was })) => Err(CodedError::raised(
             error_code::FILE_NOT_FOUND,
             format!("{path} does not exist"),
             &[("path", path), ("root", was.as_param())],
         )),
+        None => Err(unanswered()),
     }
 }
 
@@ -455,7 +428,7 @@ fn reached(
 /// what a click on a file shows in the viewer. Anything but a file is refused, and a launchable file
 /// is read like any other, since reading launches nothing.
 pub fn read(
-    state: &crate::state::AppState,
+    state: &Arc<crate::state::AppState>,
     project: Option<&str>,
     path: &str,
     limit: usize,
@@ -469,15 +442,12 @@ pub fn read(
 /// What `path` names now, which must be a file: resolved with the project's roots looked up afresh,
 /// or, with `fresh` off, as found within the last few seconds.
 fn locate_file(
-    state: &crate::state::AppState,
+    state: &Arc<crate::state::AppState>,
     project: Option<&str>,
     path: &str,
     fresh: bool,
 ) -> Result<Resolved> {
-    let cache = OnceLock::new();
-    let resolved = reached(state, project, path, &temp_roots(), &|| {
-        cached_roots(state, project, &cache, fresh)
-    })?;
+    let (resolved, _) = reached(state, project, path, &temp_roots(), fresh)?;
     if resolved.kind != PathLinkKind::File {
         return Err(crate::browse::live::unsupported(path, "directory"));
     }
@@ -489,7 +459,7 @@ fn locate_file(
 /// path again, and a copy of hundreds of parts must not run `git` for each. Anything but a file is
 /// refused.
 pub fn locate(
-    state: &crate::state::AppState,
+    state: &Arc<crate::state::AppState>,
     project: Option<&str>,
     path: &str,
 ) -> Result<Resolved> {
@@ -500,7 +470,7 @@ pub fn locate(
 /// resolving it again as `probe` does, from the project's roots as they are now. A launchable
 /// file is refused, and on macOS so is a folder the system types as a package; the type is asked
 /// only here, where a path is about to be opened.
-pub fn open(state: &crate::state::AppState, project: Option<&str>, path: &str) -> Result<()> {
+pub fn open(state: &Arc<crate::state::AppState>, project: Option<&str>, path: &str) -> Result<()> {
     open_with(
         state,
         project,
@@ -513,17 +483,14 @@ pub fn open(state: &crate::state::AppState, project: Option<&str>, path: &str) -
 /// [`open`] with what says a folder is a package and what opens a resolved path given, so that a
 /// test can see that nothing is opened.
 fn open_with(
-    state: &crate::state::AppState,
+    state: &Arc<crate::state::AppState>,
     project: Option<&str>,
     path: &str,
     is_package: impl FnOnce(&Path) -> bool,
     opener: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<()> {
-    let cache = OnceLock::new();
     let temp = temp_roots();
-    let resolved = reached(state, project, path, &temp, &|| {
-        cached_roots(state, project, &cache, true)
-    })?;
+    let (resolved, _) = reached(state, project, path, &temp, true)?;
     if resolved.viewer_only() {
         return Err(Refusal::Launchable.into_error(path));
     }
@@ -566,7 +533,11 @@ pub fn is_launchable(root: &Path, canonical: &Path, metadata: &std::fs::Metadata
 /// folder is closed to others; a file in a project is not checked); a root itself and a path
 /// ending in `/`, `/.` or `..` are shown as what they resolve to. Nothing is launched, so a file
 /// only the viewer shows is revealed too; whatever a link never reaches still is refused.
-pub fn reveal(state: &crate::state::AppState, project: Option<&str>, path: &str) -> Result<()> {
+pub fn reveal(
+    state: &Arc<crate::state::AppState>,
+    project: Option<&str>,
+    path: &str,
+) -> Result<()> {
     reveal_with(state, project, path, |path| {
         crate::host_open::paths::open_path(path, true)
     })
@@ -574,16 +545,14 @@ pub fn reveal(state: &crate::state::AppState, project: Option<&str>, path: &str)
 
 /// [`reveal`] with what shows a path given, so that a test can see that nothing is shown.
 fn reveal_with(
-    state: &crate::state::AppState,
+    state: &Arc<crate::state::AppState>,
     project: Option<&str>,
     path: &str,
     shower: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<()> {
     let temp = temp_roots();
-    let cache = OnceLock::new();
-    let lookup = || cached_roots(state, project, &cache, true);
-    let resolved = reached(state, project, path, &temp, &lookup)?;
-    shower(&own_entry(&resolved, &temp, &lookup).unwrap_or(resolved.path))
+    let (resolved, roots) = reached(state, project, path, &temp, true)?;
+    shower(&own_entry(&resolved, &temp, &|| roots.clone()).unwrap_or(resolved.path))
 }
 
 #[cfg(test)]

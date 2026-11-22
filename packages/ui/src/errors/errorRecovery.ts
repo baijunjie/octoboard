@@ -81,7 +81,7 @@ const STORE_WRITE_CAUSE_RECOVERY: Record<StoreWriteCause, ErrorRecovery> = {
 
 /** The remedy of a `path_link_refused` by its `cause`, as `pathLinkRefusedCause` reads it. */
 const PATH_LINK_REFUSED_RECOVERY: Record<PathLinkRefusedCause, ErrorRecovery> = {
-  ambiguous: "pathLinkAmbiguous", launchable: "pathLinkLaunchable", not_private: "pathLinkNotPrivate", not_a_file_or_folder: "none", unreadable: "none", other: "none",
+  ambiguous: "pathLinkAmbiguous", launchable: "pathLinkLaunchable", not_private: "pathLinkNotPrivate", not_a_file_or_folder: "none", unreadable: "none", unanswered: "none", other: "none",
 };
 
 /** Whether every item a `session_branches_not_removed` names is a worktree kept for what its folder is or may hold:

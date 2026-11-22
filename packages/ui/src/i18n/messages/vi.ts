@@ -644,6 +644,7 @@ export const vi: Translation<"other"> = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path} không phải tệp hoặc thư mục nên không thể mở.",
   "daemon.path_link_refused.unreadable": "Không đọc được {path} nên mục không được mở.",
   "daemon.path_link_refused.unreadable.summary": "Không đọc được {path} nên mục không được mở.",
+  "daemon.path_link_refused.unanswered": "{path} không phản hồi kịp thời nên mục không được mở.",
   "daemon.path_link_refused.other": "Không thể mở {path} từ liên kết.",
   "daemon.path_link_refused.other.summary": "Không thể mở {path} từ liên kết.",
   "daemon.unsupported_file_type.unmerged": "{path} đang có xung đột nên không có một phiên bản duy nhất để đọc.",

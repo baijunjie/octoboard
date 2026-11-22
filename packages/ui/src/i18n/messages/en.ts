@@ -761,6 +761,7 @@ export const en = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path} is not a file or folder, so it cannot be opened.",
   "daemon.path_link_refused.unreadable": "{path} could not be read, so it is not opened.",
   "daemon.path_link_refused.unreadable.summary": "{path} could not be read, so it is not opened.",
+  "daemon.path_link_refused.unanswered": "{path} did not respond in time, so it is not opened.",
   "daemon.path_link_refused.other": "{path} cannot be opened from a link.",
   "daemon.path_link_refused.other.summary": "{path} cannot be opened from a link.",
   // The UI's wording of `unsupported_file_type` with `file_type` `unmerged` (see `messageCode`), not a code the daemon sends.

@@ -645,6 +645,7 @@ export const id: Translation<"other"> = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path} bukan file atau folder, sehingga tidak dapat dibuka.",
   "daemon.path_link_refused.unreadable": "{path} tidak dapat dibaca, sehingga tidak dibuka.",
   "daemon.path_link_refused.unreadable.summary": "{path} tidak dapat dibaca, sehingga tidak dibuka.",
+  "daemon.path_link_refused.unanswered": "{path} tidak merespons tepat waktu, sehingga tidak dibuka.",
   "daemon.path_link_refused.other": "{path} tidak dapat dibuka melalui tautan.",
   "daemon.path_link_refused.other.summary": "{path} tidak dapat dibuka melalui tautan.",
   "daemon.unsupported_file_type.unmerged": "{path} mengalami konflik, sehingga tidak ada satu versi tunggal untuk dibaca.",

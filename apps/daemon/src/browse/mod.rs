@@ -47,6 +47,7 @@ pub(crate) mod tests;
 
 use std::cell::OnceCell;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use anyhow::Result;
 use base64::Engine;
@@ -249,7 +250,7 @@ fn search_content_within(
 
 /// Runs one browse request to its reply. Blocking: it reads files and waits on `git`.
 pub fn serve(
-    state: &AppState,
+    state: &Arc<AppState>,
     id: Option<String>,
     body: BrowseBody,
     git: &dyn Fn() -> Result<IsolatedGit>,

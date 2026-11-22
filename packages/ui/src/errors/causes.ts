@@ -34,7 +34,7 @@ export function storeWriteCause(raw: string | undefined): StoreWriteCause {
   return STORE_WRITE_CAUSES.find((cause) => cause === raw) ?? "other";
 }
 
-const PATH_LINK_REFUSED_CAUSES = ["ambiguous", "launchable", "not_private", "not_a_file_or_folder", "unreadable", "other"] as const;
+const PATH_LINK_REFUSED_CAUSES = ["ambiguous", "launchable", "not_private", "not_a_file_or_folder", "unreadable", "unanswered", "other"] as const;
 
 /** The `cause` of a `path_link_refused`: why a path inside a root is not opened from a link. */
 export type PathLinkRefusedCause = (typeof PATH_LINK_REFUSED_CAUSES)[number];

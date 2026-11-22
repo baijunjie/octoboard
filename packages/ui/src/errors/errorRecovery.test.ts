@@ -211,7 +211,7 @@ it.each([
 
 it.each([
   ["ambiguous", "pathLinkAmbiguous"], ["launchable", "pathLinkLaunchable"], ["not_private", "pathLinkNotPrivate"],
-  ["not_a_file_or_folder", "none"], ["unreadable", "none"], ["other", "none"], ["a_future_cause", "none"], ["constructor", "none"], [undefined, "none"],
+  ["not_a_file_or_folder", "none"], ["unreadable", "none"], ["unanswered", "none"], ["other", "none"], ["a_future_cause", "none"], ["constructor", "none"], [undefined, "none"],
 ] as const)("gives a path link refused for the cause %s its own remedy, an unknown one as other", (cause, recovery) => {
   const error = new CodedError("refused", "path_link_refused", { path: "a.ts", ...(cause && { cause }) });
   expect(classifyError(error)).toEqual({ kind: "actionable", recovery });

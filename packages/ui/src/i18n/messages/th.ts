@@ -657,6 +657,7 @@ export const th: Translation<"other"> = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path} ไม่ใช่ไฟล์หรือโฟลเดอร์ จึงเปิดไม่ได้",
   "daemon.path_link_refused.unreadable": "อ่าน {path} ไม่ได้ จึงไม่เปิด",
   "daemon.path_link_refused.unreadable.summary": "อ่าน {path} ไม่ได้ จึงไม่เปิด",
+  "daemon.path_link_refused.unanswered": "{path} ไม่ตอบสนองทันเวลา จึงไม่เปิด",
   "daemon.path_link_refused.other": "เปิด {path} จากลิงก์ไม่ได้",
   "daemon.path_link_refused.other.summary": "เปิด {path} จากลิงก์ไม่ได้",
   "daemon.unsupported_file_type.unmerged": "{path} มีข้อขัดแย้ง จึงไม่มีเวอร์ชันเดียวให้อ่าน",

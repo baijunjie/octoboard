@@ -1639,11 +1639,12 @@ pub enum RequestBody {
     },
     /// Asks what each of `paths` names on the daemon host: a file, a folder or nothing reachable
     /// (see `crate::path_links`). A path is judged by where it resolves to, in a project root, in a
-    /// temp root or anywhere else; a network or device path as written (outside the project's own
-    /// roots) is never looked at. Each is looked at within a deadline, grouped by the place they lie
-    /// on and looked at a few places at a time: the paths of a place that has not answered by then
-    /// (a stalled mount) are nothing, and the others are answered unless as many places stall as run
-    /// at once, when those not yet started are nothing too. Answered with `path_links`.
+    /// temp root or anywhere else; a network or device path as written, or one a symbolic link on
+    /// the way leads to (outside the project's own roots), is never looked at. Each is looked at
+    /// within a deadline, grouped by the place they lie on and looked at a few places at a time:
+    /// the paths of a place that has not answered by then (a stalled mount) are nothing, and the
+    /// others are answered unless as many places stall as run at once, when those not yet started
+    /// are nothing too. Answered with `path_links`.
     ProbePathLinks {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
@@ -1651,7 +1652,8 @@ pub enum RequestBody {
         paths: Vec<String>,
     },
     /// Opens a path `probe_path_links` found, wherever on the host it lies, with its default
-    /// application on the daemon host; a folder opens in the file manager. Refused with
+    /// application on the daemon host; a folder opens in the file manager. A look the host
+    /// does not answer within a deadline is refused as `unanswered`. Refused with
     /// `file_not_found` (`root` says where it was spelled: `project`, `temporary` or `host`) when
     /// nothing is there any more.
     OpenPathLink {

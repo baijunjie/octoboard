@@ -645,6 +645,7 @@ export const fr: Translation<"one" | "many" | "other"> = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path} n’est ni un fichier ni un dossier et ne peut donc pas être ouvert.",
   "daemon.path_link_refused.unreadable": "{path} n’a pas pu être lu et n’est donc pas ouvert.",
   "daemon.path_link_refused.unreadable.summary": "{path} n’a pas pu être lu et n’est donc pas ouvert.",
+  "daemon.path_link_refused.unanswered": "{path} n’a pas répondu à temps et n’est donc pas ouvert.",
   "daemon.path_link_refused.other": "{path} ne peut pas être ouvert depuis un lien.",
   "daemon.path_link_refused.other.summary": "{path} ne peut pas être ouvert depuis un lien.",
   "daemon.unsupported_file_type.unmerged": "{path} est en conflit et ne possède donc pas de version unique à lire.",

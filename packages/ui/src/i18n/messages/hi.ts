@@ -644,6 +644,7 @@ export const hi: Translation<"one" | "other"> = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path} फ़ाइल या फ़ोल्डर नहीं है, इसलिए इसे नहीं खोल सकते।",
   "daemon.path_link_refused.unreadable": "{path} पढ़ा नहीं जा सका, इसलिए इसे नहीं खोला जाता।",
   "daemon.path_link_refused.unreadable.summary": "{path} पढ़ा नहीं जा सका, इसलिए इसे नहीं खोला जाता।",
+  "daemon.path_link_refused.unanswered": "{path} ने समय पर जवाब नहीं दिया, इसलिए इसे नहीं खोला जाता।",
   "daemon.path_link_refused.other": "{path} लिंक से नहीं खोला जा सकता।",
   "daemon.path_link_refused.other.summary": "{path} लिंक से नहीं खोला जा सकता।",
   "daemon.unsupported_file_type.unmerged": "{path} में कॉन्फ़्लिक्ट है, इसलिए पढ़ने के लिए इसका कोई एक वर्शन नहीं है।",

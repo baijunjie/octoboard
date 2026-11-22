@@ -16,7 +16,7 @@ use crate::protocol::{error_code, CodedError, PathLinkKind};
 pub struct Resolved {
     pub path: PathBuf,
     /// The path as spelled, with its `.` and `..` folded, for [`own_entry`] to look at the entry it
-    /// ends in; none when the spelling names a folder (it ends in `/`, `/.` or `..`).
+    /// ends in; none when the spelling names a folder (see [`names_directory`]).
     pub spelled: Option<PathBuf>,
     pub kind: PathLinkKind,
     /// What is found could be launched by the system. A file of that kind is kept to be viewed
@@ -35,9 +35,9 @@ impl Resolved {
     }
 }
 
-/// What `raw` names, if it is reachable. An absolute path or one starting with `~/` is taken as
-/// written, wherever on the host it lies; any other is looked for from each of the project's
-/// roots. `project` finds those roots.
+/// What `raw` names, if it is reachable. An absolute path or one starting with `~` and a
+/// separator is taken as written, wherever on the host it lies; any other is looked for from each
+/// of the project's roots. `project` finds those roots.
 pub fn resolve(
     raw: &str,
     home: Option<&Path>,
@@ -93,7 +93,9 @@ pub enum Refusal {
     Denied(String),
     /// Any other I/O failure looking at the path; holds the system's text.
     Unreadable(String),
-    /// A path that cannot be looked up at all: empty, containing NUL, `~/` with no known home, a
+    /// The host did not answer a look within its deadline, or the place is known to be stuck.
+    Unanswered,
+    /// A path that cannot be looked up at all: empty, containing NUL, `~` below no known home, a
     /// relative path with no project root to look from, or a network or device path, which is
     /// refused before the disk is touched.
     Other,
@@ -124,6 +126,7 @@ impl Refusal {
             Self::NotPrivate => ("not_private", None),
             Self::NotAFileOrFolder => ("not_a_file_or_folder", None),
             Self::Unreadable(detail) => ("unreadable", Some(detail)),
+            Self::Unanswered => ("unanswered", None),
             Self::Other => ("other", None),
         };
         let mut params = vec![("path", path), ("cause", cause)];
@@ -149,9 +152,7 @@ pub fn reach(
         return Err(Unreached::Refused(Refusal::Other));
     }
     let absolute = absolute_spelling(raw, home).map_err(|()| Unreached::Refused(Refusal::Other))?;
-    // A spelling ending in `/`, `.` or `..` names a folder, so a link spelled that way is followed.
-    let names_directory = matches!(raw.rsplit('/').next(), Some("" | "." | ".."));
-    let spelled_as = |spelled: PathBuf| (!names_directory).then_some(spelled);
+    let spelled_as = |spelled: PathBuf| (!names_directory(raw)).then_some(spelled);
     // Folded lexically first, so that the network and device check sees where a `..` leads.
     let Some(absolute) = absolute.map(|path| lexically_normalise(&path)) else {
         // A drive-relative spelling (`C:foo`) is no relative path: joined to a root it would replace
@@ -168,7 +169,7 @@ pub fn reach(
         let mut failure: Option<Refusal> = None;
         for root in &roots.canonical {
             let joined = lexically_normalise(&root.join(raw));
-            if refused_as_network(&joined, &|| roots.clone()) {
+            if refused_spelling(&joined, &|| roots.clone()) {
                 return Err(Unreached::Refused(Refusal::Other));
             }
             let canonical = match crate::hostfs::canonical(&joined) {
@@ -204,7 +205,7 @@ pub fn reach(
         };
         return placed(canonical.clone(), spelled_as(joined.clone()), &roots, temp);
     };
-    if refused_as_network(&absolute, project) {
+    if refused_spelling(&absolute, project) {
         return Err(Unreached::Refused(Refusal::Other));
     }
     let canonical = canonical_or_gone(&absolute, || {
@@ -230,11 +231,55 @@ pub(super) fn refused_as_network(spelling: &Path, project: &dyn Fn() -> ProjectR
     reaches_network_or_device(spelling) && !spelled_in(spelling, &project().lexical)
 }
 
-/// `raw` as an absolute path: written so, or from `~/`. `None` for a relative one; an error for
-/// `~/` with no known home.
-fn absolute_spelling(raw: &str, home: Option<&Path>) -> Result<Option<PathBuf>, ()> {
-    if let Some(rest) = raw.strip_prefix("~/") {
-        Ok(Some(home.ok_or(())?.join(rest)))
+/// Whether `spelling`, absolute and folded, is refused before the place it names is touched: as
+/// written ([`refused_as_network`]), or because a symbolic link on the way leads to such a place.
+/// The links are followed one by one without ever looking at a refused place, since resolving them
+/// would make the host reach out ([`crate::hostfs::links::leads_into`]).
+fn refused_spelling(spelling: &Path, project: &dyn Fn() -> ProjectRoots) -> bool {
+    refused_as_network(spelling, project)
+        || crate::hostfs::links::leads_into(
+            spelling,
+            &|prefix, more| {
+                // The roots are asked only for a prefix that reaches the network.
+                reaches_network_or_device(prefix)
+                    && refused_prefix(prefix, more, &project().lexical)
+            },
+            &crate::platform::names::names_local_volume,
+        )
+}
+
+/// Whether `prefix`, a spelling the link walk has reached, reaches the network or a device and is
+/// not allowed by the project's own `roots`: one inside a root is looked at as it is, and a folder
+/// that holds a root is allowed only as a place passed through (`more` says components follow it),
+/// never as where the walk ends, so a link to the folder above a root on a share is refused like
+/// the same spelling written out.
+pub(super) fn refused_prefix(prefix: &Path, more: bool, roots: &[PathBuf]) -> bool {
+    reaches_network_or_device(prefix)
+        && !spelled_in(prefix, roots)
+        && !(more && roots.iter().any(|root| lexically_within(root, prefix)))
+}
+
+/// Whether `raw` names a folder: it ends in a separator the host's paths take, `.` or `..`. A link
+/// spelled so is followed, and there is no entry of its own to select.
+pub(super) fn names_directory(raw: &str) -> bool {
+    matches!(
+        raw.rsplit(std::path::is_separator).next(),
+        Some("" | "." | "..")
+    )
+}
+
+/// `raw` as an absolute path: written so, or from `~` and a separator the host's paths take (`~/`,
+/// and `~\` on Windows). `None` for a relative one; an error for a `~` path with no known home.
+pub(super) fn absolute_spelling(raw: &str, home: Option<&Path>) -> Result<Option<PathBuf>, ()> {
+    let below_home = raw
+        .strip_prefix('~')
+        .filter(|rest| rest.starts_with(std::path::is_separator));
+    if let Some(rest) = below_home {
+        // Leading separators are dropped, or the join would replace the home directory.
+        Ok(Some(
+            home.ok_or(())?
+                .join(rest.trim_start_matches(std::path::is_separator)),
+        ))
     } else if Path::new(raw).is_absolute() {
         Ok(Some(PathBuf::from(raw)))
     } else {
@@ -250,9 +295,10 @@ fn absolute_spelling(raw: &str, home: Option<&Path>) -> Result<Option<PathBuf>, 
 ///   that hangs does not stall the rest of home.
 /// - Otherwise its root with the first two names (`/Volumes/Backup` for everything below it).
 ///
-/// A relative path is joined to the first project root, and one with no root to try (or `~/` with
-/// no home) is no place at all. After a Windows UNC prefix (server and share) the same two names
-/// count; such a spelling outside a project is refused before anything is looked at.
+/// A relative path is joined to the first project root, and one with no root to try (or `~` and a
+/// separator with no home) is no place at all. After a Windows UNC prefix (server and share) the
+/// same two names count; such a spelling outside a project is refused before anything is looked
+/// at.
 pub fn place_of(raw: &str, home: Option<&Path>, roots: &ProjectRoots) -> PathBuf {
     let absolute = match absolute_spelling(raw, home) {
         Ok(Some(absolute)) => absolute,

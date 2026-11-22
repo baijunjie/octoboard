@@ -385,7 +385,10 @@ terminal's editing menu.
 
 **A file outside the project** is read by the rules that make its path a link, checked again at the read: one that no
 longer passes them — gone, or, inside a temporary directory, changeable by other users of the machine — says so in the
-viewer in place of the file, and raises no error alert. It has no project around it, so
+viewer in place of the file, and raises no error alert. Looking the path up again has the time limits of any click on
+a path link: a look the machine the daemon runs on does not answer in time, or one at a place still stalled from an
+earlier look, says in the same way, in place of the file, that it did not respond in time (see "How long a check or a click may take" under "File paths" in
+`docs/product/terminal-links.md`); reading the file once it is found has no time limit of its own. It has no project around it, so
 in a Markdown file there a relative link stays its text and a relative image shows its alt text. A console session,
 which has no project, opens such files the same way.
 

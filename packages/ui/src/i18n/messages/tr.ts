@@ -663,6 +663,7 @@ export const tr: Translation<"one" | "other"> = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path} bir dosya veya klasör olmadığından açılamaz.",
   "daemon.path_link_refused.unreadable": "{path} okunamadığından açılmıyor.",
   "daemon.path_link_refused.unreadable.summary": "{path} okunamadığından açılmıyor.",
+  "daemon.path_link_refused.unanswered": "{path} zamanında yanıt vermediğinden açılmıyor.",
   "daemon.path_link_refused.other": "{path} bağlantıdan açılamaz.",
   "daemon.path_link_refused.other.summary": "{path} bağlantıdan açılamaz.",
   "daemon.unsupported_file_type.unmerged": "{path} çakışma durumunda olduğundan okunabilecek tek bir sürümü yok.",

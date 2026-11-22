@@ -107,8 +107,8 @@ daemon to its OS-token and source rules, are in `docs/structure/daemon.md`.
 - **A path taken from text an agent could have written is resolved by the daemon at the moment of opening, a click never
   hands a file to the host opener (it is shown in the viewer), and what the system could launch is never opened.** A
   temp root's contents must be the daemon user's and closed to others, and a network or device path, outside the
-  project's own roots, is refused before the disk is touched (looking at it makes the host connect out; only the
-  spelling is judged, not where a link leads). The opener runs applications, scripts and shortcuts, and what it does
+  project's own roots, as written or where a symbolic link on the way leads, is refused before that place is touched
+  (looking at it makes the host connect out). The opener runs applications, scripts and shortcuts, and what it does
   with a file is up to that machine. The decision is `reach` in `path_links/resolve.rs`; extend it rather than write a
   second.
 - **Deleting, trashing or refusing because a file or directory is missing is judged only from `metadata` or

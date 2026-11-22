@@ -659,6 +659,7 @@ export const ko: Translation<"other"> = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path}은(는) 파일이나 폴더가 아니므로 열 수 없습니다.",
   "daemon.path_link_refused.unreadable": "{path}을(를) 읽지 못해 열지 않습니다.",
   "daemon.path_link_refused.unreadable.summary": "{path}을(를) 읽지 못해 열지 않습니다.",
+  "daemon.path_link_refused.unanswered": "{path}이(가) 제시간에 응답하지 않아 열지 않습니다.",
   "daemon.path_link_refused.other": "{path}을(를) 링크에서 열 수 없습니다.",
   "daemon.path_link_refused.other.summary": "{path}을(를) 링크에서 열 수 없습니다.",
   "daemon.unsupported_file_type.unmerged": "{path}에 충돌이 있어 읽을 단일 버전이 없습니다.",

@@ -302,7 +302,7 @@ const CORE_CODES = {
   path_already_exists: { origin: "daemon", recovery: "pathExists", codeParams: ["path"] },
   // A path link the daemon will not open; its `cause` picks the remedy (`PATH_LINK_REFUSED_RECOVERY`), which is
   // none for the causes whose sentence says it all.
-  path_link_refused: { origin: "daemon", recovery: "none", detailBlock: true, variants: { ambiguous: { codeParams: ["path"] }, launchable: { codeParams: ["path"] }, not_private: { codeParams: ["path"] }, not_a_file_or_folder: { codeParams: ["path"] }, unreadable: { codeParams: ["path"] }, other: { codeParams: ["path"] } }, variantOf: (params) => pathLinkRefusedCause(params.cause) },
+  path_link_refused: { origin: "daemon", recovery: "none", detailBlock: true, variants: { ambiguous: { codeParams: ["path"] }, launchable: { codeParams: ["path"] }, not_private: { codeParams: ["path"] }, not_a_file_or_folder: { codeParams: ["path"] }, unreadable: { codeParams: ["path"] }, unanswered: { codeParams: ["path"] }, other: { codeParams: ["path"] } }, variantOf: (params) => pathLinkRefusedCause(params.cause) },
   path_not_a_directory: { origin: "daemon", recovery: "path", hostPathGone: true, codeParams: ["path"] },
   path_not_absolute: { origin: "daemon", recovery: "path", recoveryLine: true, codeParams: ["path", "tilde"], uiParams: { tilde: "~/" } },
   path_not_found: { origin: "daemon", recovery: "path", hostPathGone: true, codeParams: ["path"] },

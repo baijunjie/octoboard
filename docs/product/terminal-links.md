@@ -129,7 +129,8 @@ terminal or the button's release there. In a terminal one row high, the pointer 
 
 - **What is taken for a path**:
   - an absolute path, `/…`;
-  - a path under the home directory, `~/…` — the home directory of the machine the daemon runs on;
+  - a path under the home directory: `~` followed by a separator the daemon's machine takes in its paths — `~/…`, and
+    on Windows `~\…` as well — naming the home directory of the machine the daemon runs on;
   - a relative path with a directory in it: `./a`, `../a`, `src/a.ts`;
   - a file name with an extension followed by a line, or a line and a column: `a.ts:42`, `a.ts:42:7`.
 
@@ -170,8 +171,8 @@ terminal or the button's release there. In a terminal one row high, the pointer 
     20 or the rows 2048 characters fill at the terminal's full width, whichever is more, plus the rows 1024 characters
     fill, is treated as unruled. A joined path covers only its text in each cell, and its pieces are offered as links
     one by one, so only the piece under the pointer is underlined, though each opens the whole path.
-- **Where a path may lead**: to any existing file or folder on the machine the daemon runs on. An absolute or `~/` path
-  is taken as written.
+- **Where a path may lead**: to any existing file or folder on the machine the daemon runs on. An absolute path, or
+  one under the home directory, is taken as written.
   - Symbolic links are followed, and a path is judged by where it resolves to: inside the session's project — its
     directory and, when the project is in a git repository, its place in each worktree of that repository — inside a
     temporary directory, or anywhere else on the machine. The temporary directories are `/tmp`, `/private/tmp` and the
@@ -183,15 +184,23 @@ terminal or the button's release there. In a terminal one row high, the pointer 
     is a link only when exactly one of them has it; found in several, leading to different files or folders, it is no
     link.
   - With no project to look in — a console session, or a project whose directory cannot be found — a relative path is
-    no link, while absolute and `~/` paths are links wherever they lead.
-- **Network and device paths are never links**, and the machine the daemon runs on does not look at them at all, since
-  looking would make it connect to another machine or reach a device: on Linux and macOS a path in `/net`, and on macOS
-  one in `/home` as well (on Linux an ordinary folder); on Windows a path starting with two separators, `\` or `/` — a
-  network share such as `\\server\share\…`, or a device path such as `\\.\…` or `\\?\…` — except the long form of a
-  drive path, `\\?\C:\…`. A Windows drive-relative spelling such as `C:foo` is no link either. The path is judged as
-  written, its `.` and `..` folded and a relative path joined to the project's directory or worktree place, not by
-  where its symbolic links lead. A path written inside the project's directory or a worktree's place is looked at all
-  the same, even when the project is kept on such a share.
+    no link, while absolute paths and paths under the home directory are links wherever they lead.
+- **Network and device places are never looked at**, since looking would make the machine the daemon runs on connect
+  to another machine or reach a device. A path is no link when it lies in such a place as written — its `.` and `..`
+  folded, and a relative path joined to the project's directory or worktree place — and also when a symbolic link on
+  the way, wherever that link lies, leads into one: the links on the way are followed one at a time, and the place
+  such a link leads to is not looked at. The places are:
+  - on macOS, `/net`, `/home`, `/System/Volumes/Data/home` and `/Network/Servers`, each with everything below it,
+    compared without regard to letter case;
+  - on Linux, `/net` and everything below it (`/home` is an ordinary folder there);
+  - on Windows, a path starting with two separators, `\` or `/` — a network share such as `\\server\share\…`, or a
+    device path such as `\\.\…` or `\\?\…` — except the long form of a drive path, `\\?\C:\…`. A folder a local volume
+    is mounted in is an ordinary folder, though the link it holds names that volume in a device path. A drive-relative
+    spelling such as `C:foo` is no link either.
+
+  When the project is kept on such a share, a path inside the project's directory or a worktree's place, written there
+  or led there by a symbolic link, is looked at all the same. A folder above the project on the share is passed through
+  on the way into the project, but is itself no link, whether written out or led to by a symbolic link.
 - **Anything that is neither a file nor a folder** is never a link.
 - **No file is ever opened on the host by a click**, whatever its type and wherever it lies: the system's default
   application for a file may run it, so every file a path link leads to only ever opens in the file viewer (see
@@ -251,8 +260,11 @@ terminal or the button's release there. In a terminal one row high, the pointer 
   - it is not a file or folder;
   - Octoboard is not allowed to read it, or a directory on the way to it;
   - it could not be read for another reason, the system's own text then under **Error details**;
-  - for any other reason — a network or device path among them, or a relative path with no project to look in — or
-    one the window does not know, only that it cannot be opened from a link.
+  - the machine the daemon runs on did not answer the look at it in time, or an earlier look at its place is still
+    stalled (see "How long a check or a click may take" below): that it did not respond in time, so it is not opened,
+    with nothing under Error details. It is a known failure, not an unexpected error;
+  - for any other reason — a network or device path among them, written so or led to by a symbolic link, or a relative
+    path with no project to look in — or one the window does not know, only that it cannot be opened from a link.
 - **Open in**, in the editing menu a right-click on a path link opens, is the submenu a row of the project pane has
   under the same name, with the same items, glyphs and order (see "A row's actions" in `docs/product/project-pane.md`):
   **File manager**, then, for a file, **Default application**. A folder's holds File manager alone. Both act on the
@@ -292,10 +304,18 @@ terminal or the button's release there. In a terminal one row high, the pointer 
   file becomes a link shortly after the file exists, and one removed stops being a link. A check that fails leaves a
   path as it was, and plain text when nothing was known of it. Every answer is dropped when the terminal is cleared to
   draw a session afresh, a fresh paint sent to a client that fell behind the output included.
-- **How long a check may take**: finding the project's directory and its worktree places has five seconds, and while
-  that has not finished no path of the check is a link. The paths then have two seconds, together, checked by the place
-  they lie on — the project's directory or worktree place they are written in, else the folder of the home directory
-  they are in (`~/nas`), else the first two folders from the top of the file system (`/Volumes/Backup`) — up to four
-  places at a time. The paths of a place not answered in time, such as a disk that does not respond, are plain text,
-  and stay so at every later check until that place's stalled check ends; the paths of other places are still
+- **How long a check or a click may take**: finding the project's directory and its worktree places has five seconds,
+  and while that has not finished no path of the check is a link. The paths then have two seconds, together, checked by
+  the place they lie on — the project's directory or worktree place they are written in, else the folder of the home
+  directory they are in (`~/nas`), else the first two folders from the top of the file system (`/Volumes/Backup`) — up
+  to four places at a time. The paths of a place not answered in time, such as a disk that does not respond, are plain
+  text, and stay so at every later check until that place's stalled look ends; the paths of other places are still
   answered, unless four places stall at once, when those not yet started are plain text too.
+
+  A click that looks the path up again — a file outside the project opened in the file viewer, a folder opened on the
+  host, File manager and Default application — has the same limits: five seconds for finding the project's places, then
+  two seconds for the path, by the same places. One not answered in time is refused, and so is one, at once, while
+  the project's places or the path's place are still stalled from an earlier look, a check's or a click's alike; the
+  refusal is the did-not-respond-in-time one under "A click" above. Reading a file's content, once it is found, has no
+  time limit of its own. A file inside the project is read from the directory the check found it in, without looking
+  the path up again.

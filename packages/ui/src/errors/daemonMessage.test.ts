@@ -565,6 +565,7 @@ it.each([
   ["not_private", "can be changed by other users", "可被其他用户修改"],
   ["not_a_file_or_folder", "is not a file or folder", "不是文件或文件夹"],
   ["unreadable", "could not be read, so it is not opened", "无法读取"],
+  ["unanswered", "did not respond in time, so it is not opened", "未及时响应"],
   ["other", "cannot be opened from a link", "无法通过链接打开"],
   ["a_future_cause", "cannot be opened from a link", "无法通过链接打开"],
 ])("words a path link refused for the cause %s in every language, an unknown one as other", (cause, english, chinese) => {

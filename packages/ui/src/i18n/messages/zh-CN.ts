@@ -673,6 +673,7 @@ export const zhCN: Translation<"other"> = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path} 不是文件或文件夹，因此无法打开。",
   "daemon.path_link_refused.unreadable": "无法读取 {path}，因此不打开。",
   "daemon.path_link_refused.unreadable.summary": "无法读取 {path}，因此不打开。",
+  "daemon.path_link_refused.unanswered": "{path} 未及时响应，因此不打开。",
   "daemon.path_link_refused.other": "无法通过链接打开 {path}。",
   "daemon.path_link_refused.other.summary": "无法通过链接打开 {path}。",
   // The UI's wording of `unsupported_file_type` with `file_type` `unmerged` (see `messageCode`), not a code the daemon sends.

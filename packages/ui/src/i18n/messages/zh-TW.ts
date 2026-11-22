@@ -659,6 +659,7 @@ export const zhTW: Translation<"other"> = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path} 不是檔案或資料夾，因此無法開啟。",
   "daemon.path_link_refused.unreadable": "無法讀取 {path}，因此不開啟。",
   "daemon.path_link_refused.unreadable.summary": "無法讀取 {path}，因此不開啟。",
+  "daemon.path_link_refused.unanswered": "{path} 未及時回應，因此不開啟。",
   "daemon.path_link_refused.other": "無法透過連結開啟 {path}。",
   "daemon.path_link_refused.other.summary": "無法透過連結開啟 {path}。",
   "daemon.unsupported_file_type.unmerged": "{path} 存在衝突，沒有單一版本可讀取。",

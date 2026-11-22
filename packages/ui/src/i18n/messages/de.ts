@@ -663,6 +663,7 @@ export const de: Translation<"one" | "other"> = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path} ist weder eine Datei noch ein Ordner und kann daher nicht geöffnet werden.",
   "daemon.path_link_refused.unreadable": "{path} konnte nicht gelesen werden und wird daher nicht geöffnet.",
   "daemon.path_link_refused.unreadable.summary": "{path} konnte nicht gelesen werden und wird daher nicht geöffnet.",
+  "daemon.path_link_refused.unanswered": "{path} hat nicht rechtzeitig geantwortet und wird daher nicht geöffnet.",
   "daemon.path_link_refused.other": "{path} kann nicht über einen Link geöffnet werden.",
   "daemon.path_link_refused.other.summary": "{path} kann nicht über einen Link geöffnet werden.",
   "daemon.unsupported_file_type.unmerged": "{path} enthält Konflikte und hat daher keine eindeutige lesbare Version.",

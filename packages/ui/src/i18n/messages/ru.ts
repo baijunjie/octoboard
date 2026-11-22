@@ -645,6 +645,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path} — не файл и не папка, поэтому открыть его нельзя.",
   "daemon.path_link_refused.unreadable": "Не удалось прочитать {path}, поэтому он не открывается.",
   "daemon.path_link_refused.unreadable.summary": "Не удалось прочитать {path}, поэтому он не открывается.",
+  "daemon.path_link_refused.unanswered": "{path} не ответил вовремя, поэтому он не открывается.",
   "daemon.path_link_refused.other": "{path} нельзя открыть по ссылке.",
   "daemon.path_link_refused.other.summary": "{path} нельзя открыть по ссылке.",
   "daemon.unsupported_file_type.unmerged": "В {path} есть конфликт, поэтому единой версии для чтения нет.",

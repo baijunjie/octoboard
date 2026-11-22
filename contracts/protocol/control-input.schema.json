@@ -170,7 +170,7 @@
             "type",
             "path"
           ],
-          "description": "Reads the file a path link names, as `probe_path_links` resolved it: a file of the project,\nof a temp root or anywhere else on the host, whatever its type. Resolved again by the rules\nof `open_path_link`, but never a directory a client named, and nothing is opened on the\nhost."
+          "description": "Reads the file a path link names, as `probe_path_links` resolved it: a file of the project,\nof a temp root or anywhere else on the host, whatever its type. Resolved again by the rules\nof `open_path_link` (including its deadline for looking at the path, not for the read), but\nnever a directory a client named, and nothing is opened on the host."
         },
         {
           "type": "object",
@@ -4191,7 +4191,7 @@
             "type",
             "paths"
           ],
-          "description": "Asks what each of `paths` names on the daemon host: a file, a folder or nothing reachable\n(see `crate::path_links`). A path is judged by where it resolves to, in a project root, in a\ntemp root or anywhere else; a network or device path as written (outside the project's own\nroots) is never looked at. Each is looked at within a deadline, grouped by the place they lie\non and looked at a few places at a time: the paths of a place that has not answered by then\n(a stalled mount) are nothing, and the others are answered unless as many places stall as run\nat once, when those not yet started are nothing too. Answered with `path_links`."
+          "description": "Asks what each of `paths` names on the daemon host: a file, a folder or nothing reachable\n(see `crate::path_links`). A path is judged by where it resolves to, in a project root, in a\ntemp root or anywhere else; a network or device path as written, or one a symbolic link on\nthe way leads to (outside the project's own roots), is never looked at. Each is looked at\nwithin a deadline, grouped by the place they lie on and looked at a few places at a time:\nthe paths of a place that has not answered by then (a stalled mount) are nothing, and the\nothers are answered unless as many places stall as run at once, when those not yet started\nare nothing too. Answered with `path_links`."
         },
         {
           "type": "object",
@@ -4211,7 +4211,7 @@
             "type",
             "path"
           ],
-          "description": "Opens a path `probe_path_links` found, wherever on the host it lies, with its default\napplication on the daemon host; a folder opens in the file manager. Refused with\n`file_not_found` (`root` says where it was spelled: `project`, `temporary` or `host`) when\nnothing is there any more."
+          "description": "Opens a path `probe_path_links` found, wherever on the host it lies, with its default\napplication on the daemon host; a folder opens in the file manager. A look the host\ndoes not answer within a deadline is refused as `unanswered`. Refused with\n`file_not_found` (`root` says where it was spelled: `project`, `temporary` or `host`) when\nnothing is there any more."
         },
         {
           "type": "object",

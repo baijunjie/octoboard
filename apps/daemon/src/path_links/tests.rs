@@ -1,7 +1,7 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-use super::resolve::{refused_as_network, Whereabouts};
+use super::resolve::{absolute_spelling, names_directory, reach, refused_as_network, Whereabouts};
 use super::*;
 use crate::hostfs::lexically_normalise;
 use crate::protocol::PathLinkView;
@@ -1744,7 +1744,7 @@ mod with_state {
         assert_eq!(coded.params["cause"], "not_private");
     }
 
-    fn read_text(
+    pub(super) fn read_text(
         fixture: &Fixture,
         project: Option<&str>,
         path: &str,
@@ -2349,7 +2349,7 @@ mod with_state {
         std::fs::write(directory.join("a.ts"), b"x").unwrap();
         std::fs::write(directory.join("b.ts"), b"x").unwrap();
         let project = fixture.project("stuck-project", &directory);
-        let roots = cached_roots(&fixture.state, Some(&project), &OnceLock::new(), false);
+        let roots = crate::path_links::project_roots(&fixture.state, &project, false);
         // The top of the tree is a place of its own, whichever volume the scratch folder is on.
         let top = "/";
         let absolute = canonical(&directory).join("a.ts");
@@ -2450,7 +2450,7 @@ mod with_state {
         );
         // Everything was found, so no look is left running: the places are not stuck, and those
         // that answered were answered by a look that has ended.
-        let roots = cached_roots(&fixture.state, Some(&project), &OnceLock::new(), false);
+        let roots = crate::path_links::project_roots(&fixture.state, &project, false);
         for path in &paths {
             let place = place_of(path, None, &roots);
             assert!(!fixture.state.path_probes.is_stuck(&place), "{path}");
@@ -2616,6 +2616,11 @@ mod with_state {
             ),
             (Refusal::Other, error_code::PATH_LINK_REFUSED, Some("other")),
             (
+                Refusal::Unanswered,
+                error_code::PATH_LINK_REFUSED,
+                Some("unanswered"),
+            ),
+            (
                 Refusal::Unreadable("Input/output error (os error 5)".into()),
                 error_code::PATH_LINK_REFUSED,
                 Some("unreadable"),
@@ -2630,4 +2635,379 @@ mod with_state {
             assert_eq!(coded.params.get("detail").map(String::as_str), detail);
         }
     }
+}
+
+#[test]
+fn a_spelling_names_a_folder_by_a_trailing_separator_dot_or_dot_dot() {
+    for raw in ["a/", "a/.", "a/..", ".", "..", "~/"] {
+        assert!(names_directory(raw), "{raw}");
+    }
+    for raw in ["a", "a/b.txt", "a./b", "a/.hidden", "a/b..", "~"] {
+        assert!(!names_directory(raw), "{raw}");
+    }
+    // A backslash separates names only where the host's paths take it.
+    assert_eq!(names_directory("a\\"), cfg!(windows));
+    assert_eq!(names_directory("a\\.."), cfg!(windows));
+}
+
+#[test]
+fn a_tilde_and_a_separator_the_host_takes_start_a_path_below_home() {
+    let home = project_roots(&[&ScratchDir::new("path-links-tilde-home")]).canonical[0].clone();
+    let below = |raw: &str| absolute_spelling(raw, Some(&home));
+    assert_eq!(below("~/a/b"), Ok(Some(home.join("a/b"))));
+    // Leading separators do not make the rest absolute.
+    assert_eq!(below("~//a"), Ok(Some(home.join("a"))));
+    assert_eq!(below("~/"), Ok(Some(home.clone())));
+    // Not a path below home: a name that starts with a tilde, the tilde alone.
+    assert_eq!(below("~a/b"), Ok(None));
+    assert_eq!(below("~"), Ok(None));
+    assert_eq!(absolute_spelling("~/a", None), Err(()));
+    // A backslash is a separator only where the host's paths take it.
+    if cfg!(windows) {
+        assert_eq!(below("~\\a\\b"), Ok(Some(home.join("a").join("b"))));
+        assert_eq!(below("~\\\\a"), Ok(Some(home.join("a"))));
+    } else {
+        assert_eq!(below("~\\a"), Ok(None));
+    }
+}
+
+/// A scratch folder is a "network" place for a walk that judges by `names`; a link whose target
+/// spells a real one (`/net/...`) is refused by the spelling the walk reaches, not by a look.
+#[cfg(unix)]
+#[test]
+fn a_link_into_a_network_place_is_refused_before_anything_is_looked_at() {
+    let project = ScratchDir::new("path-links-link-network");
+    let elsewhere = ScratchDir::new("path-links-link-network-elsewhere");
+    let scratch = ScratchDir::new("path-links-link-network-temp");
+    std::fs::write(project.join("a.txt"), "x").unwrap();
+    let roots = project_roots(&[&project]);
+    let temp = temp_of(&scratch);
+    let share = "/net/octoboard-no-such-host/share";
+    let base = |dir: &ScratchDir| canonical(dir);
+    // Links in the project, in a temp root and elsewhere, straight to the share, through another
+    // link, to the tree itself and relative with dots up to it.
+    let ups = "../".repeat(canonical(&project).components().count());
+    for dir in [&project, &scratch, &elsewhere] {
+        symlink(share, dir.join("to-share")).unwrap();
+        symlink("to-share", dir.join("chained")).unwrap();
+        symlink("/net", dir.join("to-tree")).unwrap();
+        symlink(
+            format!("{ups}net/octoboard-no-such-host"),
+            dir.join("dotted"),
+        )
+        .unwrap();
+    }
+    let linked: Vec<String> = [&project, &scratch, &elsewhere]
+        .into_iter()
+        .flat_map(|dir| {
+            ["to-share", "chained", "to-tree", "dotted"]
+                .map(|name| base(dir).join(name).to_string_lossy().into_owned())
+        })
+        .collect();
+    for raw in &linked {
+        for spelling in [raw.clone(), format!("{raw}/a.txt"), format!("{raw}/.")] {
+            assert_eq!(
+                reach(&spelling, None, &temp, &|| roots.clone()),
+                Err(Unreached::Refused(Refusal::Other)),
+                "{spelling}"
+            );
+        }
+    }
+    // Written relative to the project, the join leads to the link all the same.
+    for raw in ["to-share", "chained/a.txt", "to-tree", "dotted/x"] {
+        assert_eq!(refusal(raw, &temp, &roots), Refusal::Other, "{raw}");
+    }
+    // A link to a folder that is not a network place is followed as before.
+    std::fs::create_dir(elsewhere.join("folder")).unwrap();
+    symlink(elsewhere.join("folder"), project.join("fine")).unwrap();
+    assert_eq!(
+        kind("fine", None, &temp, &roots),
+        Some(PathLinkKind::Directory)
+    );
+}
+
+/// Looks that outrun a shortened deadline: `LOOKS_OVERRIDE` holds the looks of chosen paths until
+/// the test releases them, and every deadline is as short as the test says.
+mod stalled_looks {
+    use std::time::Duration;
+
+    use super::super::looks::{HeldLooks, LooksTrial, LOOKS_OVERRIDE};
+    use super::with_state::read_text;
+    use super::*;
+    use crate::browse::tests::Fixture;
+    use crate::session::wait::wait_for;
+    use crate::test_support::PATIENCE;
+
+    /// Long enough that a place's thread has begun its look by the time it ends on a loaded
+    /// machine, short enough that a test waits it out cheaply.
+    const SHORT_DEADLINE: Duration = Duration::from_millis(500);
+
+    /// Holds the looks of `paths` and shortens the deadlines on the test's own thread until
+    /// dropped, which also lets every held look go, so no thread outlives the test blocked.
+    struct Held(std::sync::Arc<HeldLooks>);
+
+    impl Held {
+        fn new(paths: &[&str], projects: &[&str]) -> Self {
+            let held = HeldLooks::new(paths, projects);
+            LOOKS_OVERRIDE.set(Some(LooksTrial {
+                deadline: SHORT_DEADLINE,
+                held: held.clone(),
+            }));
+            Self(held)
+        }
+
+        /// How many looks of a held path began.
+        fn began(&self) -> usize {
+            self.0.began.load(std::sync::atomic::Ordering::SeqCst)
+        }
+
+        /// How many lookups of the roots of a held project began.
+        fn roots_began(&self) -> usize {
+            self.0.roots_began.load(std::sync::atomic::Ordering::SeqCst)
+        }
+
+        fn release(&self) {
+            self.0.release();
+        }
+    }
+
+    impl Drop for Held {
+        fn drop(&mut self) {
+            LOOKS_OVERRIDE.set(None);
+            self.0.release();
+        }
+    }
+
+    fn kinds(fixture: &Fixture, project: &str, paths: &[&str]) -> Vec<PathLinkKind> {
+        probe(
+            &fixture.state,
+            Some(project),
+            paths.iter().map(|path| path.to_string()).collect(),
+        )
+        .unwrap()
+        .into_iter()
+        .map(|link| link.kind)
+        .collect()
+    }
+
+    fn refused_as_unanswered(error: &anyhow::Error, path: &str) {
+        let coded = error.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.code, error_code::PATH_LINK_REFUSED);
+        assert_eq!(coded.params["cause"], "unanswered");
+        assert!(!coded.params.contains_key("detail"));
+        assert_eq!(coded.params["path"], path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_stalled_look_is_answered_none_recorded_stuck_skipped_and_answered_again_once_released() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-held-probe");
+        std::fs::write(directory.join("a.ts"), b"x").unwrap();
+        let project = fixture.project("held-probe-project", &directory);
+        let roots = crate::path_links::project_roots(&fixture.state, &project, false);
+        let place = place_of("a.ts", None, &roots);
+        // The top of the tree is a place of its own, whichever volume the scratch folder is on.
+        let paths = ["a.ts", "/"];
+        assert_ne!(place, place_of("/", None, &roots));
+        let held = Held::new(&["a.ts"], &[]);
+        let (file, none, folder) = (
+            PathLinkKind::File,
+            PathLinkKind::None,
+            PathLinkKind::Directory,
+        );
+        // The stalled path is `none` and the other place is answered. A pass whose thread had not
+        // begun the look by the deadline tested nothing, and is run again.
+        assert!(
+            wait_for(PATIENCE, || {
+                let answered = kinds(&fixture, &project, &paths);
+                held.began() == 1 && answered == [none, folder]
+            }),
+            "no look began, or the other place was not answered"
+        );
+        assert!(
+            wait_for(PATIENCE, || fixture.state.path_probes.is_stuck(&place)),
+            "the stalled place is recorded stuck"
+        );
+        // While it is stuck no new look is started for it, and the rest is answered all the same.
+        assert_eq!(kinds(&fixture, &project, &paths), [none, folder]);
+        assert_eq!(held.began(), 1);
+        // Once the stalled look is released its thread ends, and the place is looked at again.
+        held.release();
+        assert!(
+            wait_for(PATIENCE, || !fixture.state.path_probes.is_stuck(&place)),
+            "the released look ends"
+        );
+        assert_eq!(kinds(&fixture, &project, &paths), [file, folder]);
+        assert_eq!(held.began(), 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn opening_reading_and_showing_a_stalled_look_is_refused_in_time_and_works_once_released() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-held-click");
+        std::fs::write(directory.join("a.ts"), b"x").unwrap();
+        let project = fixture.project("held-click-project", &directory);
+        let roots = crate::path_links::project_roots(&fixture.state, &project, false);
+        let place = place_of("a.ts", None, &roots);
+        // No temp root, so what `open` checks there does not apply to the scratch folder.
+        let _no_temp = with_temp_roots(&[]);
+        let held = Held::new(&["a.ts"], &[]);
+        let project = Some(project.as_str());
+        let read_it = || read_text(&fixture, project, "a.ts", 1 << 20);
+        let open_it = || {
+            open_with(
+                &fixture.state,
+                project,
+                "a.ts",
+                |_| false,
+                |_| panic!("must not be opened"),
+            )
+        };
+        let reveal_it = || {
+            reveal_with(&fixture.state, project, "a.ts", |_| {
+                panic!("must not be shown")
+            })
+        };
+        // The first look outruns the deadline: refused, not hung, and the place is recorded stuck.
+        // A look that had not begun by the deadline tested nothing, and is run again.
+        let mut error = None;
+        assert!(
+            wait_for(PATIENCE, || {
+                error = read_it().err();
+                held.began() == 1
+            }),
+            "no look began"
+        );
+        refused_as_unanswered(&error.unwrap(), "a.ts");
+        assert!(
+            wait_for(PATIENCE, || fixture.state.path_probes.is_stuck(&place)),
+            "the stalled place is recorded stuck"
+        );
+        // Every route is now refused at once, with no look of its own.
+        refused_as_unanswered(&read_it().unwrap_err(), "a.ts");
+        refused_as_unanswered(&open_it().unwrap_err(), "a.ts");
+        refused_as_unanswered(&reveal_it().unwrap_err(), "a.ts");
+        refused_as_unanswered(
+            &locate(&fixture.state, project, "a.ts").unwrap_err(),
+            "a.ts",
+        );
+        assert_eq!(held.began(), 1);
+        // Released, the place is looked at again.
+        held.release();
+        assert!(wait_for(PATIENCE, || !fixture
+            .state
+            .path_probes
+            .is_stuck(&place)));
+        assert_eq!(read_it().unwrap().0, "x");
+        assert_eq!(
+            locate(&fixture.state, project, "a.ts").unwrap().kind,
+            PathLinkKind::File
+        );
+        let shown = std::cell::Cell::new(false);
+        reveal_with(&fixture.state, project, "a.ts", |_| {
+            shown.set(true);
+            Ok(())
+        })
+        .unwrap();
+        assert!(shown.get());
+        let opened = std::cell::Cell::new(false);
+        let outcome = open_with(
+            &fixture.state,
+            project,
+            "a.ts",
+            |_| false,
+            |_| {
+                opened.set(true);
+                Ok(())
+            },
+        );
+        // The scratch folder is the daemon's own, so the open reaches the opener.
+        assert!(outcome.is_ok() && opened.get(), "{outcome:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_stalled_roots_lookup_refuses_a_click_in_time_and_the_project_is_recorded_stuck() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-held-roots");
+        std::fs::write(directory.join("a.ts"), b"x").unwrap();
+        let project = fixture.project("held-roots-project", &directory);
+        // No temp root, so what `open` checks there does not apply to the scratch folder.
+        let _no_temp = with_temp_roots(&[]);
+        let held = Held::new(&[], &[&project]);
+        let id = Some(project.as_str());
+        let read_it = || read_text(&fixture, id, "a.ts", 1 << 20);
+        let open_it = || {
+            open_with(
+                &fixture.state,
+                id,
+                "a.ts",
+                |_| false,
+                |_| panic!("must not be opened"),
+            )
+        };
+        let reveal_it = || reveal_with(&fixture.state, id, "a.ts", |_| panic!("must not be shown"));
+        // The lookup of the roots outruns the deadline: refused, not hung. A lookup that had not
+        // begun by the deadline tested nothing, and is run again.
+        let mut error = None;
+        assert!(
+            wait_for(PATIENCE, || {
+                error = read_it().err();
+                held.roots_began() == 1
+            }),
+            "no lookup began"
+        );
+        refused_as_unanswered(&error.unwrap(), "a.ts");
+        assert!(
+            wait_for(PATIENCE, || fixture
+                .state
+                .path_root_lookups
+                .is_stuck(project.as_str())),
+            "the project is recorded stuck"
+        );
+        // Every route is now refused at once, with no lookup of its own.
+        refused_as_unanswered(&read_it().unwrap_err(), "a.ts");
+        refused_as_unanswered(&open_it().unwrap_err(), "a.ts");
+        refused_as_unanswered(&reveal_it().unwrap_err(), "a.ts");
+        assert_eq!(held.roots_began(), 1);
+        // The path itself was never looked at, so its place is not stuck.
+        let roots = crate::path_links::project_roots(&fixture.state, &project, false);
+        let place = place_of("a.ts", None, &roots);
+        assert!(!place.as_os_str().is_empty());
+        assert!(!fixture.state.path_probes.is_stuck(&place));
+        held.release();
+        assert!(wait_for(PATIENCE, || !fixture
+            .state
+            .path_root_lookups
+            .is_stuck(project.as_str())));
+        assert_eq!(read_it().unwrap().0, "x");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_prefix_that_holds_a_root_is_allowed_in_passing_and_never_as_where_the_walk_ends() {
+    use super::resolve::refused_prefix;
+    let roots = vec![PathBuf::from("/net/h/proj")];
+    let refused = |prefix: &str, more: bool| refused_prefix(Path::new(prefix), more, &roots);
+    // Folders above the root are passed through, and refused where a link lands on them.
+    for ancestor in ["/net", "/net/h"] {
+        assert!(!refused(ancestor, true), "{ancestor} in passing");
+        assert!(refused(ancestor, false), "{ancestor} as the end");
+    }
+    // The root and what is inside it are looked at as they are.
+    for inside in ["/net/h/proj", "/net/h/proj/x"] {
+        assert!(!refused(inside, true), "{inside}");
+        assert!(!refused(inside, false), "{inside}");
+    }
+    // Beside the root, or merely starting alike, is a place of its own.
+    for beside in ["/net/h/other", "/net/h2", "/net/h2/proj"] {
+        assert!(refused(beside, true), "{beside}");
+        assert!(refused(beside, false), "{beside}");
+    }
+    // No root on a share allows nothing there; a path on the local disk is never refused here.
+    assert!(refused_prefix(Path::new("/net"), true, &[]));
+    assert!(!refused_prefix(Path::new("/Users/me"), false, &roots));
 }

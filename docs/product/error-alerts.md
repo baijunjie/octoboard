@@ -570,9 +570,11 @@ For example:
   - **inside a temporary directory, changeable by other users of the machine**: if it is trusted, open it oneself from
     the file manager;
   - **a read the operating system denies**: the remedy of a denied read (below);
-  - **not a file or folder, could not be read for another reason, or any other reason or one the window does not
-    know**: no remedy; the alert's sentence says it all, with
-    the system's own text of a read that failed under Error details.
+  - **not a file or folder, could not be read for another reason, did not respond in time (the look at it was not
+    answered within its time limit, or its place is still stalled from an earlier look), or any other reason or one
+    the window does not know**: no remedy; the alert's sentence says it all, with the system's own text of a read that
+    failed under Error details. Each is a known failure, the one that did not respond in time included, and none
+    offers Report issue.
 - A loopback address a remote window could not forward (see "Loopback addresses of the remote machine" in
   `docs/product/links-and-files-in-a-remote-window.md`), whether opened from a link or from a row of the Forwarded ports
   popover, is a known failure, titled as any link that could not be opened, whose sentence names the port and the
@@ -587,7 +589,9 @@ For example:
   `docs/product/links-and-files-in-a-remote-window.md`) is titled that the file could not be downloaded, or, where all
   of it had arrived and no application opened it, that the downloaded file could not be opened. A file that is gone or
   that the daemon may not read gets the sentence and remedy a click on its path link gets (above); one that leads
-  outside the project gets the sentence saying so and no remedy. A file that changed while it was copied, or whose copy came out short, says the file changed
+  outside the project gets the sentence saying so and no remedy. A file a terminal's path link names outside the
+  project is looked up again for each part copied, with the time limits of a click on it, and one not answered in time
+  gets the sentence and the lack of a remedy such a click gets (above). A file that changed while it was copied, or whose copy came out short, says the file changed
   while it was read and asks to try again once whatever is writing to it has finished. A connection lost on the way
   gets the connection remedy. A copy this computer could not write gets the disk-space or the access remedy by the
   system's cause. A file this computer would run says so, naming it, and gets no remedy. A copy that arrived but that

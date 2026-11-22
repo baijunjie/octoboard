@@ -658,6 +658,7 @@ export const ja: Translation<"other"> = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path} はファイルでもフォルダでもないため、開けません。",
   "daemon.path_link_refused.unreadable": "{path} を読み取れなかったため、開きません。",
   "daemon.path_link_refused.unreadable.summary": "{path} を読み取れなかったため、開きません。",
+  "daemon.path_link_refused.unanswered": "{path} が時間内に応答しなかったため、開きません。",
   "daemon.path_link_refused.other": "{path} はリンクから開けません。",
   "daemon.path_link_refused.other.summary": "{path} はリンクから開けません。",
   "daemon.unsupported_file_type.unmerged": "{path} は競合しているため、読み取り対象のバージョンを1つに決められません。",

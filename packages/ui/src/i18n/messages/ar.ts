@@ -645,6 +645,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "daemon.path_link_refused.not_a_file_or_folder": "{path} ليس ملفاً أو مجلداً، لذا لا يمكن فتحه.",
   "daemon.path_link_refused.unreadable": "تعذرت قراءة {path}، لذا لا يُفتح.",
   "daemon.path_link_refused.unreadable.summary": "تعذرت قراءة {path}، لذا لا يُفتح.",
+  "daemon.path_link_refused.unanswered": "لم يستجب {path} في الوقت المناسب، لذا لا يُفتح.",
   "daemon.path_link_refused.other": "لا يمكن فتح {path} من رابط.",
   "daemon.path_link_refused.other.summary": "لا يمكن فتح {path} من رابط.",
   "daemon.unsupported_file_type.unmerged": "يوجد تعارض في {path}، لذا ليس له إصدار واحد يمكن قراءته.",

@@ -644,6 +644,7 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "daemon.path_link_refused.not_a_file_or_folder": "{path} não é um arquivo ou pasta, portanto não pode ser aberto.",
   "daemon.path_link_refused.unreadable": "Não foi possível ler {path}, portanto ele não é aberto.",
   "daemon.path_link_refused.unreadable.summary": "Não foi possível ler {path}, portanto ele não é aberto.",
+  "daemon.path_link_refused.unanswered": "{path} não respondeu a tempo, portanto ele não é aberto.",
   "daemon.path_link_refused.other": "{path} não pode ser aberto por um link.",
   "daemon.path_link_refused.other.summary": "{path} não pode ser aberto por um link.",
   "daemon.unsupported_file_type.unmerged": "{path} está em conflito, portanto não tem uma única versão para leitura.",
