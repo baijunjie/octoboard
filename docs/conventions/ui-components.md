@@ -76,8 +76,9 @@ The helper for each need is in `docs/structure/ui.md`, "Shared entry points"; th
   so every confirmation shares its focus, busy and error handling.
 - **Raw error text shown as a block of its own is `DiagnosticBlock`**, never a `<p className="font-mono">` or a bare
   `CodeBlock`. It sits on a surface of its own and carries the named, keyboard-reachable scroll region and the copy
-  control; a label stays outside via `labelledBy`, and `wrap` breaks long lines (for text the user wrote). Change its
-  look in the component, not in one caller.
+  control; a label stays outside, named via `labelledBy`, or via `label` where the visible label cannot carry an id (a
+  disclosure trigger), and `wrap` breaks long lines (for text a person or an agent wrote). Change its look in the
+  component, not in one caller.
 - **A dialog whose work cannot be left uses `Dialog`'s `busy` prop.** Wrappers read the state through `useDisabled`,
   custom controls through `useBusy`; a dialog does not disable its own controls for it.
 - **Announce outcomes and silent changes through `AttendedStatusAnnouncer`, `ChangeAnnouncer` and
