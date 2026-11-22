@@ -7,7 +7,8 @@
  * reversed text, `paths` draws output that names files and
  * folders, `shell` draws a shell at its prompt (the Terminal panel's shells), `exited` draws the
  * last screen of a shell that has ended and then closes, and `refuse` closes at once without ever
- * opening, which is a live session whose terminal cannot be reached.
+ * opening, which is a live session whose terminal cannot be reached. The samples of an agent's CLI (`output`,
+ * `native`, `mouse`, `paths`) turn bracketed paste on, so a selection in them can be quoted.
  */
 
 const FIXTURE_ORIGIN = "ws://gallery.invalid/";
@@ -27,6 +28,12 @@ function shellFolder(url: string): string | undefined {
 }
 
 const ESC = "\x1b[";
+/** Turns on bracketed paste, which an agent's CLI does as it starts: a paste then reaches its input as one piece, so
+ * a quote of selected text keeps its line breaks instead of sending the input line by line. */
+const BRACKETED_PASTE = `${ESC}?2004h`;
+/** The behaviours that draw an agent's CLI waiting for input, which have turned bracketed paste on by their first
+ * screen. The others draw a full-screen program, a shell or a closed session, which cannot take a quote. */
+const TAKES_PASTE: ReadonlySet<TerminalBehaviour> = new Set(["output", "native", "mouse", "paths"]);
 /** Opens (with a URI after it) or closes an OSC 8 hyperlink; each ends with the string terminator `ESC \`. */
 const OSC8 = "\x1b]8;;";
 
@@ -342,6 +349,7 @@ class FakeTerminalSocket extends EventTarget {
   private readonly folder?: string;
   /** The supplied script, once it has been asked for, and the ticks it has had. */
   private script?: TerminalScript;
+  private pasteModeSet = false;
   private step = 0;
   private ticker?: ReturnType<typeof setInterval>;
 
@@ -379,7 +387,10 @@ class FakeTerminalSocket extends EventTarget {
     const text = typeof supplied === "string"
       ? supplied
       : this.script?.screen(this.cols, this.step) ?? (this.behaviour === "shell" && this.folder !== undefined ? freshShell(this.folder) : SAMPLES[this.behaviour](this.cols));
-    this.write(clear + text);
+    // Turned on with the first screen only: the mode stays on across the redraws that follow a resize.
+    const mode = !this.pasteModeSet && supplied === undefined && TAKES_PASTE.has(this.behaviour) ? BRACKETED_PASTE : "";
+    if (mode) this.pasteModeSet = true;
+    this.write(clear + mode + text);
   }
 
   private write(text: string): void {

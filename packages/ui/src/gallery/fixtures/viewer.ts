@@ -1279,6 +1279,14 @@ const findFor = (query: string): Step => async (ui) => {
 
 /** The focusable surface that shows the file's code, named by the file's own name. */
 const SESSION_CODE = describing("the code surface of session.ts", (name) => name.includes("session.ts"));
+/** Selects all of the code surface and opens its menu. */
+const selectCodeAndOpenMenu: Step[] = [
+  (ui) => ui.tabToRegion(SESSION_CODE),
+  // Select All takes nothing until the renderer has drawn the code.
+  (ui) => ui.codeDrawn(SESSION_CODE),
+  (ui) => ui.chord({ code: "KeyA", primary: true }),
+  (ui) => ui.contextMenuRegion(SESSION_CODE),
+];
 async function findCodeSubjects(): Promise<ViewerSubject[]> {
   return [file("src/session.ts", newSession)];
 }
@@ -1522,14 +1530,17 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Text menu with text selected",
-    description: "The same menu with the code selected: Copy, then Select all.",
+    description: "The same menu with the code selected, over a session that can take a quote: Copy, Quote and Select all, with Quote enabled.",
     viewer: { subjects: findCodeSubjects },
-    steps: [
-      (ui) => ui.tabToRegion(SESSION_CODE),
-      // Select All takes nothing until the renderer has drawn the code.
-      (ui) => ui.codeDrawn(SESSION_CODE),
-      (ui) => ui.chord({ code: "KeyA", primary: true }),
-      (ui) => ui.contextMenuRegion(SESSION_CODE),
-    ],
+    steps: selectCodeAndOpenMenu,
+  },
+  {
+    id: "viewer-text-menu-quote-unavailable",
+    group: GROUP,
+    category: "normal",
+    title: "Text menu with text selected and no session to quote into",
+    description: "The menu with the code selected while no session is ready for input: Quote is disabled, with \"No session ready for input\" under its name, so its row is taller than Copy's and Select all's.",
+    viewer: { subjects: findCodeSubjects, quote: "unavailable" },
+    steps: selectCodeAndOpenMenu,
   },
 ];

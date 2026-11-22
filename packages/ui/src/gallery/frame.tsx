@@ -289,7 +289,7 @@ function screen(): React.ReactElement {
   if (viewerSubjects && ViewerGallery)
     return (
       <>
-        <ViewerGallery subjects={viewerSubjects} loadDelay={scenario.viewer?.loadDelay} />
+        <ViewerGallery subjects={viewerSubjects} loadDelay={scenario.viewer?.loadDelay} quote={scenario.viewer?.quote} />
         <Toasts focusTerminal={() => {}} />
       </>
     );

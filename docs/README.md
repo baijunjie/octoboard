@@ -237,8 +237,8 @@ Where to start, by question:
 - [The session terminal with no session selected](product/session-terminal-with-no-session-selected.md) — what the
   terminal's area shows with no session selected, where focus goes, and the creation action in an empty console.
 - [Copy, paste and selection in the session terminal](product/terminal-copy-paste-and-selection.md) — the terminal's
-  editing menu (Copy, Paste, Select all, Open in on a path link), selecting with the mouse under mouse reporting, and
-  text a program copies with OSC 52.
+  editing menu (Copy, Paste, Quote, Select all, Open in on a path link), what Quote writes into a session's input,
+  selecting with the mouse under mouse reporting, and text a program copies with OSC 52.
 - [Terminal output, scrollback and size](product/terminal-output-scrollback-and-size.md) — attaching from a first
   paint, the scrollback, a client that falls behind the output, gutters and resizing, and colours.
 - [Reconnecting and loading in the session terminal](product/session-terminal-reconnecting-and-loading.md) — automatic

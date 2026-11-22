@@ -149,6 +149,11 @@ which scenarios to write against copy, form-control values and viewing condition
   matcher accepting the plain and the quick one), so the scenario still opens.
 - **Markdown style.** The style chosen with the Markdown style control carries over to viewer scenarios that set no
   `preferences.markdownStyle` and is dropped on picking a viewer scenario that sets its own.
+- **Quote in the viewer.** A `viewer` scenario's window has a quote target that can take a quote (the viewer's Quote
+  item is enabled); `viewer: { quote: "unavailable" }` stages one that cannot (its `blocked()` answers `"input"`, no
+  session ready for input), where Quote is disabled with its reason. A quote goes nowhere in these scenarios. The
+  session terminal's own Quote item is in the app scenarios, over an agent's terminal sample, which turns bracketed
+  paste on.
 - **Live changes.** Written with the builders in `fixtures/liveChanges.ts` (`accountAdded`, `accountRemoved`,
   `agentAvailability`, `terminalOpened`, `terminalClosed`, `pagePushed`, `latestPageDeleted` and `allPagesDeleted`), not
   raw `daemonEvents` steps; another kind of collection gets a builder of its own.

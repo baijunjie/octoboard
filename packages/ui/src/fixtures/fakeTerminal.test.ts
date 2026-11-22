@@ -52,12 +52,33 @@ it("draws the default sample with mouse reporting turned on for the mouse behavi
   socket.close();
 });
 
-/** The sample's rows as `brokenUrlsAt` reads them, after `clear` and the colour codes are stripped.
- * `cols` pads each row out to the terminal's width, which is what a real buffer does with the cells
- * after a piece that stops short. */
+/** Draws `behaviour` (over `options`, for supplied output) and returns what its first screen wrote. */
+async function firstScreen(behaviour: Parameters<typeof terminalFixtureUrl>[0], options?: Parameters<typeof installFakeTerminal>[0]): Promise<string> {
+  fakeTimers();
+  installFakeTerminal(options);
+  const socket = new WebSocket(terminalFixtureUrl(behaviour, "gallery-session"));
+  let output = "";
+  socket.addEventListener("message", (event) => { output = new TextDecoder().decode(event.data); });
+  await vi.runAllTimersAsync();
+  socket.close();
+  return output;
+}
+
+it("turns bracketed paste on in an agent's CLI, so a selection can be quoted, and in no other screen", async () => {
+  for (const behaviour of ["output", "native", "mouse", "paths"] as const) expect(await firstScreen(behaviour)).toContain("\x1b[?2004h");
+  for (const behaviour of ["fullscreen", "cursor-selection", "shell", "exited"] as const) expect(await firstScreen(behaviour)).not.toContain("\x1b[?2004h");
+});
+
+it("leaves supplied output as it is, without turning bracketed paste on", async () => {
+  expect(await firstScreen("output", { output: () => "supplied" })).toBe("supplied");
+});
+
+/** The sample's rows as `brokenUrlsAt` reads them, after `clear`, the bracketed paste mode a first screen starts
+ * with and the colour codes are stripped. `cols` pads each row out to the terminal's width, which is what a real
+ * buffer does with the cells after a piece that stops short. */
 function rowsOf(output: string, clear = "", cols?: number): { lines: string[]; rows: TerminalRow[] } {
   // eslint-disable-next-line no-control-regex -- strips the sample's ANSI SGR colour codes.
-  const lines = output.slice(clear.length).replace(/\x1b\[[0-9;]*m/g, "").split("\r\n");
+  const lines = output.slice(clear.length).replace(/^\x1b\[\?2004h/, "").replace(/\x1b\[[0-9;]*m/g, "").split("\r\n");
   const rows = lines.map((line) => {
     const cells = [...line].flatMap((ch) => (isWide(ch) ? [ch, ""] : [ch]));
     if (cols !== undefined && cells.length < cols) cells.push(...Array<string>(cols - cells.length).fill(" "));

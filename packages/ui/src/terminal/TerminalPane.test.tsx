@@ -62,6 +62,24 @@ const { FakeController } = vi.hoisted(() => {
     hasHostActions(): boolean { return this.callbacks.pathLinks?.reveal !== undefined && this.callbacks.pathLinks.openDefault !== undefined; }
     probe(paths: string[]) { return this.callbacks.pathLinks!.probe(paths); }
     mount(): void {}
+    /** Why the session on input cannot take a quote, which `quoteBlock` answers for the session asked about. */
+    blocked: "input" | "program" | undefined = undefined;
+    quoteBlockAsked: string[] = [];
+    quoteBlock(sessionId: string): "input" | "program" | undefined {
+      this.quoteBlockAsked.push(sessionId);
+      return this.blocked;
+    }
+    quoted: { text: string; sessionId: string }[] = [];
+    quote(text: string, sessionId: string): void {
+      this.quoted.push({ text, sessionId });
+    }
+    /** What the pane's edit menu reads as it opens. */
+    selectedText = "";
+    programCopiedText: string | undefined;
+    mouseReporting = false;
+    inputSessionId: string | undefined;
+    pathLinkAt(): undefined { return undefined; }
+    selectAll(): void {}
     inputLabel: string | undefined;
     setInputLabel(label: string): void {
       this.inputLabel = label;
@@ -418,6 +436,79 @@ it("keeps focus off the covered terminal while no session is selected", () => {
   expect(container.querySelector("[inert]")).toBeNull();
   act(() => handle.current?.focus());
   expect(FakeController.last.focuses).toBe(1);
+});
+
+describe("quoting through the handle", () => {
+  it("is blocked by the input, and quotes nothing, with no session shown", () => {
+    const { handle } = mountEmpty();
+    expect(handle.current!.quoteBlock()).toBe("input");
+    handle.current!.quote("text");
+    expect(FakeController.last.quoted).toEqual([]);
+  });
+
+  it.each([undefined, "input", "program"] as const)("asks the controller what blocks a quote into the session shown, which answers %s", (answer) => {
+    const { handle } = mountEmpty({ session });
+    FakeController.last.blocked = answer;
+    expect(handle.current!.quoteBlock()).toBe(answer);
+    expect(FakeController.last.quoteBlockAsked).toEqual(["s-1"]);
+  });
+
+  it("quotes into the session shown, and into the one shown after a switch", () => {
+    const { handle, show } = mountEmpty({ session });
+    handle.current!.quote("first");
+    show({ session: sessionOf("s-2", "c-1", undefined, "Other", "working") });
+    handle.current!.quote("second");
+    expect(FakeController.last.quoted).toEqual([{ text: "first", sessionId: "s-1" }, { text: "second", sessionId: "s-2" }]);
+  });
+
+  it("offers Quote in the right-click menu of the session shown, quoting the selection into it", async () => {
+    const { container } = mountEmpty({ session });
+    FakeController.last.selectedText = "selected words";
+    FakeController.last.inputSessionId = "s-1";
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 });
+    await act(async () => { container.querySelector("[dir=ltr]")!.dispatchEvent(event); });
+    expect(event.defaultPrevented).toBe(true);
+    const entries = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].map((entry) => entry.textContent);
+    // Paste carries the reason it is disabled here, as the test platform has no clipboard.
+    expect(entries.map((entry) => (entry!.startsWith("Paste") ? "Paste" : entry))).toEqual(["Copy", "Paste", "Quote", "Select all"]);
+    await act(async () => {
+      const entry = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((candidate) => candidate.textContent === "Quote")!;
+      entry.focus();
+      entry.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      entry.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
+    });
+    expect(FakeController.last.quoted).toEqual([{ text: "selected words", sessionId: "s-1" }]);
+  });
+
+  it("is blocked by the input, and quotes nothing, for an archived session", () => {
+    const { handle } = mountArchived();
+    expect(handle.current!.quoteBlock()).toBe("input");
+    handle.current!.quote("text");
+    expect(FakeController.last.quoted).toEqual([]);
+    expect(FakeController.last.quoteBlockAsked).toEqual([]);
+  });
+
+  it("is blocked by the input, and quotes nothing, while an account switch holds the session, and quotes again after it", () => {
+    const { handle, show } = mountEmpty({ session });
+    show({ session: { ...session, switching_account: true } });
+    expect(handle.current!.quoteBlock()).toBe("input");
+    handle.current!.quote("held");
+    expect(FakeController.last.quoted).toEqual([]);
+    expect(FakeController.last.quoteBlockAsked).toEqual([]);
+    show({ session });
+    expect(handle.current!.quoteBlock()).toBeUndefined();
+    handle.current!.quote("released");
+    expect(FakeController.last.quoted).toEqual([{ text: "released", sessionId: "s-1" }]);
+  });
+
+  it("is blocked by the input, and quotes nothing, once the session shown has gone", () => {
+    const { handle, show } = mountEmpty({ session });
+    expect(handle.current!.quoteBlock()).toBeUndefined();
+    show({ session: undefined });
+    expect(handle.current!.quoteBlock()).toBe("input");
+    handle.current!.quote("text");
+    expect(FakeController.last.quoted).toEqual([]);
+  });
 });
 
 describe("handing focus on through the handle, as the closing archive view does", () => {

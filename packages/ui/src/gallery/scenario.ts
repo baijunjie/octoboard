@@ -265,6 +265,7 @@ export interface Scenario extends Fixture {
   liveChanges?: LiveChange[];
   /** Renders the file viewer over the subjects `subjects` builds, in place of the app; built only
    * when the scenario opens. `loadDelay` shows each one's loading state for that many milliseconds
-   * first. */
-  viewer?: { subjects: (language: Language) => Promise<ViewerSubject[]>; loadDelay?: number };
+   * first. The viewer's Quote item is offered over a session that can take a quote; `quote: "unavailable"` stages
+   * a window with none (no session ready for input), where it is disabled with its reason. */
+  viewer?: { subjects: (language: Language) => Promise<ViewerSubject[]>; loadDelay?: number; quote?: "unavailable" };
 }

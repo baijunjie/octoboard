@@ -157,7 +157,7 @@ then sent away with its Close panel button or by moving the pointer away. In the
 
 - **Copy, paste and select all**: the same editing menu as a session's terminal, opened the same ways (see
   `docs/product/terminal-copy-paste-and-selection.md`), except that it pastes no image (see "Which pastes paste an
-  image" in `docs/product/pasting-images.md`). Paste is unavailable while the terminal is not connected, a
+  image" in `docs/product/pasting-images.md`) and has no Quote, which a shell would run as commands. Paste is unavailable while the terminal is not connected, a
   terminal whose shell has exited or whose shell's process cannot be reached included. Selecting under mouse reporting,
   and text a program copies with OSC 52, follow the same section; a program in a tab not shown can copy too, and each
   tab's menu offers what its own program copied. An Option-click moves the shell's cursor as described in "Typing and

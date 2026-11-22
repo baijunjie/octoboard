@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import type { ClipboardCapability } from "../platform";
+import { QuoteTargetContext, type QuoteBlock, type QuoteTarget } from "../components/host/quoteTarget";
 import { PlatformProvider } from "../platform/react";
 import { BROWSER_HOST } from "../test/hosts";
 import { FIND_REGION } from "./find/findDom";
@@ -20,18 +21,21 @@ let container: HTMLDivElement;
 let clipboard: ClipboardCapability | undefined;
 let selectAll: ReturnType<typeof vi.fn<(region: HTMLElement) => boolean>>;
 let kind: "browser" | "tauri";
+let quoteTarget: QuoteTarget | undefined;
 const regionRef = createRef<HTMLDivElement>();
 
 function render(props: { source?: string } = {}) {
   act(() => root.render(
-    <PlatformProvider value={{ kind, host: BROWSER_HOST, clipboard }}>
-      <div ref={regionRef} tabIndex={0} {...FIND_REGION}>
-        <p id="first">first</p>
-        <p id="second">second</p>
-        <p><a id="link" href="https://example.com/">link</a> <button id="inner" type="button">inner</button> <img id="image" alt="" src="data:image/png;base64,AAAA" /></p>
-      </div>
-      <ViewerEditMenu region={regionRef} selectAll={selectAll} source={props.source} />
-    </PlatformProvider>,
+    <QuoteTargetContext.Provider value={quoteTarget}>
+      <PlatformProvider value={{ kind, host: BROWSER_HOST, clipboard }}>
+        <div ref={regionRef} tabIndex={0} {...FIND_REGION}>
+          <p id="first">first</p>
+          <p id="second">second</p>
+          <p><a id="link" href="https://example.com/">link</a> <button id="inner" type="button">inner</button> <img id="image" alt="" src="data:image/png;base64,AAAA" /></p>
+        </div>
+        <ViewerEditMenu region={regionRef} selectAll={selectAll} source={props.source} />
+      </PlatformProvider>
+    </QuoteTargetContext.Provider>,
   ));
 }
 
@@ -41,6 +45,7 @@ beforeEach(() => {
   clipboard = { writeText: vi.fn(async () => {}), readText: vi.fn(async () => "") };
   selectAll = vi.fn(() => true);
   kind = "browser";
+  quoteTarget = undefined;
   document.getSelection()!.removeAllRanges();
   render();
 });
@@ -419,4 +424,97 @@ it("drops a Select All still waiting for the close when the menu is opened again
   expect(document.querySelector("[role=menu]")).toBeNull();
   expect(selectAll).not.toHaveBeenCalled();
   expect(set).toEqual(["first"]);
+});
+
+describe("Quote", () => {
+  let blocked: ReturnType<typeof vi.fn<() => QuoteBlock | undefined>>;
+  let quote: ReturnType<typeof vi.fn<(text: string) => void>>;
+  beforeEach(() => {
+    blocked = vi.fn(() => undefined);
+    quote = vi.fn();
+    quoteTarget = { blocked, quote };
+    render();
+  });
+
+  it("is offered between Copy and Select All over a selection, to a window that has a target", async () => {
+    select("first");
+    await open();
+    expect(menuEntries()).toEqual(["Copy", "Quote", "Select all"]);
+  });
+
+  it("is not offered without a selection, even with a target", async () => {
+    await open();
+    expect(menuEntries()).toEqual(["Select all"]);
+  });
+
+  it("is not offered where the window has no target, leaving the menu as it was", async () => {
+    quoteTarget = undefined;
+    render();
+    select("first");
+    await open();
+    expect(menuEntries()).toEqual(["Copy", "Select all"]);
+  });
+
+  it("quotes the selected text into the target, once", async () => {
+    select("second");
+    await open();
+    await chooseItem("Quote");
+    expect(quote).toHaveBeenCalledExactlyOnceWith("second");
+    expect(clipboard!.writeText).not.toHaveBeenCalled();
+  });
+
+  it("quotes the selection captured when the menu opened, not a later one", async () => {
+    select("first");
+    await open();
+    select("second");
+    await chooseItem("Quote");
+    expect(quote).toHaveBeenCalledExactlyOnceWith("first");
+  });
+
+  it("quotes the Markdown source of a wholly selected document, as Copy copies it, and the selected text for a part", async () => {
+    render({ source: SOURCE });
+    document.getSelection()!.selectAllChildren(region());
+    await open();
+    await chooseItem("Quote");
+    expect(quote).toHaveBeenLastCalledWith(SOURCE);
+
+    await closeMenu();
+    select("second");
+    await open();
+    await chooseItem("Quote");
+    expect(quote).toHaveBeenLastCalledWith("second");
+  });
+
+  it("is enabled while nothing blocks the target as the menu opens, and asks the target then", async () => {
+    select("first");
+    expect(blocked).not.toHaveBeenCalled();
+    await open();
+    expect(blocked).toHaveBeenCalledOnce();
+    expect(menuItem("Quote").getAttribute("aria-disabled")).not.toBe("true");
+  });
+
+  it.each([
+    ["input", "No session ready for input"],
+    ["program", "Program not accepting pasted lines"],
+  ] as const)("is disabled, giving the reason, while the target is blocked by the %s as the menu opens", async (block, reason) => {
+    blocked.mockReturnValue(block);
+    select("first");
+    await open();
+    expect(menuItem(`Quote${reason}`).getAttribute("aria-disabled")).toBe("true");
+    await chooseItem(`Quote${reason}`);
+    expect(quote).not.toHaveBeenCalled();
+  });
+
+  it("goes by what blocked it as the menu opened: not by a render in between, and asked again on a reopen", async () => {
+    select("first");
+    await open();
+    blocked.mockReturnValue("input");
+    // A render of the menu, as any state change of the surface makes.
+    render();
+    expect(menuItem("Quote").getAttribute("aria-disabled")).not.toBe("true");
+    await closeMenu();
+    select("first");
+    await open();
+    expect(menuItem("QuoteNo session ready for input").getAttribute("aria-disabled")).toBe("true");
+  });
 });

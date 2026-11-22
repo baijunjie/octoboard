@@ -1,9 +1,10 @@
-import { ClipboardPaste, Copy, FolderOpen, SquareArrowOutUpRight, TextSelect } from "lucide-react";
+import { ClipboardPaste, Copy, FolderOpen, SquareArrowOutUpRight, TextQuote, TextSelect } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { ActionMenu } from "../components/menus/ActionMenu";
 import type { ActionMenuEntry } from "../components/menus/menuEntries";
 import { copyText } from "../components/host/copyText";
+import type { QuoteBlock } from "../components/host/quoteTarget";
 import { useLatest, useStableHandler } from "../components/hooks/useLatest";
 import { ActionableError } from "../errors/actionableError";
 import { useT } from "../i18n/react";
@@ -14,10 +15,13 @@ import type { TerminalController } from "./TerminalController";
 import { raiseError } from "../components/alerts/raiseError";
 
 /** Editing works on xterm's buffer and input pipeline, never on its hidden textarea's value. */
-export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }: {
+export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId, quote = false }: {
   controllerRef: React.RefObject<TerminalController | undefined>;
   contextTargetRef: React.RefObject<HTMLElement | null>;
   sessionId: string;
+  /** Offers Quote, which writes the selection back into the input as a block quote: for a terminal whose program is
+   * an agent, since a shell would run the quote's lines. */
+  quote?: boolean;
 }): React.ReactElement {
   const t = useT();
   const { clipboard, host } = usePlatform();
@@ -35,6 +39,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
   // The path link under the pointer when the menu opened, which the menu offers to open in the file manager or the default application.
   const [pathLink, setPathLink] = useState<PathLinkTarget>();
   const [inputSession, setInputSession] = useState<string>();
+  const [quoteBlock, setQuoteBlock] = useState<QuoteBlock | undefined>("input");
   const paste = () => {
     const controller = controllerRef.current;
     const destination = inputSession;
@@ -78,6 +83,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
         // OSC 52, leaving nothing here to copy: the item then says how to select in the terminal instead.
         setMouseReporting(controller?.mouseReporting ?? false);
         setInputSession(controller?.inputSessionId);
+        setQuoteBlock(controller ? controller.quoteBlock(sessionId) : "input");
         // Only a pointer-opened menu has a link under it: a key-opened one is anchored to the focused element.
         setPathLink(byKey ? undefined : controller?.pathLinkAt(clientX, clientY));
         controller?.focus();
@@ -95,6 +101,15 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
           reason: !clipboard?.readText ? { state: t("terminal.pasteNoClipboard") } : undefined,
           onClick: paste,
         },
+        ...(quote
+          ? [{
+            label: t("common.quote"), icon: TextQuote, disabled: !selection || quoteBlock !== undefined,
+            // A session that takes no input says why on the terminal itself, as for Paste; a program that would send
+            // the quote line by line shows nothing of it.
+            reason: selection && quoteBlock === "program" ? { state: t("common.quoteProgramBlocked") } : undefined,
+            onClick: () => controllerRef.current?.quote(selection, sessionId),
+          }]
+          : []),
         { label: t("terminal.selectAll"), icon: TextSelect, onClick: () => controllerRef.current?.selectAll() },
       ]}
     />

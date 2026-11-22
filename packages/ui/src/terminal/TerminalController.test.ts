@@ -94,7 +94,7 @@ const { FakeTerminal } = vi.hoisted(() => {
       clearTimeout(this.parseTimer);
       this.queue = [];
     }
-    modes = { mouseTrackingMode: "none" };
+    modes = { mouseTrackingMode: "none", bracketedPasteMode: false };
     private binaryListeners: ((data: string) => void)[] = [];
 
     onBinary(listener: (data: string) => void): void {
@@ -156,6 +156,8 @@ const { FakeTerminal } = vi.hoisted(() => {
           this.modes.mouseTrackingMode = { "1000": "vt200", "1002": "drag", "1003": "any" }[mode]!;
           this.selection = "";
         }
+        // eslint-disable-next-line no-control-regex -- A mode set begins with ESC.
+        for (const [, set] of text.matchAll(/\x1b\[\?2004([hl])/g)) this.modes.bracketedPasteMode = set === "h";
         // eslint-disable-next-line no-control-regex -- A mode set begins with ESC.
         for (const [, set] of text.matchAll(/\x1b\[\?1049([hl])/g)) {
           this.buffer.active.type = set === "h" ? "alternate" : "normal";
@@ -768,6 +770,59 @@ it("drops paste after its destination changed or input became unavailable", () =
 /** What reached the session as keys, as text, in the order sent. */
 const sentText = () => lastSocket().sent.filter((entry) => ArrayBuffer.isView(entry)).map((entry) => new TextDecoder().decode(entry as Uint8Array));
 const bracketed = (text: string) => `\x1b[200~${text}\x1b[201~`;
+
+describe("quoting text into the input", () => {
+  const BRACKETED_PASTE_ON = "\x1b[?2004h";
+  const BRACKETED_PASTE_OFF = "\x1b[?2004l";
+
+  /** `s-quote` attached and open to input, its program having written `output`. */
+  async function attached(output = BRACKETED_PASTE_ON) {
+    controller.attach("s-quote", url("s-quote"), false);
+    lastSocket().open();
+    lastSocket().receive(`replay${output}`);
+    await settle();
+  }
+
+  it("has nothing blocking a quote into the session on input while its program has bracketed paste on", async () => {
+    await attached();
+    expect(controller.quoteBlock("s-quote")).toBeUndefined();
+  });
+
+  it("blames the program while it has not turned bracketed paste on, or has turned it off again", async () => {
+    await attached("");
+    expect(controller.quoteBlock("s-quote")).toBe("program");
+    lastSocket().receive(BRACKETED_PASTE_ON);
+    await settle();
+    expect(controller.quoteBlock("s-quote")).toBeUndefined();
+    lastSocket().receive(BRACKETED_PASTE_OFF);
+    await settle();
+    expect(controller.quoteBlock("s-quote")).toBe("program");
+  });
+
+  it("blames the input for a session other than the one on input, for none attached, and while the input is held, though the program has bracketed paste on", async () => {
+    expect(controller.quoteBlock("s-quote")).toBe("input");
+    await attached();
+    expect(controller.quoteBlock("s-other")).toBe("input");
+    controller.holdInput(true);
+    expect(controller.quoteBlock("s-quote")).toBe("input");
+  });
+
+  it("pastes the quote as one bracketed paste, sending nothing else and never Enter", async () => {
+    await attached();
+    controller.quote("first\nsecond", "s-quote");
+    expect(sentText()).toEqual([bracketed("> first\n> second\n")]);
+  });
+
+  it.each([
+    ["the program has bracketed paste off", "", "s-quote", "text"],
+    ["the session is not the one on input", BRACKETED_PASTE_ON, "s-other", "text"],
+    ["the text is only whitespace", BRACKETED_PASTE_ON, "s-quote", " \n\t\r\n"],
+  ])("pastes nothing where %s", async (_name, output, destination, text) => {
+    await attached(output);
+    controller.quote(text, destination);
+    expect(sentText()).toEqual([]);
+  });
+});
 
 describe("pasting an image", () => {
   const PATH = "/data/run/s-img/pasted/paste-1-0.png";

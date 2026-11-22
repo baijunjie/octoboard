@@ -39,6 +39,8 @@ import {
 import { droppedPathsText } from "./droppedFiles";
 import type { DroppedFile } from "./fileDrag";
 import { imageInPaste } from "./pastedImage";
+import { quotedText } from "./quotedText";
+import type { QuoteBlock } from "../components/host/quoteTarget";
 import { watchUserInput } from "./xtermInternals";
 import { XTERM_THEMES } from "./xtermThemes";
 
@@ -588,6 +590,23 @@ export class TerminalController {
   paste(text: string, sessionId: string): void {
     if (this.inputSessionId !== sessionId) return;
     this.term.paste(text);
+  }
+
+  /**
+   * Why `sessionId` cannot take a quote now, if it cannot: it takes no input, or the program on screen does not read a
+   * paste as one piece (bracketed paste). Without that mode the quote's line breaks would arrive as Enter presses and
+   * send it line by line.
+   */
+  quoteBlock(sessionId: string): QuoteBlock | undefined {
+    if (this.inputSessionId !== sessionId) return "input";
+    return this.term.modes.bracketedPasteMode ? undefined : "program";
+  }
+
+  /** Pastes `text` as a block quote (see `quotedText`) into the input of `sessionId`, which is not sent. */
+  quote(text: string, sessionId: string): void {
+    const quoted = quotedText(text);
+    if (quoted === "" || this.quoteBlock(sessionId) !== undefined) return;
+    this.term.paste(quoted);
   }
 
   /**

@@ -8,8 +8,8 @@ and the text a program running in it copies.
 With a session selected that is not archived, right-clicking its terminal opens an editing menu in both the desktop app
 and a browser. On macOS, Control-click opens it too. With keyboard focus in the terminal, the context-menu key or
 `Shift+F10` opens the same menu; neither key is sent to the agent. Opening it preserves the terminal's selection, and
-closing it returns keyboard focus to the terminal. There is no separate menu button. Copy, Paste and Select all form
-one group, with no divider between them.
+closing it returns keyboard focus to the terminal. There is no separate menu button. Copy, Paste, Quote and Select all
+form one group, in that order, with no divider between them.
 
 - **Open in** is a submenu for the file path link under the pointer: **File manager**, then, for a file, **Default
   application**, named, drawn and ordered as in the Open in of a project pane row (see "A row's actions" in
@@ -34,12 +34,33 @@ one group, with no divider between them.
   It is disabled without clipboard reading support, saying under its name that the clipboard is unavailable, and while
   the selected session cannot accept input, with no reason given (the terminal itself shows why, by its reconnecting
   cover, its disconnected notice or the cover of a process that cannot be reached).
+- **Quote** writes the text Copy would copy — the terminal's selection or, failing that, the text a program last copied
+  — into the session's input as a block quote, without sending it (see "What Quote writes" below). It is disabled with
+  neither, with no reason given; while the selected session cannot accept input, with no reason given, as for Paste;
+  and while the program on screen has bracketed paste mode off, saying under its name that the program is not
+  accepting pasted lines. Only the session terminal offers it: a shell terminal's editing menu has no Quote, since a
+  shell would run the quoted lines.
 - **Select all** selects the terminal's contents, including its available scrollback, for copying.
 
 The clipboard is read only when Paste is chosen, so merely opening the menu does not request clipboard access. If
 clipboard access completes after the user switches sessions or the original session can no longer accept input, the
 paste is discarded. It is never redirected to another session. A failed clipboard read, or a copy that neither way
 allows, shows an error alert.
+
+## What Quote writes
+
+Quote, in the editing menu above and in the file viewer's text menu (see "Selecting and copying" in
+`docs/product/file-viewer.md`), writes text into the input of a session's agent as a Markdown block quote for the user
+to go on typing under. It is never sent: nothing reaches the agent as a message until the user sends the input.
+
+- Every line of the text is prefixed with `> `; a blank line inside the text becomes `>` alone.
+- Blank lines before the first and after the last line with text are dropped, and so is whitespace at the end of each
+  line. A text of nothing but blank lines writes nothing.
+- One line break follows the last quoted line, so what the user types next starts on a line of its own under the quote.
+- The quote is written as one paste. It is taken only while the program on the session's screen has bracketed paste
+  mode on, which makes it read a paste as one piece: without it the quote's line breaks would arrive as Enter presses
+  and send it line by line. With the mode off, Quote is disabled, saying under its name that the program is not
+  accepting pasted lines.
 
 ## Selecting with the mouse
 

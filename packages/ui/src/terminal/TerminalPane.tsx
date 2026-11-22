@@ -19,6 +19,7 @@ import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { hasNoProcess, holdsPendingLink, isLive } from "../sessions/sessionStatus";
 import { useAccountSwitchHeld, useDaemon } from "../store";
 import type { ViewedFile } from "../viewer/viewedFile";
+import type { QuoteBlock } from "../components/host/quoteTarget";
 import type { TerminalController } from "./TerminalController";
 import { SessionHistoryView } from "./history/SessionHistoryView";
 import { TerminalEditMenu } from "./TerminalEditMenu";
@@ -92,6 +93,10 @@ export interface TerminalPaneHandle {
   /** Hands focus on from what is going away or inert in the pane, as `focus` does for focus meant for the terminal,
    * but also from `<body>`: with no session shown, to the empty state's action, else the top bar. */
   handOff: () => void;
+  /** Why the session shown cannot take a quote into its input now, if it cannot; `input` with none shown. */
+  quoteBlock: () => QuoteBlock | undefined;
+  /** Writes `text` into the input of the session shown as a block quote, without sending it. */
+  quote: (text: string) => void;
 }
 
 /**
@@ -218,7 +223,14 @@ export function TerminalPane({
     if (behindArchive && rootRef.current?.contains(document.activeElement)) handOffFocus();
   }, [behindArchive]);
 
-  useImperativeHandle(ref, () => ({ focus: focusPane, handOff: handOffFocus }), [focusTerminal, restoreFocus, noSession]);
+  // None while an account switch holds the session: its socket stays open, but no input is to reach the process.
+  const quoteSessionId = session && !isArchived && !switching ? session.id : undefined;
+  useImperativeHandle(ref, () => ({
+    focus: focusPane,
+    handOff: handOffFocus,
+    quoteBlock: () => (quoteSessionId !== undefined && controllerRef.current ? controllerRef.current.quoteBlock(quoteSessionId) : "input"),
+    quote: (text) => { if (quoteSessionId !== undefined) controllerRef.current?.quote(text, quoteSessionId); },
+  }), [focusTerminal, restoreFocus, noSession, quoteSessionId]);
   const noProcess = session ? hasNoProcess(session.status) : false;
   // A starting session's agent is still being launched, so there is no process to connect to and
   // nothing saved to show. The pane waits, covered, for the status that says it is up, and
@@ -452,7 +464,7 @@ export function TerminalPane({
       inert={!session || isArchived || switching || livePending}
       rootInert={behindArchive}
       covered={covered}
-      editMenu={session && !isArchived && <TerminalEditMenu key={session.id} sessionId={session.id} controllerRef={controllerRef} contextTargetRef={containerRef} />}
+      editMenu={session && !isArchived && <TerminalEditMenu key={session.id} quote sessionId={session.id} controllerRef={controllerRef} contextTargetRef={containerRef} />}
     >
       {session && isArchived && (
         // Under the cover, which a resume raises over it; inert meanwhile, so what is hidden is

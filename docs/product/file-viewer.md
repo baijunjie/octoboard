@@ -270,12 +270,21 @@ button. Its items form one group:
   the platform has no clipboard, or it refuses, the text is copied through the browser's selection copy instead; only
   when neither works does an error alert say the selection could not be copied, with its own clipboard remedy (see
   "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
+- **Quote**, offered only while text inside that region is selected, writes what Copy would copy — the selected text,
+  or, for a selection that is the whole rendered document, the file's Markdown source — into the input of the session
+  the window shows, as a block quote that is not sent (see "What Quote writes" in
+  `docs/product/terminal-copy-paste-and-selection.md`). It goes to that session whatever opened the viewer. It is
+  disabled, saying under its name that no session is ready for input, while the window shows no session, or the
+  session shown is archived, cannot accept input, or is held by an account switch (see "While a session is switching"
+  in `docs/product/switching-session-accounts.md`); and, saying that the program is not accepting pasted lines, while
+  the program on that session's screen has bracketed paste mode off. The viewer stays open, keyboard focus goes back
+  where the menu found it, and nothing announces the quote.
 - **Select all** does what ⌘A does with keyboard focus on that region (see above): the code alone, or the whole
   document.
 
 On macOS a right-click on text with nothing selected first selects the word under the pointer, as the platform does,
-so Copy is then offered for that word. The selection survives the menu: closing it without Select all — with Escape,
-a click elsewhere or Copy — leaves the text that was selected when it opened selected, and opening it again before it
+so Copy and Quote are then offered for that word. The selection survives the menu: closing it without Select all — with
+Escape, a click elsewhere, Copy or Quote — leaves the text that was selected when it opened selected, and opening it again before it
 has gone offers the same text. A right-click puts keyboard focus on the region, unless a control inside it already has
 it; closing the menu gives focus back there.
 

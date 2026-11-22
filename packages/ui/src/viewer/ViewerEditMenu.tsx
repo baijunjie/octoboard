@@ -1,8 +1,9 @@
-import { Copy, TextSelect } from "lucide-react";
+import { Copy, TextQuote, TextSelect } from "lucide-react";
 import React, { useRef, useState } from "react";
 
 import { raiseError } from "../components/alerts/raiseError";
 import { copyText } from "../components/host/copyText";
+import { useQuoteTarget, type QuoteBlock } from "../components/host/quoteTarget";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { ActionableError } from "../errors/actionableError";
 import { useT } from "../i18n/react";
@@ -14,8 +15,9 @@ import { readSelection, restoreSelection, type FoundSelection } from "./textSele
 const NATIVE_MENU_TARGET = "a[href], img";
 
 /**
- * The right-click menu of one of the viewer's text surfaces: Copy, while text of it is selected, and
- * Select All. `region` is the surface's own focusable element, which Select All and a copy are
+ * The right-click menu of one of the viewer's text surfaces: Copy and Quote, while text of it is selected, and
+ * Select All. Quote writes the selection into the input of the session the window shows, where there is a terminal
+ * to quote into (`useQuoteTarget`). `region` is the surface's own focusable element, which Select All and a copy are
  * about; `selectAll` is what that surface's Select All key does there. `source` is the Markdown
  * of a rendered document, which a copy of the whole document puts on the clipboard, as the key's
  * does (`copyDocument`).
@@ -35,6 +37,8 @@ export function ViewerEditMenu({ region, selectAll, source }: {
   // Read when the menu opens: opening it moves focus, and the selection of code lies in a shadow root
   // that only `readSelection` reads.
   const [selection, setSelection] = useState("");
+  const quoteTarget = useQuoteTarget();
+  const [quoteBlock, setQuoteBlock] = useState<QuoteBlock | undefined>("input");
   // The selection as the menu found it, with the text it offers to copy, until the menu has gone.
   const kept = useRef<FoundSelection | null>(null);
   // Set when Select All is chosen, for the close that follows.
@@ -52,6 +56,11 @@ export function ViewerEditMenu({ region, selectAll, source }: {
   const copyItem = {
     label: t("common.copy"), icon: Copy,
     onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => raiseError(new ActionableError(t("common.copyFailedCause"), "clipboardCopy", { cause }), { title: t("viewer.copyFailed") })); },
+  };
+  const quoteItem = {
+    label: t("common.quote"), icon: TextQuote, disabled: quoteBlock !== undefined,
+    reason: quoteBlock && { state: t(quoteBlock === "program" ? "common.quoteProgramBlocked" : "viewer.quoteUnavailable") },
+    onClick: () => quoteTarget?.quote(selection),
   };
   const selectAllItem = { label: t("viewer.selectAll"), icon: TextSelect, onClick: () => { selectingAll.current = true; } };
   return (
@@ -74,6 +83,7 @@ export function ViewerEditMenu({ region, selectAll, source }: {
           }
         }
         setSelection(kept.current?.text ?? "");
+        setQuoteBlock(quoteTarget ? quoteTarget.blocked() : "input");
         // Focus on the surface, where the menu gives it back and the Select All key works from; a control inside
         // it that has focus (the Menu key on a link) keeps it, and gets it back.
         const active = element?.ownerDocument.activeElement ?? null;
@@ -105,7 +115,7 @@ export function ViewerEditMenu({ region, selectAll, source }: {
         }
         if (found) restoreSelection(found.ends, region.current);
       }}
-      items={selection ? [copyItem, selectAllItem] : [selectAllItem]}
+      items={selection ? [copyItem, ...(quoteTarget ? [quoteItem] : []), selectAllItem] : [selectAllItem]}
     />
   );
 }

@@ -21,6 +21,7 @@ import { BareTitleBar, TitleBar } from "./shell/TitleBar";
 import { Toasts } from "./shell/Toasts";
 import { useFirstConsoleHandoff } from "./shell/useFirstConsoleHandoff";
 import { UnsavedChangesProvider, useUnsavedChangesGuard } from "./components/dialog/UnsavedChanges";
+import { QuoteTargetContext } from "./components/host/quoteTarget";
 import { useStableHandler } from "./components/hooks/useLatest";
 import { focusAfterLoss, setFocusAfterModalLoss } from "./components/focus/modalFocus";
 import type { DialogRequest } from "./dialogs/dialogRequest";
@@ -99,6 +100,7 @@ import { useConsoleSwitch } from "./app/useConsoleSwitch";
 import { DRAWER_CONTROLS, useDialogRouting } from "./app/useDialogRouting";
 import { useFocusMode } from "./app/useFocusMode";
 import { useLinkedFile } from "./app/useLinkedFile";
+import { useTerminalQuoteTarget } from "./app/useTerminalQuoteTarget";
 import { usePaneLayout } from "./app/usePaneLayout";
 import { usePaneSwipe } from "./app/usePaneSwipe";
 import { usePaneWidths } from "./app/usePaneWidths";
@@ -143,6 +145,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   // made before the page hooks, which keep their page while a form is held.
   const unsaved = useUnsavedChangesGuard();
   const { linkedFile, viewLinkedFile, setLinkedFile, closeLinkedFile } = useLinkedFile({ focusTerminal });
+  const quoteTarget = useTerminalQuoteTarget(terminalRef);
 
   const consoleList = Array.from(consoles.values());
   const projectList = Array.from(projects.values());
@@ -1075,13 +1078,15 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   return (
     <>
       <UnsavedChangesProvider guard={unsaved.guard}>
-        {devicesOffered ? (
-          <RemoteDevicesProvider capability={platform.remoteDaemons!} list={devices.list} selectedId={devices.device} adding={devices.adding} onShow={showDevices} onAttention={showDevicesUnasked} onSelect={chooseDevice} onAdd={addDevice} onCancelAdd={devices.cancelAdd}>
-            {withTasks}
-          </RemoteDevicesProvider>
-        ) : (
-          withTasks
-        )}
+        <QuoteTargetContext.Provider value={quoteTarget}>
+          {devicesOffered ? (
+            <RemoteDevicesProvider capability={platform.remoteDaemons!} list={devices.list} selectedId={devices.device} adding={devices.adding} onShow={showDevices} onAttention={showDevicesUnasked} onSelect={chooseDevice} onAdd={addDevice} onCancelAdd={devices.cancelAdd}>
+              {withTasks}
+            </RemoteDevicesProvider>
+          ) : (
+            withTasks
+          )}
+        </QuoteTargetContext.Provider>
       </UnsavedChangesProvider>
       {unsaved.confirmation}
     </>

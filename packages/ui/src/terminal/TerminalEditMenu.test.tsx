@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { ClipboardCapability } from "../platform";
 import type { TerminalController } from "./TerminalController";
@@ -16,15 +16,16 @@ let root: Root;
 let container: HTMLDivElement;
 let target: HTMLDivElement;
 let input: HTMLTextAreaElement;
-let controller: { selectedText: string; programCopiedText?: string; mouseReporting?: boolean; inputSessionId?: string; selectAll: () => void; pathLinkAt: ReturnType<typeof vi.fn>; revealPathLink: ReturnType<typeof vi.fn>; openPathLinkInDefaultApplication: ReturnType<typeof vi.fn>; paste: ReturnType<typeof vi.fn>; pasteImage: ReturnType<typeof vi.fn>; focus: () => void };
+let controller: { selectedText: string; programCopiedText?: string; mouseReporting?: boolean; inputSessionId?: string; selectAll: () => void; pathLinkAt: ReturnType<typeof vi.fn>; revealPathLink: ReturnType<typeof vi.fn>; openPathLinkInDefaultApplication: ReturnType<typeof vi.fn>; paste: ReturnType<typeof vi.fn>; quoteBlock: ReturnType<typeof vi.fn>; quote: ReturnType<typeof vi.fn>; pasteImage: ReturnType<typeof vi.fn>; focus: () => void };
 let clipboard: ClipboardCapability | undefined;
 let sessionId: string;
 let isLocal: boolean | undefined;
+let quoting: boolean;
 const controllerRef = { current: undefined as TerminalController | undefined };
 const targetRef = createRef<HTMLDivElement>();
 const render = () => act(() => root.render(
   <TestHost daemon={testDaemon({ isLocal })} platform={{ kind: "browser", host: BROWSER_HOST, clipboard }}>
-    <TerminalEditMenu key={sessionId} sessionId={sessionId} controllerRef={controllerRef} contextTargetRef={targetRef} />
+    <TerminalEditMenu key={sessionId} sessionId={sessionId} quote={quoting} controllerRef={controllerRef} contextTargetRef={targetRef} />
   </TestHost>,
 ));
 beforeEach(() => {
@@ -33,13 +34,14 @@ beforeEach(() => {
   input = target.appendChild(document.createElement("textarea"));
   targetRef.current = target;
   controller = {
-    selectedText: "", inputSessionId: "s-1", paste: vi.fn(), pasteImage: vi.fn(), pathLinkAt: vi.fn(), revealPathLink: vi.fn(async () => {}), openPathLinkInDefaultApplication: vi.fn(async () => {}), focus: () => input.focus(),
+    selectedText: "", inputSessionId: "s-1", paste: vi.fn(), quoteBlock: vi.fn(() => undefined), quote: vi.fn(), pasteImage: vi.fn(), pathLinkAt: vi.fn(), revealPathLink: vi.fn(async () => {}), openPathLinkInDefaultApplication: vi.fn(async () => {}), focus: () => input.focus(),
     selectAll: () => { controller.selectedText = "all terminal output"; },
   };
   controllerRef.current = controller as unknown as TerminalController;
   clipboard = { writeText: vi.fn(async () => {}), readText: vi.fn(async () => "clipboard text") };
   sessionId = "s-1";
   isLocal = true;
+  quoting = false;
   root = createRoot(container);
   render();
 });
@@ -318,4 +320,87 @@ it("focuses the terminal when the menu opens, and takes focus into the menu when
   await vi.waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("menu"));
   await act(async () => { document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); });
   expect(document.querySelector("[role=menu]")).toBeNull();
+});
+
+describe("Quote", () => {
+  beforeEach(() => {
+    quoting = true;
+    controller.selectedText = "quoted words";
+    render();
+  });
+
+  it("is not offered where the terminal does not ask for it, as for a shell", async () => {
+    quoting = false;
+    render();
+    await open();
+    expect(entriesOf()).toEqual(["Copy", "Paste", "Select all"]);
+    expect(item("Quote")).toBeUndefined();
+  });
+
+  it("sits between Paste and Select all, enabled over a selection in a session that can take it", async () => {
+    await open();
+    expect(entriesOf()).toEqual(["Copy", "Paste", "Quote", "Select all"]);
+    expect(item("Quote").getAttribute("aria-disabled")).not.toBe("true");
+    expect(controller.quoteBlock).toHaveBeenCalledWith("s-1");
+  });
+
+  it("quotes the selection into the session the menu was opened for", async () => {
+    await open();
+    await choose("Quote");
+    expect(controller.quote).toHaveBeenCalledExactlyOnceWith("quoted words", "s-1");
+    expect(clipboard!.readText).not.toHaveBeenCalled();
+    expect(controller.paste).not.toHaveBeenCalled();
+  });
+
+  it("is disabled, with no reason, while nothing is selected, even where the program blocks it", async () => {
+    controller.selectedText = "";
+    controller.quoteBlock.mockReturnValue("program");
+    await open();
+    expect(item("Quote").getAttribute("aria-disabled")).toBe("true");
+    await choose("Quote");
+    expect(controller.quote).not.toHaveBeenCalled();
+  });
+
+  it("is disabled, with no reason, where the session takes no input", async () => {
+    controller.quoteBlock.mockReturnValue("input");
+    await open();
+    expect(item("Quote").getAttribute("aria-disabled")).toBe("true");
+    await choose("Quote");
+    expect(controller.quote).not.toHaveBeenCalled();
+  });
+
+  it("is disabled, saying the program does not accept pasted lines, where the program has no bracketed paste", async () => {
+    controller.quoteBlock.mockReturnValue("program");
+    await open();
+    expect(item("QuoteProgram not accepting pasted lines").getAttribute("aria-disabled")).toBe("true");
+    await choose("QuoteProgram not accepting pasted lines");
+    expect(controller.quote).not.toHaveBeenCalled();
+  });
+
+  it("is offered what the program last copied while the terminal has nothing selected", async () => {
+    controller.selectedText = "";
+    controller.programCopiedText = "program copy";
+    await open();
+    expect(item("Quote").getAttribute("aria-disabled")).not.toBe("true");
+    await choose("Quote");
+    expect(controller.quote).toHaveBeenCalledExactlyOnceWith("program copy", "s-1");
+  });
+
+  it("prefers the terminal's own selection to what the program copied", async () => {
+    controller.programCopiedText = "program copy";
+    await open();
+    await choose("Quote");
+    expect(controller.quote).toHaveBeenCalledExactlyOnceWith("quoted words", "s-1");
+  });
+
+  it("goes by what blocked it as the menu opened: asked again on a reopen, and not by a render in between", async () => {
+    await open();
+    controller.quoteBlock.mockReturnValue("program");
+    // A render of the menu, as any state change of the pane makes.
+    render();
+    expect(item("Quote").getAttribute("aria-disabled")).not.toBe("true");
+    await closeMenu();
+    await open();
+    expect(item("QuoteProgram not accepting pasted lines").getAttribute("aria-disabled")).toBe("true");
+  });
 });

@@ -4,12 +4,18 @@
 
 import React, { useEffect, useRef, useState } from "react";
 
+import { QuoteTargetContext, type QuoteBlock, type QuoteTarget } from "../components/host/quoteTarget";
 import type { ViewerSubject } from "../viewer/content";
 import { FileViewer } from "../viewer/FileViewer";
 import { displayWirePath } from "../format/wirePath";
 import { Button } from "../primitives";
 
-export function ViewerGallery({ subjects, loadDelay }: { subjects: ViewerSubject[]; loadDelay?: number }): React.ReactElement {
+/** The window's quote target as the app provides it, without a session behind it: a quote goes nowhere here. */
+const quoteTargetOf = (blocked: QuoteBlock | undefined): QuoteTarget => ({ blocked: () => blocked, quote: () => {} });
+const QUOTE_AVAILABLE = quoteTargetOf(undefined);
+const QUOTE_UNAVAILABLE = quoteTargetOf("input");
+
+export function ViewerGallery({ subjects, loadDelay, quote }: { subjects: ViewerSubject[]; loadDelay?: number; quote?: "unavailable" }): React.ReactElement {
   const [open, setOpen] = useState<number | null>(0);
   const [loaded, setLoaded] = useState<number | null>(loadDelay ? null : 0);
   const [anchor, setAnchor] = useState<{ path: string; fragment?: string }>();
@@ -33,32 +39,34 @@ export function ViewerGallery({ subjects, loadDelay }: { subjects: ViewerSubject
     subject && (loaded === open ? subject : { ...subject, content: { state: "loading" } });
 
   return (
-    <main className="flex flex-col items-start gap-1 p-6">
-      <h1 className="pb-2 text-base font-medium">Subjects</h1>
-      {subjects.map((s, index) => (
-        <Button key={s.key} variant="ghost" size="sm" onPress={() => show(index)}>
-          <span dir="ltr">{displayWirePath(s.path)}</span>
-          {s.source && <span className="text-muted">{s.source}</span>}
-        </Button>
-      ))}
-      {shown && open !== null && (
-        <FileViewer
-          subject={shown}
-          onClose={() => show(null)}
-          navigation={{
-            onPrevious: open > 0 ? () => show(open - 1) : undefined,
-            onNext: open < subjects.length - 1 ? () => show(open + 1) : undefined,
-          }}
-          location={{
-            project: "gallery",
-            anchor: anchor && shown.path === anchor.path ? anchor.fragment : undefined,
-            onOpenFile: (path, fragment) => {
-              const index = subjects.findIndex((item) => item.path === path);
-              if (index !== -1) show(index, fragment === undefined ? { path } : { path, fragment });
-            },
-          }}
-        />
-      )}
-    </main>
+    <QuoteTargetContext.Provider value={quote === "unavailable" ? QUOTE_UNAVAILABLE : QUOTE_AVAILABLE}>
+      <main className="flex flex-col items-start gap-1 p-6">
+        <h1 className="pb-2 text-base font-medium">Subjects</h1>
+        {subjects.map((s, index) => (
+          <Button key={s.key} variant="ghost" size="sm" onPress={() => show(index)}>
+            <span dir="ltr">{displayWirePath(s.path)}</span>
+            {s.source && <span className="text-muted">{s.source}</span>}
+          </Button>
+        ))}
+        {shown && open !== null && (
+          <FileViewer
+            subject={shown}
+            onClose={() => show(null)}
+            navigation={{
+              onPrevious: open > 0 ? () => show(open - 1) : undefined,
+              onNext: open < subjects.length - 1 ? () => show(open + 1) : undefined,
+            }}
+            location={{
+              project: "gallery",
+              anchor: anchor && shown.path === anchor.path ? anchor.fragment : undefined,
+              onOpenFile: (path, fragment) => {
+                const index = subjects.findIndex((item) => item.path === path);
+                if (index !== -1) show(index, fragment === undefined ? { path } : { path, fragment });
+              },
+            }}
+          />
+        )}
+      </main>
+    </QuoteTargetContext.Provider>
   );
 }
