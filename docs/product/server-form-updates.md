@@ -21,9 +21,20 @@ Only a daemon for which all of these hold:
 - it runs on **Linux on x86_64 or aarch64**.
 
 Any other daemon has none of this: a browser on it shows no update notice, no Updates section in Settings and no
-version in About, and `octoboardd update` says that this build does not update itself, prints the install command to
-upgrade by hand with, `curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh`, and exits with
-status 1.
+version in About.
+
+`octoboardd update`, with `--check` or `--rollback` too, run from a build that does not update itself (one built
+without self-update, or running anywhere but Linux on x86_64 or aarch64) exits with status 1 before it looks at any
+daemon. It says that this build does not update itself, and names a way to upgrade only where there is one it knows:
+
+- **On a host the install script serves** (Linux on x86_64 or aarch64, so a build there without self-update): the
+  install command to upgrade by hand with, `curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh |
+  sh`.
+- **The desktop application's own copy** (on macOS the one inside the application bundle, on Windows the one beside
+  the application's executable): that it comes with the Octoboard application, which updates it together with itself,
+  and to update the application instead.
+- **Any other build** (one built by hand on macOS or Windows, or on Linux on another architecture): nothing more; it
+  names no way to upgrade.
 
 ## Channels
 
@@ -396,8 +407,9 @@ version comes from" in `docs/product/agent-cli-updates.md`); like the daemon, it
   options (`--port`, `--parent-pid`, `--service-managed`) are not accepted with it. `--yes` and `--no-restart` cannot
   be given together, and neither with `--check`.
 
-It refuses, with status 1, while the running daemon follows the desktop application, which updates it itself; on a
-daemon that does not update itself (see "Which daemons update themselves" above); and, except with `--check`, while the
+It refuses, with status 1: from a build that does not update itself, before any daemon is looked at (see "Which
+daemons update themselves" above for what it says for each kind of build), so for the desktop application's copy on
+macOS and Windows that refusal is the one a user sees; while the running daemon follows the desktop application, which updates it itself; and, except with `--check`, while the
 daemon or another `octoboardd update` is downloading or replacing the executable, saying to try again once that has
 ended.
 

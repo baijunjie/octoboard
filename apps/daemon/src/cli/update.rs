@@ -68,6 +68,50 @@ pub(crate) struct Environment<'a> {
     pub tell: &'a dyn Fn(),
 }
 
+/// How a build that does not update itself is upgraded instead.
+#[derive(Clone, Copy)]
+enum Upgrade {
+    /// With the install script: a host the script and the release archives serve.
+    InstallScript,
+    /// By updating the desktop application, whose copy of `octoboardd` this is.
+    Application,
+    /// In no way this build can name: one built by hand for a host the install script does not
+    /// serve.
+    Unknown,
+}
+
+impl Upgrade {
+    /// The way out for the running executable.
+    fn of_this_build() -> Self {
+        if proc::self_update_host() {
+            Self::InstallScript
+        } else if proc::running_image()
+            .is_ok_and(|exe| crate::platform::is_application_copy(&exe, crate::APP_NAME))
+        {
+            Self::Application
+        } else {
+            Self::Unknown
+        }
+    }
+}
+
+/// What `octoboardd update` says for a build that does not update itself, with the way to upgrade
+/// it where there is one.
+fn no_self_update(upgrade: Upgrade) -> String {
+    let name = crate::APP_NAME;
+    match upgrade {
+        Upgrade::InstallScript => format!(
+            "this build of {name} does not update itself; upgrade by hand with `{}`",
+            install_command()
+        ),
+        Upgrade::Application => format!(
+            "this build of {name} does not update itself: it comes with the {name} application, \
+             which updates it together with itself; update the application instead"
+        ),
+        Upgrade::Unknown => format!("this build of {name} does not update itself"),
+    }
+}
+
 /// Runs `task` as `octoboardd update` does, restarting the daemon that runs into what it installed
 /// in `restart`'s mode, or with `None` leaving it running as it is; the exit status.
 pub(super) fn run(
@@ -76,11 +120,7 @@ pub(super) fn run(
     restart: Option<Mode>,
 ) -> Result<i32> {
     if !cfg!(feature = "self-update") || !proc::self_update_host() {
-        eprintln!(
-            "this build of {} does not update itself; upgrade by hand with `{}`",
-            crate::APP_NAME,
-            install_command()
-        );
+        eprintln!("{}", no_self_update(Upgrade::of_this_build()));
         return Ok(1);
     }
     if crate::instance_lock::is_running()? {
@@ -1418,6 +1458,30 @@ mod tests {
             let (got, _, _) = fixture.run(Task::Install, &Host::publishing("9.9.9", "0.0.0"));
             assert_eq!(got, status);
             assert_eq!(fixture.files.read_installed().unwrap().version, "9.9.9");
+        }
+    }
+
+    /// A build that does not update itself names the install script only where the script serves the
+    /// host, sends the desktop application's copy to the application's own update, and otherwise
+    /// names no way out.
+    #[test]
+    fn the_refusal_names_the_way_to_upgrade_this_build() {
+        let script = no_self_update(Upgrade::InstallScript);
+        assert!(script.contains(&install_command()), "{script}");
+
+        let application = no_self_update(Upgrade::Application);
+        assert!(
+            application.contains("update the application"),
+            "{application}"
+        );
+        assert!(!application.contains(&install_command()), "{application}");
+
+        let unknown = no_self_update(Upgrade::Unknown);
+        assert!(!unknown.contains(&install_command()), "{unknown}");
+        assert!(!unknown.contains("application"), "{unknown}");
+
+        for message in [script, application, unknown] {
+            assert!(message.contains("does not update itself"), "{message}");
         }
     }
 }

@@ -315,7 +315,11 @@ daemon of their own, which the application opened afterwards would find holding 
   nothing, says so and exits with status 1), which quits as a confirmed quit does, with no quit confirmation shown, and
   stops its daemon as a quit does (every session ended). It waits up to **60 seconds** for the application and its
   daemon to end and prints that the application quit. `SIGUSR1` is a quit that asks nothing; no other signal is.
-- **`restart` and `update`** stay refused for the application's daemon, which the application restarts itself.
+- **`restart`** stays refused for the application's daemon, which the application restarts itself.
+- **`update`** (with `--check` or `--rollback` too) is refused by the copy itself, with status 1, whether or not a daemon
+  runs: it says that this build does not update itself because it comes with the application, which updates it together
+  with itself, and to update the application instead (see "Which daemons update themselves" in
+  `docs/product/server-form-updates.md`).
 
 **The command-line tool.** macOS puts nothing inside an application bundle on the PATH, so Settings, under General,
 Command line, offers to link the bundled `octoboardd` into it (see "Command-line tool" in
