@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { quotedText } from "./quotedText";
+import { quoteLead, quotedText, type QuoteScreen } from "./quotedText";
+import { rowsReader } from "./screenTestSupport";
 
 describe("quotedText", () => {
   it("puts `> ` before every line, and a bare `>` for an empty or whitespace-only line inside", () => {
@@ -26,5 +27,45 @@ describe("quotedText", () => {
 
   it("adds to the quote marks the text already has", () => {
     expect(quotedText("> quoted\n- item")).toBe("> > quoted\n> - item\n");
+  });
+});
+
+/** A screen of `rows`, as xterm's active buffer reads them: the cursor at column `cursorX` of row `cursorY` of the
+ * viewport, which starts `baseY` rows into the buffer. */
+const screenOf = (rows: string[], cursor: { cursorX: number; cursorY: number; baseY?: number }): QuoteScreen =>
+  ({ baseY: 0, ...cursor, getLine: rowsReader(rows) });
+
+describe("quoteLead", () => {
+  it.each([
+    ["an empty row", ""],
+    ["a prompt mark alone", "❯ "],
+    ["a different prompt mark alone", "› "],
+    ["a boxed prompt mark alone", "│ ❯ "],
+  ])("is nothing for %s left of the cursor", (_name, row) => {
+    expect(quoteLead(screenOf([row], { cursorX: row.length, cursorY: 0 }))).toBe("");
+  });
+
+  it.each([
+    ["typed text", "❯ hello"],
+    ["a paste placeholder", "❯ [Pasted text #1 +3 lines]"],
+    ["a digit", "› 42"],
+    ["a letter of another script", "│ ❯ 你好"],
+  ])("is a line break for %s left of the cursor", (_name, row) => {
+    expect(quoteLead(screenOf([row], { cursorX: row.length, cursorY: 0 }))).toBe("\n");
+  });
+
+  it("reads only what is left of the cursor", () => {
+    const row = "❯ typed after";
+    expect(quoteLead(screenOf([row], { cursorX: 2, cursorY: 0 }))).toBe("");
+    expect(quoteLead(screenOf([row], { cursorX: 4, cursorY: 0 }))).toBe("\n");
+  });
+
+  it("reads the cursor's row, below the scrolled-off rows by `baseY`, not the first row of the buffer", () => {
+    const rows = ["old text", "more old text", "❯ ", "tail"];
+    expect(quoteLead(screenOf(rows, { cursorX: 2, cursorY: 1, baseY: 1 }))).toBe("");
+  });
+
+  it("is nothing where the cursor's row does not exist", () => {
+    expect(quoteLead(screenOf(["text"], { cursorX: 4, cursorY: 5 }))).toBe("");
   });
 });

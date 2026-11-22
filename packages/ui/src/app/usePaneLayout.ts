@@ -21,7 +21,7 @@ import { closeIdleShellTerminals, startShellTerminal } from "../terminal/shell/s
  * peek, the right pane's stack of its owner's panels, docked, folded or floating over the terminal,
  * and the rail, which comes in with the drawer at tablet width and below. It hands back what the layout, the
  * toggles, the F6 cycle and the panes' widths read, and the handlers the top bar and the swipes use;
- * `revealArchive` clears what covers the agent terminal's area for the archive view.
+ * `revealArchive` clears what covers the agent terminal's area, for the archive view and for a quote made from the file viewer.
  */
 export function usePaneLayout({
   asideOwner,

@@ -1,5 +1,5 @@
 import { Copy, TextQuote, TextSelect } from "lucide-react";
-import React, { useRef, useState } from "react";
+import React, { useContext, useRef, useState } from "react";
 
 import { raiseError } from "../components/alerts/raiseError";
 import { copyText } from "../components/host/copyText";
@@ -9,6 +9,7 @@ import { ActionableError } from "../errors/actionableError";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { isWholeDocumentSelected } from "./selectAll";
+import { ViewerCloseContext } from "./viewerClose";
 import { readSelection, restoreSelection, type FoundSelection } from "./textSelection";
 
 /** Where a browser tab keeps its own menu: a link and an image, which that menu opens and saves. */
@@ -26,6 +27,11 @@ const NATIVE_MENU_TARGET = "a[href], img";
  * The selection stays through the menu: a browser may clear it as focus moves into the menu, so it is put back
  * when the menu closes without a Select All. A Select All is carried out once the menu has closed, not when it is
  * chosen: WebKit drops a selection made while the surface behind the menu is still inert, as focus returns to it.
+ *
+ * Where the surface is in the file viewer's dialog (`ViewerCloseContext`), Quote closes the viewer once it has written the
+ * quote, so the input shows, and the input takes focus instead of the viewer's opener (`QuoteTarget.revealInput`). The
+ * viewer closes once the menu has closed, as Select All acts: the dialog going while the menu still returns focus to it
+ * would fight that return.
  */
 export function ViewerEditMenu({ region, selectAll, source }: {
   region: React.RefObject<HTMLElement | null>;
@@ -38,11 +44,14 @@ export function ViewerEditMenu({ region, selectAll, source }: {
   // that only `readSelection` reads.
   const [selection, setSelection] = useState("");
   const quoteTarget = useQuoteTarget();
+  const closeViewer = useContext(ViewerCloseContext);
   const [quoteBlock, setQuoteBlock] = useState<QuoteBlock | undefined>("input");
   // The selection as the menu found it, with the text it offers to copy, until the menu has gone.
   const kept = useRef<FoundSelection | null>(null);
   // Set when Select All is chosen, for the close that follows.
   const selectingAll = useRef(false);
+  // Set when Quote is chosen inside the viewer, to the text to quote, for the close that follows.
+  const quoting = useRef<string | null>(null);
   // The control inside the surface that had focus as the menu opened (the Menu key on a link), which the menu gives
   // focus back to.
   const control = useRef<Element | null>(null);
@@ -60,7 +69,10 @@ export function ViewerEditMenu({ region, selectAll, source }: {
   const quoteItem = {
     label: t("common.quote"), icon: TextQuote, disabled: quoteBlock !== undefined,
     reason: quoteBlock && { state: t(quoteBlock === "program" ? "common.quoteProgramBlocked" : "viewer.quoteUnavailable") },
-    onClick: () => quoteTarget?.quote(selection),
+    onClick: () => {
+      if (closeViewer) quoting.current = selection;
+      else quoteTarget?.quote(selection);
+    },
   };
   const selectAllItem = { label: t("viewer.selectAll"), icon: TextSelect, onClick: () => { selectingAll.current = true; } };
   return (
@@ -73,6 +85,7 @@ export function ViewerEditMenu({ region, selectAll, source }: {
       onContextOpen={() => {
         // Opened again before it has gone, the menu drops a Select All still waiting for that close.
         selectingAll.current = false;
+        quoting.current = null;
         const element = region.current;
         // A menu still closing keeps the selection it found, and offers its text again when opened anew: a browser may
         // have cleared the selection as focus entered the menu, or selected the word under the second right-click.
@@ -108,6 +121,15 @@ export function ViewerEditMenu({ region, selectAll, source }: {
           if (element.ownerDocument.activeElement !== back) element.focus({ preventScroll: true });
         }
         control.current = null;
+        const quoted = quoting.current;
+        quoting.current = null;
+        // Blocked since the menu opened: nothing is written and the viewer stays, as for no action at all.
+        if (quoted !== null && quoteTarget && quoteTarget.blocked() === undefined) {
+          quoteTarget.quote(quoted);
+          closeViewer?.();
+          quoteTarget.revealInput();
+          return;
+        }
         if (selectingAll.current) {
           selectingAll.current = false;
           selectEverything();

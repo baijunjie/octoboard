@@ -7,6 +7,7 @@ import { windowAttention } from "../components/announce/windowTestSupport";
 import type { HostFacts } from "../platform/host";
 import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { RESIZE_SETTLE_MS, TerminalController, type TerminalControllerHandlers } from "./TerminalController";
+import { rowsReader } from "./screenTestSupport";
 import { resetTerminalFontSize, terminalFontSize } from "./terminalFontSize";
 import { afterQueuedWork, fakeTimers } from "../test/clock";
 
@@ -54,8 +55,14 @@ const { FakeTerminal } = vi.hoisted(() => {
     keyHandler?: (event: KeyboardEvent) => boolean;
     buffer = {
       onBufferChange: () => ({ dispose: () => {} }),
-      active: { type: "normal", viewportY: 0, baseY: 0, cursorY: 0, getLine: () => undefined, getNullCell: () => ({}) },
+      active: {
+        type: "normal", viewportY: 0, baseY: 0, cursorX: 0, cursorY: 0,
+        getLine: (y: number) => rowsReader(this.bufferRows)(y),
+        getNullCell: () => ({}),
+      },
     };
+    /** The rows of the active buffer, as `getLine` serves them; the cursor is `buffer.active.cursorX` and `cursorY`. */
+    bufferRows: string[] = [];
 
     attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean): void {
       this.keyHandler = handler;
@@ -813,12 +820,34 @@ describe("quoting text into the input", () => {
     expect(sentText()).toEqual([bracketed("> first\n> second\n")]);
   });
 
+  it("starts the quote on a new line, in the same paste, where the input already holds text left of the cursor", async () => {
+    await attached();
+    const { active } = FakeTerminal.last.buffer;
+    FakeTerminal.last.bufferRows = ["old output", "❯ typed words"];
+    active.cursorY = 1;
+    active.cursorX = "❯ typed words".length;
+    controller.quote("first\nsecond", "s-quote");
+    expect(sentText()).toEqual([bracketed("\n> first\n> second\n")]);
+  });
+
+  it("adds no line break where only the prompt mark is left of the cursor", async () => {
+    await attached();
+    const { active } = FakeTerminal.last.buffer;
+    FakeTerminal.last.bufferRows = ["old output", "❯ "];
+    active.cursorY = 1;
+    active.cursorX = 2;
+    controller.quote("text", "s-quote");
+    expect(sentText()).toEqual([bracketed("> text\n")]);
+  });
+
   it.each([
     ["the program has bracketed paste off", "", "s-quote", "text"],
     ["the session is not the one on input", BRACKETED_PASTE_ON, "s-other", "text"],
     ["the text is only whitespace", BRACKETED_PASTE_ON, "s-quote", " \n\t\r\n"],
   ])("pastes nothing where %s", async (_name, output, destination, text) => {
     await attached(output);
+    FakeTerminal.last.bufferRows = ["❯ typed"];
+    FakeTerminal.last.buffer.active.cursorX = 7;
     controller.quote(text, destination);
     expect(sentText()).toEqual([]);
   });

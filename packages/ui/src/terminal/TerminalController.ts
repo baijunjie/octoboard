@@ -39,7 +39,7 @@ import {
 import { droppedPathsText } from "./droppedFiles";
 import type { DroppedFile } from "./fileDrag";
 import { imageInPaste } from "./pastedImage";
-import { quotedText } from "./quotedText";
+import { quotedText, quoteLead } from "./quotedText";
 import type { QuoteBlock } from "../components/host/quoteTarget";
 import { watchUserInput } from "./xtermInternals";
 import { XTERM_THEMES } from "./xtermThemes";
@@ -602,11 +602,14 @@ export class TerminalController {
     return this.term.modes.bracketedPasteMode ? undefined : "program";
   }
 
-  /** Pastes `text` as a block quote (see `quotedText`) into the input of `sessionId`, which is not sent. */
+  /**
+   * Pastes `text` as a block quote (see `quotedText`) into the input of `sessionId`, which is not sent. A quote added
+   * to an input that already holds text starts on a new line (`quoteLead`), in the same paste.
+   */
   quote(text: string, sessionId: string): void {
     const quoted = quotedText(text);
     if (quoted === "" || this.quoteBlock(sessionId) !== undefined) return;
-    this.term.paste(quoted);
+    this.term.paste(quoteLead(this.term.buffer.active) + quoted);
   }
 
   /**

@@ -139,7 +139,9 @@ Under the list, the **preview** shows the selected result's file: headed by the 
 as code with line numbers, the result's line scrolled to the middle with its matches marked as the file viewer marks
 them (see "Opening at a line" in `docs/product/file-viewer.md`). A Markdown file shows its source. A file that is not
 text, or cannot be read, shows what the file viewer would. Its code is selected, copied and quoted as the file viewer's
-is, with the same text menu (see "Selecting and copying" in `docs/product/file-viewer.md`). A result in another file is shown once the selection has
+is, with the same text menu (see "Selecting and copying" in `docs/product/file-viewer.md`), except that Quote writes
+the quote at once and the dialog stays open, with its selection kept: nothing is uncovered and keyboard focus is not
+moved to the terminal. A result in another file is shown once the selection has
 rested on it for **150 ms**, so moving quickly through the results reads only the file it stops on; moving within one
 file shows the new line at once.
 

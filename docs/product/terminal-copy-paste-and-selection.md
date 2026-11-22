@@ -57,10 +57,17 @@ to go on typing under. It is never sent: nothing reaches the agent as a message 
 - Blank lines before the first and after the last line with text are dropped, and so is whitespace at the end of each
   line. A text of nothing but blank lines writes nothing.
 - One line break follows the last quoted line, so what the user types next starts on a line of its own under the quote.
+- A quote added to an input that already holds text starts on a new line. The terminal cannot read the agent's input,
+  so it judges by its own screen: when the cursor's row shows a letter or a digit left of the cursor, one line break
+  goes before the quote, inside the same paste. An empty input, showing only its prompt mark left of the cursor, gets
+  none, and neither does the empty line under an earlier quote. Only the cursor's own row is read, so an input wrapped
+  onto a last row with no letter or digit left of the cursor gets no line break.
 - The quote is written as one paste. It is taken only while the program on the session's screen has bracketed paste
   mode on, which makes it read a paste as one piece: without it the quote's line breaks would arrive as Enter presses
   and send it line by line. With the mode off, Quote is disabled, saying under its name that the program is not
   accepting pasted lines.
+- A quote the session can no longer take by the time it is written — the session stopped accepting input, or the
+  program turned bracketed paste mode off, while the menu was open — is not written, and nothing says so.
 
 ## Selecting with the mouse
 

@@ -145,7 +145,6 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   // made before the page hooks, which keep their page while a form is held.
   const unsaved = useUnsavedChangesGuard();
   const { linkedFile, viewLinkedFile, setLinkedFile, closeLinkedFile } = useLinkedFile({ focusTerminal });
-  const quoteTarget = useTerminalQuoteTarget(terminalRef);
 
   const consoleList = Array.from(consoles.values());
   const projectList = Array.from(projects.values());
@@ -315,6 +314,8 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     onArchiveViewState,
     stableOpenArchive,
   } = useArchiveView({ consoles, projects, revealArchive, sidebarOpen: panes.sidebarOpen, closeSidebar: panes.closeSidebar, handOffToTerminal });
+
+  const quoteTarget = useTerminalQuoteTarget(terminalRef, focusTerminal, revealArchive);
 
   useFirstConsoleHandoff(!offline && noConsoles, dialogRequest?.kind === "new-console");
 

@@ -43,6 +43,7 @@ import { useNavigationFocus } from "./useNavigationFocus";
 import { isWaiting, ViewerContentView } from "./ViewerContentView";
 import type { ViewerNavigation } from "./viewerNavigation";
 import { useWrapClaims, WrapToggleHost } from "./code/wordWrap";
+import { ViewerCloseContext } from "./viewerClose";
 
 /**
  * The read-only file viewer: a modal showing one subject — a file's text or image, a change between
@@ -274,7 +275,9 @@ export function FileViewer({
             <ControlsSlot value={controls}>
               <MarkdownLocationProvider value={{ path: subject.path, ...location }}>
                 <StandInActionContext value={standInAction}>
-                  <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} line={line} marks={marks} />
+                  <ViewerCloseContext value={onClose}>
+                    <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} line={line} marks={marks} />
+                  </ViewerCloseContext>
                 </StandInActionContext>
               </MarkdownLocationProvider>
             </ControlsSlot>

@@ -289,14 +289,23 @@ button. Its items form one group:
   disabled, saying under its name that no session is ready for input, while the window shows no session, or the
   session shown is archived, cannot accept input, or is held by an account switch (see "While a session is switching"
   in `docs/product/switching-session-accounts.md`); and, saying that the program is not accepting pasted lines, while
-  the program on that session's screen has bracketed paste mode off. The viewer stays open, keyboard focus goes back
-  where the menu found it, and nothing announces the quote.
+  the program on that session's screen has bracketed paste mode off. Chosen, it writes the quote once the menu has
+  closed, then closes the viewer, uncovers the session terminal where a panel covers it — a maximized panel is
+  restored, a panel floating over the terminal is closed (see "Maximizing a panel" and "At 768 px and below: one panel
+  floats over the terminal" in `docs/product/right-pane-panels.md`) — and puts keyboard focus on the terminal, so the
+  user can go on typing under the quote. Focus goes where focus handed to the terminal goes: after a tap to a control
+  that takes no text (see "Focus after a tap" in `docs/product/moving-focus-between-regions.md`), and while the Remote
+  devices page, the Scheduled tasks page or an open archive view covers the terminal, to that page or view, which is
+  not closed. With another dialog open once the viewer has gone, focus is left where it is. If the session can no
+  longer take the quote by the time the menu has closed, nothing is written, the viewer stays open and the selection
+  is kept. Nothing announces either outcome. In the Find in files preview, Quote behaves otherwise (see "The preview"
+  in `docs/product/finding-in-files.md`).
 - **Select all** does what ⌘A does with keyboard focus on that region (see above): the code alone, or the whole
   document.
 
 On macOS a right-click on text with nothing selected first selects the word under the pointer, as the platform does,
 so Copy and Quote are then offered for that word. The selection survives the menu: closing it without Select all — with
-Escape, a click elsewhere, Copy or Quote — leaves the text that was selected when it opened selected, and opening it again before it
+Escape, a click elsewhere or Copy — leaves the text that was selected when it opened selected, and opening it again before it
 has gone offers the same text. A right-click puts keyboard focus on the region, unless a control inside it already has
 it; closing the menu gives focus back there.
 

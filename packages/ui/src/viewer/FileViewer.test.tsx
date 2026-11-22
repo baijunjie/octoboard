@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS, READ_TIME_MS } from "../components/announce/StatusAnnouncer";
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { QuoteTargetContext, type QuoteTarget } from "../components/host/quoteTarget";
 import { CodedError } from "../errors/codedError";
 import { NO_RECORDS } from "../errors/daemonMessage";
 import { isolate } from "../i18n/isolate";
@@ -1250,6 +1251,34 @@ it.each(surfaces)("selects only the code of %s with Select All, as the key does"
   expect(selected[1]).toBe(selected[0]);
   // The title, path and size around the code are not in it.
   expect(selected[0]).not.toContain(subject().path);
+});
+
+it("closes the viewer once Quote in the content menu has quoted the selection, then focuses the input", async () => {
+  const calls: string[] = [];
+  const quoteTarget: QuoteTarget = {
+    blocked: () => undefined,
+    quote: (text) => calls.push(`quote ${text}`),
+    revealInput: () => calls.push("revealInput"),
+  };
+  act(() => {
+    root.render(
+      <ViewerHost>
+        <ThemeProvider>
+          <QuoteTargetContext.Provider value={quoteTarget}>
+            <FileViewer subject={textFile("src/a.ts", "code\n")} onClose={() => calls.push("close")} />
+          </QuoteTargetContext.Provider>
+        </ThemeProvider>
+      </ViewerHost>,
+    );
+  });
+  await settleLazyImport();
+  const region = dialog()!.querySelector<HTMLElement>("[role=region]")!;
+  document.getSelection()!.selectAllChildren(codeTextOf(region));
+  const selected = document.getSelection()!.toString();
+  await rightClick(region);
+  expect(menuEntries()).toEqual(["Copy", "Quote", "Select all"]);
+  await chooseItem("Quote");
+  expect(calls).toEqual([`quote ${selected}`, "close", "revealInput"]);
 });
 
 it("shows a copy failure from the content menu as an error with a copy title", async () => {

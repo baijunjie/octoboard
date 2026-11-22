@@ -9,6 +9,7 @@ import { QuoteTargetContext, type QuoteBlock, type QuoteTarget } from "../compon
 import { PlatformProvider } from "../platform/react";
 import { BROWSER_HOST } from "../test/hosts";
 import { FIND_REGION } from "./find/findDom";
+import { ViewerCloseContext } from "./viewerClose";
 import { ViewerEditMenu } from "./ViewerEditMenu";
 import { chooseItem, closeMenu, menuEntries, menuItem, recordSelections, rightClick } from "./viewerTestSupport";
 
@@ -22,19 +23,22 @@ let clipboard: ClipboardCapability | undefined;
 let selectAll: ReturnType<typeof vi.fn<(region: HTMLElement) => boolean>>;
 let kind: "browser" | "tauri";
 let quoteTarget: QuoteTarget | undefined;
+let closeViewer: (() => void) | undefined;
 const regionRef = createRef<HTMLDivElement>();
 
 function render(props: { source?: string } = {}) {
   act(() => root.render(
     <QuoteTargetContext.Provider value={quoteTarget}>
-      <PlatformProvider value={{ kind, host: BROWSER_HOST, clipboard }}>
-        <div ref={regionRef} tabIndex={0} {...FIND_REGION}>
-          <p id="first">first</p>
-          <p id="second">second</p>
-          <p><a id="link" href="https://example.com/">link</a> <button id="inner" type="button">inner</button> <img id="image" alt="" src="data:image/png;base64,AAAA" /></p>
-        </div>
-        <ViewerEditMenu region={regionRef} selectAll={selectAll} source={props.source} />
-      </PlatformProvider>
+      <ViewerCloseContext.Provider value={closeViewer}>
+        <PlatformProvider value={{ kind, host: BROWSER_HOST, clipboard }}>
+          <div ref={regionRef} tabIndex={0} {...FIND_REGION}>
+            <p id="first">first</p>
+            <p id="second">second</p>
+            <p><a id="link" href="https://example.com/">link</a> <button id="inner" type="button">inner</button> <img id="image" alt="" src="data:image/png;base64,AAAA" /></p>
+          </div>
+          <ViewerEditMenu region={regionRef} selectAll={selectAll} source={props.source} />
+        </PlatformProvider>
+      </ViewerCloseContext.Provider>
     </QuoteTargetContext.Provider>,
   ));
 }
@@ -46,6 +50,7 @@ beforeEach(() => {
   selectAll = vi.fn(() => true);
   kind = "browser";
   quoteTarget = undefined;
+  closeViewer = undefined;
   document.getSelection()!.removeAllRanges();
   render();
 });
@@ -429,10 +434,12 @@ it("drops a Select All still waiting for the close when the menu is opened again
 describe("Quote", () => {
   let blocked: ReturnType<typeof vi.fn<() => QuoteBlock | undefined>>;
   let quote: ReturnType<typeof vi.fn<(text: string) => void>>;
+  let revealInput: ReturnType<typeof vi.fn<() => void>>;
   beforeEach(() => {
     blocked = vi.fn(() => undefined);
     quote = vi.fn();
-    quoteTarget = { blocked, quote };
+    revealInput = vi.fn();
+    quoteTarget = { blocked, quote, revealInput };
     render();
   });
 
@@ -516,5 +523,60 @@ describe("Quote", () => {
     select("first");
     await open();
     expect(menuItem("QuoteNo session ready for input").getAttribute("aria-disabled")).toBe("true");
+  });
+
+  describe("in the file viewer", () => {
+    /** What the target and the viewer were asked, in order, each with whether the menu was still in the document. */
+    let calls: string[];
+    let closeViewerMock: ReturnType<typeof vi.fn<() => void>>;
+    beforeEach(() => {
+      calls = [];
+      const logged = (name: string) => () => { calls.push(`${name}${document.querySelector("[role=menu]") ? " (menu open)" : ""}`); };
+      quote.mockImplementation((text) => logged(`quote ${text}`)());
+      closeViewerMock = vi.fn(logged("close"));
+      closeViewer = closeViewerMock;
+      revealInput.mockImplementation(logged("revealInput"));
+      render();
+    });
+
+    it("quotes, closes the viewer, then focuses the input, in that order and only once the menu has closed", async () => {
+      select("second");
+      await open();
+      await chooseItem("Quote");
+      expect(calls).toEqual(["quote second", "close", "revealInput"]);
+    });
+
+    it("writes nothing and closes nothing when the target is blocked by the time the menu has closed, and puts the selection back", async () => {
+      select("first");
+      const set = recordSelections();
+      await open();
+      blocked.mockReturnValue("program");
+      await chooseItem("Quote");
+      expect(calls).toEqual([]);
+      expect(set).toEqual(["first"]);
+    });
+
+    it("drops a Quote still waiting for the close when the menu is opened again first", async () => {
+      select("first");
+      await open();
+      const item = menuItem("Quote");
+      const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 });
+      await act(async () => {
+        item.click();
+        region().dispatchEvent(event);
+      });
+      await vi.waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("menu"));
+      await closeMenu();
+      expect(document.querySelector("[role=menu]")).toBeNull();
+      expect(calls).toEqual([]);
+    });
+  });
+
+  it("quotes at once, and neither closes anything nor focuses the input, where no viewer holds the surface", async () => {
+    select("first");
+    await open();
+    await chooseItem("Quote");
+    expect(quote).toHaveBeenCalledExactlyOnceWith("first");
+    expect(revealInput).not.toHaveBeenCalled();
   });
 });

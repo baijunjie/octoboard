@@ -10,6 +10,10 @@ export interface QuoteTarget {
   blocked: () => QuoteBlock | undefined;
   /** Writes `text` into that session's input as a quote, without sending it. */
   quote: (text: string) => void;
+  /** Shows that session's input and puts keyboard focus on it, for a quote made from a surface that closes with it:
+   * a panel covering the terminal is cleared (restored, or closed where it floats), and focus lands once the
+   * surface's own dialog is gone, after its focus return. Called as the surface closes. */
+  revealInput: () => void;
 }
 
 /** Absent where there is no session terminal to quote into; Quote is then not offered. */
