@@ -1,0 +1,49 @@
+---
+title: "Dòng lệnh"
+description: "Các lệnh của octoboardd trên máy chủ Linux, máy Mac và máy tính Windows: khởi động, dừng và kiểm tra Octoboard, in địa chỉ trình duyệt của nó, mở hoặc đóng cổng trình duyệt của nó."
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+
+octoboardd là chương trình chạy {productName} (ứng dụng gọi nó là daemon). Trên máy chủ Linux, bạn tự cài và khởi động nó. Trên máy Mac hoặc máy tính Windows, nó nằm sẵn trong ứng dụng, ứng dụng khởi động nó khi mở và dừng nó khi thoát. Các lệnh giống nhau trên cả ba, trừ những điểm khác dưới đây.
+
+## Chạy octoboardd
+
+- <strong>Máy chủ Linux:</strong> trình cài đặt thêm <code dir="ltr">octoboardd</code> vào PATH. Nếu shell không tìm thấy nó, xem [Nếu không tìm thấy octoboardd](../install/linux/#nếu-không-tìm-thấy-octoboardd).
+- <strong>macOS:</strong> trong ứng dụng, mở <strong>Cài đặt › Chung</strong> và chọn <strong>Cài đặt</strong> bên cạnh <strong>Công cụ dòng lệnh</strong>. Nếu sau đó nó yêu cầu thêm một thư mục vào PATH, hãy làm việc đó nữa. Từ đó, Terminal tìm thấy <code dir="ltr">octoboardd</code> theo tên.
+- <strong>Windows:</strong> không cần cài gì. Trong PowerShell, chạy nó bằng đường dẫn đầy đủ, ví dụ:
+
+  <Code code={commands.windowsStatus} lang="powershell" />
+
+Chạy các lệnh với tư cách người dùng đang chạy {productName}. Các lệnh tác động lên octoboardd của người dùng đó.
+
+## Lệnh
+
+| Lệnh | Tác dụng |
+| --- | --- |
+| <code dir="ltr">{commands.start}</code> | Khởi động octoboardd ở chế độ nền. Nó vẫn tiếp tục chạy sau khi lệnh kết thúc. |
+| <code dir="ltr">{commands.status}</code> | Cho biết octoboardd có đang chạy hay không. |
+| <code dir="ltr">{commands.stop}</code> | Dừng octoboardd, việc này làm gián đoạn mọi phiên; bạn có thể tiếp tục từng phiên khi octoboardd chạy lại. Nếu có công việc đang chạy, lệnh liệt kê công việc ấy và không dừng gì cả; <code dir="ltr">{commands.stopForce}</code> vẫn dừng dù thế nào. |
+| <code dir="ltr">{commands.restart}</code> | Chỉ dành cho máy chủ Linux. Khởi động lại octoboardd và giữ mọi phiên tiếp tục chạy; nếu có phiên bị gián đoạn, lệnh liệt kê các phiên đó và hỏi trước. Địa chỉ trình duyệt vẫn như cũ. |
+| <code dir="ltr">{commands.address}</code> | In địa chỉ trình duyệt và lệnh <code dir="ltr">ssh</code> dẫn tới địa chỉ đó. |
+| <code dir="ltr">{tunnel.rotate}</code> | Cấp cho địa chỉ trình duyệt một khóa mới và in địa chỉ mới. Mọi địa chỉ trước đó ngừng hoạt động, và mọi thứ đang kết nối bằng khóa cũ bị ngắt. |
+| <code dir="ltr">{commands.connection}</code> | In thông tin kết nối mà ứng dụng trên máy tính khác dùng để tự thiết lập, dưới dạng mã QR và một dòng văn bản. |
+| <code dir="ltr">{commands.browserOn}</code> | Mở cổng trình duyệt ngay trên chính máy tính đó (<code dir="ltr">{commands.defaultPort}</code>, trừ khi bạn đặt cổng khác), cho trình duyệt trên máy tính đó hoặc một công cụ như Tailscale. Kết nối SSH tới máy chủ Linux không cần lệnh này. Chỉ bật trên máy tính không có ai khác đăng nhập. |
+| <code dir="ltr">{commands.browserOff}</code> | Đóng cổng trình duyệt và mọi kết nối thực hiện qua cổng đó. |
+| <code dir="ltr">{commands.browserStatus}</code> | Cho biết cổng trình duyệt có đang mở không, và ở cổng nào. |
+| <code dir="ltr">{commands.update}</code> | Chỉ dành cho máy chủ Linux. Cài phiên bản mới nhất, như trong [Nâng cấp](../install/linux/#nâng-cấp). |
+| <code dir="ltr">{commands.updateCheck}</code> | Chỉ dành cho máy chủ Linux. Kiểm tra xem đã có phiên bản mới hơn chưa, mà không cài đặt. |
+| <code dir="ltr">{commands.updateRollback}</code> | Chỉ dành cho máy chủ Linux. Khôi phục phiên bản đã cài trước lần nâng cấp gần nhất và khởi động lại vào phiên bản đó, như khi nâng cấp. |
+| <code dir="ltr">{commands.version}</code> | In phiên bản đã cài. |
+
+Để xem danh sách đầy đủ các lệnh, chạy <code dir="ltr">{commands.help}</code>; để xem tùy chọn của một lệnh, chạy <code dir="ltr">{commands.commandHelp}</code>. Danh sách còn có các lệnh do {productName} tự chạy, mà bạn không bao giờ cần chạy thủ công.
+
+## Trên máy Mac hoặc máy tính Windows
+
+Ứng dụng chạy octoboardd cho bạn, nên một vài lệnh hoạt động khác đi:
+
+- <strong><code dir="ltr">{commands.start}</code> và <code dir="ltr">{commands.stop}</code> trên máy Mac</strong> tác động lên ứng dụng: <code dir="ltr">{commands.start}</code> mở ứng dụng ở chế độ nền, không có cửa sổ, còn <code dir="ltr">{commands.stop}</code> thoát ứng dụng.
+- <strong><code dir="ltr">{commands.restart}</code> và <code dir="ltr">{commands.update}</code></strong> bị từ chối. Ứng dụng tự khởi động lại octoboardd và tự cài phiên bản mới.
+- <strong><code dir="ltr">{commands.browserOn}</code> và <code dir="ltr">{commands.browserOff}</code></strong> đổi cùng một thiết lập với <strong>Cho phép truy cập từ trình duyệt</strong> trong <strong>Cài đặt › Truy cập</strong>.
+- <strong><code dir="ltr">{commands.address}</code></strong> chỉ in địa chỉ khi <strong>Cho phép truy cập từ trình duyệt</strong> (hoặc, trên máy Mac, <strong>Cho phép truy cập từ xa</strong>) đang bật. Cả hai thiết lập đều tắt theo mặc định, nên cho đến khi bạn bật một trong hai, lệnh cho biết điều đó và không in địa chỉ.

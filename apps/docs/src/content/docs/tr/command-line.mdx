@@ -1,0 +1,49 @@
+---
+title: "Komut satırı"
+description: "Bir Linux sunucusunda, Mac’te ve Windows bilgisayarda octoboardd komutları: Octoboard’u başlatma, durdurma ve denetleme, tarayıcı adresini yazdırma, tarayıcı bağlantı noktasını açma veya kapatma."
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+
+octoboardd, {productName}’u çalıştıran programdır (uygulama ona “hizmet” der). Linux sunucusunda onu kendiniz kurar ve başlatırsınız. Mac’te veya Windows bilgisayarda uygulamanın içinde gelir; uygulama açılırken onu başlatır, kapanırken durdurur. Komutlar üçünde de aynıdır, aşağıdaki farklar dışında.
+
+## octoboardd’yi çalıştırma
+
+- <strong>Linux sunucusu:</strong> Kurulum <code dir="ltr">octoboardd</code> programını PATH’inize ekler. Kabuk onu bulamazsa [octoboardd bulunamazsa](../install/linux/#octoboardd-bulunamazsa) bölümüne bakın.
+- <strong>macOS:</strong> Uygulamada <strong>Ayarlar › Genel</strong> bölümünü açın ve <strong>Komut satırı aracı</strong> yanındaki <strong>Yükle</strong> düğmesini seçin. Ardından PATH’inize bir dizin eklemeniz istenirse onu da yapın. Bundan sonra Terminal, <code dir="ltr">octoboardd</code> programını adıyla bulur.
+- <strong>Windows:</strong> Kurulacak bir şey yok. PowerShell’de programı tam yoluyla çalıştırın, örneğin:
+
+  <Code code={commands.windowsStatus} lang="powershell" />
+
+Komutları {productName} uygulamasını çalıştıran kullanıcı olarak çalıştırın. Bunlar o kullanıcının octoboardd’si üzerinde işlem yapar.
+
+## Komutlar
+
+| Komut | Ne yapar |
+| --- | --- |
+| <code dir="ltr">{commands.start}</code> | octoboardd’yi arka planda başlatır. Komut bittikten sonra da çalışmaya devam eder. |
+| <code dir="ltr">{commands.status}</code> | octoboardd’nin çalışıp çalışmadığını söyler. |
+| <code dir="ltr">{commands.stop}</code> | octoboardd’yi durdurur ve her oturumu kesintiye uğratır; octoboardd yeniden çalışınca her birini sürdürebilirsiniz. Devam eden bir iş varsa o işi listeler ve hiçbir şeyi durdurmaz; <code dir="ltr">{commands.stopForce}</code> yine de durdurur. |
+| <code dir="ltr">{commands.restart}</code> | Yalnızca Linux sunucusunda. octoboardd’yi yeniden başlatır ve her oturumu çalışır durumda tutar; bazıları kesintiye uğrayacaksa onları listeler ve önce sorar. Tarayıcı adresi aynı kalır. |
+| <code dir="ltr">{commands.address}</code> | Tarayıcı adresini ve ona ulaşan <code dir="ltr">ssh</code> komutunu yazdırır. |
+| <code dir="ltr">{tunnel.rotate}</code> | Tarayıcı adresine yeni bir anahtar verir ve yeni adresi yazdırır. Önceki tüm adresler çalışmaz olur ve eski anahtarla bağlı olan her şeyin bağlantısı kesilir. |
+| <code dir="ltr">{commands.connection}</code> | Başka bir bilgisayardaki masaüstü uygulamasının kendini yapılandırmak için kullandığı bağlantı bilgilerini, bir QR kodu ve tek satırlık metin olarak yazdırır. |
+| <code dir="ltr">{commands.browserOn}</code> | Bilgisayarın kendisinde tarayıcı bağlantı noktasını açar (başka bir tane ayarlamadıysanız <code dir="ltr">{commands.defaultPort}</code>); o bilgisayardaki bir tarayıcı veya Tailscale gibi bir araç içindir. Bir Linux sunucusuna SSH bağlantısının buna ihtiyacı yoktur. Yalnızca başka kimsenin oturum açmadığı bir bilgisayarda açın. |
+| <code dir="ltr">{commands.browserOff}</code> | Tarayıcı bağlantı noktasını ve onun üzerinden kurulan tüm bağlantıları kapatır. |
+| <code dir="ltr">{commands.browserStatus}</code> | Tarayıcı bağlantı noktasının açık olup olmadığını ve hangi bağlantı noktasını kullandığını söyler. |
+| <code dir="ltr">{commands.update}</code> | Yalnızca Linux sunucusunda. [Yükseltme](../install/linux/#yükseltme) bölümündeki gibi en yeni sürümü kurar. |
+| <code dir="ltr">{commands.updateCheck}</code> | Yalnızca Linux sunucusunda. Daha yeni bir sürüm çıkıp çıkmadığını, kurmadan denetler. |
+| <code dir="ltr">{commands.updateRollback}</code> | Yalnızca Linux sunucusunda. Son yükseltmeden önce kurulu olan sürümü geri getirir ve yükseltmedeki gibi o sürümle yeniden başlar. |
+| <code dir="ltr">{commands.version}</code> | Kurulu sürümü yazdırır. |
+
+Komutların tam listesi için <code dir="ltr">{commands.help}</code> komutunu; tek bir komutun seçenekleri için <code dir="ltr">{commands.commandHelp}</code> komutunu çalıştırın. Listede, {productName} tarafından otomatik olarak çalıştırılan ve sizin elle çalıştırmanız gerekmeyen komutlar da yer alır.
+
+## Mac’te veya Windows bilgisayarda
+
+Uygulama octoboardd’yi sizin için çalıştırır, bu yüzden birkaç komut farklı davranır:
+
+- <strong>Mac’te <code dir="ltr">{commands.start}</code> ve <code dir="ltr">{commands.stop}</code></strong> uygulama üzerinde işlem yapar: <code dir="ltr">{commands.start}</code> uygulamayı arka planda, pencere açmadan açar; <code dir="ltr">{commands.stop}</code> uygulamadan çıkar.
+- <strong><code dir="ltr">{commands.restart}</code> ve <code dir="ltr">{commands.update}</code></strong> reddedilir. octoboardd’yi yeniden başlatmayı ve yeni sürümleri kurmayı uygulama kendisi yapar.
+- <strong><code dir="ltr">{commands.browserOn}</code> ve <code dir="ltr">{commands.browserOff}</code></strong>, <strong>Ayarlar › Erişim</strong> bölümündeki <strong>Tarayıcı erişimine izin ver</strong> ile aynı ayarı değiştirir.
+- <strong><code dir="ltr">{commands.address}</code></strong>, yalnızca <strong>Tarayıcı erişimine izin ver</strong> (veya Mac’te <strong>Uzaktan erişime izin ver</strong>) açıkken adres yazdırır. İki ayar da varsayılan olarak kapalıdır; bu yüzden birini açana kadar komut bunu söyler ve adres yazdırmaz.

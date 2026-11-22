@@ -1,0 +1,49 @@
+---
+title: "命令行"
+description: "Linux 服务器、Mac 和 Windows 电脑上的 octoboardd 命令：启动、停止和检查 Octoboard，输出它的浏览器地址，以及打开或关闭它的浏览器端口。"
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+
+octoboardd 是运行 {productName} 的程序（应用里称它为“守护进程”）。在 Linux 服务器上，需要你自己安装并启动它；在 Mac 或 Windows 电脑上，它包含在应用里，应用打开时启动它，退出时停止它。三种系统上的命令相同，只有下面几处不同。
+
+## 运行 octoboardd
+
+- <strong>Linux 服务器：</strong>安装时已把 <code dir="ltr">octoboardd</code> 放进 PATH。如果终端找不到它，请看[找不到 octoboardd 时](../install/linux/#找不到-octoboardd-时)。
+- <strong>macOS：</strong>在应用中打开<strong>设置 › 通用</strong>，点击<strong>命令行工具</strong>旁的<strong>安装</strong>。如果它随后要求你把某个目录加入 PATH，也请照做。之后，“终端”就能按名称找到 <code dir="ltr">octoboardd</code>。
+- <strong>Windows：</strong>无需安装。在 PowerShell 中用完整路径运行它，例如：
+
+  <Code code={commands.windowsStatus} lang="powershell" />
+
+请以运行 {productName} 的用户身份运行这些命令。它们作用于该用户的 octoboardd。
+
+## 命令
+
+| 命令 | 作用 |
+| --- | --- |
+| <code dir="ltr">{commands.start}</code> | 在后台启动 octoboardd。命令结束后它仍会继续运行。 |
+| <code dir="ltr">{commands.status}</code> | 显示 octoboardd 是否正在运行。 |
+| <code dir="ltr">{commands.stop}</code> | 停止 octoboardd，同时中断所有会话；octoboardd 再次运行后，可以恢复每个会话。如果有工作正在进行，它会列出这些工作并且不停止任何东西；<code dir="ltr">{commands.stopForce}</code> 则无论如何都会停止。 |
+| <code dir="ltr">{commands.restart}</code> | 仅限 Linux 服务器。重新启动 octoboardd，所有会话保持运行；如果有会话会被中断，它会先列出来再询问。浏览器地址不变。 |
+| <code dir="ltr">{commands.address}</code> | 输出浏览器地址，以及能连到该地址的 <code dir="ltr">ssh</code> 命令。 |
+| <code dir="ltr">{tunnel.rotate}</code> | 为浏览器地址换一个新密钥，并输出新地址。之前的所有地址都会失效，所有使用旧密钥的连接也会断开。 |
+| <code dir="ltr">{commands.connection}</code> | 以二维码和一行文本的形式输出另一台电脑上的桌面应用用来完成自身设置的连接信息。 |
+| <code dir="ltr">{commands.browserOn}</code> | 在本机上打开浏览器端口（除非另行设置，否则为 <code dir="ltr">{commands.defaultPort}</code>），供这台电脑上的浏览器或 Tailscale 之类的工具使用。通过 SSH 连接 Linux 服务器不需要它。只在没有其他人登录的电脑上开启。 |
+| <code dir="ltr">{commands.browserOff}</code> | 关闭浏览器端口，并断开所有经由它建立的连接。 |
+| <code dir="ltr">{commands.browserStatus}</code> | 显示浏览器端口是否已打开，以及端口号。 |
+| <code dir="ltr">{commands.update}</code> | 仅限 Linux 服务器。安装最新版本，如[升级](../install/linux/#升级)所述。 |
+| <code dir="ltr">{commands.updateCheck}</code> | 仅限 Linux 服务器。检查是否有更新的版本，但不安装。 |
+| <code dir="ltr">{commands.updateRollback}</code> | 仅限 Linux 服务器。恢复到上一次升级之前安装的版本，并像升级一样重新启动，换上该版本。 |
+| <code dir="ltr">{commands.version}</code> | 输出已安装的版本。 |
+
+想查看完整的命令列表，请运行 <code dir="ltr">{commands.help}</code>；想查看某条命令的选项，请运行 <code dir="ltr">{commands.commandHelp}</code>。列表中也包含 {productName} 自己运行的命令，你无需手动运行。
+
+## 在 Mac 或 Windows 电脑上
+
+应用会替你运行 octoboardd，所以有几条命令的表现不同：
+
+- <strong>Mac 上的 <code dir="ltr">{commands.start}</code> 和 <code dir="ltr">{commands.stop}</code></strong> 作用于应用：<code dir="ltr">{commands.start}</code> 在后台打开应用，不显示窗口；<code dir="ltr">{commands.stop}</code> 退出应用。
+- <strong><code dir="ltr">{commands.restart}</code> 和 <code dir="ltr">{commands.update}</code></strong> 会被拒绝。应用自己重新启动 octoboardd，也自己安装新版本。
+- <strong><code dir="ltr">{commands.browserOn}</code> 和 <code dir="ltr">{commands.browserOff}</code></strong> 修改的设置与<strong>设置 › 访问</strong>中的<strong>允许浏览器访问</strong>相同。
+- <strong><code dir="ltr">{commands.address}</code></strong> 只有在<strong>允许浏览器访问</strong>开启（在 Mac 上也可以是<strong>允许远程访问</strong>）时才会输出地址。这两项设置默认都是关闭的，所以在你打开其中一项之前，该命令只会说明这一点，不输出地址。

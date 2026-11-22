@@ -40,6 +40,7 @@ The sidebar has four groups, in this order. The Features group holds three subgr
 | Installation | macOS | `install/macos/` |
 | Installation | Windows | `install/windows/` |
 | Installation | Linux server | `install/linux/` |
+| Installation | Command line | `command-line/` |
 | Remote connections | Choose how to connect | `choose-how-to-connect/` |
 | Remote connections | Connect over SSH | `remote-connections/` |
 | Remote connections | Browser over Tailscale | `browser-over-tailscale/` |
@@ -72,11 +73,24 @@ cover:
   guide to read first for each situation.
 - **macOS** and **Windows**: the system requirements, a download button, the installation steps (on Windows also the
   per-user install, the Microsoft Defender SmartScreen warning the unsigned installer may raise, and WebView2), installing
-  a coding agent (on Windows with Git for Windows for Claude Code and Codex), and that later versions arrive through the
-  app's own updates.
+  a coding agent (on Windows with Git for Windows for Claude Code and Codex), that later versions arrive through the
+  app's own updates, and a closing "Command line" section naming what can be done from a terminal (on macOS starting
+  and quitting the app, checking whether it runs, turning browser access on or off and printing the browser address; on
+  Windows the same from PowerShell, without starting and quitting) and pointing to the Command line page.
 - **Linux server**: signing in to the server with SSH, installing and starting `octoboardd`, then connecting from the
-  desktop app or a browser; the PATH caveat; keeping it running as a systemd user service with lingering; the default
-  port and `--port`; upgrading; and the archive downloads.
+  desktop app or a browser; the PATH caveat; keeping it running as a systemd user service with lingering; the fixed
+  port the browser address names; upgrading; a short "Commands" section pointing to the Command line page; and the
+  archive downloads.
+- **Command line**: what `octoboardd` is on each system; how to run it (on a Linux server from the PATH the install
+  sets up; on macOS after installing the Command-line tool from Settings › General; on Windows by its full path in
+  PowerShell, with nothing to install), as the user who runs Octoboard; a table of the commands a user runs by hand
+  with what each does (starting, stopping or force-stopping, restarting and checking it, printing or rotating the
+  browser address, printing the connection details, opening, closing and checking the browser port, upgrading, checking
+  for or rolling back an upgrade, and printing the version), restarting and the upgrade commands marked Linux server
+  only; a pointer to `octoboardd --help` and `octoboardd <command> --help` for the rest; and how a Mac or a Windows PC
+  differs: on a Mac `start` opens the app in the background and `stop` quits it, `restart` and `update` are refused,
+  `browser on` and `browser off` change the Allow browser access setting, and `address` prints an address only while
+  Allow browser access or, on a Mac, Allow remote access is on, both of which start off.
 - **Choose how to connect**: a comparison of SSH, Tailscale and UU Remote — where each is used from, which hosts it
   supports, what is turned on or installed on each computer, which service the traffic passes through, whether it works
   across networks, and what each is best for.
@@ -176,7 +190,7 @@ selectors.
 Each page names its own canonical address and has language alternates for all 17 languages plus an `x-default`
 alternate, the English page; the language values are the language tags. The docs publish their own sitemap index,
 `/docs/sitemap-index.xml`, listing every page in every language, including the pages shown in English as not
-translated yet (17 × 25 = 425 addresses), and none of the redirect pages; the website's `robots.txt` names it (see
+translated yet (17 × 26 = 442 addresses), and none of the redirect pages; the website's `robots.txt` names it (see
 "Search indexing and agent-readable copies" in `docs/product/website-search-indexing.md`). The docs have no Markdown
 copies or `llms.txt` of their own; the website's agent-readable files link to their pages.
 

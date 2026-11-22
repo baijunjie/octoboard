@@ -154,7 +154,7 @@ export const sidebar: NonNullable<StarlightUserConfig["sidebar"]> = [
   {
     label: installation.en,
     translations: installation,
-    items: ["install/macos", "install/windows", "install/linux"],
+    items: ["install/macos", "install/windows", "install/linux", "command-line"],
   },
   {
     label: remoteConnections.en,

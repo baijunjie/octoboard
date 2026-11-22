@@ -1,0 +1,49 @@
+---
+title: "Befehlszeile"
+description: "Die octoboardd-Befehle auf einem Linux-Server, einem Mac und einem Windows-PC: Octoboard starten, beenden und prüfen, seine Browser-Adresse ausgeben und seinen Browser-Port öffnen oder schließen."
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+
+octoboardd ist das Programm, das {productName} ausführt (die App nennt es den Hintergrunddienst). Auf einem Linux-Server installierst und startest du es selbst. Auf einem Mac oder einem Windows-PC steckt es in der App, die es beim Öffnen startet und beim Beenden stoppt. Seine Befehle sind auf allen dreien gleich, abgesehen von den Unterschieden unten.
+
+## octoboardd ausführen
+
+- <strong>Linux-Server:</strong> Die Installation legt <code dir="ltr">octoboardd</code> in deinen PATH. Findet die Shell es nicht, siehe [Wenn octoboardd nicht gefunden wird](../install/linux/#wenn-octoboardd-nicht-gefunden-wird).
+- <strong>macOS:</strong> Öffne in der App <strong>Einstellungen › Allgemein</strong> und wähle neben <strong>Befehlszeilenwerkzeug</strong> <strong>Installieren</strong>. Verlangt es danach, ein Verzeichnis zu deinem PATH hinzuzufügen, tu das auch. Dann findet das Terminal <code dir="ltr">octoboardd</code> über den Namen.
+- <strong>Windows:</strong> Es gibt nichts zu installieren. Führe es in PowerShell über den vollständigen Pfad aus, zum Beispiel:
+
+  <Code code={commands.windowsStatus} lang="powershell" />
+
+Führe die Befehle als der Benutzer aus, der {productName} ausführt. Sie wirken auf das octoboardd dieses Benutzers.
+
+## Befehle
+
+| Befehl | Was er tut |
+| --- | --- |
+| <code dir="ltr">{commands.start}</code> | Startet octoboardd im Hintergrund. Es läuft weiter, nachdem der Befehl beendet ist. |
+| <code dir="ltr">{commands.status}</code> | Sagt, ob octoboardd läuft. |
+| <code dir="ltr">{commands.stop}</code> | Beendet octoboardd und unterbricht damit jede Sitzung; du kannst jede davon fortsetzen, sobald octoboardd wieder läuft. Ist Arbeit im Gange, listet er diese Arbeit auf und beendet nichts; <code dir="ltr">{commands.stopForce}</code> beendet es trotzdem. |
+| <code dir="ltr">{commands.restart}</code> | Nur Linux-Server. Startet octoboardd neu und lässt alle Sitzungen weiterlaufen; würden einige unterbrochen, listet er sie auf und fragt vorher nach. Die Browser-Adresse bleibt gleich. |
+| <code dir="ltr">{commands.address}</code> | Gibt die Browser-Adresse und den <code dir="ltr">ssh</code>-Befehl aus, der sie erreicht. |
+| <code dir="ltr">{tunnel.rotate}</code> | Gibt der Browser-Adresse einen neuen Schlüssel und gibt die neue Adresse aus. Jede frühere Adresse funktioniert nicht mehr, und alles, was mit dem alten Schlüssel verbunden ist, wird getrennt. |
+| <code dir="ltr">{commands.connection}</code> | Gibt die Verbindungsdaten aus, aus denen sich die Desktop-App auf einem anderen Computer selbst einrichtet, als QR-Code und als eine Textzeile. |
+| <code dir="ltr">{commands.browserOn}</code> | Öffnet den Browser-Port auf dem Computer selbst (<code dir="ltr">{commands.defaultPort}</code>, sofern du keinen anderen festlegst), für einen Browser auf diesem Computer oder ein Werkzeug wie Tailscale. Eine SSH-Verbindung zu einem Linux-Server braucht ihn nicht. Schalte ihn nur auf einem Computer ein, an dem sich sonst niemand anmeldet. |
+| <code dir="ltr">{commands.browserOff}</code> | Schließt den Browser-Port und jede Verbindung, die darüber läuft. |
+| <code dir="ltr">{commands.browserStatus}</code> | Sagt, ob der Browser-Port offen ist und an welchem Port. |
+| <code dir="ltr">{commands.update}</code> | Nur Linux-Server. Installiert die neueste Version, wie unter [Upgrade](../install/linux/#upgrade). |
+| <code dir="ltr">{commands.updateCheck}</code> | Nur Linux-Server. Prüft, ob eine neuere Version erschienen ist, ohne sie zu installieren. |
+| <code dir="ltr">{commands.updateRollback}</code> | Nur Linux-Server. Stellt die Version wieder her, die vor dem letzten Upgrade installiert war, und startet in sie neu, wie bei einem Upgrade. |
+| <code dir="ltr">{commands.version}</code> | Gibt die installierte Version aus. |
+
+Die vollständige Liste der Befehle zeigt <code dir="ltr">{commands.help}</code>; die Optionen eines einzelnen Befehls zeigt <code dir="ltr">{commands.commandHelp}</code>. Die Liste enthält auch Befehle, die {productName} selbst ausführt und die du nie von Hand ausführst.
+
+## Auf einem Mac oder einem Windows-PC
+
+Die App führt octoboardd für dich aus, deshalb verhalten sich einige Befehle anders:
+
+- <strong><code dir="ltr">{commands.start}</code> und <code dir="ltr">{commands.stop}</code> auf einem Mac</strong> wirken auf die App: <code dir="ltr">{commands.start}</code> öffnet sie im Hintergrund, ohne Fenster, und <code dir="ltr">{commands.stop}</code> beendet sie.
+- <strong><code dir="ltr">{commands.restart}</code> und <code dir="ltr">{commands.update}</code></strong> werden abgelehnt. Die App startet octoboardd selbst neu und installiert neue Versionen selbst.
+- <strong><code dir="ltr">{commands.browserOn}</code> und <code dir="ltr">{commands.browserOff}</code></strong> ändern dieselbe Einstellung wie <strong>Browserzugriff erlauben</strong> unter <strong>Einstellungen › Zugriff</strong>.
+- <strong><code dir="ltr">{commands.address}</code></strong> gibt nur dann eine Adresse aus, wenn <strong>Browserzugriff erlauben</strong> (auf einem Mac auch <strong>Fernzugriff erlauben</strong>) eingeschaltet ist. Beide Einstellungen sind standardmäßig aus; solange du keine einschaltest, sagt der Befehl das und gibt keine Adresse aus.

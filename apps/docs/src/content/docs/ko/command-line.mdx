@@ -1,0 +1,49 @@
+---
+title: "명령줄"
+description: "Linux 서버, Mac, Windows PC에서 쓰는 octoboardd 명령입니다. Octoboard를 시작하고 중지하고 확인하며, 브라우저 주소를 출력하고, 브라우저 포트를 열거나 닫습니다."
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+
+octoboardd는 {productName}을(를) 실행하는 프로그램입니다(앱에서는 ‘데몬’이라고 부릅니다). Linux 서버에서는 직접 설치하고 시작합니다. Mac이나 Windows PC에서는 앱에 포함되어 있으며, 앱이 열릴 때 시작하고 종료될 때 멈춥니다. 명령은 아래의 차이를 빼면 세 곳 모두 같습니다.
+
+## octoboardd 실행하기
+
+- <strong>Linux 서버:</strong> 설치하면 <code dir="ltr">octoboardd</code>가 PATH에 들어갑니다. 셸이 찾지 못하면 [octoboardd를 찾을 수 없다면](../install/linux/#octoboardd를-찾을-수-없다면) 항목을 참고하세요.
+- <strong>macOS:</strong> 앱에서 <strong>설정 › 일반</strong>을 열고 <strong>명령줄 도구</strong> 옆의 <strong>설치</strong>를 선택하세요. 이어서 PATH에 디렉터리를 추가하라고 하면 그것도 하세요. 그러면 터미널이 이름만으로 <code dir="ltr">octoboardd</code>를 찾습니다.
+- <strong>Windows:</strong> 설치할 것은 없습니다. PowerShell에서 전체 경로로 실행하세요. 예를 들면 다음과 같습니다.
+
+  <Code code={commands.windowsStatus} lang="powershell" />
+
+{productName}을(를) 실행하는 사용자로 이 명령을 실행하세요. 이 명령은 그 사용자의 octoboardd에 작용합니다.
+
+## 명령
+
+| 명령 | 동작 |
+| --- | --- |
+| <code dir="ltr">{commands.start}</code> | octoboardd를 백그라운드에서 시작합니다. 명령이 끝난 뒤에도 계속 실행됩니다. |
+| <code dir="ltr">{commands.status}</code> | octoboardd가 실행 중인지 알려 줍니다. |
+| <code dir="ltr">{commands.stop}</code> | octoboardd를 중지하며, 모든 세션이 중단됩니다. octoboardd가 다시 실행되면 각 세션을 재개할 수 있습니다. 진행 중인 작업이 있으면 그 작업을 나열하고 아무것도 중지하지 않습니다. <code dir="ltr">{commands.stopForce}</code>을(를) 쓰면 그래도 중지합니다. |
+| <code dir="ltr">{commands.restart}</code> | Linux 서버 전용입니다. octoboardd를 다시 시작하고 모든 세션을 계속 실행합니다. 중단되는 세션이 있으면 목록을 보여 주고 먼저 물어봅니다. 브라우저 주소는 그대로입니다. |
+| <code dir="ltr">{commands.address}</code> | 브라우저 주소와 그 주소로 연결되는 <code dir="ltr">ssh</code> 명령을 출력합니다. |
+| <code dir="ltr">{tunnel.rotate}</code> | 브라우저 주소에 새 키를 부여하고 새 주소를 출력합니다. 이전 주소는 모두 쓸 수 없게 되고, 이전 키로 연결된 것은 모두 끊어집니다. |
+| <code dir="ltr">{commands.connection}</code> | 다른 컴퓨터의 데스크톱 앱이 스스로 설정할 때 쓰는 연결 정보를 QR 코드와 한 줄 텍스트로 출력합니다. |
+| <code dir="ltr">{commands.browserOn}</code> | 이 컴퓨터 자체에서 브라우저 포트(따로 설정하지 않았다면 <code dir="ltr">{commands.defaultPort}</code>)를 엽니다. 이 컴퓨터의 브라우저나 Tailscale 같은 도구를 위한 것입니다. Linux 서버에 SSH로 연결할 때는 필요하지 않습니다. 다른 사람이 로그인하지 않는 컴퓨터에서만 켜세요. |
+| <code dir="ltr">{commands.browserOff}</code> | 브라우저 포트와 그 포트를 통한 모든 연결을 닫습니다. |
+| <code dir="ltr">{commands.browserStatus}</code> | 브라우저 포트가 열려 있는지, 열려 있다면 어느 포트인지 알려 줍니다. |
+| <code dir="ltr">{commands.update}</code> | Linux 서버 전용입니다. 최신 버전을 설치합니다. [업그레이드](../install/linux/#업그레이드)에서 설명한 방법과 같습니다. |
+| <code dir="ltr">{commands.updateCheck}</code> | Linux 서버 전용입니다. 새 버전이 나왔는지 확인만 하고 설치하지는 않습니다. |
+| <code dir="ltr">{commands.updateRollback}</code> | Linux 서버 전용입니다. 마지막 업그레이드 전에 설치되어 있던 버전으로 되돌리고, 업그레이드할 때처럼 그 버전으로 다시 시작합니다. |
+| <code dir="ltr">{commands.version}</code> | 설치된 버전을 출력합니다. |
+
+전체 명령 목록을 보려면 <code dir="ltr">{commands.help}</code>을(를) 실행하고, 명령 하나의 옵션을 보려면 <code dir="ltr">{commands.commandHelp}</code>을(를) 실행하세요. 목록에는 {productName}이(가) 스스로 실행하는 명령도 있으며, 직접 실행할 일은 없습니다.
+
+## Mac 또는 Windows PC에서
+
+앱이 octoboardd를 대신 실행하므로 일부 명령은 다르게 동작합니다.
+
+- <strong>Mac에서 <code dir="ltr">{commands.start}</code>와(과) <code dir="ltr">{commands.stop}</code></strong>은(는) 앱에 작용합니다. <code dir="ltr">{commands.start}</code>은(는) 창 없이 앱을 백그라운드에서 열고, <code dir="ltr">{commands.stop}</code>은(는) 앱을 종료합니다.
+- <strong><code dir="ltr">{commands.restart}</code>와(과) <code dir="ltr">{commands.update}</code></strong>은(는) 거부됩니다. octoboardd를 다시 시작하는 일도 새 버전을 설치하는 일도 앱이 직접 합니다.
+- <strong><code dir="ltr">{commands.browserOn}</code>와(과) <code dir="ltr">{commands.browserOff}</code></strong>은(는) <strong>설정 › 접근</strong>의 <strong>브라우저 접근 허용</strong>과 같은 설정을 바꿉니다.
+- <strong><code dir="ltr">{commands.address}</code></strong>은(는) <strong>브라우저 접근 허용</strong>(Mac에서는 <strong>원격 접근 허용</strong>)이 켜져 있는 동안에만 주소를 출력합니다. 두 설정은 기본값이 꺼짐이므로, 둘 중 하나를 켜기 전에는 그렇다고 알려 주고 주소는 출력하지 않습니다.

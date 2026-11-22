@@ -1,0 +1,49 @@
+---
+title: "Linha de comando"
+description: "Os comandos do octoboardd em um servidor Linux, em um Mac e em um PC com Windows: iniciar, parar e verificar o Octoboard, imprimir o endereço do navegador e abrir ou fechar a porta do navegador."
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+
+O octoboardd é o programa que executa o {productName} (o app o chama de daemon). Em um servidor Linux, você mesmo o instala e o inicia. Em um Mac ou em um PC com Windows, ele vem dentro do app, que o inicia ao abrir e o para ao fechar. Os comandos são os mesmos nos três, exceto pelas diferenças abaixo.
+
+## Executar o octoboardd
+
+- <strong>Servidor Linux:</strong> a instalação coloca o <code dir="ltr">octoboardd</code> no seu PATH. Se o shell não o encontrar, veja [Se o octoboardd não for encontrado](../install/linux/#se-o-octoboardd-não-for-encontrado).
+- <strong>macOS:</strong> no app, abra <strong>Ajustes › Geral</strong> e selecione <strong>Instalar</strong> ao lado de <strong>Ferramenta de linha de comando</strong>. Se depois ela pedir para adicionar um diretório ao seu PATH, faça isso também. A partir daí, o Terminal encontra o <code dir="ltr">octoboardd</code> pelo nome.
+- <strong>Windows:</strong> não há nada para instalar. No PowerShell, execute-o pelo caminho completo, por exemplo:
+
+  <Code code={commands.windowsStatus} lang="powershell" />
+
+Execute os comandos como o usuário que executa o {productName}. Eles atuam sobre o octoboardd desse usuário.
+
+## Comandos
+
+| Comando | O que faz |
+| --- | --- |
+| <code dir="ltr">{commands.start}</code> | Inicia o octoboardd em segundo plano. Ele continua em execução depois que o comando termina. |
+| <code dir="ltr">{commands.status}</code> | Informa se o octoboardd está em execução. |
+| <code dir="ltr">{commands.stop}</code> | Para o octoboardd, o que interrompe todas as sessões; você pode retomar cada uma quando o octoboardd voltar a executar. Se há trabalho em andamento, ele o lista e não para nada; <code dir="ltr">{commands.stopForce}</code> para mesmo assim. |
+| <code dir="ltr">{commands.restart}</code> | Apenas em servidores Linux. Reinicia o octoboardd e mantém todas as sessões em execução; se alguma for interrompida, ele as lista e pergunta antes. O endereço do navegador continua o mesmo. |
+| <code dir="ltr">{commands.address}</code> | Imprime o endereço do navegador e o comando <code dir="ltr">ssh</code> que leva a ele. |
+| <code dir="ltr">{tunnel.rotate}</code> | Dá uma chave nova ao endereço do navegador e imprime o endereço novo. Todos os endereços anteriores deixam de funcionar, e tudo que estava conectado com a chave antiga é desconectado. |
+| <code dir="ltr">{commands.connection}</code> | Imprime os dados de conexão a partir dos quais o app para desktop de outro computador se configura, como QR code e como uma linha de texto. |
+| <code dir="ltr">{commands.browserOn}</code> | Abre a porta do navegador no próprio computador (<code dir="ltr">{commands.defaultPort}</code>, a menos que você defina outra), para um navegador nesse computador ou uma ferramenta como Tailscale. Uma conexão SSH com um servidor Linux não precisa dela. Ative-a apenas em um computador em que mais ninguém faz login. |
+| <code dir="ltr">{commands.browserOff}</code> | Fecha a porta do navegador e todas as conexões feitas por ela. |
+| <code dir="ltr">{commands.browserStatus}</code> | Informa se a porta do navegador está aberta e em qual porta. |
+| <code dir="ltr">{commands.update}</code> | Apenas em servidores Linux. Instala a versão mais recente, como em [Atualizar](../install/linux/#atualizar). |
+| <code dir="ltr">{commands.updateCheck}</code> | Apenas em servidores Linux. Verifica se há uma versão mais nova, sem instalá-la. |
+| <code dir="ltr">{commands.updateRollback}</code> | Apenas em servidores Linux. Restaura a versão que estava instalada antes da última atualização e reinicia nela, como faz uma atualização. |
+| <code dir="ltr">{commands.version}</code> | Imprime a versão instalada. |
+
+Para ver a lista completa de comandos, execute <code dir="ltr">{commands.help}</code>; para as opções de um comando, execute <code dir="ltr">{commands.commandHelp}</code>. A lista também mostra comandos que o {productName} executa por conta própria e que você nunca executa manualmente.
+
+## Em um Mac ou em um PC com Windows
+
+O app executa o octoboardd por você, então alguns comandos se comportam de outra forma:
+
+- <strong><code dir="ltr">{commands.start}</code> e <code dir="ltr">{commands.stop}</code> em um Mac</strong> atuam sobre o app: <code dir="ltr">{commands.start}</code> o abre em segundo plano, sem janela, e <code dir="ltr">{commands.stop}</code> o encerra.
+- <strong><code dir="ltr">{commands.restart}</code> e <code dir="ltr">{commands.update}</code></strong> são recusados. O app reinicia o octoboardd e instala as versões novas por conta própria.
+- <strong><code dir="ltr">{commands.browserOn}</code> e <code dir="ltr">{commands.browserOff}</code></strong> mudam a mesma configuração que <strong>Permitir acesso pelo navegador</strong> em <strong>Ajustes › Acesso</strong>.
+- <strong><code dir="ltr">{commands.address}</code></strong> imprime um endereço apenas enquanto <strong>Permitir acesso pelo navegador</strong> (ou, em um Mac, <strong>Permitir acesso remoto</strong>) está ativado. As duas configurações vêm desativadas por padrão, então, até você ativar uma, o comando informa isso e não imprime endereço nenhum.

@@ -1,0 +1,49 @@
+---
+title: "บรรทัดคำสั่ง"
+description: "คำสั่งของ octoboardd บนเซิร์ฟเวอร์ Linux, Mac และพีซี Windows: เริ่ม หยุด และตรวจสอบ Octoboard แสดงที่อยู่ของเบราว์เซอร์ และเปิดหรือปิดพอร์ตเบราว์เซอร์"
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+
+octoboardd คือโปรแกรมที่รัน {productName} (แอปเรียกว่า “ดีมอน”) บนเซิร์ฟเวอร์ Linux ต้องติดตั้งและเริ่มเอง ส่วนบน Mac หรือพีซี Windows โปรแกรมนี้มาอยู่ในแอป ซึ่งจะเริ่มให้เมื่อเปิดแอปและหยุดให้เมื่อปิดแอป คำสั่งของทั้งสามแบบเหมือนกัน ยกเว้นความต่างด้านล่าง
+
+## รัน octoboardd
+
+- <strong>เซิร์ฟเวอร์ Linux:</strong> การติดตั้งจะวาง <code dir="ltr">octoboardd</code> ไว้ใน PATH หากเชลล์หาไม่เจอ ให้ดู [หากไม่พบ octoboardd](../install/linux/#หากไม่พบ-octoboardd)
+- <strong>macOS:</strong> ในแอป ให้เปิด <strong>การตั้งค่า › ทั่วไป</strong> แล้วเลือก <strong>ติดตั้ง</strong> ที่อยู่ข้าง <strong>เครื่องมือบรรทัดคำสั่ง</strong> หากจากนั้นระบบขอให้เพิ่มไดเรกทอรีลงใน PATH ให้ทำด้วย หลังจากนั้น Terminal จะหา <code dir="ltr">octoboardd</code> เจอจากชื่อ
+- <strong>Windows:</strong> ไม่มีอะไรต้องติดตั้ง ใน PowerShell ให้รันด้วยพาธเต็ม เช่น
+
+  <Code code={commands.windowsStatus} lang="powershell" />
+
+รันคำสั่งในฐานะผู้ใช้ที่รัน {productName} คำสั่งเหล่านี้ทำงานกับ octoboardd ของผู้ใช้คนนั้น
+
+## คำสั่ง
+
+| คำสั่ง | สิ่งที่ทำ |
+| --- | --- |
+| <code dir="ltr">{commands.start}</code> | เริ่ม octoboardd ในเบื้องหลัง และยังทำงานต่อหลังคำสั่งจบ |
+| <code dir="ltr">{commands.status}</code> | บอกว่า octoboardd กำลังทำงานอยู่หรือไม่ |
+| <code dir="ltr">{commands.stop}</code> | หยุด octoboardd ซึ่งจะขัดจังหวะทุกเซสชัน และดำเนินแต่ละเซสชันต่อได้เมื่อ octoboardd ทำงานอีกครั้ง หากมีงานที่กำลังทำอยู่ จะแสดงรายการงานนั้นและไม่หยุดอะไรเลย ส่วน <code dir="ltr">{commands.stopForce}</code> จะหยุดให้ไม่ว่ากรณีใด |
+| <code dir="ltr">{commands.restart}</code> | ใช้ได้เฉพาะบนเซิร์ฟเวอร์ Linux รีสตาร์ท octoboardd และคงทุกเซสชันไว้ให้ทำงานต่อ หากบางเซสชันจะถูกขัดจังหวะ จะแสดงรายการเซสชันเหล่านั้นและถามก่อน ที่อยู่ของเบราว์เซอร์ยังเหมือนเดิม |
+| <code dir="ltr">{commands.address}</code> | แสดงที่อยู่ของเบราว์เซอร์และคำสั่ง <code dir="ltr">ssh</code> ที่ใช้เข้าถึงที่อยู่นั้น |
+| <code dir="ltr">{tunnel.rotate}</code> | ออกคีย์ใหม่ให้ที่อยู่ของเบราว์เซอร์และแสดงที่อยู่ใหม่ ที่อยู่เดิมทุกที่อยู่จะใช้ไม่ได้อีก และทุกสิ่งที่เชื่อมต่อด้วยคีย์เดิมจะถูกตัดการเชื่อมต่อ |
+| <code dir="ltr">{commands.connection}</code> | แสดงรายละเอียดการเชื่อมต่อที่แอปบนเดสก์ท็อปในคอมพิวเตอร์เครื่องอื่นใช้ตั้งค่าตัวเอง เป็น QR code และเป็นข้อความหนึ่งบรรทัด |
+| <code dir="ltr">{commands.browserOn}</code> | เปิดพอร์ตเบราว์เซอร์บนคอมพิวเตอร์เครื่องนั้นเอง (<code dir="ltr">{commands.defaultPort}</code> หากไม่ได้ตั้งค่าเป็นอย่างอื่น) สำหรับเบราว์เซอร์บนคอมพิวเตอร์เครื่องนั้นหรือเครื่องมืออย่าง Tailscale การเชื่อมต่อ SSH ไปยังเซิร์ฟเวอร์ Linux ไม่ต้องใช้ เปิดเฉพาะบนคอมพิวเตอร์ที่ไม่มีคนอื่นลงชื่อเข้าใช้ |
+| <code dir="ltr">{commands.browserOff}</code> | ปิดพอร์ตเบราว์เซอร์และทุกการเชื่อมต่อที่ผ่านพอร์ตนั้น |
+| <code dir="ltr">{commands.browserStatus}</code> | บอกว่าพอร์ตเบราว์เซอร์เปิดอยู่หรือไม่ และเป็นพอร์ตใด |
+| <code dir="ltr">{commands.update}</code> | ใช้ได้เฉพาะบนเซิร์ฟเวอร์ Linux ติดตั้งเวอร์ชันล่าสุด ตามที่อธิบายใน [อัปเกรด](../install/linux/#อัปเกรด) |
+| <code dir="ltr">{commands.updateCheck}</code> | ใช้ได้เฉพาะบนเซิร์ฟเวอร์ Linux ตรวจสอบว่ามีเวอร์ชันใหม่กว่าออกแล้วหรือไม่ โดยไม่ติดตั้ง |
+| <code dir="ltr">{commands.updateRollback}</code> | ใช้ได้เฉพาะบนเซิร์ฟเวอร์ Linux คืนเวอร์ชันที่ติดตั้งไว้ก่อนการอัปเกรดครั้งล่าสุด และรีสตาร์ทเข้าสู่เวอร์ชันนั้น เหมือนการอัปเกรด |
+| <code dir="ltr">{commands.version}</code> | แสดงเวอร์ชันที่ติดตั้งอยู่ |
+
+หากต้องการดูรายการคำสั่งทั้งหมด ให้รัน <code dir="ltr">{commands.help}</code> หากต้องการดูตัวเลือกของคำสั่งเดียว ให้รัน <code dir="ltr">{commands.commandHelp}</code> รายการนี้ยังแสดงคำสั่งที่ {productName} รันเอง ซึ่งคุณไม่จำเป็นต้องรันด้วยตนเอง
+
+## บน Mac หรือพีซี Windows
+
+แอปรัน octoboardd ให้ จึงมีบางคำสั่งที่ทำงานต่างออกไป
+
+- <strong><code dir="ltr">{commands.start}</code> และ <code dir="ltr">{commands.stop}</code> บน Mac</strong> ทำงานกับแอป <code dir="ltr">{commands.start}</code> เปิดแอปในเบื้องหลังโดยไม่มีหน้าต่าง ส่วน <code dir="ltr">{commands.stop}</code> ปิดแอป
+- <strong><code dir="ltr">{commands.restart}</code> และ <code dir="ltr">{commands.update}</code></strong> จะถูกปฏิเสธ แอปรีสตาร์ท octoboardd และติดตั้งเวอร์ชันใหม่เอง
+- <strong><code dir="ltr">{commands.browserOn}</code> และ <code dir="ltr">{commands.browserOff}</code></strong> เปลี่ยนค่าเดียวกับ <strong>อนุญาตการเข้าถึงจากเบราว์เซอร์</strong> ใน <strong>การตั้งค่า › การเข้าถึง</strong>
+- <strong><code dir="ltr">{commands.address}</code></strong> แสดงที่อยู่เฉพาะเมื่อ <strong>อนุญาตการเข้าถึงจากเบราว์เซอร์</strong> (หรือบน Mac คือ <strong>อนุญาตการเข้าถึงระยะไกล</strong>) เปิดอยู่ ทั้งสองการตั้งค่าปิดอยู่ตามค่าเริ่มต้น ดังนั้นจนกว่าจะเปิดอย่างใดอย่างหนึ่ง คำสั่งนี้จะแจ้งเรื่องนี้และไม่แสดงที่อยู่

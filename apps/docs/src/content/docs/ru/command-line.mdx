@@ -1,0 +1,49 @@
+---
+title: "Командная строка"
+description: "Команды octoboardd на сервере Linux, на Mac и на компьютере с Windows: запустить, остановить и проверить Octoboard, вывести его адрес для браузера, открыть или закрыть его порт браузера."
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+
+octoboardd — программа, которая запускает {productName} (в приложении она называется «служба»). На сервере Linux вы устанавливаете и запускаете её сами. На Mac и на компьютере с Windows она входит в приложение: оно запускает её при открытии и останавливает при закрытии. Команды на всех трёх одинаковы, кроме различий ниже.
+
+## Запуск octoboardd
+
+- <strong>Сервер Linux:</strong> установка кладёт <code dir="ltr">octoboardd</code> в ваш PATH. Если оболочка не находит программу, см. [Если octoboardd не найден](../install/linux/#если-octoboardd-не-найден).
+- <strong>macOS:</strong> в приложении откройте <strong>Настройки › Основные</strong> и выберите <strong>Установить</strong> рядом с <strong>Инструмент командной строки</strong>. Если после этого будет предложено добавить каталог в PATH, сделайте и это. Теперь Терминал находит <code dir="ltr">octoboardd</code> по имени.
+- <strong>Windows:</strong> устанавливать ничего не нужно. В PowerShell запустите программу по полному пути, например:
+
+  <Code code={commands.windowsStatus} lang="powershell" />
+
+Выполняйте команды от имени пользователя, который запускает {productName}. Они действуют на octoboardd этого пользователя.
+
+## Команды
+
+| Команда | Что делает |
+| --- | --- |
+| <code dir="ltr">{commands.start}</code> | Запускает octoboardd в фоне. Он продолжает работать после завершения команды. |
+| <code dir="ltr">{commands.status}</code> | Сообщает, запущен ли octoboardd. |
+| <code dir="ltr">{commands.stop}</code> | Останавливает octoboardd, при этом прерываются все сеансы; каждый из них можно возобновить, когда octoboardd снова запустится. Если идёт работа, команда перечисляет её и ничего не останавливает; <code dir="ltr">{commands.stopForce}</code> всё равно остановит. |
+| <code dir="ltr">{commands.restart}</code> | Только на сервере Linux. Перезапускает octoboardd, все сеансы продолжают работать; если какие-то сеансы прервутся, команда перечисляет их и сначала спрашивает. Адрес для браузера остаётся прежним. |
+| <code dir="ltr">{commands.address}</code> | Выводит адрес для браузера и команду <code dir="ltr">ssh</code>, которая к нему ведёт. |
+| <code dir="ltr">{tunnel.rotate}</code> | Выдаёт адресу для браузера новый ключ и выводит новый адрес. Все прежние адреса перестают работать, а всё, что подключено со старым ключом, отключается. |
+| <code dir="ltr">{commands.connection}</code> | Выводит данные для подключения, по которым настраивается настольное приложение на другом компьютере, в виде QR-кода и одной строки текста. |
+| <code dir="ltr">{commands.browserOn}</code> | Открывает порт браузера на самом компьютере (<code dir="ltr">{commands.defaultPort}</code>, если вы не задали другой): для браузера на этом компьютере или такого инструмента, как Tailscale. Для подключения по SSH к серверу Linux он не нужен. Включайте его только на компьютере, на который больше никто не входит. |
+| <code dir="ltr">{commands.browserOff}</code> | Закрывает порт браузера и все подключения, сделанные через него. |
+| <code dir="ltr">{commands.browserStatus}</code> | Сообщает, открыт ли порт браузера и какой это порт. |
+| <code dir="ltr">{commands.update}</code> | Только на сервере Linux. Устанавливает самую новую версию, как описано в разделе [Обновление](../install/linux/#обновление). |
+| <code dir="ltr">{commands.updateCheck}</code> | Только на сервере Linux. Проверяет, вышла ли более новая версия, не устанавливая её. |
+| <code dir="ltr">{commands.updateRollback}</code> | Только на сервере Linux. Возвращает версию, которая была установлена до последнего обновления, и перезапускается в неё, как при обновлении. |
+| <code dir="ltr">{commands.version}</code> | Выводит установленную версию. |
+
+Полный список команд показывает <code dir="ltr">{commands.help}</code>; параметры одной команды показывает <code dir="ltr">{commands.commandHelp}</code>. В списке есть и команды, которые {productName} выполняет сам и которые вам никогда не нужно выполнять вручную.
+
+## На Mac и на компьютере с Windows
+
+Приложение запускает octoboardd за вас, поэтому некоторые команды ведут себя иначе:
+
+- <strong><code dir="ltr">{commands.start}</code> и <code dir="ltr">{commands.stop}</code> на Mac</strong> действуют на приложение: <code dir="ltr">{commands.start}</code> открывает его в фоне, без окна, а <code dir="ltr">{commands.stop}</code> закрывает.
+- <strong><code dir="ltr">{commands.restart}</code> и <code dir="ltr">{commands.update}</code></strong> отклоняются. Приложение само перезапускает octoboardd и устанавливает новые версии.
+- <strong><code dir="ltr">{commands.browserOn}</code> и <code dir="ltr">{commands.browserOff}</code></strong> меняют ту же настройку, что и <strong>Разрешить доступ из браузера</strong> в разделе <strong>Настройки › Доступ</strong>.
+- <strong><code dir="ltr">{commands.address}</code></strong> выводит адрес, только пока включено <strong>Разрешить доступ из браузера</strong> (а на Mac — <strong>Разрешить удалённый доступ</strong>). По умолчанию обе настройки выключены, поэтому, пока вы не включите одну из них, команда сообщает об этом и не выводит адрес.

@@ -1,0 +1,49 @@
+---
+title: "سطر الأوامر"
+description: "أوامر octoboardd على خادم Linux وجهاز Mac وكمبيوتر Windows: تشغيل Octoboard وإيقافه والتحقق منه، وطباعة عنوان المتصفح، وفتح منفذ المتصفح أو إغلاقه."
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+
+octoboardd هو البرنامج الذي يشغّل {productName} (يسمّيه التطبيق «الخدمة»). على خادم Linux تثبّته وتشغّله بنفسك. أما على جهاز Mac أو كمبيوتر Windows فيأتي داخل التطبيق، الذي يشغّله عند فتحه ويوقفه عند إغلاقه. أوامره هي نفسها في الأنظمة الثلاثة، باستثناء الفروق الواردة أدناه.
+
+## تشغيل octoboardd
+
+- <strong>خادم Linux:</strong> يضع التثبيت <code dir="ltr">octoboardd</code> في PATH. وإذا لم تجده الصدفة (shell) فراجع [إذا لم يُعثر على octoboardd](../install/linux/#إذا-لم-يُعثر-على-octoboardd).
+- <strong>macOS:</strong> في التطبيق، افتح <strong>الإعدادات › عام</strong> ثم اختر <strong>تثبيت</strong> بجانب <strong>أداة سطر الأوامر</strong>. وإذا طلب منك بعد ذلك إضافة مجلد إلى PATH فافعل ذلك أيضًا. عندئذٍ يجد Terminal البرنامج <code dir="ltr">octoboardd</code> بالاسم.
+- <strong>Windows:</strong> لا شيء يحتاج إلى تثبيت. في PowerShell شغّله بمساره الكامل، مثلًا:
+
+  <Code code={commands.windowsStatus} lang="powershell" />
+
+شغّل الأوامر بصفة المستخدم الذي يشغّل {productName}. وهي تعمل على octoboardd الخاص بهذا المستخدم.
+
+## الأوامر
+
+| الأمر | ما يفعله |
+| --- | --- |
+| <code dir="ltr">{commands.start}</code> | يشغّل octoboardd في الخلفية. يبقى قيد التشغيل بعد انتهاء الأمر. |
+| <code dir="ltr">{commands.status}</code> | يبيّن هل octoboardd قيد التشغيل. |
+| <code dir="ltr">{commands.stop}</code> | يوقف octoboardd، فتنقطع كل الجلسات؛ ويمكنك استئناف كل جلسة منها عندما يعمل octoboardd من جديد. وإذا كان هناك عمل جارٍ، فإنه يعرضه ولا يوقف شيئًا؛ أما <code dir="ltr">{commands.stopForce}</code> فيوقفه على أي حال. |
+| <code dir="ltr">{commands.restart}</code> | على خادم Linux فقط. يعيد تشغيل octoboardd ويُبقي كل الجلسات قيد التشغيل؛ وإن كانت هناك جلسات ستنقطع فإنه يعرضها ويسألك أولًا. يبقى عنوان المتصفح كما هو. |
+| <code dir="ltr">{commands.address}</code> | يطبع عنوان المتصفح وأمر <code dir="ltr">ssh</code> الذي يصل إليه. |
+| <code dir="ltr">{tunnel.rotate}</code> | يعطي عنوان المتصفح مفتاحًا جديدًا ويطبع العنوان الجديد. تتوقف كل العناوين السابقة عن العمل، ويُقطع كل ما كان متصلًا بالمفتاح القديم. |
+| <code dir="ltr">{commands.connection}</code> | يطبع بيانات الاتصال التي يستخدمها تطبيق سطح المكتب على كمبيوتر آخر لإعداد نفسه، على شكل رمز QR وفي سطر نصي واحد. |
+| <code dir="ltr">{commands.browserOn}</code> | يفتح منفذ المتصفح على الكمبيوتر نفسه (<code dir="ltr">{commands.defaultPort}</code> ما لم تضبط منفذًا آخر)، لمتصفح على هذا الكمبيوتر أو لأداة مثل Tailscale. اتصال SSH بخادم Linux لا يحتاج إليه. شغّله فقط على كمبيوتر لا يسجّل أحد غيرك الدخول إليه. |
+| <code dir="ltr">{commands.browserOff}</code> | يغلق منفذ المتصفح وكل اتصال أُجري عبره. |
+| <code dir="ltr">{commands.browserStatus}</code> | يبيّن هل منفذ المتصفح مفتوح، وعلى أي منفذ. |
+| <code dir="ltr">{commands.update}</code> | على خادم Linux فقط. يثبّت أحدث نسخة، كما في [الترقية](../install/linux/#الترقية). |
+| <code dir="ltr">{commands.updateCheck}</code> | على خادم Linux فقط. يتحقق هل صدرت نسخة أحدث، دون أن يثبّتها. |
+| <code dir="ltr">{commands.updateRollback}</code> | على خادم Linux فقط. يعيد النسخة التي كانت مثبّتة قبل آخر ترقية ويعيد التشغيل إليها، كما تفعل الترقية. |
+| <code dir="ltr">{commands.version}</code> | يطبع النسخة المثبّتة. |
+
+للاطلاع على القائمة الكاملة للأوامر، شغّل <code dir="ltr">{commands.help}</code>؛ ولعرض خيارات أمر واحد، شغّل <code dir="ltr">{commands.commandHelp}</code>. تعرض القائمة أيضًا أوامر يشغّلها {productName} بنفسه، ولا تشغّلها أنت يدويًا.
+
+## على جهاز Mac أو كمبيوتر Windows
+
+يشغّل التطبيق octoboardd نيابةً عنك، لذلك تتصرف بعض الأوامر بشكل مختلف:
+
+- <strong>الأمران <code dir="ltr">{commands.start}</code> و<code dir="ltr">{commands.stop}</code> على جهاز Mac</strong> يعملان على التطبيق: <code dir="ltr">{commands.start}</code> يفتحه في الخلفية دون نافذة، بينما <code dir="ltr">{commands.stop}</code> يغلقه.
+- <strong>الأمران <code dir="ltr">{commands.restart}</code> و<code dir="ltr">{commands.update}</code></strong> يُرفضان. يعيد التطبيق تشغيل octoboardd ويثبّت النسخ الجديدة بنفسه.
+- <strong>الأمران <code dir="ltr">{commands.browserOn}</code> و<code dir="ltr">{commands.browserOff}</code></strong> يغيّران الإعداد نفسه الذي يغيّره <strong>السماح بالوصول من المتصفح</strong> في <strong>الإعدادات › الوصول</strong>.
+- <strong>الأمر <code dir="ltr">{commands.address}</code></strong> يطبع عنوانًا فقط ما دام <strong>السماح بالوصول من المتصفح</strong> قيد التشغيل (أو <strong>السماح بالوصول عن بُعد</strong> على جهاز Mac). الإعدادان متوقفان افتراضيًا، فما لم تشغّل أحدهما يذكر الأمر ذلك ولا يطبع أي عنوان.

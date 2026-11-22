@@ -1,0 +1,49 @@
+---
+title: "कमांड लाइन"
+description: "Linux सर्वर, Mac और Windows PC पर octoboardd की कमांड: Octoboard को शुरू करना, बंद करना और जाँचना, उसका ब्राउज़र पता प्रिंट करना, और उसका ब्राउज़र पोर्ट खोलना या बंद करना।"
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+
+octoboardd वह प्रोग्राम है जो {productName} को चलाता है (ऐप इसे डेमन कहता है)। Linux सर्वर पर आप इसे खुद इंस्टॉल करके शुरू करते हैं। Mac या Windows PC पर यह ऐप के भीतर ही आता है; ऐप खुलने पर इसे शुरू करता है और बंद होने पर इसे रोक देता है। इसकी कमांड तीनों पर एक जैसी हैं, सिवाय नीचे बताए अंतरों के।
+
+## octoboardd चलाएँ
+
+- <strong>Linux सर्वर:</strong> इंस्टॉल <code dir="ltr">octoboardd</code> को आपके PATH में रख देता है। अगर शेल उसे न ढूँढ पाए, तो [अगर octoboardd नहीं मिल रहा](../install/linux/#अगर-octoboardd-नहीं-मिल-रहा) देखें।
+- <strong>macOS:</strong> ऐप में <strong>सेटिंग्स › सामान्य</strong> खोलें और <strong>कमांड-लाइन टूल</strong> के आगे <strong>इंस्टॉल करें</strong> चुनें। अगर इसके बाद यह PATH में कोई डायरेक्टरी जोड़ने को कहे, तो वह भी करें। फिर टर्मिनल <code dir="ltr">octoboardd</code> को नाम से ढूँढ लेता है।
+- <strong>Windows:</strong> कुछ इंस्टॉल करने की ज़रूरत नहीं है। PowerShell में उसे उसके पूरे पाथ से चलाएँ, जैसे:
+
+  <Code code={commands.windowsStatus} lang="powershell" />
+
+कमांड उसी यूज़र के रूप में चलाएँ जो {productName} चलाता है। ये उस यूज़र के octoboardd पर काम करती हैं।
+
+## कमांड
+
+| कमांड | यह क्या करती है |
+| --- | --- |
+| <code dir="ltr">{commands.start}</code> | octoboardd को बैकग्राउंड में शुरू करती है। कमांड के लौटने के बाद भी वह चलता रहता है। |
+| <code dir="ltr">{commands.status}</code> | बताती है कि octoboardd चल रहा है या नहीं। |
+| <code dir="ltr">{commands.stop}</code> | octoboardd को बंद करती है, जिससे हर सेशन में रुकावट आती है; octoboardd के दोबारा चलने पर आप हर सेशन फिर से शुरू कर सकते हैं। अगर कोई काम चल रहा है, तो यह उसे सूची में दिखाती है और कुछ बंद नहीं करती; <code dir="ltr">{commands.stopForce}</code> फिर भी बंद कर देती है। |
+| <code dir="ltr">{commands.restart}</code> | केवल Linux सर्वर पर। octoboardd को रीस्टार्ट करती है और हर सेशन को चालू रखती है; अगर कुछ सेशन में रुकावट आएगी, तो उन्हें सूची में दिखाकर पहले पूछती है। ब्राउज़र पता वही रहता है। |
+| <code dir="ltr">{commands.address}</code> | ब्राउज़र पता और उस तक पहुँचाने वाली <code dir="ltr">ssh</code> कमांड प्रिंट करती है। |
+| <code dir="ltr">{tunnel.rotate}</code> | ब्राउज़र पते को नई कुंजी देती है और नया पता प्रिंट करती है। पहले के सभी पते काम करना बंद कर देते हैं, और पुरानी कुंजी से जुड़ा हर कनेक्शन कट जाता है। |
+| <code dir="ltr">{commands.connection}</code> | दूसरे कंप्यूटर का डेस्कटॉप ऐप जिन कनेक्शन विवरणों से खुद को सेट अप करता है, उन्हें QR कोड के रूप में और टेक्स्ट की एक पंक्ति के रूप में प्रिंट करती है। |
+| <code dir="ltr">{commands.browserOn}</code> | इसी कंप्यूटर पर ब्राउज़र पोर्ट खोलती है (<code dir="ltr">{commands.defaultPort}</code>, जब तक आप कोई और पोर्ट तय न करें), इस कंप्यूटर के ब्राउज़र या Tailscale जैसे टूल के लिए। Linux सर्वर से SSH कनेक्शन को इसकी ज़रूरत नहीं होती। इसे केवल ऐसे कंप्यूटर पर चालू करें जिस पर कोई और साइन इन नहीं करता। |
+| <code dir="ltr">{commands.browserOff}</code> | ब्राउज़र पोर्ट और उसके ज़रिए बने हर कनेक्शन को बंद करती है। |
+| <code dir="ltr">{commands.browserStatus}</code> | बताती है कि ब्राउज़र पोर्ट खुला है या नहीं, और किस पोर्ट पर। |
+| <code dir="ltr">{commands.update}</code> | केवल Linux सर्वर पर। सबसे नया वर्शन इंस्टॉल करती है, जैसा [अपग्रेड करें](../install/linux/#अपग्रेड-करें) में बताया है। |
+| <code dir="ltr">{commands.updateCheck}</code> | केवल Linux सर्वर पर। जाँचती है कि नया वर्शन आया है या नहीं, उसे इंस्टॉल किए बिना। |
+| <code dir="ltr">{commands.updateRollback}</code> | केवल Linux सर्वर पर। पिछले अपग्रेड से पहले इंस्टॉल वर्शन वापस ले आती है और अपग्रेड की तरह उसी में रीस्टार्ट करती है। |
+| <code dir="ltr">{commands.version}</code> | इंस्टॉल किया हुआ वर्शन प्रिंट करती है। |
+
+कमांड की पूरी सूची देखने के लिए <code dir="ltr">{commands.help}</code> चलाएँ; किसी एक कमांड के विकल्प देखने के लिए <code dir="ltr">{commands.commandHelp}</code> चलाएँ। सूची में वे कमांड भी दिखती हैं जिन्हें {productName} खुद चलाता है और जिन्हें आपको कभी हाथ से नहीं चलाना पड़ता।
+
+## Mac या Windows PC पर
+
+ऐप आपके लिए octoboardd चलाता है, इसलिए कुछ कमांड अलग तरह से काम करती हैं:
+
+- <strong>Mac पर <code dir="ltr">{commands.start}</code> और <code dir="ltr">{commands.stop}</code></strong> ऐप पर काम करती हैं: <code dir="ltr">{commands.start}</code> उसे बैकग्राउंड में, बिना विंडो के खोलती है, और <code dir="ltr">{commands.stop}</code> उसे बंद कर देती है।
+- <strong><code dir="ltr">{commands.restart}</code> और <code dir="ltr">{commands.update}</code></strong> अस्वीकार कर दी जाती हैं। ऐप खुद octoboardd को रीस्टार्ट करता है और नए वर्शन इंस्टॉल करता है।
+- <strong><code dir="ltr">{commands.browserOn}</code> और <code dir="ltr">{commands.browserOff}</code></strong> वही सेटिंग बदलती हैं जो <strong>सेटिंग्स › एक्सेस</strong> में <strong>ब्राउज़र एक्सेस की अनुमति दें</strong> बदलता है।
+- <strong><code dir="ltr">{commands.address}</code></strong> पता तभी प्रिंट करती है जब <strong>ब्राउज़र एक्सेस की अनुमति दें</strong> (या Mac पर <strong>रिमोट एक्सेस की अनुमति दें</strong>) चालू हो। ये दोनों सेटिंग डिफ़ॉल्ट रूप से बंद रहती हैं, इसलिए जब तक आप कोई एक चालू न करें, कमांड यही बताती है और कोई पता प्रिंट नहीं करती।

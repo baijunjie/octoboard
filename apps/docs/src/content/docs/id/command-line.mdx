@@ -1,0 +1,49 @@
+---
+title: "Baris perintah"
+description: "Perintah octoboardd di server Linux, Mac, dan PC Windows: memulai, menghentikan, dan memeriksa Octoboard, mencetak alamat browser-nya, serta membuka atau menutup port browser-nya."
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+
+octoboardd adalah program yang menjalankan {productName} (aplikasi menyebutnya daemon). Di server Linux, Anda memasang dan memulainya sendiri. Di Mac atau PC Windows, program ini sudah ada di dalam aplikasi, yang memulainya saat dibuka dan menghentikannya saat ditutup. Perintahnya sama di ketiganya, kecuali perbedaan di bawah.
+
+## Menjalankan octoboardd
+
+- <strong>Server Linux:</strong> penginstalan menaruh <code dir="ltr">octoboardd</code> di PATH Anda. Jika shell tidak menemukannya, lihat [Jika octoboardd tidak ditemukan](../install/linux/#jika-octoboardd-tidak-ditemukan).
+- <strong>macOS:</strong> di aplikasi, buka <strong>Pengaturan › Umum</strong> dan pilih <strong>Pasang</strong> di samping <strong>Alat baris perintah</strong>. Jika setelah itu diminta menambahkan direktori ke PATH, lakukan itu juga. Kini, Terminal menemukan <code dir="ltr">octoboardd</code> berdasarkan namanya.
+- <strong>Windows:</strong> tidak ada yang perlu dipasang. Di PowerShell, jalankan dengan jalur lengkapnya, misalnya:
+
+  <Code code={commands.windowsStatus} lang="powershell" />
+
+Jalankan perintah sebagai pengguna yang menjalankan {productName}. Perintah ini bekerja pada octoboardd milik pengguna itu.
+
+## Perintah
+
+| Perintah | Fungsinya |
+| --- | --- |
+| <code dir="ltr">{commands.start}</code> | Memulai octoboardd di latar belakang. Program tetap berjalan setelah perintah selesai. |
+| <code dir="ltr">{commands.status}</code> | Menyatakan apakah octoboardd sedang berjalan. |
+| <code dir="ltr">{commands.stop}</code> | Menghentikan octoboardd, sehingga semua sesi terinterupsi; Anda bisa melanjutkan tiap sesi setelah octoboardd berjalan lagi. Jika ada pekerjaan yang sedang berjalan, perintah ini mencantumkannya dan tidak menghentikan apa pun; <code dir="ltr">{commands.stopForce}</code> tetap menghentikannya. |
+| <code dir="ltr">{commands.restart}</code> | Hanya untuk server Linux. Memulai ulang octoboardd dan menjaga semua sesi tetap berjalan; jika ada yang akan terganggu, perintah ini mencantumkannya dan bertanya lebih dulu. Alamat browser tetap sama. |
+| <code dir="ltr">{commands.address}</code> | Mencetak alamat browser dan perintah <code dir="ltr">ssh</code> yang menjangkaunya. |
+| <code dir="ltr">{tunnel.rotate}</code> | Memberi alamat browser kunci baru dan mencetak alamat barunya. Semua alamat sebelumnya berhenti berfungsi, dan semua yang terhubung dengan kunci lama diputus. |
+| <code dir="ltr">{commands.connection}</code> | Mencetak detail koneksi yang dipakai aplikasi desktop di komputer lain untuk menyiapkan dirinya, sebagai kode QR dan sebagai satu baris teks. |
+| <code dir="ltr">{commands.browserOn}</code> | Membuka port browser di komputer itu sendiri (<code dir="ltr">{commands.defaultPort}</code>, kecuali Anda menetapkan yang lain), untuk browser di komputer itu atau alat seperti Tailscale. Koneksi SSH ke server Linux tidak memerlukannya. Aktifkan hanya di komputer tempat tidak ada orang lain yang masuk. |
+| <code dir="ltr">{commands.browserOff}</code> | Menutup port browser dan semua koneksi yang dibuat melaluinya. |
+| <code dir="ltr">{commands.browserStatus}</code> | Menyatakan apakah port browser terbuka, dan di port berapa. |
+| <code dir="ltr">{commands.update}</code> | Hanya untuk server Linux. Memasang versi terbaru, seperti pada [Pembaruan](../install/linux/#pembaruan). |
+| <code dir="ltr">{commands.updateCheck}</code> | Hanya untuk server Linux. Memeriksa apakah ada versi yang lebih baru, tanpa memasangnya. |
+| <code dir="ltr">{commands.updateRollback}</code> | Hanya untuk server Linux. Mengembalikan versi yang terpasang sebelum pembaruan terakhir dan memulai ulang ke versi itu, seperti pada pembaruan. |
+| <code dir="ltr">{commands.version}</code> | Mencetak versi yang terpasang. |
+
+Untuk daftar lengkap perintah, jalankan <code dir="ltr">{commands.help}</code>; untuk opsi satu perintah, jalankan <code dir="ltr">{commands.commandHelp}</code>. Daftar itu juga menampilkan perintah yang dijalankan {productName} sendiri dan tidak pernah Anda jalankan secara manual.
+
+## Di Mac atau PC Windows
+
+Aplikasi menjalankan octoboardd untuk Anda, jadi beberapa perintah berperilaku berbeda:
+
+- <strong><code dir="ltr">{commands.start}</code> dan <code dir="ltr">{commands.stop}</code> di Mac</strong> bekerja pada aplikasi: <code dir="ltr">{commands.start}</code> membukanya di latar belakang, tanpa jendela, dan <code dir="ltr">{commands.stop}</code> menutupnya.
+- <strong><code dir="ltr">{commands.restart}</code> dan <code dir="ltr">{commands.update}</code></strong> ditolak. Aplikasi sendiri yang memulai ulang octoboardd dan memasang versi baru.
+- <strong><code dir="ltr">{commands.browserOn}</code> dan <code dir="ltr">{commands.browserOff}</code></strong> mengubah pengaturan yang sama dengan <strong>Izinkan akses browser</strong> di <strong>Pengaturan › Akses</strong>.
+- <strong><code dir="ltr">{commands.address}</code></strong> hanya mencetak alamat selama <strong>Izinkan akses browser</strong> (atau, di Mac, <strong>Izinkan akses jarak jauh</strong>) aktif. Kedua pengaturan itu nonaktif secara bawaan, jadi sebelum Anda mengaktifkan salah satunya, perintah ini menyatakannya dan tidak mencetak alamat.

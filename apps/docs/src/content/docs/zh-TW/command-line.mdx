@@ -1,0 +1,49 @@
+---
+title: "命令列"
+description: "Linux 伺服器、Mac 與 Windows 電腦上的 octoboardd 指令：啟動、停止和檢查 Octoboard，輸出它的瀏覽器位址，以及開啟或關閉它的瀏覽器連接埠。"
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { commands, productName, tunnel } from "../../../commands.ts";
+
+octoboardd 是執行 {productName} 的程式（應用程式裡稱它為「背景服務」）。在 Linux 伺服器上，需要你自己安裝並啟動它；在 Mac 或 Windows 電腦上，它內建於應用程式中，應用程式開啟時啟動它，結束時停止它。三種系統上的指令相同，只有下面幾處不同。
+
+## 執行 octoboardd
+
+- <strong>Linux 伺服器：</strong>安裝時已把 <code dir="ltr">octoboardd</code> 放進 PATH。如果 shell 找不到它，請看[找不到 octoboardd 時](../install/linux/#找不到-octoboardd-時)。
+- <strong>macOS：</strong>在應用程式中開啟<strong>設定 › 一般</strong>，點選<strong>命令列工具</strong>旁的<strong>安裝</strong>。如果它隨後要求你把某個目錄加入 PATH，也請照做。之後，「終端機」就能依名稱找到 <code dir="ltr">octoboardd</code>。
+- <strong>Windows：</strong>不需要安裝。在 PowerShell 中用完整路徑執行它，例如：
+
+  <Code code={commands.windowsStatus} lang="powershell" />
+
+請以執行 {productName} 的使用者身分執行這些指令。它們作用於該使用者的 octoboardd。
+
+## 指令
+
+| 指令 | 作用 |
+| --- | --- |
+| <code dir="ltr">{commands.start}</code> | 在背景啟動 octoboardd。指令結束後它仍會繼續執行。 |
+| <code dir="ltr">{commands.status}</code> | 顯示 octoboardd 是否正在執行。 |
+| <code dir="ltr">{commands.stop}</code> | 停止 octoboardd，同時中斷所有工作階段；octoboardd 再次執行後，可以恢復每個工作階段。如果有工作正在進行，它會列出這些工作且不停止任何東西；<code dir="ltr">{commands.stopForce}</code> 則無論如何都會停止。 |
+| <code dir="ltr">{commands.restart}</code> | 僅限 Linux 伺服器。重新啟動 octoboardd，所有工作階段維持執行；如果有工作階段會被中斷，它會先列出來再詢問。瀏覽器位址不變。 |
+| <code dir="ltr">{commands.address}</code> | 輸出瀏覽器位址，以及能連到該位址的 <code dir="ltr">ssh</code> 指令。 |
+| <code dir="ltr">{tunnel.rotate}</code> | 為瀏覽器位址換一組新金鑰，並輸出新位址。之前的所有位址都會失效，所有使用舊金鑰的連線也會中斷。 |
+| <code dir="ltr">{commands.connection}</code> | 以 QR Code 和一行文字的形式輸出另一台電腦上的桌面應用程式用來完成自身設定的連線資訊。 |
+| <code dir="ltr">{commands.browserOn}</code> | 在本機上開啟瀏覽器連接埠（除非另行設定，否則為 <code dir="ltr">{commands.defaultPort}</code>），供這台電腦上的瀏覽器或 Tailscale 之類的工具使用。SSH 連線到 Linux 伺服器不需要它。只在沒有其他人登入的電腦上開啟。 |
+| <code dir="ltr">{commands.browserOff}</code> | 關閉瀏覽器連接埠，並中斷所有經由它建立的連線。 |
+| <code dir="ltr">{commands.browserStatus}</code> | 顯示瀏覽器連接埠是否已開啟，以及連接埠號碼。 |
+| <code dir="ltr">{commands.update}</code> | 僅限 Linux 伺服器。安裝最新版本，如[升級](../install/linux/#升級)所述。 |
+| <code dir="ltr">{commands.updateCheck}</code> | 僅限 Linux 伺服器。檢查是否有更新的版本，但不安裝。 |
+| <code dir="ltr">{commands.updateRollback}</code> | 僅限 Linux 伺服器。還原到上一次升級之前安裝的版本，並像升級一樣重新啟動，換上此版本。 |
+| <code dir="ltr">{commands.version}</code> | 輸出已安裝的版本。 |
+
+想查看完整的指令清單，請執行 <code dir="ltr">{commands.help}</code>；想查看某個指令的選項，請執行 <code dir="ltr">{commands.commandHelp}</code>。清單中也包含 {productName} 自己執行的指令，你不需要手動執行。
+
+## 在 Mac 或 Windows 電腦上
+
+應用程式會替你執行 octoboardd，所以有幾個指令的行為不同：
+
+- <strong>Mac 上的 <code dir="ltr">{commands.start}</code> 和 <code dir="ltr">{commands.stop}</code></strong> 作用於應用程式：<code dir="ltr">{commands.start}</code> 會在背景開啟應用程式，不顯示視窗；<code dir="ltr">{commands.stop}</code> 則結束它。
+- <strong><code dir="ltr">{commands.restart}</code> 與 <code dir="ltr">{commands.update}</code></strong> 會被拒絕。應用程式會自行重新啟動 octoboardd，也會自行安裝新版本。
+- <strong><code dir="ltr">{commands.browserOn}</code> 和 <code dir="ltr">{commands.browserOff}</code></strong> 變更的設定與<strong>設定 › 存取</strong>中的<strong>允許瀏覽器存取</strong>相同。
+- <strong><code dir="ltr">{commands.address}</code></strong> 只有在<strong>允許瀏覽器存取</strong>開啟（在 Mac 上也可以是<strong>允許遠端存取</strong>）時才會輸出位址。這兩項設定預設都是關閉的，所以在你開啟其中一項之前，該指令只會說明這一點，不輸出位址。
