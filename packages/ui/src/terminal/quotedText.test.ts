@@ -50,6 +50,7 @@ describe("quoteLead", () => {
     ["a paste placeholder", "❯ [Pasted text #1 +3 lines]"],
     ["a digit", "› 42"],
     ["a letter of another script", "│ ❯ 你好"],
+    ["a wrapped row of only punctuation, touching the cursor", "...)"],
   ])("is a line break for %s left of the cursor", (_name, row) => {
     expect(quoteLead(screenOf([row], { cursorX: row.length, cursorY: 0 }))).toBe("\n");
   });
@@ -58,6 +59,10 @@ describe("quoteLead", () => {
     const row = "❯ typed after";
     expect(quoteLead(screenOf([row], { cursorX: 2, cursorY: 0 }))).toBe("");
     expect(quoteLead(screenOf([row], { cursorX: 4, cursorY: 0 }))).toBe("\n");
+  });
+
+  it("is nothing with the cursor at column 0, whatever the row holds", () => {
+    expect(quoteLead(screenOf(["❯ typed"], { cursorX: 0, cursorY: 0 }))).toBe("");
   });
 
   it("reads the cursor's row, below the scrolled-off rows by `baseY`, not the first row of the buffer", () => {

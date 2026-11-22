@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { acknowledgeAllAlerts } from "../test/alertQueue";
 import { errorAlertOf, raiseError } from "../components/alerts/raiseError";
+import { raiseQuoteRefused } from "../components/host/raiseQuoteRefused";
+import { t } from "../i18n/language";
 import { appConfig } from "../appConfig";
 import { CodedError } from "../errors/codedError";
 import { ActionableError } from "../errors/actionableError";
@@ -241,6 +243,16 @@ it("retains explicit clipboard recovery metadata through the queue", () => {
   const error = new ActionableError("Copy failed", "clipboardRetry");
   act(() => errorAlerts.report({ message: error.message, error }));
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Allow clipboard access");
+});
+
+it.each([
+  ["input", "Quote again once the session is ready for input."],
+  ["program", "Quote again once the agent is back at its prompt."],
+] as const)("shows the remedy of a Quote refused for the %s", (block, remedy) => {
+  onTestFinished(acknowledgeAllAlerts);
+  raiseQuoteRefused(block, t);
+  mount();
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(remedy);
 });
 
 it("words the copy remedy of a text surface without the terminal's shortcuts", () => {

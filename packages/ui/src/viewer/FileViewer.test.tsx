@@ -1258,7 +1258,7 @@ it("closes the viewer once Quote in the content menu has quoted the selection, t
   const quoteTarget: QuoteTarget = {
     blocked: () => undefined,
     quote: (text) => calls.push(`quote ${text}`),
-    revealInput: () => calls.push("revealInput"),
+    revealInput: (close) => { calls.push("revealInput"); close(); },
   };
   act(() => {
     root.render(
@@ -1278,7 +1278,7 @@ it("closes the viewer once Quote in the content menu has quoted the selection, t
   await rightClick(region);
   expect(menuEntries()).toEqual(["Copy", "Quote", "Select all"]);
   await chooseItem("Quote");
-  expect(calls).toEqual([`quote ${selected}`, "close", "revealInput"]);
+  expect(calls).toEqual([`quote ${selected}`, "revealInput", "close"]);
 });
 
 it("shows a copy failure from the content menu as an error with a copy title", async () => {

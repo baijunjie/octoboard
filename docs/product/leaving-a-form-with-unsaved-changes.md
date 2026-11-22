@@ -11,7 +11,7 @@ The question is one destructive confirmation (see "Destructive confirmations" in
 **Discard**.
 
 - **Keep editing**, Escape and the close button leave everything as it was: the form keeps its changes, and focus goes
-  back where it was.
+  back where it was, or, where that has gone (the file viewer a quote closed, say), to the page.
 - **Discard** drops the changes, as the form's own Revert or Cancel would, and then carries the action out.
 
 A form holds changes while it would save something other than what is saved; a new item's form, once anything in it was
@@ -27,6 +27,9 @@ changed. **While a save of the form is under way, an action that would leave it 
   on the Scheduled tasks page or the menu bar icon's menu;
 - **Back** and **Forward**, by their buttons and their shortcuts: a move declined is not made, and nothing is recorded
   (see "Moving back and forward" in `docs/product/navigation-history.md`);
+- Quote in the file viewer or the Find in files preview, which leaves the page to show the session terminal it writes
+  into (see "Selecting and copying" in `docs/product/file-viewer.md`); kept, the page stays and nothing else is undone:
+  the quote is written and the dialog it came from is closed;
 - choosing the notification of a failed scheduled run (see "The notification of a failed run" in
   `docs/product/scheduled-tasks.md`), and the menus' Remote Devices item (see "Where remote daemons are reached from" in
   `docs/product/remote-daemons.md`);

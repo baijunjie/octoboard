@@ -44,7 +44,8 @@ let modalLossTimer: ReturnType<typeof setTimeout> | undefined;
 export const MODAL_CLOSE_SETTLE_MS = 400;
 
 /** Registers where focus goes when a modal that came up unasked (an error alert, a pending question), Settings with no
- * dialog under it, or a dialog's failure form (see `Dialog`'s `failure`) closes and leaves it on `<body>` (see
+ * dialog under it, a dialog's failure form (see `Dialog`'s `failure`), or the unsaved-changes question (answered Keep
+ * editing or Discard) closes and leaves it on `<body>` (see
  * `focusAfterModalCloses`); the window passes `focusAfterLoss` with its terminal. Returns what unregisters it. */
 export function setFocusAfterModalLoss(fallback: () => void): () => void {
   modalLossFallback = fallback;
@@ -57,7 +58,9 @@ export function setFocusAfterModalLoss(fallback: () => void): () => void {
 
 /** Called by each kind of modal that comes up unasked as its own last one closes (the last error alert acknowledged,
  * the last pending question gone), by Settings as it closes with no dialog under it, and by a dialog's failure form as
- * it is acknowledged, whose subject going has often taken the control that opened the dialog with it. React Aria gives
+ * it is acknowledged, whose subject going has often taken the control that opened the dialog with it, and by the
+ * unsaved-changes question as it is answered, Keep editing included: the surface it was raised over may have closed
+ * with it (a quote from the file viewer over a page). React Aria gives
  * focus back to whatever had it when the modal opened, but there may be none: a control gone with a dialog that closed
  * before the modal came, or no focus at all, as when the modal came in the same task as a press without a pointer that
  * opened a dialog, whose own opening focus react-aria then dropped. Focus left on `<body>` once the modal's exit

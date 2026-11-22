@@ -33,7 +33,9 @@ stays reachable, and above 768 px the rail stays in the row beside the floating 
   beside the card to dismiss an explicitly opened overlay.
 - **Dismissal**: `Escape` closes it without reaching the running agent; in a text field holding text it clears the field
   first. A press on the dimmed area dismisses an explicitly opened overlay. Revealing the right pane closes it, and
-  opening the sidebar hides a floating right pane: only one floating side is revealed at a time.
+  opening the sidebar hides a floating right pane: only one floating side is revealed at a time. Opening an archive view
+  with View all closes an explicitly opened overlay, which would cover the view (see
+  `docs/product/archive-view.md`); a hover-revealed card is left to its usual dismissal.
 - **Selection**: at 768 px and below, selecting a session in the sidebar or its rail closes the card so the session's
   terminal shows. Above 768 px, selecting a session leaves the floating sidebar up until its normal dismissal.
 - **Focus**: dismissing the sidebar while it holds keyboard focus hands focus to the terminal. A dialog opened from an

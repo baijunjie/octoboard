@@ -39,7 +39,7 @@ form one group, in that order, with no divider between them.
   neither, with no reason given; while the selected session cannot accept input, with no reason given, as for Paste;
   and while the program on screen has bracketed paste mode off, saying under its name that the program is not
   accepting pasted lines. Only the session terminal offers it: a shell terminal's editing menu has no Quote, since a
-  shell would run the quoted lines.
+  shell would run the quoted lines. It closes and uncovers nothing.
 - **Select all** selects the terminal's contents, including its available scrollback, for copying.
 
 The clipboard is read only when Paste is chosen, so merely opening the menu does not request clipboard access. If
@@ -50,7 +50,7 @@ allows, shows an error alert.
 ## What Quote writes
 
 Quote, in the editing menu above and in the file viewer's text menu (see "Selecting and copying" in
-`docs/product/file-viewer.md`), writes text into the input of a session's agent as a Markdown block quote for the user
+`docs/product/file-viewer.md`), which the Find in files preview shares, writes text into the input of a session's agent as a Markdown block quote for the user
 to go on typing under. It is never sent: nothing reaches the agent as a message until the user sends the input.
 
 - Every line of the text is prefixed with `> `; a blank line inside the text becomes `>` alone.
@@ -58,16 +58,22 @@ to go on typing under. It is never sent: nothing reaches the agent as a message 
   line. A text of nothing but blank lines writes nothing.
 - One line break follows the last quoted line, so what the user types next starts on a line of its own under the quote.
 - A quote added to an input that already holds text starts on a new line. The terminal cannot read the agent's input,
-  so it judges by its own screen: when the cursor's row shows a letter or a digit left of the cursor, one line break
-  goes before the quote, inside the same paste. An empty input, showing only its prompt mark left of the cursor, gets
-  none, and neither does the empty line under an earlier quote. Only the cursor's own row is read, so an input wrapped
-  onto a last row with no letter or digit left of the cursor gets no line break.
+  so it judges by its own screen: one line break goes before the quote, inside the same paste, when the text left of
+  the cursor on its row holds a letter or a digit, or when the cursor sits directly after a character that is not
+  blank — so an input wrapped onto a last row of punctuation alone gets one too. An empty input, whose prompt mark is
+  followed by a space, gets none, and neither does the empty line under an earlier quote, where the cursor is at the
+  start of the row.
 - The quote is written as one paste. It is taken only while the program on the session's screen has bracketed paste
   mode on, which makes it read a paste as one piece: without it the quote's line breaks would arrive as Enter presses
   and send it line by line. With the mode off, Quote is disabled, saying under its name that the program is not
   accepting pasted lines.
 - A quote the session can no longer take by the time it is written — the session stopped accepting input, or the
-  program turned bracketed paste mode off, while the menu was open — is not written, and nothing says so.
+  program turned bracketed paste mode off, after the menu opened — is not written, and an error alert says the
+  selection could not be quoted and that nothing was written to the input box, with the remedy to quote again once
+  the cause has passed (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). From the session
+  terminal's own editing menu the alert speaks of that session not taking input; from the file viewer or the Find in
+  files preview, of no session being ready for input. A file viewer or Find in files dialog stays open then, with its
+  selection kept.
 
 ## Selecting with the mouse
 

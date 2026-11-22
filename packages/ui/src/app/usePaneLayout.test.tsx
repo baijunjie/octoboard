@@ -88,6 +88,36 @@ it("does not clean up when archive navigation hides a narrow panel", () => {
   expect(test.request).not.toHaveBeenCalled();
 });
 
+const MAXIMIZED = { open: ["terminal"], shares: {}, maximized: "terminal" } as const;
+
+it("closes the panel floating over the terminal for the archive view, and leaves the stored maximization alone", () => {
+  const test = mount(false, { floats: true });
+  act(() => test.layout().setPanelStack("project", MAXIMIZED));
+  expect(test.layout().floating.kind).toBe("terminal");
+  act(() => test.layout().revealArchive());
+  expect(test.layout().floating.kind).toBeUndefined();
+  expect(test.layout().panelStacks.project).toEqual(MAXIMIZED);
+});
+
+it("sends away a group that floats in on hover for the archive view, and leaves the stored maximization alone", () => {
+  const test = mount(false, { pinned: false });
+  act(() => test.layout().setPanelStack("project", MAXIMIZED));
+  act(() => test.layout().stableHoverPanelToggle("terminal", true));
+  expect(test.layout().panes.asidePeek.active).toBe(true);
+  act(() => test.layout().revealArchive());
+  expect(test.layout().panes.asidePeek.active).toBe(false);
+  expect(test.layout().panelStacks.project).toEqual(MAXIMIZED);
+});
+
+it("restores a docked maximized panel for the archive view, keeping it open", () => {
+  const test = mount(false);
+  act(() => test.layout().setPanelStack("project", MAXIMIZED));
+  expect(test.layout().covered).toBe(true);
+  act(() => test.layout().revealArchive());
+  expect(test.layout().covered).toBe(false);
+  expect(test.layout().panelStacks.project).toEqual({ open: ["terminal"], shares: {} });
+});
+
 it("does not clean up when hover reveal ends", () => {
   const test = mount(true, { narrow: true });
   act(() => test.layout().stableHoverPanelToggle("terminal", true));

@@ -11,7 +11,7 @@ import { displayWirePath } from "../format/wirePath";
 import { Button } from "../primitives";
 
 /** The window's quote target as the app provides it, without a session behind it: a quote goes nowhere here. */
-const quoteTargetOf = (blocked: QuoteBlock | undefined): QuoteTarget => ({ blocked: () => blocked, quote: () => {}, revealInput: () => {} });
+const quoteTargetOf = (blocked: QuoteBlock | undefined): QuoteTarget => ({ blocked: () => blocked, quote: () => {}, revealInput: (closeSurface) => closeSurface() });
 const QUOTE_AVAILABLE = quoteTargetOf(undefined);
 const QUOTE_UNAVAILABLE = quoteTargetOf("input");
 

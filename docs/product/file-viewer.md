@@ -290,16 +290,17 @@ button. Its items form one group:
   session shown is archived, cannot accept input, or is held by an account switch (see "While a session is switching"
   in `docs/product/switching-session-accounts.md`); and, saying that the program is not accepting pasted lines, while
   the program on that session's screen has bracketed paste mode off. Chosen, it writes the quote once the menu has
-  closed, then closes the viewer, uncovers the session terminal where a panel covers it — a maximized panel is
-  restored, a panel floating over the terminal is closed (see "Maximizing a panel" and "At 768 px and below: one panel
-  floats over the terminal" in `docs/product/right-pane-panels.md`) — and puts keyboard focus on the terminal, so the
-  user can go on typing under the quote. Focus goes where focus handed to the terminal goes: after a tap to a control
-  that takes no text (see "Focus after a tap" in `docs/product/moving-focus-between-regions.md`), and while the Remote
-  devices page, the Scheduled tasks page or an open archive view covers the terminal, to that page or view, which is
-  not closed. With another dialog open once the viewer has gone, focus is left where it is. If the session can no
-  longer take the quote by the time the menu has closed, nothing is written, the viewer stays open and the selection
-  is kept. Nothing announces either outcome. In the Find in files preview, Quote behaves otherwise (see "The preview"
-  in `docs/product/finding-in-files.md`).
+  closed and, in one step, closes the viewer and uncovers the session terminal: what of the right pane covers the
+  terminal's area is cleared as the layout stands (see "Clearing what covers the terminal's area" in
+  `docs/product/right-pane-panels.md`), an open archive view is closed, and the Remote devices or Scheduled tasks page
+  is left. Leaving a page whose form holds changes not saved asks first (see "The question" in
+  `docs/product/leaving-a-form-with-unsaved-changes.md`): **Keep editing** keeps the page, and keyboard focus goes to
+  it; **Discard** leaves it. Keyboard focus then goes to the terminal's input, so the user can go on typing under the
+  quote; after a tap it goes to a control that takes no text instead, as any focus handed to the terminal does (see
+  "Focus after a tap" in `docs/product/moving-focus-between-regions.md`). With another dialog still open once the
+  viewer has gone, focus is left where it is. Nothing announces the quote. If the session can no longer take the quote
+  by the time the menu has closed, nothing is written and an error alert says so (see "What Quote writes" in
+  `docs/product/terminal-copy-paste-and-selection.md`); the viewer stays open, with the selection kept.
 - **Select all** does what ⌘A does with keyboard focus on that region (see above): the code alone, or the whole
   document.
 

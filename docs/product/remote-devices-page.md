@@ -25,8 +25,9 @@ The page is opened by:
 
 **The page is left by going to another place of the window**: choosing a console's avatar on the rail, or anything that
 changes the current console or the selected session — a session chosen from a notification, the menu bar icon's menu
-or the waiting count — Back and Forward to a place without the page, or the Scheduled tasks button, whose page then
-shows instead (see `docs/product/scheduled-tasks-page.md`). `Escape` does not leave it. What the window
+or the waiting count — Back and Forward to a place without the page, the Scheduled tasks button, whose page then
+shows instead (see `docs/product/scheduled-tasks-page.md`), or Quote in the file viewer or the Find in files preview,
+which shows the session terminal it writes into (see "Selecting and copying" in `docs/product/file-viewer.md`). `Escape` does not leave it. What the window
 showed before is kept as it was while the page shows — the terminals go on with their state, the sidebar keeps its
 console's folds and filters — and is there again once the page is left.
 

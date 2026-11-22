@@ -7,9 +7,10 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 import type { ClipboardCapability } from "../platform";
 import { QuoteTargetContext, type QuoteBlock, type QuoteTarget } from "../components/host/quoteTarget";
 import { PlatformProvider } from "../platform/react";
+import { acknowledgeAllAlerts } from "../test/alertQueue";
 import { BROWSER_HOST } from "../test/hosts";
 import { FIND_REGION } from "./find/findDom";
-import { ViewerCloseContext } from "./viewerClose";
+import { SurfaceCloseContext } from "./surfaceClose";
 import { ViewerEditMenu } from "./ViewerEditMenu";
 import { chooseItem, closeMenu, menuEntries, menuItem, recordSelections, rightClick } from "./viewerTestSupport";
 
@@ -29,7 +30,7 @@ const regionRef = createRef<HTMLDivElement>();
 function render(props: { source?: string } = {}) {
   act(() => root.render(
     <QuoteTargetContext.Provider value={quoteTarget}>
-      <ViewerCloseContext.Provider value={closeViewer}>
+      <SurfaceCloseContext.Provider value={closeViewer}>
         <PlatformProvider value={{ kind, host: BROWSER_HOST, clipboard }}>
           <div ref={regionRef} tabIndex={0} {...FIND_REGION}>
             <p id="first">first</p>
@@ -38,7 +39,7 @@ function render(props: { source?: string } = {}) {
           </div>
           <ViewerEditMenu region={regionRef} selectAll={selectAll} source={props.source} />
         </PlatformProvider>
-      </ViewerCloseContext.Provider>
+      </SurfaceCloseContext.Provider>
     </QuoteTargetContext.Provider>,
   ));
 }
@@ -431,10 +432,16 @@ it("drops a Select All still waiting for the close when the menu is opened again
   expect(set).toEqual(["first"]);
 });
 
+/** What a Quote refused at the moment it would be written says, by what blocks the target. */
+const REFUSALS = [
+  ["input", "No session is ready for input now, so nothing was written to the input box."],
+  ["program", "The program is not accepting pasted lines now, so nothing was written to the input box."],
+] as const;
+
 describe("Quote", () => {
   let blocked: ReturnType<typeof vi.fn<() => QuoteBlock | undefined>>;
   let quote: ReturnType<typeof vi.fn<(text: string) => void>>;
-  let revealInput: ReturnType<typeof vi.fn<() => void>>;
+  let revealInput: ReturnType<typeof vi.fn<(close: () => void) => void>>;
   beforeEach(() => {
     blocked = vi.fn(() => undefined);
     quote = vi.fn();
@@ -535,7 +542,7 @@ describe("Quote", () => {
       quote.mockImplementation((text) => logged(`quote ${text}`)());
       closeViewerMock = vi.fn(logged("close"));
       closeViewer = closeViewerMock;
-      revealInput.mockImplementation(logged("revealInput"));
+      revealInput.mockImplementation((close) => { logged("revealInput")(); close(); });
       render();
     });
 
@@ -543,17 +550,29 @@ describe("Quote", () => {
       select("second");
       await open();
       await chooseItem("Quote");
-      expect(calls).toEqual(["quote second", "close", "revealInput"]);
+      expect(calls).toEqual(["quote second", "revealInput", "close"]);
     });
 
-    it("writes nothing and closes nothing when the target is blocked by the time the menu has closed, and puts the selection back", async () => {
+    it("hands the viewer's own close to the target to run with the uncover, rather than closing it itself", async () => {
+      revealInput.mockImplementation(() => {});
+      select("first");
+      await open();
+      await chooseItem("Quote");
+      expect(revealInput).toHaveBeenCalledExactlyOnceWith(closeViewerMock);
+      expect(closeViewerMock).not.toHaveBeenCalled();
+    });
+
+    it.each(REFUSALS)("writes nothing, closes nothing and puts the selection back, telling why, when the target is blocked by the %s by the time the menu has closed", async (block, message) => {
+      onTestFinished(acknowledgeAllAlerts);
       select("first");
       const set = recordSelections();
       await open();
-      blocked.mockReturnValue("program");
+      blocked.mockReturnValue(block);
       await chooseItem("Quote");
       expect(calls).toEqual([]);
       expect(set).toEqual(["first"]);
+      expect(errorAlerts.getSnapshot()).toHaveLength(1);
+      expect(errorAlerts.getSnapshot()[0]).toMatchObject({ title: "Could not quote the selection", message });
     });
 
     it("drops a Quote still waiting for the close when the menu is opened again first", async () => {
@@ -578,5 +597,19 @@ describe("Quote", () => {
     await chooseItem("Quote");
     expect(quote).toHaveBeenCalledExactlyOnceWith("first");
     expect(revealInput).not.toHaveBeenCalled();
+  });
+
+  it.each(REFUSALS)("writes nothing and puts the selection back, telling why, where no dialog holds the surface and the target is blocked by the %s when the item is chosen", async (block, message) => {
+    onTestFinished(acknowledgeAllAlerts);
+    select("first");
+    const set = recordSelections();
+    await open();
+    blocked.mockReturnValue(block);
+    await chooseItem("Quote");
+    expect(quote).not.toHaveBeenCalled();
+    expect(revealInput).not.toHaveBeenCalled();
+    expect(set).toEqual(["first"]);
+    expect(errorAlerts.getSnapshot()).toHaveLength(1);
+    expect(errorAlerts.getSnapshot()[0]).toMatchObject({ title: "Could not quote the selection", message });
   });
 });

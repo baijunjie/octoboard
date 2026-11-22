@@ -7,6 +7,7 @@ import type { ClipboardCapability } from "../platform";
 import type { TerminalController } from "./TerminalController";
 import { TerminalEditMenu } from "./TerminalEditMenu";
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { acknowledgeAllAlerts } from "../test/alertQueue";
 import { BROWSER_HOST } from "../test/hosts";
 import { testDaemon } from "../test/testDaemon";
 import { TestHost } from "../test/TestHost";
@@ -375,6 +376,20 @@ describe("Quote", () => {
     expect(item("QuoteProgram not accepting pasted lines").getAttribute("aria-disabled")).toBe("true");
     await choose("QuoteProgram not accepting pasted lines");
     expect(controller.quote).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["input", "This session is not taking input now, so nothing was written to the input box."],
+    ["program", "The program is not accepting pasted lines now, so nothing was written to the input box."],
+  ] as const)("writes nothing, telling why, where the %s blocks it by the time the item is chosen", async (block, message) => {
+    onTestFinished(acknowledgeAllAlerts);
+    await open();
+    controller.quoteBlock.mockReturnValue(block);
+    await choose("Quote");
+    expect(controller.quoteBlock).toHaveBeenLastCalledWith("s-1");
+    expect(controller.quote).not.toHaveBeenCalled();
+    expect(errorAlerts.getSnapshot()).toHaveLength(1);
+    expect(errorAlerts.getSnapshot()[0]).toMatchObject({ title: "Could not quote the selection", message });
   });
 
   it("is offered what the program last copied while the terminal has nothing selected", async () => {

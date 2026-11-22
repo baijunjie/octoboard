@@ -632,6 +632,12 @@ For example:
     copy shortcut;
   - **the terminal's Paste**: allow clipboard access if prompted, then paste again or use the terminal's keyboard paste
     shortcut.
+- A Quote refused as it was about to be written, though it was offered when its menu opened (see "What Quote writes"
+  in `docs/product/terminal-copy-paste-and-selection.md`), is titled "Could not quote the selection", and its body says
+  nothing was written to the input box, and why. The cause and its remedy:
+  - **the session takes no input now** (from the session terminal's menu, this session; from the file viewer or the
+    Find in files preview, no session ready for input): quote again once the session is ready for input;
+  - **the program is not accepting pasted lines now**: quote again once the agent is back at its prompt.
 - A failure of Git — Git could not read something (`git_failed`), or a clone, push or pull failed — asks the user to
   open the project's terminal from its action menu, resolve the Git error, including remote access or an unfinished Git
   operation, then retry. A branch switch that failed is local, so its remedy is the same without remote access: it

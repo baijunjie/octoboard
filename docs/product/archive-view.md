@@ -31,8 +31,12 @@ first, in place of the relative wording; in a submenu they are part of the item'
 no known archive time shows no time, with no creation-time fallback. The agent icon carries no tooltip in a
 submenu. Focus mode's preview rows are described in "What both views show" in `docs/product/focus-mode.md`.
 
-- It **covers the terminal's area only**: the sidebar and the right pane stay as they are.
-  The terminal goes on running beneath it and is not resized.
+- It **covers the terminal's area only**: of the right pane only what covers the terminal's area is cleared, so the
+  view shows (see "Clearing what covers the terminal's area" in `docs/product/right-pane-panels.md`). A docked sidebar
+  stays as it is. A sidebar opened over the terminal by a press — at 768 px and below, or where the sidebar cannot dock
+  on a device whose primary input cannot hover (see "When the sidebar cannot dock" in
+  `docs/product/sidebar-drawer.md`) — is closed when View all opens the view, since it would cover it; a sidebar card
+  revealed by hover is left to its usual dismissal, and arriving at the view by Back or Forward closes no sidebar. The terminal goes on running beneath it and is not resized.
 - Its header says how many archived sessions there are, over the title "Archived sessions" (for console sessions,
   "Archived console sessions"; for sessions under a console session, "Archived bound sessions"), with **Delete all**
   while there is at least one, and a **Close** button. Which project, console session or console it is for is shown in

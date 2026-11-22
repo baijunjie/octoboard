@@ -21,7 +21,7 @@ import { closeIdleShellTerminals, startShellTerminal } from "../terminal/shell/s
  * peek, the right pane's stack of its owner's panels, docked, folded or floating over the terminal,
  * and the rail, which comes in with the drawer at tablet width and below. It hands back what the layout, the
  * toggles, the F6 cycle and the panes' widths read, and the handlers the top bar and the swipes use;
- * `revealArchive` clears what covers the agent terminal's area, for the archive view and for a quote made from the file viewer.
+ * `revealArchive` clears what covers the agent terminal's area in the layout as it is, for the archive view and for a quote.
  */
 export function usePaneLayout({
   asideOwner,
@@ -223,12 +223,21 @@ export function usePaneLayout({
     if (railAway && document.activeElement?.closest("[data-region=rail]")) focusTerminal();
   }, [railAway]);
 
-  // The archive view is in the agent terminal's area, which a maximized panel covers: restoring
-  // it is how the user sees what was asked for, whether opened or arrived at through the history.
+  // The archive view, and a quote's input, are in the agent terminal's area: what covers it, in the layout as it is, is
+  // cleared, and nothing else. At tablet width and below that is the panel floating over it, and the remembered stacks
+  // stay as they are (a maximization is used again when the pane docks). Above it, a group that floats in on hover is
+  // sent away, and the remembered maximization is left (it returns on docking); only a docked, maximized panel is
+  // restored.
   const revealArchive = () => {
+    if (asideFloats) {
+      floating.close();
+      return;
+    }
+    if (asideOverlay) {
+      panes.asidePeek.hide();
+      return;
+    }
     if (ownerKind && storedStack && maximizedKind(storedStack, ownerOrder) !== undefined) setPanelStack(ownerKind, restoreStack(storedStack), { persist: false });
-    // So does a panel floating over that area.
-    floating.close();
   };
   const stableToggleSidebar = useStableHandler(panes.toggleSidebar);
   const stableTogglePanel = useStableHandler(togglePanel);

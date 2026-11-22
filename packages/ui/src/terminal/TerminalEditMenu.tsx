@@ -5,6 +5,7 @@ import { ActionMenu } from "../components/menus/ActionMenu";
 import type { ActionMenuEntry } from "../components/menus/menuEntries";
 import { copyText } from "../components/host/copyText";
 import type { QuoteBlock } from "../components/host/quoteTarget";
+import { raiseQuoteRefused } from "../components/host/raiseQuoteRefused";
 import { useLatest, useStableHandler } from "../components/hooks/useLatest";
 import { ActionableError } from "../errors/actionableError";
 import { useT } from "../i18n/react";
@@ -107,7 +108,14 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId, q
             // A session that takes no input says why on the terminal itself, as for Paste; a program that would send
             // the quote line by line shows nothing of it.
             reason: selection && quoteBlock === "program" ? { state: t("common.quoteProgramBlocked") } : undefined,
-            onClick: () => controllerRef.current?.quote(selection, sessionId),
+            onClick: () => {
+              const controller = controllerRef.current;
+              if (!controller) return;
+              // Offered when the menu opened: the session may have stopped taking a quote since.
+              const block = controller.quoteBlock(sessionId);
+              if (block !== undefined) raiseQuoteRefused(block, t, { inTerminal: true });
+              else controller.quote(selection, sessionId);
+            },
           }]
           : []),
         { label: t("terminal.selectAll"), icon: TextSelect, onClick: () => controllerRef.current?.selectAll() },

@@ -31,6 +31,19 @@ vi.mock("./statusItem/statusItemIcons", () => ({ withIcons: async (draft: object
 vi.mock("./project-browser/LazyProjectBrowser", () => ({ LazyProjectBrowser: () => null }));
 // The agent terminal's input stands in for xterm's.
 vi.mock("./terminal/TerminalController", () => import("./terminalControllerTestSupport"));
+// The quote target's own hook, with the `uncoverTerminal` the window hands it kept: what a quote from the file viewer runs
+// (inside a `flushSync`, with the viewer closing in the same commit) is run here by itself.
+const quoting = vi.hoisted(() => ({ uncover: () => {} }));
+vi.mock("./app/useTerminalQuoteTarget", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./app/useTerminalQuoteTarget")>();
+  return {
+    ...actual,
+    useTerminalQuoteTarget: (...args: Parameters<typeof actual.useTerminalQuoteTarget>) => {
+      quoting.uncover = args[2];
+      return actual.useTerminalQuoteTarget(...args);
+    },
+  };
+});
 
 const main = consoleOf("c-main", "Main");
 const second = consoleOf("c-second", "Second");
@@ -206,6 +219,18 @@ it("shows one page at a time: opening the Remote devices page leaves this one, a
   await showPage();
   expect(page()).not.toBeNull();
   expect(document.querySelector("[data-region=devices]")).toBeNull();
+});
+
+it.each(["tasks", "devices"] as const)("leaves the %s page where a quote uncovers the terminal, and the terminal takes the focus once the page is gone", async (shown) => {
+  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  await mountWindow(undefined, DESKTOP);
+  if (shown === "tasks") await showPage();
+  else await pressElement(document.querySelector<HTMLElement>("[data-region=rail] button[aria-label^='Remote devices']"));
+  const pageRegion = () => document.querySelector(`[data-region=${shown}]`);
+  expect(pageRegion()).not.toBeNull();
+  act(() => quoting.uncover());
+  expect(pageRegion()).toBeNull();
+  expect(regionOfFocus()).toBe("terminal");
 });
 
 it("has no button while the daemon has not been read from, where the rail holds only Remote devices", async () => {

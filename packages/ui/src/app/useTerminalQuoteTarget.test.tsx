@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, createRef, type RefObject } from "react";
+import { act, createRef, useState, type RefObject } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
@@ -110,7 +110,7 @@ describe("revealInput", () => {
   it("uncovers the terminal at once, once, before any frame", async () => {
     const { target, uncoverTerminal } = await mountFocusing();
     dialog();
-    target.revealInput();
+    target.revealInput(() => {});
     expect(uncoverTerminal).toHaveBeenCalledOnce();
     frames(FEW_FRAMES_MS);
     expect(uncoverTerminal).toHaveBeenCalledOnce();
@@ -121,23 +121,64 @@ describe("revealInput", () => {
     const second = vi.fn();
     await render(1, second);
     expect(new Set(targets).size).toBe(1);
-    target.revealInput();
+    target.revealInput(() => {});
     expect(second).toHaveBeenCalledOnce();
     expect(first).not.toHaveBeenCalled();
   });
 
-  it("focuses the terminal on a frame after it is asked, not at once", async () => {
+  it("focuses the terminal at once, once the surface is closed, where no dialog is left", async () => {
     const { target, focusTerminal } = await mountFocusing();
-    target.revealInput();
-    expect(focusTerminal).not.toHaveBeenCalled();
+    target.revealInput(() => {});
+    expect(focusTerminal).toHaveBeenCalledOnce();
     frames();
     expect(focusTerminal).toHaveBeenCalledOnce();
+  });
+
+  it("clears the covers and closes the surface in one commit, and focuses the terminal right after it, before the call returns", async () => {
+    framesAsTimers();
+    fakeTimersKeepingFrames();
+    const renders: string[] = [];
+    const atFocus: string[] = [];
+    const focusTerminal = vi.fn(() => atFocus.push(`${document.querySelector("[role=dialog]") ? "dialog" : "no dialog"}, ${renders.at(-1)}`));
+    let closeSurface = () => {};
+    let target!: QuoteTarget;
+    function Host() {
+      const [uncovered, setUncovered] = useState(false);
+      const [surfaceOpen, setSurfaceOpen] = useState(true);
+      closeSurface = () => setSurfaceOpen(false);
+      target = useTerminalQuoteTarget(createRef<TerminalPaneHandle>(), focusTerminal, () => setUncovered(true));
+      renders.push(`uncovered ${uncovered}, open ${surfaceOpen}`);
+      return surfaceOpen ? <div role="dialog" aria-modal="true" /> : null;
+    }
+    const root = createRoot(document.body.appendChild(document.createElement("div")));
+    onTestFinished(() => act(() => root.unmount()));
+    await act(async () => root.render(<Host />));
+    const before = renders.length;
+    let focusedInsideCall = 0;
+    act(() => {
+      target.revealInput(() => closeSurface());
+      focusedInsideCall = focusTerminal.mock.calls.length;
+    });
+    expect(focusedInsideCall).toBe(1);
+    expect(renders.slice(before)).toEqual(["uncovered true, open false"]);
+    expect(atFocus).toEqual(["no dialog, uncovered true, open false"]);
+    frames();
+    expect(focusTerminal).toHaveBeenCalledOnce();
+  });
+
+  it("does not focus at once where another modal dialog is left after the surface has closed", async () => {
+    const { target, focusTerminal } = await mountFocusing();
+    dialog();
+    const surface = dialog();
+    target.revealInput(() => surface.remove());
+    frames();
+    expect(focusTerminal).not.toHaveBeenCalled();
   });
 
   it("waits for a modal dialog to leave the document, though it is gone from view, and focuses once", async () => {
     const { target, focusTerminal } = await mountFocusing();
     const closing = dialog({ "aria-modal": "true" });
-    target.revealInput();
+    target.revealInput(() => {});
     frames(FEW_FRAMES_MS);
     expect(focusTerminal).not.toHaveBeenCalled();
     closing.remove();
@@ -148,7 +189,7 @@ describe("revealInput", () => {
   it("does not wait for a dialog that is not modal", async () => {
     const { target, focusTerminal } = await mountFocusing();
     dialog({ "aria-modal": "false" });
-    target.revealInput();
+    target.revealInput(() => {});
     frames();
     expect(focusTerminal).toHaveBeenCalledOnce();
   });
@@ -156,9 +197,9 @@ describe("revealInput", () => {
   it("drops a pending focus when asked again, so the terminal is focused once", async () => {
     const { target, focusTerminal } = await mountFocusing();
     const closing = dialog();
-    target.revealInput();
+    target.revealInput(() => {});
     frames(FEW_FRAMES_MS);
-    target.revealInput();
+    target.revealInput(() => {});
     closing.remove();
     frames();
     expect(focusTerminal).toHaveBeenCalledOnce();
@@ -168,7 +209,7 @@ describe("revealInput", () => {
     const { target, focusTerminal } = await mountFocusing();
     dialog();
     const closing = dialog();
-    target.revealInput();
+    target.revealInput(() => {});
     closing.remove();
     frames();
     expect(focusTerminal).not.toHaveBeenCalled();
@@ -180,7 +221,7 @@ describe("revealInput", () => {
     const behind = document.body.appendChild(document.createElement("div"));
     behind.setAttribute("inert", "");
     behind.appendChild(document.createElement("div")).setAttribute("role", "dialog");
-    target.revealInput();
+    target.revealInput(() => {});
     behind.remove();
     frames(FEW_FRAMES_MS);
     closing.remove();
@@ -196,7 +237,7 @@ describe("revealInput", () => {
   ])("%s", async (_name, elapsedMs, focused) => {
     const { target, focusTerminal } = await mountFocusing();
     const stuck = dialog();
-    target.revealInput();
+    target.revealInput(() => {});
     frames(elapsedMs);
     expect(focusTerminal).not.toHaveBeenCalled();
     stuck.remove();

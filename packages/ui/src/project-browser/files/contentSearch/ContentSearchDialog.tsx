@@ -24,6 +24,7 @@ import { isImeKey } from "../../../input/imeKey";
 import { Input, SearchField, Spinner, TextField } from "../../../primitives";
 import type { ContentMatch } from "../../../protocol";
 import { FindOptionToggles } from "../../../viewer/find/FindBar";
+import { SurfaceCloseContext } from "../../../viewer/surfaceClose";
 import { IncludeIgnoredToggle } from "../../IncludeIgnoredToggle";
 import { ContentSearchPreview } from "./ContentSearchPreview";
 import { ContentSearchResults } from "./ContentSearchResults";
@@ -272,7 +273,7 @@ export function ContentSearchDialog({ project, projectName, directory, query, op
               />
             )}
             // The selected result's file below the list; a narrow window has room for the list alone.
-            preview={fullScreen ? null : <ContentSearchPreview project={project} selected={selected} />}
+            preview={fullScreen ? null : <SurfaceCloseContext value={onClose}><ContentSearchPreview project={project} selected={selected} /></SurfaceCloseContext>}
           />
         ) : found?.state === "searching" ? (
           <LoadingState label={t("contentSearch.searching")} />

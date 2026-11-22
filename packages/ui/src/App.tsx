@@ -100,6 +100,7 @@ import { useConsoleSwitch } from "./app/useConsoleSwitch";
 import { DRAWER_CONTROLS, useDialogRouting } from "./app/useDialogRouting";
 import { useFocusMode } from "./app/useFocusMode";
 import { useLinkedFile } from "./app/useLinkedFile";
+import { uncoverTerminal } from "./app/uncoverTerminal";
 import { useTerminalQuoteTarget } from "./app/useTerminalQuoteTarget";
 import { usePaneLayout } from "./app/usePaneLayout";
 import { usePaneSwipe } from "./app/usePaneSwipe";
@@ -270,14 +271,15 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     focusTerminal,
     sidebarWithoutConsole: pageShown,
   });
-  // A run's session chosen on the page (`openRunSession`) is given the focus once the page is gone: `focusTerminal` would
-  // otherwise find it still mounted.
+  // A run's session chosen on the page (`openRunSession`), and the terminal a quote brings back (`uncoverTerminal`, once
+  // its leave of the page has run), are given the focus once the page is gone: `focusTerminal` would otherwise find it
+  // still mounted.
   const terminalFocusPending = useRef(false);
   useLayoutEffect(() => {
-    if (tasksShown || !terminalFocusPending.current) return;
+    if (pageShown || !terminalFocusPending.current) return;
     terminalFocusPending.current = false;
     focusTerminal();
-  }, [tasksShown]);
+  }, [pageShown]);
   const chooseTask = useStableHandler((id: string) => {
     tasks.select(id);
     if (panes.sidebarOpen) panes.closeSidebar();
@@ -315,7 +317,9 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     stableOpenArchive,
   } = useArchiveView({ consoles, projects, revealArchive, sidebarOpen: panes.sidebarOpen, closeSidebar: panes.closeSidebar, handOffToTerminal });
 
-  const quoteTarget = useTerminalQuoteTarget(terminalRef, focusTerminal, revealArchive);
+  // The archive is closed with `setArchiveScopeByUser`, not `closeArchive`, which is itself a `flushSync`: this runs inside one.
+  const quoteTarget = useTerminalQuoteTarget(terminalRef, focusTerminal, () =>
+    uncoverTerminal({ uncoverPanels: revealArchive, archiveOpen, closeArchive: () => setArchiveScopeByUser(undefined), pageShown, leavePage, pageLeft: () => { terminalFocusPending.current = true; } }));
 
   useFirstConsoleHandoff(!offline && noConsoles, dialogRequest?.kind === "new-console");
 

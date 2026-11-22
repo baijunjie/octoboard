@@ -56,7 +56,12 @@ export function useUnsavedChangesGuard(): {
       destructive
       // Discarding only gives up what is on screen, and the leave reports its own failure.
       errorTitle={t("unsavedChanges.failedTitle")}
-      onCancel={() => guard.answer(false)}
+      // Keep editing: the question may have come up as the surface focus would return to was closing (a quote from the
+      // file viewer over a page), so focus left on `<body>` goes to the window's fallback, as for Discard.
+      onCancel={() => {
+        guard.answer(false);
+        focusAfterModalCloses();
+      }}
       onConfirm={async () => discardAndLeave(guard)}
     />
   ) : undefined;

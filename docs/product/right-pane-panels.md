@@ -261,10 +261,9 @@ panels are open. Above it the panes dock or float as a group according to their 
 - **Opening or closing it never resizes the terminal**, and the terminal has no minimum width here, so the row never
   scrolls sideways.
 - **It closes** on Close panel in its header, on its toggle, on a press on the dimmed strip or in the card's 4 px gap,
-  on a touch swipe (see `docs/product/touch-swipes.md`), when Quote in the file viewer writes into the session terminal
-  under it (see "Selecting and copying" in `docs/product/file-viewer.md`), and on `Escape`, which does not reach the
-  running agent. In a
-  field holding text `Escape` only clears the field first, and inside a shell terminal of the Terminal panel it goes to
+  on a touch swipe (see `docs/product/touch-swipes.md`), when what covers the terminal's area is cleared (see "Clearing
+  what covers the terminal's area" below), and on `Escape`, which does not reach the running agent. In a field holding
+  text `Escape` only clears the field first, and inside a shell terminal of the Terminal panel it goes to
   the shell and leaves the panel open.
 - **While it is shown the agent terminal under it cannot be used**, with the pointer or the keyboard, and is not an `F6`
   stop (see "Moving focus between regions with F6" in `docs/product/moving-focus-between-regions.md`). Opening a panel
@@ -276,8 +275,7 @@ panels are open. Above it the panes dock or float as a group according to their 
 - **The floating sidebar and a panel floating over the terminal are never on screen together.** Opening the sidebar
   overlay closes the floating panel, for every kind of owner, and no panel floats while the sidebar overlay is open.
   Selecting a session in the sidebar overlay closes the sidebar overlay, showing the session's terminal with no panel
-  over it. Opening a panel closes the sidebar overlay. Opening an archive view closes the floating panel too, so the
-  view it would cover shows (see "The archive view" in `docs/product/archive-view.md`).
+  over it. Opening a panel closes the sidebar overlay.
 - **The stacks are left as they are.** Nothing done at 768 px and below opens, closes, resizes or restores a panel in
   the remembered stacks (see "What is remembered" below). Widening the window to more than 768 px shows the stack
   exactly as it was; a remembered maximization is used again when the pane docks. Narrowing the window to 768 px or
@@ -365,11 +363,8 @@ connections. `Escape` never restores it. The panel is also restored:
 - when it is closed, from its header or its toggle, after which keyboard focus that was in it goes to the agent
   terminal;
 - when the right pane passes to a different kind of owner (project to console session or the reverse), or to no owner;
-- when an archive view is opened — View all in a project's "View archive" submenu, say (see "The archive view" in
-  `docs/product/archive-view.md`) — or arrived at by Back or Forward, so that the view it would cover shows. Going Back
-  or Forward anywhere else does not by itself restore it;
-- when Quote in the file viewer writes into the session terminal it covers (see "Selecting and copying" in
-  `docs/product/file-viewer.md`).
+- when what covers the terminal's area is cleared, for an archive view or a quote (see "Clearing what covers the
+  terminal's area" below). Going Back or Forward to a place without an archive view does not by itself restore it.
 
 Maximization stays in effect between owners of the same kind: a maximized Terminal panel shows the new project's tabs,
 and a maximized Report panel shows the newly selected session's pages while its Report panel is available and open. A
@@ -377,6 +372,23 @@ Terminal panel also stays maximized when its last tab is closed, showing its emp
 `docs/product/terminal-panel.md`).
 
 Which panel is maximized is not remembered: a reload shows the panels docked.
+
+## Clearing what covers the terminal's area
+
+Two things clear what of the right pane covers the agent terminal's area, so that what is asked for there shows:
+
+- an archive view opened — View all in a project's "View archive" submenu, say — or arrived at by Back or Forward (see
+  "The archive view" in `docs/product/archive-view.md`);
+- Quote in the file viewer or the Find in files preview, which writes into the session terminal's input (see
+  "Selecting and copying" in `docs/product/file-viewer.md`).
+
+What is cleared depends on the layout as it stands, and nothing else changes:
+
+- **docked**: a maximized panel is restored (see "Maximizing a panel" above);
+- **a right group floating above 768 px**: a group floated in on hover is sent away; a remembered maximization is left
+  as it is and returns on docking (see "Floating a panel in" above);
+- **at 768 px and below**: the panel floating over the terminal is closed, and the remembered stacks are left as they
+  are (see "At 768 px and below: one panel floats over the terminal" above).
 
 ## A project session's Report panel
 

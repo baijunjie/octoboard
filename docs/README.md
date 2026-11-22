@@ -189,7 +189,7 @@ Where to start, by question:
 - [Focus mode](product/focus-mode.md) — the sidebar replacement showing one project's or console session's view.
 - [The welcome screen](product/welcome-screen.md) — what the window shows with no console.
 - [Right pane panels](product/right-pane-panels.md) — the stack of panels in the right pane: cards, floating,
-  resizing and maximizing.
+  resizing and maximizing, and what clears a panel covering the terminal's area.
 - [The archive view](product/archive-view.md) — the full archive of a project, console session or console.
 - [Navigation history](product/navigation-history.md) — the Back and Forward buttons and what counts as a place.
 - [Moving focus between regions](product/moving-focus-between-regions.md) — F6 navigation between the window's

@@ -14,7 +14,7 @@ export type ErrorRecovery =
   | ProviderRemedy
   | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "installGit" | "installGitNoRetry" | "shell"
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
-  | "configuration" | "exportSelection" | "image" | "avatarSize" | "avatarImage" | "clipboardRetry" | "clipboardTerminalCopy" | "clipboardCopy" | "clipboardPaste" | "fileRead" | "fileWrite" | "gitFailure" | "gitSwitchFailure" | "gitRestoreFailure" | "gitHistory" | "noUpstream" | "mergeConflict" | "branch"
+  | "configuration" | "exportSelection" | "image" | "avatarSize" | "avatarImage" | "clipboardRetry" | "clipboardTerminalCopy" | "clipboardCopy" | "clipboardPaste" | "quoteInput" | "quoteProgram" | "fileRead" | "fileWrite" | "gitFailure" | "gitSwitchFailure" | "gitRestoreFailure" | "gitHistory" | "noUpstream" | "mergeConflict" | "branch"
   | "refresh" | "refreshMessages" | "scope" | "limit" | "openExternal" | "openTerminal" | "openFileManager" | "openDefaultApplication" | "issueAddress"
   | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "changeModelSetting" | "modelChange" | "switchRelaunch" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "stopProcessWait" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "submitRetry" | "unresumable" | "resetCredit" | "resetCreditLogin" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "accountDisabled" | "accountNotSignedIn"

@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { act, useEffect, useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { fakeTimers, runOutTimers } from "../../test/clock";
 import { buttons, click } from "../../test/dom";
 import { mountHost } from "../../test/mountHost";
+import { MODAL_CLOSE_SETTLE_MS, setFocusAfterModalLoss } from "../focus/modalFocus";
 import { framesAsTimers, settleFrames, withModality } from "./dialogTestSupport";
 import { useLeaveGuard, UnsavedChangesProvider, useUnsavedChanges, useUnsavedChangesGuard } from "./UnsavedChanges";
 
@@ -120,6 +121,23 @@ describe("the question", () => {
     expect(leave).not.toHaveBeenCalled();
     await askToLeave();
     expect(document.querySelector(ASKING)).not.toBeNull();
+  });
+
+  it("hands focus left on <body> to the window's fallback once the question has closed, after Keep editing", async () => {
+    const fallback = vi.fn();
+    onTestFinished(setFocusAfterModalLoss(fallback));
+    mount();
+    // Pressed without focus on the control, so the question has no control to return it to.
+    await click(leaveButton());
+    runOutTimers();
+    expect(document.querySelector(ASKING)).not.toBeNull();
+    await answer("Keep editing");
+    expect(fallback).not.toHaveBeenCalled();
+    act(() => void vi.advanceTimersByTime(MODAL_CLOSE_SETTLE_MS - 1));
+    expect(fallback).not.toHaveBeenCalled();
+    act(() => void vi.advanceTimersByTime(1));
+    expect(document.activeElement).toBe(document.body);
+    expect(fallback).toHaveBeenCalledOnce();
   });
 
   it("gives up the changes on Discard, with the dialog gone before the leave runs", async () => {

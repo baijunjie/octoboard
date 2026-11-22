@@ -27,7 +27,7 @@ The page is opened by:
 **The page is left by going to another place of the window**, as the Remote devices page is (see "Opening and leaving
 the page" in `docs/product/remote-devices-page.md`): a console's avatar on the rail, the current console's included,
 anything that changes the current console or the selected session, Back and Forward to a place without the page, a
-run's session chosen on the page, or the Remote devices button. One of the two pages shows at a time. `Escape` does not
+run's session chosen on the page, the Remote devices button, or Quote in the file viewer or the Find in files preview. One of the two pages shows at a time. `Escape` does not
 leave it. What the window showed before is kept as it was while the page shows, and is there again once it is left. The
 page goes away, whatever its form holds, when the daemon stops being usable — it turns out to be of another version, or
 refuses the window's key.

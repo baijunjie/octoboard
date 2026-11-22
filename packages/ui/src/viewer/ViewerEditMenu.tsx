@@ -4,12 +4,13 @@ import React, { useContext, useRef, useState } from "react";
 import { raiseError } from "../components/alerts/raiseError";
 import { copyText } from "../components/host/copyText";
 import { useQuoteTarget, type QuoteBlock } from "../components/host/quoteTarget";
+import { raiseQuoteRefused } from "../components/host/raiseQuoteRefused";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { ActionableError } from "../errors/actionableError";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { isWholeDocumentSelected } from "./selectAll";
-import { ViewerCloseContext } from "./viewerClose";
+import { SurfaceCloseContext } from "./surfaceClose";
 import { readSelection, restoreSelection, type FoundSelection } from "./textSelection";
 
 /** Where a browser tab keeps its own menu: a link and an image, which that menu opens and saves. */
@@ -28,10 +29,10 @@ const NATIVE_MENU_TARGET = "a[href], img";
  * when the menu closes without a Select All. A Select All is carried out once the menu has closed, not when it is
  * chosen: WebKit drops a selection made while the surface behind the menu is still inert, as focus returns to it.
  *
- * Where the surface is in the file viewer's dialog (`ViewerCloseContext`), Quote closes the viewer once it has written the
- * quote, so the input shows, and the input takes focus instead of the viewer's opener (`QuoteTarget.revealInput`). The
- * viewer closes once the menu has closed, as Select All acts: the dialog going while the menu still returns focus to it
- * would fight that return.
+ * Where the surface is in a dialog that provides `SurfaceCloseContext` (the file viewer, and Find in files, whose preview
+ * holds one), Quote closes that dialog once it has written the quote, so the input shows, and the input takes focus
+ * instead of the dialog's opener (`QuoteTarget.revealInput`). The dialog closes once the menu has closed, as Select All
+ * acts: the dialog going while the menu still returns focus to it would fight that return.
  */
 export function ViewerEditMenu({ region, selectAll, source }: {
   region: React.RefObject<HTMLElement | null>;
@@ -44,7 +45,7 @@ export function ViewerEditMenu({ region, selectAll, source }: {
   // that only `readSelection` reads.
   const [selection, setSelection] = useState("");
   const quoteTarget = useQuoteTarget();
-  const closeViewer = useContext(ViewerCloseContext);
+  const closeSurface = useContext(SurfaceCloseContext);
   const [quoteBlock, setQuoteBlock] = useState<QuoteBlock | undefined>("input");
   // The selection as the menu found it, with the text it offers to copy, until the menu has gone.
   const kept = useRef<FoundSelection | null>(null);
@@ -70,7 +71,13 @@ export function ViewerEditMenu({ region, selectAll, source }: {
     label: t("common.quote"), icon: TextQuote, disabled: quoteBlock !== undefined,
     reason: quoteBlock && { state: t(quoteBlock === "program" ? "common.quoteProgramBlocked" : "viewer.quoteUnavailable") },
     onClick: () => {
-      if (closeViewer) quoting.current = selection;
+      if (closeSurface) {
+        quoting.current = selection;
+        return;
+      }
+      // The item was offered when the menu opened: the session may have stopped taking a quote since.
+      const block = quoteTarget ? quoteTarget.blocked() : "input";
+      if (block !== undefined) raiseQuoteRefused(block, t);
       else quoteTarget?.quote(selection);
     },
   };
@@ -123,12 +130,16 @@ export function ViewerEditMenu({ region, selectAll, source }: {
         control.current = null;
         const quoted = quoting.current;
         quoting.current = null;
-        // Blocked since the menu opened: nothing is written and the viewer stays, as for no action at all.
-        if (quoted !== null && quoteTarget && quoteTarget.blocked() === undefined) {
-          quoteTarget.quote(quoted);
-          closeViewer?.();
-          quoteTarget.revealInput();
-          return;
+        if (quoted !== null) {
+          const block = quoteTarget ? quoteTarget.blocked() : "input";
+          if (block === undefined && quoteTarget && closeSurface) {
+            quoteTarget.quote(quoted);
+            quoteTarget.revealInput(closeSurface);
+            return;
+          }
+          // Blocked since the menu opened: nothing is written and the dialog stays, with the selection as for no action
+          // at all, and the refusal is told.
+          if (block !== undefined) raiseQuoteRefused(block, t);
         }
         if (selectingAll.current) {
           selectingAll.current = false;

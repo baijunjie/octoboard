@@ -9,21 +9,37 @@ import { fakeTimers } from "../../../test/clock";
 import { daemonError } from "../../../test/daemonError";
 import { type } from "../../../test/dom";
 import { ThemeProvider } from "../../../preferences/theme";
+import { PlatformProvider } from "../../../platform/react";
+import { BROWSER_HOST } from "../../../test/hosts";
 import { DaemonProvider } from "../../../store";
 import { SEARCH_DEBOUNCE_MS } from "../useFileSearch";
+import { QuoteTargetContext, type QuoteTarget } from "../../../components/host/quoteTarget";
+import { chooseItem, rightClick } from "../../../viewer/viewerTestSupport";
 import { ContentSearchDialog } from "./ContentSearchDialog";
 import { PREVIEW_DELAY_MS } from "./ContentSearchPreview";
 import { contentMatch, contentSearchDaemon, modalPage } from "./contentSearchTestSupport";
 import { DEFAULT_CONTENT_SEARCH_OPTIONS, type ContentSearchOptions } from "./useContentSearch";
 
-// The code surface's drawing has its own suite; here it records what it is asked to show.
+// The code surface's drawing has its own suite; here it records what it is asked to show, with the real text menu
+// over its text, as the real surface has.
 const drawn = vi.hoisted(() => [] as { name: string; text: string; line?: number; marks?: readonly LineRange[] }[]);
-vi.mock("../../../viewer/code/CodeSurface", () => ({
-  CodeSurface: (props: { name: string; text: string; line?: number; marks?: readonly LineRange[] }) => {
-    drawn.push(props);
-    return <pre data-code-surface="">{props.text}</pre>;
-  },
-}));
+vi.mock("../../../viewer/code/CodeSurface", async () => {
+  const { useRef } = await import("react");
+  const { ViewerEditMenu } = await import("../../../viewer/ViewerEditMenu");
+  const { FIND_REGION } = await import("../../../viewer/find/findDom");
+  return {
+    CodeSurface: (props: { name: string; text: string; line?: number; marks?: readonly LineRange[] }) => {
+      drawn.push(props);
+      const region = useRef<HTMLPreElement>(null);
+      return (
+        <>
+          <pre ref={region} tabIndex={0} {...FIND_REGION} data-code-surface="">{props.text}</pre>
+          <ViewerEditMenu region={region} selectAll={() => true} />
+        </>
+      );
+    },
+  };
+});
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -37,7 +53,12 @@ const file = (path: string, text: string): Event => ({
   file: { size: text.length, kind: "text", text, data: null, media_type: null },
 });
 
-async function mount({ narrow = false, read }: { narrow?: boolean; read?: (path: string) => Promise<Event> } = {}) {
+async function mount({ narrow = false, read, quoteTarget, onClose = () => {} }: {
+  narrow?: boolean;
+  read?: (path: string) => Promise<Event>;
+  quoteTarget?: QuoteTarget;
+  onClose?: () => void;
+} = {}) {
   modalPage({ narrow });
   drawn.length = 0;
   const reads: string[] = [];
@@ -53,9 +74,9 @@ async function mount({ narrow = false, read }: { narrow?: boolean; read?: (path:
   function Host() {
     const [query, setQuery] = useState("");
     const [options, setOptions] = useState<ContentSearchOptions>(DEFAULT_CONTENT_SEARCH_OPTIONS);
-    return <ContentSearchDialog project="p" projectName="demo" query={query} options={options} onQueryChange={setQuery} onOptionsChange={setOptions} onOpen={() => {}} onClose={() => {}} />;
+    return <ContentSearchDialog project="p" projectName="demo" query={query} options={options} onQueryChange={setQuery} onOptionsChange={setOptions} onOpen={() => {}} onClose={onClose} />;
   }
-  act(() => root.render(<ThemeProvider><DaemonProvider value={fake.daemon}><Host /></DaemonProvider></ThemeProvider>));
+  act(() => root.render(<ThemeProvider><QuoteTargetContext.Provider value={quoteTarget}><PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}><DaemonProvider value={fake.daemon}><Host /></DaemonProvider></PlatformProvider></QuoteTargetContext.Provider></ThemeProvider>));
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
@@ -158,4 +179,23 @@ it("never draws one file's body at another file's line while a slow read finishe
   expect(lastDrawn()).toMatchObject({ name: "slow.ts", line: 7 });
   expect(lastDrawn()?.marks).toBe(slow.ranges);
   expect(preview()?.querySelector("h3")?.textContent).toBe("slow.ts");
+});
+
+it("quotes a selection of the preview into the session and hands the dialog's close to the target to run with the uncover", async () => {
+  fakeTimers();
+  const calls: string[] = [];
+  const onClose = vi.fn();
+  const quoteTarget: QuoteTarget = {
+    blocked: () => undefined,
+    quote: (text) => calls.push(`quote ${text}`),
+    revealInput: (close) => { calls.push("revealInput"); close(); },
+  };
+  const { fake } = await mount({ quoteTarget, onClose });
+  await act(async () => fake.matches([contentMatch("src/a.ts", 1, "foo", "foo")]));
+  const text = preview()!.querySelector<HTMLElement>("[data-code-surface]")!;
+  document.getSelection()!.selectAllChildren(text);
+  await rightClick(text);
+  await chooseItem("Quote");
+  expect(calls).toEqual(["quote text of src/a.ts", "revealInput"]);
+  expect(onClose).toHaveBeenCalledOnce();
 });
