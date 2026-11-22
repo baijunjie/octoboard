@@ -168,15 +168,25 @@ export interface ViewerSubject {
  * name. AVIF decodes only where the system's WebKit does (macOS 13 and later), so a body that fails
  * to decode falls back to the unsupported presentation rather than a broken image.
  */
-const IMAGE_MEDIA_TYPES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-  "image/bmp",
-  "image/x-icon",
-  "image/avif",
-]);
+const IMAGE_MEDIA_TYPES_BY_EXTENSION: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  bmp: "image/bmp",
+  ico: "image/x-icon",
+  avif: "image/avif",
+};
+
+const IMAGE_MEDIA_TYPES = new Set(Object.values(IMAGE_MEDIA_TYPES_BY_EXTENSION));
+
+/** The binary image type a file's name says it holds, for where its bytes have not been read; nothing for any other
+ * name, an SVG's included, which is text. */
+export function imageMediaTypeOfName(name: string): string | undefined {
+  const extension = /\.([a-z0-9]+)$/i.exec(name)?.[1];
+  return extension === undefined ? undefined : IMAGE_MEDIA_TYPES_BY_EXTENSION[extension.toLowerCase()];
+}
 
 /** The body of a live file the daemon refused to read for its size (`browseFailure`'s `tooLarge`). */
 export function tooLargeBody(size: number | undefined): ViewerBody {

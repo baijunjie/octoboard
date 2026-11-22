@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BROWSE_SLOTS } from "../../browse/budget";
 import { useLatestRequest } from "../../components/hooks/useLatestRequest";
 import type { Event } from "../../protocol";
+import { readLargeImage } from "../../viewer/largeImage";
 import { useDaemon } from "../../store";
 import { bodyFromFileContent, tooLargeBody, type ViewerContent, type ViewerSubject } from "../../viewer/content";
 import type { Shown as ShownRead } from "../viewedItem";
@@ -31,7 +32,8 @@ const LOADING: Shown = { content: { state: "loading" } };
  * behind in the daemon as well; a reply is taken only for the latest read, of this project and of
  * the path shown. Moving to another file shows it loading, never the previous file's body under its
  * name; a failed read shows why, in place of whatever was shown, but a file too large to read is shown as the stand-in
- * that says so, which a listing that has it anew reads again like a failure. A read again that finds the same
+ * that says so, which a listing that has it anew reads again like a failure, unless it is an image, which is then read
+ * in parts (`readLargeImage`) and shown as a smaller one is. A read again that finds the same
  * version keeps what is shown as it is, and one lost with the connection keeps the body shown until
  * the reconnect, which reads the file again.
  *
@@ -58,8 +60,24 @@ export function useFileReader(project: string, worktree?: string): FileReader {
     void latest.send({
       scope: target,
       wanted: () => opened.current === target,
-      request: () => request({ type: "read_project_file", project, ...(worktree !== undefined && { worktree }), path: target, slot: BROWSE_SLOTS.viewer }),
+      request: (current) =>
+        request({ type: "read_project_file", project, ...(worktree !== undefined && { worktree }), path: target, slot: BROWSE_SLOTS.viewer }).catch((refusal: unknown) =>
+          // An image past what a read delivers is read in parts instead, and shown as any other.
+          readLargeImage({
+            refusal,
+            file: { kind: "project", project, ...(worktree !== undefined && { worktree }), path: target },
+            name: target,
+            request,
+            wanted: current,
+          }),
+        ),
       accept: (reply) => {
+        if ("version" in reply) {
+          return (shown) =>
+            shown.content.state === "file" && shown.version === reply.version
+              ? shown
+              : { content: { state: "file", body: bodyFromFileContent(target, reply.file) }, version: reply.version };
+        }
         if (reply.project !== project || reply.path !== target || (reply.worktree ?? undefined) !== worktree) return undefined;
         const version = reply.source.kind === "live" ? reply.source.version : undefined;
         return (shown) =>

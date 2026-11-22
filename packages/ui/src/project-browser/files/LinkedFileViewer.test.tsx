@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ViewerSubject } from "../../viewer/content";
 import { ViewerHost } from "../../viewer/viewerTestSupport";
 import type { ViewedFile, ViewedProjectFile } from "../../viewer/viewedFile";
 import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
+import { daemonError } from "../../test/daemonError";
+import { encodeBase64, fileRangeReply, sampleBytes } from "../../test/fileRange";
 import { LinkedFileViewer } from "./LinkedFileViewer";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -219,4 +221,116 @@ it("shows a file outside every project from its path, read through the daemon", 
   expect(request).toHaveBeenCalledWith(expect.objectContaining({ type: "read_path_link", project: "p", path: "/tmp/b.txt" }));
   expect(shown.props?.subject.linkHost).toEqual({ project: "p", path: "/tmp/b.txt" });
   expect(shown.props?.subject.content.state).toBe("file");
+});
+
+describe("an image past what a read delivers", () => {
+  const TOO_LARGE = { limit: "file_bytes", max: "4194304", size: "9000000" };
+  const bytes = sampleBytes(100);
+
+  /** Refuses the whole read of the file as too large and serves its bytes in ranges of at most `cap`. */
+  const serveImage = (params: Record<string, string> = TOO_LARGE, cap = 1024): Handler => async (body) => {
+    if (body.type === "read_file_range") return fileRangeReply(bytes, body as never, { cap, version: "v9" });
+    throw daemonError("limit_exceeded", params);
+  };
+  const rangeRequests = (request: ReturnType<typeof mountAny>["request"]) => request.mock.calls.map(([body]) => body).filter((body) => body.type === "read_file_range");
+
+  it.each([
+    { name: "a linked file", file: { link: "/tmp/photo.JPG", project: "p" } as ViewedFile, mediaType: "image/jpeg", source: { kind: "path_link", project: "p", path: "/tmp/photo.JPG" } },
+    { name: "a project file", file: { project: "p", worktree: "w", path: "img/photo.png" } as ViewedFile, mediaType: "image/png", source: { kind: "project", project: "p", worktree: "w", path: "img/photo.png" } },
+  ])("reads $name in parts and shows it as an image like a smaller one", async ({ file, mediaType, source }) => {
+    const { request } = mountAny(file, serveImage(TOO_LARGE, 30));
+    await act(async () => {});
+    await act(async () => {});
+    expect(shown.props!.subject.content).toMatchObject({
+      state: "file",
+      body: { kind: "image", mediaType, url: `data:${mediaType};base64,${encodeBase64(bytes)}`, size: 100 },
+    });
+    const parts = rangeRequests(request);
+    expect(parts.length).toBeGreaterThan(1);
+    expect(parts[0]).toMatchObject({ type: "read_file_range", file: source, offset: 0, slot: "viewer" });
+  });
+
+  it.each([
+    { name: "a linked file", file: { link: "/tmp/huge.png" } as ViewedFile },
+    { name: "a project file", file: { project: "p", path: "huge.png" } as ViewedFile },
+  ])("still shows $name over the most as the stand-in with the size the daemon gave, without reading it in parts", async ({ file }) => {
+    const { request } = mountAny(file, serveImage({ limit: "file_bytes", max: "4194304", size: String(40 * 1024 * 1024) }));
+    await act(async () => {});
+    expect(shown.props!.subject.content).toEqual({ state: "file", body: { kind: "tooLarge", size: 40 * 1024 * 1024 } });
+    expect(rangeRequests(request)).toEqual([]);
+  });
+
+  it.each([
+    { name: "a linked file", file: { link: "/tmp/big.svg" } as ViewedFile },
+    { name: "a project file", file: { project: "p", path: "big.bin" } as ViewedFile },
+  ])("still shows $name that is not a raster image as the stand-in", async ({ file }) => {
+    const { request } = mountAny(file, serveImage());
+    await act(async () => {});
+    expect(shown.props!.subject.content).toEqual({ state: "file", body: { kind: "tooLarge", size: 9000000 } });
+    expect(rangeRequests(request)).toEqual([]);
+  });
+
+  it("shows another failure of an image's read as an error, and reads no parts", async () => {
+    const { request } = mountAny({ link: "/tmp/gone.png" }, async () => { throw daemonError("file_not_found", { path: "/tmp/gone.png", root: "temporary" }); });
+    await act(async () => {});
+    expect(shown.props!.subject.content.state).toBe("error");
+    expect(rangeRequests(request)).toEqual([]);
+  });
+
+  it("shows the stand-in when a part's read ends before the file does", async () => {
+    mountAny({ link: "/tmp/cut.png" }, async (body) => {
+      if (body.type === "read_file_range") return { ...fileRangeReply(bytes, body as never, { cap: 30 }), data: "" };
+      throw daemonError("limit_exceeded", TOO_LARGE);
+    });
+    await act(async () => {});
+    await act(async () => {});
+    expect(shown.props!.subject.content).toEqual({ state: "file", body: { kind: "tooLarge", size: 9000000 } });
+  });
+
+  it("sends no further part for an image the viewer has moved on from", async () => {
+    const parts: ((reply: unknown) => void)[] = [];
+    const { request, render } = mountAny({ link: "/tmp/first.png" }, (body) => {
+      if (body.type === "read_file_range") return new Promise((resolve) => parts.push(resolve));
+      if (body.path === "/tmp/first.png") return Promise.reject(daemonError("limit_exceeded", TOO_LARGE));
+      return Promise.resolve(linkReply(body.path, "1", { text: "second" }));
+    });
+    await act(async () => {});
+    expect(parts).toHaveLength(1);
+    render({ link: "/tmp/second.txt" });
+    await act(async () => {});
+    await act(async () => parts[0](fileRangeReply(bytes, rangeRequests(request)[0] as never, { cap: 30 })));
+    expect(rangeRequests(request)).toHaveLength(1);
+    expect(shown.props!.subject.path).toBe("/tmp/second.txt");
+    expect(shown.props!.subject.content).toMatchObject({ state: "file", body: { text: "second" } });
+  });
+
+  it("shows the stand-in with the size the first part gave when that is past the most", async () => {
+    const size = 50 * 1024 * 1024;
+    mountAny({ project: "p", path: "grown.png" }, async (body) => {
+      if (body.type === "read_file_range") return { ...fileRangeReply(bytes, body as never, { cap: 30 }), size };
+      throw daemonError("limit_exceeded", TOO_LARGE);
+    });
+    await act(async () => {});
+    await act(async () => {});
+    expect(shown.props!.subject.content).toEqual({ state: "file", body: { kind: "tooLarge", size } });
+  });
+
+  it.each([
+    { name: "the viewer closes", next: undefined },
+    { name: "a project file's viewer gives way to a path link's", next: { link: "/tmp/other.txt" } as ViewedFile },
+    { name: "a path link's viewer gives way to a project file's", next: { project: "p", path: "other.txt" } as ViewedFile, first: { link: "/tmp/first.png" } as ViewedFile },
+  ])("sends no further part once $name mid-read", async ({ next, first }) => {
+    const parts: ((reply: unknown) => void)[] = [];
+    const { request, render } = mountAny(first ?? { project: "p", path: "first.png" }, (body) => {
+      if (body.type === "read_file_range") return new Promise((resolve) => parts.push(resolve));
+      if (body.path.endsWith("first.png")) return Promise.reject(daemonError("limit_exceeded", TOO_LARGE));
+      return new Promise(() => {});
+    });
+    await act(async () => {});
+    expect(parts).toHaveLength(1);
+    if (next) render(next);
+    else act(() => root!.unmount());
+    await act(async () => parts[0](fileRangeReply(bytes, rangeRequests(request)[0] as never, { cap: 30 })));
+    expect(rangeRequests(request)).toHaveLength(1);
+  });
 });

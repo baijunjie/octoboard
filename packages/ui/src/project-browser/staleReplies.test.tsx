@@ -7,6 +7,8 @@ import { CodedError } from "../errors/codedError";
 import { isolate } from "../i18n/isolate";
 import type { BrowseEntry, ChangeGroup, Event, FileContent, ClientRequestBody } from "../protocol";
 import { DaemonProvider, type Daemon } from "../store";
+import { daemonError } from "../test/daemonError";
+import { fileRangeReply, sampleBytes, type RangeRequest } from "../test/fileRange";
 import { testDaemon } from "../test/testDaemon";
 import { changeItem, type ChangeItem } from "./git/changes";
 import type { DirListing } from "./tree";
@@ -138,6 +140,62 @@ it("reads the file again after a reconnect, keeping what is shown through a lost
   await act(async () => pending.splice(0)[0].resolve(file("a.ts", "a")));
   expect(hook.current().subject?.content).toBe(shown);
   expect(hook.current().shown).toEqual({ state: "read", version: "1" });
+});
+
+const TOO_LARGE = { limit: "file_bytes", max: "4194304", size: "9000000" };
+
+it("reads an image past the read budget in parts and shows it as read at the version of the parts", async () => {
+  const { daemon, pending } = controlledDaemon();
+  const bytes = sampleBytes(40);
+  const hook = mount<FileReader>(daemon, () => useFileReader("p"));
+  act(() => hook.current().open("big.png"));
+  await act(async () => pending.splice(0)[0].reject(daemonError("limit_exceeded", TOO_LARGE)));
+  expect(hook.current().shown).toEqual({ state: "loading" });
+  // The parts are asked one at a time, until the file is whole.
+  for (let parts = 0; pending.length > 0; parts++) {
+    expect(parts).toBeLessThan(10);
+    const [part] = pending.splice(0);
+    expect(part.body).toMatchObject({ type: "read_file_range", file: { kind: "project", project: "p", path: "big.png" }, slot: "viewer" });
+    await act(async () => part.resolve(fileRangeReply(bytes, part.body as RangeRequest, { cap: 16, version: "v5" })));
+  }
+  expect(hook.current().subject?.content).toMatchObject({ state: "file", body: { kind: "image", mediaType: "image/png", size: 40 } });
+  expect(hook.current().shown).toEqual({ state: "read", version: "v5" });
+});
+
+it("shows an image past the most as the stand-in, as an error for listings to read again, with no part asked", async () => {
+  const { daemon, pending } = controlledDaemon();
+  const hook = mount<FileReader>(daemon, () => useFileReader("p"));
+  act(() => hook.current().open("huge.png"));
+  await act(async () => pending.splice(0)[0].reject(daemonError("limit_exceeded", { limit: "file_bytes", max: "4194304", size: String(40 * 1024 * 1024) })));
+  expect(pending).toEqual([]);
+  expect(hook.current().subject?.content).toEqual({ state: "file", body: { kind: "tooLarge", size: 40 * 1024 * 1024 } });
+  expect(hook.current().shown).toEqual({ state: "error", changing: undefined });
+});
+
+it("sends no further part of an image read that a read again has replaced", async () => {
+  const { daemon, pending } = controlledDaemon();
+  const bytes = sampleBytes(40);
+  const hook = mount<FileReader>(daemon, () => useFileReader("p"));
+  act(() => hook.current().open("big.png"));
+  await act(async () => pending.splice(0)[0].reject(daemonError("limit_exceeded", TOO_LARGE)));
+  const [firstPart] = pending.splice(0);
+  expect(firstPart.body.type).toBe("read_file_range");
+  act(() => hook.current().reload());
+  expect(pending.map((p) => p.body.type)).toEqual(["read_project_file"]);
+  await act(async () => firstPart.resolve(fileRangeReply(bytes, firstPart.body as RangeRequest, { cap: 16 })));
+  expect(pending.map((p) => p.body.type)).toEqual(["read_project_file"]);
+});
+
+it("sends no further part of an image read once another file is open", async () => {
+  const { daemon, pending } = controlledDaemon();
+  const bytes = sampleBytes(40);
+  const hook = mount<FileReader>(daemon, () => useFileReader("p"));
+  act(() => hook.current().open("big.png"));
+  await act(async () => pending.splice(0)[0].reject(daemonError("limit_exceeded", TOO_LARGE)));
+  const [firstPart] = pending.splice(0);
+  act(() => hook.current().open("b.ts"));
+  await act(async () => firstPart.resolve(fileRangeReply(bytes, firstPart.body as RangeRequest, { cap: 16 })));
+  expect(pending.map((p) => p.body)).toMatchObject([{ type: "read_project_file", path: "b.ts" }]);
 });
 
 /** Mounts `use` over arguments the test changes later, as a parent re-rendering with new props does. */

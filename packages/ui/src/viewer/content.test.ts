@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { FileContent } from "../protocol";
-import { bodiesFailure, bodyFromFileContent, ChangeBodiesError, changePresentation, changeStatus, tooLargeBody, type ViewerChange, type ViewerChangeSide } from "./content";
+import { bodiesFailure, bodyFromFileContent, ChangeBodiesError, changePresentation, changeStatus, imageMediaTypeOfName, tooLargeBody, type ViewerChange, type ViewerChangeSide } from "./content";
 
 const textFile = (text: string): FileContent => ({ size: text.length, kind: "text", media_type: null, text, data: null });
 const binaryFile = (media_type: string | null): FileContent => ({ size: 3, kind: "binary", media_type, text: null, data: "AAEC" });
@@ -81,5 +81,27 @@ describe("tooLargeBody", () => {
     expect(tooLargeBody(9_000_000)).toEqual({ kind: "tooLarge", size: 9_000_000 });
     expect(tooLargeBody(0)).toEqual({ kind: "tooLarge", size: 0 });
     expect(tooLargeBody(undefined)).toEqual({ kind: "tooLarge", size: null });
+  });
+});
+
+describe("imageMediaTypeOfName", () => {
+  it.each([
+    ["a.png", "image/png"],
+    ["a.jpg", "image/jpeg"],
+    ["a.jpeg", "image/jpeg"],
+    ["a.gif", "image/gif"],
+    ["a.webp", "image/webp"],
+    ["a.bmp", "image/bmp"],
+    ["a.ico", "image/x-icon"],
+    ["a.avif", "image/avif"],
+    ["dir.d/sub/Photo.PNG", "image/png"],
+    ["/tmp/shot.JpEg", "image/jpeg"],
+    ["archive.tar.png", "image/png"],
+  ])("types %s as %s", (name, mediaType) => {
+    expect(imageMediaTypeOfName(name)).toBe(mediaType);
+  });
+
+  it.each(["vector.svg", "VECTOR.SVG", "data.bin", "notes.txt", "photo", "png", "dir.png/file", "photo.png.bak", ""])("has no type for %j", (name) => {
+    expect(imageMediaTypeOfName(name)).toBeUndefined();
   });
 });

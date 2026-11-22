@@ -27,7 +27,8 @@ export interface BrowseShare {
  *   goes past the places, so each place has a unit for it.
  * - `documentImages`: the images a document names, one at a time in one slot, whose next read cancels the one let go
  *   of.
- * - `viewer`: the viewer's read, file or change, in one slot for the whole window.
+ * - `viewer`: the viewer's read, file or change, in one slot for the whole window. The parts of an image too large for
+ *   one read (`viewer/largeImage.ts`) are asked in it too, one at a time after that read was refused.
  * - `contentSearch`: the window's one content search, in one slot (`BROWSE_SLOTS.contentSearch`), counted by the daemon
  *   from its request until its last event, not only until its `ack`: a search the user has moved on from keeps its unit
  *   until it stops, beside the one replacing it.

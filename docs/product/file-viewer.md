@@ -116,9 +116,21 @@ one's do not, or when one subject has the subtitle row and the next has none.
   (see "Zooming an image" below). An image is only displayed: an SVG's scripts
   never run and nothing it refers to is fetched. An image that cannot be decoded is an error in its place (see "Notices
   and stand-ins" below); an SVG that cannot be decoded is shown as its text instead, with a failure notice saying so.
+- **A large image** — one larger than the 4 MiB a read delivers and at most **32 MiB** — is read in parts and shown
+  exactly as a smaller image is, with the same header, when it is a file the viewer opens as a file: from Files, from
+  the terminal, or from a result of Find in files, read live from the project, a worktree or anywhere else on the
+  machine the daemon runs on. It is told by its name alone, which ends in `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`,
+  `.bmp`, `.ico` or `.avif`, in any case. Until all of it has arrived the viewer says it is loading, as for any file,
+  with no measure of progress. Such a file that cannot be decoded as an image is an error in its place, as any image
+  that cannot be decoded is, not the too-large stand-in. Everything else keeps the 4 MiB limit: an SVG, which is text,
+  an image past 32 MiB, a change — a committed version, a side of a comparison, a path in conflict (see
+  `docs/product/project-pane-git-change-viewer.md`) — a folder's entry file, read before the viewer opens (see
+  "Opened from the terminal" below), and the images a Markdown document names (see
+  `docs/product/markdown-documents.md`).
 - **Any other binary file** says it cannot be displayed, with its size, and **a file larger than the 4 MiB a read
-  delivers** says it is too large to display, with its size where the daemon gives it, whatever it holds. Under either,
-  a live file (see "The header" above) has a button that opens it outside the viewer: **Open in default application**
+  delivers** says it is too large to display, with its size where the daemon gives it, whatever it holds but for a
+  large image (see the bullet above). Under either, a live file (see "The header" above) has a button that opens it
+  outside the viewer: **Open in default application**
   in the main window and in a browser, which is the header's Default application; **Download and open** in a remote
   window of the desktop application (see "Download and open" below). A file the system could launch rather than show
   has no such button.
@@ -387,7 +399,7 @@ The entry file is read first, from the directory the folder was found in:
 - when it is text, or an image the viewer draws, it opens in the file viewer, showing what was read at once rather than
   saying it is loading, and without a line — a `:line` written after the folder's path plays no part;
 - when the folder has no entry file, or its entry file is binary and not an image the viewer draws, is larger than the
-  4 MiB a read delivers, or cannot be read for any other reason, the folder itself opens in the file manager on the
+  4 MiB a read delivers (an image included), or cannot be read for any other reason, the folder itself opens in the file manager on the
   machine the daemon runs on, as a folder outside the project does; an entry file that cannot be read raises no error
   alert;
 - **Cmd+click** (Ctrl+click on other systems) opens the folder in the file manager straight away, without looking at

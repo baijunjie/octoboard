@@ -6,7 +6,7 @@ import { errorText } from "../errors/errorText";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import { browseFailure, projectBrowseFailure } from "./failure";
+import { browseFailure, fileTooLarge, projectBrowseFailure } from "./failure";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 const records = { consoles: new Map(), projects: new Map(), sessions: new Map() };
@@ -17,6 +17,29 @@ function sourceUnavailable(path: string) {
 
 /** The plain text of a failure to show. */
 const failed = (failure: ReturnType<typeof browseFailure>) => (failure.kind === "failed" ? errorText(failure.message) : "");
+
+describe("fileTooLarge", () => {
+  it.each<{ name: string; params: Record<string, string>; expected: { size?: number } }>([
+    { name: "the size the daemon gave", params: { limit: "file_bytes", max: "4194304", size: "9000000" }, expected: { size: 9000000 } },
+    { name: "a size of zero", params: { limit: "file_bytes", max: "4194304", size: "0" }, expected: { size: 0 } },
+    { name: "no size", params: { limit: "file_bytes", max: "4194304" }, expected: {} },
+    { name: "a size that is not a number", params: { limit: "file_bytes", max: "4194304", size: "many" }, expected: {} },
+  ])("is $expected for a read past the file budget with $name", ({ params, expected }) => {
+    const found = fileTooLarge(new CodedError("too large", "limit_exceeded", params));
+    expect(found).toEqual(expected);
+    if (!("size" in expected)) expect(found).not.toHaveProperty("size");
+  });
+
+  it.each([
+    { name: "another limit", error: new CodedError("busy", "limit_exceeded", { limit: "reply_bytes", max: "1", size: "2" }) },
+    { name: "another code", error: new CodedError("gone", "file_not_found", { limit: "file_bytes", size: "2" }) },
+    { name: "an error that is not coded", error: new Error("boom") },
+    { name: "a value that is not an error", error: "file_bytes" },
+    { name: "nothing", error: undefined },
+  ])("is nothing for $name", ({ error }) => {
+    expect(fileTooLarge(error)).toBeUndefined();
+  });
+});
 
 describe("browseFailure", () => {
   it("marks a read past the file budget as too large, with the size where the daemon said it, and no other limit", () => {

@@ -31,6 +31,7 @@ function mount(onReconnect?: (last: { asked: boolean; lost: boolean }) => void) 
   const render = () => act(() => root.render(<DaemonProvider value={daemon}><Probe /></DaemonProvider>));
   render();
   onTestFinished(() => act(() => root.unmount()));
+  const unmount = () => act(() => root.unmount());
   const out: Out[] = [];
   const send = (extra: Partial<LatestRequestSend<Held, string>> = {}) => {
     const sent = latest.send<string>({
@@ -44,6 +45,7 @@ function mount(onReconnect?: (last: { asked: boolean; lost: boolean }) => void) 
   };
   return {
     out,
+    unmount,
     send,
     value: () => latest.value,
     latest: () => latest,
@@ -196,4 +198,34 @@ it("leaves a rejection the caller handles to the caller, and drops everything on
   act(() => hook.latest().reset());
   await act(async () => hook.out[2]!.resolve("late"));
   expect(hook.value()).toEqual({ state: "loading" });
+});
+
+it("hands the request a predicate that says whether its answer would still be taken", async () => {
+  const hook = mount();
+  const predicates: (() => boolean)[] = [];
+  const asked = (extra: Partial<LatestRequestSend<Held, string>> = {}) =>
+    hook.send({ request: (current) => { predicates.push(current); return new Promise<string>(() => {}); }, ...extra });
+  act(() => void asked());
+  expect(predicates[0]!()).toBe(true);
+  // A newer request takes its place.
+  act(() => void asked());
+  expect(predicates[0]!()).toBe(false);
+  expect(predicates[1]!()).toBe(true);
+  // Another scope is shown.
+  hook.scope("b");
+  expect(predicates[1]!()).toBe(false);
+});
+
+it("tells a request it is no longer wanted when the caller's own check says so, or once the hook is unmounted", async () => {
+  const hook = mount();
+  const predicates: (() => boolean)[] = [];
+  let wanted = true;
+  act(() => void hook.send({ wanted: () => wanted, request: (current) => { predicates.push(current); return new Promise<string>(() => {}); } }));
+  expect(predicates[0]!()).toBe(true);
+  wanted = false;
+  expect(predicates[0]!()).toBe(false);
+  wanted = true;
+  expect(predicates[0]!()).toBe(true);
+  hook.unmount();
+  expect(predicates[0]!()).toBe(false);
 });

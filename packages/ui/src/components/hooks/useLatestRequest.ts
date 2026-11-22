@@ -16,8 +16,10 @@ export interface LatestRequestSend<V, R> {
    * `undefined`, it is the scope `undefined`). Given where the request is sent before the
    * render that names its scope is committed (a viewer opening a file, say). */
   scope?: string | undefined;
-  /** Sends the request: when the `lane` gives it its turn, at once without one, and again for each retry. */
-  request: () => Promise<R>;
+  /** Sends the request: when the `lane` gives it its turn, at once without one, and again for each retry. `current`
+   * tells whether its answer would still be taken, for a request made of several sent one after another to stop
+   * once it would not: one sent after that would give up the request that took its place. */
+  request: (current: () => boolean) => Promise<R>;
   /** The window's lane the request waits in (`browse/budget.ts`); none for a request in a slot of its own. */
   lane?: BrowseLane;
   /** The slot the request claims, for a lane that lets a request replacing another in its slot go past it. */
@@ -110,8 +112,8 @@ function sendLatest<V, R>(requests: LatestRequests<V>, request: LatestRequestSen
   const current = () => s.alive && s.sequence === sequence && s.scope === asked && (request.wanted?.() ?? true);
   if (attempt === 0 && request.pending) hold(request.pending, asked);
   const sent = request.lane
-    ? request.lane.send(() => (current() ? request.request() : undefined), { slot: request.slot })
-    : request.request();
+    ? request.lane.send(() => (current() ? request.request(current) : undefined), { slot: request.slot })
+    : request.request(current);
   return sent
     .then((reply) => {
       if (reply === undefined || !current()) return;

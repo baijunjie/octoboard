@@ -50,6 +50,13 @@ function shownParams(language: Language, params: MessageParams, root: string | u
   return shown;
 }
 
+/** Whether a rejection is a read's for a file past the file budget: the file's size where the daemon said it, and
+ * nothing for any other rejection. */
+export function fileTooLarge(err: unknown): { size?: number } | undefined {
+  if (!(err instanceof CodedError) || err.code !== "limit_exceeded" || err.params.limit !== "file_bytes") return undefined;
+  return err.params.size !== undefined && Number.isFinite(Number(err.params.size)) ? { size: Number(err.params.size) } : {};
+}
+
 /**
  * Sorts out a browse request's rejection, worded in the current language from its code with its
  * params as they read (`shownParams`); a file too large to read gets a sentence of its own, with
@@ -72,7 +79,8 @@ export function browseFailure(
   if (err.code === CODE.request_superseded) return { kind: "superseded" };
   if (err.code === CODE.source_changed) return { kind: "changed" };
   const params = shownParams(language, err.params, root);
-  if (err.code === "limit_exceeded" && err.params.limit === "file_bytes") {
+  const tooLarge = fileTooLarge(err);
+  if (tooLarge) {
     return {
       kind: "failed",
       code: err.code,
@@ -80,7 +88,7 @@ export function browseFailure(
         err.params.size !== undefined
           ? t("browser.error.fileTooLarge", { size: params.size!, max: params.max })
           : t("browser.error.fileTooLargeNoSize", { max: params.max }),
-      tooLarge: Number.isFinite(Number(err.params.size)) && err.params.size !== undefined ? { size: Number(err.params.size) } : {},
+      tooLarge,
     };
   }
   if (err.code === "limit_exceeded" && err.params.limit === "patch_bytes") {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { BROWSE_SLOTS } from "../../browse/budget";
 import { useLatestRequest } from "../../components/hooks/useLatestRequest";
+import { readLargeImage } from "../../viewer/largeImage";
 import { useDaemon } from "../../store";
 import { bodyFromFileContent, tooLargeBody, type ViewerContent, type ViewerSubject } from "../../viewer/content";
 
@@ -19,7 +20,7 @@ const LOADING: Shown = { content: { state: "loading" } };
 /**
  * The file a terminal's path link names, read through the daemon (`read_path_link`) when it is not in a project's
  * directory (anywhere else on the daemon's host). It reads as `useFileReader` does: one read at a time, in the window's viewer slot, a
- * reply taken only for the latest read and the path shown, a read again that finds the same version keeps what is
+ * reply taken only for the latest read and the path shown, an image too large for one read is read in parts, a read again that finds the same version keeps what is
  * shown, and one lost with the connection is read again at the reconnect. `project` is the session's, if it has one;
  * the daemon tells a project kept under a temporary directory from scratch space with it.
  *
@@ -32,14 +33,25 @@ export function usePathLinkReader(project: string | undefined): PathLinkReader {
   const opened = useRef<string | undefined>(undefined);
   const latest = useLatestRequest<Shown>({ scope: path, initial: LOADING, project, onReconnect: () => read() });
 
-  const read = (target = opened.current) => {
+  const read = (asked?: string) => {
+    const target = asked ?? opened.current;
     if (target === undefined) return;
     void latest.send({
       scope: target,
       wanted: () => opened.current === target,
-      request: () => request({ type: "read_path_link", ...(project !== undefined && { project }), path: target, slot: BROWSE_SLOTS.viewer }),
+      request: (current) =>
+        request({ type: "read_path_link", ...(project !== undefined && { project }), path: target, slot: BROWSE_SLOTS.viewer }).catch((refusal: unknown) =>
+          // An image past what a read delivers is read in parts instead, and shown as any other.
+          readLargeImage({
+            refusal,
+            file: { kind: "path_link", ...(project !== undefined && { project }), path: target },
+            name: target,
+            request,
+            wanted: current,
+          }),
+        ),
       accept: (reply) => {
-        if (reply.path !== target) return undefined;
+        if ("path" in reply && reply.path !== target) return undefined;
         return (shown) =>
           shown.content.state === "file" && shown.version === reply.version
             ? shown

@@ -460,7 +460,7 @@ file viewer's header already shows that path (see "Notices and stand-ins" in `do
 | The entry is not a regular file — a FIFO, a socket, a device | it is not a regular file |
 | A symbolic link leads outside the project | it leads outside the project, so it is not shown |
 | Octoboard is not allowed to read it | it is not allowed to read it, with the system's reason |
-| The file is larger than 4 MiB | in the file viewer, that it is too large to display, with its size, as a stand-in rather than an error (see "What it shows" in `docs/product/file-viewer.md`) |
+| The file is larger than 4 MiB, and is not a large image the file viewer reads in parts | in the file viewer, that it is too large to display, with its size, as a stand-in rather than an error (see "What it shows" in `docs/product/file-viewer.md`) |
 | A file kept changing while it was being read, after two more tries | it kept changing, and is read again at the next refresh |
 | A folder kept changing while it was being listed, after two more tries | it kept changing, and Refresh tries again |
 | The project's directory itself cannot be read | the folder cannot be read, with the reason |
