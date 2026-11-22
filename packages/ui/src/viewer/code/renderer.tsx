@@ -26,7 +26,7 @@ import { useRenderLatest } from "../../components/hooks/useLatest";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { RENDER_BUDGETS } from "./budgets";
 import { highlightCacheKey } from "./cacheKey";
-import { CODE_THEMES } from "./codeTheme";
+import { CHANGED_WORD_INK, CODE_THEMES, DIFF_TINTS } from "./codeTheme";
 import type { ChangeBodies } from "../content";
 import type { DiffLayout } from "./diffLayout";
 import { EXPANSION_STEP, Expansion, type ExpansionStatus, type HunkExpander, type SeparatorLabels } from "./expansion";
@@ -40,7 +40,7 @@ const THEMES = { light: CODE_THEMES.light.name, dark: CODE_THEMES.dark.name } as
 /** The renderer's shadow root shares the application's monospace stack and its frame's fill, and
  * paints the find bar's matches (a highlight rule has to be in the shadow root's own stylesheet). */
 function readingCss(theme: "light" | "dark"): string {
-  // The palette's line-number colour keeps separator labels readable on the lighter dark surface.
+  // The palette's line-number colour keeps line numbers readable on the lighter dark surface.
   const numbers = theme === "dark" ? `--diffs-fg-number-override: ${CODE_THEMES.dark.numberForeground};` : "";
   return `:host { ${numbers} --diffs-bg: ${CODE_THEMES[theme].background}; --diffs-font-family: var(--font-mono); }${findHighlightCss}`;
 }
@@ -59,34 +59,60 @@ const FILL_FRAME_CSS = `
 `;
 
 /**
- * Diff colours that keep every token at 4.5:1 and mark a change by more than colour. The library
- * marks a changed word with a tint over the changed line's tint, and in the light appearance the
- * palette's grey comments fall short under either tint; so a changed word is underlined instead of
- * tinted in both appearances, in the application's added and removed text colours (`--tint-success-fg`
- * and `--tint-danger-fg`, the ones of the change rows' `+N` and `-M`, which a shadow root inherits), and
- * in the light one the line tints are GitHub's (HeroUI's soft fills would take the palette's comments to
- * 4.44:1 on an addition and 4.11:1 on a deletion), the deletion's
- * lightened just enough for the comments to keep the ratio, and their line numbers' cells take
- * GitHub's deeper tints rather than the library's mix toward the palette's dark git colours. The
- * dark palette meets the ratio on the library's own line tints. The `+` / `-` indicators mark
- * changed lines. The same sheet draws what the viewer adds to the separators of collapsed lines
- * (`expansion.ts`): the whole-file control, and a focus ring. Every `data-*` selector and
- * `--diffs-*` property in the sheet is the library's own markup and styling, except the attributes
- * the viewer sets itself (`data-whole-file`, `data-focus-visible`, `data-faded-label`), so a
- * library upgrade is checked against them.
+ * A diff drawn as GitHub draws one, in each appearance (`DIFF_TINTS`): a changed line is tinted, its
+ * line number's cell and a changed word within it take a clearly deeper fill of the same hue, and
+ * the bars of collapsed lines are blue, with their expanding controls a deeper blue at rest and the
+ * accent blue of GitHub when hovered or focused. Nothing is set apart by a gap in the background colour:
+ * the library's rules between the line numbers and the code, and round each expanding control, are
+ * taken out. A line number keeps the code's foreground on its deeper cell, where the library would
+ * draw it in the palette's git colours. The `+` / `-` indicators mark changed lines by more than
+ * colour.
+ *
+ * Every token keeps 4.5:1: on the line tints as it is, and on a changed word's deeper fill by
+ * being drawn nearer the foreground (`CHANGED_WORD_INK`), the mix being in sRGB so that
+ * `codeTheme.test.ts` takes the same ratio the browser draws.
+ *
+ * The same sheet draws what the viewer adds to the separators of collapsed lines (`expansion.ts`):
+ * the whole-file control, and a focus ring. Every `data-*` selector and `--diffs-*` property in the
+ * sheet is the library's own markup and styling, except the attributes the viewer sets itself
+ * (`data-whole-file`, `data-focus-visible`, `data-faded-label`), so a library upgrade is checked
+ * against them.
  */
 function diffCss(theme: "light" | "dark"): string {
-  const lineTints =
-    theme === "light"
-      ? `[data-line][data-line-type="change-addition"] { background-color: #dafbe1 !important; }
-         [data-line][data-line-type="change-deletion"] { background-color: #ffefed !important; }
-         [data-line-type="change-addition"][data-column-number] { background-color: #ccffd8 !important; }
-         [data-line-type="change-deletion"][data-column-number] { background-color: #ffd7d5 !important; }`
-      : "";
+  const { addition, deletion, separator } = DIFF_TINTS[theme];
+  const ink = `${CHANGED_WORD_INK[theme] * 100}%`;
   return `${readingCss(theme)}
     ${FLUSH_TOP_CSS}
     ${FILL_FRAME_CSS}
-    ${lineTints}
+    :host {
+      --diffs-gap-style: none;
+      --diffs-bg-separator-override: ${separator.bar};
+      --diffs-fg-number-addition-override: var(--diffs-fg);
+      --diffs-fg-number-deletion-override: var(--diffs-fg);
+    }
+    /* A changed side's row saying its file ends without a newline (\`[data-no-newline]\`, with the
+       \`metadata\` cell beside it in the gutter) is filled as the changed line above it. */
+    :is([data-line], [data-no-newline])[data-line-type="change-addition"] { background-color: ${addition.line}; }
+    :is([data-line], [data-no-newline])[data-line-type="change-deletion"] { background-color: ${deletion.line}; }
+    :is([data-column-number], [data-gutter-buffer="metadata"])[data-line-type="change-addition"] { background-color: ${addition.number}; }
+    :is([data-column-number], [data-gutter-buffer="metadata"])[data-line-type="change-deletion"] { background-color: ${deletion.number}; }
+    [data-line-type="change-addition"] [data-diff-span] { background-color: ${addition.word}; }
+    [data-line-type="change-deletion"] [data-diff-span] { background-color: ${deletion.word}; }
+    [data-line-type="change-addition"] [data-diff-span],
+    [data-line-type="change-deletion"] [data-diff-span] { color: color-mix(in srgb, var(--diffs-fg) ${ink}, var(--diffs-mixer)); }
+    /* The \`+\` / \`-\` indicator stands a character clear of the line number's cell, and the code a
+       character clear of it, where the library draws it against the cell. */
+    [data-indicators="classic"] [data-line],
+    [data-indicators="classic"] [data-no-newline] { padding-inline-start: 3ch; }
+    [data-indicators="classic"] [data-line]::before,
+    [data-indicators="classic"] [data-no-newline]::before { left: 1ch; }
+    /* The token colour is the library's own declaration for a token (\`[data-line] span\`), mixed. A
+       token with a background of its own (the inline \`--diffs-token-…-bg\`) sits on that, not on the
+       word's fill, and keeps its colour. */
+    [data-line-type="change-addition"] [data-diff-span] span:not([style*="--diffs-token-${theme}-bg"]),
+    [data-line-type="change-deletion"] [data-diff-span] span:not([style*="--diffs-token-${theme}-bg"]) {
+      color: color-mix(in srgb, light-dark(var(--diffs-token-light, var(--diffs-light)), var(--diffs-token-dark, var(--diffs-dark))) ${ink}, var(--diffs-mixer));
+    }
     /* In the code column (\`[data-content]\`), whose parent \`[data-code]\` is the scroll container when
        lines are not wrapped. Sticky, like the gutter the label and chevrons sit in, so it stays at the visible
        end of the bar and not at the end of the longest line. Because it is in normal flow, not
@@ -104,7 +130,7 @@ function diffCss(theme: "light" | "dark"): string {
        measured from the gutter's physical left, as the library pins the gutter there; the code frame
        is \`dir="ltr"\`, so the control is at the right.
        The additions side of a split diff shows no label and is left alone. */
-    [data-separator] { --whole-file-width: 9em; }
+    [data-separator] { --whole-file-width: 9em; --diffs-fg-number: ${separator.text}; }
     [data-code] { container-type: inline-size; }
     [data-code]:not([data-additions]) [data-gutter] [data-separator-wrapper] {
       grid-template-columns: 100% max(0px, calc(100cqi - 100% - var(--whole-file-width)));
@@ -115,6 +141,27 @@ function diffCss(theme: "light" | "dark"): string {
     [data-gutter] [data-unmodified-lines] { display: none; }
     [data-faded-label] { display: block; min-width: 0; width: 100%; }
     [data-faded-label] > div { overflow: hidden; white-space: nowrap; }
+    /* The controls are told from the bar, and the one under the pointer from the other of a
+       pair, by their fills alone. The wrapper behind them is the bar's colour, as the
+       library's own (the code background) would show at any seam between them. */
+    [data-separator-wrapper] { background-color: ${separator.bar}; }
+    [data-separator] [data-expand-button] { border: 0; }
+    [data-separator] [data-expand-button]:not([data-whole-file]) { background-color: ${separator.control}; }
+    [data-separator] [data-expand-button]:not([data-whole-file], [aria-disabled="true"]):hover,
+    [data-separator] [data-expand-button]:not([data-whole-file], [aria-disabled="true"])[data-focus-visible] {
+      background-color: ${separator.controlActive};
+      color: ${separator.onControlActive};
+    }
+    /* On the deeper fill the focus colour cannot be told from it, so the ring there is the glyph's
+       colour, which also tells the focused control of a pair from the one under the pointer. */
+    [data-separator] [data-expand-button]:not([data-whole-file], [aria-disabled="true"])[data-focus-visible] {
+      outline-color: ${separator.onControlActive};
+    }
+    /* A control that is unavailable keeps its resting fill, which the focus colour is too near:
+       its ring is the colour of its glyph. */
+    [data-separator] [data-expand-button]:not([data-whole-file])[aria-disabled="true"][data-focus-visible] {
+      outline-color: ${separator.text};
+    }
     [data-separator] [data-whole-file] {
       position: sticky;
       inset-inline-end: 0;
@@ -152,15 +199,7 @@ function diffCss(theme: "light" | "dark"): string {
     [data-separator="line-info-basic"] { height: calc(var(--diffs-line-height, 20px) * 1.4); }
     [data-separator="line-info-basic"]:has(> [data-separator-multi-button]) { height: calc(var(--diffs-line-height, 20px) * 2); }
     [data-expand-button][data-focus-visible],
-    [data-separator-content][data-focus-visible] { outline: 2px solid var(--focus); outline-offset: -2px; }
-    [data-line-type="change-addition"] [data-diff-span],
-    [data-line-type="change-deletion"] [data-diff-span] {
-      background-color: transparent;
-      text-decoration: underline 2px;
-      text-underline-offset: 3px;
-    }
-    [data-line-type="change-addition"] [data-diff-span] { text-decoration-color: var(--tint-success-fg); }
-    [data-line-type="change-deletion"] [data-diff-span] { text-decoration-color: var(--tint-danger-fg); }`;
+    [data-separator-content][data-focus-visible] { outline: 2px solid var(--focus); outline-offset: -2px; }`;
 }
 
 /**
