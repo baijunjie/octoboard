@@ -52,9 +52,9 @@ How code produces text the user reads, in the UI and on the website. How copy is
 
 ## Keys
 
-- **Whether a change is polish (keep the key and the old translations) or a change of meaning (a new key, the old one
-  left) is judged as the skill's "Changing existing copy" says**; when only some uses of a shared key change, move
-  those uses to a new key.
+- **A change of meaning updates every catalog in the same change and keeps the key**; only when some uses of a shared
+  key change do those uses move to a new key, and a key nothing uses any more is deleted, not left: every translation
+  lives in the repository and is type-checked against the English, so no delivered translation can go stale.
 
 ## Placeholders, numbers and plurals
 

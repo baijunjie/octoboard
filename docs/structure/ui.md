@@ -154,7 +154,7 @@ their cascade order does not depend on which screen opened first.
   host), `IncompatibleDaemonScreen` (the whole window while the connection state is `incompatible`), `KeyRefusedScreen` (the whole
   window while it is `keyRefused`, and, as its keyless variant, `main.tsx`'s screen for a browser page opened with no key),
   `RailRemoteDevices` (the rail's Remote devices button, which opens the Remote devices page, under the
-  consoles, in the desktop application's own window only; `Rail` offers it alone, with no consoles, while the local daemon cannot be used), `RailScheduledTasks` (the rail's Scheduled tasks button, directly above Remote devices where there is one: it opens the Scheduled tasks page, in every window of a daemon, with a badge counting the tasks running), `RailForwardsEntry` (a remote window's rail button for the
+  consoles, in the desktop application's own window only; `Rail` offers it alone, with no consoles, while the local daemon cannot be used), `RailScheduledTasks` (the rail's Scheduled tasks button, directly above Remote devices where there is one: it opens the Scheduled tasks page, in every window of a daemon, with a badge counting the enabled tasks), `RailForwardsEntry` (a remote window's rail button for the
   ports forwarded to its daemon's machine, built on `RailPanelEntry`), `RailRemoteGap` and `RailSeparator` (the free space and
   the separator between the remote button and the rail's bottom group, and the separator and spacer items they are made of), and the page of the window that has no daemon: `TrayFlyout` with
   `TrayFlyoutLines.tsx` and `TrayFlyout.css` (the Windows notification-area flyout, drawing the model the shell sends).
@@ -202,7 +202,7 @@ their cascade order does not depend on which screen opened first.
   the mapping between a task's wire fields and the form's, `taskDraft.ts` the form's draft model and what a save
   changes, `useTaskDraft.ts` and `useTaskLaunch.ts` its state, `useTarget.ts`, `useTaskZone.ts` and `taskName.ts` what a
   task is shown as; `useScheduledTasksSync.ts`, `useScheduledTaskRuns.ts` and `useSnapshotListing.ts` listing the tasks
-  and a task's runs after every snapshot; `useRunningTaskCount.ts` the rail's badge; `useScheduledRunNotifications.ts`
+  and a task's runs after every snapshot; `useEnabledTaskCount.ts` the rail's badge; `useScheduledRunNotifications.ts`
   the system notification of a failed run, whose choosing opens the page on that task; `scheduledTaskPreference.ts` the
   task last viewed, per daemon).
 - `src/statusItem/` — the menu-bar menu: its builder, quota submenus, icons and the hook that pushes it to the platform.

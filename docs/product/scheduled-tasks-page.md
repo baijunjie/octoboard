@@ -16,11 +16,11 @@ The page is opened by:
 - the rail's **Scheduled tasks** button, a clock, directly above the Remote devices button where the window has one
   (see "The rail" in `docs/product/window-layout.md`). The button only opens the page: pressed while the page shows, it
   does nothing. While the page shows, the button is drawn with a filled circle behind its glyph and tells assistive
-  technology it is the current item, and no console's avatar is marked current. **A green badge counts the tasks that
-  are running** — those with a session one of their kept runs started that the window holds and that is starting or
-  working (see "Run records" in `docs/product/scheduled-tasks.md`) — placed as the waiting count's and shown only while
-  at least one is (99+ beyond 99). Its tooltip and name are Scheduled tasks, followed while any is running by how many
-  are;
+  technology it is the current item, and no console's avatar is marked current. **A green badge counts the enabled
+  tasks** — every task switched on, whether or not one is running and whether or not it has a run to come, so an
+  enabled one-off already past or an enabled manual-only task counts too — placed as the waiting count's and shown only
+  while at least one is (99+ beyond 99). Its tooltip and name are Scheduled tasks, followed while any is enabled by how
+  many are;
 - choosing the notification of a failed run, which opens the page on that task (see "The notification of a failed run"
   in `docs/product/scheduled-tasks.md`).
 
@@ -65,7 +65,9 @@ technology it is named Scheduled tasks; the dimmed area behind the drawer is nam
   its reason saying to add a console first, since a task starts its session in one (see
   `docs/product/controls-unavailable-for-a-reason.md`).
 - **One row for each task**: its name, then under it one quiet line with its schedule in a few words ("Daily 9:00 AM",
-  "Mon, Wed, Fri 9:30 AM", "Monthly, day 15 9:00 AM", "Hourly :15", "Manual", or a one-off's short date and time),
+  "Mon, Wed, Fri 9:30 AM", "Monthly, day 15 9:00 AM", "Hourly :15", "Manual", or a one-off's short date and time;
+  an hourly schedule at minute 0 reads "Hourly, on the hour", and at any other minute gives the minute in two digits in
+  the language's own digits and notation, such as "Hourly :15", 每小时 15 分 or 毎時 15 分),
   then the name of the console or project it starts a session in, and at the line's end how long until it next runs, in
   one unit ("in 3 days", "in 2 hr", "in < 1 min"), whose tooltip is the exact time. A disabled task's name is drawn
   muted and its line ends with **Off**; a task with no next run has nothing there. A part of the line too long for the

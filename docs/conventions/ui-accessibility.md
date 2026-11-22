@@ -259,7 +259,7 @@ interaction conventions are `docs/conventions/ui-standard.md`; what each view do
 - **A value substituted into a sentence is isolated**: `<bdi dir="auto">` as React children, `isolate()` from
   `i18n/isolate.ts` in a plain string, at the point every value of a kind passes through (`daemonMessage`). A string
   that is matched, sorted, keyed or a collection's `textValue` is never isolated, and a value in an element that carries
-  a `dir` needs none.
+  a `dir` needs none, nor does a plain number or a date or time an `Intl` formatter wrote in the interface's language.
 - **An LTR value field whose placeholder is prose lays the placeholder out in the interface's direction**, `dir="ltr"`
   only once it holds a value.
 - **An icon mirrors only when its meaning is a direction** (`rtl:-scale-x-100`; Back and Forward, a disclosure or

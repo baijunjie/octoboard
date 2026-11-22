@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { translatorFor } from "../i18n/catalog";
 import { t } from "../i18n/language";
+import { LANGUAGES } from "../i18n/languages";
 import type { Schedule } from "../protocol";
 import { countdownWords, dayOfMonthAt, DAY_MS, formatDayOfMonth, formatTimeOfDay, HOUR_MS, MINUTE_MS, formatInstant, scheduleShort, instantInputValue, parseInstantInput, parseTimeInput, scheduleWords, taskZone, timeInputValue, WINDOW_ZONE } from "./scheduleText";
 
@@ -67,14 +68,41 @@ it.each<[Schedule, string]>([
   [{ kind: "manual" }, "Manual"],
   [{ kind: "once", run_at: new Date(2026, 10, 21, 4, 7).getTime() }, "Nov 21, 4:07 AM"],
 ])("writes %j in a few words as %s", (schedule, words) => {
-  // The hourly minute is one isolated left-to-right value.
-  expect(scheduleShort(t, "en", schedule)?.replace(/[\u2068\u2069]/g, "")).toBe(words);
+  expect(scheduleShort(t, "en", schedule)).toBe(words);
 });
 
-it("isolates an hourly schedule's minute as one value in every language, so that its colon keeps its place in a right-to-left line", () => {
-  for (const language of ["en", "ar"] as const) {
+it("writes an hourly schedule on the hour as its own text in every language", () => {
+  for (const language of LANGUAGES) {
     const words = translatorFor(language);
-    expect(scheduleShort(words, language, { kind: "hourly", minute: 15 }), language).toContain("\u2068:15\u2069");
+    expect(scheduleShort(words, language, { kind: "hourly", minute: 0 }), language).toBe(words("scheduledTasks.scheduleShort.hourlyOnTheHour"));
+  }
+  expect(scheduleShort(t, "en", { kind: "hourly", minute: 0 })).toBe("Hourly, on the hour");
+  expect(scheduleShort(translatorFor("zh-CN"), "zh-CN", { kind: "hourly", minute: 0 })).toBe("每小时整点");
+});
+
+it("writes an hourly schedule past the hour with its minute as two digits in every language", () => {
+  for (const language of LANGUAGES) {
+    const words = translatorFor(language);
+    for (const [minute, digits] of [[5, "05"], [15, "15"], [59, "59"]] as const) {
+      const text = scheduleShort(words, language, { kind: "hourly", minute });
+      expect(text, `${language} ${minute}`).toContain(digits);
+      expect(text, `${language} ${minute}`).not.toBe(words("scheduledTasks.scheduleShort.hourlyOnTheHour"));
+    }
+  }
+});
+
+it("writes an hourly schedule's minute in the notation of each language", () => {
+  const short = (language: (typeof LANGUAGES)[number], minute: number) => scheduleShort(translatorFor(language), language, { kind: "hourly", minute });
+  expect(short("en", 5)).toBe("Hourly :05");
+  expect(short("zh-CN", 5)).toBe("每小时 05 分");
+  expect(short("ja", 5)).toBe("毎時 05 分");
+  expect(short("ko", 5)).toBe("매시 05분");
+  expect(short("ar", 15)).toBe("كل ساعة عند الدقيقة 15");
+});
+
+it("writes the Arabic hourly short text with no colon, so no digit group has to keep its place in a right-to-left line", () => {
+  for (const minute of [0, 5, 15, 45]) {
+    expect(scheduleShort(translatorFor("ar"), "ar", { kind: "hourly", minute }), `ar ${minute}`).not.toContain(":");
   }
 });
 

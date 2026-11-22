@@ -213,7 +213,7 @@ it("renders App when a form comes to hold changes and when they go, and not for 
     run_sessions: [],
   };
   mountApp({ scheduledTasks: new Map([[task.id, task]]), scheduledTaskRuns: new Map([[task.id, []]]) });
-  await rendersOf(() => found(byLabel("Scheduled tasks")).click());
+  await rendersOf(() => found(byLabel("Scheduled tasks, enabled: 1")).click());
   const prompt = () => found(document.querySelector<HTMLTextAreaElement>("[data-region=tasks] textarea"));
   const edit = (value: string) => () => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(prompt(), value);
@@ -251,7 +251,7 @@ it("does not render App when a save starts, and renders it no more than twice wh
       answerSave = () => resolve({ type: "scheduled_task_saved", id: null, task: { ...task, prompt: "Edited" } });
     });
   });
-  await rendersOf(() => found(byLabel("Scheduled tasks")).click());
+  await rendersOf(() => found(byLabel("Scheduled tasks, enabled: 1")).click());
   const prompt = found(document.querySelector<HTMLTextAreaElement>("[data-region=tasks] textarea"));
   await rendersOf(() => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(prompt, "Edited");

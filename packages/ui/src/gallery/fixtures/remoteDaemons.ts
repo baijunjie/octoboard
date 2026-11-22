@@ -1,7 +1,7 @@
 import type { RemoteDaemonEntry } from "../../platform";
-import { SAMPLE, consoleOf, sessionOf, snapshotState } from "../../fixtures/builders";
+import { SAMPLE, consoleOf, snapshotState } from "../../fixtures/builders";
 import type { Ui } from "../../fixtures/interact";
-import { scheduledRunOf, scheduledTaskOf } from "../../fixtures/scheduledTaskBuilders";
+import { scheduledTaskOf } from "../../fixtures/scheduledTaskBuilders";
 import type { Scenario } from "../scenario";
 
 const RAIL_GROUP = "Window layout";
@@ -12,29 +12,13 @@ const { console: console_, web, api, sessions } = SAMPLE;
 /** The rail has the consoles above its Remote devices button; one console is enough to see the button under them. */
 const state = snapshotState({ consoles: [console_], projects: [web, api], sessions });
 
-/** The sample's sessions and one more, still starting, which a scheduled task's run opened. */
-const runningState = snapshotState({
-  consoles: [console_],
-  projects: [web, api],
-  sessions: [...sessions, sessionOf("s-run-starting", console_.id, api.id, "Check the search index health", "starting")],
-});
-
-/** Three scheduled tasks whose runs opened a session each: Weekly dependency review's is working and Check the search
- * index health's is starting, so two tasks are running, while Morning report's has gone idle and does not count. */
-const runningRuns = [
-  scheduledRunOf("r-deps", "t-deps", 4, { kind: "started", session: "s-web-1", started_independent: false }),
-  // A console task's run opens a console session.
-  scheduledRunOf("r-report", "t-report", 90, { kind: "started", session: SAMPLE.consoleSession.id, started_independent: false }),
-  scheduledRunOf("r-index", "t-index", 1, { kind: "started", session: "s-run-starting", started_independent: false }),
-];
-const lastRunOf = (task: string) => runningRuns.find((run) => run.task_id === task)!.ran_at;
-const runningTasks = {
+/** Three scheduled tasks, Morning report off, so the rail's badge counts the other two. */
+const enabledTasks = {
   tasks: [
-    scheduledTaskOf("t-deps", console_.id, { project_id: web.id, launch: { title: "Weekly dependency review", compatibility: {} }, schedule: { kind: "weekdays", time: { hour: 9, minute: 30 } }, last_run_at: lastRunOf("t-deps") }),
-    scheduledTaskOf("t-report", console_.id, { launch: { title: "Morning report", compatibility: {} }, last_run_at: lastRunOf("t-report") }),
-    scheduledTaskOf("t-index", console_.id, { project_id: api.id, launch: { title: "Check the search index health", compatibility: {} }, schedule: { kind: "hourly", minute: 15 }, last_run_at: lastRunOf("t-index") }),
+    scheduledTaskOf("t-deps", console_.id, { project_id: web.id, launch: { title: "Weekly dependency review", compatibility: {} }, schedule: { kind: "weekdays", time: { hour: 9, minute: 30 } } }),
+    scheduledTaskOf("t-report", console_.id, { launch: { title: "Morning report", compatibility: {} }, enabled: false }),
+    scheduledTaskOf("t-index", console_.id, { project_id: api.id, launch: { title: "Check the search index health", compatibility: {} }, schedule: { kind: "hourly", minute: 15 } }),
   ],
-  runs: Object.fromEntries(runningRuns.map((run) => [run.task_id, [run]])),
 };
 
 /** No console at all, which the Remote devices page is still reachable from. */
@@ -96,11 +80,11 @@ export const remoteDaemonsScenarios: Scenario[] = [
     category: "normal",
     title: "Rail with the Scheduled tasks and Remote devices buttons, both counting",
     description:
-      "Under the consoles and a groove, the rail's two page buttons: Scheduled tasks above and the Remote devices button (the Server glyph) of the main window, each with a green badge at its top right corner. Scheduled tasks counts the tasks that are running, 2 here (Weekly dependency review, whose session is working, and Check the search index health, whose session is starting; Morning report's console session is idle and does not count), and its tooltip and name say so. Remote devices counts the connections held: 3 here (Staging in a window, Production for the browser, Build server reconnecting). Pressing Remote devices only opens the Remote devices page (in the main area, in place of the console's sessions), which the scenarios below draw.",
-    state: runningState,
+      "Under the consoles and a groove, the rail's two page buttons: Scheduled tasks above and the Remote devices button (the Server glyph) of the main window, each with a green badge at its top right corner. Scheduled tasks counts the tasks that are enabled, 2 here (Weekly dependency review and Check the search index health; Morning report is off and does not count), and its tooltip and name say so. Remote devices counts the connections held: 3 here (Staging in a window, Production for the browser, Build server reconnecting). Pressing Remote devices only opens the Remote devices page (in the main area, in place of the console's sessions), which the scenarios below draw.",
+    state,
     desktopApp: true,
     remoteDaemons: { entries: SAVED, status: [...CONNECTED] },
-    scheduledTasks: runningTasks,
+    scheduledTasks: enabledTasks,
   },
 
   {
@@ -108,7 +92,7 @@ export const remoteDaemonsScenarios: Scenario[] = [
     group: RAIL_GROUP,
     category: "normal",
     title: "Rail with the Remote devices button, nothing connected",
-    description: "Remote daemons are saved but none is connected: the button is there all the same, under the Scheduled tasks button, the consoles and a groove, with no badge, and the Scheduled tasks button has none either, since no task is running.",
+    description: "Remote daemons are saved but none is connected: the button is there all the same, under the Scheduled tasks button, the consoles and a groove, with no badge, and the Scheduled tasks button has none either, since no task is enabled.",
     state,
     desktopApp: true,
     remoteDaemons: { entries: SAVED },

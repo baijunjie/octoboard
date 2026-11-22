@@ -119,7 +119,7 @@ async function mountWindow({ width = 1400, platform }: { width?: number; platfor
   return daemon;
 }
 
-const tasksButton = () => document.querySelector<HTMLElement>("[data-region=rail] button[aria-label='Scheduled tasks']");
+const tasksButton = () => document.querySelector<HTMLElement>("[data-region=rail] button[aria-label^='Scheduled tasks']");
 const page = () => document.querySelector<HTMLElement>("[data-region=tasks]");
 const heading = () => page()?.querySelector("h1")?.textContent;
 const prompt = () => page()!.querySelector<HTMLTextAreaElement>("textarea")!;

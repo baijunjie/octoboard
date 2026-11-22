@@ -353,7 +353,7 @@ below it, and a count badge floats over its item's corner without taking room. I
 - **Under the consoles, after a separator, the buttons of the window's pages**, each opening its page; while a page
   shows, its button is marked as the current item with a filled circle behind its glyph and no console's avatar is
   marked as current:
-  - **Scheduled tasks**, in every window, a clock with the number of scheduled tasks running in a green badge placed as
+  - **Scheduled tasks**, in every window, a clock with the number of enabled scheduled tasks in a green badge placed as
     the waiting count's, shown only while at least one is (99+ beyond 99) (see "Opening and leaving the page" in
     `docs/product/scheduled-tasks-page.md`);
   - **Remote devices**, in the main window of the desktop application only, a server glyph with the number of remote

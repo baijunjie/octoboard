@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
-// What the rail's button draws of the count of running tasks; which tasks count is `useRunningTaskCount.test.tsx`'s.
+// What the rail's button draws of the count of enabled tasks; which tasks count is `useEnabledTaskCount.test.tsx`'s.
 import { expect, it } from "vitest";
 
-import { sessionOf } from "../fixtures/builders";
 import { scheduledTaskOf } from "../fixtures/scheduledTaskBuilders";
 import { LanguageProvider } from "../i18n/react";
-import type { Session } from "../protocol";
+import type { ScheduledTask } from "../protocol";
 import type { State } from "../store";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
@@ -13,9 +12,7 @@ import { RailScheduledTasks } from "./RailScheduledTasks";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const session = (id: string, status: Parameters<typeof sessionOf>[4]) => sessionOf(id, "c", undefined, id, status);
-const taskOf = (id: string, runSessions: string[]) => scheduledTaskOf(id, "c", { run_sessions: runSessions });
-const held = (...sessions: Session[]) => new Map(sessions.map((s) => [s.id, s]));
+const taskOf = (id: string, extra: Partial<ScheduledTask> = {}) => scheduledTaskOf(id, "c", extra);
 
 function mount(state: Partial<State>) {
   const daemon = testDaemon({ state });
@@ -25,26 +22,28 @@ function mount(state: Partial<State>) {
 
 const button = (container: ParentNode) => container.querySelector<HTMLButtonElement>("button")!;
 
-it("is named Scheduled tasks and draws no badge where none is running", () => {
-  const { container } = mount({ scheduledTasks: new Map([["t-1", taskOf("t-1", ["s-1"])]]), sessions: held(session("s-1", "idle")) });
+it.each<[string, Partial<State>]>([
+  ["the tasks are not listed", { scheduledTasks: undefined }],
+  ["no task exists", { scheduledTasks: new Map() }],
+  ["every task is disabled", { scheduledTasks: new Map([["t-1", taskOf("t-1", { enabled: false })], ["t-2", taskOf("t-2", { enabled: false })]]) }],
+])("is named Scheduled tasks and draws no badge where %s", (_, state) => {
+  const { container } = mount(state);
   expect(button(container).getAttribute("aria-label")).toBe("Scheduled tasks");
   expect(container.textContent).toBe("");
 });
 
-it("draws the count in the badge and in the button's name", () => {
-  const { container } = mount({
-    scheduledTasks: new Map([["t-1", taskOf("t-1", ["s-1"])], ["t-2", taskOf("t-2", ["s-2"])]]),
-    sessions: held(session("s-1", "working"), session("s-2", "starting")),
-  });
-  expect(button(container).getAttribute("aria-label")).toBe("Scheduled tasks, running: 2");
+it("draws the count of enabled tasks in the badge and in the button's name", () => {
+  const { container } = mount({ scheduledTasks: new Map([["t-1", taskOf("t-1")], ["t-2", taskOf("t-2")], ["t-3", taskOf("t-3", { enabled: false })]]) });
+  expect(button(container).getAttribute("aria-label")).toBe("Scheduled tasks, enabled: 2");
   expect(container.textContent).toBe("2");
 });
 
 it("shows the overflow label past 99", () => {
-  const ids = Array.from({ length: 100 }, (_, i) => `s-${i}`);
-  const { container } = mount({
-    scheduledTasks: new Map(ids.map((id) => [`t-${id}`, taskOf(`t-${id}`, [id])])),
-    sessions: held(...ids.map((id) => session(id, "working"))),
-  });
+  const { container } = mount({ scheduledTasks: new Map(Array.from({ length: 100 }, (_, i) => [`t-${i}`, taskOf(`t-${i}`)] as const)) });
   expect(container.textContent).toBe("99+");
+});
+
+it("shows the count itself at 99", () => {
+  const { container } = mount({ scheduledTasks: new Map(Array.from({ length: 99 }, (_, i) => [`t-${i}`, taskOf(`t-${i}`)] as const)) });
+  expect(container.textContent).toBe("99");
 });

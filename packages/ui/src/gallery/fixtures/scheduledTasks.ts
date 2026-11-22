@@ -148,7 +148,7 @@ const EARLIER_PLAIN_RUN = lastOccurrence(Date.now(), 9, 30, onPlainDay, 1);
 const MANUAL_PLAIN_RUN = EARLIER_PLAIN_RUN + 5 * 3_600_000;
 
 /** The window the plain scenarios open on: the same console and projects, with the two sessions the plain task's runs
- * started (idle, so no running badge sits on the rail). */
+ * started (idle). */
 const plainSessions = [
   consoleSession,
   sessionOf("s-deps-1", console_.id, web.id, "Dependency review", "idle", { bound_to: consoleSession.id, started_at: LATEST_PLAIN_RUN }),
@@ -238,7 +238,7 @@ const runOf = (id: string): ScheduledTaskRun => RUNS.find((run) => run.id === id
 /** A zone the daemon reads schedules in that is not the window's own, so the page names it. */
 const OTHER_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone === "Asia/Tokyo" ? "America/New_York" : "Asia/Tokyo";
 
-/** Presses the rail's Scheduled tasks button, which shows the page; its name counts the tasks running, when there are any. */
+/** Presses the rail's Scheduled tasks button, which shows the page; its name counts the tasks enabled, when there are any. */
 const showPage = (ui: Ui) => ui.press(describing("the rail's Scheduled tasks button", (name) => name.startsWith(ui.t("scheduledTasks.label"))));
 
 /** Scrolls the task's page, a scroll region named by the task, to its end, where the Schedule card stands above Delete; the
@@ -255,7 +255,7 @@ export const scheduledTasksScenarios: Scenario[] = [
     category: "normal",
     title: "Scheduled tasks page with several tasks",
     description:
-      "The rail's Scheduled tasks button, directly above Remote devices, is drawn as the current item while the page shows, and no console avatar button is drawn as the current one (no filled circle behind an avatar); it carries a green badge reading 1, since one task is running (the selected task's latest run opened Fix the summary layout, which is working). The sidebar lists the tasks, oldest first, one row of two lines each, with no icons: the name (the first line of the prompt for the one with no name), then the schedule in short form and the name of what the task starts (\"Mon, Wed, Fri 9:30 AM · Web app\", \"Daily 8:00 AM\", \"Hourly :15\", \"Monthly, day 31 9:00 AM\", a date for the one-off, \"Manual\"), fading at its end, and at the line's end a one-unit countdown to the next run (\"in 2 hr\", whose tooltip is the exact next run time) or Off for the one that is off. The long name is cut at the row's end. The first, a project task that reports to the console session, is selected: the header is its name and Run now, which stays beside a long name, then a quiet line of the target's icon and name and the schedule in words; below it one card holds two figures, Next run (the countdown over its time) and Last run (the time ago with an outcome mark, over its time); then two tabs, Settings (selected) and Run history: the Session card (Console and Project side by side, Name, Agent and account, Report to, Prompt, which shows an example as its placeholder, and the Advanced settings), the Schedule card (the kind and the fields it needs in one row where the area is wide, and stacked where it is narrow; Enabled below) and the Delete card, with Save and Revert (disabled until something changes) pinned in a bar at the bottom of the area that stays in view while the form scrolls. Choose a narrow width to see the sidebar become a drawer.",
+      "The rail's Scheduled tasks button, directly above Remote devices, is drawn as the current item while the page shows, and no console avatar button is drawn as the current one (no filled circle behind an avatar); it carries a green badge reading 8, the tasks that are enabled (nine are listed and Nightly backup check is off). The sidebar lists the tasks, oldest first, one row of two lines each, with no icons: the name (the first line of the prompt for the one with no name), then the schedule in short form and the name of what the task starts (\"Mon, Wed, Fri 9:30 AM · Web app\", \"Daily 8:00 AM\", \"Hourly :15\", \"Monthly, day 31 9:00 AM\", a date for the one-off, \"Manual\"), fading at its end, and at the line's end a one-unit countdown to the next run (\"in 2 hr\", whose tooltip is the exact next run time) or Off for the one that is off. The long name is cut at the row's end. The first, a project task that reports to the console session, is selected: the header is its name and Run now, which stays beside a long name, then a quiet line of the target's icon and name and the schedule in words; below it one card holds two figures, Next run (the countdown over its time) and Last run (the time ago with an outcome mark, over its time); then two tabs, Settings (selected) and Run history: the Session card (Console and Project side by side, Name, Agent and account, Report to, Prompt, which shows an example as its placeholder, and the Advanced settings), the Schedule card (the kind and the fields it needs in one row where the area is wide, and stacked where it is narrow; Enabled below) and the Delete card, with Save and Revert (disabled until something changes) pinned in a bar at the bottom of the area that stays in view while the form scrolls. Choose a narrow width to see the sidebar become a drawer.",
     state,
     desktopApp: true,
     remoteDaemons: { entries: [staging, production] },

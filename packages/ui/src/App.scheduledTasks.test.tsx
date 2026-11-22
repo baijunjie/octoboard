@@ -114,7 +114,7 @@ async function mountWindow(tasks: ScheduledTask[] = [REPORT, CLEANUP], platform?
   return daemon;
 }
 
-const tasksButton = () => document.querySelector<HTMLElement>("[data-region=rail] button[aria-label='Scheduled tasks']");
+const tasksButton = () => document.querySelector<HTMLElement>("[data-region=rail] button[aria-label^='Scheduled tasks']");
 const page = () => document.querySelector<HTMLElement>("[data-region=tasks]");
 const heading = () => page()?.querySelector("h1")?.textContent;
 const topBar = () => document.querySelector<HTMLElement>("[data-region=topbar]")!;

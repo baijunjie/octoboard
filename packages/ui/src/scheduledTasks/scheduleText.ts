@@ -1,5 +1,4 @@
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
 import type { Schedule, TimeOfDay, Weekday } from "../protocol";
 import { SCHEDULE_KINDS, type ScheduleKind } from "../values/scheduleKind";
@@ -179,15 +178,31 @@ function shortInstant(language: Language, at: number, zone: TaskZone): string {
   return dateFormat(language, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...(zone.zone && { timeZone: zone.zone }) }).format(new Date(at));
 }
 
-/** A schedule in a few words for a narrow row ("Mon, Wed, Fri 9:30 AM", "Daily 8:00 AM", "Monthly, day 15 9:00 AM", "Hourly :15"). A one-off's time is
- * written in `zone` without its name; `scheduleWords` has the full sentence. `undefined` for a kind a newer daemon sends. */
+const minuteFormats = new Map<Language, Intl.NumberFormat>();
+
+/** `minute` in two digits, written in `language`'s digits. */
+function twoDigitMinute(language: Language, minute: number): string {
+  let format = minuteFormats.get(language);
+  if (!format) {
+    format = new Intl.NumberFormat(language, { minimumIntegerDigits: 2, useGrouping: false });
+    minuteFormats.set(language, format);
+  }
+  return format.format(minute);
+}
+
+/** A schedule in a few words for a narrow row ("Mon, Wed, Fri 9:30 AM", "Daily 8:00 AM", "Monthly, day 15 9:00 AM",
+ * "Hourly :15", "Hourly, on the hour"). A one-off's time is written in `zone` without its name; `scheduleWords` has the
+ * full sentence. `undefined` for a kind a newer daemon sends. */
 export function scheduleShort(t: Translate, language: Language, schedule: Schedule, zone: TaskZone = WINDOW_ZONE): string | undefined {
   switch (schedule.kind) {
     case "once":
       return shortInstant(language, schedule.run_at, zone);
     case "hourly":
-      // One left-to-right value, so that under a right-to-left language it does not read "15:".
-      return t("scheduledTasks.scheduleShort.hourly", { minute: isolate(`:${String(schedule.minute).padStart(2, "0")}`) });
+      // The minute alone, in two digits; each language writes its own notation around it (":15", "15 分"), and a
+      // language read right to left writes it in words, since a colon beside it would land on the wrong side.
+      return schedule.minute === 0
+        ? t("scheduledTasks.scheduleShort.hourlyOnTheHour")
+        : t("scheduledTasks.scheduleShort.hourly", { minute: twoDigitMinute(language, schedule.minute) });
     case "daily":
       return t("scheduledTasks.scheduleShort.daily", { time: formatTimeOfDay(language, schedule.time) });
     case "weekdays":
