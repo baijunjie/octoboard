@@ -11,15 +11,17 @@ Reaching a usage limit is the most common thing that interrupts work. When a ses
 
 <Screenshot id="switch-account-dialog" alt="The “Switch account” confirmation, naming the session and the account it will be switched to." />
 
-## Why it works this way
+## What it does
 
-- <strong>A limit should not mean starting over.</strong> A switch keeps the session and its conversation and changes only the account it runs under, so the task carries on instead of being explained again.
-- <strong>The conversation is copied, not moved.</strong> Each account keeps its own folder, and an agent finds a conversation in the folder of the account it runs under. A switch copies the session's conversation into the target account's folder and restarts the session there. The original stays in the account it came from, so a switch that fails loses nothing, and switching back needs no second copy.
 - <strong>The session restarts.</strong> The agent's process ends and starts again under the new account, which takes a few seconds. While it does, the session shows as switching and cannot be resumed or switched again. Background processes the session had running are carried over to the restart where possible; the ones the agent ends itself as it exits are not, and the session is told which.
 - <strong>A cut-off turn is continued.</strong> If the switch interrupted a turn, or the turn had stopped on the usage limit, the session is sent a message from {productName} asking it to continue the task without repeating finished work. If you had cancelled the turn, or it had finished, no such message is sent.
-- <strong>It is the same agent.</strong> A session never changes agent by a switch, so you can only switch between accounts of the session's own agent. The session reads the new account's configuration; the model, reasoning effort and compatibility choices you set explicitly stay. Settings kept only in the old account's folder do not follow, so the same conversation can come up with different defaults.
+- <strong>A session keeps its agent.</strong> A session never changes agent by a switch, so you can only switch between accounts of the session's own agent. The session reads the new account's configuration; the model, reasoning effort and compatibility choices you set explicitly stay. Settings kept only in the old account's folder do not follow, so the same conversation can come up with different defaults.
 - <strong>Some accounts are not valid targets.</strong> A session cannot be switched onto an account that has reached its limit, is not logged in or is turned off.
-- <strong>Automatic switching is opt-in.</strong> It is off to begin with because it ends a session's process and spends another account's usage without asking.
+
+## Why it works this way
+
+- <strong>The conversation is copied, not moved.</strong> Each account keeps its own folder, and an agent finds a conversation in the folder of the account it runs under. A switch copies the session's conversation into the target account's folder and restarts the session there. The original stays in the account it came from, so a switch that fails loses nothing, and switching back needs no second copy.
+- <strong>Automatic switching is opt-in.</strong> It is off by default because it ends a session's process and spends another account's usage without asking.
 
 ## Switch an account by hand
 

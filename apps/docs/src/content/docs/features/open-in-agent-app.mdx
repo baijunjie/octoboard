@@ -11,14 +11,18 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 <Screenshot id="open-in-app-menu" alt="An interrupted session's menu with “Open in Claude app” after “Hand off”, and the note that the agent's app may not see this conversation." />
 
+## What it does
+
+- <strong>It's a bridge, not a copy.</strong> {productName} only asks the app to show the session's conversation: nothing is copied.
+- <strong>A session that isn't archived yet is archived first, after a confirmation.</strong> The sessions under it are archived with it. Its branches and worktrees are kept, since the app works in the session's folder, and you choose which of its background processes keep running. Reopen it from the archive once you're done in the app, to continue here.
+- <strong>It is offered only where the agent's app is installed.</strong> That means a Mac or Windows PC with the agent's app on it. Grok Build has no app, so it never shows the action.
+- <strong>A session at work can't be opened.</strong> While the session is working or waiting for you, the action is disabled with <strong>Session busy</strong> under it; wait until it's waiting for instructions. A locked session shows <strong>Session locked</strong>, and a session with no conversation yet has nothing to open: <strong>No conversation yet</strong>.
+- <strong>The app reads the agent's default directory only.</strong> If the conversation's latest record lives in an account's own directory (an account that doesn't share the default configuration), the item carries a note, <strong>The agent's app may not see this conversation</strong>. It only warns: the action still works, but the app may show an older state, or nothing.
+
 ## Why it works this way
 
-- <strong>{productName} orchestrates, the agent's app is for working in depth.</strong> Keeping each to its job means you get both: many agents and projects in one place, and the full app when one task deserves it.
-- <strong>It's a bridge, not a copy.</strong> {productName} only asks the app to show the session's conversation: nothing is copied.
-- <strong>The session is archived first, like a handed-off one.</strong> The app and {productName} must not both write to the conversation, and an interrupted session would come back as soon as you select it. So a session that isn't archived yet is archived before the app opens, together with the sessions under it, after a confirmation. Its branches and worktrees are kept, since the app works in the session's folder, and you choose which of its background processes keep running. Reopen it from the archive once you're done in the app, to continue here.
-- <strong>A session at work can't be opened.</strong> While the session is working or waiting for you, the action is disabled with <strong>Session busy</strong> under it; wait until it's waiting for instructions. A locked session shows <strong>Session locked</strong>, and a session with no conversation yet has nothing to open: <strong>No conversation yet</strong>.
-- <strong>It happens on the daemon's computer.</strong> For a remote window, the app opens on the remote machine, not on the computer the window runs on. The action is offered only on a Mac or Windows PC, and only when the agent's app is installed there. Grok Build has no app, so it never shows the action.
-- <strong>The app reads the agent's default directory only.</strong> If the conversation's latest record lives in an account's own directory (an account that doesn't share the default configuration), the item carries a note, <strong>The agent's app may not see this conversation</strong>. It only warns: the action still works, but the app may show an older state, or nothing.
+- <strong>The session is archived first, like a handed-off one.</strong> The app and {productName} must not both write to the conversation, and an interrupted session would come back as soon as you select it.
+- <strong>It happens on the daemon's computer.</strong> For a remote window, the app opens on the remote machine, not on the computer the window runs on. That is where the session's folder and conversation are.
 
 ## How to use it
 

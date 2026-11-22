@@ -42,6 +42,20 @@ relative to `apps/docs/` unless they start with `apps/`, `packages/`, `scripts/`
   from its text, so an English fragment copied into a translation is a broken link (it is right only where that language
   has no translation of the target page). Retitling a heading changes the anchors to it.
 
+## Features pages
+
+- **A Features page separates what the feature does from why it is designed that way.** After the opening paragraph and
+  the lead screenshot come "What it does" (the feature's behaviour, rules, values and limits, closing with its Limits
+  aside or "Its limits" point where it has limits), then "Why it works this way", the how-to sections ("How to use it",
+  or sections named for each task) and "Next"; a translation uses the same headings in its language on every page. A
+  caution that applies only to one how-to section's steps stays in that section.
+- **"Why it works this way" holds only design choices a reader would not expect or could take for a defect**: a
+  deliberate restriction, a trade-off, a difference from how the agent's own program or a common tool behaves, which
+  computer something runs on, what is never read, stored or sent. Each point states the choice and its reason. A point
+  that only describes what the feature does, or a choice whose reason the product docs do not give, belongs in "What it
+  does", and a page with no qualifying choice has no "Why it works this way" section: a reason invented for ordinary
+  behaviour buries the ones that matter.
+
 ## Screenshots
 
 - **A page's screenshot is a capture of a UI state gallery scenario**, listed in `screenshots/<group>.mjs` and written

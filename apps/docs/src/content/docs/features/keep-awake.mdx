@@ -11,11 +11,9 @@ Agents keep working when you walk away, but a computer that goes to sleep does n
 
 <Screenshot id="prevent-sleep-setting" alt="The “General” page in Settings, with “Prevent sleep” switched on and “When to prevent sleep” set to “While sessions work”." />
 
-## Why it works this way
+## What it does
 
-- <strong>The agents' work should not depend on you being at the computer.</strong> With <strong>Prevent sleep</strong> on, {productName} holds off the sleep that idleness brings, so a long run is not cut short by the system's idle timer, and the screen stays on for work that needs it.
-- <strong>It is the host that is held awake.</strong> The computer is the one that runs the daemon, {productName}'s background program. When you use {productName} on one computer and the daemon on another, it is the other computer that is kept awake, not the one you sit at.
-- <strong>It is off to begin with, and you choose when.</strong> <strong>When to prevent sleep</strong> offers <strong>While sessions work</strong>, the default, and <strong>Always</strong>. <strong>While sessions work</strong> holds the computer while a session is starting, working, dormant or working in the background; a session that waits for you does not count, and once none counts the system's own settings apply again. <strong>Always</strong> holds it for as long as the daemon runs: in the desktop app, as long as the app runs, with its window shown or closed into the background.
+- <strong>It is off by default.</strong> Once you switch on <strong>Prevent sleep</strong>, <strong>When to prevent sleep</strong> offers <strong>While sessions work</strong>, the default, and <strong>Always</strong>. <strong>While sessions work</strong> holds the computer while a session is starting, working, dormant or working in the background; a session that waits for you does not count, and once none counts the system's own settings apply again. <strong>Always</strong> holds it for as long as the daemon runs: in the desktop app, as long as the app runs, with its window shown or closed into the background.
 - <strong>What is held depends on the system.</strong>
   - macOS: the display and the system are both kept from idle sleep, so the screen neither turns off nor locks while you are idle.
   - Windows: the display and the system are both requested. The display part is best effort: in a session with no display, such as a service or an SSH session, only the system is held.
@@ -27,6 +25,10 @@ Agents keep working when you walk away, but a computer that goes to sleep does n
 - When the host refuses the hold, nothing is held and the daemon logs the reason.
 - When {productName} quits, or the daemon stops or crashes, the hold ends with it.
 </Aside>
+
+## Why it works this way
+
+- <strong>It is the host that is held awake.</strong> The computer is the one that runs the daemon, {productName}'s background program, because the sessions run there. When you use {productName} on one computer and the daemon on another, it is the other computer that is kept awake, not the one you sit at.
 
 ## How to use it
 

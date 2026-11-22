@@ -11,13 +11,13 @@ Many people hold several subscriptions at once, such as a personal one and a wor
 
 <Screenshot id="accounts-table" alt="The “Agent accounts” section of Settings, with the Claude Code tab open: a table of accounts with their usage, login status and a “Disable” switch." />
 
-## Why it works this way
+## What it does
 
-- <strong>Changing accounts should not interrupt work.</strong> An agent holds one login at a time. {productName} instead lists every account of an agent under a name you choose, and a console, a project or a single session picks the account it uses. Accounts of the same agent can run side by side, each signed in as itself.
+- <strong>A console, a project or a session picks the account it uses.</strong> {productName} lists every account of an agent under a name you choose. Accounts of the same agent can run side by side, each signed in as itself.
 - <strong>An account is a named folder.</strong> An agent account is a configuration directory of the agent, where it keeps its login and its conversation history.
-- <strong>{productName} never handles your credentials.</strong> Logging in runs the agent's own sign-in in the background, against the account's folder. {productName} reads the agent's sign-in record only to show the email each account is signed in with.
 - <strong>Every agent has a default account.</strong> It is the agent's own folder, the one it uses when you do nothing. You can rename it or turn it off, but not remove it or change its folder.
 - <strong>An account can be turned off.</strong> A disabled account leaves the account choices and the usage displays, and new sessions will not use it. Sessions already running on it keep running. Nothing turns it back on except you.
+- <strong>{productName} never handles your credentials.</strong> Logging in runs the agent's own sign-in in the background, against the account's folder. {productName} reads the agent's sign-in record only to show the email each account is signed in with.
 - <strong>Its limits:</strong> an agent has to be installed and found on your <code dir="ltr">PATH</code> before its accounts can be used, and {productName} only adds agents installed on this computer; for one that is not, it links to the agent's own installation instructions. Removing an account does not delete its folder unless you ask for that.
 
 ## How to use it

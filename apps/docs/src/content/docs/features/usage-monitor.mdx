@@ -11,14 +11,16 @@ To decide which account should take the work, you first need to see them. {produ
 
 <Screenshot id="rail-usage-panel" alt="The “Account usage” panel opened from the rail, with no session selected, listing an agent's accounts with their remaining usage and reset countdowns." />
 
-## Why it works this way
+## What it does
 
-- <strong>You need to see the accounts before you can choose one.</strong> Each agent shows its usage in its own place, so {productName} gathers every account's remaining usage and reset countdown in one view.
-- <strong>It asks the agent itself.</strong> For each account, {productName} runs the agent's own command that reports usage, in the account's folder, and shows the answer. It uses no credential of its own and contacts no service of its own.
 - <strong>Windows are named as the agent names them.</strong> Claude Code shows its five-hour window as <strong>Session</strong>, its weekly window for the whole account as <strong>Weekly</strong> (<strong>Weekly · all models</strong> when a model also has its own weekly limit), and one weekly window for each model with a limit of its own, named after the model. Codex shows <strong>5h</strong> and <strong>Weekly</strong>. Grok Build shows one credit pool, named <strong>Weekly</strong>, <strong>Monthly</strong> or <strong>Credits</strong> after its period. Each window shows what remains as a percentage, a bar, and "resets in" a countdown.
 - <strong>Readings refresh by themselves.</strong> Every account is read about every 5 minutes, again shortly after a window resets, soon after you add or log in an account, and when you open <strong>Settings › Agent accounts</strong>, the usage panel or the menu bar menu, for accounts not read recently. A failed reading is retried less and less often, up to every 40 minutes.
 - <strong>It says when it cannot be sure.</strong> Each account shows how long ago it was read. If the latest reading failed, the last good one stays, marked as out of date with the reason in a popover. An account that is not logged in is shown as such.
 - <strong>Its limits:</strong> it shows the plan and its windows only, not spend, credit balances or predictions. Readings are kept in memory and never exported, so after a restart each account starts unread until its first reading. An account that is turned off is not read, and an account on an API key, or another provider with no plan quota behind it, has no usage to show.
+
+## Why it works this way
+
+- <strong>It asks the agent itself.</strong> For each account, {productName} runs the agent's own command that reports usage, in the account's folder, and shows the answer, so it uses no credential of its own and contacts no service of its own.
 
 ## How to use it
 

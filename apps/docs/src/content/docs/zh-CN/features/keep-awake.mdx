@@ -11,11 +11,9 @@ import Screenshot from "../../../../components/Screenshot.astro";
 
 <Screenshot id="prevent-sleep-setting" alt="设置中的“通用”页面，“阻止睡眠”已开启，“何时阻止睡眠”为“会话工作期间”。" />
 
-## 为什么这样设计
+## 功能说明
 
-- <strong>智能体的工作不该取决于你是否守在电脑前。</strong>开启<strong>阻止睡眠</strong>后，{productName} 会挡住因闲置而触发的睡眠，长时间的运行不会被系统的闲置计时器打断，需要画面的工作屏幕也会一直亮着。
-- <strong>被保持唤醒的是主机。</strong>这台电脑指运行守护进程（{productName} 的后台程序）的那一台。你在一台电脑上使用 {productName}、守护进程在另一台上时，保持唤醒的是另一台，而不是你面前这台。
-- <strong>默认关闭，何时生效由你选。</strong><strong>何时阻止睡眠</strong>有两个选项：默认的<strong>会话工作期间</strong>，以及<strong>始终</strong>。<strong>会话工作期间</strong>会在有会话正在启动、工作、休眠或在后台工作时保持唤醒；在等你的会话不算，没有会话算数时，系统自己的设置重新生效。<strong>始终</strong>则在守护进程运行期间一直保持；在桌面应用里，就是应用运行期间，无论窗口是显示还是收进后台。
+- <strong>它默认关闭。</strong>开启<strong>阻止睡眠</strong>后，<strong>何时阻止睡眠</strong>有两个选项：默认的<strong>会话工作期间</strong>，以及<strong>始终</strong>。<strong>会话工作期间</strong>会在有会话正在启动、工作、休眠或在后台工作时保持唤醒；在等你的会话不算，没有会话算数时，系统自己的设置重新生效。<strong>始终</strong>则在守护进程运行期间一直保持；在桌面应用里，就是应用运行期间，无论窗口是显示还是收进后台。
 - <strong>具体挡住什么，取决于系统。</strong>
   - macOS：显示器和系统都不会因闲置而睡眠，所以你闲置时屏幕既不会熄灭，也不会锁定。
   - Windows：同时请求保持显示器和系统唤醒。显示器这部分是尽力而为：在没有显示器的会话里（比如服务或 SSH 会话），只保持系统唤醒。
@@ -27,6 +25,10 @@ import Screenshot from "../../../../components/Screenshot.astro";
 - 主机拒绝保持唤醒时，什么都不会被保持，守护进程会记录原因。
 - {productName} 退出，或守护进程停止、崩溃时，保持唤醒随之结束。
 </Aside>
+
+## 为什么这样设计
+
+- <strong>被保持唤醒的是主机。</strong>这台电脑指运行守护进程（{productName} 的后台程序）的那一台，因为会话就在那里运行。你在一台电脑上使用 {productName}、守护进程在另一台上时，保持唤醒的是另一台，而不是你面前这台。
 
 ## 如何使用
 

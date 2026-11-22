@@ -11,19 +11,23 @@ Real requests often span several projects: a front end, a back end, the docs. Ha
 
 <Screenshot id="console-sessions-sidebar" alt="The sidebar with console sessions at the top and the project sessions they started under their projects, each with a status glyph." />
 
-## Why it works this way
+## What it does
 
-- <strong>One entry point for work that spans projects.</strong> You describe the request once. The console session decides which of its console's projects it belongs to, gives each project's agent its part, follows up and sums up, so you do not relay between projects yourself. A console groups projects, and one console can run several console sessions at once.
-- <strong>A console session changes no project itself.</strong> Every change to a project goes through a session it starts there, so that session loads that project's own instructions, skills and settings (see [Native project sessions](../native-project-sessions/)). A console session can still read a project, and it sees what a session changed through {productName}'s own tools rather than by running <code dir="ltr">git status</code> in the project.
+- <strong>The console session works out which projects the request belongs to.</strong> They are the projects of its own console, which groups projects; one console can run several console sessions at once.
 - <strong>The sessions it starts are ordinary project sessions.</strong> They appear under their projects in the sidebar, marked with a small dot in the console session's colour, and you can open any of them and type to it ([Session status and intervention](../session-intervention/)).
 - <strong>Sessions report back.</strong> A session started by a console session sends it a report saying whether the work is done, failed or needs a decision. The console session shows you the result in its own terminal and in the report panel, which can hold tables, charts and forms.
-- <strong>Sessions can pass each other information.</strong> Any session can see the other running sessions and tell them things. That is information, not an order: a session takes work only from its owner or from you, and its owner is sent a copy of what reaches it.
+- <strong>Sessions can pass each other information.</strong> Any session can see the other running sessions and tell them things, and the owner of the session that receives it is sent a copy.
 
 <Aside type="caution" title="Limits">
 - A console session works on its own console's projects. For a project of another console it asks you to start a session there.
 - Everything here is done by AI agents. {productName} frames information so that it is clearly not an instruction, but whether a model acts on a message is the model's own call, which {productName} cannot enforce.
 - The agents' own permission prompts still apply: a session that needs your approval stops and waits for you.
 </Aside>
+
+## Why it works this way
+
+- <strong>A console session changes no project itself.</strong> Every change to a project goes through a session it starts there, so that session loads that project's own instructions, skills and settings (see [Native project sessions](../native-project-sessions/)). A console session can still read a project, and it sees what a session changed through {productName}'s own tools rather than by running <code dir="ltr">git status</code> in the project.
+- <strong>What reaches a session from another session is information, not an order.</strong> A session is told to take work only from its owner or from you, and only its owner's tools can command it, so being reachable by every session does not let them command it.
 
 ## How to use it
 
@@ -47,7 +51,7 @@ You'll know it worked when the console session's summary appears in its terminal
 ### Related settings
 
 - In the console's settings, <strong>Console session instructions</strong> adds your own instructions for the console's console sessions. They take precedence over the built-in ones, short of letting a console session change a project itself.
-- In <strong>Settings › Agent behavior</strong>, <strong>Automatically approve session requests</strong> and the other approval switches decide which requests from sessions {productName} approves without asking you. They are off to begin with.
+- In <strong>Settings › Agent behavior</strong>, <strong>Automatically approve session requests</strong> and the other approval switches decide which requests from sessions {productName} approves without asking you. They are off by default.
 
 ## Next
 

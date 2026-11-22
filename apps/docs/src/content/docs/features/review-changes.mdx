@@ -11,13 +11,11 @@ To judge how well an agent did, you finally have to look at the code changes, no
 
 <Screenshot id="git-changes-list" alt="The “Changes” tab for the branch feature/ranking-experiments, with one unstaged change and four commits listed under “Committed”, each with its files." />
 
-## Why it works this way
+## What it does
 
-- <strong>The changes, not the self-report.</strong> The panel beside the session shows what is actually on disk and in the branch, so the review rests on the code.
-- <strong>You review in the same window, without leaving the session.</strong> The project's panel needs no session of its own: it reads only the project. Moving between sessions of a project leaves the panel as you set it, except that the <strong>Changes</strong> tab follows the session's branch.
+- <strong>The project's panel needs no session of its own.</strong> It reads only the project. Moving between sessions of a project leaves the panel as you set it, except that the <strong>Changes</strong> tab follows the session's branch.
 - <strong>It shows the state on disk.</strong> The <strong>Files</strong> tab reads the project's folder live, including what an agent has written and not committed yet. The <strong>Changes</strong> tab lists what the branch has not committed (<strong>Conflicted</strong>, <strong>Staged</strong>, <strong>Unstaged</strong> and <strong>Untracked</strong>) and what it has <strong>Committed</strong> since it forked from the branch the project's own working copy has checked out. For that branch itself, it lists what it has not pushed to its remote branch.
 - <strong>It follows the session.</strong> Selecting one of the project's sessions sets the <strong>Branch</strong> selector to the branch that session is responsible for, so the changes you see are the ones that session made. You can choose any other local branch yourself.
-- <strong>It is read-only, on purpose.</strong> The panel and the viewer cannot edit, save, stage, commit or check out, and the Changes tab fetches nothing from a remote. Reviewing can never disturb the work an agent is doing. Changing things stays with the agents and with the project's Git actions you confirm.
 - <strong>Diffs are drawn for reading.</strong> A text change opens as a unified diff or side by side, with long runs of unchanged lines folded until you expand them. An image change shows <strong>Before</strong> and <strong>After</strong>. A Markdown file opens as a rendered document.
 
 <Aside type="caution" title="Limits">
@@ -26,6 +24,10 @@ To judge how well an agent did, you finally have to look at the code changes, no
 - A branch no worktree has checked out has no uncommitted changes to show. Files that Git ignores appear on the <strong>Files</strong> tab only.
 - A project that is not a Git repository has no <strong>Changes</strong> to list.
 </Aside>
+
+## Why it works this way
+
+- <strong>It is read-only, on purpose.</strong> The panel and the viewer cannot edit, save, stage, commit or check out, and the Changes tab fetches nothing from a remote. Reviewing can never disturb the work an agent is doing. Changing things stays with the agents and with the project's Git actions you confirm.
 
 ## How to use it
 

@@ -11,15 +11,17 @@ The price of having several accounts is installing the same skills and plugins, 
 
 <Screenshot id="account-sharing-switch" alt="An account's settings dialog, with the “Share default configuration” and “Disable account” switches." />
 
-## Why it works this way
+## What it does
 
-- <strong>Several accounts should not mean setting everything up again.</strong> Accounts of one agent share their configuration, so you set a tool up once; only what is private to the account, its login, stays separate.
-- <strong>Links, not copies.</strong> With sharing on, the parts of an account's folder that can be shared are replaced by links to the agent's default account's folder. Something installed once is seen by every account that shares, and a conversation is in one place whichever of those accounts runs it.
-- <strong>The login stays separate.</strong> Credentials are never shared, so accounts that share still run side by side, each signed in as itself. Sharing one folder with only the credentials swapped would not work: every running session would follow each swap, and one session refreshing its login would break the stored copy of another account's.
 - <strong>A fixed list, per agent.</strong> What is shared is not chosen entry by entry. It covers the agent's settings and instruction files, its skills, plugins, commands and similar folders, and its conversation history. For Codex and Grok Build that includes the file that holds MCP servers, so a server defined there is shared too.
 - <strong>What is not shared:</strong> login credentials; a Codex account's MCP sign-ins; Claude Code's <code dir="ltr">.claude.json</code>, which holds the account's identity, per-project trust and user-level MCP servers, so Claude Code's user-level MCP servers stay separate for each account; and per-machine caches and registries.
 - <strong>Nothing is lost when it is turned on or off.</strong> Turning sharing on keeps a backup of every configuration entry the account had, and moves its conversations into the shared folder so earlier ones stay resumable. Turning it off restores the backups and takes the account's own sessions' conversations back.
 - <strong>Its limits:</strong> the default account has no sharing switch, being the folder the others share. Sharing cannot be changed while the account has working sessions or is being logged in. Changing it ends the account's idle sessions and resumes them afterwards, and text typed into an idle session's terminal but not yet sent is lost. On Windows the computer running the daemon must allow file links, which Developer Mode does; turn it on in Windows Settings, then quit {productName} and open it again.
+
+## Why it works this way
+
+- <strong>Links, not copies.</strong> With sharing on, the parts of an account's folder that can be shared are replaced by links to the agent's default account's folder, so something installed once is seen by every account that shares, and a conversation is in one place whichever of those accounts runs it.
+- <strong>The login stays separate.</strong> Credentials are never shared, so accounts that share still run side by side, each signed in as itself. Sharing one folder with only the credentials swapped would not work: every running session would follow each swap, and one session refreshing its login would break the stored copy of another account's.
 
 ## How to use it
 

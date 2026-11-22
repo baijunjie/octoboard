@@ -11,13 +11,11 @@ import Screenshot from "../../../../components/Screenshot.astro";
 
 <Screenshot id="git-changes-list" alt="“更改”标签页，显示分支 feature/ranking-experiments：一处未暂存的改动，以及“已提交”下的四个提交，每个提交下列出它的文件。" />
 
-## 为什么这样设计
+## 功能说明
 
-- <strong>看改动，而不是看自述。</strong>会话旁的面板显示磁盘上和分支里实际的内容，审阅就以代码为依据。
-- <strong>在同一个窗口里审阅，不用离开会话。</strong>项目的面板不需要自己的会话：它只读取项目。在同一项目的会话之间切换时，面板保持你设置的样子，只有<strong>更改</strong>标签页会跟随会话的分支。
+- <strong>项目的面板不需要自己的会话。</strong>它只读取项目。在同一项目的会话之间切换时，面板保持你设置的样子，只有<strong>更改</strong>标签页会跟随会话的分支。
 - <strong>显示的是磁盘上的真实状态。</strong><strong>文件</strong>标签页实时读取项目文件夹，包括智能体已写入但还没提交的内容。<strong>更改</strong>标签页列出分支尚未提交的内容（<strong>有冲突</strong>、<strong>已暂存</strong>、<strong>未暂存</strong>和<strong>未跟踪</strong>），以及它从项目主工作副本所在分支分出来之后<strong>已提交</strong>的内容。对于那个分支本身，则列出它还没推送到远程分支的内容。
 - <strong>它跟随会话。</strong>选中项目的某个会话时，<strong>分支</strong>选择器会设为该会话负责的分支，所以你看到的就是这个会话做的改动。你也可以自己选择任何其他本地分支。
-- <strong>它是只读的，这是有意为之。</strong>面板和查看器都不能编辑、保存、暂存、提交或检出，<strong>更改</strong>标签页也不会从远程获取任何东西。审阅永远不会干扰智能体正在做的工作。改动仍由智能体和你确认过的项目 Git 操作来完成。
 - <strong>差异为方便阅读而绘制。</strong>文本改动可以按统一差异或左右并排显示，大段未改动的行默认折叠，需要时再展开。图片改动会显示<strong>更改前</strong>和<strong>更改后</strong>。Markdown 文件会以渲染后的文档打开。
 
 <Aside type="caution" title="局限">
@@ -26,6 +24,10 @@ import Screenshot from "../../../../components/Screenshot.astro";
 - 没有任何工作树检出的分支，没有未提交的改动可显示。被 Git 忽略的文件只出现在<strong>文件</strong>标签页。
 - 不是 Git 仓库的项目没有<strong>更改</strong>可列。
 </Aside>
+
+## 为什么这样设计
+
+- <strong>它是只读的，这是有意为之。</strong>面板和查看器都不能编辑、保存、暂存、提交或检出，<strong>更改</strong>标签页也不会从远程获取任何东西。审阅永远不会干扰智能体正在做的工作。改动仍由智能体和你确认过的项目 Git 操作来完成。
 
 ## 如何使用
 

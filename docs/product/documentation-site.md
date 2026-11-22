@@ -130,9 +130,11 @@ collapsed "New to this?" block, lists what is needed before starting, gives numb
 step worked, and ends with what to do when it does not.
 
 Each Features page opens with a paragraph stating what the feature is for, followed by a lead screenshot. Then come a
-"Why it works this way" section, whose first point is that intent and whose others state the feature's rules and
-limits, a "How to use it" section of numbered steps (Account continuity splits it into switching by hand and switching
-automatically) and a "Next" list of related Features pages. The screenshots show the application in English, in its
+"What it does" section stating the feature's behaviour, rules and values, closing with its limits where it has any; on pages whose
+feature has design choices a reader might not expect or could take for a defect, a "Why it works this way" section
+giving each choice with its reason; the how-to sections of numbered steps, a single "How to use it" or one section per
+task (Account continuity has switching by hand and switching automatically; Agent handoff adds using the other agent's
+setup); and a "Next" list of related Features pages. Each language uses the same headings, in its own words. The screenshots show the application in English, in its
 light theme, with fictional sample data: every language's page shows the same English images, with the images'
 descriptions in the page's language. A screenshot is shown at the size the interface really has, never enlarged, and
 shrinks only to fit a narrower column. Some show the whole window; others show one element alone, mostly set on a

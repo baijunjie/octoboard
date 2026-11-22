@@ -11,11 +11,10 @@ Agents start dev servers and watchers, and when the session ends they are often 
 
 <Screenshot id="processes-of-session" alt="A session's “Processes” panel with four cards, each showing a command, its folder and its memory, and a web link on the two servers." />
 
-## Why it works this way
+## What it does
 
-- <strong>What an agent starts is not forgotten.</strong> Processes are tied to the session that started them, shown to you while they run, and, within the limits below, stopped when the session ends, so they do not sit on memory and ports for no reason. Keep is the exception you choose.
-- <strong>Ownership comes from how a process started, not from what it looks like.</strong> A process is an agent session's when that session's launch started it, however it started and wherever it moved since. Concretely, a process belongs to a session's launch when its chain of parents leads to the agent, when it carries the launch's tag in its environment, or when it runs in a terminal session that one of the launch's processes started. It stays the launch's after it detaches or moves. This does not depend on the agent reporting its background tasks or remembering to clean up. {productName} keeps no list of programs to spare or to stop and does not judge what a process is.
-- <strong>What a session started ends with the session.</strong> When the agent's process ends, for any reason (it exits, you archive the session, the application quits), {productName} stops the processes it attributes to that launch, except those you chose to keep. On macOS and Linux it asks them to exit and forces the survivors to end after 3 seconds. That includes a shared service the agent brought up, such as a build daemon, even if other programs have started using it since.
+- <strong>A process belongs to the session whose launch started it.</strong> However it started and wherever it moved since, a process belongs to a session's launch when its chain of parents leads to the agent, when it carries the launch's tag in its environment, or when it runs in a terminal session that one of the launch's processes started. It stays the launch's after it detaches or moves.
+- <strong>What a session started ends with the session.</strong> When the agent's process ends, for any reason (it exits, you archive the session, the application quits), {productName} stops the processes it attributes to that launch, except those you chose to keep. On macOS and Linux it asks them to exit and forces the survivors to end after 3 seconds.
 - <strong>Keep is your way to spare one.</strong> A kept process no longer stops with the session. It moves to the project's own list, never stops by itself, and stays until you stop it.
 - <strong>A handoff or a restart is not an end.</strong> Switching a session's account, changing its model and handing it off carry its running processes over to the session that replaces it. Kept processes stay kept.
 - <strong>You see them where they run.</strong> The rail counts the process trees of every project and console session. A project's Processes panel lists them, with each one's command, folder, memory, listening ports and a link for each port that serves web pages.
@@ -28,6 +27,10 @@ Agents start dev servers and watchers, and when the session ends they are often 
 - A stop can be refused: the system may deny permission for another user's process, or a process may outlive being killed. The tree stays listed and an alert says why.
 - Web links are <code dir="ltr">{commands.localhost}</code> addresses, so they open on the computer where the daemon runs. From a remote window, {productName} reaches them through a forwarded port.
 </Aside>
+
+## Why it works this way
+
+- <strong>Ownership comes from how a process started, not from what it looks like.</strong> This does not depend on the agent reporting its background tasks or remembering to clean up. {productName} keeps no list of programs to spare or to stop and does not judge what a process is, so a shared service the agent brought up, such as a build daemon, is stopped with the session even if other programs have started using it since.
 
 ## How to use it
 

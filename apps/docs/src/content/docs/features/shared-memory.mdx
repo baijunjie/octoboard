@@ -11,15 +11,12 @@ Each agent keeps a memory of its own, split by agent and by account, so a sessio
 
 <Screenshot id="memory-dialog" alt="The “Console memory” dialog, listing entries with a one-line summary each, when and by whom each was updated, and “Add entry” and “Delete all” buttons." />
 
-## Why it works this way
+## What it does
 
-- <strong>What one session learns should help the next, on any agent.</strong> There are two memories. A console's memory is read and written by every console session of that console: your preferences and corrections, which kind of request belongs to which project, facts about the machine for work that touches no project. A project's memory is read and written by every session working in the project: what agents need to know about the machine the project is on, such as local paths, ports and how a local tool behaves there. Anything else about a project belongs in the project's own documents.
-- <strong>It is off to begin with, and you turn it on.</strong> <strong>Let sessions share {productName}'s memory</strong> in <strong>Settings › Memory</strong> is off by default. While it is off, sessions behave as if there were no memory. Turning it off later deletes nothing.
+- <strong>There are two memories.</strong> A console's memory is read and written by every console session of that console: your preferences and corrections, which kind of request belongs to which project, facts about the machine for work that touches no project. A project's memory is read and written by every session working in the project: what agents need to know about the machine the project is on, such as local paths, ports and how a local tool behaves there. Anything else about a project belongs in the project's own documents.
+- <strong>It is off by default.</strong> <strong>Let sessions share {productName}'s memory</strong> in <strong>Settings › Memory</strong> stays off until you turn it on. While it is off, sessions behave as if there were no memory. Turning it off later deletes nothing.
 - <strong>Sessions start with an index, and open entries as they need them.</strong> Each entry has a one-sentence summary, and a new session is given the list of summaries, most recently updated first, then reads an entry in full only when its summary matters to the work. A session saves without asking you, and a console session says in its reply what it saved, so you can correct it.
-- <strong>Its own memory is turned off, so nothing is learned twice.</strong> While the shared memory is on, each session {productName} launches has its agent's own memory turned off for that launch, so it keeps what it learns in the shared one. Nothing is written into the agent's configuration, and what the agent wrote before is left alone.
-- <strong>An entry is a short note you can read.</strong> It is a summary of up to 200 characters and Markdown content of up to 16,384 bytes, with when it was last updated and by whom: you, or an agent such as Codex. A memory holds at most 200 entries.
-- <strong>Nobody overwrites a change they never saw.</strong> A save that edits an entry is refused when the entry was saved by someone else since it was read, and nothing is lost: the session, or your form, gets the current entry to merge and save again.
-- <strong>A project's memory belongs to the folder, not to the project.</strong> Every project at the same place on the same computer shares it, and removing a project keeps its memory unless you tick <strong>Also delete this project’s memory</strong> in the removal confirmation, so adding the project again at the same folder finds it again.
+- <strong>Entries are short notes you can read.</strong> An entry is a summary of up to 200 characters and Markdown content of up to 16,384 bytes, with when it was last updated and by whom: you, or an agent such as Codex. A memory holds at most 200 entries.
 
 <Aside type="caution" title="Limits">
 - The setting reaches only sessions launched after you change it. A session already running keeps what it started with.
@@ -28,6 +25,12 @@ Each agent keeps a memory of its own, split by agent and by account, so a sessio
 - An entry in a console's memory can be marked <strong>This machine only</strong>, for what holds only on the computer that runs the daemon, {productName}'s background program. A configuration export carries a console's memory without those entries, and never carries a project's memory or the setting itself.
 - Deleting a console deletes its memory.
 </Aside>
+
+## Why it works this way
+
+- <strong>Its own memory is turned off, so nothing is learned twice.</strong> While the shared memory is on, each session {productName} launches has its agent's own memory turned off for that launch, so it keeps what it learns in the shared one. Nothing is written into the agent's configuration, and what the agent wrote before is left alone.
+- <strong>Nobody overwrites a change they never saw.</strong> A save that edits an entry is refused when the entry was saved by someone else since it was read, and nothing is lost: the session, or your form, gets the current entry to merge and save again.
+- <strong>A project's memory belongs to the folder, not to the project.</strong> Every project at the same place on the same computer shares it, and removing a project keeps its memory unless you tick <strong>Also delete this project’s memory</strong> in the removal confirmation, so adding the project again at the same folder finds it again.
 
 ## How to use it
 

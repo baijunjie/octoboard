@@ -433,7 +433,7 @@ Binding rules for code, one home per rule; the structure docs keep placement and
   modules, entry points with a prohibition, native callbacks and threads, native menu accelerators.
 - [Website](conventions/website.md) — Nuxt website code in `apps/web/`.
 - [Documentation site](conventions/docs-site.md) — Starlight docs code in `apps/docs/`: quoted values, UI names and
-  platform words, sidebar, snippets, links and anchors, screenshots, look and feel.
+  platform words, sidebar, snippets, links and anchors, Features page sections, screenshots, look and feel.
 - [Comments](conventions/comments.md) — the project's comment rules beyond the `agent-docs` skill: machine-local
   content, what a comment may refer to and how `TODO` is written.
 - [Tests](conventions/tests.md) — what tests assert, real runs, time, jsdom component tests, daemon and desktop shell

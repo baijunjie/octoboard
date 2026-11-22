@@ -11,12 +11,12 @@ import Screenshot from "../../../../components/Screenshot.astro";
 
 <Screenshot id="native-session-terminal" alt="侧边栏“Website”项目下的一个项目会话，终端里是 Claude Code 自己的命令行界面：它读了项目的 CLAUDE.md，并概述了项目的构成。" />
 
-## 为什么这样设计
+## 功能说明
 
 - <strong>会话就是智能体自己的程序。</strong>{productName} 从你的 <code dir="ltr">PATH</code> 里启动 Claude Code、Codex 或 Grok Build，以项目文件夹作为工作目录，并显示它的终端。你输入的对象就是智能体本身，{productName} 自己并不是智能体。
 - <strong>项目里的东西一样都不替换。</strong>智能体发现项目的指令文件、技能、钩子和权限规则的方式，和在 {productName} 之外完全一样。项目自己的 MCP 服务器会和 {productName} 的并存。项目定义了钩子、{productName} 也有自己的钩子时，两者都会运行。
 - <strong>{productName} 不往你的项目或智能体的设置里写东西。</strong>它不会往项目里添加指令文件、设置文件或钩子，也不修改智能体自己的配置。它加给会话的内容（比如状态钩子和它自己的 MCP 服务器）只在这次启动时提供。少数例外都源于你选择或开启的操作：切换或共享账户，以及 Git 操作（拉取，包括自动拉取，以及切换分支、恢复改动和推送）。
-- <strong>信任仍由智能体决定。</strong>智能体询问是否信任某个文件夹时，只有在你已授权该项目之后，{productName} 才会代为确认，信任记录由智能体自己写入。在文件夹被信任之前，智能体会扣住项目自己的一部分配置：Grok Build 不加载项目的指令、钩子和 MCP 服务器，Claude Code 则忽略项目自己的允许规则。对于 Grok Build，{productName} 之后会把 Grok 写入的那一条信任记录带到你自己的信任存储里。
+- <strong>信任仍由智能体决定。</strong>{productName} 自己从不做这个决定。智能体询问是否信任某个文件夹时，只有在你已授权该项目之后，{productName} 才会代为确认，信任记录由智能体自己写入。在文件夹被信任之前，智能体会扣住项目自己的一部分配置：Grok Build 不加载项目的指令、钩子和 MCP 服务器，Claude Code 则忽略项目自己的允许规则。对于 Grok Build，{productName} 之后会把 Grok 写入的那一条信任记录带到你自己的信任存储里。
 - <strong>每个项目可以有自己的智能体、账户和模型。</strong>项目设置里保存着它的默认智能体，以及按智能体分别设定的账户、模型和推理强度。项目没设置的部分，跟随它所在的控制台。不同项目的会话各在自己的文件夹里独立运行。
 - <strong>可选的防护让会话只留在自己的项目里。</strong>开启<strong>会话只改自己的项目</strong>后，项目会话如果在另一个已注册的项目里修改文件或更新分支，就会被拦下，并被要求改为请那个项目的会话来做。
 
