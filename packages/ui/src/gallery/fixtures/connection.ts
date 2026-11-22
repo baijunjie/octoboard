@@ -458,7 +458,7 @@ export const connectionScenarios: Scenario[] = [
     title: "A temporary file removed since the link was drawn",
     description:
       "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, a temporary file the daemon found when the output was drawn but which is gone now, opened the file viewer with the empty-state failure in place of the file: a danger glyph, the heading and the sentence that the path does not exist any more, without repeating the path the header names. No alert is raised. " +
-      "There is no remedy line: unlike a project path, there are no project files to find it in. A path that is neither a file nor a folder, or that leads outside the project and the temporary folders, reads alike.",
+      "There is no remedy line: unlike a project path, there are no project files to find it in. A path that is neither a file nor a folder reads alike.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, [TEMP_IMAGE_PATH]: { kind: "file", gone: true } },
     steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink(TEMP_IMAGE_PATH)],

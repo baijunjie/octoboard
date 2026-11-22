@@ -637,7 +637,6 @@ export const es: Translation<"one" | "many" | "other"> = {
   "daemon.permission_denied": "La aplicación no tiene permiso para leer {path}: {detail}",
   "daemon.permission_denied.summary": "La aplicación no tiene permiso para leer {path}.",
   "daemon.outside_scope": "{path} lleva fuera de este proyecto, por lo que no se muestra.",
-  "daemon.outside_scope.open": "{path} lleva fuera del proyecto y de las carpetas temporales del sistema, por lo que no se abre desde un enlace.",
   "daemon.path_link_refused.ambiguous": "{path} está en la carpeta del proyecto en más de un worktree, por lo que no se abre.",
   "daemon.path_link_refused.launchable": "{path} es algo que el sistema ejecutaría, por lo que no se abre desde un enlace.",
   "daemon.path_link_refused.not_private": "Otros usuarios pueden cambiar {path}, por lo que no se abre desde un enlace.",

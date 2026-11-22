@@ -21,7 +21,7 @@ const WINDOWS_ERRNO: Record<string, ErrorRecovery> = { "112": "diskSpace", "39":
  * The daemon's own failures keep their sentences and remedies (a file that is gone, that may not be read, that leads
  * outside what a link may open); a file that changed while it was copied says so, a connection lost on the way has the
  * connection remedy. The daemon's failures to read the file have the remedies of a failed click on a path link (a file
- * gone from the project is found in its files, one gone from a temporary directory has nowhere to be found). The
+ * gone from the project is found in its files, one gone from anywhere else has nowhere to be found). The
  * shell's kinds: what this computer would run says so and has no remedy; a copy that came up short says the file
  * changed, as a changed one does; a copy that could not be written has the disk or access remedy by what the system
  * said (read off its text, a Windows host's own numbers included, `hostOs` being the host of this computer's shell); a

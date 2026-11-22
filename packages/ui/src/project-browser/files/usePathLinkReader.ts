@@ -18,7 +18,7 @@ const LOADING: Shown = { content: { state: "loading" } };
 
 /**
  * The file a terminal's path link names, read through the daemon (`read_path_link`) when it is not in a project's
- * directory (in a temporary one). It reads as `useFileReader` does: one read at a time, in the window's viewer slot, a
+ * directory (anywhere else on the daemon's host). It reads as `useFileReader` does: one read at a time, in the window's viewer slot, a
  * reply taken only for the latest read and the path shown, a read again that finds the same version keeps what is
  * shown, and one lost with the connection is read again at the reconnect. `project` is the session's, if it has one;
  * the daemon tells a project kept under a temporary directory from scratch space with it.

@@ -637,7 +637,6 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "daemon.permission_denied": "У приложения нет разрешения на чтение {path}: {detail}",
   "daemon.permission_denied.summary": "У приложения нет разрешения на чтение {path}.",
   "daemon.outside_scope": "{path} ведёт за пределы этого проекта, поэтому не отображается.",
-  "daemon.outside_scope.open": "{path} ведёт за пределы проекта и временных папок системы, поэтому не открывается по ссылке.",
   "daemon.path_link_refused.ambiguous": "{path} находится в папке проекта в нескольких рабочих деревьях, поэтому не открывается.",
   "daemon.path_link_refused.launchable": "{path} — объект, который система запустит, поэтому он не открывается по ссылке.",
   "daemon.path_link_refused.not_private": "{path} могут изменять другие пользователи, поэтому он не открывается по ссылке.",

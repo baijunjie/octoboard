@@ -170,30 +170,42 @@ terminal or the button's release there. In a terminal one row high, the pointer 
     20 or the rows 2048 characters fill at the terminal's full width, whichever is more, plus the rows 1024 characters
     fill, is treated as unruled. A joined path covers only its text in each cell, and its pieces are offered as links
     one by one, so only the piece under the pointer is underlined, though each opens the whole path.
-- **Where a path may lead**: inside the session's project — its directory and, when the project is in a git repository,
-  its place in each worktree of that repository — or inside a temporary directory: `/tmp`, `/private/tmp` and the
-  daemon's own temporary directory, which covers agents' scratch space. A temporary directory that is the filesystem
-  root or holds the home directory is not used.
-  - Symbolic links are followed before this is checked, so a link leading out of these places is no link. An absolute or
-    `~/` path must also be written starting inside one of them, not only resolve into one.
+- **Where a path may lead**: to any existing file or folder on the machine the daemon runs on. An absolute or `~/` path
+  is taken as written.
+  - Symbolic links are followed, and a path is judged by where it resolves to: inside the session's project — its
+    directory and, when the project is in a git repository, its place in each worktree of that repository — inside a
+    temporary directory, or anywhere else on the machine. The temporary directories are `/tmp`, `/private/tmp` and the
+    daemon's own temporary directory, which covers agents' scratch space; on Windows, the daemon's temporary directory
+    alone. One that is the filesystem root or holds the home directory is not taken for a temporary directory. Where
+    the rules below differ between the three, it is where the path resolves to that counts.
   - A relative path is looked for in the project's directory and in each worktree's place — not in whichever directory
-    the agent happens to be working in — and is a link only when exactly one of them has it. Found in several, it is no
+    the agent happens to be working in — and need not stay inside them: `../sibling/a.ts` is found where it exists. It
+    is a link only when exactly one of them has it; found in several, leading to different files or folders, it is no
     link.
-  - A console session has no project: in it, only absolute and `~/` paths inside a temporary directory are links. A
-    project whose directory cannot be found still has its paths inside a temporary directory linked.
+  - With no project to look in — a console session, or a project whose directory cannot be found — a relative path is
+    no link, while absolute and `~/` paths are links wherever they lead.
+- **Network and device paths are never links**, and the machine the daemon runs on does not look at them at all, since
+  looking would make it connect to another machine or reach a device: on Linux and macOS a path in `/net`, and on macOS
+  one in `/home` as well (on Linux an ordinary folder); on Windows a path starting with two separators, `\` or `/` — a
+  network share such as `\\server\share\…`, or a device path such as `\\.\…` or `\\?\…` — except the long form of a
+  drive path, `\\?\C:\…`. A Windows drive-relative spelling such as `C:foo` is no link either. The path is judged as
+  written, its `.` and `..` folded and a relative path joined to the project's directory or worktree place, not by
+  where its symbolic links lead. A path written inside the project's directory or a worktree's place is looked at all
+  the same, even when the project is kept on such a share.
 - **Anything that is neither a file nor a folder** is never a link.
 - **No file is ever opened on the host by a click**, whatever its type and wherever it lies: the system's default
-  application for a file may run it, so every file a path link leads to — in the project's directory or a worktree's
-  place, or in a temporary directory outside the project — only ever opens in the file viewer (see "Opened from the
-  terminal" in `docs/product/file-viewer.md`). A file reaches its default application only by the user's own choice of
-  **Default application**, under Open in (below) or in the file viewer.
+  application for a file may run it, so every file a path link leads to only ever opens in the file viewer (see
+  "Opened from the terminal" in `docs/product/file-viewer.md`). A file reaches its default application only by the
+  user's own choice of **Default application**, under Open in (below) or in the file viewer.
 - **What the system could launch rather than show is never opened on the host** — neither a folder by a click, nor a
   file by Default application:
   - a file with an executable bit;
-  - a path any part of which, below the project or temporary directory, has one of these extensions, compared without
-    regard to case — so an application bundle and everything inside it as well: `app`, `appex`, `bundle`, `framework`,
-    `plugin`, `kext`, `xpc`, `prefpane`, `saver`, `workflow`, `action`, `command`, `tool`, `terminal`, `term`, `scpt`,
-    `scptd`, `pkg`, `mpkg`, `dmg`, `jar`, `sh`, `bash`, `zsh`, `csh`, `tcsh`, `ksh`, `fish`, `desktop`, `webloc`,
+  - a path any part of which has one of these extensions, compared without regard to case — so an application bundle
+    and everything inside it as well. The parts that count are those below the project's directory or worktree place
+    for a path in the project, those below the temporary directory for one in a temporary directory, and every folder
+    from the top of the file system (on Windows, the drive or share) for one anywhere else, so anything inside an
+    `.app` anywhere on the machine. The extensions: `app`, `appex`, `bundle`, `framework`, `plugin`, `kext`, `xpc`,
+    `prefpane`, `saver`, `workflow`, `action`, `command`, `tool`, `terminal`, `term`, `scpt`, `scptd`, `pkg`, `mpkg`, `dmg`, `jar`, `sh`, `bash`, `zsh`, `csh`, `tcsh`, `ksh`, `fish`, `desktop`, `webloc`,
     `inetloc`, `fileloc`, `afploc`, `ftploc`, `mailloc`, `newsloc`, `atloc`, `nslloc`, `url`, `mobileconfig` and
     `shortcut`;
   - a file — not a folder — whose own name has one of these extensions, which an interpreter or installer handles,
@@ -212,46 +224,50 @@ terminal or the button's release there. In a terminal one row high, the pointer 
     folder is about to be opened on the host, so such a folder is still a link, and a click that would open it in the
     file manager is refused.
 
-  A folder of this kind, a macOS package apart, is no link at all, in the project or in a temporary directory. A file of
-  this kind is a link like any other file, opening in the file viewer, and Open in offers it File manager alone.
+  A folder of this kind, a macOS package apart, is no link at all, wherever it lies. A file of this kind is a link like
+  any other file, opening in the file viewer, and Open in offers it File manager alone.
 - **Inside a temporary directory**, which other users can write to, the file or folder and every folder from the
   temporary directory down to it must also belong to the user the daemon runs as and be closed to writes by its group
   and by others. A file of a project kept inside a temporary directory is a link without passing this rule, since a
   click only opens it in the file viewer; Default application opens it only when it passes. A folder of such a
   project, however its path is written, must pass this rule all the same.
-- **A click** on a file opens it in Octoboard's file viewer, at the path's line, whether it lies inside the project or
-  in a temporary directory outside it; how the viewer then behaves, and how it says that a file can no longer be read,
-  is in "Opened from the terminal" in `docs/product/file-viewer.md`. A click on a folder inside the project opens the
-  folder's README or index file in the file viewer instead, when it has one the viewer can show; which file that is,
-  and when and how the folder opens in the file manager instead, is in the same section. Any other folder — one in a
-  temporary directory outside the project, or a project folder that opens in the file manager by that section's rules
-  — opens in the file manager on the machine the daemon runs on, not on the machine a browser client happens to be open
+- **A click** on a file opens it in Octoboard's file viewer, at the path's line, wherever it lies; how the viewer then
+  behaves, and how it says that a file can no longer be read, is in "Opened from the terminal" in
+  `docs/product/file-viewer.md`. A click on a folder inside the project opens the folder's README or index file in the
+  file viewer instead, when it has one the viewer can show; which file that is, and when and how the folder opens in
+  the file manager instead, is in the same section. Any other folder — one outside the project, or a project folder
+  that opens in the file manager by that section's rules — opens in the file manager on the machine the daemon runs on,
+  not on the machine a browser client happens to be open
   on. A line given with a folder's path plays no part. A path link has no tooltip. A folder is checked again by the
   rules above as it is opened on the host, and one that no longer passes them is not opened. Every error alert a click
   raises is titled that the path could not be opened; which of them carry a remedy is in "Recovery and unexpected
-  errors" in `docs/product/error-alerts.md`. The system failing to open the folder raises one. One written inside the
-  project or a temporary directory where nothing is any more — deleted, moved or renamed since it was checked, a file
-  now where a folder on the way should be, or a symbolic link leading nowhere or round in a loop — raises one saying it
-  does not exist any more. Any other that no longer passes them is refused with one whose sentence says why:
-  - it leads outside the project and the temporary directories — written outside them, or leading out of them through
-    a symbolic link;
+  errors" in `docs/product/error-alerts.md`. The system failing to open the folder raises one. One where nothing is any
+  more — deleted, moved or renamed since it was checked, a file now where a folder on the way should be, or a symbolic
+  link leading nowhere or round in a loop — raises one saying it does not exist any more, wherever it was written. Any
+  other that no longer passes them is refused with one whose sentence says why:
   - a relative path is found in more than one of the places it is looked for;
   - it is something the system would run;
   - inside a temporary directory, it can be changed by other users of the machine;
   - it is not a file or folder;
   - Octoboard is not allowed to read it, or a directory on the way to it;
   - it could not be read for another reason, the system's own text then under **Error details**;
-  - for any other reason, or one the window does not know, only that it cannot be opened from a link.
+  - for any other reason — a network or device path among them, or a relative path with no project to look in — or
+    one the window does not know, only that it cannot be opened from a link.
 - **Open in**, in the editing menu a right-click on a path link opens, is the submenu a row of the project pane has
   under the same name, with the same items, glyphs and order (see "A row's actions" in `docs/product/project-pane.md`):
   **File manager**, then, for a file, **Default application**. A folder's holds File manager alone. Both act on the
   machine the daemon runs on. A line given with the path plays no part in either, and success says nothing.
   - **File manager** shows the path in the file manager, whatever a click would do with it, and launches nothing: a
     file is selected in its folder, a folder is opened, and on macOS a folder the system treats as a package is selected
-    in its containing folder. A symbolic link is selected by its own name in its folder, not followed, as File manager
-    in the project pane does, whether it leads to a file or a folder; the rules above still judge where it leads. A
-    root, a link whose folder lies outside the roots, a link in a temp root whose folder is not closed to others or that
-    is not the daemon user's, and a path ending in `/`, `/.` or `..` are shown as what they resolve to. The path is
+    in its containing folder. A symbolic link the path ends in is selected by its own name in its folder, not followed,
+    as File manager in the project pane does, whether it leads to a file or a folder; the rules above still judge where
+    it leads. Where the link itself may lie for that depends on where it leads: for a path in the project, inside the
+    project's directory or a worktree's place; for a path in a temporary directory, inside that temporary directory;
+    for a path anywhere else on the machine, anywhere. A link lying inside a temporary directory must also, with every
+    folder from the temporary directory down to it, belong to the user the daemon runs as and be closed to writes by
+    others — not checked for a link to a file of a project kept there. Any other link, the project's directory, a
+    worktree's place or a temporary directory itself, and a path ending in `/`, `/.` or `..` are shown as what they
+    resolve to. The path is
     checked again by the rules above as it is shown; being something the system could launch does not stop a file, or a
     macOS package folder, being shown. A failure raises an error alert titled that it could not open in the file
     manager, with the sentence and remedy the same failure of a click opening a folder on the host gets (above), the
@@ -266,9 +282,9 @@ terminal or the button's release there. In a terminal one row high, the pointer 
 - **In a remote window** of the desktop application nothing is opened on the daemon's machine, whose screen is not the
   user's (see "The remote window" in `docs/product/remote-daemons.md`). A file link opens in the file viewer as in any
   window, from where a copy of the file can be opened on this computer (see "Download and open" in
-  `docs/product/file-viewer.md`). A folder is a link only when it has a README or index file, which a click opens in
-  the viewer, the viewer saying why where it cannot show that file; any other folder stays plain text. Cmd/Ctrl changes
-  nothing about a click, and the editing menu has no Open in.
+  `docs/product/file-viewer.md`). A folder is a link only when it lies in the project and has a README or index file,
+  which a click opens in the viewer, the viewer saying why where it cannot show that file; any other folder stays plain
+  text. Cmd/Ctrl changes nothing about a click, and the editing menu has no Open in.
 - **When paths are checked**: only paths on screen, or under the pointer, are checked; those that appear together are
   checked together, about 120 ms after they appear, at most 64 at a time. An answer is kept for about 30 seconds for a
   path found and about 10 seconds for one that was not, and a path still on screen is checked again once its answer is
@@ -276,3 +292,10 @@ terminal or the button's release there. In a terminal one row high, the pointer 
   file becomes a link shortly after the file exists, and one removed stops being a link. A check that fails leaves a
   path as it was, and plain text when nothing was known of it. Every answer is dropped when the terminal is cleared to
   draw a session afresh, a fresh paint sent to a client that fell behind the output included.
+- **How long a check may take**: finding the project's directory and its worktree places has five seconds, and while
+  that has not finished no path of the check is a link. The paths then have two seconds, together, checked by the place
+  they lie on — the project's directory or worktree place they are written in, else the folder of the home directory
+  they are in (`~/nas`), else the first two folders from the top of the file system (`/Volumes/Backup`) — up to four
+  places at a time. The paths of a place not answered in time, such as a disk that does not respond, are plain text,
+  and stay so at every later check until that place's stalled check ends; the paths of other places are still
+  answered, unless four places stall at once, when those not yet started are plain text too.

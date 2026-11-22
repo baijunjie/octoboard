@@ -665,7 +665,6 @@ export const zhCN: Translation<"other"> = {
   "daemon.permission_denied": "本应用无权读取 {path}：{detail}",
   "daemon.permission_denied.summary": "本应用无权读取 {path}。",
   "daemon.outside_scope": "{path} 指向此项目之外，因此不显示。",
-  "daemon.outside_scope.open": "{path} 指向项目和系统临时文件夹之外，因此不通过链接打开。",
   "daemon.path_link_refused.ambiguous": "{path} 在多个工作树的项目文件夹中都存在，因此不打开。",
   "daemon.path_link_refused.launchable": "{path} 是系统会运行的内容，因此不通过链接打开。",
   "daemon.path_link_refused.not_private": "{path} 可被其他用户修改，因此不通过链接打开。",

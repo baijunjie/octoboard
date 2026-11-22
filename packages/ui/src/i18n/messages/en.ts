@@ -753,7 +753,6 @@ export const en = {
   "daemon.permission_denied": "The app is not allowed to read {path}: {detail}",
   "daemon.permission_denied.summary": "The app is not allowed to read {path}.",
   "daemon.outside_scope": "{path} leads outside this project, so it is not shown.",
-  "daemon.outside_scope.open": "{path} leads outside the project and the system’s temporary folders, so it is not opened from a link.",
   "daemon.path_link_refused.ambiguous": "{path} is in the project’s folder in more than one worktree, so it is not opened.",
   "daemon.path_link_refused.launchable": "{path} is something the system would run, so it is not opened from a link.",
   "daemon.path_link_refused.not_private": "{path} can be changed by other users, so it is not opened from a link.",

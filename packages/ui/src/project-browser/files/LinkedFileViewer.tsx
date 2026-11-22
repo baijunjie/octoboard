@@ -7,11 +7,11 @@ import { usePathLinkReader } from "./usePathLinkReader";
 
 /**
  * The file viewer on a file a path in a session's terminal named, shown over the window with the project pane left as
- * it is: a file in a project's directory or one of its worktrees, read from there, or one in a temporary directory,
+ * it is: a file in a project's directory or one of its worktrees, read from there, or one anywhere else on the host,
  * read through the daemon's path link rules. It reads the file itself, so it needs no project browser; a new `file`
  * (the same path at another line, too) shows it again. It has no Previous and Next, there being no list of files it was
  * opened from. A Markdown file's links to other files open in it too, in the project's own directory; in a worktree or
- * in a temporary directory they stay text, as the project's files they would be read from are not the ones beside it.
+ * elsewhere on the host they stay text, as the project's files they would be read from are not the ones beside it.
  */
 export function LinkedFileViewer({
   file,

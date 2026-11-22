@@ -293,7 +293,7 @@ const CORE_CODES = {
   no_upstream_to_pull: { origin: "daemon", recovery: "noUpstream" },
   not_a_git_repository: { origin: "daemon", recovery: "repository", recordIds: ["project"], nameParams: ["project"] },
   not_on_a_branch: { origin: "daemon", recovery: "branch" },
-  outside_scope: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { open: { codeParams: ["path"] } }, variantOf: (params) => params.action === "open" ? "open" : undefined },
+  outside_scope: { origin: "daemon", recovery: "scope", codeParams: ["path"] },
   // The owner chosen under Bind to, or the session, changed after the menu opened, which lists only the sessions that
   // can own it as it opens; the message says what can have changed, and there is no remedy of its own to give.
   owner_cannot_own: { origin: "daemon", recovery: "none", recordIds: ["owner"], nameParams: ["owner"] },

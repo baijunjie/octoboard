@@ -306,6 +306,12 @@ pub struct AppState {
     /// The roots of each project a path link was last checked against, reused for a few seconds
     /// (`crate::path_links`). Held in memory only. Dropped with their project.
     pub path_link_roots: crate::path_links::RootsCache,
+    /// The places a `probe_path_links` looked at paths on whose look outran its deadline and is
+    /// still running, by place (`crate::path_links::place_of`). Held in memory only.
+    pub path_probes: StalledPasses<std::path::PathBuf>,
+    /// The projects whose roots a `probe_path_links` could not find in time, the lookup still
+    /// running. Held in memory only.
+    pub path_root_lookups: StalledPasses<String>,
     /// For each session with a session request waiting, the status its agent's own events
     /// say it has, while the record shows `WaitingUser` for the request. Kept so that the daemon's
     /// decisions about the agent (can a message be written, did a turn end) keep reading the agent
@@ -515,6 +521,8 @@ impl AppState {
             shell_terminals: Default::default(),
             directory_looks: Default::default(),
             path_link_roots: Default::default(),
+            path_probes: Default::default(),
+            path_root_lookups: Default::default(),
             events,
             field_versions: FieldVersions::default(),
             checked_writes: tokio::sync::Mutex::new(()),

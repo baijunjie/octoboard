@@ -651,7 +651,6 @@ export const zhTW: Translation<"other"> = {
   "daemon.permission_denied": "本應用程式無權讀取 {path}：{detail}",
   "daemon.permission_denied.summary": "本應用程式無權讀取 {path}。",
   "daemon.outside_scope": "{path} 指向此專案之外，因此不顯示。",
-  "daemon.outside_scope.open": "{path} 指向專案和系統臨時資料夾之外，因此不透過連結開啟。",
   "daemon.path_link_refused.ambiguous": "{path} 在多個工作樹的專案資料夾中都存在，因此不開啟。",
   "daemon.path_link_refused.launchable": "{path} 是系統會執行的內容，因此不透過連結開啟。",
   "daemon.path_link_refused.not_private": "{path} 可被其他使用者修改，因此不透過連結開啟。",

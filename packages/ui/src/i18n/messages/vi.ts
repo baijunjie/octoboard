@@ -636,7 +636,6 @@ export const vi: Translation<"other"> = {
   "daemon.permission_denied": "Ứng dụng không có quyền đọc {path}: {detail}",
   "daemon.permission_denied.summary": "Ứng dụng không có quyền đọc {path}.",
   "daemon.outside_scope": "{path} dẫn ra ngoài dự án này nên không được hiển thị.",
-  "daemon.outside_scope.open": "{path} dẫn ra ngoài dự án và các thư mục tạm của hệ thống nên không được mở từ liên kết.",
   "daemon.path_link_refused.ambiguous": "{path} có trong thư mục dự án ở nhiều cây làm việc nên không được mở.",
   "daemon.path_link_refused.launchable": "{path} là mục mà hệ thống sẽ chạy nên không được mở từ liên kết.",
   "daemon.path_link_refused.not_private": "Người dùng khác có thể thay đổi {path} nên mục không được mở từ liên kết.",

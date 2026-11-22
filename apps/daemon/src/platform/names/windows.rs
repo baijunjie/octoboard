@@ -65,3 +65,7 @@ pub fn plain_form(path: PathBuf) -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or(path)
 }
+
+pub fn reaches_network_or_device(path: &Path) -> bool {
+    windows_rules::reaches_network_or_device(&path.to_string_lossy())
+}

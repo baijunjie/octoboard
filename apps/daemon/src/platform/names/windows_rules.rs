@@ -126,6 +126,23 @@ pub(super) fn is_slash_unc(text: &str) -> bool {
     matches!((parts.next(), parts.next()), (Some(server), Some(share)) if !server.is_empty() && !share.is_empty())
 }
 
+/// Whether `text` starts with two separators, `\` or `/` (a UNC path or a device namespace:
+/// `\\server\share`, `//server/share`, `\\.\pipe`, `\\?\UNC\…`), other than the verbatim
+/// form of a drive (`\\?\C:\a`), which names a path on the local disk like `C:\a`; see
+/// `names::reaches_network_or_device`.
+pub(super) fn reaches_network_or_device(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let separator = |at: usize| matches!(bytes.get(at), Some(b'\\' | b'/'));
+    if !(separator(0) && separator(1)) {
+        return false;
+    }
+    let verbatim_drive = text.starts_with(r"\\?\")
+        && bytes.get(4).is_some_and(u8::is_ascii_alphabetic)
+        && bytes.get(5) == Some(&b':')
+        && bytes.get(6) == Some(&b'\\');
+    !verbatim_drive
+}
+
 /// `path` without its verbatim prefix, or `None` where it has none or dropping it would change what
 /// it names: `\\?\C:\a` is `C:\a` and `\\?\UNC\server\share\a` is `\\server\share\a`. A verbatim path
 /// is taken as written, so one with a component the plain form would normalise away (a trailing
@@ -325,6 +342,62 @@ mod tests {
             "C://a/b",
         ] {
             assert!(!is_slash_unc(other), "{other}");
+        }
+    }
+
+    /// Two separators, of either kind, start a UNC path or a device namespace: the host would
+    /// connect out or reach a device by looking at it.
+    #[test]
+    fn a_path_starting_with_two_separators_reaches_the_network_or_a_device() {
+        for network in [
+            r"\\server\share",
+            r"\\server\share\dir\a.txt",
+            "//server/share",
+            "//server/share/dir/a.txt",
+            r"\\.\pipe\x",
+            r"\\.\C:\a",
+            r"\\?\UNC\server\share\a",
+            r"\\?\Volume{0b1c}\dir",
+            r"\\?\GLOBALROOT\Device\x",
+            // Mixed separators are two separators all the same.
+            r"\/server\share",
+            r"/\server\share",
+            "//x",
+            r"\\x",
+            // A verbatim prefix that is not followed by a drive and a backslash is no drive path.
+            r"\\?\C:",
+            r"\\?\1:\a",
+        ] {
+            assert!(reaches_network_or_device(network), "{network}");
+        }
+    }
+
+    /// The verbatim form of a drive names the local disk like `C:\a`, so it is the one `\\` start
+    /// that is let through; so is every path that does not start with two separators.
+    #[test]
+    fn a_drive_a_verbatim_drive_and_a_path_from_the_root_stay_on_the_local_disk() {
+        for local in [
+            r"\\?\C:\a",
+            r"\\?\c:\Users\me\a.txt",
+            "\\\\?\\D:\\",
+            r"C:\a",
+            "C:/a",
+            "C:\\",
+            "/a",
+            r"\a",
+            "/a/b",
+            r"\a\b",
+            r"a\b",
+            "a/b",
+            "~/a",
+            "",
+            "/",
+            "\\",
+            // One separator and a later pair is not a start with two.
+            r"C:\\server\share",
+            "C://server/share",
+        ] {
+            assert!(!reaches_network_or_device(local), "{local}");
         }
     }
 

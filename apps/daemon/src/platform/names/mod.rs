@@ -70,6 +70,18 @@ fn is_foreign_absolute_to(host: PathStyle, recorded: &str) -> bool {
     }
 }
 
+/// Whether looking at `path`, an absolute path as written, would make the host reach out to
+/// another machine or a device rather than read its own disk: on Windows a UNC path
+/// (`\\server\share`, also written with slashes) and the device namespaces (`\\.\`, `\\?\`
+/// but for a plain drive such as `\\?\C:\`), where the host connects out with the user's
+/// credentials; on Unix the automount tree `/net`, and on macOS `/home` too (the `auto_home`
+/// mount; an ordinary folder on Linux), where touching a name mounts a remote host. A judgement of
+/// the spelling alone: where a link leads is not known until the disk is looked at. Text only:
+/// nothing is read from disk, so it can be asked before the path is touched.
+pub fn reaches_network_or_device(path: &Path) -> bool {
+    host::reaches_network_or_device(path)
+}
+
 /// The bytes of a file name, one name to one byte string: on Unix the name's own bytes, on
 /// Windows its WTF-8 form (UTF-8, with a lone surrogate written as the three bytes it would
 /// have). Borrowed where they are the name's own: on Unix always, on Windows for valid Unicode.
@@ -213,6 +225,72 @@ mod tests {
             for host in [PathStyle::Unix, PathStyle::Windows] {
                 assert!(!is_foreign_absolute_to(host, neither), "{neither}");
             }
+        }
+    }
+
+    /// The automount tree `/net` and everything below it mounts a remote host when looked at; a
+    /// name that only starts with the same letters is an ordinary folder.
+    #[cfg(unix)]
+    #[test]
+    fn on_unix_the_net_automount_tree_reaches_the_network_and_names_like_it_do_not() {
+        for network in [
+            "/net",
+            "/net/",
+            "/net/host",
+            "/net/host/share/a.txt",
+            "/net/.",
+        ] {
+            assert!(reaches_network_or_device(Path::new(network)), "{network}");
+        }
+        // `/home` is an automount on macOS and an ordinary folder elsewhere.
+        for home in ["/home", "/home/me/a.txt"] {
+            assert_eq!(
+                reaches_network_or_device(Path::new(home)),
+                cfg!(target_os = "macos"),
+                "{home}"
+            );
+        }
+        for local in [
+            "/",
+            "/network",
+            "/network/a",
+            "/netx",
+            "/netx/a",
+            "/ne",
+            "/Users/net",
+            "/Users/me/net/a",
+            "/tmp/net",
+            "net",
+            "net/host",
+            "a/net",
+            "",
+        ] {
+            assert!(!reaches_network_or_device(Path::new(local)), "{local}");
+        }
+    }
+
+    /// The platform fact is the host's own rule applied to a `Path`: the Windows spelling through
+    /// the Windows host, whose rule `windows_rules` tests on every host.
+    #[cfg(windows)]
+    #[test]
+    fn on_windows_a_unc_or_device_path_reaches_the_network_or_a_device() {
+        for network in [
+            r"\\server\share\a.txt",
+            "//server/share/a.txt",
+            r"\\.\pipe\x",
+            r"\\?\UNC\server\share\a",
+            r"\\?\Volume{0b1c}\dir",
+        ] {
+            assert!(reaches_network_or_device(Path::new(network)), "{network}");
+        }
+        for local in [
+            r"C:\a\b.txt",
+            "C:/a/b.txt",
+            r"\\?\C:\a\b.txt",
+            r"\a\b",
+            "a/b",
+        ] {
+            assert!(!reaches_network_or_device(Path::new(local)), "{local}");
         }
     }
 

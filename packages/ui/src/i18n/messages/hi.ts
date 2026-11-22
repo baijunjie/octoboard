@@ -636,7 +636,6 @@ export const hi: Translation<"one" | "other"> = {
   "daemon.permission_denied": "ऐप को {path} पढ़ने की अनुमति नहीं है: {detail}",
   "daemon.permission_denied.summary": "ऐप को {path} पढ़ने की अनुमति नहीं है।",
   "daemon.outside_scope": "{path} इस प्रोजेक्ट के बाहर जाता है, इसलिए इसे नहीं दिखाया जाता।",
-  "daemon.outside_scope.open": "{path} प्रोजेक्ट और सिस्टम के अस्थायी फ़ोल्डरों के बाहर जाता है, इसलिए इसे लिंक से नहीं खोला जाता।",
   "daemon.path_link_refused.ambiguous": "{path} एक से ज़्यादा वर्कट्री में प्रोजेक्ट के फ़ोल्डर में है, इसलिए इसे नहीं खोला जाता।",
   "daemon.path_link_refused.launchable": "{path} ऐसी चीज़ है जिसे सिस्टम चलाएगा, इसलिए इसे लिंक से नहीं खोला जाता।",
   "daemon.path_link_refused.not_private": "दूसरे यूज़र {path} बदल सकते हैं, इसलिए इसे लिंक से नहीं खोला जाता।",

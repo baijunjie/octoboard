@@ -1995,7 +1995,7 @@ describe("the fixture daemon's path link probe", () => {
     }
   });
 
-  it("refuses revealing a path gone since, outside every root or refused for another cause, as it refuses opening it", async () => {
+  it("refuses revealing a path gone since or refused for another cause, as it refuses opening it", async () => {
     const owner = consoleOf("c", "Main");
     const project = projectOf("p", owner.id, "Website");
     const daemon = createFixtureDaemon({
@@ -2003,7 +2003,6 @@ describe("the fixture daemon's path link probe", () => {
       pathLinks: {
         "/private/tmp/sheet.png": { kind: "file", gone: true },
         [`${project.path}/docs`]: { kind: "directory", gone: true },
-        "/tmp/link": { kind: "file", outside: true },
         "/tmp/locked.txt": { kind: "file", refused: "unreadable", detail: "Permission denied" },
         "/tmp/tool": { kind: "file", refused: "ambiguous" },
       },
@@ -2013,12 +2012,25 @@ describe("the fixture daemon's path link probe", () => {
       params: { path: "/private/tmp/sheet.png", root: "temporary" },
     });
     await expect(daemon.request({ type: "reveal_path_link", project: project.id, path: "docs" })).rejects.toMatchObject({ code: "file_not_found", params: { path: "docs", root: "project" } });
-    await expect(daemon.request({ type: "reveal_path_link", project: project.id, path: "/tmp/link" })).rejects.toMatchObject({ code: "outside_scope", params: { path: "/tmp/link" } });
     await expect(daemon.request({ type: "reveal_path_link", project: project.id, path: "/tmp/locked.txt" })).rejects.toMatchObject({
       code: "path_link_refused",
       params: { path: "/tmp/locked.txt", cause: "unreadable", detail: "Permission denied" },
     });
     await expect(daemon.request({ type: "reveal_path_link", project: project.id, path: "/tmp/tool" })).rejects.toMatchObject({ code: "path_link_refused", params: { path: "/tmp/tool", cause: "ambiguous" } });
+  });
+
+  it("refuses a relative path asked with no project as path_link_refused with the cause other, as the daemon does", async () => {
+    const owner = consoleOf("c", "Main");
+    const project = projectOf("p", owner.id, "Website");
+    const daemon = createFixtureDaemon({
+      state: snapshotState({ consoles: [owner], projects: [project] }),
+      pathLinks: { "docs/a.md": { kind: "file", gone: true }, "/tmp/a.png": { kind: "file", gone: true } },
+    });
+    for (const type of ["open_path_link", "reveal_path_link", "read_path_link"] as const) {
+      await expect(daemon.request({ type, path: "docs/a.md" })).rejects.toMatchObject({ code: "path_link_refused", params: { path: "docs/a.md", cause: "other" } });
+      // An absolute path with no project is looked at as any other.
+      await expect(daemon.request({ type, path: "/tmp/a.png" })).rejects.toMatchObject({ code: "file_not_found", params: { root: "temporary" } });
+    }
   });
 
   it("opens what the probe found, but refuses one gone since with file_not_found, the path as given and the kind of root it was in", async () => {
@@ -2043,6 +2055,35 @@ describe("the fixture daemon's path link probe", () => {
     await expect(daemon.request({ type: "open_path_link", project: project.id, path: "docs" })).rejects.toMatchObject({ code: "file_not_found", params: { path: "docs", root: "project" } });
   });
 
+  it("says a gone path was spelled in the project, a temporary folder or on the host, for opening, revealing and reading alike", async () => {
+    const owner = consoleOf("c", "Main");
+    const project = projectOf("p", owner.id, "Website");
+    const spelled: [string, "project" | "temporary" | "host"][] = [
+      // Relative paths are the project's, and so is an absolute one inside the project's folder.
+      ["src/gone.ts", "project"],
+      [`${project.path}/src/gone.ts`, "project"],
+      // Inside a temporary folder, outside the project.
+      ["/tmp/gone.log", "temporary"],
+      ["/private/var/folders/ab/T/gone.log", "temporary"],
+      // Anywhere else on the host, written absolute or from the home directory, a sibling of the project included.
+      ["/etc/gone.conf", "host"],
+      ["/Users/dev/code/website-two/gone.ts", "host"],
+      ["~/gone.txt", "host"],
+    ];
+    const daemon = createFixtureDaemon({
+      state: snapshotState({ consoles: [owner], projects: [project] }),
+      pathLinks: Object.fromEntries(spelled.map(([path]) => [path.startsWith("/") || path.startsWith("~") ? path : `${project.path}/${path}`, { kind: "file" as const, gone: true }])),
+    });
+    for (const [path, root] of spelled) {
+      for (const type of ["open_path_link", "reveal_path_link", "read_path_link"] as const) {
+        await expect(daemon.request({ type, project: project.id, path }), `${type} ${path}`).rejects.toMatchObject({ code: "file_not_found", params: { path, root } });
+      }
+    }
+    // A path the scenario does not know at all is answered the same way by the read.
+    await expect(daemon.request({ type: "read_path_link", project: project.id, path: "/etc/unknown.conf" })).rejects.toMatchObject({ code: "file_not_found", params: { root: "host" } });
+    await expect(daemon.request({ type: "read_path_link", project: project.id, path: "unknown.ts" })).rejects.toMatchObject({ code: "file_not_found", params: { root: "project" } });
+  });
+
   it("answers the probe for a path the daemon will not open from a link, and refuses opening it with path_link_refused, the path as given, the cause and, for unreadable, the system's text", async () => {
     const owner = consoleOf("c", "Main");
     const project = projectOf("p", owner.id, "Website");
@@ -2054,7 +2095,6 @@ describe("the fixture daemon's path link probe", () => {
         "/private/tmp/sheet.png": { kind: "file", refused: "not_private" },
         "/private/tmp/sheet2.png": { kind: "file", refused: "unreadable", detail: "Input/output error (os error 5)" },
         "/private/tmp/sheet3.png": { kind: "file", refused: "other" },
-        "/private/tmp/sheet4.png": { kind: "file", outside: true },
       },
     });
     await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["docs", "bin/helper", "/private/tmp/sheet.png"] })).resolves.toEqual({
@@ -2085,16 +2125,6 @@ describe("the fixture daemon's path link probe", () => {
       params: { path: "/private/tmp/sheet3.png", cause: "other" },
     });
     await expect(daemon.request({ type: "open_path_link", project: project.id, path: "/private/tmp/sheet3.png" })).rejects.not.toHaveProperty("params.detail");
-    // A path that lies outside every root now is refused as outside_scope for an open, which words no remedy.
-    await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["/private/tmp/sheet4.png"] })).resolves.toEqual({
-      type: "path_links",
-      id: null,
-      links: [{ path: "/private/tmp/sheet4.png", kind: "file" }],
-    });
-    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "/private/tmp/sheet4.png" })).rejects.toMatchObject({
-      code: "outside_scope",
-      params: { path: "/private/tmp/sheet4.png", action: "open" },
-    });
   });
 
   it("sends where a file the viewer shows (or a folder's README) is read from, and reads a worktree's files from the worktree", async () => {

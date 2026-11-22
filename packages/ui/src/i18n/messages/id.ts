@@ -637,7 +637,6 @@ export const id: Translation<"other"> = {
   "daemon.permission_denied": "Aplikasi tidak diizinkan membaca {path}: {detail}",
   "daemon.permission_denied.summary": "Aplikasi tidak diizinkan membaca {path}.",
   "daemon.outside_scope": "{path} mengarah ke luar proyek ini, sehingga tidak ditampilkan.",
-  "daemon.outside_scope.open": "{path} mengarah ke luar proyek dan folder sementara sistem, sehingga tidak dibuka melalui tautan.",
   "daemon.path_link_refused.ambiguous": "{path} berada di folder proyek pada lebih dari satu worktree, sehingga tidak dibuka.",
   "daemon.path_link_refused.launchable": "{path} adalah sesuatu yang akan dijalankan sistem, sehingga tidak dibuka melalui tautan.",
   "daemon.path_link_refused.not_private": "{path} dapat diubah oleh pengguna lain, sehingga tidak dibuka melalui tautan.",

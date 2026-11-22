@@ -558,8 +558,9 @@ For example:
   terminal's File manager shows it or its Default application opens it, instead says it may have been moved, renamed or
   deleted, and that one moved or renamed can be found in the project's files and tried again from there (see
   "A row's actions" in `docs/product/project-pane.md`, "Opened from the terminal" in `docs/product/file-viewer.md` and
-  "File paths" in `docs/product/terminal-links.md`). A path link's file or folder gone from a temporary directory
-  outside the project gets no remedy: the alert's sentence already says it does not exist any more.
+  "File paths" in `docs/product/terminal-links.md`). A path link's file or folder gone from outside the project — a
+  temporary directory or anywhere else on the machine the daemon runs on — gets no remedy: the alert's sentence already
+  says it does not exist any more.
 - A terminal's path link that a click refuses to open on the host, that the terminal's File manager refuses to show or
   that its Default application refuses to open, for a reason other than its being gone (see "File paths" in
   `docs/product/terminal-links.md`), gets a remedy by that reason:
@@ -569,8 +570,8 @@ For example:
   - **inside a temporary directory, changeable by other users of the machine**: if it is trusted, open it oneself from
     the file manager;
   - **a read the operating system denies**: the remedy of a denied read (below);
-  - **leading outside the project and the temporary directories, not a file or folder, could not be read for another
-    reason, or any other reason or one the window does not know**: no remedy; the alert's sentence says it all, with
+  - **not a file or folder, could not be read for another reason, or any other reason or one the window does not
+    know**: no remedy; the alert's sentence says it all, with
     the system's own text of a read that failed under Error details.
 - A loopback address a remote window could not forward (see "Loopback addresses of the remote machine" in
   `docs/product/links-and-files-in-a-remote-window.md`), whether opened from a link or from a row of the Forwarded ports
@@ -584,9 +585,9 @@ For example:
   this computer. Stopping a forward that fails is titled that the port could not be stopped.
 - A file a remote window could not download and open (see "Files opened on this computer" in
   `docs/product/links-and-files-in-a-remote-window.md`) is titled that the file could not be downloaded, or, where all
-  of it had arrived and no application opened it, that the downloaded file could not be opened. A file that is gone,
-  that the daemon may not read or that leads outside what a link may open gets the sentence and remedy a click on its
-  path link gets (above). A file that changed while it was copied, or whose copy came out short, says the file changed
+  of it had arrived and no application opened it, that the downloaded file could not be opened. A file that is gone or
+  that the daemon may not read gets the sentence and remedy a click on its path link gets (above); one that leads
+  outside the project gets the sentence saying so and no remedy. A file that changed while it was copied, or whose copy came out short, says the file changed
   while it was read and asks to try again once whatever is writing to it has finished. A connection lost on the way
   gets the connection remedy. A copy this computer could not write gets the disk-space or the access remedy by the
   system's cause. A file this computer would run says so, naming it, and gets no remedy. A copy that arrived but that

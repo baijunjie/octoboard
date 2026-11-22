@@ -651,7 +651,6 @@ export const ko: Translation<"other"> = {
   "daemon.permission_denied": "앱에 {path}을(를) 읽을 권한이 없습니다: {detail}",
   "daemon.permission_denied.summary": "앱에 {path}을(를) 읽을 권한이 없습니다.",
   "daemon.outside_scope": "{path}이(가) 이 프로젝트 외부를 가리켜 표시하지 않습니다.",
-  "daemon.outside_scope.open": "{path}이(가) 프로젝트와 시스템 임시 폴더 외부를 가리켜 링크에서 열지 않습니다.",
   "daemon.path_link_refused.ambiguous": "{path}이(가) 여러 작업 트리의 프로젝트 폴더에 있어 열지 않습니다.",
   "daemon.path_link_refused.launchable": "{path}은(는) 시스템에서 실행되는 항목이므로 링크에서 열지 않습니다.",
   "daemon.path_link_refused.not_private": "{path}은(는) 다른 사용자가 변경할 수 있어 링크에서 열지 않습니다.",

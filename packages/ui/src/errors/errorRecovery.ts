@@ -283,13 +283,15 @@ export function modelChangeRecovery(error: unknown): ErrorRecovery | undefined {
 }
 
 /** The remedy for a failed click on a path link, at either step of it (reading the file for the viewer, or opening the
- * path on the host): a project file or folder gone since the link was drawn is found again in the project's files, a
- * gone temporary one has nowhere to be found, and a path that leads outside what the step may read (`outside_scope`) is
- * no use to the browse views' `scope` remedy, so the sentence alone says what is wrong. Undefined for any other
- * failure, which keeps its own. */
+ * path on the host): a file or folder of the project gone since the link was drawn (`root` is `project`, or absent) is
+ * found again in the project's files; a gone one anywhere else (`root` is `temporary`, or `host` for the rest of the
+ * daemon's machine, or a value this version does not know) has nowhere to be found, so the sentence alone says what is
+ * wrong. Undefined for any other failure, which keeps its own. */
 export function pathLinkRecovery(error: unknown): ErrorRecovery | undefined {
   if (!(error instanceof CodedError)) return undefined;
+  // Daemons released before the `open` variant of `outside_scope` was removed still raise it for a path link.
   if (error.code === CODE.outside_scope) return "none";
   const recovery = hostPathRecovery(error);
-  return recovery && error.params.root === "temporary" ? "none" : recovery;
+  const root = error.params.root;
+  return recovery && root !== undefined && root !== "project" ? "none" : recovery;
 }

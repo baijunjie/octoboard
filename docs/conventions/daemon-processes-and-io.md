@@ -104,10 +104,13 @@ daemon to its OS-token and source rules, are in `docs/structure/daemon.md`.
   itself, only entries at the agent's layout depth count, and no link may lie between them. Any finder of an agent's
   record by id goes through `records::locate::record_paths` or `records::removal::conversation_files_in`, extended if
   short, never a finder of its own. The hook route takes no `Origin` and its key is readable by any local process.
-- **A path taken from text an agent could have written is resolved by the daemon at the moment of opening, must lie
-  inside a daemon-chosen root after links are resolved, and a file in the user's project is never handed to the host
-  opener (it is shown in the viewer).** The opener runs applications, scripts and shortcuts, and what it does with a
-  file is up to that machine. The decision is `reach` in `path_links/resolve.rs`; extend it rather than write a second.
+- **A path taken from text an agent could have written is resolved by the daemon at the moment of opening, a click never
+  hands a file to the host opener (it is shown in the viewer), and what the system could launch is never opened.** A
+  temp root's contents must be the daemon user's and closed to others, and a network or device path, outside the
+  project's own roots, is refused before the disk is touched (looking at it makes the host connect out; only the
+  spelling is judged, not where a link leads). The opener runs applications, scripts and shortcuts, and what it does
+  with a file is up to that machine. The decision is `reach` in `path_links/resolve.rs`; extend it rather than write a
+  second.
 - **Deleting, trashing or refusing because a file or directory is missing is judged only from `metadata` or
   `symlink_metadata` failing with `ErrorKind::NotFound`, never `Path::exists`, `is_dir` or `is_file`.** Those answer
   false on any error and an unmounted volume's mount point reads as empty. Any other error is unknown, and unknown

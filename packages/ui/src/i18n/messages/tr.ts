@@ -655,7 +655,6 @@ export const tr: Translation<"one" | "other"> = {
   "daemon.permission_denied": "Uygulama için {path} okuma izni yok: {detail}",
   "daemon.permission_denied.summary": "Uygulama için {path} okuma izni yok.",
   "daemon.outside_scope": "{path} projenin dışına çıktığından gösterilmiyor.",
-  "daemon.outside_scope.open": "{path}, projenin ve sistemin geçici klasörlerinin dışına çıktığından bağlantıdan açılmıyor.",
   "daemon.path_link_refused.ambiguous": "{path} projenin klasöründe birden fazla çalışma ağacında bulunduğundan açılmıyor.",
   "daemon.path_link_refused.launchable": "{path} sistemin çalıştıracağı bir öğe olduğundan bağlantıdan açılmıyor.",
   "daemon.path_link_refused.not_private": "{path} başka kullanıcılar tarafından değiştirilebildiğinden bağlantıdan açılmıyor.",

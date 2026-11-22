@@ -579,9 +579,7 @@ it("keeps the system's text of an unreadable path link as plain text, on a line 
   expect(daemonMessage("en", "path_link_refused", { path: "a.ts", cause: "other" }, "x", records)).not.toContain("\n");
 });
 
-it("words an outside_scope from a link click as not opened from a link, and any other as not shown", () => {
-  expect(daemonMessage("en", "outside_scope", { path: "/x", action: "open" }, "x", records)).toContain("not opened from a link");
-  expect(daemonMessage("zh-CN", "outside_scope", { path: "/x", action: "open" }, "x", records)).toContain("不通过链接打开");
+it("words an outside_scope as not shown", () => {
   expect(daemonMessage("en", "outside_scope", { path: "/x" }, "x", records)).toContain("is not shown");
 });
 

@@ -637,7 +637,6 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "daemon.permission_denied": "لا يُسمح للتطبيق بقراءة {path}: {detail}",
   "daemon.permission_denied.summary": "لا يُسمح للتطبيق بقراءة {path}.",
   "daemon.outside_scope": "يشير {path} إلى خارج هذا المشروع، لذا لا يُعرض.",
-  "daemon.outside_scope.open": "يشير {path} إلى خارج المشروع والمجلدات المؤقتة للنظام، لذا لا يُفتح من رابط.",
   "daemon.path_link_refused.ambiguous": "يوجد {path} في مجلد المشروع في أكثر من شجرة عمل، لذا لا يُفتح.",
   "daemon.path_link_refused.launchable": "{path} شيء سيشغّله النظام، لذا لا يُفتح من رابط.",
   "daemon.path_link_refused.not_private": "يمكن لمستخدمين آخرين تغيير {path}، لذا لا يُفتح من رابط.",

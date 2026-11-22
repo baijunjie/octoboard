@@ -9,7 +9,7 @@ import type { PathLinkTarget } from "./pathLinks";
 
 /**
  * What a click on a path link in the terminal does. A file always goes to the viewer, wherever it lies: a file of the
- * project or its worktrees from its place there, any other (in a temporary folder) from its path, which the viewer
+ * project or its worktrees from its place there, any other (anywhere else on the host) from its path, which the viewer
  * reads itself and says what it cannot show. A file is never opened on the host from here, and with no viewer to show
  * it nothing happens. A folder with a `view` (its README or index file, shown without a line) is read first and shown
  * in the viewer with what was read when it is text or an image; one that is not, or is past the read cap, or whose
@@ -18,7 +18,7 @@ import type { PathLinkTarget } from "./pathLinks";
  * is not on the user's screen) nothing is opened on the host: a folder's entry file goes to the viewer unread, which
  * says what it cannot show, and a folder with none does nothing. A failed read or open is reported; a folder gone
  * since the link was drawn gets the remedy of finding it in the project's files, when it was in the project rather
- * than a temporary folder.
+ * than elsewhere on the host.
  */
 export async function openPathTarget({
   target,

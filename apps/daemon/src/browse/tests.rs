@@ -2117,7 +2117,7 @@ fn a_part_of_what_is_not_a_regular_file_inside_the_scope_is_refused() {
         code(project_file(&project, "pipe")),
         error_code::UNSUPPORTED_FILE_TYPE
     );
-    // A link that leads outside the project is outside its scope; the same through a path link.
+    // A link that leads outside the project is outside the scope of a read of the project.
     assert_eq!(
         code(project_file(&project, "leaving")),
         error_code::OUTSIDE_SCOPE
@@ -2137,14 +2137,13 @@ fn a_part_of_what_is_not_a_regular_file_inside_the_scope_is_refused() {
         )),
         error_code::UNSUPPORTED_FILE_TYPE
     );
-    assert_eq!(
-        code(path_link_file(Some(&project), "leaving")),
-        error_code::OUTSIDE_SCOPE
-    );
-    assert_eq!(
-        code(path_link_file(Some(&project), "/etc/hosts")),
-        error_code::OUTSIDE_SCOPE
-    );
+    // A path link is judged by where it leads, so the same link, and the file it leads to
+    // written outright, are read through one.
+    let secret = canonical_path(&outside.join("secret.txt"));
+    for path in ["leaving", secret.to_str().unwrap()] {
+        let part = range_of(&fixture, path_link_file(Some(&project), path), 0, 10, None).unwrap();
+        assert_eq!(part.bytes, b"x", "{path}");
+    }
     assert_eq!(
         code(path_link_file(Some(&project), "gone.txt")),
         error_code::FILE_NOT_FOUND

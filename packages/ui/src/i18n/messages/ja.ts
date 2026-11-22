@@ -650,7 +650,6 @@ export const ja: Translation<"other"> = {
   "daemon.permission_denied": "アプリには {path} の読み取り権限がありません: {detail}",
   "daemon.permission_denied.summary": "アプリには {path} の読み取り権限がありません。",
   "daemon.outside_scope": "{path} はプロジェクトの外を指しているため、表示しません。",
-  "daemon.outside_scope.open": "{path} はプロジェクトとシステムの一時フォルダの外を指しているため、リンクからは開きません。",
   "daemon.path_link_refused.ambiguous": "{path} は複数のワークツリーのプロジェクトフォルダに存在するため、開きません。",
   "daemon.path_link_refused.launchable": "{path} はシステムで実行される内容のため、リンクからは開きません。",
   "daemon.path_link_refused.not_private": "{path} はほかのユーザが変更できるため、リンクからは開きません。",

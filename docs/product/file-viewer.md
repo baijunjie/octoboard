@@ -10,7 +10,8 @@ is opened from four places:
 - **a change in the project pane's Git mode**; what the viewer shows of a change, how it moves through the change list,
   closes and follows a change is in `docs/product/project-pane-git-change-viewer.md`;
 - **a file or folder path link in a session's terminal or a shell terminal** (see "File paths" in
-  `docs/product/terminal-links.md`), whether the file lies in the project or in a temporary directory outside it; how
+  `docs/product/terminal-links.md`), whether the file lies in the project or anywhere else on the machine the daemon
+  runs on; how
   that differs is in "Opened from the terminal" below;
 - **a result of Find in files**, at the result's line, shown as a file opened from the terminal is (see "Opening a
   result" in `docs/product/finding-in-files.md`).
@@ -41,8 +42,8 @@ The header has three parts, one under the other:
   file (see `docs/product/markdown-documents.md`), then the diff's unified-or-split choice, then the wrap choice (see
   "Wrapping long lines" below), then **File manager** and **Default application** — in a remote window of the desktop
   application, **Download and open** alone. The size shows as a tag of its own, drawn as the title's neutral stage tag
-  is, where the size is known; a rename's origin reads as a sentence naming the path. A file in a temporary directory
-  outside the project, which only a terminal's path link opens, shows its full path on the daemon's machine — under the
+  is, where the size is known; a rename's origin reads as a sentence naming the path. A file outside the project,
+  which only a terminal's path link opens, shows its full path on the daemon's machine — under the
   home folder written from `~` on a Linux or macOS machine — and Copy path copies it as shown.
   Right after the file's path stand the marks of the **notices about the whole file or change** on screen, one mark per
   notice (see "Notices and stand-ins" below); they belong to the path's own item, and the path's fade cuts only the
@@ -76,7 +77,7 @@ machine running the daemon. They are offered only on a live file — a file open
 uncommitted change that is not a deletion, in the worktree it is read from; a committed change and a change that deletes
 the file have neither; a remote window of the desktop application has neither, and offers **Download and open** on the
 same live files in their place (see "Download and open" below and "The remote window" in
-`docs/product/remote-daemons.md`). On a file in a temporary directory outside the project they are the two actions of
+`docs/product/remote-daemons.md`). On a file outside the project they are the two actions of
 the terminal's Open in on that path, by its rules (see "File paths" in `docs/product/terminal-links.md`). **Default
 application is left out for a file the system could launch rather than show** — told by the daemon for a file opened
 from the terminal, and by the file's name otherwise — and the daemon refuses to open such a file all the same, one with
@@ -354,16 +355,16 @@ A click on a file path link in a session's terminal, or in a shell terminal of t
 terminal" in `docs/product/terminal-panel.md`), always opens the file in the file viewer, whatever kind of file it is
 and wherever the link may lead (see "File paths" in `docs/product/terminal-links.md`): a file inside that terminal's
 project — its directory or its place in a worktree of the same repository — from the directory it was found in, and a
-file in a temporary directory outside the project from where it lies. It is never opened on the host by the click. The
-viewer reads and shows it as any file (see "What it shows" above): a binary file that is not an image it draws, such as
+file anywhere else on the machine the daemon runs on from where it lies. It is never opened on the host by the click.
+The viewer reads and shows it as any file (see "What it shows" above): a binary file that is not an image it draws, such as
 a PDF, says it cannot be displayed, and a file that cannot be read says why in the viewer. Such a file is opened in its
 default application only by the user's own choice of Default application, in the viewer's header (see "The header"
 above), on the stand-in of a file the viewer cannot display (see "What it shows" above), or under Open in in the
 terminal's editing menu.
 
-**A file in a temporary directory outside the project** is read by the rules that make its path a link, checked again
-at the read: one that no longer passes them — gone, leading outside the temporary directories, changeable by other users
-of the machine — says so in the viewer in place of the file, and raises no error alert. It has no project around it, so
+**A file outside the project** is read by the rules that make its path a link, checked again at the read: one that no
+longer passes them — gone, or, inside a temporary directory, changeable by other users of the machine — says so in the
+viewer in place of the file, and raises no error alert. It has no project around it, so
 in a Markdown file there a relative link stays its text and a relative image shows its alt text. A console session,
 which has no project, opens such files the same way.
 
@@ -383,7 +384,7 @@ The entry file is read first, from the directory the folder was found in:
 - **Cmd+click** (Ctrl+click on other systems) opens the folder in the file manager straight away, without looking at
   its entry file. On a file link the modifier changes nothing.
 
-A folder inside a temporary directory always opens in the file manager. On macOS, wherever a click would open a folder
+A folder outside the project always opens in the file manager. On macOS, wherever a click would open a folder
 in the file manager, one the system treats as a package is refused instead (see "File paths" in
 `docs/product/terminal-links.md`).
 
@@ -400,8 +401,8 @@ A path link that carries a line opens the file at it (see "Opening at a line" be
 
 **Links in a Markdown document** opened from the terminal open in the same viewer, as in any document (see
 `docs/product/markdown-documents.md`), with two differences: a link to a folder is not told from one to a file, so it
-opens as a file and the viewer says why it cannot be shown; and in a document read from a worktree or from a temporary
-directory, a relative link stays its text and a relative image shows its alt text, as an address that is not a project
+opens as a file and the viewer says why it cannot be shown; and in a document read from a worktree or from outside the
+project, a relative link stays its text and a relative image shows its alt text, as an address that is not a project
 file does.
 
 **The first time a viewer is opened from the terminal** its code is loaded, and nothing is shown until it has loaded.

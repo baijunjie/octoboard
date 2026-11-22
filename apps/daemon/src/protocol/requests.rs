@@ -1638,15 +1638,22 @@ pub enum RequestBody {
         worktree: Option<String>,
     },
     /// Asks what each of `paths` names on the daemon host: a file, a folder or nothing reachable
-    /// (see `crate::path_links`). Answered with `path_links`.
+    /// (see `crate::path_links`). A path is judged by where it resolves to, in a project root, in a
+    /// temp root or anywhere else; a network or device path as written (outside the project's own
+    /// roots) is never looked at. Each is looked at within a deadline, grouped by the place they lie
+    /// on and looked at a few places at a time: the paths of a place that has not answered by then
+    /// (a stalled mount) are nothing, and the others are answered unless as many places stall as run
+    /// at once, when those not yet started are nothing too. Answered with `path_links`.
     ProbePathLinks {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         project: Option<String>,
         paths: Vec<String>,
     },
-    /// Opens a path `probe_path_links` found with its default application on the daemon host; a
-    /// folder opens in the file manager.
+    /// Opens a path `probe_path_links` found, wherever on the host it lies, with its default
+    /// application on the daemon host; a folder opens in the file manager. Refused with
+    /// `file_not_found` (`root` says where it was spelled: `project`, `temporary` or `host`) when
+    /// nothing is there any more.
     OpenPathLink {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
@@ -1656,10 +1663,11 @@ pub enum RequestBody {
     /// Shows a path `probe_path_links` found in the file manager on the daemon host: a file is selected
     /// in its folder, a folder is opened. Resolved as `open_path_link` does, but a file only the viewer
     /// shows is accepted, since nothing is launched. A symbolic link at the end of the path is
-    /// selected by its own name in its folder, not followed; a root, a link whose folder lies
-    /// outside the roots, a link in a temp root whose folder is not closed to others or that is not
-    /// the daemon user's (a file link in a project is not checked), and a path ending in `/`, `/.`
-    /// or `..` are shown as what they resolve to.
+    /// selected by its own name in its folder, not followed, when it lies inside a project root
+    /// (for a path in a project), or inside the temp root holding the path and then only when its
+    /// folder and it are the daemon user's and its folder is closed to others (a file link in a
+    /// project is not checked), and always for a path elsewhere on the host; a root, any other
+    /// link, and a path ending in `/`, `/.` or `..` are shown as what they resolve to.
     RevealPathLink {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]

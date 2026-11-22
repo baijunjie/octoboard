@@ -43,3 +43,36 @@ pub fn lexical_key(path: &Path) -> OsString {
 pub fn canonical(path: &Path) -> io::Result<PathBuf> {
     std::fs::canonicalize(path)
 }
+
+/// The automount trees mount a remote host on the first look at a name below them: `/net`, and on
+/// macOS `/home` too (the `auto_home` mount; on Linux `/home` is an ordinary folder).
+pub fn reaches_network_or_device(path: &Path) -> bool {
+    reaches_automount(path, cfg!(target_os = "macos"))
+}
+
+fn reaches_automount(path: &Path, macos: bool) -> bool {
+    path.starts_with("/net") || (macos && path.starts_with("/home"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `/home` is an automount only where the host says so: refused on macOS with everything below
+    /// it, an ordinary folder elsewhere; a name that only starts with the same letters is never it.
+    #[test]
+    fn home_is_an_automount_on_macos_only() {
+        for home in ["/home", "/home/", "/home/me", "/home/me/a.txt"] {
+            assert!(reaches_automount(Path::new(home), true), "{home}");
+            assert!(!reaches_automount(Path::new(home), false), "{home}");
+        }
+        for other in ["/homes", "/homework/a", "/Users/me/home", "/net/x"] {
+            assert_eq!(
+                reaches_automount(Path::new(other), true),
+                other.starts_with("/net"),
+                "{other}"
+            );
+        }
+        assert!(reaches_automount(Path::new("/net/host"), false));
+    }
+}

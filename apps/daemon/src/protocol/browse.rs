@@ -617,9 +617,10 @@ pub enum BrowseBody {
         #[cfg_attr(test, ts(optional = nullable))]
         from: ReadFrom,
     },
-    /// Reads the file a path link names, as `probe_path_links` resolved it: a file of the project
-    /// or of a temp root, whatever its type. Resolved again by the rules of `open_path_link`, but
-    /// never a directory a client named, and nothing is opened on the host.
+    /// Reads the file a path link names, as `probe_path_links` resolved it: a file of the project,
+    /// of a temp root or anywhere else on the host, whatever its type. Resolved again by the rules
+    /// of `open_path_link`, but never a directory a client named, and nothing is opened on the
+    /// host.
     ReadPathLink {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]

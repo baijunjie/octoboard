@@ -29,7 +29,7 @@ function isLeftOut(name: string): boolean {
 }
 
 /** The temporary folders a path link can lie in without being the project's: `open_path_link` says `root: "temporary"` of a
- * path gone from one. */
+ * path gone from one that is spelled in one and not in the project. */
 const TEMPORARY_ROOTS = ["/tmp", "/private/tmp", "/var/folders", "/private/var/folders"];
 const isInTemporaryRoot = (path: string) => TEMPORARY_ROOTS.some((root) => normalizedPath(path).startsWith(`${root}/`));
 
@@ -121,19 +121,29 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
    * the probe and refuses to open: only the viewer shows it. */
   const isLaunchableFile = (found: NonNullable<ReturnType<typeof pathLinkFound>>) =>
     typeof found === "object" && "refused" in found && found.refused === "launchable" && found.kind === "file";
+  /** Where a path a link names is spelled, as the daemon's `file_not_found` says in `root`: in the asking project's folder
+   * it is `project`, in a temporary folder `temporary`, anywhere else `host`. A relative path is the project's (one with
+   * no project folder is refused before this is asked). */
+  const whereabouts = (project: string | undefined, path: string): "project" | "temporary" | "host" => {
+    const root = project === undefined ? undefined : store.getState().projects.get(project)?.path;
+    const absolute = normalizedPath(absoluteLinkPath(project, path));
+    if (root !== undefined && (absolute === normalizedPath(root) || absolute.startsWith(`${normalizedPath(root)}/`))) return "project";
+    if (!path.startsWith("/") && !path.startsWith("~")) return "project";
+    return isInTemporaryRoot(absolute) ? "temporary" : "host";
+  };
   /** Refuses a path the daemon will not take from a link, with the path as given, as the daemon does: one gone since the
-   * output was drawn, one that lies outside every root now, one found but refused. Of the `launchable` refusals only a
+   * output was drawn, one found but refused. Of the `launchable` refusals only a
    * launchable file is let through to a reveal and a read, as the daemon refuses only opening it (a launchable folder is
    * never found, and is refused by every request). */
   const refuseUnreachableLink = (body: { project?: string; path: string }, found: ReturnType<typeof pathLinkFound>, action: "open" | "reveal" | "read"): void => {
     const done = action === "open" ? "opened" : action === "reveal" ? "shown" : "read";
-    if (typeof found === "object" && "gone" in found) {
-      // `root` says where the path was: a temporary folder has nowhere to be found again, the project has its files.
-      const root = isInTemporaryRoot(absoluteLinkPath(body.project, body.path)) ? "temporary" : "project";
-      fail({ code: "file_not_found", params: { path: body.path, root }, message: `\`${body.path}\` does not exist` });
+    // A relative path with no project folder to try it from names nothing: the daemon refuses it as `other`.
+    if (!body.path.startsWith("/") && !body.path.startsWith("~") && (body.project === undefined ? undefined : store.getState().projects.get(body.project)?.path) === undefined) {
+      fail({ code: "path_link_refused", params: { path: body.path, cause: "other" }, message: `${body.path} is not ${done} from a link: other` });
     }
-    if (typeof found === "object" && "outside" in found) {
-      fail({ code: "outside_scope", params: { path: body.path, action: "open" }, message: `${body.path} leads outside the project, so it is not ${done}` });
+    if (typeof found === "object" && "gone" in found) {
+      // `root` says where the path was spelled: only the project has files to find it in again.
+      fail({ code: "file_not_found", params: { path: body.path, root: whereabouts(body.project, body.path) }, message: `\`${body.path}\` does not exist` });
     }
     if (typeof found === "object" && "refused" in found && (action === "open" || found.refused !== "launchable" || !isLaunchableFile(found))) {
       // Only an `unreadable` cause carries the system's text, as the daemon sends `detail` for no other.
@@ -173,8 +183,7 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
     const found = pathLinkFound(body.project, body.path);
     refuseUnreachableLink(body, found, "read");
     if (found === undefined) {
-      const root = isInTemporaryRoot(absoluteLinkPath(body.project, body.path)) ? "temporary" : "project";
-      return fail({ code: "file_not_found", params: { path: body.path, root }, message: `\`${body.path}\` does not exist` });
+      return fail({ code: "file_not_found", params: { path: body.path, root: whereabouts(body.project, body.path) }, message: `\`${body.path}\` does not exist` });
     }
     if (found === "directory" || (typeof found === "object" && "kind" in found && found.kind === "directory")) {
       return fail({ code: "unsupported_file_type", params: { path: body.path, file_type: "directory" }, message: `${body.path} is a directory, which cannot be read here` });

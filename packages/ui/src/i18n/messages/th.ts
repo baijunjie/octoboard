@@ -649,7 +649,6 @@ export const th: Translation<"other"> = {
   "daemon.permission_denied": "แอปไม่มีสิทธิ์อ่าน {path}: {detail}",
   "daemon.permission_denied.summary": "แอปไม่มีสิทธิ์อ่าน {path}",
   "daemon.outside_scope": "{path} ชี้ไปนอกโปรเจ็กต์นี้ จึงไม่แสดง",
-  "daemon.outside_scope.open": "{path} ชี้ไปนอกโปรเจ็กต์และโฟลเดอร์ชั่วคราวของระบบ จึงไม่เปิดจากลิงก์",
   "daemon.path_link_refused.ambiguous": "{path} อยู่ในโฟลเดอร์โปรเจ็กต์ของหลายเวิร์กทรี จึงไม่เปิด",
   "daemon.path_link_refused.launchable": "{path} เป็นสิ่งที่ระบบจะเรียกใช้ จึงไม่เปิดจากลิงก์",
   "daemon.path_link_refused.not_private": "ผู้ใช้อื่นเปลี่ยน {path} ได้ จึงไม่เปิดจากลิงก์",

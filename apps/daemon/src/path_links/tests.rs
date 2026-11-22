@@ -1,12 +1,28 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+use super::resolve::{refused_as_network, Whereabouts};
 use super::*;
+use crate::hostfs::lexically_normalise;
 use crate::protocol::PathLinkView;
 use crate::test_support::{symlink, ScratchDir};
 
 fn canonical(dir: &Path) -> PathBuf {
     crate::hostfs::canonical(dir).unwrap()
+}
+
+/// Makes [`temp_roots`] answer `dirs` instead of the host's, on the test's own thread, until dropped.
+struct TempRootsOverride;
+
+fn with_temp_roots(dirs: &[&Path]) -> TempRootsOverride {
+    TEMP_ROOTS_OVERRIDE.set(Some(dirs.iter().map(|dir| dir.to_path_buf()).collect()));
+    TempRootsOverride
+}
+
+impl Drop for TempRootsOverride {
+    fn drop(&mut self) {
+        TEMP_ROOTS_OVERRIDE.set(None);
+    }
 }
 
 fn project_roots(dirs: &[&Path]) -> ProjectRoots {
@@ -94,15 +110,75 @@ fn a_relative_path_found_in_two_roots_is_ambiguous() {
 }
 
 #[test]
-fn a_path_outside_every_root_is_refused_even_through_a_link() {
+fn a_path_outside_every_root_is_reachable_where_it_resolves_even_through_a_link() {
     let project = ScratchDir::new("path-links-outside");
     let elsewhere = ScratchDir::new("path-links-elsewhere");
     std::fs::write(elsewhere.join("secret.txt"), "x").unwrap();
+    std::fs::create_dir(elsewhere.join("folder")).unwrap();
     symlink(elsewhere.join("secret.txt"), project.join("link.txt")).unwrap();
+    symlink(elsewhere.join("folder"), project.join("folder-link")).unwrap();
     let roots = project_roots(&[&project]);
-    let at = |raw: &str| kind(raw, None, &no_temp(), &roots);
-    assert_eq!(at(elsewhere.join("secret.txt").to_str().unwrap()), None);
-    assert_eq!(at("link.txt"), None);
+    let outside = canonical(&elsewhere);
+    let inside = canonical(&project);
+    // Written as it lies, through the project's own link to it, written absolute or relative, and
+    // spelled inside the project: it is judged by where it resolves to, so it is not the project's.
+    for (raw, kind, target) in [
+        (
+            outside.join("secret.txt"),
+            PathLinkKind::File,
+            outside.join("secret.txt"),
+        ),
+        (
+            outside.join("folder"),
+            PathLinkKind::Directory,
+            outside.join("folder"),
+        ),
+        (
+            inside.join("link.txt"),
+            PathLinkKind::File,
+            outside.join("secret.txt"),
+        ),
+        (
+            inside.join("folder-link"),
+            PathLinkKind::Directory,
+            outside.join("folder"),
+        ),
+        (
+            PathBuf::from("link.txt"),
+            PathLinkKind::File,
+            outside.join("secret.txt"),
+        ),
+        (
+            PathBuf::from("folder-link"),
+            PathLinkKind::Directory,
+            outside.join("folder"),
+        ),
+    ] {
+        let raw = raw.to_str().unwrap();
+        let resolved = reach(raw, None, &no_temp(), &|| roots.clone())
+            .unwrap_or_else(|unreached| panic!("{raw}: {unreached:?}"));
+        assert_eq!(
+            (resolved.kind, resolved.path, resolved.project_root),
+            (kind, target, None),
+            "{raw}"
+        );
+    }
+}
+
+#[test]
+fn a_path_anywhere_needs_no_project() {
+    let elsewhere = ScratchDir::new("path-links-anywhere");
+    std::fs::write(elsewhere.join("a.txt"), "x").unwrap();
+    let home = canonical(&elsewhere);
+    // As written, and from a `~/` path of the host's home directory.
+    for raw in [home.join("a.txt").to_str().unwrap(), "~/a.txt"] {
+        let resolved = reach(raw, Some(&home), &no_temp(), &ProjectRoots::default).unwrap();
+        assert_eq!(
+            (resolved.kind, resolved.launchable, resolved.project_root),
+            (PathLinkKind::File, false, None),
+            "{raw}"
+        );
+    }
 }
 
 fn refusal(raw: &str, temp: &TempRoots, roots: &ProjectRoots) -> Refusal {
@@ -131,12 +207,23 @@ fn a_refusal_says_why_the_path_is_not_shown() {
     std::fs::create_dir(project.join("Thing.app")).unwrap();
     let roots = project_roots(&[&project, &second]);
     let at = |raw: &str| refusal(raw, &no_temp(), &roots);
-    assert_eq!(at("link.txt"), Refusal::Outside);
-    assert_eq!(at("../elsewhere.ts"), Refusal::Outside);
-    assert_eq!(at("/etc/hosts"), Refusal::Outside);
+    // A relative path with no root to look from names nothing.
+    assert_eq!(
+        refusal("a.txt", &no_temp(), &ProjectRoots::default()),
+        Refusal::Other
+    );
     assert_eq!(at("both.ts"), Refusal::Ambiguous);
     // A launchable file is reachable anywhere, a launchable folder nowhere.
     assert_eq!(at("Thing.app"), Refusal::Launchable);
+    std::fs::create_dir(elsewhere.join("Other.app")).unwrap();
+    assert_eq!(
+        refusal(
+            canonical(&elsewhere).join("Other.app").to_str().unwrap(),
+            &no_temp(),
+            &ProjectRoots::default()
+        ),
+        Refusal::Launchable
+    );
     assert_eq!(
         refusal(
             canonical(&project).join("Thing.app").to_str().unwrap(),
@@ -202,6 +289,12 @@ fn a_denied_read_is_refused_with_the_systems_text() {
         [
             refusal("locked/a.txt", &no_temp(), &roots),
             refusal(absolute.to_str().unwrap(), &no_temp(), &roots),
+            // Outside every root the system's refusal is still the answer.
+            refusal(
+                absolute.to_str().unwrap(),
+                &no_temp(),
+                &ProjectRoots::default(),
+            ),
         ]
     }));
     chmod(0o755);
@@ -267,9 +360,11 @@ fn what_could_be_launched_is_never_opened_and_only_a_file_is_kept_to_be_viewed()
         "Thing.app/Contents/info.txt",
     ];
     // In a temp root alone the directory is scratch space; as the project's it is the project's.
+    // Anywhere else on the host every folder from the top of the file system counts.
     for (temp, roots, scope) in [
         (no_temp(), roots, "project"),
         (temp_of(&dir), ProjectRoots::default(), "temp"),
+        (no_temp(), ProjectRoots::default(), "host"),
     ] {
         let at = |name: &str| {
             let path = canonical(&dir).join(name);
@@ -281,8 +376,8 @@ fn what_could_be_launched_is_never_opened_and_only_a_file_is_kept_to_be_viewed()
             "{scope}"
         );
         for name in launchable {
-            // A file is kept for the viewer, in a project or a temp root, marked so that nothing
-            // opens it.
+            // A file is kept for the viewer, in a project, a temp root or anywhere else, marked so that
+            // nothing opens it.
             assert_eq!(
                 at(name).map(|r| (r.kind, r.launchable)),
                 Some((PathLinkKind::File, true)),
@@ -403,6 +498,18 @@ fn the_hosts_own_launched_types_are_refused_on_a_files_own_name() {
             &ProjectRoots::default,
         );
         assert_eq!(in_temp, None, "{extension}");
+        // Anywhere else on the host it is kept for the viewer like a project's.
+        let elsewhere = resolve(
+            file.to_str().unwrap(),
+            None,
+            &no_temp(),
+            &ProjectRoots::default,
+        );
+        assert_eq!(
+            elsewhere.map(|r| (r.kind, r.launchable)),
+            Some((PathLinkKind::File, true)),
+            "{extension}"
+        );
     }
 }
 
@@ -457,16 +564,25 @@ fn only_a_regular_file_directly_in_the_directory_is_its_entry() {
 }
 
 #[test]
-fn an_absolute_path_must_start_with_a_root_as_written_not_only_resolve_into_one() {
+fn an_absolute_path_is_judged_by_where_it_resolves_not_by_how_it_is_written() {
     let project = ScratchDir::new("path-links-spelled");
     let elsewhere = ScratchDir::new("path-links-spelled-link");
     std::fs::write(project.join("a.ts"), "x").unwrap();
     symlink(&*project, elsewhere.join("alias")).unwrap();
     let roots = project_roots(&[&project]);
+    // Written outside the project, through a link into it: the project's file.
     let written = canonical(&elsewhere).join("alias/a.ts");
+    let resolved = reach(written.to_str().unwrap(), None, &no_temp(), &|| {
+        roots.clone()
+    })
+    .unwrap();
     assert_eq!(
-        kind(written.to_str().unwrap(), None, &no_temp(), &roots),
-        None
+        (resolved.kind, resolved.path, resolved.project_root),
+        (
+            PathLinkKind::File,
+            canonical(&project).join("a.ts"),
+            Some(0)
+        )
     );
     let direct = canonical(&project).join("a.ts");
     assert_eq!(
@@ -476,20 +592,96 @@ fn an_absolute_path_must_start_with_a_root_as_written_not_only_resolve_into_one(
 }
 
 #[test]
-fn a_link_from_a_temp_root_to_outside_it_is_refused() {
+fn a_link_in_the_project_to_another_root_is_that_roots_file() {
+    let first = ScratchDir::new("path-links-roots-first");
+    let second = ScratchDir::new("path-links-roots-second");
+    std::fs::write(second.join("b.ts"), "x").unwrap();
+    symlink(second.join("b.ts"), first.join("to-second.ts")).unwrap();
+    let roots = project_roots(&[&first, &second]);
+    for raw in [
+        "to-second.ts".to_string(),
+        canonical(&first)
+            .join("to-second.ts")
+            .to_string_lossy()
+            .into_owned(),
+    ] {
+        let resolved = reach(&raw, None, &no_temp(), &|| roots.clone()).unwrap();
+        assert_eq!(resolved.project_root, Some(1), "{raw}");
+    }
+}
+
+#[test]
+fn a_path_spelled_in_a_temp_root_is_judged_where_a_link_in_it_leads() {
     let temp = ScratchDir::new("path-links-temp-link");
     let elsewhere = ScratchDir::new("path-links-temp-target");
     std::fs::write(elsewhere.join("a.txt"), "x").unwrap();
+    std::fs::create_dir(elsewhere.join("folder")).unwrap();
     symlink(elsewhere.join("a.txt"), temp.join("a.txt")).unwrap();
-    let path = canonical(&temp).join("a.txt");
+    symlink(elsewhere.join("folder"), temp.join("folder")).unwrap();
+    for (name, expected) in [
+        ("a.txt", PathLinkKind::File),
+        ("folder", PathLinkKind::Directory),
+    ] {
+        let path = canonical(&temp).join(name);
+        assert_eq!(
+            kind(
+                path.to_str().unwrap(),
+                None,
+                &temp_of(&temp),
+                &ProjectRoots::default()
+            ),
+            Some(expected),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn a_link_from_a_temp_root_into_the_project_is_the_projects_file() {
+    let temp = ScratchDir::new("path-links-temp-into");
+    let project = ScratchDir::new("path-links-temp-into-project");
+    std::fs::write(project.join("a.ts"), "x").unwrap();
+    symlink(project.join("a.ts"), temp.join("to-project.ts")).unwrap();
+    let roots = project_roots(&[&project]);
+    let path = canonical(&temp).join("to-project.ts");
+    let resolved = reach(path.to_str().unwrap(), None, &temp_of(&temp), &|| {
+        roots.clone()
+    })
+    .unwrap();
+    assert_eq!(resolved.project_root, Some(0));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_path_outside_the_project_and_the_temp_roots_has_no_owner_check() {
+    let dir = ScratchDir::new("path-links-no-owner-check");
+    std::fs::create_dir(dir.join("open")).unwrap();
+    std::fs::write(dir.join("open/a.txt"), "x").unwrap();
+    std::fs::set_permissions(dir.join("open"), std::fs::Permissions::from_mode(0o777)).unwrap();
+    std::fs::set_permissions(
+        dir.join("open/a.txt"),
+        std::fs::Permissions::from_mode(0o666),
+    )
+    .unwrap();
+    let path = canonical(&dir).join("open/a.txt");
+    // As a temp root's file it is refused for others being able to change it; anywhere else it is
+    // shown, as is any file on the host.
+    assert_eq!(
+        refusal(
+            path.to_str().unwrap(),
+            &temp_of(&dir),
+            &ProjectRoots::default()
+        ),
+        Refusal::NotPrivate
+    );
     assert_eq!(
         kind(
             path.to_str().unwrap(),
             None,
-            &temp_of(&temp),
+            &no_temp(),
             &ProjectRoots::default()
         ),
-        None
+        Some(PathLinkKind::File)
     );
 }
 
@@ -548,28 +740,29 @@ fn a_temp_root_that_is_the_filesystem_root_or_holds_home_is_not_used() {
 }
 
 #[test]
-fn dots_cannot_lead_out_of_the_roots_a_path_was_checked_against() {
+fn a_path_with_dots_is_judged_by_where_it_leads_not_by_the_root_it_was_written_under() {
     let project = ScratchDir::new("path-links-dots");
     let elsewhere = ScratchDir::new("path-links-dots-target");
     std::fs::write(elsewhere.join("secret.txt"), "x").unwrap();
     let roots = project_roots(&[&project]);
     let name = elsewhere.file_name().unwrap().to_str().unwrap();
     let up = format!("../{name}/secret.txt");
+    // A relative path may lead out of a root, and is then what it names: not the project's.
+    let found = resolve(&up, None, &no_temp(), &|| roots.clone()).unwrap();
+    assert_eq!(
+        (found.path, found.project_root),
+        (canonical(&elsewhere).join("secret.txt"), None)
+    );
+    // An absolute one is folded first and is then what it names: neither the project's nor a temp
+    // root's, whichever root it was written under.
     let absolute = canonical(&project).join(&up);
-    assert_eq!(kind(&up, None, &no_temp(), &roots), None);
-    assert_eq!(
-        kind(absolute.to_str().unwrap(), None, &no_temp(), &roots),
-        None
-    );
-    assert_eq!(
-        kind(
-            absolute.to_str().unwrap(),
-            None,
-            &temp_of(&project),
-            &ProjectRoots::default()
-        ),
-        None
-    );
+    for temp in [no_temp(), temp_of(&project)] {
+        let resolved = resolve(absolute.to_str().unwrap(), None, &temp, &|| roots.clone()).unwrap();
+        assert_eq!(
+            (resolved.path, resolved.project_root),
+            (canonical(&elsewhere).join("secret.txt"), None)
+        );
+    }
 }
 
 #[test]
@@ -581,7 +774,10 @@ fn a_path_asks_for_the_project_roots_once_whether_or_not_it_is_under_a_temp_root
         calls.set(calls.get() + 1);
         ProjectRoots::default()
     };
-    assert!(resolve("/etc/hosts", None, &temp_roots, &project).is_none());
+    let elsewhere = ScratchDir::new("path-links-lexical-elsewhere");
+    std::fs::write(elsewhere.join("a.txt"), "x").unwrap();
+    let outside = canonical(&elsewhere).join("a.txt");
+    assert!(resolve(outside.to_str().unwrap(), None, &temp_roots, &project).is_some());
     assert_eq!(calls.get(), 1);
     // Told apart from a project kept under the temp root, which it may be.
     let inside = canonical(&temp).join("a.txt");
@@ -670,10 +866,510 @@ fn dots_are_folded_lexically_before_the_file_system_sees_the_path() {
     );
 }
 
+fn whereabouts(
+    raw: &str,
+    home: Option<&Path>,
+    temp: &TempRoots,
+    roots: &ProjectRoots,
+) -> Whereabouts {
+    match reach(raw, home, temp, &|| roots.clone()) {
+        Err(Unreached::Gone { was }) => was,
+        other => panic!("{raw}: expected a gone path, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_gone_path_says_where_it_was_spelled() {
+    let project = ScratchDir::new("path-links-gone-project");
+    let temp = ScratchDir::new("path-links-gone-temp");
+    let elsewhere = ScratchDir::new("path-links-gone-elsewhere");
+    let roots = project_roots(&[&project]);
+    let (in_project, in_temp, outside) =
+        (canonical(&project), canonical(&temp), canonical(&elsewhere));
+    let at =
+        |path: &Path, temp: &TempRoots| whereabouts(path.to_str().unwrap(), None, temp, &roots);
+    // The project's, spelled absolute or relative, even when the project itself is under a temp root.
+    for temp in [no_temp(), temp_of(&project), temp_of(&temp)] {
+        assert_eq!(at(&in_project.join("gone.ts"), &temp), Whereabouts::Project);
+        assert_eq!(
+            whereabouts("src/gone.ts", None, &temp, &roots),
+            Whereabouts::Project
+        );
+    }
+    // A link of the project whose target is gone is still spelled in the project.
+    symlink(outside.join("gone.ts"), project.join("dangling")).unwrap();
+    assert_eq!(
+        at(&in_project.join("dangling"), &no_temp()),
+        Whereabouts::Project
+    );
+    // In a temp root, outside the project: the temp root's.
+    assert_eq!(
+        at(&in_temp.join("gone.ts"), &temp_of(&temp)),
+        Whereabouts::Temporary
+    );
+    // Anywhere else on the host, with or without temp roots, and for a `~/` path.
+    assert_eq!(
+        at(&outside.join("gone.ts"), &no_temp()),
+        Whereabouts::Elsewhere
+    );
+    assert_eq!(
+        at(&outside.join("gone.ts"), &temp_of(&temp)),
+        Whereabouts::Elsewhere
+    );
+    assert_eq!(
+        whereabouts("~/gone.ts", Some(&outside), &no_temp(), &roots),
+        Whereabouts::Elsewhere
+    );
+}
+
+/// What a reveal of `raw` selects, judged with no temp roots: the link it ends in by its own name,
+/// else none.
+fn own_entry_of(raw: &str, roots: &ProjectRoots) -> Option<PathBuf> {
+    let resolved = reach(raw, None, &no_temp(), &|| roots.clone()).unwrap();
+    own_entry(&resolved, &no_temp(), &|| roots.clone())
+}
+
+#[test]
+fn a_link_anywhere_on_the_host_is_selected_by_its_own_name() {
+    let dir = ScratchDir::new("path-links-own-entry");
+    std::fs::create_dir(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("notes.txt"), "x").unwrap();
+    symlink("notes.txt", dir.join("file-link")).unwrap();
+    symlink("sub", dir.join("folder-link")).unwrap();
+    symlink("../notes.txt", dir.join("sub/up")).unwrap();
+    let base = canonical(&dir);
+    let absolute = |name: &str| base.join(name).to_string_lossy().into_owned();
+    let none = ProjectRoots::default();
+    for (raw, expected) in [
+        (absolute("file-link"), Some(base.join("file-link"))),
+        (absolute("folder-link"), Some(base.join("folder-link"))),
+        // A link below a linked folder is selected where it lies.
+        (absolute("folder-link/up"), Some(base.join("sub/up"))),
+        // Not a link, or a spelling that names the folder.
+        (absolute("notes.txt"), None),
+        (absolute("folder-link/"), None),
+        (absolute("folder-link/."), None),
+    ] {
+        assert_eq!(own_entry_of(&raw, &none), expected, "{raw}");
+    }
+    // Where the link sits in a project it is the project's root that holds it, and a link of the
+    // project that leads out of it is selected where it lies, though it resolves elsewhere.
+    let elsewhere = ScratchDir::new("path-links-own-entry-elsewhere");
+    std::fs::write(elsewhere.join("far.txt"), "x").unwrap();
+    symlink(elsewhere.join("far.txt"), dir.join("out-link")).unwrap();
+    let roots = project_roots(&[&dir]);
+    for name in ["file-link", "out-link"] {
+        assert_eq!(
+            own_entry_of(&absolute(name), &roots),
+            Some(base.join(name)),
+            "{name}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_link_in_a_folder_others_can_write_is_selected_outside_the_temp_roots() {
+    let dir = ScratchDir::new("path-links-own-entry-open");
+    std::fs::create_dir(dir.join("open")).unwrap();
+    std::fs::write(dir.join("open/a.txt"), "x").unwrap();
+    symlink("a.txt", dir.join("open/link")).unwrap();
+    std::fs::set_permissions(dir.join("open"), std::fs::Permissions::from_mode(0o777)).unwrap();
+    let link = canonical(&dir).join("open/link");
+    assert_eq!(
+        own_entry_of(link.to_str().unwrap(), &ProjectRoots::default()),
+        Some(link)
+    );
+}
+
+/// A host with no `/net`, and one with an automount tree there, answer a look at it differently
+/// (gone, or a connection out), so a name below it that is refused as `Other` and not as gone shows
+/// the disk was not consulted.
+#[cfg(unix)]
+const NET_FILE: &str = "/net/octoboard-no-such-host/share/a.txt";
+
+#[cfg(unix)]
+#[test]
+fn a_network_path_is_refused_before_the_disk_is_looked_at() {
+    let project = ScratchDir::new("path-links-network");
+    std::fs::write(project.join("a.txt"), "x").unwrap();
+    let roots = project_roots(&[&project]);
+    let home = Path::new("/net/octoboard-no-such-host/me");
+    // Whatever the roots and temp roots, and whether or not anything is there.
+    for (temp, roots) in [
+        (no_temp(), ProjectRoots::default()),
+        (no_temp(), roots.clone()),
+        (temp_of(&project), roots.clone()),
+    ] {
+        for raw in [
+            "/net",
+            "/net/",
+            "/net/octoboard-no-such-host",
+            NET_FILE,
+            "~/a.txt",
+            "/net/./octoboard-no-such-host/a.txt",
+            "/net/octoboard-no-such-host/../other/a.txt",
+        ] {
+            let result = reach(raw, Some(home), &temp, &|| roots.clone());
+            assert_eq!(result, Err(Unreached::Refused(Refusal::Other)), "{raw}");
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_path_is_refused_as_network_by_where_its_dots_lead() {
+    let project = ScratchDir::new("path-links-network-dots");
+    let roots = project_roots(&[&project]);
+    let ups = "../".repeat(canonical(&project).components().count());
+    let from_project = canonical(&project).join(format!("{ups}net/octoboard-no-such-host/a.txt"));
+    let refused = Err(Unreached::Refused(Refusal::Other));
+    // Into the tree by dots, written absolute or relative to a root.
+    assert_eq!(
+        reach(from_project.to_str().unwrap(), None, &no_temp(), &|| roots
+            .clone()),
+        refused
+    );
+    assert_eq!(
+        reach(
+            "/tmp/../net/octoboard-no-such-host/a.txt",
+            None,
+            &no_temp(),
+            &|| roots.clone()
+        ),
+        refused
+    );
+    assert_eq!(
+        reach(
+            &format!("{ups}net/octoboard-no-such-host/a.txt"),
+            None,
+            &no_temp(),
+            &|| roots.clone()
+        ),
+        refused
+    );
+    // And out of it by dots: written under `/net`, it is judged by where it leads.
+    let out = reach(
+        "/net/../etc/octoboard-no-such-file",
+        None,
+        &no_temp(),
+        &|| roots.clone(),
+    );
+    assert!(
+        !matches!(out, Err(Unreached::Refused(Refusal::Other))),
+        "{out:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_name_that_only_starts_like_net_is_looked_at_like_any_other_path() {
+    let none = ProjectRoots::default();
+    for raw in [
+        "/network-octoboard-test/a.txt",
+        "/netx-octoboard-test/a.txt",
+        "/octoboard-test/net/a.txt",
+    ] {
+        assert_eq!(
+            whereabouts(raw, None, &no_temp(), &none),
+            Whereabouts::Elsewhere,
+            "{raw}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_relative_path_is_refused_when_its_join_leaves_the_roots_into_the_network() {
+    let project = ScratchDir::new("path-links-network-roots");
+    std::fs::write(project.join("a.txt"), "x").unwrap();
+    let roots = project_roots(&[&project]);
+    let ups = "../".repeat(canonical(&project).components().count());
+    // The join leads out of the roots into the automount tree, whether or not a file is there.
+    for raw in [
+        format!("{ups}net/octoboard-no-such-host/a.txt"),
+        format!("{ups}net"),
+    ] {
+        assert_eq!(refusal(&raw, &no_temp(), &roots), Refusal::Other, "{raw}");
+    }
+}
+
+/// The decision alone, on spellings that are never looked at: nothing here reads the disk.
+#[cfg(unix)]
+#[test]
+fn a_spelling_on_a_network_share_is_refused_unless_it_lies_inside_a_root_of_the_project() {
+    let share = PathBuf::from("/net/octoboard-no-such-host/project");
+    let on_share = ProjectRoots {
+        canonical: vec![PathBuf::from("/work/app"), share.clone()],
+        lexical: vec![PathBuf::from("/work/app"), share.clone()],
+        worktrees: vec![None, None],
+    };
+    let elsewhere = ProjectRoots {
+        canonical: vec![PathBuf::from("/work/app")],
+        lexical: vec![PathBuf::from("/work/app")],
+        worktrees: vec![None],
+    };
+    let refused = |spelling: &str, roots: &ProjectRoots| {
+        refused_as_network(Path::new(spelling), &|| roots.clone())
+    };
+    // Inside a root kept on the share, written absolute or as the join of a relative path.
+    assert!(!refused("/net/octoboard-no-such-host/project", &on_share));
+    assert!(!refused(
+        "/net/octoboard-no-such-host/project/a.txt",
+        &on_share
+    ));
+    let joined = lexically_normalise(&share.join("src/../a.txt"));
+    assert!(!refused(joined.to_str().unwrap(), &on_share));
+    // Beside it, or with no root on a share at all, it leaves the roots into one.
+    assert!(refused(
+        "/net/octoboard-no-such-host/other/a.txt",
+        &on_share
+    ));
+    assert!(refused(
+        "/net/octoboard-no-such-host/project/a.txt",
+        &elsewhere
+    ));
+    assert!(refused("/net", &on_share));
+    let leaving = lexically_normalise(&Path::new("/work/app").join("../../net/host/a.txt"));
+    assert!(refused(leaving.to_str().unwrap(), &on_share));
+    // What is not on a share is never refused, in a root or not.
+    assert!(!refused("/work/app/a.txt", &elsewhere));
+    assert!(!refused("/elsewhere/a.txt", &elsewhere));
+}
+
+#[cfg(windows)]
+#[test]
+fn a_drive_relative_path_is_refused_not_joined_to_a_root() {
+    let project = ScratchDir::new("path-links-drive-relative");
+    std::fs::write(project.join("a.txt"), "x").unwrap();
+    let roots = project_roots(&[&project]);
+    for raw in [r"C:a.txt", r"D:..\a.txt", "c:a.txt"] {
+        assert_eq!(refusal(raw, &no_temp(), &roots), Refusal::Other, "{raw}");
+    }
+}
+
+/// The grouping of what a probe may block on alike: the project root a spelling is in, else home
+/// and one name, else its root and first two names.
+#[cfg(unix)]
+#[test]
+fn a_path_lies_on_the_place_of_its_project_root_else_home_and_a_name_else_its_first_two_names() {
+    let roots = ProjectRoots {
+        canonical: vec![
+            PathBuf::from("/Users/me/code/app"),
+            PathBuf::from("/Users/me/code/app/.wt/x"),
+        ],
+        lexical: vec![
+            PathBuf::from("/Users/me/code/app"),
+            PathBuf::from("/Users/me/code/app/.wt/x"),
+            PathBuf::from("/stored/app"),
+        ],
+        worktrees: vec![None, None],
+    };
+    let home = Path::new("/Users/me");
+    let place = |raw: &str| place_of(raw, Some(home), &roots);
+    for (raw, expected) in [
+        // A project root is a place of its own, the innermost that holds the spelling, however
+        // the root is written, and a relative path is the root it is joined to.
+        ("/Users/me/code/app/src/a", "/Users/me/code/app"),
+        ("/Users/me/code/app/.wt/x/a", "/Users/me/code/app/.wt/x"),
+        ("/stored/app/a/b/c", "/stored/app"),
+        ("~/code/app/a", "/Users/me/code/app"),
+        ("src/a", "/Users/me/code/app"),
+        ("src/../../app/a", "/Users/me/code/app"),
+        // Leaving the roots, a spelling under home is home and one name.
+        ("../other/a", "/Users/me/code"),
+        ("~/nas/x/y", "/Users/me/nas"),
+        ("/Users/me/nas", "/Users/me/nas"),
+        ("/Users/me", "/Users/me"),
+        ("/Users/me/../me/b/c", "/Users/me/b"),
+        // Elsewhere, the root and the first two names, folded.
+        ("/Volumes/X/a/b", "/Volumes/X"),
+        ("/Volumes/X", "/Volumes/X"),
+        ("/Volumes/X/../Y/a", "/Volumes/Y"),
+        ("/Volumes/./X/a/./b", "/Volumes/X"),
+        ("/Users/you/a/b", "/Users/you"),
+        ("/a", "/a"),
+        ("/", "/"),
+        ("../../../../z/w/v", "/z/w"),
+    ] {
+        assert_eq!(place(raw), Path::new(expected), "{raw}");
+    }
+    assert_ne!(place("/Volumes/X/a"), place("/Volumes/Y/a"));
+    assert_eq!(place("/Volumes/X/a"), place("/Volumes/X/b/c"));
+    // Another project is another place, and a stall under home touches neither.
+    let other = ProjectRoots {
+        canonical: vec![PathBuf::from("/Users/me/code/site")],
+        lexical: vec![PathBuf::from("/Users/me/code/site")],
+        worktrees: vec![None],
+    };
+    assert_ne!(place("a"), place_of("a", Some(home), &other));
+    assert_ne!(place("~/nas/a"), place("a"));
+    // No root to try from, or no home: no place, which nothing is read for.
+    assert_eq!(
+        place_of("a/b", None, &ProjectRoots::default()),
+        Path::new("")
+    );
+    assert_eq!(place_of("~/a", None, &roots), Path::new(""));
+}
+
+/// Windows spells these as it does; where the host is Unix they are names of a file in the folder.
+#[cfg(windows)]
+#[test]
+fn a_unc_or_device_path_is_refused_and_the_verbatim_form_of_a_drive_is_not() {
+    let dir = ScratchDir::new("path-links-unc");
+    std::fs::write(dir.join("a.txt"), "x").unwrap();
+    let roots = project_roots(&[&dir]);
+    for raw in [
+        r"\\server\share\a.txt",
+        "//server/share/a.txt",
+        r"\\.\pipe\x",
+        r"\\.\C:\a.txt",
+        r"\\?\UNC\server\share\a.txt",
+        r"\\?\Volume{0b1c}\a.txt",
+    ] {
+        assert_eq!(
+            reach(raw, None, &no_temp(), &|| roots.clone()),
+            Err(Unreached::Refused(Refusal::Other)),
+            "{raw}"
+        );
+    }
+    let plain = canonical(&dir).join("a.txt");
+    let verbatim = format!(r"\\?\{}", plain.display());
+    let resolved = reach(&verbatim, None, &no_temp(), &|| roots.clone())
+        .unwrap_or_else(|unreached| panic!("{verbatim}: {unreached:?}"));
+    assert_eq!((resolved.kind, resolved.path), (PathLinkKind::File, plain));
+}
+
+/// A bundle among the folders above a path counts wherever the path was found outside the
+/// project: from the top of the tree for one found elsewhere on the host, but only below the temp
+/// root for one found in it.
+#[test]
+fn a_file_elsewhere_is_judged_launchable_by_every_folder_from_the_top_of_the_tree() {
+    let dir = ScratchDir::new("path-links-top-of-tree");
+    std::fs::create_dir_all(dir.join("Outer.app/Contents/Resources")).unwrap();
+    std::fs::write(dir.join("Outer.app/Contents/Resources/notes.txt"), "x").unwrap();
+    let base = canonical(&dir);
+    let at = |temp: &TempRoots, name: &str| {
+        reach(
+            base.join(name).to_str().unwrap(),
+            None,
+            temp,
+            &ProjectRoots::default,
+        )
+    };
+    let inside = base.join("Outer.app/Contents");
+    // Elsewhere on the host: a file in a bundle is for the viewer only, a folder of one is refused.
+    let host = at(&no_temp(), "Outer.app/Contents/Resources/notes.txt").unwrap();
+    assert_eq!(
+        (host.kind, host.viewer_only(), host.project_root),
+        (PathLinkKind::File, true, None)
+    );
+    for folder in [
+        "Outer.app",
+        "Outer.app/Contents",
+        "Outer.app/Contents/Resources",
+    ] {
+        assert_eq!(
+            at(&no_temp(), folder),
+            Err(Unreached::Refused(Refusal::Launchable)),
+            "{folder}"
+        );
+    }
+    // A temp root above the bundle counts it; one inside it does not, as only what lies below the
+    // root is the root's own business.
+    assert!(at(&temp_of(&dir), "Outer.app/Contents/Resources/notes.txt")
+        .unwrap()
+        .viewer_only());
+    let within = TempRoots {
+        canonical: vec![inside.clone()],
+        lexical: vec![inside],
+        check_owner: false,
+    };
+    let in_temp = at(&within, "Outer.app/Contents/Resources/notes.txt").unwrap();
+    assert_eq!(
+        (in_temp.kind, in_temp.viewer_only()),
+        (PathLinkKind::File, false)
+    );
+}
+
+#[test]
+fn a_relative_path_to_a_sibling_outside_every_root_is_reachable_and_not_the_projects() {
+    let outer = ScratchDir::new("path-links-sibling");
+    std::fs::create_dir_all(outer.join("proj/src")).unwrap();
+    std::fs::create_dir_all(outer.join("sib/docs")).unwrap();
+    std::fs::write(outer.join("sib/x.txt"), "x").unwrap();
+    let roots = project_roots(&[&outer.join("proj")]);
+    let base = canonical(&outer);
+    for (raw, kind, target) in [
+        ("../sib/x.txt", PathLinkKind::File, base.join("sib/x.txt")),
+        (
+            "../sib/docs",
+            PathLinkKind::Directory,
+            base.join("sib/docs"),
+        ),
+        // The way out is by any number of levels, and back in by another name.
+        (
+            "src/../../sib/x.txt",
+            PathLinkKind::File,
+            base.join("sib/x.txt"),
+        ),
+    ] {
+        let resolved = reach(raw, None, &no_temp(), &|| roots.clone())
+            .unwrap_or_else(|unreached| panic!("{raw}: {unreached:?}"));
+        assert_eq!(
+            (resolved.kind, resolved.path, resolved.project_root),
+            (kind, target, None),
+            "{raw}"
+        );
+    }
+    // What is not there is gone, spelled as the project's, as the relative path is.
+    assert_eq!(
+        whereabouts("../sib/missing.txt", None, &no_temp(), &roots),
+        Whereabouts::Project
+    );
+}
+
 mod with_state {
     use super::*;
     use crate::browse::tests::Fixture;
     use crate::test_support::{git, repo_with};
+
+    /// A scratch file and folder that are in no project and in no temp root of the test, wherever
+    /// the checkout and the system's temp folder lie: the test's temp roots are set to `temp`
+    /// (none, or the scratch folders it means as temp roots) for as long as this is held.
+    struct Outside {
+        dir: ScratchDir,
+        _temp: TempRootsOverride,
+    }
+
+    impl Outside {
+        fn new(temp: &[&Path]) -> Self {
+            let dir = ScratchDir::new("path-links-outside");
+            std::fs::write(dir.join("outside.txt"), "outside").unwrap();
+            #[cfg(unix)]
+            for (path, mode) in [("", 0o755), ("outside.txt", 0o644)] {
+                std::fs::set_permissions(dir.join(path), std::fs::Permissions::from_mode(mode))
+                    .unwrap();
+            }
+            Self {
+                dir,
+                _temp: with_temp_roots(temp),
+            }
+        }
+
+        fn folder(&self) -> PathBuf {
+            canonical(&self.dir)
+        }
+
+        fn file(&self) -> PathBuf {
+            self.folder().join("outside.txt")
+        }
+
+        /// A path that is not there, below a folder that is not there either.
+        fn gone(&self) -> PathBuf {
+            self.folder().join("octoboardd-no-such-folder/gone.txt")
+        }
+    }
 
     #[test]
     fn probing_answers_in_order_and_caps_the_paths_asked() {
@@ -726,7 +1422,7 @@ mod with_state {
     }
 
     #[test]
-    fn a_project_whose_directory_is_gone_still_answers_for_the_temp_roots() {
+    fn a_project_whose_directory_is_gone_still_answers_for_the_temp_roots_and_the_host() {
         let fixture = Fixture::new();
         let missing = ScratchDir::new("path-links-gone").join("missing");
         let project = fixture.project("gone-project", &missing);
@@ -742,21 +1438,25 @@ mod with_state {
         )
         .unwrap();
         let in_temp = canonical(&scratch).join("a.png");
+        let outside = Outside::new(&[&scratch]);
         let links = probe(
             &fixture.state,
             Some(&project),
-            vec!["a.ts".into(), in_temp.to_string_lossy().into_owned()],
+            vec![
+                "a.ts".into(),
+                in_temp.to_string_lossy().into_owned(),
+                outside.file().to_string_lossy().into_owned(),
+            ],
         )
         .unwrap();
         assert_eq!(
-            (links[0].kind, links[1].kind),
-            (PathLinkKind::None, PathLinkKind::File)
+            (links[0].kind, links[1].kind, links[2].kind),
+            (PathLinkKind::None, PathLinkKind::File, PathLinkKind::File)
         );
     }
 
     #[test]
-    fn opening_what_is_not_reachable_is_refused_as_outside_the_scope_and_what_is_gone_as_not_found()
-    {
+    fn opening_what_is_gone_is_refused_as_not_found_wherever_it_was_spelled() {
         let fixture = Fixture::new();
         let directory = ScratchDir::new("path-links-open");
         std::fs::create_dir(directory.join("src")).unwrap();
@@ -765,11 +1465,10 @@ mod with_state {
         let gone_absolute = canonical(&directory).join("src/removed.ts");
         let gone_absolute = gone_absolute.to_string_lossy().into_owned();
         for (path, code) in [
-            ("/etc/hosts", error_code::OUTSIDE_SCOPE),
             ("nothing.ts", error_code::FILE_NOT_FOUND),
             ("src/gone/a.ts", error_code::FILE_NOT_FOUND),
             (gone_absolute.as_str(), error_code::FILE_NOT_FOUND),
-            ("../elsewhere.ts", error_code::OUTSIDE_SCOPE),
+            ("../elsewhere.ts", error_code::FILE_NOT_FOUND),
             ("src/file.ts/below.ts", error_code::FILE_NOT_FOUND),
         ] {
             let error = open_with(
@@ -790,6 +1489,7 @@ mod with_state {
         }
         // A gone file in a temp root outside the project is the temp root's.
         let elsewhere = ScratchDir::new("path-links-open-temp");
+        let outside = Outside::new(&[&elsewhere]);
         let gone_temp = canonical(&elsewhere).join("removed.png");
         let error = open_with(
             &fixture.state,
@@ -803,6 +1503,20 @@ mod with_state {
         assert_eq!(
             (coded.code, coded.params["root"].as_str()),
             (error_code::FILE_NOT_FOUND, "temporary")
+        );
+        // Anywhere else on the host it is the host's.
+        let error = open_with(
+            &fixture.state,
+            Some(&project),
+            outside.gone().to_str().unwrap(),
+            |_| false,
+            |_| panic!("must not be opened"),
+        )
+        .unwrap_err();
+        let coded = error.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(
+            (coded.code, coded.params["root"].as_str()),
+            (error_code::FILE_NOT_FOUND, "host")
         );
     }
 
@@ -871,7 +1585,16 @@ mod with_state {
             .join("t.txt")
             .to_string_lossy()
             .into_owned();
-        let paths = ["src/a%b.ts", "data.bin", "run.command", "src", &in_temp];
+        let outside = Outside::new(&[&temp]);
+        let outside = outside.file().to_string_lossy().into_owned();
+        let paths = [
+            "src/a%b.ts",
+            "data.bin",
+            "run.command",
+            "src",
+            &in_temp,
+            &outside,
+        ];
         let links = probe(
             &fixture.state,
             Some(&project),
@@ -889,6 +1612,7 @@ mod with_state {
                 Some("data.bin"),
                 Some("run.command"),
                 None,
+                None,
                 None
             ]
         );
@@ -896,10 +1620,10 @@ mod with_state {
             .view
             .as_ref()
             .is_none_or(|view| view.worktree.is_none())));
-        // Only what the system could launch is for the viewer alone; a folder, a plain file and a
-        // temp file are not.
+        // Only what the system could launch is for the viewer alone; a folder, a plain file, a temp
+        // file and one elsewhere on the host are not.
         let viewer_only: Vec<_> = links.iter().map(|link| link.viewer_only).collect();
-        assert_eq!(viewer_only, [false, true, true, false, false]);
+        assert_eq!(viewer_only, [false, true, true, false, false, false]);
         assert_eq!(links[3].kind, PathLinkKind::Directory);
     }
 
@@ -1037,7 +1761,7 @@ mod with_state {
     }
 
     #[test]
-    fn reading_a_link_returns_a_file_of_the_project_or_a_temp_root_whatever_its_type() {
+    fn reading_a_link_returns_a_file_of_the_project_a_temp_root_or_the_host_whatever_its_type() {
         let fixture = Fixture::new();
         let directory = ScratchDir::new("path-links-read");
         std::fs::write(directory.join("a.txt"), "project").unwrap();
@@ -1046,13 +1770,22 @@ mod with_state {
         let scratch = ScratchDir::new("path-links-read-temp");
         std::fs::write(scratch.join("out.txt"), "scratch").unwrap();
         let in_temp = canonical(&scratch).join("out.txt");
+        let outside = Outside::new(&[&scratch]);
+        let manifest = std::fs::read_to_string(outside.file()).unwrap();
+        let outside = outside.file();
         for (project, path, text) in [
             (Some(project.as_str()), "a.txt", "project"),
             (Some(project.as_str()), "run.command", "launchable"),
             (Some(project.as_str()), in_temp.to_str().unwrap(), "scratch"),
             (None, in_temp.to_str().unwrap(), "scratch"),
+            (None, outside.to_str().unwrap(), manifest.as_str()),
+            (
+                Some(project.as_str()),
+                outside.to_str().unwrap(),
+                manifest.as_str(),
+            ),
         ] {
-            let (read, version) = read_text(&fixture, project, path, 1024).unwrap();
+            let (read, version) = read_text(&fixture, project, path, 1 << 20).unwrap();
             assert_eq!(read, text, "{path}");
             assert!(!version.is_empty());
         }
@@ -1065,11 +1798,9 @@ mod with_state {
         std::fs::create_dir(directory.join("src")).unwrap();
         std::fs::write(directory.join("big.txt"), "0123456789").unwrap();
         let project = fixture.project("read-refused-project", &directory);
-        let outside = ScratchDir::new("path-links-read-refused-outside");
-        std::fs::write(outside.join("secret.txt"), "x").unwrap();
-        crate::test_support::symlink(outside.join("secret.txt"), directory.join("link.txt"))
-            .unwrap();
-        let gone = canonical(&ScratchDir::new("path-links-read-refused-gone")).join("missing.txt");
+        let gone_dir = ScratchDir::new("path-links-read-refused-gone");
+        let outside = Outside::new(&[&gone_dir]);
+        let gone = canonical(&gone_dir).join("missing.txt");
         let read_code = |project: Option<&str>, path: &str, limit: usize| {
             let error = read_text(&fixture, project, path, limit).unwrap_err();
             let coded = error.downcast_ref::<CodedError>().unwrap();
@@ -1089,12 +1820,18 @@ mod with_state {
             (error_code::FILE_NOT_FOUND, Some("temporary".into()))
         );
         assert_eq!(
-            read_code(project, "link.txt", 1024).0,
-            error_code::OUTSIDE_SCOPE
+            read_code(None, outside.gone().to_str().unwrap(), 1024),
+            (error_code::FILE_NOT_FOUND, Some("host".into()))
         );
+        // A relative path may lead out of the project; it is gone like any other.
         assert_eq!(
-            read_code(project, "/etc/hosts", 1024).0,
-            error_code::OUTSIDE_SCOPE
+            read_code(project, "../elsewhere.txt", 1024).0,
+            error_code::FILE_NOT_FOUND
+        );
+        // With no project there is no root to look from.
+        assert_eq!(
+            read_code(None, "big.txt", 1024).0,
+            error_code::PATH_LINK_REFUSED
         );
         assert_eq!(
             read_code(project, "big.txt", 4).0,
@@ -1155,6 +1892,13 @@ mod with_state {
         let (result, opened) = attempt(in_temp.to_str().unwrap());
         assert!(result.is_ok());
         assert_eq!(opened, Some(in_temp));
+        // So are a file and a folder anywhere else on the host.
+        let outside = Outside::new(&[&scratch]);
+        for path in [outside.file(), outside.folder()] {
+            let (result, opened) = attempt(path.to_str().unwrap());
+            assert!(result.is_ok(), "{}", path.display());
+            assert_eq!(opened, Some(path));
+        }
     }
 
     #[test]
@@ -1203,7 +1947,7 @@ mod with_state {
     }
 
     #[test]
-    fn revealing_takes_a_project_file_and_a_folder_but_nothing_unreachable() {
+    fn revealing_takes_a_file_a_folder_and_a_path_anywhere_on_the_host_and_refuses_what_is_gone() {
         let fixture = Fixture::new();
         let directory = ScratchDir::new("path-links-reveal");
         std::fs::write(directory.join("notes.txt"), "x").unwrap();
@@ -1223,12 +1967,18 @@ mod with_state {
             );
         }
         for (path, code) in [
-            ("/etc/hosts", error_code::OUTSIDE_SCOPE),
+            ("../elsewhere.txt", error_code::FILE_NOT_FOUND),
             ("missing.txt", error_code::FILE_NOT_FOUND),
         ] {
             let error = shown(&fixture, Some(&project), path).unwrap_err();
             assert_eq!(code_of(&error), code, "{path}");
         }
+        // A file anywhere on the host is shown, as itself.
+        let outside = Outside::new(&[]);
+        assert_eq!(
+            shown(&fixture, Some(&project), outside.file().to_str().unwrap()).unwrap(),
+            outside.file()
+        );
         let error =
             reveal_with(&fixture.state, Some("unknown"), "notes.txt", |_| Ok(())).unwrap_err();
         assert_eq!(code_of(&error), error_code::UNKNOWN_PROJECT);
@@ -1250,8 +2000,6 @@ mod with_state {
         // A folder linked out of the root, holding a link back into it.
         crate::test_support::symlink(&*outside, directory.join("out")).unwrap();
         crate::test_support::symlink(directory.join("notes.txt"), outside.join("back")).unwrap();
-        crate::test_support::symlink(outside.join("secret.txt"), directory.join("leak")).unwrap();
-        std::fs::write(outside.join("secret.txt"), "x").unwrap();
         let project = fixture.project("reveal-link-project", &directory);
         let absolute = |name: &str| base.join(name).to_string_lossy().into_owned();
         for (path, expected) in [
@@ -1282,9 +2030,6 @@ mod with_state {
                 "{path}"
             );
         }
-        // A link leading outside the roots is still refused.
-        let error = shown(&fixture, Some(&project), "leak").unwrap_err();
-        assert_eq!(code_of(&error), error_code::OUTSIDE_SCOPE);
     }
 
     #[test]
@@ -1530,6 +2275,327 @@ mod with_state {
         assert_eq!(coded.params["cause"], "ambiguous");
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_network_path_is_answered_none_and_the_other_paths_of_the_request_are_answered() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-probe-network");
+        std::fs::write(directory.join("a.ts"), b"x").unwrap();
+        let project = fixture.project("network-project", &directory);
+        let links = probe(
+            &fixture.state,
+            Some(&project),
+            vec![NET_FILE.into(), "a.ts".into(), "/net".into()],
+        )
+        .unwrap();
+        let kinds: Vec<_> = links.iter().map(|link| link.kind).collect();
+        assert_eq!(
+            kinds,
+            [PathLinkKind::None, PathLinkKind::File, PathLinkKind::None]
+        );
+        assert_eq!(links[0].path, NET_FILE);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn opening_showing_or_reading_a_network_path_is_refused_as_other_and_touches_nothing() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-open-network");
+        let project = fixture.project("open-network-project", &directory);
+        for project in [Some(project.as_str()), None] {
+            let refused = [
+                open_with(
+                    &fixture.state,
+                    project,
+                    NET_FILE,
+                    |_| false,
+                    |_| panic!("must not be opened"),
+                )
+                .unwrap_err(),
+                reveal_with(&fixture.state, project, NET_FILE, |_| {
+                    panic!("must not be shown")
+                })
+                .unwrap_err(),
+                read_text(&fixture, project, NET_FILE, 1 << 20).unwrap_err(),
+            ];
+            for error in refused {
+                let coded = error.downcast_ref::<CodedError>().unwrap();
+                assert_eq!(coded.code, error_code::PATH_LINK_REFUSED);
+                assert_eq!(coded.params["cause"], "other");
+                assert_eq!(coded.params["path"], NET_FILE);
+            }
+        }
+    }
+
+    /// What `paths` are answered, as the kinds of the links.
+    fn kinds(fixture: &Fixture, project: &str, paths: &[&str]) -> Vec<PathLinkKind> {
+        probe(
+            &fixture.state,
+            Some(project),
+            paths.iter().map(|path| path.to_string()).collect(),
+        )
+        .unwrap()
+        .into_iter()
+        .map(|link| link.kind)
+        .collect()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_place_whose_earlier_look_is_still_stuck_is_answered_none_and_the_other_places_are_answered(
+    ) {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-stuck");
+        std::fs::write(directory.join("a.ts"), b"x").unwrap();
+        std::fs::write(directory.join("b.ts"), b"x").unwrap();
+        let project = fixture.project("stuck-project", &directory);
+        let roots = cached_roots(&fixture.state, Some(&project), &OnceLock::new(), false);
+        // The top of the tree is a place of its own, whichever volume the scratch folder is on.
+        let top = "/";
+        let absolute = canonical(&directory).join("a.ts");
+        let absolute = absolute.to_str().unwrap();
+        let place = place_of("a.ts", None, &roots);
+        assert_ne!(place, place_of(top, None, &roots));
+        assert_eq!(place_of(absolute, None, &roots), place);
+        let paths = ["a.ts", "b.ts", absolute, top];
+        let (file, none, folder) = (
+            PathLinkKind::File,
+            PathLinkKind::None,
+            PathLinkKind::Directory,
+        );
+        assert_eq!(
+            kinds(&fixture, &project, &paths),
+            [file, file, file, folder]
+        );
+        // The look at that place that outran its deadline is still running on its thread.
+        let thread = std::sync::Arc::new(());
+        fixture
+            .state
+            .path_probes
+            .record(place.clone(), std::sync::Arc::downgrade(&thread));
+        assert!(fixture.state.path_probes.is_stuck(&place));
+        // Every path of the place is `none`, whichever way it is spelled, and no other is.
+        assert_eq!(
+            kinds(&fixture, &project, &paths),
+            [none, none, none, folder],
+            "every ask of the stuck place"
+        );
+        // Once its thread has ended it is looked at again.
+        drop(thread);
+        assert!(!fixture.state.path_probes.is_stuck(&place));
+        assert_eq!(
+            kinds(&fixture, &project, &paths),
+            [file, file, file, folder]
+        );
+    }
+
+    #[test]
+    fn a_project_whose_roots_are_still_being_found_answers_every_path_none() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-roots-stuck");
+        std::fs::write(directory.join("a.ts"), b"x").unwrap();
+        let project = fixture.project("roots-stuck-project", &directory);
+        let absolute = canonical(&directory).join("a.ts");
+        let paths = ["a.ts", absolute.to_str().unwrap()];
+        let thread = std::sync::Arc::new(());
+        fixture
+            .state
+            .path_root_lookups
+            .record(project.clone(), std::sync::Arc::downgrade(&thread));
+        assert_eq!(kinds(&fixture, &project, &paths), [PathLinkKind::None; 2]);
+        // Another project is not held back by it, nor is a request that names none.
+        assert_eq!(
+            kinds_without_project(&fixture, &paths[1..]),
+            [PathLinkKind::File]
+        );
+        drop(thread);
+        assert_eq!(kinds(&fixture, &project, &paths), [PathLinkKind::File; 2]);
+    }
+
+    fn kinds_without_project(fixture: &Fixture, paths: &[&str]) -> Vec<PathLinkKind> {
+        probe(
+            &fixture.state,
+            None,
+            paths.iter().map(|path| path.to_string()).collect(),
+        )
+        .unwrap()
+        .into_iter()
+        .map(|link| link.kind)
+        .collect()
+    }
+
+    #[test]
+    fn a_probe_answers_each_path_asked_in_order_repeats_included_and_stalls_no_place() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-not-stalled");
+        std::fs::write(directory.join("a.ts"), b"x").unwrap();
+        let project = fixture.project("not-stalled-project", &directory);
+        let paths: Vec<String> = ["a.ts", "missing.ts", "a.ts", "/no/such/file"]
+            .map(String::from)
+            .to_vec();
+        let links = probe(&fixture.state, Some(&project), paths.clone()).unwrap();
+        // One answer for each path asked, repeated ones included, in the order asked.
+        let answered: Vec<_> = links
+            .iter()
+            .map(|link| (link.path.as_str(), link.kind))
+            .collect();
+        assert_eq!(
+            answered,
+            [
+                ("a.ts", PathLinkKind::File),
+                ("missing.ts", PathLinkKind::None),
+                ("a.ts", PathLinkKind::File),
+                ("/no/such/file", PathLinkKind::None),
+            ]
+        );
+        // Everything was found, so no look is left running: the places are not stuck, and those
+        // that answered were answered by a look that has ended.
+        let roots = cached_roots(&fixture.state, Some(&project), &OnceLock::new(), false);
+        for path in &paths {
+            let place = place_of(path, None, &roots);
+            assert!(!fixture.state.path_probes.is_stuck(&place), "{path}");
+        }
+        assert!(!fixture.state.path_root_lookups.is_stuck(project.as_str()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn what_could_be_launched_is_judged_from_the_top_of_the_tree_outside_every_root() {
+        use std::cell::RefCell;
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-top-project");
+        let project = fixture.project("top-project", &directory);
+        let outside = Outside::new(&[]);
+        let base = outside.folder();
+        // A file with an executable bit, a file under a bundle folder, a bundle folder.
+        std::fs::write(base.join("tool"), "x").unwrap();
+        std::fs::set_permissions(base.join("tool"), std::fs::Permissions::from_mode(0o755))
+            .unwrap();
+        std::fs::create_dir_all(base.join("Thing.app/inner")).unwrap();
+        std::fs::write(base.join("Thing.app/inner/a.txt"), "x").unwrap();
+        let tool = base.join("tool").to_string_lossy().into_owned();
+        let inside = base
+            .join("Thing.app/inner/a.txt")
+            .to_string_lossy()
+            .into_owned();
+        let bundle = base.join("Thing.app").to_string_lossy().into_owned();
+        let plain = outside.file().to_string_lossy().into_owned();
+        let links = probe(
+            &fixture.state,
+            Some(&project),
+            [&plain, &tool, &inside, &bundle]
+                .map(String::clone)
+                .to_vec(),
+        )
+        .unwrap();
+        let seen: Vec<_> = links
+            .iter()
+            .map(|link| (link.kind, link.viewer_only))
+            .collect();
+        assert_eq!(
+            seen,
+            [
+                (PathLinkKind::File, false),
+                (PathLinkKind::File, true),
+                (PathLinkKind::File, true),
+                (PathLinkKind::None, false),
+            ]
+        );
+        // `open` refuses a launchable file and folder alike; `reveal` shows the file, not the folder.
+        for path in [&tool, &inside, &bundle] {
+            let error = open_with(
+                &fixture.state,
+                Some(&project),
+                path,
+                |_| false,
+                |_| panic!("{path} must not be opened"),
+            )
+            .unwrap_err();
+            let coded = error.downcast_ref::<CodedError>().unwrap();
+            assert_eq!(coded.code, error_code::PATH_LINK_REFUSED, "{path}");
+            assert_eq!(coded.params["cause"], "launchable", "{path}");
+        }
+        let shown = RefCell::new(Vec::new());
+        for path in [&tool, &inside] {
+            reveal_with(&fixture.state, Some(&project), path, |shown_path| {
+                shown.borrow_mut().push(shown_path.to_path_buf());
+                Ok(())
+            })
+            .unwrap();
+        }
+        assert_eq!(
+            shown.into_inner(),
+            [base.join("tool"), base.join("Thing.app/inner/a.txt")]
+        );
+        let error = reveal_with(&fixture.state, Some(&project), &bundle, |_| Ok(())).unwrap_err();
+        assert_eq!(code_of(&error), error_code::PATH_LINK_REFUSED);
+        // Reading launches nothing.
+        let (text, _) = read_text(&fixture, Some(&project), &tool, 1 << 20).unwrap();
+        assert_eq!(text, "x");
+    }
+
+    #[test]
+    fn a_sibling_of_the_project_is_reachable_with_no_view_and_can_be_read_and_opened() {
+        let fixture = Fixture::new();
+        let outer = ScratchDir::new("path-links-probe-sibling");
+        // No temp root of the test holds it, so it is anywhere else on the host.
+        let _temp = with_temp_roots(&[]);
+        std::fs::create_dir_all(outer.join("proj")).unwrap();
+        std::fs::create_dir_all(outer.join("sib")).unwrap();
+        std::fs::write(outer.join("sib/x.txt"), "beside").unwrap();
+        // Closed to others whatever the umask, as the temp root's rule asks of what it holds.
+        #[cfg(unix)]
+        for (path, mode) in [
+            ("", 0o755),
+            ("proj", 0o755),
+            ("sib", 0o755),
+            ("sib/x.txt", 0o644),
+        ] {
+            std::fs::set_permissions(outer.join(path), std::fs::Permissions::from_mode(mode))
+                .unwrap();
+        }
+        let project = fixture.project("sibling-project", &outer.join("proj"));
+        let links = probe(
+            &fixture.state,
+            Some(&project),
+            vec![
+                "../sib/x.txt".into(),
+                "../sib".into(),
+                "../sib/gone.txt".into(),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            (links[0].kind, links[1].kind, links[2].kind),
+            (
+                PathLinkKind::File,
+                PathLinkKind::Directory,
+                PathLinkKind::None
+            )
+        );
+        assert!(links
+            .iter()
+            .all(|link| link.view.is_none() && !link.viewer_only));
+        let (text, _) = read_text(&fixture, Some(&project), "../sib/x.txt", 1 << 20).unwrap();
+        assert_eq!(text, "beside");
+        let opened = std::cell::RefCell::new(None);
+        open_with(
+            &fixture.state,
+            Some(&project),
+            "../sib/x.txt",
+            |_| false,
+            |path| {
+                *opened.borrow_mut() = Some(path.to_path_buf());
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            opened.into_inner(),
+            Some(canonical(&outer).join("sib/x.txt"))
+        );
+    }
+
     #[test]
     fn the_refusals_are_raised_under_their_codes() {
         let denied = Refusal::Denied("Permission denied (os error 13)".into()).into_error("a/b");
@@ -1537,11 +2603,7 @@ mod with_state {
         assert_eq!(coded.code, error_code::PERMISSION_DENIED);
         assert_eq!(coded.params["path"], "a/b");
         assert_eq!(coded.params["detail"], "Permission denied (os error 13)");
-        let outside = Refusal::Outside.into_error("a/b");
-        let coded = outside.downcast_ref::<CodedError>().unwrap();
-        assert_eq!(coded.params["action"], "open");
         for (refusal, code, cause) in [
-            (Refusal::Outside, error_code::OUTSIDE_SCOPE, None),
             (
                 Refusal::NotPrivate,
                 error_code::PATH_LINK_REFUSED,
