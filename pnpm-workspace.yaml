@@ -7,13 +7,20 @@ packages:
 onlyBuiltDependencies:
   - esbuild
 
-# jsdom's `getComputedStyle` matches its default stylesheet's `[dir]:dir(ltr)` rule, and its selector engine
-# (`@asamuzakjp/dom-selector`) builds a new bidi-js instance for every `dir="auto"` element it checks, which
-# parses the whole Unicode bidi table again: 13-19 % of the CPU of the UI's dialog tests. The patch shares one
-# instance.
-# Keep the patch while jsdom's selector engine creates a bidi-js instance per direction check.
 patchedDependencies:
+  # jsdom's `getComputedStyle` matches its default stylesheet's `[dir]:dir(ltr)` rule, and its selector engine
+  # (`@asamuzakjp/dom-selector`) builds a new bidi-js instance for every `dir="auto"` element it checks, which
+  # parses the whole Unicode bidi table again: 13-19 % of the CPU of the UI's dialog tests. The patch shares one
+  # instance.
+  # Keep the patch while jsdom's selector engine creates a bidi-js instance per direction check.
   '@asamuzakjp/dom-selector@9.2.4': patches/@asamuzakjp__dom-selector@9.2.4.patch
+  # The file viewer's renderer gives an empty line a newline only when the line has no children, but Shiki draws an
+  # empty line of plain text (a file with no grammar, a Markdown fence without one) as an empty token span, so the
+  # line holds no text: a copy of a selection across it leaves the empty line out, and a fence draws it with no
+  # height. The patch gives every line that holds no text the newline, in the main-thread build and in the worker
+  # the viewer loads (`dist/worker/worker.js`).
+  # Keep the patch while `processLine` in `@pierre/diffs` adds the newline only to a line with no children.
+  '@pierre/diffs@1.5.2': patches/@pierre__diffs@1.5.2.patch
 
 # Security floors for transitive dependencies whose parents still resolve vulnerable releases.
 # Remove a floor once the parent dependency requires the patched version itself.

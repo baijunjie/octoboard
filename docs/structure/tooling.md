@@ -11,8 +11,9 @@ scripts, the checks, the dependencies and the single sources of configuration ar
   `apps/daemon/`'s only wraps the cargo build that embeds the UI (see [`daemon.md`](daemon.md)). The root `package.json` holds repository-wide verification, formatting, Rust workspace checks, identity
   maintenance and hook installation, with shared lint dev dependencies. Commands that build, type-check, install or
   release one package live in that package's `package.json`, invoked with `pnpm --filter <package> <command>` from the
-  root. `patchedDependencies` in `pnpm-workspace.yaml`
-  registers the patches in `patches/` (currently one for jsdom's selector engine, used by the UI's tests).
+  root. `patchedDependencies` in `pnpm-workspace.yaml` registers the patches in `patches/` (currently one for jsdom's
+  selector engine, used by the UI's tests, and one for the file viewer's code renderer, `@pierre/diffs`, which ships in
+  the UI).
 - **Cargo workspace** (`Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `rustfmt.toml`, `clippy.toml`, whose `disallowed-methods` bar `block_in_place` and `std::fs::canonicalize`): members `apps/daemon` and
   `apps/desktop/src-tauri`, built into one `target/`. The workspace `version` is the application's version, which
   `apps/desktop/package.json` carries too; the desktop crate's `build.rs` fails the build when they differ, and the UI's

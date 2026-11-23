@@ -16,6 +16,9 @@ patchedDependencies:
   '@asamuzakjp/dom-selector@9.2.4':
     hash: 826c3cb8304efba8114b2999edef70e81048280ebc90e6d3a8a72190dd97185a
     path: patches/@asamuzakjp__dom-selector@9.2.4.patch
+  '@pierre/diffs@1.5.2':
+    hash: fbb464000c97d8facc8bcd220022e209b713a8932d940536d6bf9f815858212a
+    path: patches/@pierre__diffs@1.5.2.patch
 
 importers:
 
@@ -133,7 +136,7 @@ importers:
         version: 3.12.4
       '@pierre/diffs':
         specifier: 1.5.2
-        version: 1.5.2(@shikijs/themes@4.5.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        version: 1.5.2(patch_hash=fbb464000c97d8facc8bcd220022e209b713a8932d940536d6bf9f815858212a)(@shikijs/themes@4.5.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@pierre/theming':
         specifier: 1.0.1
         version: 1.0.1(@pierre/theme@2.0.0)(@shikijs/themes@4.5.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.5.0)
@@ -9535,7 +9538,7 @@ snapshots:
       is-glob: 4.0.3
       picomatch: 4.0.7
 
-  '@pierre/diffs@1.5.2(@shikijs/themes@4.5.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@pierre/diffs@1.5.2(patch_hash=fbb464000c97d8facc8bcd220022e209b713a8932d940536d6bf9f815858212a)(@shikijs/themes@4.5.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@pierre/theme': 2.0.0
       '@pierre/theming': 1.0.1(@pierre/theme@2.0.0)(@shikijs/themes@4.5.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.5.0)

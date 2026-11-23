@@ -1,0 +1,42 @@
+diff --git a/dist/utils/processLine.js b/dist/utils/processLine.js
+index 8c5a3912ec26367d907371a038e2279daa6e350f..d907930251ad90ad2f4cc57f1a2de284427eb6ad 100644
+--- a/dist/utils/processLine.js
++++ b/dist/utils/processLine.js
+@@ -16,9 +16,15 @@ function processLine(node, line, state) {
+ 	node.properties["data-alt-line"] = lineInfo.altLineNumber;
+ 	node.properties["data-line-type"] = lineInfo.type;
+ 	node.properties["data-line-index"] = lineInfo.lineIndex;
+-	if (node.children.length === 0) node.children.push(createTextNodeElement("\n"));
++	if (holdsNoText(node)) node.children.push(createTextNodeElement("\n"));
+ 	return node;
+ }
++// Octoboard patch: an empty line of plain text ("text") comes from Shiki as one empty token span rather than
++// no children, and a line holding no text is left out of a copied selection (and drawn with no height where
++// nothing else sizes it), so it gets the newline as well.
++function holdsNoText(node) {
++	return node.children.every((child) => child.type === "text" ? child.value === "" : child.type === "element" && child.tagName === "span" && holdsNoText(child));
++}
+ //#endregion
+ export { processLine };
+ 
+diff --git a/dist/worker/worker.js b/dist/worker/worker.js
+index 527dd057117dd5e94e97dd49835eff1af2b1bd96..b956f0089e5236d9fb87ebd519ad170980c93b0e 100644
+--- a/dist/worker/worker.js
++++ b/dist/worker/worker.js
+@@ -519,9 +519,15 @@ function processLine(node, line, state) {
+ 	node.properties["data-alt-line"] = lineInfo.altLineNumber;
+ 	node.properties["data-line-type"] = lineInfo.type;
+ 	node.properties["data-line-index"] = lineInfo.lineIndex;
+-	if (node.children.length === 0) node.children.push(createTextNodeElement("\n"));
++	if (holdsNoText(node)) node.children.push(createTextNodeElement("\n"));
+ 	return node;
+ }
++// Octoboard patch: an empty line of plain text ("text") comes from Shiki as one empty token span rather than
++// no children, and a line holding no text is left out of a copied selection (and drawn with no height where
++// nothing else sizes it), so it gets the newline as well.
++function holdsNoText(node) {
++	return node.children.every((child) => child.type === "text" ? child.value === "" : child.type === "element" && child.tagName === "span" && holdsNoText(child));
++}
+ //#endregion
+ //#region src/utils/wrapTokenFragments.ts
+ const NO_TOKEN = Symbol("no-token");

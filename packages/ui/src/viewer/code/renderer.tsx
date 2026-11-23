@@ -8,6 +8,8 @@
 // `package.json`: the theme shim (`themeShim.ts`) reaches into the first two's internals, and the
 // viewer depends on `@pierre/diffs`'s markup and instance, which no type signature guards. Each
 // dependency on the library's markup or behavior is noted where it is used.
+// `patches/@pierre__diffs@1.5.2.patch` gives an empty line of plain text its newline, without which a copy leaves the
+// line out.
 import {
   getFiletypeFromFileName,
   preloadHighlighter,
