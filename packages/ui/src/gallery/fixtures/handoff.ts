@@ -394,7 +394,7 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Open in the agent's app refused",
-    description: "Open in Claude app was chosen from the menu of a stopped session and the daemon could not open the agent's app. An error alert titled \"Could not open the agent's app\", with OK alone, names the session and its project, says that the app may not be installed, may not have started, or has no conversation to open, then, on the line after it, to see the details for the cause and try again; the daemon's own reason (here that the application is not installed) is only under Error details, open here.",
+    description: "Open in Claude app was chosen from the menu of a stopped session and confirmed (the daemon archives it and opens the agent's app), but the daemon could not open the app. An error alert titled \"Could not open the agent's app\", with OK alone, names the session and its project, says that the app may not be installed, may not have started, or has no conversation to open, then, on the line after it, to see the details for the cause and try again; the daemon's own reason (here that the application is not installed) is only under Error details, open here.",
     state: stoppedState,
     nativeApps: ["claude"],
     sessionAppOpenError: {
@@ -402,7 +402,7 @@ export const handoffScenarios: Scenario[] = [
       params: { detail: "the Claude application is not installed" },
       message: "The application could not be opened: the Claude application is not installed",
     },
-    steps: [openMenu(stopped.title), (ui) => ui.press(ui.t("provider.claude.openInApp")), (ui) => ui.press(ui.t("error.diagnostics"))],
+    steps: [openMenu(stopped.title), (ui) => ui.press(ui.t("provider.claude.openInApp")), (ui) => ui.confirm(), (ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
     id: "dialog-open-session-in-app",
