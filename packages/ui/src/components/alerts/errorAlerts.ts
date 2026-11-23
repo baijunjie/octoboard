@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
+import { errorAlertsUnderTest } from "./errorAlertsUnderTest";
 import { cancelFocusAfterModalCloses, focusAfterModalCloses } from "../focus/modalFocus";
 import { CodedError } from "../../errors/codedError";
 import { CODE } from "../../errors/codes";
@@ -124,6 +125,9 @@ export const errorAlerts = {
     if (shownLeft) afterShownLeft();
   },
 };
+
+// Under the test runner alone, where the shared setup empties the queue after every test.
+if (import.meta.env.MODE === "test") errorAlertsUnderTest.add(errorAlerts);
 
 function afterShownLeft(): void {
   // An alert that came when a dialog closed itself has no control to give focus back to, so it is left on

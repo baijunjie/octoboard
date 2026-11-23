@@ -1,5 +1,7 @@
 import { beforeEach, onTestFinished } from "vitest";
 
+import { acknowledgeAllAlerts } from "./alertQueue";
+
 // jsdom has no ResizeObserver, which HeroUI's ScrollShadow and `FadeOverflow` need to mount, and
 // `Dialog` puts a ScrollShadow around every dialog's body. A test that has to measure installs its
 // own with `vi.stubGlobal`, which replaces this one.
@@ -29,12 +31,11 @@ if (typeof Element !== "undefined") {
 }
 
 // Register first so this runs after every afterEach and every later onTestFinished, including unmount and timer drain.
+// The drain empties the queue only once the file itself has loaded it, and never loads it: in this hook its hundred-odd
+// modules would be the first test's cost in every file, counted against that test's timeout; at the top of this file
+// they would be loaded before the test file's mocks apply.
 if (typeof document !== "undefined") {
-  // Bind after test mocks but before a test can reset modules, so cleanup keeps the static imports' queue.
-  // Resolve once per file to avoid reinstalling focus/input listeners after module resets.
-  let drain: (() => void) | undefined;
-  beforeEach(async () => {
-    drain ??= (await import("./alertQueue")).acknowledgeAllAlerts;
-    onTestFinished(() => drain!());
+  beforeEach(() => {
+    onTestFinished(acknowledgeAllAlerts);
   });
 }
