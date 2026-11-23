@@ -14,6 +14,16 @@ The files holders keep — their registry files, the copies of builds they run f
 
 - The daemon starts a holder of its own build when the first terminal is asked for, and starts another if the one it
   uses is gone. One holder runs many terminals.
+- **Starting a holder.** The holder starts from the copy of the build (see "The copy of the build holders run from"
+  below), and the daemon waits for it to register while its process runs, up to **30 seconds**, as long as a started
+  holder itself waits for a daemon to link to it. A holder that exits before it registers fails the start at once. A
+  holder the daemon gives up on is ended, and `daemon.log` gets a warning with the reason. Meanwhile a session being
+  opened shows as *starting*, and a failed start fails its launch as any launch failure does (see "Starting the session"
+  in `docs/product/opening-sessions.md`); a session being resumed at the daemon's start waits the same way, and one
+  whose resume fails is left *interrupted*. A project shell terminal waits the same way too. An ordinary stop of the
+  daemon gives up a start still waiting at once; a planned stop or restart lets it go on while it waits for what was
+  admitted before it (see "While the terminals are handed over" in
+  `docs/product/planned-restart-and-planned-stop.md`).
 - Beside a Codex session's terminal, the holder also runs that session's private app server, started before the
   terminal and ended with it; a holder of an earlier build may not run one (see "Codex's private app server" in
   `docs/product/per-agent-launch-specifics.md`).
@@ -332,8 +342,19 @@ build under `~/.octoboard/builds/<build>/` (on Windows `%USERPROFILE%\.octoboard
 and the `OpenConsole.exe` of each architecture beside the executable), not from the installation. So an update can
 replace the installed application while sessions run, and on Windows they hold no file of the installation. The copy is
 always of the build the daemon runs, even when it is made after the installed executable was replaced, as the server
-form's update replaces it under a running daemon (see `docs/product/server-form-updates.md`). A copy is
-removed once no holder runs from it. Where the copy cannot be made, the holder runs from the installation instead; that
+form's update replaces it under a running daemon (see `docs/product/server-form-updates.md`).
+
+- **The copy of the running daemon's own build is kept** while no holder runs from it, so the first run of a new copy,
+  which can take seconds, comes once per build rather than at every first holder after the daemon starts. This holds
+  where the build is named by the executable's hash; a build named by its version alone (the executable could not be
+  read) is removed like any other.
+- **A copy of any other build is removed** once no holder runs from it.
+- **A copy that does not start a holder is made afresh**: one a holder exited from before it registered is removed at
+  once, and so is one from which two starts in a row ran out of time; the next start makes it again. A single start
+  that runs out of time keeps it.
+- **A copy a live holder runs from is never removed.**
+
+Where the copy cannot be made, the holder runs from the installation instead; that
 does not block a Windows update either: the installer renames the files the holder holds aside and the holder runs on
 from them (see "Downloading and installing" in `docs/product/in-app-updates.md`).
 

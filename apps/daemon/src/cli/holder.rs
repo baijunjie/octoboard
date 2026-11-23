@@ -6,9 +6,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-/// How long a holder waits for the daemon that started it to link before it gives up.
-const FIRST_LINK_DEADLINE: Duration = Duration::from_secs(30);
-
 /// How long the log of a holder that has ended is kept.
 const STALE_LOG: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
@@ -24,7 +21,7 @@ pub(super) fn run(holder_id: String, registry_dir: Option<PathBuf>) -> Result<()
         version: env!("CARGO_PKG_VERSION").to_string(),
         build_id: crate::holder::build_id().to_string(),
         exe: crate::platform::proc::running_image()?,
-        first_link_deadline: FIRST_LINK_DEADLINE,
+        first_link_deadline: crate::holder::FIRST_LINK_DEADLINE,
         relay_deadline: crate::holder::RELAY_DEADLINE,
     };
     // Asked to end (SIGTERM, on Unix) by the daemon that cannot link to this holder, the holder

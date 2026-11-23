@@ -173,9 +173,10 @@ terminal. These choices are not visible from any one module:
   the daemon through the owner and key records it keeps in the data directory for `octoboardd address`. Their
   arguments, variables and the helper routes they call are therefore kept compatible across builds.
 - **Holders and their other helpers run from a copy of their build** under the data directory (`builds/<build>`),
-  removed once no holder of that build runs. Helpers start afresh on every call, so without the copy an update replacing
-  the installation would run new helpers against an old holder; on Windows the copy also leaves the installation folder
-  free for the installer.
+  removed once no holder of that build runs, except the running daemon's own build's copy, which is kept for its next
+  holder (a new copy's first run can be slow); a copy a holder could not start from is removed and made again. Helpers
+  start afresh on every call, so without the copy an update replacing the installation would run new helpers against
+  an old holder; on Windows the copy also leaves the installation folder free for the installer.
 - **Adoption is approximate, except after a planned stop.** A daemon that starts adopts what the holders run, rebuilds
   each screen from the raw tail, marks it inexact (`screen_inexact` on the wire) and resizes the program by one row and
   back so a full-screen program repaints. Terminals no record claims are ended, sessions no holder runs are

@@ -884,8 +884,22 @@ fn install_holders(state: &Arc<AppState>, application: Option<u32>) {
                 relay: Arc::new(server::relay::DaemonRelay::new(state.clone())),
             })
         });
-    if let Err(err) = installed {
-        tracing::warn!(%err, "terminals will run in the daemon itself: the holders could not be set up");
+    match installed {
+        Ok(()) => {
+            if let Some(holders) = holder::client::current() {
+                // Weak: the installed holders live as long as the process, and must not keep the
+                // state alive with them.
+                let state = Arc::downgrade(state);
+                holders.give_up_starts_when(move || {
+                    state
+                        .upgrade()
+                        .is_none_or(|state| state.holder_starts_abandoned())
+                });
+            }
+        }
+        Err(err) => {
+            tracing::warn!(%err, "terminals will run in the daemon itself: the holders could not be set up");
+        }
     }
 }
 

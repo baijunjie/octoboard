@@ -5,7 +5,13 @@
 //! in use cannot be replaced, so an installer that finds the holder running from its own folder
 //! stops on it, while one beside a copy replaces every file it ships. A project session's git hooks
 //! are the exception: a job the session leaves running outlives the copy, which goes once no holder
-//! runs from it, so they run the installation's own executable (`crate::session_git_hooks`).
+//! runs from it and it is not the running daemon's build, so they run the installation's own
+//! executable (`crate::session_git_hooks`).
+//!
+//! The copy of the daemon's own build is kept while no holder runs from it: the first run of an
+//! executable made just now can take seconds before it does anything (on macOS, while the system
+//! examines it, longer still for a copy that shares the installation's blocks), and a copy kept
+//! has that paid once per build rather than at every first holder of a run.
 //!
 //! The copy is made at the first holder start, which can come after a self-update replaced the
 //! installed file (`crate::self_update`), so the running executable's bytes are read from the open
@@ -33,14 +39,26 @@ const MAKING_PREFIX: &str = ".making-";
 /// hash of the executable's bytes, so two builds of one version (a development build, a rebuilt
 /// release) are told apart. Computed once; without a readable executable it is the version alone.
 pub fn build_id() -> &'static str {
-    static ID: OnceLock<String> = OnceLock::new();
+    &identity().0
+}
+
+/// [`build_id`] where it names the executable's bytes, `None` where it is the version alone: a
+/// copy kept under a version alone could be of another build of that version.
+pub fn hashed_build_id() -> Option<&'static str> {
+    let (id, hashed) = identity();
+    hashed.then_some(id.as_str())
+}
+
+/// [`build_id`], and whether it carries the executable's hash. Computed once.
+fn identity() -> &'static (String, bool) {
+    static ID: OnceLock<(String, bool)> = OnceLock::new();
     ID.get_or_init(|| {
         let version = env!("CARGO_PKG_VERSION");
         match crate::platform::proc::running_image().and_then(|exe| hash_of(&exe)) {
-            Ok(hash) => format!("{version}+{hash}"),
+            Ok(hash) => (format!("{version}+{hash}"), true),
             Err(err) => {
                 tracing::warn!(%err, "hashing the executable failed; the build is named by its version alone");
-                version.to_string()
+                (version.to_string(), false)
             }
         }
     })
@@ -104,12 +122,38 @@ impl Builds {
         start(&exe)
     }
 
-    /// Removes every copy no live holder of the registry in `registry_dir` runs from, and any copy
-    /// that was left half made. A holder whose process cannot be told from another by its identity
+    /// Removes the copy of the build `build_id` unless a live holder of the registry in
+    /// `registry_dir` runs from it: a holder started from it did not run. A copy that cannot be
+    /// removed is left as it is.
+    pub fn discard(&self, registry_dir: &Path, build_id: &str) {
+        let _serial = self.serial.lock().unwrap_or_else(|err| err.into_inner());
+        if builds_in_use(&self.dir, registry_dir)
+            .iter()
+            .any(|name| *name == *build_id)
+        {
+            return;
+        }
+        match std::fs::remove_dir_all(self.dir.join(build_id)) {
+            Ok(()) => {
+                tracing::info!(
+                    build = build_id,
+                    "removed a copy of a build a holder did not start from"
+                )
+            }
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+            Err(err) => {
+                tracing::debug!(build = build_id, %err, "a copy of a build could not be removed; it is left as it is");
+            }
+        }
+    }
+
+    /// Removes every copy no live holder of the registry in `registry_dir` runs from, but that of
+    /// the build `current` when there is one (the daemon's own, which its next holder runs from,
+    /// named by its hash: [`hashed_build_id`]), and any copy that was left half made. A holder whose process cannot be told from another by its identity
     /// counts as live while something listens on its port. A copy that cannot be removed (a file of
     /// it is in use, on Windows) is left for the next time. Returns whether nothing that should go
     /// is left.
-    pub fn sweep(&self, registry_dir: &Path) -> bool {
+    pub fn sweep(&self, registry_dir: &Path, current: Option<&str>) -> bool {
         let _serial = self.serial.lock().unwrap_or_else(|err| err.into_inner());
         let in_use = builds_in_use(&self.dir, registry_dir);
         let Ok(entries) = std::fs::read_dir(&self.dir) else {
@@ -122,7 +166,8 @@ impl Builds {
             }
             let name = entry.file_name();
             let making = name.to_string_lossy().starts_with(MAKING_PREFIX);
-            if !making && in_use.contains(&name) {
+            if !making && (in_use.contains(&name) || current.is_some_and(|current| name == current))
+            {
                 continue;
             }
             match std::fs::remove_dir_all(entry.path()) {
@@ -394,7 +439,7 @@ mod tests {
         let dir = ScratchDir::new("build-sweep");
         let builds_dir = dir.join("builds");
         let registry_dir = dir.join("holders");
-        for name in ["kept", "dead", "unused", ".making-x"] {
+        for name in ["kept", "dead", "unused", "current", ".making-x"] {
             std::fs::create_dir_all(builds_dir.join(name)).unwrap();
             std::fs::write(builds_dir.join(name).join("octoboardd"), b"x").unwrap();
         }
@@ -415,12 +460,41 @@ mod tests {
         .unwrap();
 
         let builds = Builds::new(builds_dir.clone());
-        assert!(builds.sweep(&registry_dir));
+        assert!(builds.sweep(&registry_dir, Some("current")));
         assert!(builds_dir.join("kept").join("octoboardd").is_file());
+        assert!(
+            builds_dir.join("current").join("octoboardd").is_file(),
+            "the daemon's own build is kept with no holder running from it"
+        );
+        // A build named by its version alone is not kept: another build of that version may run.
+        assert!(builds.sweep(&registry_dir, None));
+        assert!(!builds_dir.join("current").exists());
         for name in ["dead", "unused", ".making-x"] {
             assert!(!builds_dir.join(name).exists(), "{name}");
         }
         assert!(builds_dir.join("notes.txt").is_file());
+    }
+
+    #[test]
+    fn a_copy_a_holder_did_not_start_from_is_discarded_unless_a_holder_runs_from_it() {
+        let dir = ScratchDir::new("build-discard");
+        let builds_dir = dir.join("builds");
+        let registry_dir = dir.join("holders");
+        for name in ["broken", "running"] {
+            std::fs::create_dir_all(builds_dir.join(name)).unwrap();
+            std::fs::write(builds_dir.join(name).join("octoboardd"), b"x").unwrap();
+        }
+        registry::write(
+            &registry_dir,
+            &live_entry("live", &builds_dir.join("running").join("octoboardd")),
+        )
+        .unwrap();
+
+        let builds = Builds::new(builds_dir.clone());
+        builds.discard(&registry_dir, "broken");
+        builds.discard(&registry_dir, "running");
+        assert!(!builds_dir.join("broken").exists());
+        assert!(builds_dir.join("running").join("octoboardd").is_file());
     }
 
     #[test]
@@ -435,7 +509,7 @@ mod tests {
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
         entry.port = listener.local_addr().unwrap().port();
         registry::write(&registry_dir, &entry).unwrap();
-        assert!(Builds::new(builds_dir.clone()).sweep(&registry_dir));
+        assert!(Builds::new(builds_dir.clone()).sweep(&registry_dir, None));
         assert!(builds_dir.join("odd").is_dir());
 
         // Once nothing does, it is gone. The file names a port that is kept from every other
@@ -446,7 +520,7 @@ mod tests {
         let closed = crate::test_support::ClosedPort::new();
         entry.port = closed.port();
         registry::write(&registry_dir, &entry).unwrap();
-        assert!(Builds::new(builds_dir.clone()).sweep(&registry_dir));
+        assert!(Builds::new(builds_dir.clone()).sweep(&registry_dir, None));
         assert!(!builds_dir.join("odd").exists());
         drop(closed);
     }
@@ -479,7 +553,7 @@ mod tests {
         let sweep = {
             let builds = builds.clone();
             let registry_dir = registry_dir.clone();
-            std::thread::spawn(move || builds.sweep(&registry_dir))
+            std::thread::spawn(move || builds.sweep(&registry_dir, None))
         };
         sweeping.send(()).unwrap();
         assert!(

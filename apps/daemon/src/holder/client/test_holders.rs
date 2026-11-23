@@ -103,7 +103,7 @@ pub(crate) fn in_process_placed(
                     tracing::warn!(%err, "the test holder failed");
                 }
             });
-            Ok(placement)
+            Ok(placement.into())
         }),
     })
 }

@@ -12,7 +12,7 @@
 
 use std::time::Duration;
 
-pub use build::build_id;
+pub use build::{build_id, hashed_build_id};
 
 pub mod build;
 pub mod client;
@@ -30,3 +30,10 @@ mod companion_test_support;
 /// restarts a dead daemon after a second and a start takes a few seconds. Past it the request
 /// fails as one made with no daemon running does.
 pub const RELAY_DEADLINE: Duration = Duration::from_secs(30);
+
+/// How long a holder that has been started may take to be linked to: the holder waits this long
+/// after it registers for the daemon that started it to link before it gives up and exits, and
+/// the daemon waits as long for a holder it started, while that holder's process runs, to
+/// register. A holder's first run from a copy of the build made just now can take seconds before
+/// it does anything, on macOS while the system examines the new executable.
+pub const FIRST_LINK_DEADLINE: Duration = Duration::from_secs(30);

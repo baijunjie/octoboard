@@ -18,7 +18,7 @@ use crate::platform::term::Command;
 use crate::test_support::cgroups::ChildCgroup;
 #[cfg(unix)]
 use crate::test_support::code_of;
-use crate::test_support::{ScratchDir, PATIENCE};
+use crate::test_support::{accept_unprobed, ScratchDir, PATIENCE};
 
 /// What the scripted holder does once it has been asked to start a program.
 #[derive(Clone, Copy)]
@@ -65,7 +65,9 @@ async fn scripted_holder(
     let port = listener.local_addr().unwrap().port();
     let (reached, spawn_reached) = tokio::sync::oneshot::channel();
     tokio::spawn(async move {
-        let (stream, _) = listener.accept().await.expect("the daemon connects");
+        let stream = accept_unprobed(&listener)
+            .await
+            .expect("the daemon connects");
         let mut socket = tokio_tungstenite::accept_async(stream)
             .await
             .expect("a websocket");
@@ -144,7 +146,7 @@ fn holders_placed(dir: &ScratchDir, port: u16, started: String, placement: Place
                     exe: "/x".to_string(),
                 },
             )
-            .map(|()| placement)
+            .map(|()| placement.into())
         }),
     })
     .expect("holders")
@@ -190,7 +192,7 @@ fn holders_of_current_build(registry_dir: PathBuf) -> Holders {
                     .block_on(crate::holder::server::run(config))
                     .expect("the holder runs");
             });
-            Ok(Placement::Detached)
+            Ok(Placement::Detached.into())
         }),
     })
     .expect("holders")
@@ -344,7 +346,9 @@ async fn one_shot_holder() -> (u16, crate::test_support::ClosedPort) {
         .await
         .expect("the port");
     tokio::spawn(async move {
-        let (stream, _) = listener.accept().await.expect("the daemon connects");
+        let stream = accept_unprobed(&listener)
+            .await
+            .expect("the daemon connects");
         drop(listener);
         let mut socket = tokio_tungstenite::accept_async(stream)
             .await
@@ -451,14 +455,15 @@ async fn a_link_that_cannot_be_opened_again_for_now_is_pending_and_never_ends_th
 }
 
 /// A holder of this build's version that welcomes the first connection, turns the next `refused`
-/// away, then welcomes again: one alive but too busy to take a link for a while.
+/// away, then welcomes again: one alive but too busy to take a link for a while. A running
+/// daemon's probe of the port is not counted ([`accept_unprobed`]).
 #[cfg(unix)]
 async fn refusing_holder(refused: usize) -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("a port");
     let port = listener.local_addr().unwrap().port();
     tokio::spawn(async move {
         let mut accepted = 0;
-        while let Ok((stream, _)) = listener.accept().await {
+        while let Ok(stream) = accept_unprobed(&listener).await {
             accepted += 1;
             let welcomes = accepted == 1 || accepted > refused + 1;
             if !welcomes {
@@ -993,7 +998,9 @@ async fn a_large_write_goes_in_chunks_and_a_failure_counts_what_went_in() {
     let writes = Arc::new(std::sync::Mutex::new(Vec::<usize>::new()));
     let seen = writes.clone();
     tokio::spawn(async move {
-        let (stream, _) = listener.accept().await.expect("the daemon connects");
+        let stream = accept_unprobed(&listener)
+            .await
+            .expect("the daemon connects");
         let mut socket = tokio_tungstenite::accept_async(stream)
             .await
             .expect("a websocket");
@@ -1425,7 +1432,9 @@ async fn a_holder_that_does_not_carry_out_a_handover_is_not_sent_one() {
     let received = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
     let seen = received.clone();
     tokio::spawn(async move {
-        let (stream, _) = listener.accept().await.expect("the daemon connects");
+        let stream = accept_unprobed(&listener)
+            .await
+            .expect("the daemon connects");
         let mut socket = tokio_tungstenite::accept_async(stream)
             .await
             .expect("a websocket");
@@ -1563,7 +1572,9 @@ async fn launch_holder(
     let received = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
     let seen = received.clone();
     tokio::spawn(async move {
-        let (stream, _) = listener.accept().await.expect("the daemon connects");
+        let stream = accept_unprobed(&listener)
+            .await
+            .expect("the daemon connects");
         let mut socket = tokio_tungstenite::accept_async(stream)
             .await
             .expect("a websocket");
@@ -1915,7 +1926,7 @@ fn a_holder_started_in_the_daemons_service_counts_while_it_starts_and_not_once_i
             builds: None,
             range: Range::current(),
             relay: Arc::new(Unavailable),
-            launch: Box::new(|_, _, _| Ok(Placement::InDaemonService)),
+            launch: Box::new(|_, _, _| Ok(Placement::InDaemonService.into())),
         })
         .expect("holders"),
     );
@@ -2091,7 +2102,7 @@ fn nothing_is_linked_or_used_in_the_daemons_service_once_a_stop_is_claimed() {
         builds: None,
         range: Range::current(),
         relay: Arc::new(Unavailable),
-        launch: Box::new(|_, _, _| Ok(Placement::InDaemonService)),
+        launch: Box::new(|_, _, _| Ok(Placement::InDaemonService.into())),
     })
     .expect("holders");
     let _claim = holders.claim_planned_stop().expect("claimed");
@@ -2140,7 +2151,7 @@ fn a_claim_dropped_uncommitted_reopens_the_daemons_service_only_when_no_other_ho
         builds: None,
         range: Range::current(),
         relay: Arc::new(Unavailable),
-        launch: Box::new(|_, _, _| Ok(Placement::InDaemonService)),
+        launch: Box::new(|_, _, _| Ok(Placement::InDaemonService.into())),
     })
     .expect("holders");
     let claim = fresh.claim_planned_stop().expect("claimed");
@@ -2267,4 +2278,303 @@ async fn a_companion_runs_a_program_only_until_it_exits() {
     })
     .await
     .unwrap();
+}
+
+/// A process started from `program` as a holder's would be, and its identity, read before it can
+/// end; its stdin is piped, and dropping the returned handle closes it. Reaped on a thread of its
+/// own, as a detached start does.
+fn started_as_holder(
+    program: crate::test_support::programs::Program,
+) -> (ProcessIdentity, std::process::ChildStdin) {
+    let mut command = program.command();
+    command
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    let mut child = command.spawn().expect("the process starts");
+    let pid = child.id();
+    let start_micros =
+        crate::platform::proc_table::start_of(pid as i32).expect("the process's start");
+    let stdin = child.stdin.take().expect("its stdin");
+    std::thread::spawn(move || {
+        child.wait().ok();
+    });
+    (
+        ProcessIdentity {
+            pid: crate::platform::proc::ProcessId(pid),
+            start_micros,
+        },
+        stdin,
+    )
+}
+
+/// Holders whose every start is `process`, given as the start's own when `told`, and leaves the
+/// registry file `entry` makes of the holder id, if it makes one.
+fn holders_starting(
+    dir: &ScratchDir,
+    process: ProcessIdentity,
+    told: bool,
+    entry: impl Fn(&str) -> Option<RegistryEntry> + Send + Sync + 'static,
+) -> Holders {
+    holders_starting_from(dir, None, process, told, entry)
+}
+
+/// [`holders_starting`], started from copies of the build made in `builds` when given, from the
+/// file `octoboardd` in `dir`.
+fn holders_starting_from(
+    dir: &ScratchDir,
+    builds: Option<PathBuf>,
+    process: ProcessIdentity,
+    told: bool,
+    entry: impl Fn(&str) -> Option<RegistryEntry> + Send + Sync + 'static,
+) -> Holders {
+    Holders::new(ClientConfig {
+        registry_dir: dir.join("holders"),
+        exe: dir.join("octoboardd"),
+        builds: builds.map(|builds| Arc::new(Builds::new(builds))),
+        range: Range::current(),
+        relay: Arc::new(Unavailable),
+        launch: Box::new(move |_, holder_id, registry_dir| {
+            if let Some(entry) = entry(holder_id) {
+                registry::write(registry_dir, &entry)?;
+            }
+            Ok(Started {
+                placement: Placement::Detached,
+                process: told.then_some(process),
+            })
+        }),
+    })
+    .expect("holders")
+}
+
+/// Holders whose every start is a new process of `program`, whose pids go to `started`, from
+/// copies of the build made in `builds`, from the file `octoboardd` in `dir`; none registers.
+fn holders_starting_anew(
+    dir: &ScratchDir,
+    builds: PathBuf,
+    program: impl Fn() -> crate::test_support::programs::Program + Send + Sync + 'static,
+    started: Arc<Mutex<Vec<i32>>>,
+) -> Holders {
+    Holders::new(ClientConfig {
+        registry_dir: dir.join("holders"),
+        exe: dir.join("octoboardd"),
+        builds: Some(Arc::new(Builds::new(builds))),
+        range: Range::current(),
+        relay: Arc::new(Unavailable),
+        launch: Box::new(move |_, _, _| {
+            let (process, _stdin) = started_as_holder(program());
+            started.lock().unwrap().push(process.pid.0 as i32);
+            Ok(Started {
+                placement: Placement::Detached,
+                process: Some(process),
+            })
+        }),
+    })
+    .expect("holders")
+}
+
+/// Whether the copy of this build in `builds` is there.
+fn copy_kept(builds: &Path) -> bool {
+    match std::fs::symlink_metadata(builds.join(crate::holder::build_id())) {
+        Ok(_) => true,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => false,
+        Err(err) => panic!("the copy cannot be looked at: {err}"),
+    }
+}
+
+/// Runs `holders.spawn(spec())` on a thread of its own, with the start's wait set to `deadline`
+/// there, and returns its error, failing the test if it does not end within [`PATIENCE`].
+fn spawn_failing(
+    holders: impl std::ops::Deref<Target = Holders> + Send + 'static,
+    deadline: Duration,
+) -> String {
+    let (done, outcome) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        START_DEADLINE_OVERRIDE.with(|cell| cell.set(Some(deadline)));
+        let spawned = holders
+            .spawn(spec())
+            .map(|_| ())
+            .map_err(|err| format!("{err:#}"));
+        done.send(spawned).ok();
+    });
+    outcome
+        .recv_timeout(PATIENCE)
+        .expect("the start ended")
+        .expect_err("the start failed")
+}
+
+/// A holder whose process exits before it registers is given up on at once, however long a
+/// running one would be waited for, with its exit as the reason.
+#[test]
+fn a_started_holder_that_exits_before_it_registers_is_given_up_on_at_once() {
+    let dir = ScratchDir::new("client-start-exits");
+    let (process, stdin) = started_as_holder(crate::test_support::programs::hold_stdin());
+    let holders = holders_starting(&dir, process, true, |_| None);
+    // It ends once its input closes.
+    drop(stdin);
+    crate::test_support::assert_stops_running(process.pid.0 as i32);
+
+    let err = spawn_failing(Box::new(holders), Duration::MAX);
+    assert!(
+        err.contains("the holder exited before it registered itself"),
+        "{err}"
+    );
+}
+
+/// The copy of the build a holder was started from and did not register from is discarded, so
+/// that the next start makes it afresh rather than keeping one that does not run.
+#[test]
+fn the_copy_a_started_holder_did_not_register_from_is_discarded() {
+    let dir = ScratchDir::new("client-start-discards");
+    std::fs::write(dir.join("octoboardd"), b"exe").unwrap();
+    let builds = dir.join("builds");
+    let (process, stdin) = started_as_holder(crate::test_support::programs::hold_stdin());
+    let holders = holders_starting_from(&dir, Some(builds.clone()), process, true, |_| None);
+    drop(stdin);
+    crate::test_support::assert_stops_running(process.pid.0 as i32);
+
+    spawn_failing(Box::new(holders), Duration::MAX);
+    assert!(builds.is_dir(), "no copy was made");
+    assert!(!copy_kept(&builds), "the copy was kept");
+}
+
+/// A copy of the build from which a start ran out of time with its holder still running is kept,
+/// as a first run can be that slow; a second start in a row from it that runs out of time has the
+/// copy discarded, as one that does not start.
+#[test]
+fn a_copy_is_discarded_only_after_starts_from_it_run_out_of_time_twice_in_a_row() {
+    let dir = ScratchDir::new("client-start-timeouts");
+    std::fs::write(dir.join("octoboardd"), b"exe").unwrap();
+    let builds = dir.join("builds");
+    let started = Arc::new(Mutex::new(Vec::new()));
+    let holders = Arc::new(holders_starting_anew(
+        &dir,
+        builds.clone(),
+        || crate::test_support::programs::sleep(60),
+        started.clone(),
+    ));
+
+    for round in 1..=TIMEOUTS_BEFORE_DISCARD {
+        let discarded = round == TIMEOUTS_BEFORE_DISCARD;
+        let err = spawn_failing(holders.clone(), Duration::ZERO);
+        assert!(
+            err.contains("the holder did not register itself within"),
+            "{err}"
+        );
+        let pid = *started
+            .lock()
+            .unwrap()
+            .last()
+            .expect("a holder was started");
+        crate::test_support::assert_stops_running(pid);
+        assert_eq!(copy_kept(&builds), !discarded, "after time-out {round}");
+    }
+}
+
+/// Parting from the holders in an ordinary stop makes a waiting start give up at once; a planned
+/// stop marking the parting does not, as its handover barrier still waits for the operations
+/// admitted before it, a launch among them, and the start runs on to its own end.
+#[test]
+fn a_waiting_start_gives_up_on_an_ordinary_parting_but_not_a_planned_one() {
+    for planned in [true, false] {
+        let dir = ScratchDir::new("client-start-parting");
+        std::fs::write(dir.join("octoboardd"), b"exe").unwrap();
+        let started = Arc::new(Mutex::new(Vec::new()));
+        let holders = holders_starting_anew(
+            &dir,
+            dir.join("builds"),
+            || crate::test_support::programs::sleep(60),
+            started.clone(),
+        );
+        // Given a deadline that has run out, a start not given up as stopping runs out of time.
+        let (deadline, expected) = if planned {
+            holders.begin_planned_stop();
+            (Duration::ZERO, "the holder did not register itself within")
+        } else {
+            holders.shutdown();
+            (Duration::MAX, "the daemon is stopping")
+        };
+        let err = spawn_failing(Box::new(holders), deadline);
+        assert!(err.contains(expected), "planned: {planned}: {err}");
+        let pid = *started
+            .lock()
+            .unwrap()
+            .last()
+            .expect("a holder was started");
+        let _guard = crate::test_support::KillOnDrop(vec![pid]);
+        crate::test_support::assert_stops_running(pid);
+    }
+}
+
+/// A start that is waiting for its holder gives up as soon as the daemon is stopping, however
+/// long it would wait otherwise, and ends the holder; the copy it ran from is kept.
+#[test]
+fn a_start_gives_up_waiting_once_the_daemon_is_stopping() {
+    let dir = ScratchDir::new("client-start-stopping");
+    std::fs::write(dir.join("octoboardd"), b"exe").unwrap();
+    let builds = dir.join("builds");
+    let started = Arc::new(Mutex::new(Vec::new()));
+    let holders = holders_starting_anew(
+        &dir,
+        builds.clone(),
+        || crate::test_support::programs::sleep(60),
+        started.clone(),
+    );
+    holders.give_up_starts_when(|| true);
+
+    let err = spawn_failing(Box::new(holders), Duration::MAX);
+    assert!(err.contains("the daemon is stopping"), "{err}");
+    let pid = *started
+        .lock()
+        .unwrap()
+        .last()
+        .expect("a holder was started");
+    let _guard = crate::test_support::KillOnDrop(vec![pid]);
+    crate::test_support::assert_stops_running(pid);
+    assert!(copy_kept(&builds), "the copy was discarded");
+}
+
+/// A holder whose process still runs when the wait for its registry file runs out, or that
+/// registered but cannot be linked to, is ended rather than left to wait out its first link:
+/// by the process its start reported, or else the one its registry file names.
+#[test]
+fn a_started_holder_that_cannot_be_linked_to_is_ended() {
+    // Unregistered when the wait runs out, its process reported by the start.
+    let dir = ScratchDir::new("client-start-unregistered");
+    let (process, _stdin) = started_as_holder(crate::test_support::programs::sleep(60));
+    let _guard = crate::test_support::KillOnDrop(vec![process.pid.0 as i32]);
+    let err = spawn_failing(
+        Box::new(holders_starting(&dir, process, true, |_| None)),
+        Duration::ZERO,
+    );
+    assert!(
+        err.contains("the holder did not register itself within"),
+        "{err}"
+    );
+    crate::test_support::assert_stops_running(process.pid.0 as i32);
+
+    // Registered on a port nothing listens on, its process named by its registry file alone.
+    let dir = ScratchDir::new("client-start-unlinkable");
+    let (process, _stdin) = started_as_holder(crate::test_support::programs::sleep(60));
+    let _guard = crate::test_support::KillOnDrop(vec![process.pid.0 as i32]);
+    let closed = crate::test_support::ClosedPort::new();
+    let port = closed.port();
+    let err = spawn_failing(
+        Box::new(holders_starting(&dir, process, false, move |holder_id| {
+            Some(RegistryEntry {
+                holder_id: holder_id.to_string(),
+                pid: process.pid.0,
+                started: process.key(),
+                port,
+                secret: "secret".to_string(),
+                version: "test".to_string(),
+                build_id: "test".to_string(),
+                exe: "/x".to_string(),
+            })
+        })),
+        PATIENCE,
+    );
+    assert!(err.contains("connecting to the holder"), "{err}");
+    crate::test_support::assert_stops_running(process.pid.0 as i32);
+    drop(closed);
 }

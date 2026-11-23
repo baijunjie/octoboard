@@ -72,7 +72,7 @@ pub(crate) use background::Background;
 pub(crate) use clock::*;
 pub(crate) use closed_port::ClosedPort;
 pub(crate) use git::*;
-pub(crate) use port_probe::{is_port_probe, probe_port};
+pub(crate) use port_probe::{accept_unprobed, is_port_probe, probe_port};
 pub(crate) use processes::*;
 pub(crate) use scratch::*;
 pub(crate) use sessions::*;

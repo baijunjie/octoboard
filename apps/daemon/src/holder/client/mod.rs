@@ -34,7 +34,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 pub use self::companion::HeldCompanion;
 pub use self::held::{HeldAt, HeldReader, HeldTerminal};
@@ -52,8 +52,39 @@ use crate::platform::proc::{self, Polite, ProcessIdentity, Sent, Signal};
 use crate::platform::term::{Command, Size};
 use crate::protocol::{error_code, CodedError};
 
-/// How long a started holder has to leave its registry file.
-const START_DEADLINE: Duration = Duration::from_secs(10);
+/// How long a started holder whose process runs has to leave its registry file: as long as it
+/// waits to be linked to once it has, so that the daemon never gives up on a holder that would
+/// still take its link. One whose process has exited is given up on at once.
+const START_DEADLINE: Duration = super::FIRST_LINK_DEADLINE;
+
+// A holder registered just now is linked to within the handshake's deadline, which has to end
+// before the holder stops waiting for its first link.
+const _: () = assert!(CONNECT_DEADLINE.as_millis() < super::FIRST_LINK_DEADLINE.as_millis());
+
+/// How many starts in a row from one copy of the build may run out of [`START_DEADLINE`] with the
+/// holder still running before the copy is discarded and made afresh. The first run of a copy made
+/// just now can take most of that deadline, so one start that runs out says nothing against the
+/// copy, and it is kept; once run, the same file starts in well under a second, so a second one in
+/// a row is a copy that does not start.
+const TIMEOUTS_BEFORE_DISCARD: u32 = 2;
+
+#[cfg(test)]
+thread_local! {
+    /// [`START_DEADLINE`] for a test, on its own thread; `Duration::MAX` waits for as long as the
+    /// holder's process runs.
+    static START_DEADLINE_OVERRIDE: std::cell::Cell<Option<Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// How long a started holder has to leave its registry file ([`START_DEADLINE`]), read on the
+/// thread that starts it.
+fn start_deadline() -> Duration {
+    #[cfg(test)]
+    if let Some(deadline) = START_DEADLINE_OVERRIDE.with(std::cell::Cell::get) {
+        return deadline;
+    }
+    START_DEADLINE
+}
 
 /// How long a holder found running at the daemon's start has to answer its one try, all of them
 /// at once: the start stays well inside the time the application gives the daemon to report its
@@ -81,9 +112,29 @@ const LOSS_SWEEP_TRIES: u32 = 20;
 const LOSS_SWEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 /// Starts the holder `exe` runs as, named `holder_id`, that leaves its registry file in
-/// `registry_dir`, and says where it was placed. It returns once the holder is started, not once
-/// it is ready.
-pub type Launch = Box<dyn Fn(&Path, &str, &Path) -> std::io::Result<Placement> + Send + Sync>;
+/// `registry_dir`, and says where it was placed and which process it is. It returns once the
+/// holder is started, not once it is ready.
+pub type Launch = Box<dyn Fn(&Path, &str, &Path) -> std::io::Result<Started> + Send + Sync>;
+
+/// A holder [`Launch`] started.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Started {
+    pub placement: Placement,
+    /// Its process, when the start knows it: while it runs, the holder is waited for to register
+    /// ([`START_DEADLINE`]), and it is ended if it is given up on. A holder started as a systemd
+    /// unit of its own is not known by its process.
+    pub process: Option<ProcessIdentity>,
+}
+
+impl From<Placement> for Started {
+    /// A holder started in `placement` whose process is not known.
+    fn from(placement: Placement) -> Self {
+        Self {
+            placement,
+            process: None,
+        }
+    }
+}
 
 /// Where a started holder runs, which says whether the daemon's own stop would end it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -157,7 +208,7 @@ pub fn launch_holder(application: Option<u32>, service_managed: bool) -> Launch 
                 &format!("{} process holder", crate::APP_NAME),
                 service,
             ) {
-                Ok(()) => return Ok(Placement::OwnUnit),
+                Ok(()) => return Ok(Placement::OwnUnit.into()),
                 // It may have started: a second start under the same id would run two holders.
                 Err(err) if err.kind() == std::io::ErrorKind::TimedOut => return Err(err),
                 Err(err) => {
@@ -170,12 +221,13 @@ pub fn launch_holder(application: Option<u32>, service_managed: bool) -> Launch 
                 }
             }
         }
-        crate::platform::proc::start_detached(command, application).map(|()| {
-            if daemon_in_service {
+        crate::platform::proc::start_detached(command, application).map(|process| Started {
+            placement: if daemon_in_service {
                 Placement::InDaemonService
             } else {
                 Placement::Detached
-            }
+            },
+            process,
         })
     })
 }
@@ -432,9 +484,9 @@ struct InService {
     /// program is admitted to a holder in the service, and no holder is linked to or used in it.
     /// A claim committed is never released, as its stop is made and the restart completes only
     /// with the daemon's end. A holder process may still be started then, as the launch comes
-    /// before the refusal: it ends with the service, or on its own once no daemon links to it in
-    /// time (`FIRST_LINK_DEADLINE`), as a claim can be released without a stop. A count, so that a claim released never
-    /// reopens admission another claim closed.
+    /// before the refusal: it is given up on as a start that cannot be linked to is
+    /// ([`Holders::give_up`]). A count, so that a claim released never reopens admission another
+    /// claim closed.
     stop_claims: usize,
 }
 
@@ -556,6 +608,31 @@ pub struct Holders {
     /// [`Holders::link`] holds for as long as a holder takes to start: [`Holders::versions`]
     /// reads this one without waiting for it. Set and cleared where `current` is.
     current_holder: Mutex<Option<(String, String)>>,
+    /// Says whether nothing will use what a start starts any more ([`Holders::give_up_starts_when`]).
+    starts_abandoned: OnceLock<Box<dyn Fn() -> bool + Send + Sync>>,
+    /// How many starts in a row from each copy of a build ran out of time with the holder
+    /// running ([`TIMEOUTS_BEFORE_DISCARD`]), by the copy's executable.
+    copy_timeouts: Mutex<HashMap<PathBuf, u32>>,
+}
+
+/// Why a started holder did not register.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Unregistered {
+    /// Its process exited first: the executable it was started from does not run.
+    Exited,
+    /// [`START_DEADLINE`] ran out with its process running, or not known.
+    TimedOut,
+    /// The daemon is stopping, and nothing would use it.
+    Stopping,
+}
+
+/// How a holder start ended, for what it says of the copy it was started from.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum StartOutcome {
+    Linked,
+    Unregistered(Unregistered),
+    /// Anything else: nothing is learned of the copy.
+    Failed,
 }
 
 /// The ending of a holder that is not adopted, or of its terminals, to be run where waiting on it
@@ -640,7 +717,27 @@ impl Holders {
             shared,
             current: Mutex::new(None),
             current_holder: Mutex::new(None),
+            starts_abandoned: OnceLock::new(),
+            copy_timeouts: Mutex::new(HashMap::new()),
         })
+    }
+
+    /// Has a holder start that is waiting for its holder to register give up as soon as `asked`
+    /// says nothing will use what it starts, as it does once these holders are parted from in an
+    /// ordinary stop: the start holds the current link and the build copies' lock, and what a stop
+    /// waits on, while it waits. Set once; a later call is ignored.
+    pub fn give_up_starts_when(&self, asked: impl Fn() -> bool + Send + Sync + 'static) {
+        self.starts_abandoned.set(Box::new(asked)).ok();
+    }
+
+    /// Whether a holder start under way is to be given up: these holders are being parted from in
+    /// an ordinary stop, or the daemon said so ([`Self::give_up_starts_when`]). A planned stop
+    /// marks the parting before its handover barrier waits for what was admitted before it, a
+    /// start among them, so the parting it marks is left to the daemon's own say.
+    fn stopping(&self) -> bool {
+        (self.shared.stopping.load(Ordering::Acquire)
+            && !self.shared.planned.load(Ordering::Acquire))
+            || self.starts_abandoned.get().is_some_and(|asked| asked())
     }
 
     /// Has the holders `targets` names, which a quit of the application left running, ended with
@@ -849,28 +946,48 @@ impl Holders {
         *current = Some(link);
     }
 
-    /// Starts a holder from the copy of the current build, which stays until the holder is
-    /// linked to: a copy is removed only when no holder runs from it, and one being started is
-    /// not yet in the registry.
+    /// Starts a holder from the copy of the current build, which a sweep keeps. A start that
+    /// cannot link to the holder gives it up ([`Self::give_up`]), and what it learned of the copy
+    /// decides whether the copy stays ([`Self::judge_copy`]).
     fn start_holder(&self) -> Result<Arc<Link>> {
         let holder_id = uuid::Uuid::new_v4().to_string();
+        let outcome = std::cell::Cell::new(StartOutcome::Failed);
+        let started_from = std::cell::RefCell::new(PathBuf::new());
         let start = |exe: &Path| -> Result<Arc<Link>> {
-            let placement = (self.config.launch)(exe, &holder_id, &self.config.registry_dir)
+            started_from.replace(exe.to_path_buf());
+            let started = (self.config.launch)(exe, &holder_id, &self.config.registry_dir)
+                .inspect_err(|err| {
+                    tracing::warn!(holder = %holder_id, %err, "a holder could not be started");
+                })
                 .context("starting the holder")?;
-            let in_daemon_service = placement == Placement::InDaemonService;
+            let in_daemon_service = started.placement == Placement::InDaemonService;
             if in_daemon_service {
                 // From here until the start fails or the link is lost, a planned restart is
                 // refused: the holder is in no other list while it is waited for. A claim made
-                // already leaves the holder process, launched before this refusal, unlinked and
-                // unused, to end with the service, or on its own once no daemon links to it in time
-                // (`FIRST_LINK_DEADLINE`), as that claim may be released without a stop.
+                // already refuses the holder process, launched before this refusal, which is
+                // given up on unlinked and unused.
                 let mut service = locked(&self.shared.in_service);
-                service.admit().context("starting the holder")?;
+                if let Err(err) = service.admit() {
+                    drop(service);
+                    self.give_up(&holder_id, started.process, None, &err);
+                    return Err(err).context("starting the holder");
+                }
                 service.holders.insert(holder_id.clone(), None);
             }
-            let linked = self
-                .wait_for_registry(&holder_id)
-                .and_then(|entry| self.connect(&entry));
+            let linked = match self.wait_for_registry(&holder_id, started.process.as_ref()) {
+                Ok(entry) => self.connect(&entry).inspect_err(|err| {
+                    self.give_up(&holder_id, started.process, Some(&entry), err);
+                }),
+                Err(why) => {
+                    let err = anyhow!(unregistered_reason(why, &holder_id));
+                    self.give_up(&holder_id, started.process, None, &err);
+                    outcome.set(StartOutcome::Unregistered(why));
+                    Err(err)
+                }
+            };
+            if linked.is_ok() {
+                outcome.set(StartOutcome::Linked);
+            }
             if in_daemon_service {
                 let mut service = locked(&self.shared.in_service);
                 match &linked {
@@ -888,16 +1005,48 @@ impl Holders {
             linked
         };
         match &self.config.builds {
-            Some(builds) => builds.run_from(super::build_id(), &self.config.exe, start),
+            Some(builds) => {
+                let linked = builds.run_from(super::build_id(), &self.config.exe, start);
+                if self.judge_copy(&started_from.borrow(), outcome.get()) {
+                    builds.discard(&self.config.registry_dir, super::build_id());
+                }
+                linked
+            }
             None => start(&self.config.exe),
         }
     }
 
-    /// Removes the copies of builds no holder runs from: what the start of the daemon does once
-    /// it has adopted what it found, and what a lost link does on its own. **Blocks.**
+    /// Whether the copy of the build at `exe` is to be discarded after a start from it ended as
+    /// `outcome`: a holder that exited before it registered does not run from it, and one that ran
+    /// out of time [`TIMEOUTS_BEFORE_DISCARD`] times in a row from it does not start. A start that
+    /// linked, or that gave up as the daemon stops, counts no time-out, and a discarded copy starts
+    /// its count afresh.
+    fn judge_copy(&self, exe: &Path, outcome: StartOutcome) -> bool {
+        let mut timeouts = locked(&self.copy_timeouts);
+        let discard = match outcome {
+            StartOutcome::Linked => false,
+            StartOutcome::Unregistered(Unregistered::Exited) => true,
+            StartOutcome::Unregistered(Unregistered::TimedOut) => {
+                let count = timeouts.entry(exe.to_path_buf()).or_insert(0);
+                *count += 1;
+                *count >= TIMEOUTS_BEFORE_DISCARD
+            }
+            StartOutcome::Unregistered(Unregistered::Stopping) | StartOutcome::Failed => {
+                return false;
+            }
+        };
+        if discard || outcome == StartOutcome::Linked {
+            timeouts.remove(exe);
+        }
+        discard
+    }
+
+    /// Removes the copies of builds no holder runs from, but the daemon's own where its build id
+    /// names its hash: what the start of the daemon does once it has adopted what it found, and
+    /// what a lost link does on its own. **Blocks.**
     pub fn sweep_builds(&self) {
         if let Some(builds) = &self.config.builds {
-            builds.sweep(&self.config.registry_dir);
+            builds.sweep(&self.config.registry_dir, super::hashed_build_id());
         }
     }
 
@@ -906,17 +1055,66 @@ impl Holders {
         self.shared.connect(entry, false, CONNECT_DEADLINE)
     }
 
-    fn wait_for_registry(&self, holder_id: &str) -> Result<RegistryEntry> {
-        let deadline = Instant::now() + START_DEADLINE;
+    /// Waits for the holder `holder_id`, started as `process` when that is known, to leave its
+    /// registry file: for [`START_DEADLINE`] while its process runs, no longer once it has exited,
+    /// and not at all once the daemon is stopping. **Blocks.**
+    fn wait_for_registry(
+        &self,
+        holder_id: &str,
+        process: Option<&ProcessIdentity>,
+    ) -> Result<RegistryEntry, Unregistered> {
+        let deadline = Instant::now().checked_add(start_deadline());
         loop {
             if let Some(entry) = registry::read(&self.config.registry_dir, holder_id) {
                 return Ok(entry);
             }
-            if Instant::now() >= deadline {
-                bail!("the holder did not register itself in time");
+            if process.is_some_and(|process| !process.is_running()) {
+                // Read once more: it may have registered just before it exited.
+                return registry::read(&self.config.registry_dir, holder_id)
+                    .ok_or(Unregistered::Exited);
+            }
+            if self.stopping() {
+                return Err(Unregistered::Stopping);
+            }
+            if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                return Err(Unregistered::TimedOut);
             }
             std::thread::sleep(Duration::from_millis(20));
         }
+    }
+
+    /// Gives up on the holder `holder_id` a start could not link to, for `err`: says so in the
+    /// log, and ends it on a thread of its own, by its process `process` or the one its registry
+    /// file `entry` names, so that it does not wait out its first link with nothing to serve. One
+    /// known by neither is left to exit on its own once no daemon has linked in time.
+    fn give_up(
+        &self,
+        holder_id: &str,
+        process: Option<ProcessIdentity>,
+        entry: Option<&RegistryEntry>,
+        err: &anyhow::Error,
+    ) {
+        let process =
+            process.or_else(|| entry.and_then(|entry| ProcessIdentity::parse(&entry.started)));
+        tracing::warn!(
+            holder = holder_id,
+            err = format!("{err:#}"),
+            ending = process.is_some(),
+            "a holder that was started could not be linked to; it is given up on"
+        );
+        let Some(process) = process else {
+            return;
+        };
+        let registry_dir = self.config.registry_dir.clone();
+        let holder_id = holder_id.to_string();
+        std::thread::spawn(move || {
+            if let Err(err) = end_process(&process) {
+                tracing::warn!(holder = %holder_id, %err, "ending a holder that was given up on failed; it is left running");
+                return;
+            }
+            // A holder that was killed, or registered as it was ended, leaves its file behind.
+            registry::remove(&registry_dir, &holder_id);
+        });
     }
 
     /// Begins a planned stop: from now on a holder that could not be linked to is no longer tried
@@ -1591,6 +1789,24 @@ impl Shared {
     }
 }
 
+/// What a start says of the holder `holder_id` that did not register, `why`.
+fn unregistered_reason(why: Unregistered, holder_id: &str) -> String {
+    match why {
+        Unregistered::Exited => {
+            format!(
+                "the holder exited before it registered itself; its log is holder-{holder_id}.log"
+            )
+        }
+        Unregistered::TimedOut => format!(
+            "the holder did not register itself within {} seconds",
+            start_deadline().as_secs()
+        ),
+        Unregistered::Stopping => {
+            "the daemon is stopping, so the holder it was starting is not waited for".to_string()
+        }
+    }
+}
+
 /// The links `adopted` names plus `current`, the current one once: it may be one of the adopted.
 fn with_current(mut adopted: Vec<Arc<Link>>, current: Option<Arc<Link>>) -> Vec<Arc<Link>> {
     if let Some(current) = current {
@@ -1742,7 +1958,9 @@ fn sweep_after_loss(builds: Option<Arc<Builds>>, registry_dir: PathBuf) -> OnLos
         let (registry_dir, holder_id) = (registry_dir.clone(), holder_id.to_string());
         std::thread::spawn(move || {
             for _ in 0..LOSS_SWEEP_TRIES {
-                if holder_gone(&registry_dir, &holder_id) && builds.sweep(&registry_dir) {
+                if holder_gone(&registry_dir, &holder_id)
+                    && builds.sweep(&registry_dir, super::hashed_build_id())
+                {
                     return;
                 }
                 std::thread::sleep(LOSS_SWEEP_INTERVAL);

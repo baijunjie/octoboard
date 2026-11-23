@@ -38,7 +38,7 @@ revert gate. Applies to project sessions only.
   session left running after it ended still reports and is gated. A dispatcher treats a git whose environment has no
   `OCTOBOARD_SESSION_ID` as not a session's (no report, no gate).
 - The dispatchers start the installation's own entry point (`AppState::install_exe`), which an update replaces in place,
-  not the copy of the build a holder runs from, which is removed once no holder runs from it. A newer build's modes may
+  not the copy of the build a holder runs from, which can be removed once no holder runs from it. A newer build's modes may
   therefore serve dispatchers an older one wrote: their arguments and variables stay accepted across versions, a command
   line without a later argument (`--data-dir`) included.
 - Nothing is injected when the user's `git` is older than `MIN_GIT`, the user's `GIT_CONFIG_PARAMETERS` is one git

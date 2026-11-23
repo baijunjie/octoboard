@@ -140,7 +140,10 @@ operation already under way when the planned stop begins is waited for, up to **
 and the branch removals it starts, before the terminals are handed over. One still running when that wait runs out goes
 on without being waited for, but no later step of it that would start or end a terminal or a process, remove a branch
 or move a folder to the Trash is taken: that step is refused with `daemon_shutting_down`, and what it would have ended
-is left to the next daemon (see "Moving the project folder to the Trash" in `docs/product/removing-projects.md`).
+is left to the next daemon (see "Moving the project folder to the Trash" in `docs/product/removing-projects.md`). A
+launch waiting for the process holder it started to register is one such operation: its start goes on during the
+wait, so a session being opened as the stop begins is handed over if its holder registers in time, and it is given
+up once the wait is over (see "What a holder runs and when it ends" in `docs/product/process-holders.md`).
 
 On every terminal, from just before it is handed over, the clients no longer change its size, nor what the program is
 told of their display or focus; the next daemon takes the clients' size when they reconnect. Until the

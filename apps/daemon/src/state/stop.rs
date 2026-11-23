@@ -363,6 +363,15 @@ impl AppState {
         self.stop.borrow().is_some() || self.is_shutting_down() || self.handover_barrier_raised()
     }
 
+    /// Whether a holder start under way can be given up, as nothing will use what it starts: an
+    /// ordinary stop has been asked for, or a stop has gone past waiting for what was admitted
+    /// before it ([`Self::is_shutting_down`], set by a planned stop once its handover barrier's
+    /// wait is over). Unlike [`Self::stop_asked`], false while a planned stop waits for a launch
+    /// admitted before its barrier, which it hands over once the launch is done.
+    pub fn holder_starts_abandoned(&self) -> bool {
+        self.ordinary_stop_asked() || self.is_shutting_down()
+    }
+
     /// Whether an ordinary stop has been asked for. During a planned stop `main` has begun, this is
     /// its escalation: the handover stops where it stands, and the stop goes on as an ordinary one.
     pub fn ordinary_stop_asked(&self) -> bool {
@@ -969,6 +978,36 @@ mod tests {
         );
         // Nothing claimed, nothing to settle.
         assert_eq!(settle(None::<FakeClaim>, Ok(true), |_| panic!()), Ok(true));
+    }
+
+    /// A holder start under way is given up as soon as an ordinary stop is asked for, but a planned
+    /// stop lets it run on while its handover barrier waits for what was admitted before it, and
+    /// gives it up only once that wait is over.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_holder_start_is_abandoned_on_an_ordinary_stop_and_after_a_planned_stops_wait() {
+        let (state, _dir) = app_state("stop-abandons-starts");
+        assert!(!state.holder_starts_abandoned());
+        let admitted = state.admit_change().expect("admitted before the stop");
+        state.request_planned_stop();
+        let settling = tokio::spawn({
+            let state = state.clone();
+            async move { state.settle_for_planned_stop().await.len() }
+        });
+        let raised = state.clone();
+        assert!(
+            crate::test_support::within(PATIENCE, move || raised.handover_barrier_raised()).await
+        );
+        assert!(
+            !state.holder_starts_abandoned(),
+            "given up while the barrier waits for what it admitted"
+        );
+        drop(admitted);
+        settling.await.unwrap();
+        assert!(state.holder_starts_abandoned());
+
+        let (state, _dir) = app_state("stop-abandons-starts-ordinary");
+        state.request_shutdown();
+        assert!(state.holder_starts_abandoned());
     }
 
     /// Once a planned stop has raised its handover barrier, no launch or switch is claimed, and no

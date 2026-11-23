@@ -33,7 +33,7 @@
 //! through the owner record it keeps when the launch's own route has gone with the session's
 //! process ([`route`]), found in the data directory the dispatchers are under. The executable the
 //! dispatchers start is the installation's own entry point, which an update replaces in place, not
-//! the copy of the build a holder runs from, which is removed once no holder runs from it; so a
+//! the copy of the build a holder runs from, which can be removed once no holder runs from it; so a
 //! newer build's modes may serve the dispatchers an older one wrote, and their arguments and
 //! variables stay accepted across versions. A tool that installs hooks wherever
 //! `git rev-parse --git-path hooks` points is refused there rather than writing into every

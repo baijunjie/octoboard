@@ -25,8 +25,8 @@ use windows_sys::Win32::System::Threading::{
 };
 
 use super::{last_error, terminate};
-use crate::platform::proc::Sent;
-use crate::platform::proc_table::Process;
+use crate::platform::proc::{ProcessId, ProcessIdentity, Sent};
+use crate::platform::proc_table::{start_of_handle, Process};
 use crate::platform::term::ProcessParameters;
 
 /// Starts `command` as a process that outlives the daemon, with no console, no inherited handles
@@ -39,8 +39,11 @@ use crate::platform::term::ProcessParameters;
 /// desktop application, which is outside the job), taking that process's job membership instead.
 /// When there is no application, or it cannot be opened for that (it is gone, access is denied),
 /// or creating a child of it fails, the process is started without breakaway and ends with the
-/// job.
-pub(crate) fn start_detached(command: Command, application: Option<u32>) -> io::Result<()> {
+/// job. Returns the process started, or `None` when its identity cannot be read.
+pub(crate) fn start_detached(
+    command: Command,
+    application: Option<u32>,
+) -> io::Result<Option<ProcessIdentity>> {
     if command.get_envs().next().is_some() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -81,7 +84,7 @@ pub(crate) fn start_detached(command: Command, application: Option<u32>) -> io::
     };
     if let Some(parent) = &parent {
         match create_detached(&mut line, directory, Detached::ChildOf(parent)) {
-            Ok(()) => return Ok(()),
+            Ok(started) => return Ok(started),
             Err(err) => {
                 tracing::warn!(application = ?application, %err, "a process cannot be created under the application");
             }
@@ -143,12 +146,12 @@ fn push_quoted(line: &mut Vec<u16>, arg: &OsStr) -> io::Result<()> {
 
 /// Creates the process `line` (NUL-terminated) names, as [`start_detached`] describes, in
 /// `directory` (NUL-terminated) when there is one, placed as `placement` says, and lets go of its
-/// handles.
+/// handles. Returns its identity, read from its handle before that is closed.
 fn create_detached(
     line: &mut [u16],
     directory: Option<&[u16]>,
     placement: Detached<'_>,
-) -> io::Result<()> {
+) -> io::Result<Option<ProcessIdentity>> {
     let mut flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
     let mut startup = STARTUPINFOEXW::default();
     startup.StartupInfo.cb = size_of::<STARTUPINFOW>() as u32;
@@ -191,12 +194,16 @@ fn create_detached(
     if created == 0 {
         return Err(last_error());
     }
+    let identity = start_of_handle(information.hProcess).map(|start_micros| ProcessIdentity {
+        pid: ProcessId(information.dwProcessId),
+        start_micros,
+    });
     // SAFETY: valid handles the call returned, closed here: nothing waits on the process.
     unsafe {
         drop(OwnedHandle::from_raw_handle(information.hProcess));
         drop(OwnedHandle::from_raw_handle(information.hThread));
     }
-    Ok(())
+    Ok(identity)
 }
 
 /// An initialised process attribute list, with room for as many attributes as it was made for,

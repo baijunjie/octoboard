@@ -200,6 +200,37 @@ fn a_process_started_in_the_background_keeps_its_pipes() {
     drop(reader);
 }
 
+/// A process started detached is reported by its identity, which names it while it runs. Unix
+/// only: on Windows a detached start runs in the daemon's own environment, which cannot carry the
+/// helper its role.
+#[cfg(unix)]
+#[test]
+fn a_process_started_detached_is_reported_by_its_identity() {
+    let dir = ScratchDir::new("proc-detached");
+    let pid_file = dir.join("detached");
+    let mut command = Command::new(test_helper::program());
+    command
+        .args(test_helper::args(
+            "platform::proc::contract_tests::a_helper_process",
+        ))
+        .env(ROLE, "park")
+        .env(PID_FILE, &pid_file);
+    let identity = start_detached(command, None)
+        .expect("the detached start spawns")
+        .expect("the started process's identity");
+    let mut guard = KillOnDrop(vec![identity.pid.0 as i32]);
+    assert_eq!(wait_for_pid(&pid_file), identity.pid.0 as i32);
+    assert!(identity.is_running());
+
+    assert!(matches!(
+        signal_identified(&identity, Signal::Kill),
+        Sent::Delivered
+    ));
+    crate::test_support::assert_stops_running(identity.pid.0 as i32);
+    assert!(!identity.is_running());
+    guard.0.clear();
+}
+
 /// A program that cannot be started is reported by the background start, which marks the
 /// starter's descriptors close-on-exec between `fork` and `exec` without touching the pipe `std`
 /// reports a failed `exec` through.

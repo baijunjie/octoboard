@@ -339,18 +339,27 @@ pub(crate) fn detach(command: &mut Command) {
 /// Starts `command` as a process that outlives the daemon, with no stdio, in a session of its own
 /// (so a signal to the daemon's process group never reaches it), and reaps it on another thread
 /// while the daemon runs. `application` is the desktop application's pid, which Windows may need
-/// to name; there is nothing to do with it here.
-pub(crate) fn start_detached(mut command: Command, _application: Option<u32>) -> io::Result<()> {
+/// to name; there is nothing to do with it here. Returns the process started, read before it can
+/// be reaped, or `None` when its identity cannot be read (it ended at once, on Linux).
+pub(crate) fn start_detached(
+    mut command: Command,
+    _application: Option<u32>,
+) -> io::Result<Option<ProcessIdentity>> {
     command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     lead_session(&mut command);
     let mut child = command.spawn()?;
+    let pid = child.id();
+    let identity = proc_table::start_of(pid as i32).map(|start_micros| ProcessIdentity {
+        pid: ProcessId(pid),
+        start_micros,
+    });
     std::thread::spawn(move || {
         child.wait().ok();
     });
-    Ok(())
+    Ok(identity)
 }
 
 /// The daemon [`spawn_in_background`] started.

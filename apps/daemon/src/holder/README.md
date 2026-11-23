@@ -36,9 +36,14 @@ daemon's own; see [`../processes/ledger/README.md`](../processes/ledger/README.m
   `paths::builds_dir` that holders and their helpers run from, so that an installer can replace the installed files while
   a holder runs (on Windows a file in use cannot be replaced). The copy is the executable plus the
   `platform::build_files` companions, made in a temporary sibling directory and renamed into place, and reused when
-  whole. If it cannot be made the holder runs from the installation, with a warning. Copies no live holder runs from are
-  removed after adoption at start and after a holder's link ends; making a copy, starting from it and removing copies
-  are serialized, so a copy is never removed between being made and being started from.
+  whole. If it cannot be made the holder runs from the installation, with a warning. `Builds::sweep` removes the copies no
+  live holder runs from, after adoption at start and after a holder's link ends, but keeps the running daemon's own
+  build's copy (its `current` argument) while no holder runs from it, which it does only where the build id carries the
+  executable's hash (`hashed_build_id()`; an id that is the version alone is swept as before, since another build of that
+  version could be the one running). `Builds::discard` removes a copy at once when a holder started from it exited without
+  registering, or when two starts in a row from it timed out (`TIMEOUTS_BEFORE_DISCARD`), and never while a live holder
+  runs from it. Making a copy, starting from it and removing copies are serialized, so a copy is never removed between
+  being made and being started from.
 - `server/` — the holder. `mod.rs` the listener, the link and the exit rule (and the companions no terminal has bound
   yet), `terminal.rs` one terminal's threads and its 1 MiB raw tail (and what a handover restarted it with),
   `companion.rs` a terminal's companion (its endpoint, start, readiness wait, exit watch and end), `offline.rs` the
@@ -268,7 +273,11 @@ daemon's own; see [`../processes/ledger/README.md`](../processes/ledger/README.m
   carries its companion (`FoundTerminal::companion`). The daemon reaches the companion at its endpoint directly, not
   through the link.
 - **Starting a holder.** `Holders` starts one from the build's copy on the first terminal, detached
-  (`platform::proc::start_detached`) so that it outlives the daemon, and waits for its registry file. Under a systemd
+  (`platform::proc::start_detached`, which returns the started process's identity) so that it outlives the daemon, and
+  waits for its registry file while that process runs, up to `FIRST_LINK_DEADLINE` (`holder/mod.rs`, also the holder's own
+  window for its first link): a holder that exits first fails the start at once, and one given up on is ended and logged
+  as a warning. A waiting start gives up at once on an ordinary stop, and on a planned stop only once the handover
+  barrier's wait is over (`AppState::holder_starts_abandoned`, installed through `Holders::give_up_starts_when`). Under a systemd
   user manager the holder is started as a user unit of its own instead (`platform::proc::start_in_user_unit`), which a
   stop or a planned restart of the daemon's unit leaves running, ordered to stop after it at a shutdown; a failed start
   falls back to the detached one, while a `systemd-run` that does not return in time is an error, since the unit may
@@ -303,12 +312,13 @@ daemon's own; see [`../processes/ledger/README.md`](../processes/ledger/README.m
 - `quit_targets::reconcile`, `quit_targets::QuitTargets`, `quit_targets::Target`, `Holders::end_quit_targets`,
   `Holders::wait_endings`, `client::ENDINGS_WAIT` — the application's quit record read at start, the endings of the
   holders it names (`HeldTerminal::end` tells whether one is confirmed), and the bounded wait for them.
-- `client::Placement` (`launch_holder`'s answer: where a holder started, which of them ends with the daemon's own
-  systemd unit) and `Holders::claim_planned_stop` (called from `state/stop.rs`) — a planned stop or restart is claimed
+- `client::Started` (`Launch`'s answer: the `Placement` of a started holder, and its process), `client::Placement` (where
+  a holder started, which of them ends with the daemon's own systemd unit) and `Holders::claim_planned_stop` (called from `state/stop.rs`) — a planned stop or restart is claimed
   from the holders, which refuse it while a holder in the daemon's own unit runs a program, and otherwise hand back a
   `StopClaim`: until it is dropped, or for good once the stop it was taken for is made (`StopClaim::commit`), they admit
   no new program in one.
 - `Holders::pending_holders` — the holders that could not be linked to and are tried again.
+- `Holders::give_up_starts_when` — the daemon's way of telling a waiting holder start to give up (`main.rs` installs it).
 - `Holders::versions` — the version each linked or pending holder reports, by holder id, which
   `coordinator::handover_check` judges against the next daemon's floor.
 - `HeldTerminal`, `HeldReader`, `HeldAt` — a held terminal and its output stream, answering the calls a
@@ -316,7 +326,7 @@ daemon's own; see [`../processes/ledger/README.md`](../processes/ledger/README.m
   (`unlinked`, `on_link_changed`) and where it runs (`held_at`, which the daemon records with the launch).
 - `RelayHandler`, `RelayRequest`, `RelayReply` — what answers a request a holder relays; the daemon's is
   `server::relay::DaemonRelay`.
-- `build_id`, `build::Builds` — a build's identity and the copy holders run from.
+- `build_id`, `hashed_build_id`, `build::Builds` — a build's identity (and whether it names the executable's bytes) and the copy holders run from.
 - `compat::FLOOR`, `compat::Range`, `compat::Version`, `compat::Verdict` — the adopted version range.
 - `registry::RegistryEntry` with `write`, `read`, `list`, `remove`, `nothing_listens` — the holder's registry file.
 - `protocol::ToHolder`, `protocol::FromHolder`, `protocol::BulkKind` and the types they carry — the frames.
