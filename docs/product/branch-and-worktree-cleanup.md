@@ -111,7 +111,7 @@ Each branch or worktree choice the confirmation offers is a plain block of its o
 unchecked by default, whose label names what it removes and how many; a short hint; and under them a **Details**
 disclosure, collapsed by default and left as the user sets it while it is shown, over the items it covers grouped by
 what keeps them, each group led by one line saying so (that these worktrees have uncommitted changes, say) over the
-names. Expanded, those groups sit together on a light grey panel, set apart from the option's label and hint. A worktree
+names; how the disclosure looks is in "Disclosures in a dialog's body" in `docs/product/dialogs.md`. A worktree
 is named by its path, with the home directory written as `~` (see "How paths are shown" in
 `docs/product/settings.md`), and the branch it has checked out (or that its `HEAD` is
 detached); a branch by its name. Paths and branch names are plain monospace text. Each worktree shows a folder glyph

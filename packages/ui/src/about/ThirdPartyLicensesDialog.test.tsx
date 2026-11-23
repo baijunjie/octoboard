@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { EXTENDED_TARGET } from "../components/disclosure/TextDisclosure";
 import { LanguageProvider } from "../i18n/react";
 import { ThirdPartyLicensesDialog, ThirdPartyLicensesList } from "./ThirdPartyLicensesDialog";
 import { filterPackages, loadThirdPartyLicenses, type ThirdPartyLicenses } from "./thirdPartyLicenses";
@@ -90,9 +91,20 @@ it("says so when no package matches, and points aria-controls at the list only w
   expect(container.querySelector("[role=status]")?.textContent).toBe("No package matches the search.");
 });
 
-it("draws a chevron on each package's summary", () => {
+it("draws one triangle, hidden from assistive technology, ahead of each package's summary text", () => {
   const container = mount(licenses);
-  expect(container.querySelectorAll("summary > svg")).toHaveLength(6);
+  const summaries = Array.from(container.querySelectorAll("summary"));
+  expect(summaries.length).toBeGreaterThan(0);
+  for (const summary of summaries) {
+    expect(summary.querySelectorAll(":scope > svg")).toHaveLength(1);
+    expect(summary.firstElementChild?.tagName.toLowerCase()).toBe("svg");
+    expect(summary.firstElementChild?.getAttribute("aria-hidden")).toBe("true");
+    // Two shapes, collapsed and open, switched by the row's `details` being open; and an extended pointer target.
+    expect(summary.firstElementChild?.querySelectorAll("path")).toHaveLength(2);
+    for (const name of EXTENDED_TARGET.split(" ")) expect(summary.classList.contains(name), name).toBe(true);
+    expect(summary.closest("details")?.classList.contains("group/disclosure")).toBe(true);
+  }
+  expect(container.querySelectorAll("summary > svg")).toHaveLength(container.querySelectorAll("details").length);
 });
 
 it("loads a well-formed list, the committed empty one until the generator has run", async () => {

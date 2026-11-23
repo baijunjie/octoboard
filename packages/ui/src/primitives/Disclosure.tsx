@@ -19,12 +19,13 @@ export function DisclosureHeading({ children }: { children: React.ReactNode }): 
 }
 
 /** The button that shows and hides the disclosure's content; it carries the expanded state. */
-export function DisclosureTrigger({ describedBy, className, children }: {
+export function DisclosureTrigger({ id, describedBy, className, children }: {
+  id?: string;
   describedBy?: string;
   className?: string;
   children: React.ReactNode;
 }): React.ReactElement {
-  return <HeroDisclosure.Trigger aria-describedby={describedBy} className={className}>{children}</HeroDisclosure.Trigger>;
+  return <HeroDisclosure.Trigger id={id} aria-describedby={describedBy} className={className}>{children}</HeroDisclosure.Trigger>;
 }
 
 /** The chevron in a `DisclosureTrigger` that turns with the expanded state. */
@@ -38,7 +39,13 @@ export function DisclosureContent({ className, children }: { className?: string;
 }
 
 /** The padded body inside a `DisclosureContent`; `className` goes on its inner element. `flush` pads the body by 4px at
- * the sides and the bottom in place of HeroUI's 8px (`Disclosure.css`), for what is set in line with the content above. */
-export function DisclosureBody({ flush, className, children }: { flush?: boolean; className?: string; children: React.ReactNode }): React.ReactElement {
-  return <HeroDisclosure.Body data-flush={flush || undefined} className={className}>{children}</HeroDisclosure.Body>;
+ * the sides and the bottom in place of HeroUI's 8px (`Disclosure.css`), for what is set in line with the content above;
+ * `indent`, with `flush`, sets it in further at the start, under the label of a `TextDisclosure`'s trigger. */
+export function DisclosureBody({ flush, indent, className, children }: {
+  flush?: boolean;
+  indent?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return <HeroDisclosure.Body data-flush={flush || undefined} data-indent={indent || undefined} className={className}>{children}</HeroDisclosure.Body>;
 }

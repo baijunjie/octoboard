@@ -1,8 +1,9 @@
-import { ChevronDown, ChevronRight, ScrollText, SearchX } from "lucide-react";
+import { ScrollText, SearchX } from "lucide-react";
 import React, { useDeferredValue, useEffect, useId, useState } from "react";
 
 import { FieldClearButton } from "../components/controls/FieldClearButton";
 import { SurfaceCodeBlock } from "../components/text/CodeBlock";
+import { DisclosureTriangle, EXTENDED_TARGET } from "../components/disclosure/TextDisclosure";
 import { DiagnosticBlock } from "../components/alerts/DiagnosticBlock";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { PaneFailure } from "../components/alerts/PaneFailure";
@@ -16,16 +17,17 @@ import { filterPackages, loadThirdPartyLicenses, type LicensedPackage, type Thir
 /** One package: its name, version and license on the summary of a disclosure, and its license texts behind it.
  * The texts are rendered only while it is open, so a list of hundreds costs no more than its summaries. The
  * summary is a flex row, which takes the browser's own marker away (WebKit's needs its pseudo-element hidden too), so
- * it draws a chevron of its own, in a column of its own so a wrapped second line stays under the name. */
+ * it draws a `DisclosureTriangle`, in a column of its own so a wrapped second line stays under the name.
+ * The license texts are code blocks, set flush under the summary; the note for a package without one starts under
+ * the name, indented past the triangle. */
 function PackageRow({ entry, texts }: { entry: LicensedPackage; texts: readonly string[] }): React.ReactElement {
   const t = useT();
   const [open, setOpen] = useState(false);
   return (
     <li className="hairline-b py-2 last:border-b-0">
-      <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)} className="group min-w-0">
-        <summary className="flex cursor-pointer items-baseline gap-2 text-sm [&::-webkit-details-marker]:hidden">
-          <ChevronRight className="size-4 shrink-0 translate-y-0.5 self-start text-app-muted group-open:hidden rtl:-scale-x-100" />
-          <ChevronDown className="hidden size-4 shrink-0 translate-y-0.5 self-start text-app-muted group-open:block" />
+      <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)} className="group/disclosure min-w-0">
+        <summary className={`flex cursor-pointer items-baseline gap-1 text-sm [&::-webkit-details-marker]:hidden ${EXTENDED_TARGET}`}>
+          <DisclosureTriangle className="mt-1 self-start" />
           <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3">
             <span dir="ltr" className="font-medium text-foreground [overflow-wrap:anywhere]">{entry.name} {entry.version}</span>
             <span dir="ltr" className="text-app-muted">{entry.license}</span>
@@ -34,7 +36,7 @@ function PackageRow({ entry, texts }: { entry: LicensedPackage; texts: readonly 
         </summary>
         {open && (
           <div className="mt-2 flex min-w-0 flex-col gap-2">
-            {entry.texts.length === 0 && <p className="text-sm text-app-muted">{t("settings.about.thirdParty.noText")}</p>}
+            {entry.texts.length === 0 && <p className="ps-4 text-sm text-app-muted">{t("settings.about.thirdParty.noText")}</p>}
             {entry.texts.map((index) => (
               <SurfaceCodeBlock key={index}>{texts[index] ?? ""}</SurfaceCodeBlock>
             ))}

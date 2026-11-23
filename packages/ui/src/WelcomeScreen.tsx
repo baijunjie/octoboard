@@ -13,7 +13,8 @@ import { usePlatform } from "./platform/react";
 import { useDaemonStore, useProviders } from "./store";
 import type { ProviderInfo } from "./protocol";
 import { StatusAnnouncer } from "./components/announce/StatusAnnouncer";
-import { FlushDisclosureContent, QuietDisclosureTrigger } from "./components/disclosure/QuietDisclosure";
+import { FlushDisclosureContent } from "./components/disclosure/FlushDisclosureContent";
+import { QuietDisclosureTrigger } from "./components/disclosure/QuietDisclosure";
 import { useListMotion } from "./components/motion/useListMotion";
 import { Card, Disclosure } from "./primitives";
 
@@ -136,6 +137,8 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
           <StatusAnnouncer text={foldNews} clearAfterRead />
           {folded.length > 0 && (
             <Disclosure>
+              {/* A ghost trigger, not a `TextDisclosure`: the user's exception to the disclosure rule
+                  ("Fields and choices" in docs/conventions/ui-standard.md). */}
               <QuietDisclosureTrigger className="mx-auto mt-3 flex">{notDetected}</QuietDisclosureTrigger>
               <FlushDisclosureContent>
                 {/* Rows here carry no status region: what they say does not change while folded,

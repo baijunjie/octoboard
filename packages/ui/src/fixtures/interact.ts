@@ -23,7 +23,7 @@ import { partSelector, segmentSelector } from "../primitives";
 /** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, a tag
  * in a tag group is a `role="row"`, and a checkbox or radio is its (visually hidden) input: pressing
  * the label HeroUI draws it in does not toggle it. The `summary` of a `details` is a disclosure's
- * control, such as an error alert's "Error details". */
+ * control, such as a third-party licenses row (an error alert's "Error details" is a button). */
 const PRESSABLE =
   "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href], input[type=checkbox], input[type=radio], summary, [role=separator][tabindex]";
 

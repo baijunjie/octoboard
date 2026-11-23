@@ -13,6 +13,7 @@ import { broadcastNotification } from "../store/notifications";
 import { testDaemon } from "../test/testDaemon";
 import { ErrorAlerts } from "./ErrorAlerts";
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { errorDetails, withoutErrorDetails } from "../components/alerts/detailsTestSupport";
 import { Toasts } from "./Toasts";
 import { matchesWidthQuery } from "../test/viewport";
 import { fakeTimers } from "../test/clock";
@@ -198,7 +199,7 @@ it.each([
     expect(alert.textContent).not.toContain(remedy);
     expect(alert.textContent).not.toContain("Report issue");
     // Diagnostic copy controls stay in Error details; the only action outside is the acknowledgement.
-    const actions = [...alert.querySelectorAll("button")].filter((button) => !button.closest("details") && button.getAttribute("aria-label") !== "Close");
+    const actions = [...alert.querySelectorAll("button")].filter((button) => !errorDetails(alert)?.contains(button) && button.getAttribute("aria-label") !== "Close");
     expect(actions.map((button) => button.textContent)).toEqual(["OK"]);
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
@@ -394,9 +395,8 @@ it.each<{ code: string; params: Record<string, string>; title: string; sentence:
     const alert = document.querySelector('[role="alertdialog"]')!;
     expect(alert.querySelector("h2")?.textContent).toBe(title);
     expect(alert.textContent).toContain("Hub");
-    expect(alert.querySelector("details pre")?.textContent).toBe(raw);
-    const explanation = alert.cloneNode(true) as Element;
-    explanation.querySelector("details")!.remove();
+    expect(errorDetails(alert)?.querySelector("pre")?.textContent).toBe(raw);
+    const explanation = withoutErrorDetails(alert);
     expect(explanation.textContent).toContain(sentence);
     expect(explanation.textContent).not.toContain(raw);
     // An expected failure, not one to report as a bug.

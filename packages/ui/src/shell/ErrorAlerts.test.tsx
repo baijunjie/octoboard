@@ -14,6 +14,7 @@ import { PlatformProvider } from "../platform/react";
 import type { PlatformAdapter } from "../platform";
 import { focusAfterLoss, MODAL_CLOSE_SETTLE_MS, setFocusAfterModalLoss } from "../components/focus/modalFocus";
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { errorDetails, errorDetailsTrigger, withoutErrorDetails } from "../components/alerts/detailsTestSupport";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { Dialog } from "../components/dialog/Dialog";
 import { failureOf, framesAsTimers, openable, settleFrames, trackMountRefocus } from "../components/dialog/dialogTestSupport";
@@ -169,8 +170,8 @@ it("immediately shows an actionable manual URL fallback if opening an Issue fail
   expect(alert.textContent).not.toContain("title=");
   expect(alert.textContent).toContain("open it manually");
   // The system's reason is not part of the alert's words; it is behind Error details, on a surface of its own.
-  const details = alert.querySelector("details")!;
-  expect(details.querySelector("summary")?.textContent).toBe("Error details");
+  const details = errorDetails(alert)!;
+  expect(errorDetailsTrigger(alert)?.getAttribute("aria-expanded")).toBe("false");
   expect(details.querySelector(".app-code")?.textContent).toContain("Browser unavailable");
   expect(alert.textContent?.replace(details.textContent ?? "", "")).not.toContain("Browser unavailable");
   expect([...alert.querySelectorAll("a")].some((link) => link.textContent === "Report issue")).toBe(false);
@@ -672,7 +673,7 @@ it("shows foreign-realm diagnostic stacks and an accurate manual Issue fallback"
   const error = { message: "Foreign failure", stack: "Foreign stack trace" };
   act(() => errorAlerts.report({ message: error.message, error }));
   const alert = document.querySelector('[role="alertdialog"]')!;
-  expect(alert.querySelector("details")?.textContent).toContain("Foreign stack trace");
+  expect(errorDetails(alert)?.textContent).toContain("Foreign stack trace");
   expect(alert.textContent).toContain("Open https://github.com/baijunjie/octoboard/issues/new in your browser");
   expect(alert.textContent).toContain(issueUrl);
   expect(alert.textContent).not.toContain("use Report issue");
@@ -681,7 +682,7 @@ it("shows foreign-realm diagnostic stacks and an accurate manual Issue fallback"
 it.each(["Module load reason", { message: "Module load reason" }])("shows original diagnostics when a generic failure summary has no source stack: %s", (error) => {
   mount();
   act(() => errorAlerts.report({ message: "Formula rendering failed", content: <p>Formula rendering failed</p>, error }));
-  expect(document.querySelector('[role="alertdialog"] details')?.textContent).toContain("Module load reason");
+  expect(errorDetails(document.querySelector('[role="alertdialog"]')!)?.textContent).toContain("Module load reason");
 });
 
 it("preserves an unhandled foreign rejection's message and stack through the reporting normalizer", () => {
@@ -689,7 +690,7 @@ it("preserves an unhandled foreign rejection's message and stack through the rep
   act(() => raiseError({ message: "Foreign rejection", stack: "Foreign rejection stack" }, { title: undefined }));
   const alert = document.querySelector('[role="alertdialog"]')!;
   expect(alert.textContent).toContain("Foreign rejection");
-  expect(alert.querySelector("details")?.textContent).toContain("Foreign rejection stack");
+  expect(errorDetails(alert)?.textContent).toContain("Foreign rejection stack");
 });
 
 it("shows a failed account-switch batch as prose: the target once, a short reason per session, the remedy once, and the raw text only in Error details", async () => {
@@ -711,11 +712,11 @@ it("shows a failed account-switch batch as prose: the target once, a short reaso
   expect(alert.textContent).toContain("Session two");
   expect(alert.textContent?.match(/Free space on the disk/g)).toHaveLength(1);
   expect(alert.textContent).not.toContain("Report issue");
-  const details = alert.querySelector("details")!;
+  const details = errorDetails(alert)!;
   expect(details.textContent).toContain("No space left on device (os error 28)");
   const visible = (alert.textContent ?? "").replace(details.textContent ?? "", "");
   expect(visible).not.toContain("os error 28");
-  expect([...alert.querySelectorAll("button")].map((button) => button.getAttribute("aria-label") ?? button.textContent)).toEqual(["Close", "Copy", "Copy", "OK"]);
+  expect([...alert.querySelectorAll("button")].map((button) => button.getAttribute("aria-label") ?? button.textContent)).toEqual(["Close", "Error details", "Copy", "Copy", "OK"]);
 });
 
 async function failedBatch(failures: Record<string, Error>, accountName = "Work") {
@@ -729,7 +730,7 @@ async function failedBatch(failures: Record<string, Error>, accountName = "Work"
     await runAccountSwitchBatch(store, Object.keys(failures), "a-1", { accountName, switchOne: async (id) => { throw failures[id]; } });
   });
   const alert = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
-  const details = alert.querySelector("details");
+  const details = errorDetails(alert);
   const visible = (alert.textContent ?? "").replace(details?.textContent ?? "\u0000", "");
   return { alert, details, visible };
 }
@@ -776,8 +777,9 @@ it("words each stage of a failed conversation copy, and says where an older item
 it("shows an alert's own details in place of the diagnostics it would work out for an unexpected failure", () => {
   mount();
   act(() => errorAlerts.report({ message: "Failed", error: new Error("worked out"), details: <p>supplied detail</p> }));
-  const details = document.querySelector('[role="alertdialog"] details')!;
-  expect(document.querySelectorAll('[role="alertdialog"] details')).toHaveLength(1);
+  const alert = document.querySelector('[role="alertdialog"]')!;
+  const details = errorDetails(alert)!;
+  expect(alert.querySelectorAll("button[aria-expanded]")).toHaveLength(1);
   expect(details.textContent).toContain("supplied detail");
   expect(details.textContent).not.toContain("worked out");
 });
@@ -870,12 +872,11 @@ it.each([
   mount();
   act(() => raiseError(error, { title: undefined }));
   const alert = document.querySelector('[role="alertdialog"]')!;
-  const details = alert.querySelectorAll("details");
-  expect(details).toHaveLength(1);
-  expect(details[0].querySelector("summary")?.textContent).toBe("Error details");
-  expect(details[0].querySelector("pre")?.textContent).toBe(raw);
-  const explanation = alert.cloneNode(true) as Element;
-  explanation.querySelector("details")!.remove();
+  const triggers = [...alert.querySelectorAll("button[aria-expanded]")].filter((button) => button.textContent === "Error details");
+  expect(triggers).toHaveLength(1);
+  expect(triggers[0].getAttribute("aria-expanded")).toBe("false");
+  expect(errorDetails(alert)!.querySelector("pre")?.textContent).toBe(raw);
+  const explanation = withoutErrorDetails(alert);
   expect(explanation.textContent?.replace(/[⁦-⁩]/g, "")).toContain(sentence);
   expect(explanation.textContent).not.toContain(raw);
   expect(explanation.querySelector("pre")).toBeNull();

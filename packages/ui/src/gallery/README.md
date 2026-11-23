@@ -119,7 +119,8 @@ which scenarios to write against copy, form-control values and viewing condition
 - **Step helpers.** The step driver's helpers (`ui.pressTab`, `ui.confirm`, `ui.contextMenu`, `ui.touchPress`,
   `ui.tapTopBarStatus`, `ui.swipe`, `ui.hoverStatusMark`, `ui.touchPressStatusMark`, `ui.openGitFailure`,
   `ui.showPanel`, `ui.closeDrawer`, `ui.pressWithModifier`, and so on) are documented on the `Ui` interface in
-  `fixtures/interact.ts`. A raw-text disclosure of an error alert is opened with `ui.press(ui.t("error.diagnostics"))`.
+  `fixtures/interact.ts`. A raw-text disclosure of an error alert (a button named "Error details") is opened with
+  `ui.press(ui.t("error.diagnostics"))`.
   A step waits on a condition (the `Ui` helpers, which wait for the control they act on; `waitForControl`,
   `waitForText` and `waitUntil` for a state with nothing to act on), not on time; a fixed `ui.wait(ms)` only with a
   comment saying why the UI shows nothing to wait on (a timer inside the page), written once where a shared step list

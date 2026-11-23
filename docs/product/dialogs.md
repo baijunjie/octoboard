@@ -3,7 +3,7 @@
 How a dialog — a form dialog, a confirmation, an error alert or a failure modal — is titled, where keyboard focus starts
 in it, where a question the user did not ask for stands among other dialogs, what its confirm button says, what Enter
 does in it, what it and its controls do while a request it started runs — with how a button anywhere in the window shows
-that its action is running — and how it changes size while open. What an open dialog puts
+that its action is running — how it changes size while open, and how a disclosure in its body looks. What an open dialog puts
 out of reach in the rest of the window is in "What an open dialog, menu or popover covers" in
 `docs/product/window-layout.md`; error alerts and failure modals themselves are in `docs/product/error-alerts.md`.
 
@@ -178,3 +178,26 @@ the repeats stay: Space in any text field, Enter in a multi-line one.
 opened, a failure line appearing — over **200 ms**, growing or shrinking about its centre. Its first size and a change
 of the window's size are not eased, and where the system asks for reduced motion the height changes at once. Every
 dialog does this except Settings.
+
+## Disclosures in a dialog's body
+
+A disclosure in a dialog's body is collapsed to begin with, and its trigger is its label as plain text after a small
+filled triangle in the text's colour, with no button look and no chevron. The triangle points to the end of the text
+while collapsed and down while expanded, mirrored in a right-to-left layout. This holds for:
+
+- **Error details** in an error alert, and in the other dialogs that show a failure's raw text under it (see "Names and
+  diagnostic details" in `docs/product/error-alerts.md`);
+- an option's **Details** in a confirmation — a branch or worktree choice (see "The confirmation" in
+  `docs/product/branch-and-worktree-cleanup.md`) or a background process tree (see "Processes in an archive
+  confirmation" in `docs/product/background-processes.md`);
+- the text a session wrote for a session request — "Brief written by the session", "Note written by the session",
+  "Prompt written by the session" (see "The confirmation dialog" in `docs/product/session-requests.md`);
+- each package row of the third-party licenses dialog, whose label is the package's name, version, license and kind
+  (see `docs/product/about-octoboard.md`).
+
+What a disclosure folds away starts under its label, indented past the triangle — an option's items, or a license
+row's note that the package ships no license text — unless it is a code block (the raw text under **Error details**,
+the text a session wrote, a license text), which stands flush with the trigger, its tinted surface setting it apart.
+
+A form dialog's collapsed **Advanced** section, and the welcome screen's disclosure of the tools not detected (see
+`docs/product/welcome-screen.md`), keep a different trigger: a small muted button with a chevron after its label.

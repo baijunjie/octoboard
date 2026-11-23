@@ -6,3 +6,10 @@
   padding-inline: calc(var(--spacing) * 1);
   padding-bottom: calc(var(--spacing) * 1);
 }
+
+/* An indented flush body (`DisclosureBody`'s `indent`): set in at the start by the 4px of the flush body plus the width
+   of a `TextDisclosure` trigger's triangle and the gap after it (12px + 4px), so what it holds starts under the
+   trigger's label. */
+.disclosure__body[data-flush][data-indent] {
+  padding-inline-start: calc(var(--spacing) * 5);
+}

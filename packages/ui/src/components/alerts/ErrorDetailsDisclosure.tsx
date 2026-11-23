@@ -1,19 +1,21 @@
 import React, { useId } from "react";
 
 import { useT } from "../../i18n/react";
+import { TextDisclosure } from "../disclosure/TextDisclosure";
 import { DiagnosticLabelContext } from "./DiagnosticBlock";
 
-/** The "Error details" disclosure around details a caller laid out itself; a `DiagnosticBlock` among them with no
- * `labelledBy` of its own is labelled by its summary. */
+/** The "Error details" disclosure around details a caller laid out itself, which stand flush under the trigger
+ * (`TextDisclosure`'s `code`): code blocks (`DiagnosticBlock`s, each possibly under a heading of its own), or a raw part
+ * that sets itself in (a sharing failure's list, `SharingDetails`, indented by its own margin). A `DiagnosticBlock`
+ * among them with no `labelledBy` of its own is labelled by the trigger. */
 export function DetailsDisclosure({ children }: { children: React.ReactNode }): React.ReactElement {
   const t = useT();
-  const summaryId = useId();
+  const triggerId = useId();
   return (
-    <details className="min-w-0 max-w-full">
-      <summary id={summaryId}>{t("error.diagnostics")}</summary>
-      <DiagnosticLabelContext.Provider value={summaryId}>
-        <div className="mt-2 flex min-w-0 max-w-full flex-col gap-3">{children}</div>
-      </DiagnosticLabelContext.Provider>
-    </details>
+    <div className="min-w-0 max-w-full">
+      <TextDisclosure code id={triggerId} label={t("error.diagnostics")} contentClassName="flex min-w-0 max-w-full flex-col gap-3">
+        <DiagnosticLabelContext.Provider value={triggerId}>{children}</DiagnosticLabelContext.Provider>
+      </TextDisclosure>
+    </div>
   );
 }

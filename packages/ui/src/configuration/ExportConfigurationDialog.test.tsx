@@ -4,6 +4,7 @@ import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { errorDetails, errorDetailsTrigger, withoutErrorDetails } from "../components/alerts/detailsTestSupport";
 import { consoleOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import { setLanguage } from "../i18n/language";
@@ -384,11 +385,9 @@ it("shows why a file could not be written in its own words, the system's text be
   const alert = document.querySelector('[role="alertdialog"]')!;
   // The alert is titled for what failed, not the generic "Error".
   expect(alert.querySelector("h2")?.textContent).toBe("Could not export the configuration");
-  const details = alert.querySelector("details")!;
-  expect(details.querySelector("summary")?.textContent).toBe("Error details");
-  expect(details.querySelector("pre")?.textContent).toBe("Permission denied (os error 13)");
-  const explanation = alert.cloneNode(true) as Element;
-  explanation.querySelector("details")!.remove();
+  expect(errorDetailsTrigger(alert)?.getAttribute("aria-expanded")).toBe("false");
+  expect(errorDetails(alert)!.querySelector("pre")?.textContent).toBe("Permission denied (os error 13)");
+  const explanation = withoutErrorDetails(alert);
   expect(explanation.textContent).toContain("Could not save the file.");
   expect(explanation.textContent).not.toContain("Permission denied");
   // The remedy is still the one the system's error names.

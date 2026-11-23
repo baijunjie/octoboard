@@ -20,7 +20,7 @@ afterEach(() => {
 
 const TEXT = "  first line\r\n\tindented line\n" + "a long message ".repeat(100) + "\n\n";
 
-function mount({ text = TEXT, labelledBy, label, disclosure, dir, wrap }: { text?: string; labelledBy?: string; label?: string; disclosure?: string; dir?: "ltr" | "auto"; wrap?: boolean } = {}) {
+function mount({ text = TEXT, labelledBy, disclosure, dir, wrap }: { text?: string; labelledBy?: string; disclosure?: string; dir?: "ltr" | "auto"; wrap?: boolean } = {}) {
   // Before anything mounts: the frame HeroUI's overflow watch reports from is armed on the faked clock.
   fakeTimers();
   const writeText = vi.fn(async (_text: string) => {});
@@ -29,7 +29,7 @@ function mount({ text = TEXT, labelledBy, label, disclosure, dir, wrap }: { text
     <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST, clipboard: { writeText } }}>
       <LanguageProvider>
         <DiagnosticLabelContext.Provider value={disclosure}>
-          <DiagnosticBlock labelledBy={labelledBy} label={label} dir={dir} wrap={wrap}>{text}</DiagnosticBlock>
+          <DiagnosticBlock labelledBy={labelledBy} dir={dir} wrap={wrap}>{text}</DiagnosticBlock>
         </DiagnosticLabelContext.Provider>
       </LanguageProvider>
     </PlatformProvider>,
@@ -101,14 +101,6 @@ it.each([[300, 100], [100, 300], [300, 300]])("makes overflowing diagnostics key
   expect(scroller.getAttribute("aria-label")).toBe("Error details");
 });
 
-it("names its region by the label its caller gives where there is no disclosure or heading to name it", async () => {
-  layout(300, 100);
-  const { scroller } = mount({ label: "Prompt written by the session" });
-  await settle();
-  expect(scroller.getAttribute("aria-label")).toBe("Prompt written by the session");
-  expect(scroller.hasAttribute("aria-labelledby")).toBe(false);
-});
-
 it("does not add a scrolling tab stop when the text fits", async () => {
   layout(100, 100);
   const { scroller } = mount({ text: "short" });
@@ -118,6 +110,7 @@ it("does not add a scrolling tab stop when the text fits", async () => {
 });
 
 it.each([
+  { labelledBy: "heading", expected: "heading" },
   { disclosure: "summary", expected: "summary" },
   { disclosure: "summary", labelledBy: "heading", expected: "heading" },
 ])("keeps the diagnostic region named by $expected", async ({ expected, ...labels }) => {

@@ -56,5 +56,9 @@ it("keeps a long text in a block of bounded height that scrolls on its own, name
   expect(scroller.classList.contains("overflow-auto")).toBe(true);
   expect(scroller.getAttribute("role")).toBe("region");
   expect(scroller.getAttribute("tabindex")).toBe("0");
-  expect(scroller.getAttribute("aria-label")).toBe("Prompt written by the session");
+  // Named by the trigger, whose text is the label, rather than by a label of its own.
+  expect(scroller.hasAttribute("aria-label")).toBe(false);
+  expect(scroller.getAttribute("aria-labelledby")).toBe(trigger(container).id);
+  expect(trigger(container).id).not.toBe("");
+  expect(trigger(container).textContent).toBe("Prompt written by the session");
 });

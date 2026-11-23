@@ -137,8 +137,14 @@ reduced motion.
   padding. A select whose options load shows it inside the control (the spinner for the chevron, `aria-busy`, a
   chosen value kept), never as a line below.
 - **A field's clear action is `FieldClearButton`**, beside a select's trigger, never inside it.
-- **A disclosure folding away something rarely needed uses `QuietDisclosureTrigger` and `FlushDisclosureContent`**,
-  never a copy of their classes.
+- **A disclosure folding away a form's rarely set fields (a dialog's Advanced section) uses `QuietDisclosureTrigger`
+  and `FlushDisclosureContent`**, never a copy of their classes. The welcome screen's tools not detected keeps them too.
+- **Every other disclosure in a dialog's or a page's body is a `TextDisclosure`: its label as text after a
+  `DisclosureTriangle`, never a button's look or a chevron**, whatever it folds away (error details, what an option
+  covers, a text someone wrote); tree rows, a pane's collapsible section headings and menu items keep their chevrons.
+  What it folds away starts under the label, indented past the triangle, unless it is a code block (`DiagnosticBlock`,
+  `CodeBlock`, each possibly under a label of its own), which stands flush (`code`). A summary that lays out a row of
+  its own (a list's row) draws the same `DisclosureTriangle` and follows the same rule for its content.
 
 ### A modal's title is a plain name
 

@@ -8,7 +8,7 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { CodedError } from "../errors/codedError";
 import { MIXED_RESULT, REVIEW } from "../fixtures/configurationReview";
-import { press as pressElement } from "../components/alerts/detailsTestSupport";
+import { errorDetails, press as pressElement, withoutErrorDetails } from "../components/alerts/detailsTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { press as pressWithMouse } from "../components/hint/tooltipTestSupport";
@@ -1570,9 +1570,8 @@ it.each([
   await press("Choose file");
   const alert = document.querySelector('[role="alertdialog"]')!;
   expect(alert.querySelector("h2")?.textContent).toBe("Could not import the configuration");
-  expect(alert.querySelector("details pre")?.textContent).toBe(raw);
-  const explanation = alert.cloneNode(true) as Element;
-  explanation.querySelector("details")?.remove();
+  expect(errorDetails(alert)?.querySelector("pre")?.textContent).toBe(raw);
+  const explanation = withoutErrorDetails(alert);
   expect(explanation.textContent).toContain(shown);
   if (raw) expect(explanation.textContent).not.toContain(raw);
   expect(mounted.sent()).toEqual([]);

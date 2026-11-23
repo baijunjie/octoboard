@@ -6,7 +6,7 @@ import { CODE_SURFACE_CLASS, CodeBlock } from "../text/CodeBlock";
 import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
 import { Surface } from "../../primitives";
 
-/** The id of the summary of the disclosure a block stands in, which names the block's region unless it is given its own
+/** The id of the trigger of the disclosure a block stands in, which names the block's region unless it is given its own
  * `labelledBy`: a block a caller passes as the content of an "Error details" disclosure is labelled by the disclosure
  * without knowing its id. */
 export const DiagnosticLabelContext = createContext<string | undefined>(undefined);
@@ -16,9 +16,9 @@ export const DiagnosticLabelContext = createContext<string | undefined>(undefine
  * scroller so it is always reachable, never faded, and copies the original text rather than the visible portion.
  * Diagnostics read left to right and keep their lines unwrapped; text the user wrote, shown in such a block
  * (`detailLabel`), takes `dir="auto"` and `wrap`, its long lines wrapping on screen while the copy keeps them whole,
- * and a `failedText` that does not call it error details; so does its region's name (`label`), which is "Error details"
- * where neither it nor `labelledBy` is given. */
-export function DiagnosticBlock({ children, labelledBy, label, dir = "ltr", wrap = false, failedText }: { children: string; labelledBy?: string; label?: string; dir?: "ltr" | "auto"; wrap?: boolean; failedText?: string }): ReactElement {
+ * and a `failedText` that does not call it error details, with its region named by its label (`labelledBy`). The
+ * region is named "Error details" where no `labelledBy` is given and no disclosure labels it. */
+export function DiagnosticBlock({ children, labelledBy, dir = "ltr", wrap = false, failedText }: { children: string; labelledBy?: string; dir?: "ltr" | "auto"; wrap?: boolean; failedText?: string }): ReactElement {
   const t = useT();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollbarWidth, setScrollbarWidth] = useState(0);
@@ -33,7 +33,7 @@ export function DiagnosticBlock({ children, labelledBy, label, dir = "ltr", wrap
   });
   const disclosure = useContext(DiagnosticLabelContext);
   const labelId = labelledBy ?? disclosure;
-  const region = useFadeRegion(labelId ? { labelledBy: labelId } : { label: label ?? t("error.diagnostics") });
+  const region = useFadeRegion(labelId ? { labelledBy: labelId } : { label: t("error.diagnostics") });
   return (
     <Surface variant="secondary" className={`${CODE_SURFACE_CLASS} diagnostic-block relative shrink-0 ${region.ring}`}>
       <FadedScroller

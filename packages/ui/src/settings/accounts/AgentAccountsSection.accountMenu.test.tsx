@@ -6,6 +6,7 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 import type { AccountLogin, AccountTrashOutcome, Session } from "../../protocol";
 import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
+import { errorDetails, errorDetailsTrigger } from "../../components/alerts/detailsTestSupport";
 import { ErrorAlerts } from "../../shell/ErrorAlerts";
 import { framesAsTimers, settleFrames, trackMountRefocus } from "../../components/dialog/dialogTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
@@ -192,8 +193,8 @@ describe("an account's actions menu", () => {
     expect(plain(dialog.querySelector("p"))).toBe("Logging in to Claude Code account claude-work failed.");
     expect(plain(dialog)).not.toContain("could not log in.");
     // The raw text is only in the disclosure, closed until opened.
-    const disclosure = dialog.querySelector("details")!;
-    expect(disclosure.querySelector("summary")?.textContent).toBe("Error details");
+    const disclosure = errorDetails(dialog)!;
+    expect(errorDetailsTrigger(dialog)?.getAttribute("aria-expanded")).toBe("false");
     expect(disclosure.textContent).toContain("Login failed: 400");
     expect(dialog.textContent!.replace(disclosure.textContent!, "")).not.toContain("Login failed: 400");
     expect(buttonNamed(dialog, "Cancel login")).toBeUndefined();
@@ -252,7 +253,7 @@ describe("an account's actions menu", () => {
     expect(plain(dialog.querySelector("p"))).toBe("Logging in to Claude Code account claude-work failed. Claude Code finished, but this account is still not logged in.");
     // No live region of its own: the dialog mounting, with focus moving into it, is what is announced.
     expect(dialog.querySelector('[role="status"]')).toBeNull();
-    expect(dialog.querySelector("details")).toBeNull();
+    expect(errorDetails(dialog)).toBeNull();
   });
 
   it("leaves no line in the row for a login that ended without success", () => {
@@ -354,7 +355,7 @@ describe("an account's actions menu", () => {
     const dialog = document.querySelector('[role="alertdialog"]')!;
     const text = dialog.textContent!.replace(/[\u2068\u2069]/g, "");
     expect(text).toContain("Logging in to Claude Code account claude-work failed.");
-    expect(dialog.querySelector("details")?.textContent).toContain("Login failed: 400");
+    expect(errorDetails(dialog)?.textContent).toContain("Login failed: 400");
     expect(text).not.toContain("already running");
   });
 

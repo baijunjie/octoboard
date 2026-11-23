@@ -110,7 +110,7 @@ export const aboutScenarios: Scenario[] = [
     category: "normal",
     title: "Third-party licenses, the whole list",
     description:
-      "The dialog has the search field, a muted count of 13 packages and one closed row per package: a chevron pointing along the reading direction, name and version, its license, and whether it is an npm package or a Rust crate. The package with the very long name wraps in its row instead of widening the dialog, its license and npm label dropping to a second line; the licenses written as expressions (OR, AND) stay on one line each.",
+      "The dialog has the search field, a muted count of 13 packages and one closed row per package: a small triangle pointing along the reading direction, name and version, its license, and whether it is an npm package or a Rust crate. The package with the very long name wraps in its row instead of widening the dialog, its license and npm label dropping to a second line; the licenses written as expressions (OR, AND) stay on one line each.",
     licensesDialog: LICENSES,
   },
   {
@@ -119,7 +119,7 @@ export const aboutScenarios: Scenario[] = [
     category: "normal",
     title: "Third-party licenses, packages expanded",
     description:
-      "The first row, the package with the very long name, is open (its chevron points down) on the line \"This package does not ship a license text.\"; the second, @tauri-apps/api, is open with its two license texts one under the other, each in its own tinted block that keeps the text's line breaks and wraps long lines (scroll the dialog to see both). The other rows stay closed.",
+      "The first row, the package with the very long name, is open (its triangle points down) on the line \"This package does not ship a license text.\", set in under the name; the second, @tauri-apps/api, is open with its two license texts one under the other, each in its own tinted block, flush with the row, that keeps the text's line breaks and wraps long lines (scroll the dialog to see both). The other rows stay closed.",
     licensesDialog: LICENSES,
     steps: [(ui) => ui.press(packageRow(LONG_NAME, "10.12.4-beta.3")), (ui) => ui.press(packageRow("@tauri-apps/api", "2.1.1"))],
   },

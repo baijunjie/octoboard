@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { DaemonProvider } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
 import { errorAlerts, type AcknowledgementView } from "../alerts/errorAlerts";
+import { errorDetailsTrigger } from "../alerts/detailsTestSupport";
 import { CodedError } from "../../errors/codedError";
 import { MODAL_CLOSE_SETTLE_MS, setFocusAfterModalLoss } from "../focus/modalFocus";
 import { Dialog } from "./Dialog";
@@ -841,7 +842,7 @@ it("turns into a failure modal in place: danger icon, title, explanation, detail
     expect(dialog?.querySelector("h2, h1, [data-slot$=heading]")?.textContent).toBe("Error");
     expect(dialog?.querySelector('[data-slot$="icon"]')).not.toBeNull();
     expect(dialog?.textContent).toContain("Gone.");
-    expect(dialog?.querySelector("details summary")?.textContent).toBe("Error details");
+    expect(errorDetailsTrigger(dialog!)?.getAttribute("aria-expanded")).toBe("false");
     const footer = [...(dialog?.querySelectorAll("button") ?? [])].filter((button) => button.closest("[data-slot$=footer]")).map((button) => button.textContent);
     expect(footer).toEqual(["OK"]);
     // Escape and a press outside are held; the close button does what OK does.

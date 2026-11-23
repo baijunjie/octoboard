@@ -2,7 +2,8 @@ import React from "react";
 
 import { StatusAnnouncer } from "../announce/StatusAnnouncer";
 import { Disclosure, DisclosureHeading, TabPanel, Tabs } from "../../primitives";
-import { FlushDisclosureContent, QuietDisclosureTrigger } from "../disclosure/QuietDisclosure";
+import { FlushDisclosureContent } from "../disclosure/FlushDisclosureContent";
+import { QuietDisclosureTrigger } from "../disclosure/QuietDisclosure";
 import { TextTabStrip } from "../tabs/TextTabStrip";
 import { useT } from "../../i18n/react";
 

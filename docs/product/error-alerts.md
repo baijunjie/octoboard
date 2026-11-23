@@ -489,7 +489,7 @@ failure. A launch or trust-confirmation failure whose cause Octoboard has no wor
 sentence — for a launch, the sentence of an uncatalogued failure (see "Failures shown on the screen" above); for a trust
 confirmation, that something unexpected went wrong — and the cause's own text is the raw text. The output retains its
 line breaks, indentation and left-to-right order without automatic wrapping. Every diagnostic block sits on a tinted
-surface of its own rather than directly on what holds it, with whatever names it (the disclosure's summary, a heading)
+surface of its own rather than directly on what holds it, with whatever names it (the disclosure's trigger, a heading)
 outside that surface. The whole surface, including its copy control, is at most 40% of the window's height. Long lines
 scroll horizontally, and content beyond the available height scrolls vertically within the block. The scrolling text
 is a region the keyboard can reach when it overflows, named by its disclosure or heading where there is one, and
