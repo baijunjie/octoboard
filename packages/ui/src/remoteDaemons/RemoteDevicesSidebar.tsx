@@ -1,4 +1,4 @@
-import { AppWindow, Link, Plug, Plus, Server, Trash2 } from "lucide-react";
+import { AppWindow, Link, Plug, Plus, Server, ServerPlus, Trash2 } from "lucide-react";
 import React, { useRef } from "react";
 
 import { RowControls, RowIconGroup, RowIconSlot } from "../components/controls/RowControls";
@@ -40,7 +40,7 @@ export function RemoteDevicesSidebar(): React.ReactElement {
       <FadedScroller className="min-h-0 flex-1 px-(--row-fill-inset) pt-2 pb-2">
         {entriesRead && entries.length === 0 && (
           // One compact row in the list's place, whose press starts what fills it.
-          <EmptyPanel compact icon={Server} message={t("remoteDaemons.empty")} action={{ label: t("remoteDaemons.add"), onPress: startAdd }} />
+          <EmptyPanel compact icon={ServerPlus} message={t("remoteDaemons.empty")} action={{ label: t("remoteDaemons.add"), onPress: startAdd }} />
         )}
         {entriesRead && entries.length > 0 && (
           <div ref={listRef} className="relative flex flex-col gap-0.5">

@@ -1,4 +1,4 @@
-import { CircleAlert, Clock, Play, Plus, Power, PowerOff, Trash2 } from "lucide-react";
+import { CircleAlert, Clock, ClockPlus, Play, Plus, Power, PowerOff, Trash2 } from "lucide-react";
 import React, { useId, useRef } from "react";
 
 import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
@@ -76,7 +76,7 @@ export function ScheduledTasksSidebar(): React.ReactElement {
         {tasks && tasks.length === 0 && (
           // One compact row in the list's place, whose press starts what fills it; with no console there is nothing to
           // start, and the row is plain.
-          <EmptyPanel compact icon={Clock} message={t("scheduledTasks.empty")} action={canAdd ? { label: t("scheduledTasks.new"), onPress: startAdd } : undefined} />
+          <EmptyPanel compact icon={canAdd ? ClockPlus : Clock} message={t("scheduledTasks.empty")} action={canAdd ? { label: t("scheduledTasks.new"), onPress: startAdd } : undefined} />
         )}
         {tasks && tasks.length > 0 && (
           <div ref={listRef} className="relative flex flex-col gap-0.5">
