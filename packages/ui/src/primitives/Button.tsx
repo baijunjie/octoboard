@@ -8,7 +8,7 @@ import { useFieldClear } from "./Field";
 import { openingFocus, useObjectRef } from "./focus";
 import { Spinner } from "./Spinner";
 import type { DataAttributes } from "./props";
-import { Tooltip, useOwnTooltipGuard } from "./Tooltip";
+import { type ControlTooltipPlacement, Tooltip, useOwnTooltipGuard } from "./Tooltip";
 import { UNAVAILABLE_BUTTON_CLASS, useUnavailable } from "./unavailable";
 
 /** HeroUI's button variants, by HeroUI's own names. */
@@ -148,7 +148,7 @@ export function Button(props: ButtonBaseProps & {
    * is held back with the button staying in its place. A tooltip that repeats `label` does not describe the button. */
   tooltip?: React.ReactNode;
   /** Where the tooltip opens relative to the button; see `Tooltip`. */
-  tooltipPlacement?: "end" | "bottom";
+  tooltipPlacement?: ControlTooltipPlacement;
   /** The tooltip opens on keyboard focus only, not on hover. */
   tooltipFocusOnly?: boolean;
   /** A press does not close the tooltip, for a button whose tooltip answers the press. */

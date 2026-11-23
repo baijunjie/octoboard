@@ -6,7 +6,7 @@ import { type DataAttributes, definedProps } from "./props";
 
 /** Where a floating element opens relative to what it belongs to: the side, then the alignment along it. The start and
  * end sides follow the reading direction. */
-export type OverlayPlacement = "top" | "bottom" | "start" | "end" | "bottom end" | "end bottom";
+export type OverlayPlacement = "top" | "bottom" | "start" | "end" | "bottom end" | "end top" | "end bottom";
 
 /** HeroUI's popover around a trigger: `children` are the trigger, a layer `Button` that opens it on a press and says
  * that it does, and its `PopoverContent`. Given `open` the caller holds the state, told of a change by `onOpenChange`. */

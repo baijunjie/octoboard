@@ -109,7 +109,8 @@ const ConsoleTile = memo(function ConsoleTile({
       <BadgeAnchor>
         <Button
           tooltip={tooltip}
-          tooltipPlacement="end"
+          // A tall tooltip centred beside the first avatar can reach the macOS window buttons.
+          tooltipPlacement="end top"
           tooltipFocusOnly={hoverOpensSidebar}
           iconOnly
           size="sm"

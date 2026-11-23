@@ -26,6 +26,8 @@ interface TooltipBaseProps {
   content: React.ReactNode;
 }
 
+export type ControlTooltipPlacement = "end" | "end top" | "bottom";
+
 interface ControlTooltipProps extends TooltipBaseProps {
   trigger?: "control";
   /** The control, a single react-aria control that takes the tooltip's trigger behaviour from context (a `ToggleButton`, a
@@ -33,9 +35,10 @@ interface ControlTooltipProps extends TooltipBaseProps {
    * (their `tooltip` and `unavailable` props) and are never wrapped in one. */
   children: React.ReactElement<{ label?: string; describedBy?: string }>;
   /** Where the tooltip opens relative to the control; HeroUI's default is above it. `end` is the reading direction's, so a
-   * control on a vertical strip at the window's start edge opens it toward the content under either direction. `bottom`
-   * keeps a header control's tooltip below the window chrome. */
-  placement?: "end" | "bottom";
+   * control on a vertical strip at the window's start edge opens it toward the content under either direction.
+   * `end top` aligns the top of the tooltip with the control. `bottom` keeps a header control's tooltip below the
+   * window chrome. */
+  placement?: ControlTooltipPlacement;
   /** The control's accessible name, for the touch popover's name when the child gives none as its `label`. */
   label?: string;
   /** The tooltip opens on keyboard focus only, not on hover. */
@@ -359,7 +362,7 @@ function TouchPopover({ popover, label, labelRepeatsTooltip = false, placement, 
   popover: ReturnType<typeof useTouchPopover>;
   label?: string;
   labelRepeatsTooltip?: boolean;
-  placement?: "end" | "bottom";
+  placement?: ControlTooltipPlacement;
   children: React.ReactNode;
 }): React.ReactElement {
   const labels = usePrimitiveLabels();
