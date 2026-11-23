@@ -256,10 +256,14 @@ interaction conventions are `docs/conventions/ui-standard.md`; what each view do
   diagram, a formula) is drawn with `dir="ltr"` on the element that draws it (on a field's group where it holds an
   affix), with `align-match-parent` where it stands on a line of its own; a free-form name (a session title, a project,
   tag or account name) takes `dir="auto"`.
-- **A value substituted into a sentence is isolated**: `<bdi dir="auto">` as React children, `isolate()` from
-  `i18n/isolate.ts` in a plain string, at the point every value of a kind passes through (`daemonMessage`). A string
-  that is matched, sorted, keyed or a collection's `textValue` is never isolated, and a value in an element that carries
-  a `dir` needs none, nor does a plain number or a date or time an `Intl` formatter wrote in the interface's language.
+- **A value substituted into a sentence is isolated when it can carry left-to-right content**, such as any value the
+  bullet above lists, a file name, a version, a number with a Latin unit, or a message from git or the system:
+  `<bdi dir="auto">` as React children, `isolate()` from `i18n/isolate.ts` in a plain string, at the point every value
+  of a kind passes through (`daemonMessage`). A number, date or time an `Intl` formatter wrote in the interface's
+  language needs none, since the formatter already orders it for that language; a string that is matched, sorted,
+  keyed or a collection's `textValue` is never isolated, and a value in an element that carries a `dir` needs none.
+  Why: in a right-to-left line the bidi algorithm alone misplaces the spaces, parentheses and digits beside such a
+  value.
 - **An LTR value field whose placeholder is prose lays the placeholder out in the interface's direction**, `dir="ltr"`
   only once it holds a value.
 - **An icon mirrors only when its meaning is a direction** (`rtl:-scale-x-100`; Back and Forward, a disclosure or
