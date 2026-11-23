@@ -12,6 +12,7 @@ import type { HostFacts } from "../platform/host";
 import { TerminalLinkColors } from "./links/linkColors";
 import { OSC_52, osc52ClipboardText } from "./osc52";
 import { installPathLinks, type PathAnswer, type PathLinkCache, type PathLinkTarget } from "./links/pathLinks";
+import { LinkClickReports } from "./links/linkClickReports";
 import { watchPointerForLinks } from "./links/pointerLinks";
 import { macEditingSequence } from "./terminalKeys";
 import { terminalFontSize } from "./terminalFontSize";
@@ -165,6 +166,8 @@ export class TerminalController {
   private hoveredViewportY = 0;
   private readonly linkColors: TerminalLinkColors;
   private readonly pathLinks?: PathLinkCache;
+  /** Keeps the mouse reports of a click that opens a link from the program. */
+  private readonly linkClicks: LinkClickReports;
   /** Has xterm ask the link providers again for the cell under a resting pointer; set by `mount`. */
   private askLinksUnderPointer?: () => void;
   /** False until a frame has passed since `open()`; see `mount`. */
@@ -249,7 +252,12 @@ export class TerminalController {
   constructor(handlers: TerminalControllerHandlers, initialColorTheme: "light" | "dark", { gpu = true, fittedSizesOnly = false, host }: TerminalControllerOptions) {
     this.handlers = handlers;
     this.options = { gpu, fittedSizesOnly, host };
-    const onLinkClick = terminalLinkHandler(handlers.openLink, () => this.term.hasSelection(), host);
+    // A click that opens a link is not the program's (see `LinkClickReports`).
+    const opening = <A extends unknown[]>(open: (...args: A) => Promise<void>) => (...args: A) => {
+      this.linkClicks.opened();
+      return open(...args);
+    };
+    const onLinkClick = terminalLinkHandler(handlers.openLink && opening(handlers.openLink), () => this.term.hasSelection(), host);
     this.term = new Terminal({
       scrollback: SCROLLBACK_ROWS,
       fontFamily: TERMINAL_FONT_FAMILY,
@@ -280,6 +288,10 @@ export class TerminalController {
         leave: () => this.handlers.onLinkHover?.(undefined),
       },
     });
+    this.linkClicks = new LinkClickReports(this.term, host, (event) => {
+      const grid = this.grid();
+      return grid && cellAtPoint(grid, event.clientX, event.clientY);
+    });
     this.fitAddon = new FitAddon();
     this.term.loadAddon(this.fitAddon);
     // Ahead of the addon: where both find a link, the one registered first is used.
@@ -287,7 +299,7 @@ export class TerminalController {
     this.term.loadAddon(new WebLinksAddon(onLinkClick, { urlRegex: TERMINAL_URL_REGEX }));
     const paths =
       handlers.pathLinks &&
-      installPathLinks(this.term, handlers.pathLinks, () => this.term.hasSelection(), () => {
+      installPathLinks(this.term, { ...handlers.pathLinks, open: opening(handlers.pathLinks.open) }, () => this.term.hasSelection(), () => {
         this.linkColors.refresh();
         // A path the pointer already rests on becomes a link without the pointer having to move.
         this.askLinksUnderPointer?.();
@@ -363,8 +375,11 @@ export class TerminalController {
       }
       // A mouse report is not the user turning back to the program: the pointer crossing the screen
       // on the way to a right-click must leave what the program copied on offer.
-      if (fromUser && !MOUSE_REPORT.test(data)) this.programCopy = undefined;
-      this.sendInput(new TextEncoder().encode(data), fromUser);
+      const report = MOUSE_REPORT.test(data);
+      if (fromUser && !report) this.programCopy = undefined;
+      const bytes = new TextEncoder().encode(data);
+      if (report) this.linkClicks.report(() => this.sendInput(bytes, fromUser));
+      else this.sendInput(bytes, fromUser);
     });
     // Mouse reports in the default encoding are not UTF-8: a coordinate is `32 + n`, so a byte can
     // exceed 127, and xterm always sends them through `onBinary` rather than `onData`, as a JS
@@ -373,9 +388,10 @@ export class TerminalController {
     // does not mark them as the user's, and they are not typing. While saved output is parsed they
     // are dropped along with xterm's own replies (see `sendInput`); after that the reset reporting
     // modes (`RESET_REPORTING_MODES`) stop xterm from producing them.
-    this.term.onBinary((data) =>
-      this.sendInput(Uint8Array.from(data, (c) => c.charCodeAt(0) & 0xff), false),
-    );
+    this.term.onBinary((data) => {
+      const bytes = Uint8Array.from(data, (c) => c.charCodeAt(0) & 0xff);
+      this.linkClicks.report(() => this.sendInput(bytes, false));
+    });
   }
 
   /** The screen's cell grid, or `undefined` while it is not in the document. */
@@ -459,6 +475,7 @@ export class TerminalController {
       { signal },
     );
     if (screen) this.askLinksUnderPointer = watchPointerForLinks(this.term, screen, signal);
+    this.linkClicks.watch(container, signal);
     // Coming back to the window: the person turns to the terminal it shows.
     const stopFocusReturn = onWindowFocusReturn(() => {
       if (this.inForeground()) this.activate();
@@ -723,6 +740,7 @@ export class TerminalController {
     this.sessionId = sessionId;
     // Anything held belonged to the connection before.
     this.pendingInput = [];
+    this.linkClicks.drop();
     this.replayMark = undefined;
     this.outputEnd = undefined;
     this.sentDisplay = undefined;
@@ -842,6 +860,7 @@ export class TerminalController {
     this.socket?.close();
     this.socket = undefined;
     this.sessionId = undefined;
+    this.linkClicks.drop();
     if (
       keepScreenFor === undefined ||
       keepScreenFor !== this.screenSessionId ||

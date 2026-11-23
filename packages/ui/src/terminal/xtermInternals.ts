@@ -23,3 +23,15 @@ export function watchUserInput(term: Terminal, onUserInput: () => void): boolean
   core.coreService.onUserInput(onUserInput);
   return true;
 }
+
+/**
+ * Whether xterm's link detection has a link under the pointer: the one a press now would open on a release over it
+ * (`Linkifier.currentLink`, xterm 6, which it takes as the pressed link on `mousedown`). The public API exposes only
+ * each link's own hover, so this reaches the link detection through the private `_core`; recheck it on every
+ * `@xterm/xterm` upgrade. Without it no link is ever found under the pointer, so a click on a link reaches the program
+ * in the terminal too (see `LinkClickReports`).
+ */
+export function hasLinkUnderPointer(term: Terminal): boolean {
+  const core = (term as unknown as { _core?: { linkifier?: { currentLink?: unknown } } })._core;
+  return core?.linkifier?.currentLink !== undefined;
+}

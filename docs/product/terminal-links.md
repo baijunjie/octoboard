@@ -16,6 +16,18 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
   open the editing menu described in "The editing menu" in `docs/product/terminal-copy-paste-and-selection.md`; on a
   file path link it offers **Open in** (see "File paths" below), and it has nothing of its own for a web address.
   Opening a link does not resume an interrupted session or reopen an archived one.
+- **A click that opens a link is not reported to the program** while the program has mouse reporting on: neither its
+  press nor its release reaches it, so whatever the program does on a click — an agent moving its input cursor, say —
+  does not happen, and its state stays as it was. A primary-button press on a link made with no other mouse button
+  down is held until its release shows what it was. When the pointer moves to another cell with the button down, the
+  release opens no link (a selection is left, say), or another button is pressed while it is still down, the press and
+  what followed it reach the program in order, a moment later than they otherwise would, and what comes after is
+  reported as usual; so a drag that starts and ends inside the same link reaches the program and opens the link as
+  well. A release never seen, the button let go outside the window, drops the held press with nothing sent, at the
+  next pointer move with no button down or the next press: the program never gets a press without its release. Other
+  buttons, a Mac's Control-click, and a click on a link made while another button is down are reported as usual, the
+  last still opening the link. A press still held when the terminal goes to another session, or to none, is dropped
+  with everything up to the moment no button is down, and reaches neither session.
 - **A scrollbar a full-screen program draws down the terminal's last column is no part of a row's text** — as Grok
   Build draws one when the conversation overflows its view, its thumb a `█`, its track blank cells. A block element
   (U+2580–U+259F, such as `█`, `▐`, `▕`, `▓` or `░`) alone in the terminal's last column, with a blank cell right

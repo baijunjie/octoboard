@@ -6,6 +6,7 @@ import { BROWSER_HOST } from "../../test/hosts";
 import { installPathLinks, type PathAnswer } from "./pathLinks";
 import { cellAtPoint, rangeHasCell, type TerminalGrid } from "./terminalLinks";
 import { watchPointerForLinks } from "./pointerLinks";
+import { hasLinkUnderPointer } from "../xtermInternals";
 
 /** The real xterm, to pin the link detection `watchPointerForLinks` relies on, and the cell under a point
  * that `cellAtPoint` / `rangeHasCell` match against the range xterm hovers: if an upgrade changes what
@@ -105,6 +106,22 @@ describe("xterm's link detection", () => {
     expect(provider.asked).toEqual([1]);
     expect(showsLink(screen)).toBe(false);
   });
+});
+
+it("holds the link the pointer is over where `hasLinkUnderPointer` reads it, and none off it", () => {
+  const { term, screen } = openTerminal();
+  term.registerLinkProvider({
+    provideLinks(y, callback) {
+      const link: ILink = { range: { start: { x: 5, y: 1 }, end: { x: 11, y: 1 } }, text: "/a/b.ts", activate: () => {} };
+      callback(y === 1 ? [link] : undefined);
+    },
+  });
+  moveTo(screen, at(2, 1));
+  expect(hasLinkUnderPointer(term)).toBe(false);
+  moveTo(screen, at(6, 1));
+  expect(hasLinkUnderPointer(term)).toBe(true);
+  moveTo(screen, at(15, 1));
+  expect(hasLinkUnderPointer(term)).toBe(false);
 });
 
 describe("asking again under a resting pointer", () => {

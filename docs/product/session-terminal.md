@@ -25,7 +25,8 @@ The rest of the session terminal is described in its own docs:
 The selected session's terminal is live: keystrokes go straight to the agent, exactly as in a system terminal. Mouse
 reporting works, so an agent's own mouse-driven TUI is usable: while an agent has mouse reporting on (Claude Code's
 fullscreen view, for one), a plain drag goes to the agent and makes no selection of the terminal's own; how to select
-anyway is in "Selecting with the mouse" in `docs/product/terminal-copy-paste-and-selection.md`. An Option-click
+anyway is in "Selecting with the mouse" in `docs/product/terminal-copy-paste-and-selection.md`. A click that opens a
+link is not reported to the agent (see `docs/product/terminal-links.md`). An Option-click
 (Alt-click outside macOS) moves the agent's prompt cursor to the clicked cell, by sending it arrow keys, only on a
 screen without mouse reporting and while the terminal is scrolled to the bottom; under mouse reporting it never sends
 arrow keys. `Ctrl+C` reaches the agent, and so do `Tab` and `Shift+Tab`. `F6` and `Shift+F6` never do: they move
