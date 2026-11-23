@@ -199,6 +199,10 @@ collection say on their doc comments when a test needs them.
 - **A stand-in that writes a file the daemon polls writes the whole content beside it during setup and `mv`s it into
   place,** as the real program replaces it by rename; a shell redirect writes a line at a time and a poll can act on a
   prefix.
+- **A loopback stand-in server that takes only so many connections accepts them through
+  `test_support::accept_unprobed`,** and any stand-in leaves the probe out of what it records
+  (`test_support::is_port_probe`): a running Octoboard daemon asks every port a session's process tree listens on for
+  `HEAD /`, and tests run inside such a session, so a probe can arrive first and be taken for the client's connection.
 - **A test asserting a stand-in session was sent nothing uses `test_support::running` and `heard_after_marker`; one
   asserting something was sent waits for the text with `test_support::output_containing`;** "the owner was not told of
   an end" first waits with `test_support::exit_settled` for every process whose end could have told it. The marker
