@@ -19,7 +19,7 @@ use rusqlite::Connection;
 /// result with a fresh one. A version is released once a `desktop-v*` tag is on a commit that carries
 /// it; prerelease tags count. The number is also stated in docs/product/files-octoboard-owns.md's
 /// "The database's schema version" section.
-pub(super) const SCHEMA_VERSION: i64 = 6;
+pub(super) const SCHEMA_VERSION: i64 = 7;
 
 /// The `application_id` of an Octoboard database, "OCTB" in ASCII, written into the file's header
 /// when it is created, so that a SQLite file of another program is told apart from one of ours.
@@ -175,6 +175,10 @@ pub(super) const MIGRATIONS: &[&str] = &[
         " ALTER TABLE settings ADD COLUMN allow_browser_access INTEGER NOT NULL DEFAULT 0;
      ALTER TABLE settings ADD COLUMN auto_approve_scheduled_task_changes INTEGER NOT NULL DEFAULT 0;"
     ),
+    // 6 to 7: the colours the last client reported for a terminal's display, kept so that a
+    // terminal started before any client has reported answers its program's colour queries with
+    // them (see `SCHEMA`).
+    "ALTER TABLE settings ADD COLUMN last_terminal_colors TEXT;",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -476,14 +480,16 @@ CREATE TABLE settings (
     squash_before_delivery INTEGER NOT NULL DEFAULT 0,
     rebase_before_delivery INTEGER NOT NULL DEFAULT 1,
     delivery            TEXT NOT NULL DEFAULT 'ask',
-    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working', keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0, daemon_update_check INTEGER NOT NULL DEFAULT 1, daemon_update_channel TEXT NOT NULL DEFAULT 'stable', allow_remote_access INTEGER NOT NULL DEFAULT 0, remote_access_port INTEGER, memory_enabled INTEGER NOT NULL DEFAULT 0, allow_browser_access INTEGER NOT NULL DEFAULT 0, auto_approve_scheduled_task_changes INTEGER NOT NULL DEFAULT 0);
+    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working', keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0, daemon_update_check INTEGER NOT NULL DEFAULT 1, daemon_update_channel TEXT NOT NULL DEFAULT 'stable', allow_remote_access INTEGER NOT NULL DEFAULT 0, remote_access_port INTEGER, memory_enabled INTEGER NOT NULL DEFAULT 0, allow_browser_access INTEGER NOT NULL DEFAULT 0, auto_approve_scheduled_task_changes INTEGER NOT NULL DEFAULT 0, last_terminal_colors TEXT);
 -- `resume_sessions_on_start`, `keep_awake`, `keep_awake_when`, `keep_sessions_in_own_project`,
 -- `daemon_update_check`, `daemon_update_channel`, `allow_remote_access`, `remote_access_port`,
--- `memory_enabled`, `allow_browser_access` and `auto_approve_scheduled_task_changes` are the last
--- columns, spelled as a migration leaves them; see `Store::resume_sessions_on_start`, `Store::keep_awake`,
+-- `memory_enabled`, `allow_browser_access`, `auto_approve_scheduled_task_changes` and
+-- `last_terminal_colors` are the last columns, spelled as a migration leaves them; see
+-- `Store::resume_sessions_on_start`, `Store::keep_awake`,
 -- `Store::keep_sessions_in_own_project`, `Store::daemon_update_check`,
--- `Store::allow_remote_access`, `Store::remote_access_port`, `Store::memory_enabled` and
--- `Store::allow_browser_access` and `Store::auto_approve_scheduled_task_changes`.
+-- `Store::allow_remote_access`, `Store::remote_access_port`, `Store::memory_enabled`,
+-- `Store::allow_browser_access`, `Store::auto_approve_scheduled_task_changes` and
+-- `Store::last_terminal_colors` (NULL until a client first reports a display).
 -- The user's explicit choice for a setting of a provider, as JSON (`true`, `false` or a quoted
 -- choice); a setting with no row follows its default. Rows naming a provider or setting this
 -- build does not declare are kept and ignored. See `Store::provider_settings`.
@@ -1199,6 +1205,7 @@ mod tests {
         include_str!("schema/v3.sql"),
         include_str!("schema/v4.sql"),
         include_str!("schema/v5.sql"),
+        include_str!("schema/v6.sql"),
     ];
 
     /// The files next to `path` that are backups from before a migration.
@@ -1595,6 +1602,43 @@ mod tests {
             .execute_batch(CARRY_BROWSER_ACCESS)
             .expect("the carrying statement");
         assert!(store.allow_browser_access().unwrap());
+    }
+
+    /// Migrating a version 6 database adds the colours a client last reported for a display, with
+    /// nothing in them, and keeps the values the settings row holds; once stored, they survive
+    /// reopening the store.
+    #[test]
+    fn migrating_a_version_6_database_adds_the_last_terminal_colours_unset() {
+        let path = temp_db("migrate-last-terminal-colors");
+        {
+            let conn = Connection::open(&path).expect("version 6 database");
+            conn.execute_batch(PAST_SCHEMAS[5])
+                .expect("version 6 schema");
+            conn.pragma_update(None, "user_version", 6)
+                .expect("version");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
+            conn.execute_batch(
+                "INSERT INTO settings (id, auto_pull_repositories, auto_approve_handoffs)
+                 VALUES ('singleton', 1, 1);",
+            )
+            .expect("settings");
+        }
+
+        {
+            let store = Store::open(&path).expect("migrated");
+            assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+            assert_eq!(store.last_terminal_colors().unwrap(), None);
+            let settings = store.get_settings().unwrap();
+            assert!(settings.auto_pull_repositories, "the row's values stay");
+            assert!(settings.auto_approve_handoffs, "the row's values stay");
+            assert!(store.set_last_terminal_colors("colours").unwrap());
+        }
+        let reopened = Store::open(&path).expect("reopened");
+        assert_eq!(
+            reopened.last_terminal_colors().unwrap().as_deref(),
+            Some("colours")
+        );
     }
 
     /// Migrating a version 5 database adds the automatic approval of scheduled task changes, off,

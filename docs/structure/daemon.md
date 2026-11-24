@@ -418,7 +418,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `AppState::admit_change` and the admission it returns), what the application says over stdin before it quits, which
   tells a quit from a crash (`application_note.rs`), the screens a planned stop saved, written and loaded with the
   versioned file and consumed per holder once the adoption is committed or a gone holder's preview is written
-  (`restart_screens.rs`), and `field_versions.rs`, the version of each field of the settings, consoles, projects and
+  (`restart_screens.rs`), the colours last reported by any terminal client, stored in the settings and restored into
+  `AppState::display_fallback` at start (`display_fallback.rs`: `AppState::restore_display_fallback`, whose writer
+  task `run_daemon` closes and awaits at the stop), and `field_versions.rs`, the version of each field of the settings, consoles, projects and
   accounts a form edits, with the lock of checked writes; `field_versions/paths.rs` lists the versioned paths),
   `conversation_feeds.rs` (`ConversationFeeds`, `AppState::conversation_feeds`: one `FeedChannel` per session a
   connection follows, holding its entries as last published, epoch and broadcast of changes, made for the first
@@ -561,8 +563,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   report's body parsed under its limits, `ProgramStatus` the records kept by id, whose root record is the program's own
   status, and the text that answers the support query; `keep_program_status` and `take_program_status` on `pty.rs` and
   `fan.rs` turn it on and take what was reported), `display.rs` `DisplayFacts`, the colours and cell size a client
-  reports (until it does, `DisplaySeed` weighs the launch's appearance against the daemon-wide last report kept in
-  `DisplayFallback` on `AppState`, whichever is more recent, else the dark default), `activity.rs` which attached client
+  reports (until it does, `DisplaySeed` weighs the launch's appearance against this run's daemon-wide last report kept
+  in `DisplayFallback` on `AppState`, whichever is more recent, then the colours stored by an earlier run that seed
+  `DisplayFallback`, else the dark default), `activity.rs` which attached client
   was active most recently (it sent input or an explicit `activate` frame; an attach takes precedence only until a
   deadline `attach` returns, `ATTACH_CLAIM` after it), whose size the terminal takes and whose display facts the answers
   use, `ringbuf.rs` the ring, which recent output and `output_since` (the trust-dialog press in `src/session/trust/`

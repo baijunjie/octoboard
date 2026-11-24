@@ -482,7 +482,8 @@ one's model, switches one to another account or hands one off, and it sends the 
 choice has resolved to at that moment (see "Light, dark and follow the system" in `docs/product/appearance.md`). No
 window is behind a launch an agent asks for through Octoboard's tools (opening or reopening a session, handing one off,
 switching one to another account, changing one's model), a session opened, reopened or resumed by an approved session
-request, or an archived owner relaunched on the way while a session is resumed.
+request, a session the daemon resumes on its own as it starts (see "Resume sessions on start" in
+`docs/product/general-settings.md`), or an archived owner relaunched on the way while a session is resumed.
 
 The appearance is taken at each launch and not kept with the session: a running Grok session keeps the theme it was
 launched with when the window's appearance changes later, and its next launch picks the theme afresh. `GROK_THEME` takes

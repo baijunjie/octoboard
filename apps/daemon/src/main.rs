@@ -296,6 +296,8 @@ async fn run_daemon(
         processes::ledger::ProcessLedger::new(&paths::data_dir()),
     ));
     let _ = state_out.set(state.clone());
+    // Before anything starts or adopts a terminal, which may be asked its colours at once.
+    let display_writer = state.restore_display_fallback();
     if started_as.clean_up_run {
         state.set_clean_up_run();
     }
@@ -698,6 +700,9 @@ async fn run_daemon(
             }
         },
     };
+    // The colours the next daemon seeds from: what clients reported until now is written first.
+    state.display_fallback.stop_storing_changes();
+    let _ = display_writer.await;
     remove_port_file(&port_file, port);
     if let Some(owner) = &owner {
         // Ahead of the record going: from then until the next daemon has recorded itself, the

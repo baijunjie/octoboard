@@ -88,13 +88,13 @@ How a launch avoids showing the window before the appearance has been applied is
 
 The choice is remembered **per client**, in that client's own browser storage. The daemon does not store it, and it is
 not among the files under `~/.octoboard` (see `docs/product/files-octoboard-owns.md`). A
-client tells the daemon only what the choice has resolved to, in two ways, and the daemon writes neither to disk:
-light or dark, sent with a request that launches a session, used for that launch alone, so that a Grok Build session's
-theme matches the terminal (see "Grok Build's theme" in `docs/product/per-agent-launch-specifics.md`) and so that it
-counts towards the colours the session's terminal answers queries with; and the terminal's colours, sent by each
-attached terminal to answer the programs that ask for them, of which the daemon keeps in memory those most recently
-sent by any client, for terminals none of whose own clients has sent any (see "The colours and sizes a program reads"
-in `docs/product/terminal-queries.md`).
+client tells the daemon only what the choice has resolved to, in two ways: light or dark, sent with a request that
+launches a session, used for that launch alone and never written to disk, so that a Grok Build session's theme matches
+the terminal (see "Grok Build's theme" in `docs/product/per-agent-launch-specifics.md`) and so that it counts towards
+the colours the session's terminal answers queries with; and the terminal's colours, sent by each attached terminal to
+answer the programs that ask for them, of which the daemon keeps those most recently sent by any client, in its
+database across restarts, for terminals none of whose own clients has sent any (see "The colours and sizes a program
+reads" in `docs/product/terminal-queries.md`).
 
 So the choice itself does not travel between clients. A desktop window and a browser tab, or two machines reaching the
 same daemon, each keep their own; a client whose storage has been cleared is back to System. A configuration export

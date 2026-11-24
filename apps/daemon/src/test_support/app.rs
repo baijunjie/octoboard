@@ -31,6 +31,18 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
 /// daemon started again over another one's data directory.
 pub(crate) fn app_state_with_key(label: &str, key: &str) -> (Arc<AppState>, ScratchDir) {
     let mut dir = ScratchDir::new(label);
+    let state = state_in(&mut dir, key);
+    (state, dir)
+}
+
+/// A second `AppState` over the data directory of an [`app_state`], as a daemon started again
+/// there has it: the same store file, opened anew, with nothing carried over in memory. The
+/// earlier state may still be alive.
+pub(crate) fn app_state_again(dir: &mut ScratchDir) -> Arc<AppState> {
+    state_in(dir, TEST_KEY)
+}
+
+fn state_in(dir: &mut ScratchDir, key: &str) -> Arc<AppState> {
     let store = Store::open(&dir.join("octoboard.db")).expect("store");
     let state = Arc::new(AppState::new(
         store,
@@ -41,7 +53,7 @@ pub(crate) fn app_state_with_key(label: &str, key: &str) -> (Arc<AppState>, Scra
         dir.join("output"),
         dir.join("consoles"),
         dir.join("handoff"),
-        crate::processes::ledger::ProcessLedger::new(&dir),
+        crate::processes::ledger::ProcessLedger::new(dir),
     ));
     state.install_auto_switch(crate::coordinator::auto_switch::hooks());
     state.process_ledger.without_scanner();
@@ -51,7 +63,7 @@ pub(crate) fn app_state_with_key(label: &str, key: &str) -> (Arc<AppState>, Scra
     *state.send_wait.lock().unwrap() = None;
     dir.removed_again_after(&state);
     dir.removed_again_after(&state.process_ledger);
-    (state, dir)
+    state
 }
 
 /// What requests reach the host through in a test: the system `git` over [`isolated_git_env`], a

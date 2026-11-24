@@ -53,20 +53,24 @@ a browser, a phone), and most queries are answered by Octoboard itself rather th
     theme" in `docs/product/per-agent-launch-specifics.md`). It counts from the moment the launch begins. So a program
     that asks once, as it starts, before any window shows its terminal, reads the colours of the window that launched
     it.
-  - **the colours most recently told by any client of any terminal** of the same daemon. Octoboard holds them in memory
-    only, so a daemon that restarts starts without them.
+  - **the colours most recently told by any client of any terminal** of the same daemon since it started.
 
   With neither — a terminal with no launch appearance (a shell terminal of the Terminal panel, a session launched with
-  no window behind it, or a session Octoboard took back over after restarting) while no client has told a display since
-  the daemon started — a program reads the dark appearance's colours. The appearances' terminal colours are foreground
-  `#e4e4e6` on background `#1e1f22` (dark) and `#383a42` on `#fafafa` (light), with cursor `#808080` in both.
+  no window behind it, which includes a session resumed by Resume sessions on start, or a session Octoboard took back
+  over after restarting) while no client has told a display since the daemon started — a program reads **the colours
+  most recently told by any client in an earlier run of the daemon**. The daemon keeps the last colours any client told
+  in its database, `~/.octoboard/octoboard.db` (see `docs/product/files-octoboard-owns.md`), so they outlast a restart;
+  a launch appearance, or a display told since the daemon started, always takes precedence over them, and kept colours
+  that cannot be read are ignored. Only when no client has ever told a display, or what was kept cannot be read, does a
+  program read the dark appearance's colours. The appearances' terminal colours are foreground `#e4e4e6` on background
+  `#1e1f22` (dark) and `#383a42` on `#fafafa` (light), with cursor `#808080` in both.
 - **Which of the two is more recent is weighed when the terminal starts, and again whenever its display is next brought
   up to date**: input sent from a client or the person turning to its terminal, a client telling its display or asking
   for a size, the 30 seconds an attach counts for running out, a client going back to watching, or a client leaving. A
   display told on another terminal does not change what a program reads in between.
 - **The cell is 8 by 17 pixels while none of the terminal's clients has told its display**; only colours are taken
-  from the launch's appearance or from another terminal's client, never a cell size. A client that does not know its
-  cell size is taken to have that cell too.
+  from the launch's appearance, from another terminal's client or from what the daemon kept from an earlier run, never
+  a cell size. A client that does not know its cell size is taken to have that cell too.
 - **Dark or light** is whether the background is darker than the foreground.
 - **A colour the program set itself** is read back as the program set it.
 - **A program that turned on colour scheme updates (mode 2031) is told dark or light whenever the colours it reads

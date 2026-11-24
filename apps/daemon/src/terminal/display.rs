@@ -1,10 +1,12 @@
 //! The display facts the daemon answers the program's colour and size queries with: what a
 //! client's terminal shows, which the client reports (`display` frames on the terminal stream).
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use alacritty_terminal::vte::ansi::Rgb;
+use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::protocol::TerminalAppearance;
 use crate::terminal::snapshot::{MAX_COLS, MAX_ROWS};
@@ -23,8 +25,8 @@ pub struct DisplayFacts {
     pub cell: (u16, u16),
 }
 
-/// Used when there is nothing else to go on, with no client report anywhere and no launch
-/// appearance: the web client's dark theme, and a cell of a 14 px monospace font.
+/// Used when there is nothing else to go on, with no client report anywhere (the daemon's stored
+/// one included) and no launch appearance: the web client's dark theme, and a cell of a 14 px monospace font.
 impl Default for DisplayFacts {
     fn default() -> Self {
         Self::for_appearance(TerminalAppearance::Dark)
@@ -67,6 +69,25 @@ impl DisplayFacts {
         })
     }
 
+    /// The colours as the text the store keeps them in, JSON of three `#rrggbb` strings
+    /// (`{"foreground":"#383a42","background":"#fafafa","cursor":"#808080"}`), without the cell.
+    pub fn colors_text(&self) -> String {
+        let hex = |color: Rgb| format!("#{:02x}{:02x}{:02x}", color.r, color.g, color.b);
+        serde_json::to_string(&StoredColors {
+            foreground: hex(self.foreground),
+            background: hex(self.background),
+            cursor: hex(self.cursor),
+        })
+        .expect("colours serialize")
+    }
+
+    /// The display [`Self::colors_text`] wrote, with the default cell; `None` for text that is
+    /// not that, which the daemon treats as nothing stored.
+    fn from_colors_text(text: &str) -> Option<Self> {
+        let stored: StoredColors = serde_json::from_str(text).ok()?;
+        Self::reported(&stored.foreground, &stored.background, &stored.cursor, None)
+    }
+
     /// These colours with the default cell: a cell size is a fact of one client's display, which
     /// no other terminal has any reason to take.
     fn colors_only(self) -> Self {
@@ -89,21 +110,84 @@ impl DisplayFacts {
     }
 }
 
+/// The text of [`DisplayFacts::colors_text`].
+#[derive(Serialize, Deserialize)]
+struct StoredColors {
+    foreground: String,
+    background: String,
+    cursor: String,
+}
+
 /// The colours last reported by any client of any terminal, kept by the daemon for all of them. A
-/// terminal uses them only when its launch appearance is not newer.
+/// terminal uses them only when its launch appearance is not newer. The daemon's store keeps the
+/// colours across a restart (`Store::last_terminal_colors`): the daemon seeds them back here as it
+/// starts ([`Self::seed`]) and has each change a report makes sent out to be stored
+/// ([`Self::store_changes_through`]), so this module does not touch the store itself.
 #[derive(Debug, Default)]
 pub struct DisplayFallback {
     /// The colours of the display most recently reported by any client of any terminal, and when.
     last_report: Mutex<Option<(Instant, DisplayFacts)>>,
+    /// The colours the store held when the daemon started: older than every launch appearance and
+    /// report of this run, so a terminal takes them only when it has neither.
+    stored: OnceLock<DisplayFacts>,
+    /// Where the text of a changed report goes to be stored; none where nothing stores them, or
+    /// once [`Self::stop_storing_changes`] has closed it.
+    changes: Mutex<Option<UnboundedSender<String>>>,
 }
 
 impl DisplayFallback {
+    /// Takes the colours the store holds as the daemon starts; unreadable text is ignored, with a
+    /// warning. Takes effect once; a later call is ignored.
+    pub fn seed(&self, text: &str) {
+        match DisplayFacts::from_colors_text(text) {
+            Some(display) => {
+                let _ = self.stored.set(display);
+            }
+            None => tracing::warn!("the stored terminal colours are unreadable; ignoring them"),
+        }
+    }
+
+    /// Has the text of each report that changes the colours sent to `sender`, in order.
+    pub fn store_changes_through(&self, sender: UnboundedSender<String>) {
+        *self.changes.lock().expect("display fallback lock poisoned") = Some(sender);
+    }
+
+    /// Closes the channel [`Self::store_changes_through`] gave: what was sent stays there for the
+    /// receiver to drain, and later changes are not sent.
+    pub fn stop_storing_changes(&self) {
+        self.changes
+            .lock()
+            .expect("display fallback lock poisoned")
+            .take();
+    }
+
+    /// Notes a reported display, and sends its colours out as text when they differ from the
+    /// colours held until now (the last report of this run, else the stored ones), so that only a
+    /// change is stored.
     fn record(&self, display: DisplayFacts) {
-        *self
+        let display = display.colors_only();
+        let mut last = self
             .last_report
             .lock()
-            .expect("display fallback lock poisoned") =
-            Some((Instant::now(), display.colors_only()));
+            .expect("display fallback lock poisoned");
+        let held = match *last {
+            Some((_, held)) => Some(held),
+            None => self.stored.get().copied(),
+        };
+        *last = Some((Instant::now(), display));
+        if held.is_some_and(|held| !held.colors_differ(&display)) {
+            return;
+        }
+        // Sent while the last report is still held, so that two terminals reporting at once queue
+        // their writes in the order memory took them: the store never ends on the older colours.
+        // Sending never blocks.
+        if let Some(changes) = &*self.changes.lock().expect("display fallback lock poisoned") {
+            let _ = changes.send(display.colors_text());
+        }
+    }
+
+    fn stored(&self) -> Option<DisplayFacts> {
+        self.stored.get().copied()
     }
 
     fn last_report(&self) -> Option<(Instant, DisplayFacts)> {
@@ -116,7 +200,7 @@ impl DisplayFallback {
 
 /// Where one terminal takes its display from while none of its clients has reported one: the
 /// appearance its launch was made for or the daemon's last report from any terminal, whichever is
-/// more recent, else the default.
+/// more recent, else the colours stored from a report of an earlier run, else the default.
 #[derive(Debug, Default)]
 pub struct DisplaySeed {
     shared: Arc<DisplayFallback>,
@@ -149,7 +233,7 @@ impl DisplaySeed {
                 }
             }
             (Some((_, display)), None) | (None, Some((_, display))) => display,
-            (None, None) => DisplayFacts::default(),
+            (None, None) => self.shared.stored().unwrap_or_default(),
         }
     }
 }
@@ -327,6 +411,119 @@ mod tests {
         next_millisecond().await;
         reporting.record(reported_light());
         assert!(!launched.fallback().dark(), "the later report decides");
+    }
+
+    fn seeded(display: DisplayFacts) -> Arc<DisplayFallback> {
+        let shared = Arc::new(DisplayFallback::default());
+        shared.seed(&display.colors_text());
+        shared
+    }
+
+    #[test]
+    fn colours_are_stored_as_text_without_the_cell_and_read_back() {
+        let display = reported("#383a42", "#FAFAFA");
+        assert_eq!(
+            display.colors_text(),
+            r##"{"foreground":"#383a42","background":"#fafafa","cursor":"#101010"}"##
+        );
+        let read = DisplayFacts::from_colors_text(&display.colors_text()).expect("colours");
+        assert!(!read.colors_differ(&display));
+        assert_eq!(read.cell, DisplayFacts::default().cell);
+        for text in [
+            "",
+            "null",
+            "{}",
+            "not json",
+            r##"{"foreground":"#383a42"}"##,
+            r##"{"foreground":"#383a42","background":"nope","cursor":"#101010"}"##,
+            r##"{"foreground":"#383a4","background":"#fafafa","cursor":"#101010"}"##,
+        ] {
+            assert!(DisplayFacts::from_colors_text(text).is_none(), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_seed_from_the_store_is_what_a_terminal_with_nothing_else_gives() {
+        let seed = DisplaySeed::new(seeded(reported_light()), None);
+        assert!(!seed.fallback().dark());
+        assert_eq!(seed.fallback().cell, DisplayFacts::default().cell);
+    }
+
+    #[test]
+    fn unreadable_stored_colours_are_ignored() {
+        let shared = Arc::new(DisplayFallback::default());
+        shared.seed("garbage");
+        assert_eq!(
+            DisplaySeed::new(shared, None).fallback(),
+            DisplayFacts::default()
+        );
+    }
+
+    #[test]
+    fn a_launch_appearance_wins_over_the_seed_from_the_store() {
+        let seed = DisplaySeed::new(seeded(reported_light()), Some(TerminalAppearance::Dark));
+        assert_eq!(
+            seed.fallback(),
+            DisplayFacts::for_appearance(TerminalAppearance::Dark)
+        );
+    }
+
+    #[test]
+    fn a_report_wins_over_the_seed_from_the_store() {
+        let shared = seeded(reported_light());
+        let seed = DisplaySeed::new(shared.clone(), None);
+        seed.record(reported_dark());
+        assert!(seed.fallback().dark());
+        assert!(DisplaySeed::new(shared, None).fallback().dark());
+    }
+
+    #[test]
+    fn only_a_report_that_changes_the_colours_is_sent_to_be_stored() {
+        let shared = seeded(reported_light());
+        let (changes, mut stored) = tokio::sync::mpsc::unbounded_channel();
+        shared.store_changes_through(changes);
+        let seed = DisplaySeed::new(shared, None);
+        seed.record(reported_light());
+        assert!(stored.try_recv().is_err(), "the colours the store holds");
+        seed.record(reported_dark());
+        assert_eq!(stored.try_recv().unwrap(), reported_dark().colors_text());
+        let other_cell = DisplayFacts::reported("#e4e4e6", "#1e1f22", "#101010", Some((7, 15)))
+            .expect("a display");
+        assert_ne!(other_cell.cell, reported_dark().cell);
+        seed.record(other_cell);
+        assert!(stored.try_recv().is_err(), "a repeat, whatever its cell");
+        seed.record(reported_light());
+        assert_eq!(stored.try_recv().unwrap(), reported_light().colors_text());
+    }
+
+    #[test]
+    fn a_change_of_the_cursor_colour_alone_is_sent_to_be_stored() {
+        let shared = seeded(reported_light());
+        let (changes, mut stored) = tokio::sync::mpsc::unbounded_channel();
+        shared.store_changes_through(changes);
+        let moved_cursor =
+            DisplayFacts::reported("#383a42", "#fafafa", "#ff0000", Some((9, 20))).unwrap();
+        DisplaySeed::new(shared, None).record(moved_cursor);
+        assert_eq!(stored.try_recv().unwrap(), moved_cursor.colors_text());
+    }
+
+    #[test]
+    fn a_report_over_unreadable_stored_colours_is_sent_to_be_stored() {
+        let shared = Arc::new(DisplayFallback::default());
+        shared.seed("garbage");
+        let (changes, mut stored) = tokio::sync::mpsc::unbounded_channel();
+        shared.store_changes_through(changes);
+        DisplaySeed::new(shared, None).record(reported_dark());
+        assert_eq!(stored.try_recv().unwrap(), reported_dark().colors_text());
+    }
+
+    #[test]
+    fn the_first_report_with_nothing_stored_is_sent_to_be_stored() {
+        let shared = Arc::new(DisplayFallback::default());
+        let (changes, mut stored) = tokio::sync::mpsc::unbounded_channel();
+        shared.store_changes_through(changes);
+        DisplaySeed::new(shared, None).record(reported_dark());
+        assert_eq!(stored.try_recv().unwrap(), reported_dark().colors_text());
     }
 
     #[test]

@@ -51,6 +51,7 @@ pub(crate) mod bindings;
 mod claims;
 mod clean_up_run;
 mod conversation_feeds;
+mod display_fallback;
 mod field_versions;
 mod forget;
 mod git_status;
@@ -428,7 +429,8 @@ pub struct AppState {
     pub process_ledger: Arc<crate::processes::ledger::ProcessLedger>,
     /// The colours last reported by any client, which a terminal answers its program's colour
     /// queries with when no client of its own has reported and its launch appearance is not newer
-    /// (`crate::terminal::display`). Held in memory only.
+    /// (`crate::terminal::display`). Seeded from the store at start and stored on each change
+    /// (`AppState::restore_display_fallback`).
     pub display_fallback: Arc<crate::terminal::display::DisplayFallback>,
 }
 

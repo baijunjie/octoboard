@@ -245,6 +245,22 @@ impl Store {
         Ok(changed > 0)
     }
 
+    /// The colours a client last reported for a terminal's display, as text (see
+    /// `crate::terminal::display::DisplayFacts::colors_text`); `None` until one has.
+    pub fn last_terminal_colors(&self) -> Result<Option<String>> {
+        read_setting(&self.lock(), "last_terminal_colors")
+    }
+
+    /// Stores the colours a client reported. Whether the setting actually changed.
+    pub fn set_last_terminal_colors(&self, colors: &str) -> Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE settings SET last_terminal_colors = ?2 \
+             WHERE id = ?1 AND last_terminal_colors IS NOT ?2",
+            params![SETTINGS_ID, colors],
+        )?;
+        Ok(changed > 0)
+    }
+
     /// When Prevent sleep holds (`keep_awake`).
     pub fn keep_awake_when(&self) -> Result<KeepAwakeWhen> {
         read_keep_awake_when(&self.lock())
@@ -1017,6 +1033,39 @@ mod tests {
         );
         assert!(store.set_default_clone_dir(None).unwrap());
         assert_eq!(store.default_clone_dir().unwrap(), built_in);
+    }
+
+    /// The colours a client last reported are unset until one has, a repeat changes nothing, and
+    /// the stored value is what a restarted store reads.
+    #[test]
+    fn the_last_terminal_colors_are_unset_until_reported_and_survive_a_restart() {
+        let path = temp_db("last-terminal-colors");
+        let store = Store::open(&path).unwrap();
+        assert_eq!(store.last_terminal_colors().unwrap(), None);
+        assert!(store.set_last_terminal_colors("a").unwrap());
+        assert!(!store.set_last_terminal_colors("a").unwrap());
+        assert!(store.set_last_terminal_colors("b").unwrap());
+        drop(store);
+        let reopened = Store::open(&path).unwrap();
+        assert_eq!(
+            reopened.last_terminal_colors().unwrap().as_deref(),
+            Some("b")
+        );
+    }
+
+    /// Storing the colours changes no other setting.
+    #[test]
+    fn storing_the_last_terminal_colors_touches_only_their_column() {
+        let path = temp_db("last-terminal-colors-column");
+        let store = Store::open(&path).unwrap();
+        store.set_interface_language("ja").unwrap();
+        store.set_keep_awake_when(KeepAwakeWhen::Always).unwrap();
+        let before = serde_json::to_value(store.get_settings().unwrap()).unwrap();
+        assert!(store.set_last_terminal_colors("{}").unwrap());
+        let after = serde_json::to_value(store.get_settings().unwrap()).unwrap();
+        assert_eq!(before, after);
+        assert_eq!(store.interface_language().unwrap().as_deref(), Some("ja"));
+        assert_eq!(store.keep_awake_when().unwrap(), KeepAwakeWhen::Always);
     }
 
     /// The interface language is unset until a client reports one, a repeat of the same tag
