@@ -18,7 +18,7 @@ export function Spinner({ label, size = "md", color }: {
 }): React.ReactElement {
   const heroSize = size === "md" ? "md" : "sm";
   const narrowed = size === "xs" || size === "compact" ? NARROWED[size] : undefined;
-  const classes = [color === "current" ? undefined : "text-app-muted", narrowed].filter(Boolean).join(" ") || undefined;
+  const classes = ["app-spinner", color === "current" ? undefined : "text-app-muted", narrowed].filter(Boolean).join(" ");
   return label === undefined
     ? <HeroSpinner size={heroSize} color="current" role="presentation" aria-label={undefined} aria-hidden="true" className={classes} />
     : <HeroSpinner size={heroSize} color="current" aria-label={label} className={classes} />;

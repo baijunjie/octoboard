@@ -314,6 +314,7 @@ html {
 @import "./primitives/Tooltip.css";
 
 @import "./primitives/ProgressCircle.css";
+@import "./primitives/Spinner.css";
 
 @import "./components/hint/touchTarget.css";
 

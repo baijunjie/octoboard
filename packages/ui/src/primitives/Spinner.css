@@ -1,0 +1,12 @@
+/* WKWebView can offset a rotating spinner box on HiDPI. Rotate only the drawing inside the viewBox. */
+.app-spinner {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .app-spinner > svg[data-slot="spinner-icon"] > g {
+    animation: var(--animate-spin-fast);
+    transform-box: view-box;
+    transform-origin: center;
+  }
+}
