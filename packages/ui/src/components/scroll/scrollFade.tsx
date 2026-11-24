@@ -472,11 +472,14 @@ export function useScrollFade<T extends HTMLElement = HTMLDivElement>({
   orientation = "vertical",
   region,
   ref: forwarded,
+  fade = true,
   style,
   className,
 }: {
   orientation?: Orientation;
   region?: FadeRegion;
+  /** Let the content paint its own fade, keeping native scrolling and scroll padding. */
+  fade?: boolean;
   ref?: Ref<T>;
   style?: CSSProperties;
   className?: string;
@@ -496,8 +499,8 @@ export function useScrollFade<T extends HTMLElement = HTMLDivElement>({
     ...region?.props,
     ...strips.marker,
     ref,
-    className: joinClasses(scrollShadowClassName(orientation), MASKED_FADE_CLASS, className, region?.className),
-    style: { ...autoStyle, ...scrollPadding(orientation), ...style, ...strips.style, ...rest.style } as CSSProperties,
+    className: joinClasses(scrollShadowClassName(orientation), fade ? MASKED_FADE_CLASS : undefined, className, region?.className),
+    style: { ...autoStyle, ...scrollPadding(orientation), ...style, ...strips.style, ...rest.style, ...(fade ? {} : NO_FADE) } as CSSProperties,
     ...autoAttributes,
   };
 }

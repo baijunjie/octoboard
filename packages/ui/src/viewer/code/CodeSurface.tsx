@@ -59,7 +59,7 @@ export function PlainText({
   const colours = CODE_THEMES[theme];
   const fade = useScrollFade<HTMLPreElement>({
     region: frame.region,
-    style: { backgroundColor: colours.background, color: colours.foreground },
+    style: { color: colours.foreground },
     // `overflow-auto` rather than the fade's own `overflow-y` alone: unwrapped lines scroll
     // sideways too, and the fade is the vertical one either way.
     className: `min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-5 ${wrap ? "break-words whitespace-pre-wrap" : "whitespace-pre"}`,
@@ -81,7 +81,7 @@ export function PlainText({
     return () => clearLineMarks(markOwner);
   }, [markOwner, text, line, marks, scrollKey]);
   return (
-    <FrameSurface focused={frame.region.focused}>
+    <FrameSurface focused={frame.region.focused} background={CODE_THEMES[theme].background}>
       <pre dir="ltr" {...fade} {...FIND_REGION} onKeyDown={frame.onKeyDown}>
         {text}
       </pre>
@@ -124,25 +124,27 @@ function CodeFrame({
   label,
   resetKey,
   theme,
+  preserveRowBackgrounds = false,
   children,
 }: {
   label: string;
   resetKey: string;
   theme: "light" | "dark";
+  preserveRowBackgrounds?: boolean;
   children: (onDrawn: () => void) => React.ReactNode;
 }): React.ReactElement {
   const frame = useCodeFrame(label);
   const fade = useScrollFade({
     region: frame.region,
-    style: { backgroundColor: CODE_THEMES[theme].background },
+    fade: !preserveRowBackgrounds,
     className: "relative flex min-h-0 flex-1 flex-col overflow-auto",
   });
   const [drawnFor, setDrawnFor] = useState<string>();
   const onDrawn = useCallback(() => setDrawnFor(resetKey), [resetKey]);
   const drawn = drawnFor === resetKey;
   return (
-    <FrameSurface focused={frame.region.focused}>
-      <div dir="ltr" {...fade} {...FIND_REGION} onKeyDown={frame.onKeyDown}>
+    <FrameSurface focused={frame.region.focused} background={CODE_THEMES[theme].background}>
+      <div dir="ltr" {...fade} {...FIND_REGION} data-viewer-diff-scroll={preserveRowBackgrounds || undefined} onKeyDown={frame.onKeyDown}>
         {!drawn && <LoadingOverlay />}
         <Suspense fallback={trackSuspenseFallback(null)}>{children(onDrawn)}</Suspense>
       </div>
@@ -324,7 +326,7 @@ export function DiffSurface({
       {ending && <FileNotice sentence={t(ending)} />}
       {expansionNote !== undefined && <FileNotice tone={status?.kind === "failed" ? "failed" : "explained"} sentence={expansionNote} line={expansionLine} detail={status?.kind === "failed" ? status.detail : undefined} />}
       <StatusAnnouncer text={status?.kind === "loading" ? t("viewer.expand.loading") : status?.kind === "failed" ? undefined : expansionNote} clearAfterRead />
-      <CodeFrame label={label} resetKey={resetKey} theme={theme}>
+      <CodeFrame label={label} resetKey={resetKey} theme={theme} preserveRowBackgrounds>
         {(onDrawn) => (
           <RenderedDiff
             name={name}

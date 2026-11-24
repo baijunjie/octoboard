@@ -64,6 +64,11 @@ export function shadowRootsIn(container: ParentNode): ShadowRoot[] {
   return Array.from(container.querySelectorAll("*")).flatMap((element) => (element.shadowRoot ? [element.shadowRoot] : []));
 }
 
+/** Each diff column in row order, including its gutter, for measuring the scroll fade. */
+export function diffRowColumns(host: HTMLElement): NodeListOf<Element> {
+  return (host.shadowRoot ?? host).querySelectorAll("[data-gutter], [data-content]");
+}
+
 /** The elements holding the code of a shadow root's lines, in reading order: the code columns
  * (`[data-content]`), one per file or per side of a split diff, and not the line numbers, markers
  * and gutters beside them. A line is `[data-line]` in a column; a column that has none is returned

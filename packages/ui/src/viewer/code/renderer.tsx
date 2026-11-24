@@ -21,10 +21,11 @@ import {
 import { File, FileDiff, WorkerPoolContext } from "@pierre/diffs/react";
 import { getOrCreateWorkerPoolSingleton, terminateWorkerPoolSingleton } from "@pierre/diffs/worker";
 import DiffsWorker from "@pierre/diffs/worker/worker.js?worker";
-import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useRenderLatest } from "../../components/hooks/useLatest";
+import { watchScrollRowFade } from "../../components/scroll/scrollRowFade";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { RENDER_BUDGETS } from "./budgets";
 import { highlightCacheKey } from "./cacheKey";
@@ -33,7 +34,7 @@ import type { ChangeBodies } from "../content";
 import type { DiffLayout } from "./diffLayout";
 import { EXPANSION_STEP, Expansion, type ExpansionStatus, type HunkExpander, type SeparatorLabels } from "./expansion";
 import { findHighlightCss } from "../find/findHighlight";
-import { separatorLabels } from "./rendererDom";
+import { diffRowColumns, separatorLabels } from "./rendererDom";
 
 // GitHub's high-contrast palettes: of the bundled themes measured, the ones whose every token
 // reaches WCAG AA's 4.5:1 on the code background in both appearances.
@@ -98,6 +99,24 @@ function diffCss(theme: "light" | "dark"): string {
     :is([data-line], [data-no-newline])[data-line-type="change-deletion"] { background-color: ${deletion.line}; }
     :is([data-column-number], [data-gutter-buffer="metadata"])[data-line-type="change-addition"] { background-color: ${addition.number}; }
     :is([data-column-number], [data-gutter-buffer="metadata"])[data-line-type="change-deletion"] { background-color: ${deletion.number}; }
+    /* Repaint the row's own fill only where the foreground should fade. The scroll mask sets
+       the viewport-sized slice of the gradient on the rows touching either edge. */
+    :is([data-gutter], [data-content]) > [style*="--scroll-row-fade-mask"]:not([data-separator])::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      background-color: inherit;
+      mask: var(--scroll-row-fade-mask) 0 var(--scroll-row-fade-offset) / 100% var(--scroll-row-fade-size) no-repeat;
+      -webkit-mask: var(--scroll-row-fade-mask) 0 var(--scroll-row-fade-offset) / 100% var(--scroll-row-fade-size) no-repeat;
+    }
+    /* The gutter separator's controls can extend across the visible code column. Its mask
+       also covers a wider, horizontally scrolling code column. */
+    :is([data-gutter], [data-content]) > [data-separator][style*="--scroll-row-content-mask"]:not(:focus-within) {
+      -webkit-mask: var(--scroll-row-content-mask) 0 var(--scroll-row-fade-offset) / max(100%, 100cqi) var(--scroll-row-fade-size) no-repeat border-box no-clip;
+      mask: var(--scroll-row-content-mask) 0 var(--scroll-row-fade-offset) / max(100%, 100cqi) var(--scroll-row-fade-size) no-repeat border-box no-clip;
+    }
     [data-line-type="change-addition"] [data-diff-span] { background-color: ${addition.word}; }
     [data-line-type="change-deletion"] [data-diff-span] { background-color: ${deletion.word}; }
     [data-line-type="change-addition"] [data-diff-span],
@@ -438,9 +457,18 @@ export const RenderedDiff = memo(function RenderedDiff({
   // A read of the change again that yields the same patch keeps this expansion, so a failure of the
   // earlier read is dropped by hand.
   useEffect(() => expansion?.forgetFailure(), [expansion, loadBodies]);
+  const stopRowFade = useRef<() => void>(undefined);
   const onPostRender = useDrawnCallback<HunkExpander>(onDrawn, (node, instance, phase) => {
-    if (phase === "unmount") expansion?.detach();
-    else expansion?.attach(node, instance);
+    stopRowFade.current?.();
+    stopRowFade.current = undefined;
+    if (phase === "unmount") {
+      expansion?.detach();
+      return;
+    }
+    expansion?.attach(node, instance);
+    const scroller = node.closest<HTMLElement>("[data-viewer-diff-scroll]");
+    const columns = diffRowColumns(node);
+    if (scroller && columns.length) stopRowFade.current = watchScrollRowFade(scroller, node, columns);
   });
   const options = useMemo(
     () =>

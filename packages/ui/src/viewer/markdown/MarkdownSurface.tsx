@@ -94,7 +94,7 @@ function DocumentSurface({
   const region = useFadeRegion({ label: t("viewer.contents", { name: isolate(name) }), always: true });
   const fade = useScrollFade({
     region,
-    style: { backgroundColor: colours.background, color: colours.foreground },
+    style: { color: colours.foreground },
     className: "relative min-h-0 flex-1 overflow-auto p-4 text-sm leading-6",
   });
   // Stable across the caller's renders. A new callback would mount every link and diagram again,
@@ -122,7 +122,7 @@ function DocumentSurface({
   );
   return (
     <RendererBoundary resetKey={resetKey} fallback={fallback} retry={markdownDocument.retry}>
-      <FrameSurface focused={region.focused}>
+      <FrameSurface focused={region.focused} background={colours.background}>
         <div
           key={resetKey}
           {...fade}

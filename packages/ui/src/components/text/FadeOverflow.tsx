@@ -3,6 +3,7 @@ import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { onReducedMotion, prefersReducedMotion } from "../motion/reducedMotion";
 import { ValueTooltipText } from "../hint/ValueTooltipText";
 import { Tooltip } from "../../primitives";
+import { fadeMask } from "../scroll/fadeMask";
 
 interface Clipped {
   start: boolean;
@@ -107,11 +108,7 @@ function maskImage(fade: number, { start, end, rtl, width }: Clipped): string | 
   const edges = (start ? 1 : 0) + (end ? 1 : 0);
   const fadePx = width > 0 ? Math.min(fade, Math.floor(width / (edges + 1))) : fade;
   if (fadePx <= 0) return undefined;
-  const stops = [
-    start ? `transparent 0, #000 ${fadePx}px` : "#000 0",
-    end ? `#000 calc(100% - ${fadePx}px), transparent 100%` : "#000 100%",
-  ];
-  return `linear-gradient(to ${rtl ? "left" : "right"}, ${stops.join(", ")})`;
+  return fadeMask(rtl ? "left" : "right", start ? fadePx : 0, end ? fadePx : 0);
 }
 
 /** Marquee pacing: a pause where the label rests, a scroll at reading speed, a pause at the far
